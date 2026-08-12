@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Helpotron — Lecture Recorder</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; text-align: center; }
+    #timer { font-size: 40px; font-weight: 700; margin: 20px 0; }
+    button { padding: 12px 24px; margin: 6px; border-radius: 10px; border: 1px solid #ccc; font-size: 15px; cursor: pointer; }
+    #recordBtn { background: #ef4444; color: white; border-color: #ef4444; }
+    #stopBtn { background: #111827; color: white; border-color: #111827; display: none; }
+    #state { margin-top: 16px; font-size: 13px; color: #555; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <h2>🎙️ Lecture Recorder</h2>
+  <div id="timer">00:00</div>
+  <button id="recordBtn">Start Recording</button>
+  <button id="stopBtn">Stop & Upload</button>
+  <div id="state">Your recording is uploaded to your Helpotron server and transcribed there.</div>
+  <script src="recorder.js"></script>
+</body>
+</html>

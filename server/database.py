@@ -1,0 +1,151 @@
+"""Database layer — SQLAlchemy 2.0, SQLite by default, Supabase-swappable.
+
+Swap to PostgreSQL by setting DATABASE_URL (see .env.example). All access goes
+through the session factory here; nothing else constructs connections.
+"""
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import Any, Generator
+
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+
+from .config import config
+
+_connect_args = {"check_same_thread": False} if config.database_url.startswith("sqlite") else {}
+engine = create_engine(config.database_url, connect_args=_connect_args)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def _json_default(v: Any) -> str:
+    return json.dumps(v)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # client-supplied device id
+    telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    plan: Mapped[str] = mapped_column(String(16), default="basic")  # basic | pro | elite
+    credits: Mapped[float] = mapped_column(Float, default=0.0)
+    notifications_paused: Mapped[bool] = mapped_column(default=False)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)  # reading_level, tone, retry_attempts
+    discount_balance: Mapped[float] = mapped_column(Float, default=0.0)  # % carry-over
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
+    transcripts = relationship("Transcript", back_populates="user", cascade="all, delete-orphan")
+    materials = relationship("StudyMaterial", back_populates="user", cascade="all, delete-orphan")
+    credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    canvas_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    title: Mapped[str] = mapped_column(String(512))
+    due_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt: Mapped[str] = mapped_column(String)  # TEXT
+    file_urls: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="tracked")  # tracked | transcribed | materials_ready
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)  # e.g. {"transcribed": true, "guide": false}
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="assignments")
+    transcripts = relationship("Transcript", back_populates="assignment")
+    materials = relationship("StudyMaterial", back_populates="assignment")
+
+
+class Transcript(Base):
+    __tablename__ = "transcripts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), default="upload")  # upload | recording
+    text: Mapped[str] = mapped_column(String)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="transcripts")
+    assignment = relationship("Assignment", back_populates="transcripts")
+    materials = relationship("StudyMaterial", back_populates="transcript")
+
+
+class StudyMaterial(Base):
+    __tablename__ = "study_materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
+    transcript_id: Mapped[int | None] = mapped_column(ForeignKey("transcripts.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(32))  # study_guide | flashcards | practice_test | summary
+    content: Mapped[str] = mapped_column(String)  # markdown or JSON
+    model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="materials")
+    assignment = relationship("Assignment", back_populates="materials")
+    transcript = relationship("Transcript", back_populates="materials")
+
+
+class CreditTransaction(Base):
+    __tablename__ = "credit_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    delta: Mapped[float] = mapped_column(Float)  # +top-up, -spend
+    reason: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="credit_transactions")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(32))  # stripe | cashapp | zelle | venmo | paypal
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | captured | refunded | manual
+    provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="payments")
+
+
+class DataSubmission(Base):
+    __tablename__ = "data_submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)  # opt-in grades/teacher notes
+    discount_earned: Mapped[float] = mapped_column(Float, default=1.0)  # 1% per submission
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+def get_db() -> Generator[Any, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_db() -> None:
+    Base.metadata.create_all(engine)

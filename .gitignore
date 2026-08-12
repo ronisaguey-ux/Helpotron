@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+web/dist/
+
+# Env + secrets
+.env
+*.key
+*.pem
+
+# Data
+*.db
+*.db-wal
+*.db-shm
+uploads/
+audio/
+pipeline/state/*.json
+!pipeline/state/.gitkeep
+
+# OS
+.DS_Store
