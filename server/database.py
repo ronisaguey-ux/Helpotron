@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Generator
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from .config import config
@@ -40,7 +40,7 @@ class User(Base):
     plan: Mapped[str] = mapped_column(String(16), default="basic")  # basic | pro | elite
     credits: Mapped[float] = mapped_column(Float, default=0.0)
     notifications_paused: Mapped[bool] = mapped_column(default=False)
-    settings: Mapped[dict] = mapped_column(JSON, default=dict)  # reading_level, tone, retry_attempts
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)  # reading_level, tone, writing_style, retry_attempts, average_grade
     discount_balance: Mapped[float] = mapped_column(Float, default=0.0)  # % carry-over
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -49,6 +49,7 @@ class User(Base):
     materials = relationship("StudyMaterial", back_populates="user", cascade="all, delete-orphan")
     credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    drafts = relationship("Draft", back_populates="user", cascade="all, delete-orphan")
 
 
 class Assignment(Base):
@@ -61,13 +62,14 @@ class Assignment(Base):
     due_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str] = mapped_column(String)  # TEXT
     file_urls: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(String(32), default="tracked")  # tracked | transcribed | materials_ready
-    progress: Mapped[dict] = mapped_column(JSON, default=dict)  # e.g. {"transcribed": true, "guide": false}
+    status: Mapped[str] = mapped_column(String(32), default="tracked")  # tracked | transcribed | materials_ready | draft_ready | draft_risky | completed
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)  # e.g. {"transcribed": true, "guide": false, "draft": true, "target_grade": "B", "current_grade": "C"}
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="assignments")
     transcripts = relationship("Transcript", back_populates="assignment")
     materials = relationship("StudyMaterial", back_populates="assignment")
+    drafts = relationship("Draft", back_populates="assignment")
 
 
 class Transcript(Base):
@@ -137,6 +139,28 @@ class DataSubmission(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)  # opt-in grades/teacher notes
     discount_earned: Mapped[float] = mapped_column(Float, default=1.0)  # 1% per submission
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Draft(Base):
+    __tablename__ = "drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), index=True)
+    threshold: Mapped[float] = mapped_column(Float, default=80.0)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | passed | risky | failed
+    draft_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    average_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    detector_results: Mapped[list | None] = mapped_column(JSON, nullable=True)  # list of {name, score, details, error}
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    retries_left: Mapped[int] = mapped_column(Integer, default=5)
+    last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user = relationship("User", back_populates="drafts")
+    assignment = relationship("Assignment", back_populates="drafts")
 
 
 def get_db() -> Generator[Any, None, None]:

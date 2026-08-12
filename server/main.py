@@ -24,6 +24,7 @@ from .agent_session import manager as agent_manager
 from .config import config
 from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_db
 from .payments import process_payment, refund_unused
+from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -47,7 +48,7 @@ app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
 IP_LIMIT = 120
 USER_STRICT_LIMIT = 10
 USER_GENERAL_LIMIT = 30
-STRICT_PATHS = ("/api/transcribe", "/api/agent/start")
+STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -506,3 +507,115 @@ async def agent_ws(websocket: WebSocket, session_id: str):
         pass
     finally:
         agent_manager.detach(session_id)
+
+
+# ─── writing style (custom text upload) ───────────────────────────────────
+
+class StyleUploadIn(BaseModel):
+    public_id: str = Field(..., max_length=100)
+    style_text: str = Field(..., max_length=100_000)  # student's custom writing sample
+
+
+@app.post("/api/style/upload")
+def upload_style(body: StyleUploadIn, db: Session = Depends(get_db)):
+    """Upload the student's custom writing style for mimicry."""
+    user = get_or_create_user(db, body.public_id)
+    set_style(user.id, body.style_text, db)
+    return {"status": "ok", "message": "Style uploaded successfully"}
+
+
+@app.get("/api/style/{public_id}")
+def get_style_endpoint(public_id: str, db: Session = Depends(get_db)):
+    """Retrieve the student's current style text."""
+    user = get_or_create_user(db, public_id)
+    style = get_style(user.id, db)
+    return {"style_text": style or ""}
+
+
+# ─── assignment draft generation ──────────────────────────────────────────
+
+class DraftGenerateIn(BaseModel):
+    public_id: str = Field(..., max_length=100)
+    assignment_id: int = Field(..., ge=1)
+    threshold: float = Field(default=80.0, ge=0, le=100)
+
+
+@app.post("/api/draft/generate")
+async def generate_draft(body: DraftGenerateIn, db: Session = Depends(get_db)):
+    """Start a draft generation workflow. Returns draft_id for polling."""
+    user = get_or_create_user(db, body.public_id)
+    db.commit()
+    # Check credits
+    if user.credits < DRAFT_COST:
+        raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
+    # Check style exists
+    style = get_style(user.id, db)
+    if not style:
+        raise HTTPException(400, "No writing style uploaded. Please upload custom text first.")
+    # Check assignment exists
+    assignment = db.get(Assignment, body.assignment_id)
+    if not assignment or assignment.user_id != user.id:
+        raise HTTPException(404, "Assignment not found")
+    # Create draft record and start background task
+    draft = await create_draft_task(user.id, body.assignment_id, body.threshold, db)
+    start_draft_workflow(draft.id)
+    return {
+        "draft_id": draft.id,
+        "status": draft.status,
+        "estimated_seconds": 30,  # rough guess
+    }
+
+
+@app.get("/api/draft/{draft_id}")
+def get_draft_status(draft_id: int, db: Session = Depends(get_db)):
+    """Check status of a draft generation."""
+    draft = db.get(Draft, draft_id)
+    if not draft:
+        raise HTTPException(404, "Draft not found")
+    # We need to return the draft data
+    return {
+        "id": draft.id,
+        "status": draft.status,
+        "draft_text": draft.draft_text,
+        "average_score": draft.average_score,
+        "detector_results": draft.detector_results,
+        "attempts": draft.attempts,
+        "retries_left": draft.retries_left,
+        "threshold": draft.threshold,
+        "model_used": draft.model_used,
+        "last_error": draft.last_error,
+        "created_at": draft.created_at.isoformat(),
+        "updated_at": draft.updated_at.isoformat(),
+    }
+
+
+@app.post("/api/draft/{draft_id}/retry")
+def retry_draft(draft_id: int, db: Session = Depends(get_db)):
+    """Manually retry a risky draft (student asks for further instruction)."""
+    draft = db.get(Draft, draft_id)
+    if not draft:
+        raise HTTPException(404, "Draft not found")
+    if draft.status != "risky":
+        raise HTTPException(400, "Only risky drafts can be retried")
+    # Reset status and retries
+    draft.status = "pending"
+    draft.retries_left = MAX_RETRIES
+    draft.attempts = 0
+    draft.last_error = None
+    db.commit()
+    start_draft_workflow(draft.id)
+    return {"status": "retry started"}
+
+
+@app.post("/api/draft/{draft_id}/admin")
+def admin_help(draft_id: int, db: Session = Depends(get_db)):
+    """Send /admin command via Telegram to the dev."""
+    draft = db.get(Draft, draft_id)
+    if not draft:
+        raise HTTPException(404, "Draft not found")
+    # In a real implementation, send a Telegram message to the admin chat
+    # For now, we just log and return.
+    logger.info("Admin help requested for draft %d by user %d", draft_id, draft.user_id)
+    # We would call the telegram bot here
+    # For simplicity, we'll just return a message
+    return {"status": "admin notified", "message": "The developer has been alerted. They will respond shortly."}

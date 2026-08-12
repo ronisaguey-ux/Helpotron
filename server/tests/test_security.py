@@ -3,6 +3,7 @@ config checks, agent refund policy."""
 import asyncio
 import collections
 import time
+import uuid
 
 from server import ratelimit
 from server.agent_session import AgentSession
@@ -88,6 +89,21 @@ def _make_elite(public_id: str) -> None:
         db.close()
 
 
+def _cleanup_user(public_id: str) -> None:
+    """Delete all materials and assignments for the user to avoid test pollution."""
+    from server.database import SessionLocal
+    from server.database import StudyMaterial, Assignment, User
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if user:
+            db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).delete()
+            db.query(Assignment).filter(Assignment.user_id == user.id).delete()
+            db.commit()
+    finally:
+        db.close()
+
+
 def test_materials_pagination(client, monkeypatch):
     from server import study_tools
 
@@ -95,7 +111,8 @@ def test_materials_pagination(client, monkeypatch):
         return "A summary of the lecture transcript.", "deepseek-v4-flash-free"
 
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
-    uid = "page-user"
+    uid = f"page-user-{uuid.uuid4().hex[:8]}"
+    _cleanup_user(uid)  # remove any leftover data
     _make_elite(uid)
     for i in range(3):
         r = client.post("/api/summary", json={

@@ -51,4 +51,21 @@ export const api = {
     if (!resp.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `HTTP ${resp.status}`);
     return body;
   },
+  // ── Writing style ──
+  uploadStyle: (publicId, styleText) =>
+    request('/api/style/upload', { method: 'POST', body: JSON.stringify({ public_id: publicId, style_text: styleText }) }),
+  getStyle: (publicId) => request(`/api/style/${publicId}`),
+  // ── Draft generation ──
+  generateDraft: (publicId, assignmentId, threshold) =>
+    request('/api/draft/generate', { method: 'POST', body: JSON.stringify({ public_id: publicId, assignment_id: assignmentId, threshold }) }),
+  getDraftStatus: (draftId) => request(`/api/draft/${draftId}`),
+  retryDraft: (draftId) => request(`/api/draft/${draftId}/retry`, { method: 'POST' }),
+  adminHelp: (draftId) => request(`/api/draft/${draftId}/admin`, { method: 'POST' }),
+  // ── Orchestrator ──
+  startOrchestrator: (publicId, assignmentId) =>
+    request('/api/orchestrator/start', { method: 'POST', body: JSON.stringify({ public_id: publicId, assignment_id: assignmentId }) }),
+  getOrchestratorStatus: (assignmentId) => request(`/api/orchestrator/status/${assignmentId}`),
+  getAllOrchestratorStatuses: (publicId) => request(`/api/orchestrator/all?public_id=${publicId}`),
+  sendOrchestratorMessage: (publicId, assignmentId, text) =>
+    request(`/api/orchestrator/message/${assignmentId}`, { method: 'POST', body: JSON.stringify({ public_id: publicId, text }) }),
 };

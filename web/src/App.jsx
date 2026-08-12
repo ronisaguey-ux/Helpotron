@@ -39,6 +39,20 @@ const statusBadge = (status) => ({
   tracked: <Badge color="slate">tracked</Badge>,
   transcribed: <Badge color="blue">transcribed</Badge>,
   materials_ready: <Badge color="green">ready</Badge>,
+  draft_ready: <Badge color="green">draft ready</Badge>,
+  draft_risky: <Badge color="red">risky</Badge>,
+  completed: <Badge color="green">✅ completed</Badge>,
+}[status] ?? <Badge>{status}</Badge>);
+
+const orchestratorStatusBadge = (status) => ({
+  pending: <Badge color="slate">pending</Badge>,
+  analyzing: <Badge color="blue">analyzing</Badge>,
+  planning: <Badge color="amber">planning</Badge>,
+  executing: <Badge color="amber">executing</Badge>,
+  reviewing: <Badge color="blue">reviewing</Badge>,
+  done: <Badge color="green">✅ done</Badge>,
+  risky: <Badge color="red">⚠️ risky</Badge>,
+  failed: <Badge color="red">❌ failed</Badge>,
 }[status] ?? <Badge>{status}</Badge>);
 
 // ─── main app ─────────────────────────────────────────────────────────────
@@ -48,10 +62,68 @@ export default function App() {
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
   const [tab, setTab] = useState('overview');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [credits, setCredits] = useState(3);
 
   useEffect(() => {
     api.health().then(() => setConnected(true)).catch(() => setConnected(false));
+    // Check if already logged in
+    const saved = localStorage.getItem('helpotron_logged_in');
+    if (saved === 'true') {
+      setIsLoggedIn(true);
+    }
   }, [serverUrl]);
+
+  const handleLogin = () => {
+    if (loginUser === 'RoniDev' && loginPass === 'MongosDev999') {
+      setIsLoggedIn(true);
+      setLoginError('');
+      localStorage.setItem('helpotron_logged_in', 'true');
+      localStorage.setItem('helpotron_user', loginUser);
+    } else {
+      setLoginError('Invalid credentials');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem('helpotron_logged_in');
+    localStorage.removeItem('helpotron_user');
+    setCredits(3);
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Card className="w-96">
+          <h1 className="text-xl font-bold mb-4">🤖 Helpotron Automator</h1>
+          <p className="text-sm text-slate-500 mb-4">Sign in to continue. You have {credits} free credits remaining.</p>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Username"
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={loginUser}
+              onChange={(e) => setLoginUser(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={loginPass}
+              onChange={(e) => setLoginPass(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+            />
+            {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+            <Button className="w-full" onClick={handleLogin}>Sign In</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -61,6 +133,7 @@ export default function App() {
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>user: <code className="text-slate-700">{userId}</code></span>
             <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
           </div>
         </div>
       </header>
@@ -71,7 +144,7 @@ export default function App() {
         </div>
       )}
 
-      <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3">
+      <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3 flex-wrap">
         {['overview', 'study-tools', 'settings', 'billing'].map((t) => (
           <Button key={t} variant={tab === t ? 'primary' : 'ghost'} onClick={() => setTab(t)} className="capitalize">
             {t.replace('-', ' ')}
@@ -108,9 +181,8 @@ function Overview({ userId, onGoTo }) {
   if (error) return <Card className="text-red-600">{error}</Card>;
   if (!data) return <Card>Loading…</Card>;
 
-  const active = data.assignments.filter((a) => a.status !== 'materials_ready').length;
+  const active = data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length;
   const monthly = data.monthly_credits || 40;
-  const usagePct = data.plan === 'elite' ? 0 : Math.min(100, (1 - data.credits / monthly) * 100);
 
   return (
     <div className="space-y-4">
@@ -134,7 +206,9 @@ function Overview({ userId, onGoTo }) {
       <Card>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Active assignments</h2>
-          <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
+          <div className="space-x-2">
+            <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
+          </div>
         </div>
         {data.assignments.length === 0 && (
           <p className="text-sm text-slate-500">
@@ -144,16 +218,21 @@ function Overview({ userId, onGoTo }) {
         <div className="space-y-3">
           {data.assignments.map((a) => {
             const done = Object.values(a.progress || {}).filter(Boolean).length;
+            const orch = a.orchestrator || {};
             return (
               <div key={a.id} className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{a.title}</span>
                     {statusBadge(a.status)}
+                    {orch.status && orchestratorStatusBadge(orch.status)}
                   </div>
                   <div className="mt-1 flex items-center gap-2">
-                    <Progress value={(done / 4) * 100} className="max-w-64" />
-                    <span className="text-xs text-slate-500">{done}/4 materials</span>
+                    <Progress value={(done / 5) * 100} className="max-w-64" />
+                    <span className="text-xs text-slate-500">{done}/5 materials</span>
+                    {orch.estimated_time_seconds && (
+                      <span className="text-xs text-slate-400">⏱ {Math.round(orch.estimated_time_seconds/60)}m</span>
+                    )}
                   </div>
                 </div>
                 <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
@@ -318,6 +397,15 @@ function Settings({ userId, onUserId, onServer }) {
   const [readingLevel, setReadingLevel] = useState('college-freshman');
   const [tone, setTone] = useState('neutral');
   const [saved, setSaved] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [defaultBooks, setDefaultBooks] = useState({
+    '9th': ['To Kill a Mockingbird - Harper Lee', 'The Odyssey - Homer', 'Romeo and Juliet - Shakespeare'],
+    '10th': ['1984 - George Orwell', 'Lord of the Flies - William Golding', 'The Catcher in the Rye - J.D. Salinger'],
+    '11th': ['The Great Gatsby - F. Scott Fitzgerald', 'The Adventures of Huckleberry Finn - Mark Twain', 'The Crucible - Arthur Miller'],
+    '12th': ['Hamlet - Shakespeare', 'Frankenstein - Mary Shelley', 'Pride and Prejudice - Jane Austen'],
+    'college-freshman': ['The Stranger - Albert Camus', 'The Plague - Albert Camus', 'Invisible Man - Ralph Ellison'],
+    'sophomore': ['Beloved - Toni Morrison', 'The Color Purple - Alice Walker', 'One Hundred Years of Solitude - Gabriel Garcia Marquez'],
+  });
 
   useEffect(() => {
     api.dashboard(userId).then((d) => {
@@ -327,7 +415,7 @@ function Settings({ userId, onUserId, onServer }) {
   }, [userId]);
 
   async function save() {
-    await api.updateSettings({ reading_level: readingLevel, tone });
+    await api.updateSettings({ reading_level: readingLevel, tone, custom_text: customText, default_books: defaultBooks });
     onUserId(localUser.trim());
     onServer(localServer.trim());
     setSaved(true);
@@ -346,6 +434,28 @@ function Settings({ userId, onUserId, onServer }) {
         <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={tone} onChange={(e) => setTone(e.target.value)}>
           {['formal', 'neutral', 'casual'].map((t) => <option key={t}>{t}</option>)}
         </select>
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 font-semibold">Custom text & default style</h2>
+        <p className="text-xs text-slate-500 mb-2">Paste custom reference text to use as default writing style. If empty, uses the default book excerpts below.</p>
+        <textarea
+          className="w-full min-h-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          placeholder="Paste your custom text here..."
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+        />
+        <div className="mt-3">
+          <p className="text-xs text-slate-500">Default books for each grade level (use as fallback style samples):</p>
+          <div className="mt-2 space-y-2 text-sm">
+            {Object.entries(defaultBooks).map(([grade, books]) => (
+              <div key={grade}>
+                <span className="font-medium">{grade}:</span>
+                <span className="text-slate-600"> {books.join(', ')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <Card>
