@@ -32,6 +32,13 @@ own lecture transcripts and assignment prompts.
 
 - **Assignment tracker** — the browser extension reads a Canvas assignment
   (title, due date, prompt, files) into your tracker with one click.
+- **Browser collection agent** — hit **Activate Agent** in the extension and a
+  DeepSeek agent runs 30 min–1 h inside your own Canvas tab (WebSocket bridge):
+  it navigates, clicks, scrolls, and reads pages to gather the full prompt,
+  rubric, file descriptions, and related module/lecture content, then saves the
+  collection as a transcript (`source: agent`) the study generators can use.
+  1 credit per session, **refunded automatically** if it ends with nothing
+  collected. Capped at 120 steps / 1 hour; it never submits anything.
 - **Lecture transcription** — record a lecture in the extension (or upload an
   audio file) and get a transcript. Whisper API or local faster-whisper.
 - **Study guide** — key concepts, definitions, main arguments, sample exam
@@ -83,6 +90,9 @@ Canvas runs at `*.instructure.com` — the content script only fires there.
 | `POST /api/assignments` | upsert a scraped assignment |
 | `GET /api/status/{user}` | assignment statuses |
 | `POST /api/transcribe` | audio upload → transcript (form: `public_id`, `file`) |
+| `POST /api/agent/start` | start a browser agent session (charges 1 credit) |
+| `GET /api/agent/{session_id}` | agent status snapshot |
+| `WS /ws/agent/{session_id}` | extension↔agent command bridge |
 | `POST /api/study-guide` · `/api/flashcards` · `/api/practice-test` · `/api/summary` | generate materials |
 | `GET /api/materials/{user}/{kind}` | list generated materials |
 | `GET /api/dashboard/{user}` | full dashboard payload |
@@ -117,6 +127,7 @@ rejected ones deserve a human (or paid-model) second look.
 
 - [x] Backend + API + tests (live-verified end-to-end)
 - [x] Browser extension (scrape + recorder)
+- [x] Browser collection agent (extension Activate → LLM agent → transcript)
 - [x] Telegram bot
 - [x] Web dashboard (Vite + React + Tailwind)
 - [x] Self-improvement pipeline

@@ -21,6 +21,7 @@ TASK_COSTS = {
     "flashcards": 0.5,
     "practice_test": 0.5,
     "summary": 0.5,
+    "agent_session": 1.0,  # 30min-1h browser agent session (refunded if nothing collected)
 }
 
 MAX_DISCOUNT_PCT = 20.0

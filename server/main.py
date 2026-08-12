@@ -6,6 +6,7 @@ generated from the user's own transcripts, credits, payments, discounts.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -16,7 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import credits, study_tools, transcription
+from . import agent_session, credits, study_tools, transcription
+from .agent_session import manager as agent_manager
 from .config import config
 from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_db
 from .payments import process_payment, refund_unused
@@ -384,3 +386,75 @@ def discount(body: DiscountIn, db: Session = Depends(get_db)):
     result = credits.record_data_submission(db, user, body.payload)
     db.commit()
     return result
+
+
+# ─── browser agent (extension "Activate") ─────────────────────────────────
+
+class AgentStartIn(BaseModel):
+    public_id: str
+    assignment_id: int | None = None
+    instruction: str = ""
+
+
+@app.post("/api/agent/start")
+async def agent_start(body: AgentStartIn, db: Session = Depends(get_db)):
+    user = get_or_create_user(db, body.public_id)
+    db.commit()
+    if not credits.charge(db, user, "agent_session"):
+        raise HTTPException(402, "insufficient credits — agent sessions cost 1 credit")
+    db.commit()
+    session = agent_manager.create(user.public_id, body.assignment_id, body.instruction)
+    asyncio.create_task(_run_agent_and_persist(session))
+    return {"session_id": session.session_id, "max_seconds": agent_session.MAX_SESSION_SECONDS}
+
+
+async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
+    """Run the agent; on success persist collected pages as a transcript, on
+    failure with nothing collected refund the session credit."""
+    await agent_manager.run(session)
+    from .database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == session.public_id).first()
+        if session.status == "done" and session.result_text and user:
+            t = Transcript(user_id=user.id, assignment_id=session.assignment_id,
+                           source="agent", text=session.result_text)
+            db.add(t)
+            db.flush()
+            if session.assignment_id is not None:
+                a = db.get(Assignment, session.assignment_id)
+                if a is not None:
+                    a.progress = {**a.progress, "collected": True}
+                    a.status = "transcribed"
+            db.commit()
+            logger.info("agent %s collected %d chars -> transcript %d",
+                        session.session_id, len(session.result_text), t.id)
+        elif session.status in ("failed", "disconnected") and not session.result_text and user:
+            credits.top_up(db, user, credits.TASK_COSTS["agent_session"],
+                           reason="refund:agent:failed")
+            db.commit()
+            logger.info("agent %s failed with nothing collected; credit refunded", session.session_id)
+    finally:
+        db.close()
+
+
+@app.get("/api/agent/{session_id}")
+def agent_status(session_id: str, db: Session = Depends(get_db)):
+    session = agent_manager.get(session_id)
+    if session is None:
+        raise HTTPException(404, "session not found")
+    return session.snapshot()
+
+
+@app.websocket("/ws/agent/{session_id}")
+async def agent_ws(websocket: WebSocket, session_id: str):
+    await agent_manager.attach(session_id, websocket)
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            await agent_manager.handle_result(session_id, msg)
+    except Exception:
+        pass
+    finally:
+        agent_manager.detach(session_id)
