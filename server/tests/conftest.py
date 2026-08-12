@@ -19,6 +19,18 @@ def client():
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def clear_ratelimiter():
+    """The in-memory rate limiter is module-global and the IP key is
+    'testclient' for every request — reset between tests so a busy suite
+    can't trip the 120/min per-IP limit mid-run."""
+    from server import ratelimit
+
+    ratelimit.limiter._hits.clear()
+    yield
+    ratelimit.limiter._hits.clear()
+
+
 @pytest.fixture()
 def unique_user():
     import uuid

@@ -12,12 +12,14 @@ import logging
 import math
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse
 
-from . import agent_session, credits, study_tools, transcription
+from . import agent_session, credits, ratelimit, study_tools, transcription
 from .agent_session import manager as agent_manager
 from .config import config
 from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_db
@@ -31,11 +33,47 @@ ALL_MATERIAL_KINDS = ("study_guide", "flashcards", "practice_test", "summary")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    for problem in config.validate():
+        logger.warning("config: %s", problem)
     init_db()
     yield
 
 
 app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
+
+# ─── rate limiting (dependency-free, in-memory) ────────────────────────────
+# Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
+# LLM-costing paths, 30/min elsewhere. 429 with Retry-After when exceeded.
+IP_LIMIT = 120
+USER_STRICT_LIMIT = 10
+USER_GENERAL_LIMIT = 30
+STRICT_PATHS = ("/api/transcribe", "/api/agent/start")
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        client = request.client.host if request.client else "unknown"
+        if not ratelimit.limiter.allow(f"ip:{client}", IP_LIMIT):
+            return JSONResponse({"detail": "rate limited"}, status_code=429,
+                                headers={"Retry-After": "60"})
+        ctype = request.headers.get("content-type", "")
+        if request.method == "POST" and "application/json" in ctype:
+            try:
+                body = await request.body()
+                request._body = body  # keep form/body parsing working downstream
+                data = json.loads(body or b"{}")
+                public_id = str(data.get("public_id") or "").strip()[:100]
+            except Exception:
+                public_id = ""
+            if public_id and not ratelimit.limiter.allow(
+                    f"user:{public_id}",
+                    USER_STRICT_LIMIT if request.url.path in STRICT_PATHS else USER_GENERAL_LIMIT):
+                return JSONResponse({"detail": "rate limited"}, status_code=429,
+                                    headers={"Retry-After": "60"})
+        return await call_next(request)
+
+
+app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,42 +166,42 @@ def _require_transcript(db: Session, public_id: str, transcript_id: int | None, 
 # ─── models ────────────────────────────────────────────────────────────────
 
 class AssignmentIn(BaseModel):
-    public_id: str
-    canvas_id: str | None = None
-    title: str
-    due_date: str | None = None
-    prompt: str = ""
-    file_urls: list[str] = Field(default_factory=list)
+    public_id: str = Field(..., max_length=100)
+    canvas_id: str | None = Field(default=None, max_length=200)
+    title: str = Field(..., max_length=500)
+    due_date: str | None = Field(default=None, max_length=100)
+    prompt: str = Field(default="", max_length=50_000)
+    file_urls: list[str] = Field(default_factory=list, max_length=50)
 
 
 class GenerateIn(BaseModel):
-    public_id: str
+    public_id: str = Field(..., max_length=100)
     transcript_id: int | None = None
-    transcript_text: str = ""
+    transcript_text: str = Field(default="", max_length=100_000)
     assignment_id: int | None = None
-    assignment_prompt: str = ""
-    reading_level: str | None = None
+    assignment_prompt: str = Field(default="", max_length=50_000)
+    reading_level: str | None = Field(default=None, max_length=50)
 
 
 class UserIn(BaseModel):
-    public_id: str
-    telegram_id: str | None = None
+    public_id: str = Field(..., max_length=100)
+    telegram_id: str | None = Field(default=None, max_length=100)
 
 
 class SettingsIn(BaseModel):
-    public_id: str
-    settings: dict
+    public_id: str = Field(..., max_length=100)
+    settings: dict = Field(..., max_length=100)
 
 
 class PaymentIn(BaseModel):
-    public_id: str
-    provider: str
-    amount_cents: int
+    public_id: str = Field(..., max_length=100)
+    provider: str = Field(..., max_length=50)
+    amount_cents: int = Field(..., ge=0, le=10_000_000)
 
 
 class DiscountIn(BaseModel):
-    public_id: str
-    payload: dict
+    public_id: str = Field(..., max_length=100)
+    payload: dict = Field(..., max_length=100)
 
 
 # ─── health ────────────────────────────────────────────────────────────────
@@ -311,13 +349,18 @@ async def _material_endpoint(db: Session, body: GenerateIn, kind: str) -> dict:
 
 
 @app.get("/api/materials/{public_id}/{kind}")
-def materials(public_id: str, kind: str, db: Session = Depends(get_db)):
+def materials(public_id: str, kind: str,
+              limit: int = Query(default=20, ge=1, le=100),
+              offset: int = Query(default=0, ge=0),
+              db: Session = Depends(get_db)):
     user = get_or_create_user(db, public_id)
     if kind not in ALL_MATERIAL_KINDS:
         raise HTTPException(400, f"kind must be one of {ALL_MATERIAL_KINDS}")
-    rows = (db.query(StudyMaterial).filter_by(user_id=user.id, kind=kind)
-            .order_by(StudyMaterial.id.desc()).limit(20).all())
-    return {"materials": [_material_payload(m) for m in rows]}
+    q = db.query(StudyMaterial).filter_by(user_id=user.id, kind=kind)
+    total = q.count()
+    rows = q.order_by(StudyMaterial.id.desc()).offset(offset).limit(limit).all()
+    return {"materials": [_material_payload(m) for m in rows],
+            "total": total, "limit": limit, "offset": offset}
 
 
 # ─── dashboard / credits ───────────────────────────────────────────────────
@@ -391,9 +434,9 @@ def discount(body: DiscountIn, db: Session = Depends(get_db)):
 # ─── browser agent (extension "Activate") ─────────────────────────────────
 
 class AgentStartIn(BaseModel):
-    public_id: str
+    public_id: str = Field(..., max_length=100)
     assignment_id: int | None = None
-    instruction: str = ""
+    instruction: str = Field(default="", max_length=5_000)
 
 
 @app.post("/api/agent/start")
@@ -430,7 +473,12 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
             db.commit()
             logger.info("agent %s collected %d chars -> transcript %d",
                         session.session_id, len(session.result_text), t.id)
-        elif session.status in ("failed", "disconnected") and not session.result_text and user:
+        elif (session.status == "failed" or
+              (session.status == "disconnected" and session.steps < 3)) \
+                and not session.result_text and user:
+            # Refund only when nothing was collected AND the session barely
+            # started (crash, never-connected, or an immediate disconnect) —
+            # a session that ran steps and then disconnected pays the credit.
             credits.top_up(db, user, credits.TASK_COSTS["agent_session"],
                            reason="refund:agent:failed")
             db.commit()

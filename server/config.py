@@ -37,5 +37,24 @@ class Config:
     # Web
     web_origin: str = os.getenv("WEB_ORIGIN", "http://localhost:5173")
 
+    def validate(self) -> list[str]:
+        """Startup sanity checks. Returns a list of problems; callers decide
+        whether to hard-fail (missing LLM endpoint) or warn (missing optional
+        integrations)."""
+        problems: list[str] = []
+        if not self.omniroute_api_base.startswith(("http://", "https://")):
+            problems.append(f"OMNIROUTE_API_BASE malformed: {self.omniroute_api_base!r}")
+        if not self.primary_model.strip():
+            problems.append("PRIMARY_MODEL is empty")
+        if self.chat_timeout_seconds < 5 or self.chat_timeout_seconds > 600:
+            problems.append(f"CHAT_TIMEOUT_SECONDS out of range: {self.chat_timeout_seconds}")
+        if not self.database_url.startswith(("sqlite://", "postgresql://", "postgres://")):
+            problems.append(f"DATABASE_URL scheme unsupported: {self.database_url!r}")
+        if self.telegram_bot_token and len(self.telegram_bot_token) < 30:
+            problems.append("TELEGRAM_BOT_TOKEN looks truncated (< 30 chars)")
+        if self.web_origin and not self.web_origin.startswith("http"):
+            problems.append(f"WEB_ORIGIN malformed: {self.web_origin!r}")
+        return problems
+
 
 config = Config()
