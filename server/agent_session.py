@@ -28,6 +28,7 @@ MAX_SESSION_SECONDS = 60 * 60  # spec: "30 minutes to an hour"
 MAX_STEPS = 120                # slow, deliberate scraping pace
 MAX_PAGE_CHARS = 30000
 COMMAND_TIMEOUT = 40  # seconds to wait for the extension to execute one command
+ATTACH_TIMEOUT = 60   # seconds to wait for the extension to connect after start
 
 AGENT_SYSTEM = (
     "You are the Helpotron collection agent working inside the user's own "
@@ -69,6 +70,7 @@ class AgentSession:
         self.websocket: WebSocket | None = None
         self.command_queue: asyncio.Queue | None = asyncio.Queue()
         self.pending: dict[str, asyncio.Future] = {}
+        self.attached = asyncio.Event()  # set when the extension connects
 
     def elapsed(self) -> float:
         return time.time() - self.started_at
@@ -107,6 +109,7 @@ class AgentManager:
             except Exception:
                 pass
         s.websocket = ws
+        s.attached.set()
         logger.info("agent %s attached", session_id)
 
     def detach(self, session_id: str) -> None:
@@ -133,6 +136,14 @@ class AgentManager:
             {"role": "user", "content": f"Mission start. User instruction: {session.instruction or '(none — collect the current assignment)'}"},
         ]
         try:
+            # The extension connects only after /api/agent/start returns — wait
+            # for it so we don't misread the handoff gap as a disconnect.
+            try:
+                await asyncio.wait_for(session.attached.wait(), timeout=ATTACH_TIMEOUT)
+            except asyncio.TimeoutError:
+                session.status = "disconnected"
+                session.log.append({"step": 0, "event": "extension never connected"})
+                return
             while session.elapsed() < MAX_SESSION_SECONDS and session.steps < MAX_STEPS:
                 if session.websocket is None:
                     session.status = "disconnected"

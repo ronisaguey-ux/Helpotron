@@ -82,6 +82,24 @@ def test_agent_session_times_out_command(monkeypatch):
     assert s.status in ("done", "running", "disconnected", "failed")
 
 
+def test_agent_session_waits_for_extension_attach(monkeypatch):
+    """Regression: the extension connects only after /api/agent/start returns,
+    so the loop must wait for the bridge instead of instantly treating the
+    gap as a disconnect (which would refund every session)."""
+    monkeypatch.setattr("server.agent_session.ATTACH_TIMEOUT", 0.05)
+
+    async def scenario():
+        mgr = AgentManager()
+        s = mgr.create("pub-4", None, "")
+        await asyncio.wait_for(mgr.run(s), timeout=5)
+        return s
+
+    s = asyncio.run(scenario())
+    assert s.status == "disconnected"
+    assert s.steps == 0
+    assert any("never connected" in entry["event"] for entry in s.log)
+
+
 def test_agent_session_invalid_json_retries(monkeypatch):
     calls = {"n": 0}
 
