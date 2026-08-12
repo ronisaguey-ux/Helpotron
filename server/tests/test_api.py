@@ -97,6 +97,18 @@ def test_discount_program(client, unique_user):
 
 
 def test_transcribe_without_backend_returns_clear_error(client, unique_user):
+    # clients (extension recorder, web) send public_id as a FORM field — this
+    # asserts that path works (was a query-param-only endpoint; 422 before fix)
+    r = client.post(
+        "/api/transcribe",
+        data={"public_id": unique_user},
+        files={"file": ("lecture.webm", b"not really audio", "audio/webm")},
+    )
+    assert r.status_code == 500  # no whisper backend configured — clean error, not 422
+    assert "WHISPER_API_KEY" in r.json()["detail"]
+
+
+def test_transcribe_accepts_query_param_too(client, unique_user):
     r = client.post(
         "/api/transcribe",
         params={"public_id": unique_user},

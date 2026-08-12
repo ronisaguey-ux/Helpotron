@@ -31,7 +31,7 @@ def _is_unlimited(user: User) -> bool:
     return user.plan == "elite"
 
 
-def get_balance(db: Session, user: User) -> float:
+def get_balance(user: User) -> float:
     return float("inf") if _is_unlimited(user) else user.credits
 
 

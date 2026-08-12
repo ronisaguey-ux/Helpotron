@@ -11,7 +11,7 @@ import logging
 import math
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -226,9 +226,16 @@ def status(public_id: str, db: Session = Depends(get_db)):
 # ─── transcription ─────────────────────────────────────────────────────────
 
 @app.post("/api/transcribe")
-async def transcribe(public_id: str = ..., file: UploadFile = File(...),
-                     assignment_id: int | None = None,
+async def transcribe(file: UploadFile = File(...),
+                     public_id: str | None = Form(default=None),
+                     public_id_q: str | None = Query(default=None),
+                     assignment_id: int | None = Form(default=None),
+                     assignment_id_q: int | None = Query(default=None),
                      db: Session = Depends(get_db)):
+    # clients (extension recorder, web) send public_id/assignment_id as form
+    # fields; curl and direct callers use query params — accept both
+    public_id = public_id or public_id_q or "dev-user"
+    assignment_id = assignment_id if assignment_id is not None else assignment_id_q
     user = get_or_create_user(db, public_id)
     db.commit()
     content = await file.read()
@@ -321,10 +328,12 @@ def dashboard(public_id: str, db: Session = Depends(get_db)):
     materials = db.query(StudyMaterial).filter_by(user_id=user.id).order_by(StudyMaterial.id.desc()).limit(50).all()
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
         credits.CreditTransaction.id.desc()).limit(20).all()
+    monthly = credits.TIER_MONTHLY_CREDITS[user.plan]
     return {
         "public_id": user.public_id,
         "plan": user.plan,
-        "credits": credits.get_balance(db, user),
+        "credits": credits.get_balance(user),
+        "monthly_credits": None if monthly == float("inf") else monthly,
         "settings": user.settings,
         "discount_balance": user.discount_balance,
         "assignments": [
@@ -342,7 +351,7 @@ def dashboard(public_id: str, db: Session = Depends(get_db)):
 @app.get("/api/credits/{public_id}")
 def credits_balance(public_id: str, db: Session = Depends(get_db)):
     user = get_or_create_user(db, public_id)
-    return {"plan": user.plan, "credits": credits.get_balance(db, user)}
+    return {"plan": user.plan, "credits": credits.get_balance(user)}
 
 
 # ─── payments / discounts ──────────────────────────────────────────────────
@@ -355,7 +364,7 @@ async def pay(body: PaymentIn, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     db.commit()
-    return {"payment_id": payment.id, "status": payment.status, "credits": credits.get_balance(db, user)}
+    return {"payment_id": payment.id, "status": payment.status, "credits": credits.get_balance(user)}
 
 
 @app.post("/api/refund")

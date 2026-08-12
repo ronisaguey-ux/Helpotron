@@ -42,8 +42,12 @@ def _in_cooldown(model: str) -> bool:
     return time.time() - _cooldowns.get(model, 0.0) < COOLDOWN_SECONDS
 
 
-async def call_llm(system_prompt: str, user_prompt: str, max_tokens: int = 8192) -> tuple[str, str]:
-    """Returns (content, model_used). Rotates through the fallback chain."""
+async def call_llm(system_prompt: str, user_prompt: str, max_tokens: int | None = None) -> tuple[str, str]:
+    """Returns (content, model_used). Rotates through the fallback chain.
+
+    NOTE: the local OmniRoute proxy returns EMPTY content when max_tokens is
+    set small (< ~256); omit it entirely unless a real cap is needed.
+    """
     headers = {}
     if config.omniroute_api_key:
         headers["Authorization"] = f"Bearer {config.omniroute_api_key}"
@@ -52,15 +56,16 @@ async def call_llm(system_prompt: str, user_prompt: str, max_tokens: int = 8192)
     last_error = ""
 
     for attempt, model in enumerate(candidates[:3]):
-        payload = {
+        payload: dict = {
             "model": model,
             "stream": False,
-            "max_tokens": max_tokens,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         try:
             async with httpx.AsyncClient(timeout=config.chat_timeout_seconds) as client:
                 resp = await client.post(
