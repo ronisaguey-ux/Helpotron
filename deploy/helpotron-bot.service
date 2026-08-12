@@ -1,0 +1,13 @@
+[Unit]
+Description=Helpotron Telegram bot
+After=network.target helpotron-api.service
+
+[Service]
+WorkingDirectory=/home/roni/Roni_Workspace/helpotron
+ExecStart=/home/roni/Roni_Workspace/helpotron/.venv/bin/python -m server.telegram_bot
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/roni/Roni_Workspace/helpotron/.env
+
+[Install]
+WantedBy=multi-user.target

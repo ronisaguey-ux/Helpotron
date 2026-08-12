@@ -1,0 +1,13 @@
+[Unit]
+Description=Helpotron API (uvicorn)
+After=network.target
+
+[Service]
+WorkingDirectory=/home/roni/Roni_Workspace/helpotron
+ExecStart=/home/roni/Roni_Workspace/helpotron/.venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+EnvironmentFile=/home/roni/Roni_Workspace/helpotron/.env
+
+[Install]
+WantedBy=multi-user.target
