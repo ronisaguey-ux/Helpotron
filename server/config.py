@@ -15,46 +15,35 @@ class Config:
     # LLM
     omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "http://localhost:20128/api/v1")
     omniroute_api_key: str = os.getenv("OMNIROUTE_API_KEY", "")
-    primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash-free")
-    fallback_models: list[str] = [
-        m.strip() for m in os.getenv("FALLBACK_MODELS", "mimo-v2.5-free,nemotron-3-ultra-free").split(",") if m.strip()
-    ]
-    chat_timeout_seconds: int = int(os.getenv("CHAT_TIMEOUT_SECONDS", "60"))
+    primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash")
 
     # Database
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./helpotron.db")
-
-    # Telegram
-    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    telegram_admin_chat_id: str = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")
-
-    # Transcription
-    whisper_api_key: str = os.getenv("WHISPER_API_KEY", "")
-
-    # Payments
-    stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
+    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/helpotron.db")
 
     # Web
     web_origin: str = os.getenv("WEB_ORIGIN", "http://localhost:5173")
 
+    # Payments (Stripe)
+    stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
+    stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+    # Admin — set your public_id here to access /api/admin/*
+    admin_public_id: str = os.getenv("ADMIN_PUBLIC_ID", "")
+
+    # Telegram
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+    # DeepSeek
+    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
+    deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+
     def validate(self) -> list[str]:
-        """Startup sanity checks. Returns a list of problems; callers decide
-        whether to hard-fail (missing LLM endpoint) or warn (missing optional
-        integrations)."""
-        problems: list[str] = []
-        if not self.omniroute_api_base.startswith(("http://", "https://")):
-            problems.append(f"OMNIROUTE_API_BASE malformed: {self.omniroute_api_base!r}")
-        if not self.primary_model.strip():
-            problems.append("PRIMARY_MODEL is empty")
-        if self.chat_timeout_seconds < 5 or self.chat_timeout_seconds > 600:
-            problems.append(f"CHAT_TIMEOUT_SECONDS out of range: {self.chat_timeout_seconds}")
-        if not self.database_url.startswith(("sqlite://", "postgresql://", "postgres://")):
-            problems.append(f"DATABASE_URL scheme unsupported: {self.database_url!r}")
-        if self.telegram_bot_token and len(self.telegram_bot_token) < 30:
-            problems.append("TELEGRAM_BOT_TOKEN looks truncated (< 30 chars)")
-        if self.web_origin and not self.web_origin.startswith("http"):
-            problems.append(f"WEB_ORIGIN malformed: {self.web_origin!r}")
-        return problems
+        issues = []
+        if not self.omniroute_api_key:
+            issues.append("OMNIROUTE_API_KEY not set")
+        if not self.database_url:
+            issues.append("DATABASE_URL not set")
+        return issues
 
 
 config = Config()

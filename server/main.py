@@ -26,6 +26,7 @@ from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_
 from .payments import process_payment, refund_unused
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
 from .routes_features import router as features_router
+from .admin import router as admin_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -84,8 +85,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── include feature routes ────────────────────────────────────────────────
+# ─── include feature and admin routes ──────────────────────────────────────
 app.include_router(features_router)
+app.include_router(admin_router, prefix="/api")
 
 
 # ─── helpers ───────────────────────────────────────────────────────────────
