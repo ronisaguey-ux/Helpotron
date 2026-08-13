@@ -79,6 +79,10 @@ app.add_middleware(
 # ─── rate limiting middleware ────────────────────────────────────────────
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Allow OPTIONS requests to pass through
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         client = request.client.host if request.client else "unknown"
         if not ip_limiter.allow(f"ip:{client}"):
             return JSONResponse({"detail": "rate limited"}, status_code=429,
@@ -104,7 +108,7 @@ app.add_middleware(RateLimitMiddleware)
 # ─── CORS ──────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.web_origin, "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", config.web_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
