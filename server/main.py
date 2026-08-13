@@ -40,6 +40,7 @@ from .security import (
     verify_password,
     SESSION_COOKIE_NAME,
 )
+from .credits import calculate_actual_cost, charge_user, get_credit_summary
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -152,10 +153,6 @@ class GenerateRequest(BaseModel):
     assignment_id: int
 
 
-class CreditsStatusRequest(BaseModel):
-    public_id: str
-
-
 class PaymentRequest(BaseModel):
     public_id: str
     provider: str
@@ -184,6 +181,82 @@ class DraftRequest(BaseModel):
 class DraftRetryRequest(BaseModel):
     public_id: str
     draft_id: int
+
+
+class SignupRequest(BaseModel):
+    public_id: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    public_id: str
+    password: str
+
+
+# ─── Auth endpoints ──────────────────────────────────────────────────────
+
+@app.post("/api/signup")
+async def signup(req: SignupRequest, db: Session = Depends(get_db)):
+    """Create a new user account with password."""
+    existing = db.query(User).filter(User.public_id == req.public_id).first()
+    if existing:
+        raise HTTPException(409, "Public ID already taken")
+    hashed, salt = hash_password(req.password)
+    user = User(
+        public_id=req.public_id,
+        plan="basic",
+        credits=5.0,  # Free starter credits
+        password_hash=hashed,
+        password_salt=salt,
+        settings={"reading_level": "college-freshman"}
+    )
+    db.add(user)
+    db.commit()
+    return {"message": "Account created", "public_id": user.public_id}
+
+
+@app.post("/api/login")
+async def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    """Login with public_id and password."""
+    user = db.query(User).filter(User.public_id == req.public_id).first()
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+    if not user.password_hash or not user.password_salt:
+        raise HTTPException(401, "Account not set up with password")
+    if not verify_password(req.password, user.password_hash, user.password_salt):
+        raise HTTPException(401, "Invalid credentials")
+
+    token = SessionStore.create_session(user.id, user.public_id)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=config.production_mode,
+        samesite='lax',
+        max_age=7 * 24 * 60 * 60,
+    )
+    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan}
+
+
+@app.post("/api/logout")
+async def logout(response: Response, request: Request):
+    """Logout and clear session."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        SessionStore.delete_session(token)
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"message": "Logged out"}
+
+
+@app.get("/api/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current user info (requires authentication)."""
+    return {
+        "id": current_user.id,
+        "public_id": current_user.public_id,
+        "plan": current_user.plan,
+        "credits": current_user.credits,
+    }
 
 
 # ─── API routes ───────────────────────────────────────────────────────────
@@ -288,6 +361,7 @@ async def generate_materials(req: GenerateRequest, db: Session = Depends(get_db)
         context += "\n\nTranscript:\n" + transcript.text
 
     materials = []
+    total_cost = 0.0
     for kind in ALL_MATERIAL_KINDS:
         if kind == "study_guide":
             content = study_tools.generate_study_guide(context)
@@ -306,9 +380,12 @@ async def generate_materials(req: GenerateRequest, db: Session = Depends(get_db)
         )
         db.add(material)
         materials.append({"kind": kind, "content": content})
+        # Charge credits dynamically
+        success, cost = charge_user(db, user, f"generate_{kind}", tokens_used=len(content), compute_time_seconds=0.5)
+        total_cost += cost
     assignment.status = "materials_ready"
     db.commit()
-    return {"materials": materials}
+    return {"materials": materials, "total_cost": total_cost}
 
 
 @app.get("/api/materials")
@@ -324,13 +401,7 @@ async def list_materials(public_id: str, assignment_id: int | None = None, db: S
 @app.get("/api/credits")
 async def get_credits(public_id: str, db: Session = Depends(get_db)):
     user = get_or_create_user(db, public_id)
-    return {
-        "credits": user.credits,
-        "plan": user.plan,
-        "is_unlimited": user.plan == "elite",
-        "discount_balance": user.discount_balance or 0.0,
-        "discount_spillover": user.discount_spillover or 0.0,
-    }
+    return get_credit_summary(user)
 
 
 @app.post("/api/credits/topup")
@@ -368,17 +439,19 @@ async def draft_generate(req: DraftRequest, db: Session = Depends(get_db)):
     ).first()
     if not assignment:
         raise HTTPException(404, "Assignment not found")
-    if user.credits < DRAFT_COST:
-        raise HTTPException(402, f"Insufficient credits (need {DRAFT_COST})")
+
+    # Check credits with dynamic costing
+    success, cost = charge_user(db, user, "draft_generation", tokens_used=2000, compute_time_seconds=2.0)
+    if not success:
+        raise HTTPException(402, f"Insufficient credits. Need {cost:.2f} credits")
 
     draft = create_draft_task(user.id, req.assignment_id, req.threshold)
     db.add(draft)
-    user.credits -= DRAFT_COST
     db.commit()
 
     asyncio.create_task(start_draft_workflow(draft.id))
 
-    return {"draft_id": draft.id, "status": "pending"}
+    return {"draft_id": draft.id, "status": "pending", "cost": cost}
 
 
 @app.get("/api/draft/{draft_id}")
@@ -413,17 +486,18 @@ async def draft_retry(req: DraftRetryRequest, db: Session = Depends(get_db)):
         raise HTTPException(404, "Draft not found")
     if draft.retries_left <= 0:
         raise HTTPException(400, "No retries left")
-    if user.credits < DRAFT_COST:
-        raise HTTPException(402, f"Insufficient credits (need {DRAFT_COST})")
 
-    user.credits -= DRAFT_COST
+    success, cost = charge_user(db, user, "draft_retry", tokens_used=1000, compute_time_seconds=1.0)
+    if not success:
+        raise HTTPException(402, f"Insufficient credits. Need {cost:.2f} credits")
+
     draft.retries_left -= 1
     draft.attempts += 1
     draft.status = "pending"
     db.commit()
 
     asyncio.create_task(start_draft_workflow(draft.id))
-    return {"message": "Retry started"}
+    return {"message": "Retry started", "cost": cost}
 
 
 # ─── Style endpoints ─────────────────────────────────────────────────────
@@ -447,56 +521,3 @@ async def get_user_style(public_id: str, db: Session = Depends(get_db)):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
-
-
-# ─── Login endpoint (password-based) ────────────────────────────────────
-
-class LoginRequest(BaseModel):
-    public_id: str
-    password: str
-
-
-@app.post("/api/login")
-async def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    """Login with public_id and password."""
-    user = db.query(User).filter(User.public_id == req.public_id).first()
-    if not user:
-        raise HTTPException(401, "Invalid credentials")
-    if not user.password_hash or not user.password_salt:
-        raise HTTPException(401, "Account not set up with password")
-    if not verify_password(req.password, user.password_hash, user.password_salt):
-        raise HTTPException(401, "Invalid credentials")
-
-    token = SessionStore.create_session(user.id, user.public_id)
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        secure=config.production_mode,
-        samesite='lax',
-        max_age=7 * 24 * 60 * 60,
-    )
-    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan}
-
-
-@app.post("/api/logout")
-async def logout(response: Response, request: Request):
-    """Logout and clear session."""
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        SessionStore.delete_session(token)
-    response.delete_cookie(SESSION_COOKIE_NAME)
-    return {"message": "Logged out"}
-
-
-# ─── Protected route example ────────────────────────────────────────────
-
-@app.get("/api/me")
-async def get_me(current_user: User = Depends(get_current_user)):
-    """Get current user info (requires authentication)."""
-    return {
-        "id": current_user.id,
-        "public_id": current_user.public_id,
-        "plan": current_user.plan,
-        "credits": current_user.credits,
-    }
