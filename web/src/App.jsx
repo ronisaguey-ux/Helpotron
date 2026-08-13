@@ -103,7 +103,7 @@ function App() {
     if (!publicId || !isLoggedIn) return;
     try {
       const res = await api.get(`/api/assignments?public_id=${publicId}`);
-      setAssignments(res.data || []);
+      setAssignments(res || []);
     } catch (e) { setError('Failed to load assignments'); }
   };
 
@@ -111,7 +111,7 @@ function App() {
     if (!publicId || !isLoggedIn) return;
     try {
       const res = await api.get(`/api/materials?public_id=${publicId}`);
-      setMaterials(res.data || []);
+      setMaterials(res || []);
     } catch (e) { setError('Failed to load materials'); }
   };
 
@@ -119,7 +119,7 @@ function App() {
     if (!publicId || !isLoggedIn) return;
     try {
       const res = await api.get(`/api/credits?public_id=${publicId}`);
-      setCredits(res.data || { credits: 0, plan: 'basic' });
+      setCredits(res || { credits: 0, plan: 'basic' });
     } catch (e) { setError('Failed to load credits'); }
   };
 
@@ -127,7 +127,7 @@ function App() {
     if (!publicId || !isLoggedIn) return;
     try {
       const res = await api.get(`/api/settings?public_id=${publicId}`);
-      setSettings(res.data || {});
+      setSettings(res || {});
     } catch (e) { setError('Failed to load settings'); }
   };
 
@@ -145,7 +145,7 @@ function App() {
     setError(null);
     try {
       const res = await api.post('/api/login', { public_id: publicId, password });
-      if (res.data.message === 'Logged in') {
+      if (res.message === 'Logged in') {
         localStorage.setItem('helpotron_session', 'true');
         localStorage.setItem('helpotron_public_id', publicId);
         setIsLoggedIn(true);
@@ -162,7 +162,7 @@ function App() {
     setError(null);
     try {
       const res = await api.post('/api/signup', { public_id: publicId, password });
-      if (res.data.message === 'Account created') {
+      if (res.message === 'Account created') {
         localStorage.setItem('helpotron_session', 'true');
         localStorage.setItem('helpotron_public_id', publicId);
         setIsLoggedIn(true);
