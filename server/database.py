@@ -42,6 +42,7 @@ class User(Base):
     notifications_paused: Mapped[bool] = mapped_column(default=False)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)  # reading_level, tone, writing_style, retry_attempts, average_grade
     discount_balance: Mapped[float] = mapped_column(Float, default=0.0)  # % carry-over
+    discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)  # % rolled over from previous purchases
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
