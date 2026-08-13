@@ -1,7 +1,6 @@
 # 🤖 Helpotron Automator
 
-AI-powered **study tools** platform. It makes the material understandable — it
-does not write assignments for you. Everything generated is built from your
+AI-powered **study tools** platform. It makes the material understandable —  Everything generated is built from your
 own lecture transcripts and assignment prompts.
 
 ```
