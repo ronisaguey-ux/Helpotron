@@ -6,7 +6,6 @@ const PrivacyPolicy = ({ onAgree }) => {
   const handleAgree = () => {
     if (agreed) {
       onAgree();
-      // Store agreement in localStorage
       localStorage.setItem('helpotron_privacy_agreed', 'true');
     }
   };
@@ -113,7 +112,7 @@ const PrivacyPolicy = ({ onAgree }) => {
         <h2 className="text-xl font-semibold mt-6">11. Contact Us</h2>
         <ul className="list-disc pl-6 space-y-1">
           <li><strong>Telegram:</strong> @your_bot_username</li>
-          <li><strong>Email:</strong> helpotron@example.com</li>
+          <li><strong>Email:</strong> helpotronhelper@gmail.com</li>
         </ul>
       </div>
 
