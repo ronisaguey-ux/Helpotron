@@ -74,8 +74,6 @@ app.add_middleware(
     session_cookie=SESSION_COOKIE_NAME,
     max_age=7 * 24 * 60 * 60,
     same_site="lax",
-    secure=config.production_mode,
-    httponly=True,
 )
 
 # ─── rate limiting middleware ────────────────────────────────────────────
@@ -205,7 +203,7 @@ async def signup(req: SignupRequest, db: Session = Depends(get_db)):
     user = User(
         public_id=req.public_id,
         plan="basic",
-        credits=5.0,  # Free starter credits
+        credits=5.0,
         password_hash=hashed,
         password_salt=salt,
         settings={"reading_level": "college-freshman"}
@@ -231,8 +229,6 @@ async def login(req: LoginRequest, response: Response, db: Session = Depends(get
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=config.production_mode,
-        samesite='lax',
         max_age=7 * 24 * 60 * 60,
     )
     return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan}
@@ -380,7 +376,6 @@ async def generate_materials(req: GenerateRequest, db: Session = Depends(get_db)
         )
         db.add(material)
         materials.append({"kind": kind, "content": content})
-        # Charge credits dynamically
         success, cost = charge_user(db, user, f"generate_{kind}", tokens_used=len(content), compute_time_seconds=0.5)
         total_cost += cost
     assignment.status = "materials_ready"
@@ -440,7 +435,6 @@ async def draft_generate(req: DraftRequest, db: Session = Depends(get_db)):
     if not assignment:
         raise HTTPException(404, "Assignment not found")
 
-    # Check credits with dynamic costing
     success, cost = charge_user(db, user, "draft_generation", tokens_used=2000, compute_time_seconds=2.0)
     if not success:
         raise HTTPException(402, f"Insufficient credits. Need {cost:.2f} credits")
