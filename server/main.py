@@ -64,6 +64,16 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
 
+# ─── CORS ──────────────────────────────────────────────────────────────────
+# CORS must be added BEFORE other middleware to handle OPTIONS properly
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", config.web_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ─── security middleware ──────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -104,15 +114,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 app.add_middleware(RateLimitMiddleware)
-
-# ─── CORS ──────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", config.web_origin],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ─── include feature and admin routes ──────────────────────────────────────
 app.include_router(features_router)
