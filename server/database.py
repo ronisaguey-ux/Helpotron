@@ -35,14 +35,17 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # client-supplied device id
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
-    plan: Mapped[str] = mapped_column(String(16), default="basic")  # basic | pro | elite
+    plan: Mapped[str] = mapped_column(String(16), default="basic")
     credits: Mapped[float] = mapped_column(Float, default=0.0)
     notifications_paused: Mapped[bool] = mapped_column(default=False)
-    settings: Mapped[dict] = mapped_column(JSON, default=dict)  # reading_level, tone, writing_style, retry_attempts, average_grade
-    discount_balance: Mapped[float] = mapped_column(Float, default=0.0)  # % carry-over
-    discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)  # % rolled over from previous purchases
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    discount_balance: Mapped[float] = mapped_column(Float, default=0.0)
+    discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)
+    # Password fields for authentication
+    password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
@@ -61,10 +64,10 @@ class Assignment(Base):
     canvas_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     title: Mapped[str] = mapped_column(String(512))
     due_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    prompt: Mapped[str] = mapped_column(String)  # TEXT
+    prompt: Mapped[str] = mapped_column(String)
     file_urls: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(String(32), default="tracked")  # tracked | transcribed | materials_ready | draft_ready | draft_risky | completed
-    progress: Mapped[dict] = mapped_column(JSON, default=dict)  # e.g. {"transcribed": true, "guide": false, "draft": true, "target_grade": "B", "current_grade": "C"}
+    status: Mapped[str] = mapped_column(String(32), default="tracked")
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="assignments")
@@ -79,7 +82,7 @@ class Transcript(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
-    source: Mapped[str] = mapped_column(String(16), default="upload")  # upload | recording
+    source: Mapped[str] = mapped_column(String(16), default="upload")
     text: Mapped[str] = mapped_column(String)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -96,8 +99,8 @@ class StudyMaterial(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
     transcript_id: Mapped[int | None] = mapped_column(ForeignKey("transcripts.id"), nullable=True)
-    kind: Mapped[str] = mapped_column(String(32))  # study_guide | flashcards | practice_test | summary
-    content: Mapped[str] = mapped_column(String)  # markdown or JSON
+    kind: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str] = mapped_column(String)
     model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -111,7 +114,7 @@ class CreditTransaction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    delta: Mapped[float] = mapped_column(Float)  # +top-up, -spend
+    delta: Mapped[float] = mapped_column(Float)
     reason: Mapped[str] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -123,9 +126,9 @@ class Payment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    provider: Mapped[str] = mapped_column(String(32))  # stripe | cashapp | zelle | venmo | paypal
+    provider: Mapped[str] = mapped_column(String(32))
     amount_cents: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | captured | refunded | manual
+    status: Mapped[str] = mapped_column(String(32), default="pending")
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -137,8 +140,8 @@ class DataSubmission(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    payload: Mapped[dict] = mapped_column(JSON, default=dict)  # opt-in grades/teacher notes
-    discount_earned: Mapped[float] = mapped_column(Float, default=1.0)  # 1% per submission
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    discount_earned: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -149,11 +152,11 @@ class Draft(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), index=True)
     threshold: Mapped[float] = mapped_column(Float, default=80.0)
-    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | passed | risky | failed
+    status: Mapped[str] = mapped_column(String(32), default="pending")
     draft_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
     average_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    detector_results: Mapped[list | None] = mapped_column(JSON, nullable=True)  # list of {name, score, details, error}
+    detector_results: Mapped[list | None] = mapped_column(JSON, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     retries_left: Mapped[int] = mapped_column(Integer, default=5)
     last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)

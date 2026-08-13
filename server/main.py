@@ -12,9 +12,10 @@ import logging
 import math
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
@@ -27,11 +28,29 @@ from .payments import process_payment, refund_unused
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
 from .routes_features import router as features_router
 from .admin import router as admin_router
+from .security import (
+    SecurityHeadersMiddleware,
+    RateLimiter,
+    SessionStore,
+    get_current_user,
+    get_current_user_optional,
+    require_admin,
+    is_admin_user,
+    hash_password,
+    verify_password,
+    SESSION_COOKIE_NAME,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
 
 ALL_MATERIAL_KINDS = ("study_guide", "flashcards", "practice_test", "summary")
+
+# Rate limiters
+ip_limiter = RateLimiter(120, 60)
+user_limiter = RateLimiter(30, 60)
+strict_limiter = RateLimiter(10, 60)
+STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
 
 
 @asynccontextmanager
@@ -44,19 +63,25 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
 
-# ─── rate limiting (dependency-free, in-memory) ────────────────────────────
-# Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
-# LLM-costing paths, 30/min elsewhere. 429 with Retry-After when exceeded.
-IP_LIMIT = 120
-USER_STRICT_LIMIT = 10
-USER_GENERAL_LIMIT = 30
-STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
+# ─── security middleware ──────────────────────────────────────────────────
+app.add_middleware(SecurityHeadersMiddleware)
 
+# ─── session middleware ───────────────────────────────────────────────────
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.session_secret or "dev-secret-key-change-in-production",
+    session_cookie=SESSION_COOKIE_NAME,
+    max_age=7 * 24 * 60 * 60,
+    same_site="lax",
+    secure=config.production_mode,
+    httponly=True,
+)
 
+# ─── rate limiting middleware ────────────────────────────────────────────
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         client = request.client.host if request.client else "unknown"
-        if not ratelimit.limiter.allow(f"ip:{client}", IP_LIMIT):
+        if not ip_limiter.allow(f"ip:{client}"):
             return JSONResponse({"detail": "rate limited"}, status_code=429,
                                 headers={"Retry-After": "60"})
         ctype = request.headers.get("content-type", "")
@@ -68,15 +93,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 public_id = str(data.get("public_id") or "").strip()[:100]
             except Exception:
                 public_id = ""
-            if public_id and not ratelimit.limiter.allow(
-                    f"user:{public_id}",
-                    USER_STRICT_LIMIT if request.url.path in STRICT_PATHS else USER_GENERAL_LIMIT):
-                return JSONResponse({"detail": "rate limited"}, status_code=429,
-                                    headers={"Retry-After": "60"})
+            if public_id:
+                limiter = strict_limiter if request.url.path in STRICT_PATHS else user_limiter
+                if not limiter.allow(f"user:{public_id}"):
+                    return JSONResponse({"detail": "rate limited"}, status_code=429,
+                                        headers={"Retry-After": "60"})
         return await call_next(request)
 
-
 app.add_middleware(RateLimitMiddleware)
+
+# ─── CORS ──────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.web_origin, "http://localhost:5173", "http://127.0.0.1:5173"],
@@ -225,8 +251,6 @@ async def get_assignment(assignment_id: int, public_id: str, db: Session = Depen
 
 @app.post("/api/transcribe")
 async def transcribe_audio(file: UploadFile = File(...), public_id: str = Form(...), assignment_id: int | None = Form(None)):
-    # Placeholder — real implementation would call Whisper API
-    # For now, return a dummy transcript
     content = await file.read()
     return {
         "text": f"[Transcribed {len(content)} bytes of audio] This is a placeholder transcript for assignment {assignment_id or 'unknown'}.",
@@ -312,9 +336,8 @@ async def get_credits(public_id: str, db: Session = Depends(get_db)):
 @app.post("/api/credits/topup")
 async def topup_credits(req: PaymentRequest, db: Session = Depends(get_db)):
     user = get_or_create_user(db, req.public_id)
-    # Simulate payment processing
     amount_cents = req.amount_cents
-    credits_added = amount_cents / 100  # $1 = 1 credit (for simplicity)
+    credits_added = amount_cents / 100
     user.credits += credits_added
     db.commit()
     return {"credits": user.credits}
@@ -348,13 +371,11 @@ async def draft_generate(req: DraftRequest, db: Session = Depends(get_db)):
     if user.credits < DRAFT_COST:
         raise HTTPException(402, f"Insufficient credits (need {DRAFT_COST})")
 
-    # Create draft task
     draft = create_draft_task(user.id, req.assignment_id, req.threshold)
     db.add(draft)
     user.credits -= DRAFT_COST
     db.commit()
 
-    # Start workflow (async)
     asyncio.create_task(start_draft_workflow(draft.id))
 
     return {"draft_id": draft.id, "status": "pending"}
@@ -426,3 +447,56 @@ async def get_user_style(public_id: str, db: Session = Depends(get_db)):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# ─── Login endpoint (password-based) ────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    public_id: str
+    password: str
+
+
+@app.post("/api/login")
+async def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    """Login with public_id and password."""
+    user = db.query(User).filter(User.public_id == req.public_id).first()
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+    if not user.password_hash or not user.password_salt:
+        raise HTTPException(401, "Account not set up with password")
+    if not verify_password(req.password, user.password_hash, user.password_salt):
+        raise HTTPException(401, "Invalid credentials")
+
+    token = SessionStore.create_session(user.id, user.public_id)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=config.production_mode,
+        samesite='lax',
+        max_age=7 * 24 * 60 * 60,
+    )
+    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan}
+
+
+@app.post("/api/logout")
+async def logout(response: Response, request: Request):
+    """Logout and clear session."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        SessionStore.delete_session(token)
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"message": "Logged out"}
+
+
+# ─── Protected route example ────────────────────────────────────────────
+
+@app.get("/api/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current user info (requires authentication)."""
+    return {
+        "id": current_user.id,
+        "public_id": current_user.public_id,
+        "plan": current_user.plan,
+        "credits": current_user.credits,
+    }

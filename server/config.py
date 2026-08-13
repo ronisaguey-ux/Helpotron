@@ -37,12 +37,18 @@ class Config:
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 
+    # Security
+    session_secret: str = os.getenv("SESSION_SECRET", "")
+    production_mode: bool = os.getenv("PRODUCTION_MODE", "false").lower() == "true"
+
     def validate(self) -> list[str]:
         issues = []
         if not self.omniroute_api_key:
             issues.append("OMNIROUTE_API_KEY not set")
         if not self.database_url:
             issues.append("DATABASE_URL not set")
+        if self.production_mode and not self.session_secret:
+            issues.append("SESSION_SECRET required in production mode")
         return issues
 
 
