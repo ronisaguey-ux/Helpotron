@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { api, getServer, getUserId, setServer, setUserId } from './api.js';
+import React, { useEffect, useState } from 'react';
+import { api } from './api.js';
 import PrivacyPolicy from './PrivacyPolicy.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -24,54 +24,9 @@ const Badge = ({ color = 'slate', children }) => {
     red: 'bg-red-100 text-red-700',
     amber: 'bg-amber-100 text-amber-700',
     blue: 'bg-blue-100 text-blue-700',
+    purple: 'bg-purple-100 text-purple-700',
   };
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colors[color]}`}>{children}</span>;
-};
-
-const PaymentSection = ({ onSelect, selected }) => {
-  const methods = [
-    { id: 'stripe', label: '💳 Stripe (Card)' },
-    { id: 'paypal', label: '🟦 PayPal' },
-    { id: 'cashapp', label: '💰 Cash App' },
-    { id: 'zelle', label: '🏦 Zelle' },
-    { id: 'venmo', label: '💚 Venmo' },
-    { id: 'applepay', label: '🍎 Apple Pay' },
-    { id: 'googlepay', label: '🤖 Google Pay' },
-  ];
-  return (
-    <div className="grid grid-cols-3 gap-2 mt-2">
-      {methods.map((m) => (
-        <button
-          key={m.id}
-          onClick={() => onSelect(m.id)}
-          className={`px-3 py-2 text-sm rounded border transition-colors ${selected === m.id ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 hover:bg-slate-50'}`}
-        >
-          {m.label}
-        </button>
-      ))}
-    </div>
-  );
-};
-
-const PlanCard = ({ plan, selected, onSelect }) => {
-  const features = {
-    basic: ['15 credits/month', 'Assignment completion', 'Basic support'],
-    pro: ['40 credits/month', 'Humanization', 'Detection bypass', 'Priority support'],
-    elite: ['Unlimited credits', 'Voice cloning', 'Grade trajectory', 'Lecture transcription', 'All features'],
-  };
-  const prices = { basic: 10, pro: 20, elite: 30 };
-  return (
-    <div
-      onClick={() => onSelect(plan)}
-      className={`p-4 rounded-xl border-2 cursor-pointer transition-colors ${selected === plan ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-    >
-      <h3 className="font-semibold capitalize">{plan}</h3>
-      <p className="text-2xl font-bold">${prices[plan]}/mo</p>
-      <ul className="mt-2 text-sm text-slate-600 space-y-1">
-        {features[plan].map((f) => <li key={f}>• {f}</li>)}
-      </ul>
-    </div>
-  );
 };
 
 function App() {
@@ -79,7 +34,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('helpotron_session'));
-  const [server, setServerState] = useState(() => localStorage.getItem('helpotron_server') || 'http://localhost:8000');
   const [assignments, setAssignments] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [credits, setCredits] = useState({ credits: 0, plan: 'basic' });
@@ -89,15 +43,27 @@ function App() {
   const [activeTab, setActiveTab] = useState('assignments');
   const [privacyAgreed, setPrivacyAgreed] = useState(() => localStorage.getItem('helpotron_privacy_agreed') === 'true');
   const [selectedPlan, setSelectedPlan] = useState('basic');
-  const [selectedPayment, setSelectedPayment] = useState('stripe');
   const [topUpAmount, setTopUpAmount] = useState(10);
   const [showLogin, setShowLogin] = useState(true);
   const [showSignup, setShowSignup] = useState(false);
-
-  const headers = useMemo(() => ({
-    'Content-Type': 'application/json',
-    'X-Public-ID': publicId,
-  }), [publicId]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminTab, setAdminTab] = useState('users');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminAnalytics, setAdminAnalytics] = useState(null);
+  const [adminTokens, setAdminTokens] = useState([]);
+  const [tokenDuration, setTokenDuration] = useState(7);
+  const [tokenMaxUses, setTokenMaxUses] = useState(1);
+  const [generatedToken, setGeneratedToken] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState(null);
+  const [adminSuccess, setAdminSuccess] = useState(null);
+  const [showCreateAssignment, setShowCreateAssignment] = useState(false);
+  const [assignmentText, setAssignmentText] = useState('');
+  const [assignmentFiles, setAssignmentFiles] = useState([]);
+  const [gradeLevel, setGradeLevel] = useState('B');
+  const [subjectGrades, setSubjectGrades] = useState({});
+  const [gradeIncrement, setGradeIncrement] = useState(5);
+  const [baselineGrade, setBaselineGrade] = useState('C');
 
   const fetchAssignments = async () => {
     if (!publicId || !isLoggedIn) return;
@@ -128,7 +94,35 @@ function App() {
     try {
       const res = await api.get(`/api/settings?public_id=${publicId}`);
       setSettings(res || {});
+      if (res.grade_level) setGradeLevel(res.grade_level);
+      if (res.subject_grades) setSubjectGrades(res.subject_grades);
+      if (res.grade_increment) setGradeIncrement(res.grade_increment);
+      if (res.baseline_grade) setBaselineGrade(res.baseline_grade);
     } catch (e) { setError('Failed to load settings'); }
+  };
+
+  const fetchAdminUsers = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get('/api/admin/users');
+      setAdminUsers(res || []);
+    } catch (e) { setAdminError('Failed to load users'); }
+  };
+
+  const fetchAdminAnalytics = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get('/api/admin/analytics');
+      setAdminAnalytics(res);
+    } catch (e) { setAdminError('Failed to load analytics'); }
+  };
+
+  const fetchAdminTokens = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get('/api/admin/tokens');
+      setAdminTokens(res.tokens || []);
+    } catch (e) { setAdminError('Failed to load tokens'); }
   };
 
   useEffect(() => {
@@ -137,8 +131,19 @@ function App() {
       fetchMaterials();
       fetchCredits();
       fetchSettings();
+      if (publicId === 'RoniDev' || publicId === 'admin') {
+        setIsAdmin(true);
+      }
     }
   }, [publicId, isLoggedIn, privacyAgreed]);
+
+  useEffect(() => {
+    if (isAdmin && isLoggedIn) {
+      fetchAdminUsers();
+      fetchAdminAnalytics();
+      fetchAdminTokens();
+    }
+  }, [isAdmin]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -150,6 +155,11 @@ function App() {
         localStorage.setItem('helpotron_public_id', publicId);
         setIsLoggedIn(true);
         setShowLogin(false);
+        if (publicId === 'RoniDev' || publicId === 'admin') {
+          setIsAdmin(true);
+        }
+      } else {
+        setError('Invalid credentials');
       }
     } catch (e) {
       setError('Invalid credentials');
@@ -181,11 +191,133 @@ function App() {
     setIsLoggedIn(false);
     setPublicId('');
     setPassword('');
+    setIsAdmin(false);
   };
 
   const handlePrivacyAgree = () => {
     setPrivacyAgreed(true);
     localStorage.setItem('helpotron_privacy_agreed', 'true');
+  };
+
+  const handleAdminAdjustCredits = async (userId, amount, reason) => {
+    setAdminLoading(true);
+    setAdminError(null);
+    setAdminSuccess(null);
+    try {
+      await api.post(`/api/admin/user/${userId}/credits?amount=${amount}&reason=${encodeURIComponent(reason)}`, {});
+      setAdminSuccess(`Adjusted credits by ${amount}`);
+      fetchAdminUsers();
+      fetchAdminAnalytics();
+    } catch (e) {
+      setAdminError('Failed to adjust credits');
+    }
+    setAdminLoading(false);
+  };
+
+  const handleAdminSetPlan = async (userId, plan) => {
+    setAdminLoading(true);
+    setAdminError(null);
+    setAdminSuccess(null);
+    try {
+      await api.post(`/api/admin/user/${userId}/plan?plan=${plan}`, {});
+      setAdminSuccess(`Set plan to ${plan}`);
+      fetchAdminUsers();
+    } catch (e) {
+      setAdminError('Failed to set plan');
+    }
+    setAdminLoading(false);
+  };
+
+  const handleAdminGenerateToken = async () => {
+    setAdminLoading(true);
+    setAdminError(null);
+    setGeneratedToken(null);
+    try {
+      const res = await api.post('/api/admin/tokens/generate', { duration_days: tokenDuration, max_uses: tokenMaxUses });
+      setGeneratedToken(res.token);
+      setAdminSuccess('Token generated!');
+      fetchAdminTokens();
+    } catch (e) {
+      setAdminError('Failed to generate token');
+    }
+    setAdminLoading(false);
+  };
+
+  const handleAdminDeactivateToken = async (token) => {
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      await api.post(`/api/admin/tokens/deactivate?token=${token}`, {});
+      setAdminSuccess('Token deactivated');
+      fetchAdminTokens();
+    } catch (e) {
+      setAdminError('Failed to deactivate token');
+    }
+    setAdminLoading(false);
+  };
+
+  const handleAdminResetPassword = async (userId) => {
+    const newPassword = prompt('Enter new password (min 6 chars):');
+    if (newPassword && newPassword.length >= 6) {
+      setAdminLoading(true);
+      try {
+        await api.post(`/api/admin/user/${userId}/reset-password`, { new_password: newPassword });
+        setAdminSuccess('Password reset successfully');
+      } catch (e) {
+        setAdminError('Failed to reset password');
+      }
+      setAdminLoading(false);
+    }
+  };
+
+  const handleAdminBanUser = async (userId) => {
+    if (confirm('Ban this user?')) {
+      setAdminLoading(true);
+      try {
+        await api.post(`/api/admin/user/${userId}/ban`, {});
+        setAdminSuccess('User banned');
+        fetchAdminUsers();
+      } catch (e) {
+        setAdminError('Failed to ban user');
+      }
+      setAdminLoading(false);
+    }
+  };
+
+  const handleCreateAssignment = async () => {
+    if (!assignmentText.trim()) return;
+    setLoading(true);
+    try {
+      await api.post('/api/assignments', {
+        public_id: publicId,
+        assignments: [{ title: 'New Assignment', prompt: assignmentText, file_urls: assignmentFiles }]
+      });
+      setAssignmentText('');
+      setAssignmentFiles([]);
+      setShowCreateAssignment(false);
+      fetchAssignments();
+    } catch (e) {
+      setError('Failed to create assignment');
+    }
+    setLoading(false);
+  };
+
+  const handleSaveSettings = async () => {
+    const newSettings = {
+      ...settings,
+      grade_level: gradeLevel,
+      subject_grades: subjectGrades,
+      grade_increment: gradeIncrement,
+      baseline_grade: baselineGrade,
+      tone: 'formal',
+    };
+    setSettings(newSettings);
+    try {
+      await api.post('/api/settings', { public_id: publicId, settings: newSettings });
+      setError(null);
+    } catch (e) {
+      setError('Failed to save settings');
+    }
   };
 
   if (!privacyAgreed) {
@@ -196,7 +328,7 @@ function App() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <Card className="max-w-md w-full p-6">
-          <h1 className="text-2xl font-bold text-center mb-6">🔧 Helpotron Automator</h1>
+          <h1 className="text-2xl font-bold text-center mb-6">🔧 Helpotron</h1>
           {showLogin && (
             <div className="space-y-4">
               <div>
@@ -297,44 +429,87 @@ function App() {
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold">🔧 Helpotron</span>
             <Badge color="blue">{credits.plan || 'basic'}</Badge>
+            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600">
-            <span>💰 {credits.credits?.toFixed(1) || 0} credits</span>
+            <span>💰 {typeof credits.credits === 'number' ? credits.credits.toFixed(1) : '0'} credits</span>
             <span>📊 {credits.discount_balance || 0}% discount</span>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-slate-600">
-              Logout
-            </button>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-slate-600">Logout</button>
           </div>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex gap-2 border-b border-slate-200 mb-6">
+        <div className="flex gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
           {['assignments', 'materials', 'settings', 'billing'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'admin' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🛡️ Admin
+            </button>
+          )}
         </div>
 
         {activeTab === 'assignments' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">📋 Assignments</h2>
-              <Button onClick={fetchAssignments} variant="outline" className="text-sm">
-                Refresh
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setShowCreateAssignment(!showCreateAssignment)} variant="outline" className="text-sm">
+                  + New Assignment
+                </Button>
+                <Button onClick={fetchAssignments} variant="outline" className="text-sm">Refresh</Button>
+              </div>
             </div>
-            {assignments.length === 0 ? (
-              <Card className="p-8 text-center text-slate-500">
-                No assignments found. Connect your Canvas account or upload manually.
+            {showCreateAssignment && (
+              <Card className="p-4">
+                <h3 className="font-medium mb-2">Create New Assignment</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Assignment Text / Prompt</label>
+                    <textarea
+                      value={assignmentText}
+                      onChange={(e) => setAssignmentText(e.target.value)}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
+                      placeholder="Paste your assignment prompt, text, or upload files below..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Files (paste URLs or paths)</label>
+                    <input
+                      type="text"
+                      value={assignmentFiles.join(', ')}
+                      onChange={(e) => setAssignmentFiles(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="file1.pdf, file2.docx, https://example.com/assignment.pdf"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleCreateAssignment} disabled={loading}>
+                      {loading ? 'Creating...' : 'Create Assignment'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreateAssignment(false)}>Cancel</Button>
+                  </div>
+                  <p className="text-xs text-slate-500">Sub-agents will analyze the text/files and organize them into structured assignments with a clear chain of action.</p>
+                </div>
               </Card>
+            )}
+            {assignments.length === 0 ? (
+              <Card className="p-8 text-center text-slate-500">No assignments found. Click "+ New Assignment" to create one.</Card>
             ) : (
               <div className="space-y-3">
                 {assignments.map((a) => (
@@ -350,12 +525,8 @@ function App() {
                       </Badge>
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <Button variant="outline" className="text-xs px-3 py-1">
-                        Generate Materials
-                      </Button>
-                      <Button variant="outline" className="text-xs px-3 py-1">
-                        Generate Draft
-                      </Button>
+                      <Button variant="outline" className="text-xs px-3 py-1">Generate Materials</Button>
+                      <Button variant="outline" className="text-xs px-3 py-1">Generate Draft</Button>
                     </div>
                   </Card>
                 ))}
@@ -368,9 +539,7 @@ function App() {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">📚 Study Materials</h2>
             {materials.length === 0 ? (
-              <Card className="p-8 text-center text-slate-500">
-                No study materials yet. Generate them from your assignments.
-              </Card>
+              <Card className="p-8 text-center text-slate-500">No study materials yet.</Card>
             ) : (
               <div className="grid gap-3">
                 {materials.map((m) => (
@@ -391,117 +560,26 @@ function App() {
 
         {activeTab === 'billing' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">💳 Billing</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <PlanCard plan="basic" selected={selectedPlan} onSelect={setSelectedPlan} />
-              <PlanCard plan="pro" selected={selectedPlan} onSelect={setSelectedPlan} />
-              <PlanCard plan="elite" selected={selectedPlan} onSelect={setSelectedPlan} />
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-blue-800">💡 1 credit = 10,000 tokens (~1 assignment)</p>
+              <p className="text-blue-700 mt-1">Basic: ~50 assignments/mo | Pro: ~150 | Elite: ~400</p>
             </div>
-            <div className="mt-4">
-              <h3 className="font-medium mb-2">Payment Method</h3>
-              <PaymentSection selected={selectedPayment} onSelect={setSelectedPayment} />
+            <h2 className="text-xl font-semibold">💳 Choose Your Plan</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {['basic', 'pro', 'elite'].map((plan) => (
+                <div
+                  key={plan}
+                  onClick={() => setSelectedPlan(plan)}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedPlan === plan ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <h3 className="font-semibold capitalize">{plan}</h3>
+                  <p className="text-2xl font-bold">${plan === 'basic' ? 10 : plan === 'pro' ? 20 : 40}/mo</p>
+                  <ul className="mt-2 text-sm text-slate-600 space-y-1">
+                    <li>• {plan === 'basic' ? '50' : plan === 'pro' ? '150' : '400'} credits</li>
+                    <li>• ~{plan === 'basic' ? '50' : plan === 'pro' ? '150' : '400'} assignments</li>
+                  </ul>
+                </div>
+              ))}
             </div>
             <Button className="w-full mt-4">Subscribe to {selectedPlan} plan</Button>
-            <div className="border-t pt-4 mt-4">
-              <h3 className="font-medium mb-2">💎 Top-up Credits (no plan)</h3>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(parseFloat(e.target.value) || 0)}
-                  className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  min="1"
-                />
-                <span className="text-sm text-slate-600">credits</span>
-                <Button variant="outline" className="ml-2">Add ${(topUpAmount * 0.5).toFixed(2)}</Button>
-              </div>
-              <p className="text-xs text-slate-500 mt-2">Credits are consumed dynamically based on compute usage.</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">⚙️ Settings</h2>
-            <Card className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Reading Level</label>
-                  <select
-                    value={settings.reading_level || 'college-freshman'}
-                    onChange={(e) => {
-                      const newSettings = { ...settings, reading_level: e.target.value };
-                      setSettings(newSettings);
-                      api.post('/api/settings', { public_id: publicId, settings: newSettings });
-                    }}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  >
-                    <option value="9th">9th Grade</option>
-                    <option value="10th">10th Grade</option>
-                    <option value="11th">11th Grade</option>
-                    <option value="12th">12th Grade</option>
-                    <option value="college-freshman">College Freshman</option>
-                    <option value="college-sophomore">College Sophomore</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Tone</label>
-                  <select
-                    value={settings.tone || 'neutral'}
-                    onChange={(e) => {
-                      const newSettings = { ...settings, tone: e.target.value };
-                      setSettings(newSettings);
-                      api.post('/api/settings', { public_id: publicId, settings: newSettings });
-                    }}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  >
-                    <option value="formal">Formal</option>
-                    <option value="neutral">Neutral</option>
-                    <option value="casual">Casual</option>
-                  </select>
-                </div>
-                <div className="pt-4 border-t">
-                  <h3 className="font-medium text-sm">📱 Telegram Notifications</h3>
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Bot Token"
-                      className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-                      value={settings.telegram_bot_token || ''}
-                      onChange={(e) => {
-                        const newSettings = { ...settings, telegram_bot_token: e.target.value };
-                        setSettings(newSettings);
-                        api.post('/api/settings', { public_id: publicId, settings: newSettings });
-                      }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Chat ID"
-                      className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-                      value={settings.telegram_chat_id || ''}
-                      onChange={(e) => {
-                        const newSettings = { ...settings, telegram_chat_id: e.target.value };
-                        setSettings(newSettings);
-                        api.post('/api/settings', { public_id: publicId, settings: newSettings });
-                      }}
-                    />
-                    <Button variant="outline" className="text-sm">Test</Button>
-                  </div>
-                </div>
-                <div className="pt-4 border-t">
-                  <h3 className="font-medium text-sm">🎫 Redeem Token</h3>
-                  <div className="mt-2 flex gap-2">
-                    <input type="text" placeholder="Enter your token" className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm" id="tokenInput" />
-                    <Button variant="outline" className="text-sm">Redeem</Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default App;
+            <div className="border-t pt-4 mt-4
