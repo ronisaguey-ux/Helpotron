@@ -104,6 +104,9 @@ class RateLimiter:
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to responses."""
     async def dispatch(self, request: Request, call_next):
+        # Skip security headers for OPTIONS requests
+        if request.method == "OPTIONS":
+            return await call_next(request)
         response = await call_next(request)
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
