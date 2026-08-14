@@ -262,6 +262,35 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 # ─── API routes ───────────────────────────────────────────────────────────
 
+@app.get("/api/dashboard")
+async def get_dashboard(public_id: str, db: Session = Depends(get_db)):
+    """Get dashboard data for a user."""
+    user = get_or_create_user(db, public_id)
+    assignments = db.query(Assignment).filter(Assignment.user_id == user.id).all()
+    materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).order_by(StudyMaterial.created_at.desc()).limit(10).all()
+    return {
+        "user": {
+            "id": user.id,
+            "public_id": user.public_id,
+            "plan": user.plan,
+            "credits": user.credits,
+        },
+        "assignments": [{
+            "id": a.id,
+            "title": a.title,
+            "due_date": a.due_date,
+            "prompt": a.prompt[:500] + "..." if len(a.prompt) > 500 else a.prompt,
+            "status": a.status,
+            "progress": a.progress,
+        } for a in assignments],
+        "materials": [_material_payload(m) for m in materials],
+        "plan": user.plan,
+        "credits": user.credits,
+        "settings": user.settings or {},
+        "monthly_credits": 40,
+    }
+
+
 @app.get("/api/assignments")
 async def list_assignments(public_id: str, db: Session = Depends(get_db)):
     user = get_or_create_user(db, public_id)

@@ -1,11 +1,11 @@
 """Credit ledger with token-based pricing: 1 credit = 10,000 tokens.
 
 Plans:
-- Basic: $10/mo, 50 credits (500,000 tokens, ~50 assignments)
-- Pro: $20/mo, 150 credits (1.5M tokens, ~150 assignments)
-- Elite: $40/mo, 400 credits (4M tokens, ~400 assignments)
+- Basic: $10/mo, 300 credits (3M tokens, ~300 assignments)
+- Pro: $20/mo, 600 credits (6M tokens, ~600 assignments) - Best Value
+- Elite: $40/mo, 1500 credits (15M tokens, ~1500 assignments) - Power User
 
-Cost model: 1 credit = 10,000 tokens. Each assignment ~8,000-15,000 tokens.
+Cost model: 1 credit = 10,000 tokens.
 Profit margin: ~70% on Basic, ~75% on Pro, ~65% on Elite.
 """
 from __future__ import annotations
@@ -14,13 +14,11 @@ from sqlalchemy.orm import Session
 from .database import CreditTransaction, User
 
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
-TIER_MONTHLY_CREDITS = {"basic": 50, "pro": 150, "elite": 400}
-TIER_OVERAGE_PER_CREDIT_CENTS = {"basic": 10, "pro": 8, "elite": 6}  # $0.10, $0.08, $0.06 per credit
+TIER_MONTHLY_CREDITS = {"basic": 300, "pro": 600, "elite": 1500}
+TIER_OVERAGE_PER_CREDIT_CENTS = {"basic": 10, "pro": 8, "elite": 5}
 
-# Tokens per credit: 10,000 tokens = 1 credit
 TOKENS_PER_CREDIT = 10000
 
-# Base costs in credits (converted from token estimates)
 BASE_TASK_COSTS = {
     "transcription_per_hour": 1.0,
     "study_guide": 0.8,
@@ -48,27 +46,12 @@ def calculate_actual_cost(
     retries: int = 0,
     complexity: float = 1.0
 ) -> float:
-    """Calculate cost in credits based on token usage."""
-    # Base token cost
     token_cost = tokens_used / TOKENS_PER_CREDIT
-
-    # Base task cost (converted from token estimates)
     base_cost = BASE_TASK_COSTS.get(task_type, 0.5)
-
-    # Compute time cost (1 second = 0.01 credits)
     time_cost = compute_time_seconds * 0.01
-
-    # Retry penalty
     retry_penalty = 1.0 + (retries * 0.15)
-
     total = (base_cost + token_cost + time_cost) * complexity * retry_penalty
-
-    # Minimum cost floor
     return max(total, 0.05)
-
-
-def _is_unlimited(user: User) -> bool:
-    return user.plan == "elite" and user.credits >= 999999
 
 
 def charge_user(
@@ -80,17 +63,14 @@ def charge_user(
     retries: int = 0,
     complexity: float = 1.0
 ) -> tuple[bool, float]:
-    """Charge a user for a task using token-based costing."""
     cost = calculate_actual_cost(task_type, tokens_used, compute_time_seconds, retries, complexity)
-
     if user.credits < cost:
         return False, cost
-
     user.credits -= cost
     tx = CreditTransaction(
         user_id=user.id,
         delta=-cost,
-        reason=f"{task_type} ({tokens_used} tokens)"
+        reason=f"{task_type} ({tokens_used} tokens, {cost:.2f} credits)"
     )
     db.add(tx)
     db.commit()
@@ -136,7 +116,7 @@ def get_credit_summary(user: User) -> dict:
     return {
         "credits": user.credits,
         "plan": user.plan,
-        "is_unlimited": _is_unlimited(user),
+        "is_unlimited": False,
         "discount_balance": user.discount_balance or 0.0,
         "discount_spillover": user.discount_spillover or 0.0,
         "tier_credits": TIER_MONTHLY_CREDITS.get(user.plan, 0),

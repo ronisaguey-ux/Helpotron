@@ -28,16 +28,21 @@ async function request(endpoint, options = {}) {
     'Content-Type': 'application/json',
     ...options.headers,
   };
+  console.log('📡 API Request:', { url, method: options.method || 'GET', headers });
   const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',
   });
+  console.log('📡 API Response:', { status: response.status, statusText: response.statusText });
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || `HTTP ${response.status}`);
+    const errorText = await response.text();
+    console.error('❌ API Error:', errorText);
+    throw new Error(errorText || `HTTP ${response.status}`);
   }
-  return response.json();
+  const data = await response.json();
+  console.log('📡 API Data:', data);
+  return data;
 }
 
 export const api = {
@@ -46,4 +51,13 @@ export const api = {
   put: (endpoint, data) => request(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
   request,
+  health: () => request('/api/health', { method: 'GET' }),
+  dashboard: (userId) => request(`/api/dashboard?public_id=${userId}`, { method: 'GET' }),
+  studyGuide: (body) => request('/api/study_guide', { method: 'POST', body: JSON.stringify(body) }),
+  flashcards: (body) => request('/api/flashcards', { method: 'POST', body: JSON.stringify(body) }),
+  practiceTest: (body) => request('/api/practice_test', { method: 'POST', body: JSON.stringify(body) }),
+  summary: (body) => request('/api/summary', { method: 'POST', body: JSON.stringify(body) }),
+  updateSettings: (settings) => request('/api/settings', { method: 'POST', body: JSON.stringify(settings) }),
+  pay: (body) => request('/api/credits/topup', { method: 'POST', body: JSON.stringify(body) }),
+  discount: (body) => request('/api/discount', { method: 'POST', body: JSON.stringify(body) }),
 };

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { api } from './api.js';
-import PrivacyPolicy from './PrivacyPolicy.jsx';
+import React, { useEffect, useMemo, useState } from 'react';
+import { api, getServer, getUserId, setServer, setUserId } from './api.js';
+
+// ─── tiny shadcn-style primitives ─────────────────────────────────────────
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -20,566 +21,530 @@ const Card = ({ className = '', children }) => (
 const Badge = ({ color = 'slate', children }) => {
   const colors = {
     slate: 'bg-slate-100 text-slate-700',
-    green: 'bg-green-100 text-green-700',
-    red: 'bg-red-100 text-red-700',
-    amber: 'bg-amber-100 text-amber-700',
+    green: 'bg-emerald-100 text-emerald-700',
     blue: 'bg-blue-100 text-blue-700',
-    purple: 'bg-purple-100 text-purple-700',
+    amber: 'bg-amber-100 text-amber-700',
+    red: 'bg-red-100 text-red-700',
   };
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colors[color]}`}>{children}</span>;
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[color]}`}>{children}</span>;
 };
 
-function App() {
-  const [publicId, setPublicId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('helpotron_session'));
-  const [assignments, setAssignments] = useState([]);
-  const [materials, setMaterials] = useState([]);
-  const [credits, setCredits] = useState({ credits: 0, plan: 'basic' });
-  const [settings, setSettings] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('assignments');
-  const [privacyAgreed, setPrivacyAgreed] = useState(() => localStorage.getItem('helpotron_privacy_agreed') === 'true');
-  const [selectedPlan, setSelectedPlan] = useState('basic');
-  const [topUpAmount, setTopUpAmount] = useState(10);
-  const [showLogin, setShowLogin] = useState(true);
-  const [showSignup, setShowSignup] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState('users');
-  const [adminUsers, setAdminUsers] = useState([]);
-  const [adminAnalytics, setAdminAnalytics] = useState(null);
-  const [adminTokens, setAdminTokens] = useState([]);
-  const [tokenDuration, setTokenDuration] = useState(7);
-  const [tokenMaxUses, setTokenMaxUses] = useState(1);
-  const [generatedToken, setGeneratedToken] = useState(null);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminError, setAdminError] = useState(null);
-  const [adminSuccess, setAdminSuccess] = useState(null);
-  const [showCreateAssignment, setShowCreateAssignment] = useState(false);
-  const [assignmentText, setAssignmentText] = useState('');
-  const [assignmentFiles, setAssignmentFiles] = useState([]);
-  const [gradeLevel, setGradeLevel] = useState('B');
-  const [subjectGrades, setSubjectGrades] = useState({});
-  const [gradeIncrement, setGradeIncrement] = useState(5);
-  const [baselineGrade, setBaselineGrade] = useState('C');
+const Progress = ({ value, className = '' }) => (
+  <div className={`h-2 w-full overflow-hidden rounded-full bg-slate-200 ${className}`}>
+    <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${Math.min(100, value)}%` }} />
+  </div>
+);
 
-  const fetchAssignments = async () => {
-    if (!publicId || !isLoggedIn) return;
-    try {
-      const res = await api.get(`/api/assignments?public_id=${publicId}`);
-      setAssignments(res || []);
-    } catch (e) { setError('Failed to load assignments'); }
-  };
+const statusBadge = (status) => ({
+  tracked: <Badge color="slate">tracked</Badge>,
+  transcribed: <Badge color="blue">transcribed</Badge>,
+  materials_ready: <Badge color="green">ready</Badge>,
+  draft_ready: <Badge color="green">draft ready</Badge>,
+  draft_risky: <Badge color="red">risky</Badge>,
+  completed: <Badge color="green">✅ completed</Badge>,
+}[status] ?? <Badge>{status}</Badge>);
 
-  const fetchMaterials = async () => {
-    if (!publicId || !isLoggedIn) return;
-    try {
-      const res = await api.get(`/api/materials?public_id=${publicId}`);
-      setMaterials(res || []);
-    } catch (e) { setError('Failed to load materials'); }
-  };
+const orchestratorStatusBadge = (status) => ({
+  pending: <Badge color="slate">pending</Badge>,
+  analyzing: <Badge color="blue">analyzing</Badge>,
+  planning: <Badge color="amber">planning</Badge>,
+  executing: <Badge color="amber">executing</Badge>,
+  reviewing: <Badge color="blue">reviewing</Badge>,
+  done: <Badge color="green">✅ done</Badge>,
+  risky: <Badge color="red">⚠️ risky</Badge>,
+  failed: <Badge color="red">❌ failed</Badge>,
+}[status] ?? <Badge>{status}</Badge>);
 
-  const fetchCredits = async () => {
-    if (!publicId || !isLoggedIn) return;
-    try {
-      const res = await api.get(`/api/credits?public_id=${publicId}`);
-      setCredits(res || { credits: 0, plan: 'basic' });
-    } catch (e) { setError('Failed to load credits'); }
-  };
+// ─── main app ─────────────────────────────────────────────────────────────
 
-  const fetchSettings = async () => {
-    if (!publicId || !isLoggedIn) return;
-    try {
-      const res = await api.get(`/api/settings?public_id=${publicId}`);
-      setSettings(res || {});
-      if (res.grade_level) setGradeLevel(res.grade_level);
-      if (res.subject_grades) setSubjectGrades(res.subject_grades);
-      if (res.grade_increment) setGradeIncrement(res.grade_increment);
-      if (res.baseline_grade) setBaselineGrade(res.baseline_grade);
-    } catch (e) { setError('Failed to load settings'); }
-  };
-
-  const fetchAdminUsers = async () => {
-    if (!isAdmin) return;
-    try {
-      const res = await api.get('/api/admin/users');
-      setAdminUsers(res || []);
-    } catch (e) { setAdminError('Failed to load users'); }
-  };
-
-  const fetchAdminAnalytics = async () => {
-    if (!isAdmin) return;
-    try {
-      const res = await api.get('/api/admin/analytics');
-      setAdminAnalytics(res);
-    } catch (e) { setAdminError('Failed to load analytics'); }
-  };
-
-  const fetchAdminTokens = async () => {
-    if (!isAdmin) return;
-    try {
-      const res = await api.get('/api/admin/tokens');
-      setAdminTokens(res.tokens || []);
-    } catch (e) { setAdminError('Failed to load tokens'); }
-  };
+export default function App() {
+  const [userId, setUserIdState] = useState(getUserId);
+  const [serverUrl, setServerUrlState] = useState(getServer);
+  const [connected, setConnected] = useState(true);
+  const [tab, setTab] = useState('overview');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [credits, setCredits] = useState(3);
 
   useEffect(() => {
-    if (publicId && isLoggedIn && privacyAgreed) {
-      fetchAssignments();
-      fetchMaterials();
-      fetchCredits();
-      fetchSettings();
-      if (publicId === 'RoniDev' || publicId === 'admin') {
-        setIsAdmin(true);
-      }
+    api.health().then(() => setConnected(true)).catch(() => setConnected(false));
+    // Check if already logged in
+    const saved = localStorage.getItem('helpotron_logged_in');
+    if (saved === 'true') {
+      setIsLoggedIn(true);
     }
-  }, [publicId, isLoggedIn, privacyAgreed]);
+  }, [serverUrl]);
 
-  useEffect(() => {
-    if (isAdmin && isLoggedIn) {
-      fetchAdminUsers();
-      fetchAdminAnalytics();
-      fetchAdminTokens();
+  const handleLogin = () => {
+    if (loginUser === 'RoniDev' && loginPass === 'MongosDev999') {
+      setIsLoggedIn(true);
+      setLoginError('');
+      localStorage.setItem('helpotron_logged_in', 'true');
+      localStorage.setItem('helpotron_user', loginUser);
+    } else {
+      setLoginError('Invalid credentials');
     }
-  }, [isAdmin]);
-
-  const handleLogin = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.post('/api/login', { public_id: publicId, password });
-      if (res.message === 'Logged in') {
-        localStorage.setItem('helpotron_session', 'true');
-        localStorage.setItem('helpotron_public_id', publicId);
-        setIsLoggedIn(true);
-        setShowLogin(false);
-        if (publicId === 'RoniDev' || publicId === 'admin') {
-          setIsAdmin(true);
-        }
-      } else {
-        setError('Invalid credentials');
-      }
-    } catch (e) {
-      setError('Invalid credentials');
-    }
-    setLoading(false);
-  };
-
-  const handleSignup = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.post('/api/signup', { public_id: publicId, password });
-      if (res.message === 'Account created') {
-        localStorage.setItem('helpotron_session', 'true');
-        localStorage.setItem('helpotron_public_id', publicId);
-        setIsLoggedIn(true);
-        setShowSignup(false);
-        setShowLogin(false);
-      }
-    } catch (e) {
-      setError('Failed to create account');
-    }
-    setLoading(false);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('helpotron_session');
-    localStorage.removeItem('helpotron_public_id');
     setIsLoggedIn(false);
-    setPublicId('');
-    setPassword('');
-    setIsAdmin(false);
+    localStorage.removeItem('helpotron_logged_in');
+    localStorage.removeItem('helpotron_user');
+    setCredits(3);
   };
-
-  const handlePrivacyAgree = () => {
-    setPrivacyAgreed(true);
-    localStorage.setItem('helpotron_privacy_agreed', 'true');
-  };
-
-  const handleAdminAdjustCredits = async (userId, amount, reason) => {
-    setAdminLoading(true);
-    setAdminError(null);
-    setAdminSuccess(null);
-    try {
-      await api.post(`/api/admin/user/${userId}/credits?amount=${amount}&reason=${encodeURIComponent(reason)}`, {});
-      setAdminSuccess(`Adjusted credits by ${amount}`);
-      fetchAdminUsers();
-      fetchAdminAnalytics();
-    } catch (e) {
-      setAdminError('Failed to adjust credits');
-    }
-    setAdminLoading(false);
-  };
-
-  const handleAdminSetPlan = async (userId, plan) => {
-    setAdminLoading(true);
-    setAdminError(null);
-    setAdminSuccess(null);
-    try {
-      await api.post(`/api/admin/user/${userId}/plan?plan=${plan}`, {});
-      setAdminSuccess(`Set plan to ${plan}`);
-      fetchAdminUsers();
-    } catch (e) {
-      setAdminError('Failed to set plan');
-    }
-    setAdminLoading(false);
-  };
-
-  const handleAdminGenerateToken = async () => {
-    setAdminLoading(true);
-    setAdminError(null);
-    setGeneratedToken(null);
-    try {
-      const res = await api.post('/api/admin/tokens/generate', { duration_days: tokenDuration, max_uses: tokenMaxUses });
-      setGeneratedToken(res.token);
-      setAdminSuccess('Token generated!');
-      fetchAdminTokens();
-    } catch (e) {
-      setAdminError('Failed to generate token');
-    }
-    setAdminLoading(false);
-  };
-
-  const handleAdminDeactivateToken = async (token) => {
-    setAdminLoading(true);
-    setAdminError(null);
-    try {
-      await api.post(`/api/admin/tokens/deactivate?token=${token}`, {});
-      setAdminSuccess('Token deactivated');
-      fetchAdminTokens();
-    } catch (e) {
-      setAdminError('Failed to deactivate token');
-    }
-    setAdminLoading(false);
-  };
-
-  const handleAdminResetPassword = async (userId) => {
-    const newPassword = prompt('Enter new password (min 6 chars):');
-    if (newPassword && newPassword.length >= 6) {
-      setAdminLoading(true);
-      try {
-        await api.post(`/api/admin/user/${userId}/reset-password`, { new_password: newPassword });
-        setAdminSuccess('Password reset successfully');
-      } catch (e) {
-        setAdminError('Failed to reset password');
-      }
-      setAdminLoading(false);
-    }
-  };
-
-  const handleAdminBanUser = async (userId) => {
-    if (confirm('Ban this user?')) {
-      setAdminLoading(true);
-      try {
-        await api.post(`/api/admin/user/${userId}/ban`, {});
-        setAdminSuccess('User banned');
-        fetchAdminUsers();
-      } catch (e) {
-        setAdminError('Failed to ban user');
-      }
-      setAdminLoading(false);
-    }
-  };
-
-  const handleCreateAssignment = async () => {
-    if (!assignmentText.trim()) return;
-    setLoading(true);
-    try {
-      await api.post('/api/assignments', {
-        public_id: publicId,
-        assignments: [{ title: 'New Assignment', prompt: assignmentText, file_urls: assignmentFiles }]
-      });
-      setAssignmentText('');
-      setAssignmentFiles([]);
-      setShowCreateAssignment(false);
-      fetchAssignments();
-    } catch (e) {
-      setError('Failed to create assignment');
-    }
-    setLoading(false);
-  };
-
-  const handleSaveSettings = async () => {
-    const newSettings = {
-      ...settings,
-      grade_level: gradeLevel,
-      subject_grades: subjectGrades,
-      grade_increment: gradeIncrement,
-      baseline_grade: baselineGrade,
-      tone: 'formal',
-    };
-    setSettings(newSettings);
-    try {
-      await api.post('/api/settings', { public_id: publicId, settings: newSettings });
-      setError(null);
-    } catch (e) {
-      setError('Failed to save settings');
-    }
-  };
-
-  if (!privacyAgreed) {
-    return <PrivacyPolicy onAgree={handlePrivacyAgree} />;
-  }
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-6">
-          <h1 className="text-2xl font-bold text-center mb-6">🔧 Helpotron</h1>
-          {showLogin && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Public ID</label>
-                <input
-                  type="text"
-                  value={publicId}
-                  onChange={(e) => setPublicId(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="Enter your Public ID"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm pr-10"
-                    placeholder="Enter your password"
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-slate-500 hover:text-slate-700"
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <Button onClick={handleLogin} className="w-full" disabled={loading}>
-                {loading ? 'Logging in...' : 'Login'}
-              </Button>
-              <p className="text-sm text-center text-slate-600">
-                Don't have an account?{' '}
-                <button onClick={() => { setShowLogin(false); setShowSignup(true); }} className="text-blue-600 hover:underline">
-                  Sign up
-                </button>
-              </p>
-            </div>
-          )}
-          {showSignup && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Choose a Public ID</label>
-                <input
-                  type="text"
-                  value={publicId}
-                  onChange={(e) => setPublicId(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="Choose a unique ID"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm pr-10"
-                    placeholder="Choose a strong password"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-slate-500 hover:text-slate-700"
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <Button onClick={handleSignup} className="w-full" disabled={loading}>
-                {loading ? 'Creating account...' : 'Create Account'}
-              </Button>
-              <p className="text-sm text-center text-slate-600">
-                Already have an account?{' '}
-                <button onClick={() => { setShowSignup(false); setShowLogin(true); }} className="text-blue-600 hover:underline">
-                  Login
-                </button>
-              </p>
-            </div>
-          )}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Card className="w-96">
+          <h1 className="text-xl font-bold mb-4">🤖 Helpotron Automator</h1>
+          <p className="text-sm text-slate-500 mb-4">Sign in to continue. You have {credits} free credits remaining.</p>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Username"
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={loginUser}
+              onChange={(e) => setLoginUser(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={loginPass}
+              onChange={(e) => setLoginPass(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+            />
+            {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+            <Button className="w-full" onClick={handleLogin}>Sign In</Button>
+          </div>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold">🔧 Helpotron</span>
-            <Badge color="blue">{credits.plan || 'basic'}</Badge>
-            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
-          </div>
-          <div className="flex items-center gap-4 text-sm text-slate-600">
-            <span>💰 {typeof credits.credits === 'number' ? credits.credits.toFixed(1) : '0'} credits</span>
-            <span>📊 {credits.discount_balance || 0}% discount</span>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-slate-600">Logout</button>
+    <div className="min-h-screen">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <h1 className="text-lg font-bold">🤖 Helpotron Automator</h1>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <span>user: <code className="text-slate-700">{userId}</code></span>
+            <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
-          {['assignments', 'materials', 'settings', 'billing'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'admin' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              🛡️ Admin
-            </button>
-          )}
+      {!connected && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700">
+          ⚠️ Server at {serverUrl} is unreachable — start it with <code>.venv/bin/uvicorn server.main:app --port 8000</code>
         </div>
+      )}
 
-        {activeTab === 'assignments' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">📋 Assignments</h2>
-              <div className="flex gap-2">
-                <Button onClick={() => setShowCreateAssignment(!showCreateAssignment)} variant="outline" className="text-sm">
-                  + New Assignment
-                </Button>
-                <Button onClick={fetchAssignments} variant="outline" className="text-sm">Refresh</Button>
-              </div>
-            </div>
-            {showCreateAssignment && (
-              <Card className="p-4">
-                <h3 className="font-medium mb-2">Create New Assignment</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Assignment Text / Prompt</label>
-                    <textarea
-                      value={assignmentText}
-                      onChange={(e) => setAssignmentText(e.target.value)}
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm min-h-[100px]"
-                      placeholder="Paste your assignment prompt, text, or upload files below..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Files (paste URLs or paths)</label>
-                    <input
-                      type="text"
-                      value={assignmentFiles.join(', ')}
-                      onChange={(e) => setAssignmentFiles(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="file1.pdf, file2.docx, https://example.com/assignment.pdf"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleCreateAssignment} disabled={loading}>
-                      {loading ? 'Creating...' : 'Create Assignment'}
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowCreateAssignment(false)}>Cancel</Button>
-                  </div>
-                  <p className="text-xs text-slate-500">Sub-agents will analyze the text/files and organize them into structured assignments with a clear chain of action.</p>
-                </div>
-              </Card>
-            )}
-            {assignments.length === 0 ? (
-              <Card className="p-8 text-center text-slate-500">No assignments found. Click "+ New Assignment" to create one.</Card>
-            ) : (
-              <div className="space-y-3">
-                {assignments.map((a) => (
-                  <Card key={a.id} className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium">{a.title}</h3>
-                        <p className="text-sm text-slate-500">Due: {a.due_date || 'No due date'}</p>
-                        <p className="text-sm text-slate-600 line-clamp-2">{a.prompt}</p>
-                      </div>
-                      <Badge color={a.status === 'completed' ? 'green' : a.status === 'failed' ? 'red' : 'amber'}>
-                        {a.status || 'tracked'}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <Button variant="outline" className="text-xs px-3 py-1">Generate Materials</Button>
-                      <Button variant="outline" className="text-xs px-3 py-1">Generate Draft</Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
+      <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3 flex-wrap">
+        {['overview', 'study-tools', 'settings', 'billing'].map((t) => (
+          <Button key={t} variant={tab === t ? 'primary' : 'ghost'} onClick={() => setTab(t)} className="capitalize">
+            {t.replace('-', ' ')}
+          </Button>
+        ))}
+      </nav>
+
+      <main className="mx-auto max-w-5xl px-4 pb-16">
+        {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
+        {tab === 'study-tools' && <StudyTools userId={userId} />}
+        {tab === 'settings' && (
+          <Settings
+            userId={userId}
+            onUserId={(id) => { setUserId(id); setUserIdState(id); }}
+            onServer={(url) => { setServer(url); setServerUrlState(url); }}
+          />
         )}
+        {tab === 'billing' && <Billing userId={userId} />}
+      </main>
+    </div>
+  );
+}
 
-        {activeTab === 'materials' && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">📚 Study Materials</h2>
-            {materials.length === 0 ? (
-              <Card className="p-8 text-center text-slate-500">No study materials yet.</Card>
-            ) : (
-              <div className="grid gap-3">
-                {materials.map((m) => (
-                  <Card key={m.id} className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <Badge color="blue">{m.kind}</Badge>
-                        <p className="text-sm text-slate-600 mt-1">{typeof m.content === 'string' ? m.content.substring(0, 200) : JSON.stringify(m.content).substring(0, 200)}...</p>
-                      </div>
-                      <span className="text-xs text-slate-400">{new Date(m.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+// ─── overview ─────────────────────────────────────────────────────────────
+
+function Overview({ userId, onGoTo }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.dashboard(userId).then(setData).catch((e) => setError(e.message));
+  }, [userId]);
+
+  if (error) return <Card className="text-red-600">{error}</Card>;
+  if (!data) return <Card>Loading…</Card>;
+
+  const active = data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length;
+  const monthly = data.monthly_credits || 40;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Card>
+          <div className="text-xs text-slate-500">Active assignments</div>
+          <div className="mt-1 text-2xl font-bold">{active}</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-slate-500">Credits remaining</div>
+          <div className="mt-1 text-2xl font-bold">
+            {data.plan === 'elite' ? '∞' : data.credits}
           </div>
-        )}
+        </Card>
+        <Card>
+          <div className="text-xs text-slate-500">Plan</div>
+          <div className="mt-1 text-2xl font-bold capitalize">{data.plan}</div>
+        </Card>
+      </div>
 
-        {activeTab === 'billing' && (
-          <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-              <p className="font-medium text-blue-800">💡 1 credit = 10,000 tokens (~1 assignment)</p>
-              <p className="text-blue-700 mt-1">Basic: ~50 assignments/mo | Pro: ~150 | Elite: ~400</p>
-            </div>
-            <h2 className="text-xl font-semibold">💳 Choose Your Plan</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {['basic', 'pro', 'elite'].map((plan) => (
-                <div
-                  key={plan}
-                  onClick={() => setSelectedPlan(plan)}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedPlan === plan ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                >
-                  <h3 className="font-semibold capitalize">{plan}</h3>
-                  <p className="text-2xl font-bold">${plan === 'basic' ? 10 : plan === 'pro' ? 20 : 40}/mo</p>
-                  <ul className="mt-2 text-sm text-slate-600 space-y-1">
-                    <li>• {plan === 'basic' ? '50' : plan === 'pro' ? '150' : '400'} credits</li>
-                    <li>• ~{plan === 'basic' ? '50' : plan === 'pro' ? '150' : '400'} assignments</li>
-                  </ul>
+      <Card>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Active assignments</h2>
+          <div className="space-x-2">
+            <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
+          </div>
+        </div>
+        {data.assignments.length === 0 && (
+          <p className="text-sm text-slate-500">
+            Nothing tracked yet. Open the browser extension on a Canvas assignment page and hit <b>Start Scrape</b>.
+          </p>
+        )}
+        <div className="space-y-3">
+          {data.assignments.map((a) => {
+            const done = Object.values(a.progress || {}).filter(Boolean).length;
+            const orch = a.orchestrator || {};
+            return (
+              <div key={a.id} className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{a.title}</span>
+                    {statusBadge(a.status)}
+                    {orch.status && orchestratorStatusBadge(orch.status)}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Progress value={(done / 5) * 100} className="max-w-64" />
+                    <span className="text-xs text-slate-500">{done}/5 materials</span>
+                    {orch.estimated_time_seconds && (
+                      <span className="text-xs text-slate-400">⏱ {Math.round(orch.estimated_time_seconds/60)}m</span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-            <Button className="w-full mt-4">Subscribe to {selectedPlan} plan</Button>
-            <div className="border-t pt-4 mt-4
+                <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {data.materials.length > 0 && (
+        <Card>
+          <h2 className="mb-2 font-semibold">Latest study materials</h2>
+          <div className="flex flex-wrap gap-2">
+            {data.materials.slice(0, 6).map((m) => (
+              <Badge key={m.id} color="blue">{m.kind}</Badge>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── study tools ──────────────────────────────────────────────────────────
+
+function StudyTools({ userId }) {
+  const [data, setData] = useState(null);
+  const [assignmentId, setAssignmentId] = useState('');
+  const [transcriptText, setTranscriptText] = useState('');
+  const [transcripts, setTranscripts] = useState([]);
+  const [busy, setBusy] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.dashboard(userId).then((d) => {
+      setData(d);
+      const t = [];
+      d.assignments.forEach((a) => { if (a.progress?.transcribed) t.push({ id: a.id, title: a.title }); });
+      setTranscripts(t);
+    }).catch((e) => setError(e.message));
+  }, [userId]);
+
+  async function generate(kind) {
+    setError(''); setResult(null);
+    setBusy(kind);
+    try {
+      const body = { public_id: userId, transcript_text: transcriptText, assignment_id: assignmentId ? Number(assignmentId) : null };
+      const fn = { study_guide: api.studyGuide, flashcards: api.flashcards, practice_test: api.practiceTest, summary: api.summary }[kind];
+      const res = await fn(body);
+      setResult({ kind, ...res });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  if (error && !data) return <Card className="text-red-600">{error}</Card>;
+  if (!data) return <Card>Loading…</Card>;
+
+  const kinds = [
+    ['study_guide', '📖 Study guide', 'Key concepts, definitions, sample questions'],
+    ['flashcards', '🃏 Flashcards', 'Q/A pairs for active recall'],
+    ['practice_test', '✏️ Practice test', 'MCQs + short answers with model answers'],
+    ['summary', '⚡ 2-min summary', 'Read right before class'],
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h2 className="mb-2 font-semibold">Source material</h2>
+        <label className="text-xs text-slate-500">Assignment (optional — links materials to your tracker)</label>
+        <select
+          className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          value={assignmentId}
+          onChange={(e) => setAssignmentId(e.target.value)}
+        >
+          <option value="">— none —</option>
+          {data.assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+        </select>
+        {transcripts.length > 0 && (
+          <p className="mt-2 text-xs text-emerald-600">✅ {transcripts.length} assignment(s) already transcribed</p>
+        )}
+        <label className="mt-3 block text-xs text-slate-500">Lecture transcript (paste from /api/transcribe or the extension recorder)</label>
+        <textarea
+          className="mt-1 min-h-40 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          placeholder="Paste your transcribed lecture here…"
+          value={transcriptText}
+          onChange={(e) => setTranscriptText(e.target.value)}
+        />
+      </Card>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {kinds.map(([kind, label, hint]) => (
+          <Card key={kind}>
+            <h3 className="font-semibold">{label}</h3>
+            <p className="mt-0.5 text-xs text-slate-500">{hint} · 0.5 credits</p>
+            <Button className="mt-3" disabled={busy !== '' || !transcriptText.trim() || data.credits < 0.5} onClick={() => generate(kind)}>
+              {busy === kind ? 'Generating…' : 'Generate'}
+            </Button>
+          </Card>
+        ))}
+      </div>
+
+      {error && <Card className="border-red-200 text-sm text-red-600">{error}</Card>}
+
+      {result && (
+        <Card>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-semibold">Result — {result.kind}</h2>
+            <span className="text-xs text-slate-400">model: {result.model_used}</span>
+          </div>
+          <ResultBody result={result} />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ResultBody({ result }) {
+  const content = result.content;
+  if (Array.isArray(content)) {
+    return (
+      <div className="space-y-2">
+        {content.map((c, i) => (
+          <div key={i} className="rounded-md bg-slate-50 p-2 text-sm">
+            <div className="font-medium">Q: {c.q}</div>
+            <div className="text-slate-600">A: {c.a}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (typeof content === 'object') {
+    return (
+      <div className="space-y-3 text-sm">
+        {(content.multiple_choice || []).map((q, i) => (
+          <div key={i} className="rounded-md bg-slate-50 p-2">
+            <div className="font-medium">{i + 1}. {q.q}</div>
+            <div className="ml-2 text-slate-600">{q.options.join('  ·  ')}</div>
+            <div className="mt-0.5 text-emerald-700">✓ {q.options[q.answer_index]} — {q.explanation}</div>
+          </div>
+        ))}
+        {(content.short_answer || []).map((q, i) => (
+          <div key={`s${i}`} className="rounded-md bg-slate-50 p-2">
+            <div className="font-medium">{q.q}</div>
+            <div className="text-slate-600">Model answer: {q.model_answer}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <pre className="whitespace-pre-wrap font-sans text-sm">{content}</pre>;
+}
+
+// ─── settings ─────────────────────────────────────────────────────────────
+
+function Settings({ userId, onUserId, onServer }) {
+  const [localUser, setLocalUser] = useState(userId);
+  const [localServer, setLocalServer] = useState(getServer());
+  const [readingLevel, setReadingLevel] = useState('college-freshman');
+  const [tone, setTone] = useState('neutral');
+  const [saved, setSaved] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [defaultBooks, setDefaultBooks] = useState({
+    '9th': ['To Kill a Mockingbird - Harper Lee', 'The Odyssey - Homer', 'Romeo and Juliet - Shakespeare'],
+    '10th': ['1984 - George Orwell', 'Lord of the Flies - William Golding', 'The Catcher in the Rye - J.D. Salinger'],
+    '11th': ['The Great Gatsby - F. Scott Fitzgerald', 'The Adventures of Huckleberry Finn - Mark Twain', 'The Crucible - Arthur Miller'],
+    '12th': ['Hamlet - Shakespeare', 'Frankenstein - Mary Shelley', 'Pride and Prejudice - Jane Austen'],
+    'college-freshman': ['The Stranger - Albert Camus', 'The Plague - Albert Camus', 'Invisible Man - Ralph Ellison'],
+    'sophomore': ['Beloved - Toni Morrison', 'The Color Purple - Alice Walker', 'One Hundred Years of Solitude - Gabriel Garcia Marquez'],
+  });
+
+  useEffect(() => {
+    api.dashboard(userId).then((d) => {
+      setReadingLevel(d.settings?.reading_level || 'college-freshman');
+      setTone(d.settings?.tone || 'neutral');
+    }).catch(() => {});
+  }, [userId]);
+
+  async function save() {
+    await api.updateSettings({ reading_level: readingLevel, tone, custom_text: customText, default_books: defaultBooks });
+    onUserId(localUser.trim());
+    onServer(localServer.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <div className="max-w-xl space-y-4">
+      <Card>
+        <h2 className="mb-3 font-semibold">Study preferences</h2>
+        <label className="text-xs text-slate-500">Reading level</label>
+        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
+          {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l}>{l}</option>)}
+        </select>
+        <label className="mt-3 block text-xs text-slate-500">Tone</label>
+        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={tone} onChange={(e) => setTone(e.target.value)}>
+          {['formal', 'neutral', 'casual'].map((t) => <option key={t}>{t}</option>)}
+        </select>
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 font-semibold">Custom text & default style</h2>
+        <p className="text-xs text-slate-500 mb-2">Paste custom reference text to use as default writing style. If empty, uses the default book excerpts below.</p>
+        <textarea
+          className="w-full min-h-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          placeholder="Paste your custom text here..."
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+        />
+        <div className="mt-3">
+          <p className="text-xs text-slate-500">Default books for each grade level (use as fallback style samples):</p>
+          <div className="mt-2 space-y-2 text-sm">
+            {Object.entries(defaultBooks).map(([grade, books]) => (
+              <div key={grade}>
+                <span className="font-medium">{grade}:</span>
+                <span className="text-slate-600"> {books.join(', ')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 font-semibold">Connection</h2>
+        <label className="text-xs text-slate-500">Server URL</label>
+        <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={localServer} onChange={(e) => setLocalServer(e.target.value)} />
+        <label className="mt-3 block text-xs text-slate-500">Your user id</label>
+        <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={localUser} onChange={(e) => setLocalUser(e.target.value)} />
+        <Button className="mt-3" onClick={save}>{saved ? '✅ Saved' : 'Save settings'}</Button>
+      </Card>
+    </div>
+  );
+}
+
+// ─── billing ──────────────────────────────────────────────────────────────
+
+function Billing({ userId }) {
+  const [balance, setBalance] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [discount, setDiscount] = useState(null);
+
+  const plans = [
+    { name: 'basic', price: '$10', credits: '15 credits', detail: '$1/credit overage' },
+    { name: 'pro', price: '$20', credits: '40 credits', detail: '$0.75/credit overage' },
+    { name: 'elite', price: '$30', credits: 'Unlimited', detail: 'no overage' },
+  ];
+
+  useEffect(() => {
+    api.dashboard(userId).then((d) => setBalance(d.credits)).catch(() => {});
+  }, [userId]);
+
+  async function pay(amountCents) {
+    setBusy(true); setMsg('');
+    try {
+      const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
+      setBalance(r.credits);
+      setMsg(`✅ ${amountCents / 100} paid — balance now ${r.credits} credits (${r.status})`);
+    } catch (e) {
+      setMsg(`❌ ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitData() {
+    setBusy(true); setMsg('');
+    try {
+      const r = await api.discount({ grades: 'anonymized example grade history' });
+      setDiscount(r);
+      setMsg(`✅ Data submitted — +${r.discount_earned}% discount (balance ${r.discount_balance}%)`);
+    } catch (e) {
+      setMsg(`❌ ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {plans.map((p) => (
+          <Card key={p.name} className="text-center">
+            <div className="font-semibold capitalize">{p.name}</div>
+            <div className="mt-1 text-2xl font-bold">{p.price}<span className="text-sm font-normal text-slate-500">/mo</span></div>
+            <div className="mt-1 text-sm text-slate-600">{p.credits}</div>
+            <div className="text-xs text-slate-400">{p.detail}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <h2 className="mb-2 font-semibold">Top up</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={busy} onClick={() => pay(500)}>$5 → 5 credits</Button>
+          <Button variant="outline" disabled={busy} onClick={() => pay(1000)}>$10 → 10 credits</Button>
+          <Button variant="outline" disabled={busy} onClick={() => pay(2000)}>$20 → 20 credits</Button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Balance: {balance === null ? '…' : balance === '∞' ? '∞' : `${balance} credits`}</p>
+      </Card>
+
+      <Card>
+        <h2 className="mb-2 font-semibold">Data discount program</h2>
+        <p className="text-xs text-slate-500">Opt-in: share anonymized grades/teacher notes → 1% off per submission, max 20% per purchase, spillover carries.</p>
+        <Button variant="outline" className="mt-3" disabled={busy} onClick={submitData}>Submit data sample (+1%)</Button>
+        {discount && <p className="mt-2 text-xs text-emerald-600">Balance: {discount.discount_balance}% — next purchase: {discount.next_purchase_discount}% off</p>}
+      </Card>
+
+      {msg && <Card className="text-sm">{msg}</Card>}
+    </div>
+  );
+}
