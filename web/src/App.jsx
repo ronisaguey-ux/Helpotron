@@ -25,6 +25,7 @@ const Badge = ({ color = 'slate', children }) => {
     blue: 'bg-blue-100 text-blue-700',
     amber: 'bg-amber-100 text-amber-700',
     red: 'bg-red-100 text-red-700',
+    purple: 'bg-purple-100 text-purple-700',
   };
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[color]}`}>{children}</span>;
 };
@@ -67,22 +68,44 @@ export default function App() {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [credits, setCredits] = useState(3);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminAnalytics, setAdminAnalytics] = useState(null);
 
   useEffect(() => {
     api.health().then(() => setConnected(true)).catch(() => setConnected(false));
-    // Check if already logged in
     const saved = localStorage.getItem('helpotron_logged_in');
     if (saved === 'true') {
       setIsLoggedIn(true);
+      const user = localStorage.getItem('helpotron_user');
+      if (user === 'RoniDev' || user === 'admin') {
+        setIsAdmin(true);
+        fetchAdminData();
+      }
     }
   }, [serverUrl]);
 
+  const fetchAdminData = async () => {
+    try {
+      const users = await api.get('/api/admin/users');
+      setAdminUsers(users || []);
+      const analytics = await api.get('/api/admin/analytics');
+      setAdminAnalytics(analytics);
+    } catch (e) { console.error('Admin fetch error', e); }
+  };
+
   const handleLogin = () => {
-    if (loginUser === 'RoniDev' && loginPass === 'MongosDev999') {
+    // Use the correct backend credential: lowercase 'd' in Mongosdev999
+    if (loginUser === 'RoniDev' && loginPass === 'Mongosdev999') {
       setIsLoggedIn(true);
       setLoginError('');
       localStorage.setItem('helpotron_logged_in', 'true');
       localStorage.setItem('helpotron_user', loginUser);
+      if (loginUser === 'RoniDev' || loginUser === 'admin') {
+        setIsAdmin(true);
+        fetchAdminData();
+      }
     } else {
       setLoginError('Invalid credentials');
     }
@@ -93,6 +116,7 @@ export default function App() {
     localStorage.removeItem('helpotron_logged_in');
     localStorage.removeItem('helpotron_user');
     setCredits(3);
+    setIsAdmin(false);
   };
 
   if (!isLoggedIn) {
@@ -109,14 +133,23 @@ export default function App() {
               value={loginUser}
               onChange={(e) => setLoginUser(e.target.value)}
             />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Password"
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm pr-10"
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-slate-500 hover:text-slate-700"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
             {loginError && <p className="text-sm text-red-600">{loginError}</p>}
             <Button className="w-full" onClick={handleLogin}>Sign In</Button>
           </div>
@@ -132,6 +165,7 @@ export default function App() {
           <h1 className="text-lg font-bold">🤖 Helpotron Automator</h1>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>user: <code className="text-slate-700">{userId}</code></span>
+            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
             <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
             <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
           </div>
@@ -150,6 +184,11 @@ export default function App() {
             {t.replace('-', ' ')}
           </Button>
         ))}
+        {isAdmin && (
+          <Button key="admin" variant={tab === 'admin' ? 'primary' : 'ghost'} onClick={() => setTab('admin')} className="capitalize">
+            🛡️ Admin
+          </Button>
+        )}
       </nav>
 
       <main className="mx-auto max-w-5xl px-4 pb-16">
@@ -163,6 +202,7 @@ export default function App() {
           />
         )}
         {tab === 'billing' && <Billing userId={userId} />}
+        {tab === 'admin' && isAdmin && <AdminPanel adminUsers={adminUsers} adminAnalytics={adminAnalytics} refreshAdmin={fetchAdminData} />}
       </main>
     </div>
   );
@@ -182,7 +222,6 @@ function Overview({ userId, onGoTo }) {
   if (!data) return <Card>Loading…</Card>;
 
   const active = data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length;
-  const monthly = data.monthly_credits || 40;
 
   return (
     <div className="space-y-4">
@@ -193,9 +232,7 @@ function Overview({ userId, onGoTo }) {
         </Card>
         <Card>
           <div className="text-xs text-slate-500">Credits remaining</div>
-          <div className="mt-1 text-2xl font-bold">
-            {data.plan === 'elite' ? '∞' : data.credits}
-          </div>
+          <div className="mt-1 text-2xl font-bold">{data.credits}</div>
         </Card>
         <Card>
           <div className="text-xs text-slate-500">Plan</div>
@@ -206,34 +243,22 @@ function Overview({ userId, onGoTo }) {
       <Card>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Active assignments</h2>
-          <div className="space-x-2">
-            <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
-          </div>
+          <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
         </div>
         {data.assignments.length === 0 && (
-          <p className="text-sm text-slate-500">
-            Nothing tracked yet. Open the browser extension on a Canvas assignment page and hit <b>Start Scrape</b>.
-          </p>
+          <p className="text-sm text-slate-500">No tracked assignments yet.</p>
         )}
         <div className="space-y-3">
           {data.assignments.map((a) => {
             const done = Object.values(a.progress || {}).filter(Boolean).length;
-            const orch = a.orchestrator || {};
             return (
               <div key={a.id} className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{a.title}</span>
                     {statusBadge(a.status)}
-                    {orch.status && orchestratorStatusBadge(orch.status)}
                   </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Progress value={(done / 5) * 100} className="max-w-64" />
-                    <span className="text-xs text-slate-500">{done}/5 materials</span>
-                    {orch.estimated_time_seconds && (
-                      <span className="text-xs text-slate-400">⏱ {Math.round(orch.estimated_time_seconds/60)}m</span>
-                    )}
-                  </div>
+                  <Progress value={(done / 5) * 100} className="max-w-64" />
                 </div>
                 <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
               </div>
@@ -262,7 +287,6 @@ function StudyTools({ userId }) {
   const [data, setData] = useState(null);
   const [assignmentId, setAssignmentId] = useState('');
   const [transcriptText, setTranscriptText] = useState('');
-  const [transcripts, setTranscripts] = useState([]);
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -270,9 +294,6 @@ function StudyTools({ userId }) {
   useEffect(() => {
     api.dashboard(userId).then((d) => {
       setData(d);
-      const t = [];
-      d.assignments.forEach((a) => { if (a.progress?.transcribed) t.push({ id: a.id, title: a.title }); });
-      setTranscripts(t);
     }).catch((e) => setError(e.message));
   }, [userId]);
 
@@ -295,9 +316,9 @@ function StudyTools({ userId }) {
   if (!data) return <Card>Loading…</Card>;
 
   const kinds = [
-    ['study_guide', '📖 Study guide', 'Key concepts, definitions, sample questions'],
+    ['study_guide', '📖 Study guide', 'Key concepts, definitions'],
     ['flashcards', '🃏 Flashcards', 'Q/A pairs for active recall'],
-    ['practice_test', '✏️ Practice test', 'MCQs + short answers with model answers'],
+    ['practice_test', '✏️ Practice test', 'MCQs + model answers'],
     ['summary', '⚡ 2-min summary', 'Read right before class'],
   ];
 
@@ -305,7 +326,7 @@ function StudyTools({ userId }) {
     <div className="space-y-4">
       <Card>
         <h2 className="mb-2 font-semibold">Source material</h2>
-        <label className="text-xs text-slate-500">Assignment (optional — links materials to your tracker)</label>
+        <label className="text-xs text-slate-500">Assignment (optional)</label>
         <select
           className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           value={assignmentId}
@@ -314,10 +335,7 @@ function StudyTools({ userId }) {
           <option value="">— none —</option>
           {data.assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
         </select>
-        {transcripts.length > 0 && (
-          <p className="mt-2 text-xs text-emerald-600">✅ {transcripts.length} assignment(s) already transcribed</p>
-        )}
-        <label className="mt-3 block text-xs text-slate-500">Lecture transcript (paste from /api/transcribe or the extension recorder)</label>
+        <label className="mt-3 block text-xs text-slate-500">Lecture transcript</label>
         <textarea
           className="mt-1 min-h-40 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           placeholder="Paste your transcribed lecture here…"
@@ -342,51 +360,12 @@ function StudyTools({ userId }) {
 
       {result && (
         <Card>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-semibold">Result — {result.kind}</h2>
-            <span className="text-xs text-slate-400">model: {result.model_used}</span>
-          </div>
-          <ResultBody result={result} />
+          <h2 className="font-semibold">Result — {result.kind}</h2>
+          <pre className="whitespace-pre-wrap font-sans text-sm mt-2">{JSON.stringify(result.content, null, 2)}</pre>
         </Card>
       )}
     </div>
   );
-}
-
-function ResultBody({ result }) {
-  const content = result.content;
-  if (Array.isArray(content)) {
-    return (
-      <div className="space-y-2">
-        {content.map((c, i) => (
-          <div key={i} className="rounded-md bg-slate-50 p-2 text-sm">
-            <div className="font-medium">Q: {c.q}</div>
-            <div className="text-slate-600">A: {c.a}</div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (typeof content === 'object') {
-    return (
-      <div className="space-y-3 text-sm">
-        {(content.multiple_choice || []).map((q, i) => (
-          <div key={i} className="rounded-md bg-slate-50 p-2">
-            <div className="font-medium">{i + 1}. {q.q}</div>
-            <div className="ml-2 text-slate-600">{q.options.join('  ·  ')}</div>
-            <div className="mt-0.5 text-emerald-700">✓ {q.options[q.answer_index]} — {q.explanation}</div>
-          </div>
-        ))}
-        {(content.short_answer || []).map((q, i) => (
-          <div key={`s${i}`} className="rounded-md bg-slate-50 p-2">
-            <div className="font-medium">{q.q}</div>
-            <div className="text-slate-600">Model answer: {q.model_answer}</div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return <pre className="whitespace-pre-wrap font-sans text-sm">{content}</pre>;
 }
 
 // ─── settings ─────────────────────────────────────────────────────────────
@@ -395,27 +374,18 @@ function Settings({ userId, onUserId, onServer }) {
   const [localUser, setLocalUser] = useState(userId);
   const [localServer, setLocalServer] = useState(getServer());
   const [readingLevel, setReadingLevel] = useState('college-freshman');
-  const [tone, setTone] = useState('neutral');
+  const [tone, setTone] = useState('formal');
   const [saved, setSaved] = useState(false);
-  const [customText, setCustomText] = useState('');
-  const [defaultBooks, setDefaultBooks] = useState({
-    '9th': ['To Kill a Mockingbird - Harper Lee', 'The Odyssey - Homer', 'Romeo and Juliet - Shakespeare'],
-    '10th': ['1984 - George Orwell', 'Lord of the Flies - William Golding', 'The Catcher in the Rye - J.D. Salinger'],
-    '11th': ['The Great Gatsby - F. Scott Fitzgerald', 'The Adventures of Huckleberry Finn - Mark Twain', 'The Crucible - Arthur Miller'],
-    '12th': ['Hamlet - Shakespeare', 'Frankenstein - Mary Shelley', 'Pride and Prejudice - Jane Austen'],
-    'college-freshman': ['The Stranger - Albert Camus', 'The Plague - Albert Camus', 'Invisible Man - Ralph Ellison'],
-    'sophomore': ['Beloved - Toni Morrison', 'The Color Purple - Alice Walker', 'One Hundred Years of Solitude - Gabriel Garcia Marquez'],
-  });
 
   useEffect(() => {
     api.dashboard(userId).then((d) => {
       setReadingLevel(d.settings?.reading_level || 'college-freshman');
-      setTone(d.settings?.tone || 'neutral');
+      setTone(d.settings?.tone || 'formal');
     }).catch(() => {});
   }, [userId]);
 
   async function save() {
-    await api.updateSettings({ reading_level: readingLevel, tone, custom_text: customText, default_books: defaultBooks });
+    await api.updateSettings({ reading_level: readingLevel, tone: 'formal' });
     onUserId(localUser.trim());
     onServer(localServer.trim());
     setSaved(true);
@@ -430,32 +400,7 @@ function Settings({ userId, onUserId, onServer }) {
         <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
           {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l}>{l}</option>)}
         </select>
-        <label className="mt-3 block text-xs text-slate-500">Tone</label>
-        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={tone} onChange={(e) => setTone(e.target.value)}>
-          {['formal', 'neutral', 'casual'].map((t) => <option key={t}>{t}</option>)}
-        </select>
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 font-semibold">Custom text & default style</h2>
-        <p className="text-xs text-slate-500 mb-2">Paste custom reference text to use as default writing style. If empty, uses the default book excerpts below.</p>
-        <textarea
-          className="w-full min-h-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          placeholder="Paste your custom text here..."
-          value={customText}
-          onChange={(e) => setCustomText(e.target.value)}
-        />
-        <div className="mt-3">
-          <p className="text-xs text-slate-500">Default books for each grade level (use as fallback style samples):</p>
-          <div className="mt-2 space-y-2 text-sm">
-            {Object.entries(defaultBooks).map(([grade, books]) => (
-              <div key={grade}>
-                <span className="font-medium">{grade}:</span>
-                <span className="text-slate-600"> {books.join(', ')}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="mt-2 text-xs text-slate-400">Tone is fixed to formal for all assignments.</p>
       </Card>
 
       <Card>
@@ -479,9 +424,9 @@ function Billing({ userId }) {
   const [discount, setDiscount] = useState(null);
 
   const plans = [
-    { name: 'basic', price: '$10', credits: '15 credits', detail: '$1/credit overage' },
-    { name: 'pro', price: '$20', credits: '40 credits', detail: '$0.75/credit overage' },
-    { name: 'elite', price: '$30', credits: 'Unlimited', detail: 'no overage' },
+    { name: 'basic', price: '$10', credits: '300 credits', detail: '3M tokens ~300 assignments' },
+    { name: 'pro', price: '$20', credits: '600 credits', detail: '6M tokens ~600 assignments (BEST VALUE)' },
+    { name: 'elite', price: '$40', credits: '1500 credits', detail: '15M tokens ~1500 assignments' },
   ];
 
   useEffect(() => {
@@ -493,7 +438,7 @@ function Billing({ userId }) {
     try {
       const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
       setBalance(r.credits);
-      setMsg(`✅ ${amountCents / 100} paid — balance now ${r.credits} credits (${r.status})`);
+      setMsg(`✅ ${amountCents / 100} paid — balance now ${r.credits} credits`);
     } catch (e) {
       setMsg(`❌ ${e.message}`);
     } finally {
@@ -506,7 +451,7 @@ function Billing({ userId }) {
     try {
       const r = await api.discount({ grades: 'anonymized example grade history' });
       setDiscount(r);
-      setMsg(`✅ Data submitted — +${r.discount_earned}% discount (balance ${r.discount_balance}%)`);
+      setMsg(`✅ Data submitted — +${r.discount_earned}% discount`);
     } catch (e) {
       setMsg(`❌ ${e.message}`);
     } finally {
@@ -534,17 +479,76 @@ function Billing({ userId }) {
           <Button variant="outline" disabled={busy} onClick={() => pay(1000)}>$10 → 10 credits</Button>
           <Button variant="outline" disabled={busy} onClick={() => pay(2000)}>$20 → 20 credits</Button>
         </div>
-        <p className="mt-2 text-xs text-slate-500">Balance: {balance === null ? '…' : balance === '∞' ? '∞' : `${balance} credits`}</p>
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 font-semibold">Data discount program</h2>
-        <p className="text-xs text-slate-500">Opt-in: share anonymized grades/teacher notes → 1% off per submission, max 20% per purchase, spillover carries.</p>
-        <Button variant="outline" className="mt-3" disabled={busy} onClick={submitData}>Submit data sample (+1%)</Button>
-        {discount && <p className="mt-2 text-xs text-emerald-600">Balance: {discount.discount_balance}% — next purchase: {discount.next_purchase_discount}% off</p>}
+        <p className="mt-2 text-xs text-slate-500">Balance: {balance === null ? '…' : `${balance} credits`}</p>
+        <p className="text-xs text-slate-400 mt-1">1 credit = 10,000 tokens processed</p>
       </Card>
 
       {msg && <Card className="text-sm">{msg}</Card>}
+    </div>
+  );
+}
+
+// ─── admin panel ──────────────────────────────────────────────────────────
+
+function AdminPanel({ adminUsers, adminAnalytics, refreshAdmin }) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold">🛡️ Admin Panel</h2>
+
+      {adminAnalytics && (
+        <Card>
+          <h3 className="font-semibold mb-2">📊 Analytics</h3>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div><span className="text-slate-500">Total users:</span> {adminAnalytics.users?.total || 0}</div>
+            <div><span className="text-slate-500">Total assignments:</span> {adminAnalytics.content?.assignments || 0}</div>
+            <div><span className="text-slate-500">Study materials:</span> {adminAnalytics.content?.study_materials || 0}</div>
+            <div><span className="text-slate-500">Revenue:</span> ${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || 0}</div>
+          </div>
+          <Button variant="outline" className="mt-3 text-sm" onClick={refreshAdmin}>Refresh</Button>
+        </Card>
+      )}
+
+      <Card>
+        <h3 className="font-semibold mb-2">👥 Users</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2 px-2">User</th>
+                <th className="text-left py-2 px-2">Plan</th>
+                <th className="text-left py-2 px-2">Credits</th>
+                <th className="text-left py-2 px-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adminUsers.map((u) => (
+                <tr key={u.id} className="border-b hover:bg-slate-50">
+                  <td className="py-2 px-2 font-mono text-xs">{u.public_id}</td>
+                  <td className="py-2 px-2"><Badge color={u.plan === 'elite' ? 'purple' : u.plan === 'pro' ? 'amber' : 'blue'}>{u.plan}</Badge></td>
+                  <td className="py-2 px-2">{u.credits}</td>
+                  <td className="py-2 px-2">
+                    <div className="flex gap-1 flex-wrap">
+                      <Button variant="outline" className="text-xs px-2 py-0.5">+10</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5">Set Pro</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5">Set Elite</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5 text-red-600">Ban</Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="font-semibold mb-2">🔑 Generate Token</h3>
+        <div className="flex gap-2">
+          <Button variant="outline" className="text-sm">7-day token</Button>
+          <Button variant="outline" className="text-sm">30-day token</Button>
+          <Button variant="outline" className="text-sm">List tokens</Button>
+        </div>
+      </Card>
     </div>
   );
 }
