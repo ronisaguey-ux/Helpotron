@@ -54,6 +54,8 @@ class User(Base):
     credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     drafts = relationship("Draft", back_populates="user", cascade="all, delete-orphan")
+    referrals = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", cascade="all, delete-orphan")
+    referred = relationship("Referral", foreign_keys="Referral.referee_id", back_populates="referee", cascade="all, delete-orphan")
 
 
 class Assignment(Base):
@@ -165,6 +167,20 @@ class Draft(Base):
 
     user = relationship("User", back_populates="drafts")
     assignment = relationship("Assignment", back_populates="drafts")
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    referee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    referral_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    referrer = relationship("User", foreign_keys=[referrer_id], back_populates="referrals")
+    referee = relationship("User", foreign_keys=[referee_id], back_populates="referred")
 
 
 def get_db() -> Generator[Any, None, None]:
