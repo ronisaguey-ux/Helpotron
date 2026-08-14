@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Generator
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from .config import config
@@ -43,10 +43,13 @@ class User(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     discount_balance: Mapped[float] = mapped_column(Float, default=0.0)
     discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)
-    # Password fields for authentication
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    preferred_model: Mapped[str] = mapped_column(String(64), default="deepseek-flash")
+    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(32), default="member")  # admin, moderator, member
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="user", cascade="all, delete-orphan")
@@ -56,6 +59,23 @@ class User(Base):
     drafts = relationship("Draft", back_populates="user", cascade="all, delete-orphan")
     referrals = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", cascade="all, delete-orphan")
     referred = relationship("Referral", foreign_keys="Referral.referee_id", back_populates="referee", cascade="all, delete-orphan")
+    study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
+    organization = relationship("Organization", back_populates="members")
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(256))
+    plan: Mapped[str] = mapped_column(String(32), default="team")  # team, school, district
+    seat_count: Mapped[int] = mapped_column(Integer, default=10)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    members = relationship("User", back_populates="organization")
+    admin = relationship("User", foreign_keys=[admin_id])
 
 
 class Assignment(Base):
@@ -105,10 +125,12 @@ class StudyMaterial(Base):
     content: Mapped[str] = mapped_column(String)
     model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    shared_with: Mapped[list] = mapped_column(JSON, default=list)  # list of user IDs
 
     user = relationship("User", back_populates="materials")
     assignment = relationship("Assignment", back_populates="materials")
     transcript = relationship("Transcript", back_populates="materials")
+    study_sessions = relationship("StudySession", back_populates="material")
 
 
 class CreditTransaction(Base):
@@ -181,6 +203,62 @@ class Referral(Base):
 
     referrer = relationship("User", foreign_keys=[referrer_id], back_populates="referrals")
     referee = relationship("User", foreign_keys=[referee_id], back_populates="referred")
+
+
+class StudySession(Base):
+    __tablename__ = "study_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("study_materials.id"), index=True)
+    time_spent_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completed_flashcards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="study_sessions")
+    material = relationship("StudyMaterial", back_populates="study_sessions")
+
+
+class StudyGroup(Base):
+    __tablename__ = "study_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(256))
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    invite_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    memberships = relationship("GroupMembership", back_populates="group", cascade="all, delete-orphan")
+    shared_materials = relationship("SharedMaterial", back_populates="group", cascade="all, delete-orphan")
+
+
+class GroupMembership(Base):
+    __tablename__ = "group_memberships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    group = relationship("StudyGroup", back_populates="memberships")
+    user = relationship("User")
+
+
+class SharedMaterial(Base):
+    __tablename__ = "shared_materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id"), index=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("study_materials.id"), index=True)
+    shared_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    shared_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    group = relationship("StudyGroup", back_populates="shared_materials")
+    material = relationship("StudyMaterial")
+    shared_by = relationship("User")
 
 
 def get_db() -> Generator[Any, None, None]:

@@ -29,6 +29,13 @@ from .security import hash_password, verify_password, SessionStore, SESSION_COOK
 from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 from .ratelimit import auth_limiter
 
+# Import route modules
+from .routes_analytics import router as analytics_router
+from .routes_referral import router as referral_router
+from .routes_organization import router as organization_router
+from .routes_export import router as export_router
+from .routes_study_groups import router as study_groups_router
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
 
@@ -89,6 +96,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── include routers ────────────────────────────────────────────────────────
+app.include_router(analytics_router)
+app.include_router(referral_router)
+app.include_router(organization_router)
+app.include_router(export_router)
+app.include_router(study_groups_router)
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 

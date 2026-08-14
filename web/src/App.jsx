@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
+import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
+import ReferralSection from './components/ReferralSection.jsx';
+import StudyGroups from './components/StudyGroups.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -43,17 +46,6 @@ const statusBadge = (status) => ({
   completed: <Badge color="green">✅ completed</Badge>,
 }[status] ?? <Badge>{status}</Badge>);
 
-const orchestratorStatusBadge = (status) => ({
-  pending: <Badge color="slate">pending</Badge>,
-  analyzing: <Badge color="blue">analyzing</Badge>,
-  planning: <Badge color="amber">planning</Badge>,
-  executing: <Badge color="amber">executing</Badge>,
-  reviewing: <Badge color="blue">reviewing</Badge>,
-  done: <Badge color="green">✅ done</Badge>,
-  risky: <Badge color="red">⚠️ risky</Badge>,
-  failed: <Badge color="red">❌ failed</Badge>,
-}[status] ?? <Badge>{status}</Badge>);
-
 export default function App() {
   const [userId, setUserIdState] = useState(getUserId);
   const [serverUrl, setServerUrlState] = useState(getServer);
@@ -71,7 +63,6 @@ export default function App() {
   const [credits, setCredits] = useState(0);
   const [userPlan, setUserPlan] = useState('basic');
 
-  // Check session on mount and after login/logout
   const checkSession = async () => {
     try {
       const me = await api.me();
@@ -80,7 +71,6 @@ export default function App() {
         setUserIdState(me.public_id);
         setCredits(me.credits || 0);
         setUserPlan(me.plan || 'basic');
-        // Check admin status via dedicated endpoint
         try {
           const adminStatus = await api.adminCheck();
           if (adminStatus && adminStatus.is_admin) {
@@ -208,7 +198,7 @@ export default function App() {
       )}
 
       <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3 flex-wrap">
-        {['overview', 'study-tools', 'settings', 'billing'].map((t) => (
+        {['overview', 'study-tools', 'analytics', 'referral', 'groups', 'settings', 'billing'].map((t) => (
           <Button key={t} variant={tab === t ? 'primary' : 'ghost'} onClick={() => setTab(t)} className="capitalize">
             {t.replace('-', ' ')}
           </Button>
@@ -223,6 +213,9 @@ export default function App() {
       <main className="mx-auto max-w-5xl px-4 pb-16">
         {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
         {tab === 'study-tools' && <StudyTools userId={userId} />}
+        {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}
+        {tab === 'referral' && <ReferralSection userId={userId} />}
+        {tab === 'groups' && <StudyGroups userId={userId} />}
         {tab === 'settings' && (
           <Settings
             userId={userId}
