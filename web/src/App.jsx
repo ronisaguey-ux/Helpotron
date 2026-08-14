@@ -1,7 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
-
-// ─── tiny shadcn-style primitives ─────────────────────────────────────────
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -56,8 +54,6 @@ const orchestratorStatusBadge = (status) => ({
   failed: <Badge color="red">❌ failed</Badge>,
 }[status] ?? <Badge>{status}</Badge>);
 
-// ─── main app ─────────────────────────────────────────────────────────────
-
 export default function App() {
   const [userId, setUserIdState] = useState(getUserId);
   const [serverUrl, setServerUrlState] = useState(getServer);
@@ -67,56 +63,86 @@ export default function App() {
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [credits, setCredits] = useState(3);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminAnalytics, setAdminAnalytics] = useState(null);
+  const [credits, setCredits] = useState(0);
+  const [userPlan, setUserPlan] = useState('basic');
 
-  useEffect(() => {
-    api.health().then(() => setConnected(true)).catch(() => setConnected(false));
-    const saved = localStorage.getItem('helpotron_logged_in');
-    if (saved === 'true') {
-      setIsLoggedIn(true);
-      const user = localStorage.getItem('helpotron_user');
-      if (user === 'RoniDev' || user === 'admin') {
-        setIsAdmin(true);
-        fetchAdminData();
+  // Check session on mount and after login/logout
+  const checkSession = async () => {
+    try {
+      const me = await api.me();
+      if (me && me.public_id) {
+        setIsLoggedIn(true);
+        setUserIdState(me.public_id);
+        setCredits(me.credits || 0);
+        setUserPlan(me.plan || 'basic');
+        // Check admin status via dedicated endpoint
+        try {
+          const adminStatus = await api.adminCheck();
+          if (adminStatus && adminStatus.is_admin) {
+            setIsAdmin(true);
+            fetchAdminData();
+          }
+        } catch (e) {
+          console.log('Admin check failed:', e.message);
+        }
+        return true;
       }
+      return false;
+    } catch (e) {
+      console.log('Not authenticated:', e.message);
+      return false;
     }
-  }, [serverUrl]);
+  };
 
   const fetchAdminData = async () => {
     try {
-      const users = await api.get('/api/admin/users');
+      const users = await api.adminUsers();
       setAdminUsers(users || []);
-      const analytics = await api.get('/api/admin/analytics');
+      const analytics = await api.adminAnalytics();
       setAdminAnalytics(analytics);
     } catch (e) { console.error('Admin fetch error', e); }
   };
 
-  const handleLogin = () => {
-    // Use the correct backend credential: lowercase 'd' in Mongosdev999
-    if (loginUser === 'RoniDev' && loginPass === 'Mongosdev999') {
-      setIsLoggedIn(true);
-      setLoginError('');
-      localStorage.setItem('helpotron_logged_in', 'true');
-      localStorage.setItem('helpotron_user', loginUser);
-      if (loginUser === 'RoniDev' || loginUser === 'admin') {
-        setIsAdmin(true);
-        fetchAdminData();
+  useEffect(() => {
+    api.health().then(() => setConnected(true)).catch(() => setConnected(false));
+    checkSession();
+  }, [serverUrl]);
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await api.login(loginUser, loginPass);
+      if (res.message === 'Logged in') {
+        const loggedIn = await checkSession();
+        if (loggedIn) {
+          setLoginUser('');
+          setLoginPass('');
+        }
+      } else {
+        setLoginError('Login failed');
       }
-    } else {
-      setLoginError('Invalid credentials');
+    } catch (e) {
+      setLoginError(e.message || 'Invalid credentials');
     }
+    setLoginLoading(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (e) { console.log('Logout error:', e); }
     setIsLoggedIn(false);
-    localStorage.removeItem('helpotron_logged_in');
-    localStorage.removeItem('helpotron_user');
-    setCredits(3);
     setIsAdmin(false);
+    setAdminUsers([]);
+    setAdminAnalytics(null);
+    setCredits(0);
+    setUserPlan('basic');
   };
 
   if (!isLoggedIn) {
@@ -124,7 +150,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Card className="w-96">
           <h1 className="text-xl font-bold mb-4">🤖 Helpotron Automator</h1>
-          <p className="text-sm text-slate-500 mb-4">Sign in to continue. You have {credits} free credits remaining.</p>
+          <p className="text-sm text-slate-500 mb-4">Sign in to continue.</p>
           <div className="space-y-3">
             <input
               type="text"
@@ -151,7 +177,9 @@ export default function App() {
               </button>
             </div>
             {loginError && <p className="text-sm text-red-600">{loginError}</p>}
-            <Button className="w-full" onClick={handleLogin}>Sign In</Button>
+            <Button className="w-full" onClick={handleLogin} disabled={loginLoading}>
+              {loginLoading ? 'Logging in...' : 'Sign In'}
+            </Button>
           </div>
         </Card>
       </div>
@@ -165,8 +193,9 @@ export default function App() {
           <h1 className="text-lg font-bold">🤖 Helpotron Automator</h1>
           <div className="flex items-center gap-3 text-sm text-slate-500">
             <span>user: <code className="text-slate-700">{userId}</code></span>
-            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
+            <span>💰 {credits} credits</span>
             <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
             <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
           </div>
         </div>
@@ -208,20 +237,21 @@ export default function App() {
   );
 }
 
-// ─── overview ─────────────────────────────────────────────────────────────
-
 function Overview({ userId, onGoTo }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.dashboard(userId).then(setData).catch((e) => setError(e.message));
+    setLoading(true);
+    api.dashboard(userId).then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [userId]);
 
+  if (loading) return <Card>Loading…</Card>;
   if (error) return <Card className="text-red-600">{error}</Card>;
-  if (!data) return <Card>Loading…</Card>;
+  if (!data) return <Card>No data</Card>;
 
-  const active = data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length;
+  const active = data.assignments ? data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length : 0;
 
   return (
     <div className="space-y-4">
@@ -232,11 +262,11 @@ function Overview({ userId, onGoTo }) {
         </Card>
         <Card>
           <div className="text-xs text-slate-500">Credits remaining</div>
-          <div className="mt-1 text-2xl font-bold">{data.credits}</div>
+          <div className="mt-1 text-2xl font-bold">{data.credits ?? 0}</div>
         </Card>
         <Card>
           <div className="text-xs text-slate-500">Plan</div>
-          <div className="mt-1 text-2xl font-bold capitalize">{data.plan}</div>
+          <div className="mt-1 text-2xl font-bold capitalize">{data.plan || 'basic'}</div>
         </Card>
       </div>
 
@@ -245,29 +275,31 @@ function Overview({ userId, onGoTo }) {
           <h2 className="font-semibold">Active assignments</h2>
           <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
         </div>
-        {data.assignments.length === 0 && (
+        {!data.assignments || data.assignments.length === 0 && (
           <p className="text-sm text-slate-500">No tracked assignments yet.</p>
         )}
-        <div className="space-y-3">
-          {data.assignments.map((a) => {
-            const done = Object.values(a.progress || {}).filter(Boolean).length;
-            return (
-              <div key={a.id} className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">{a.title}</span>
-                    {statusBadge(a.status)}
+        {data.assignments && data.assignments.length > 0 && (
+          <div className="space-y-3">
+            {data.assignments.map((a) => {
+              const done = Object.values(a.progress || {}).filter(Boolean).length;
+              return (
+                <div key={a.id} className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{a.title}</span>
+                      {statusBadge(a.status)}
+                    </div>
+                    <Progress value={(done / 5) * 100} className="max-w-64" />
                   </div>
-                  <Progress value={(done / 5) * 100} className="max-w-64" />
+                  <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
                 </div>
-                <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
-      {data.materials.length > 0 && (
+      {data.materials && data.materials.length > 0 && (
         <Card>
           <h2 className="mb-2 font-semibold">Latest study materials</h2>
           <div className="flex flex-wrap gap-2">
@@ -281,8 +313,6 @@ function Overview({ userId, onGoTo }) {
   );
 }
 
-// ─── study tools ──────────────────────────────────────────────────────────
-
 function StudyTools({ userId }) {
   const [data, setData] = useState(null);
   const [assignmentId, setAssignmentId] = useState('');
@@ -290,11 +320,13 @@ function StudyTools({ userId }) {
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api.dashboard(userId).then((d) => {
       setData(d);
-    }).catch((e) => setError(e.message));
+    }).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [userId]);
 
   async function generate(kind) {
@@ -312,8 +344,9 @@ function StudyTools({ userId }) {
     }
   }
 
+  if (loading) return <Card>Loading…</Card>;
   if (error && !data) return <Card className="text-red-600">{error}</Card>;
-  if (!data) return <Card>Loading…</Card>;
+  if (!data) return <Card>No data</Card>;
 
   const kinds = [
     ['study_guide', '📖 Study guide', 'Key concepts, definitions'],
@@ -333,7 +366,7 @@ function StudyTools({ userId }) {
           onChange={(e) => setAssignmentId(e.target.value)}
         >
           <option value="">— none —</option>
-          {data.assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+          {data.assignments && data.assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
         </select>
         <label className="mt-3 block text-xs text-slate-500">Lecture transcript</label>
         <textarea
@@ -349,7 +382,7 @@ function StudyTools({ userId }) {
           <Card key={kind}>
             <h3 className="font-semibold">{label}</h3>
             <p className="mt-0.5 text-xs text-slate-500">{hint} · 0.5 credits</p>
-            <Button className="mt-3" disabled={busy !== '' || !transcriptText.trim() || data.credits < 0.5} onClick={() => generate(kind)}>
+            <Button className="mt-3" disabled={busy !== '' || !transcriptText.trim() || (data.credits ?? 0) < 0.5} onClick={() => generate(kind)}>
               {busy === kind ? 'Generating…' : 'Generate'}
             </Button>
           </Card>
@@ -367,8 +400,6 @@ function StudyTools({ userId }) {
     </div>
   );
 }
-
-// ─── settings ─────────────────────────────────────────────────────────────
 
 function Settings({ userId, onUserId, onServer }) {
   const [localUser, setLocalUser] = useState(userId);
@@ -414,8 +445,6 @@ function Settings({ userId, onUserId, onServer }) {
     </div>
   );
 }
-
-// ─── billing ──────────────────────────────────────────────────────────────
 
 function Billing({ userId }) {
   const [balance, setBalance] = useState(null);
@@ -488,9 +517,11 @@ function Billing({ userId }) {
   );
 }
 
-// ─── admin panel ──────────────────────────────────────────────────────────
-
 function AdminPanel({ adminUsers, adminAnalytics, refreshAdmin }) {
+  const [adjustTarget, setAdjustTarget] = useState(null);
+  const [adjustAmount, setAdjustAmount] = useState(10);
+  const [adjustReason, setAdjustReason] = useState('admin adjustment');
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">🛡️ Admin Panel</h2>
@@ -528,10 +559,11 @@ function AdminPanel({ adminUsers, adminAnalytics, refreshAdmin }) {
                   <td className="py-2 px-2">{u.credits}</td>
                   <td className="py-2 px-2">
                     <div className="flex gap-1 flex-wrap">
-                      <Button variant="outline" className="text-xs px-2 py-0.5">+10</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5">Set Pro</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5">Set Elite</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5 text-red-600">Ban</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminAdjustCredits(u.id, 10, 'admin bonus'); refreshAdmin(); }}>+10</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminSetPlan(u.id, 'pro'); refreshAdmin(); }}>Pro</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminSetPlan(u.id, 'elite'); refreshAdmin(); }}>Elite</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5 text-red-600" onClick={() => { if(confirm('Ban this user?')) { api.adminBanUser(u.id); refreshAdmin(); } }}>Ban</Button>
+                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { const pw = prompt('New password for '+u.public_id+':'); if(pw && pw.length>=6) { api.adminResetPassword(u.id, pw); refreshAdmin(); } }}>Reset PW</Button>
                     </div>
                   </td>
                 </tr>
@@ -544,9 +576,9 @@ function AdminPanel({ adminUsers, adminAnalytics, refreshAdmin }) {
       <Card>
         <h3 className="font-semibold mb-2">🔑 Generate Token</h3>
         <div className="flex gap-2">
-          <Button variant="outline" className="text-sm">7-day token</Button>
-          <Button variant="outline" className="text-sm">30-day token</Button>
-          <Button variant="outline" className="text-sm">List tokens</Button>
+          <Button variant="outline" className="text-sm" onClick={() => { api.adminGenerateToken(7, 1).then(() => refreshAdmin()); }}>7-day token</Button>
+          <Button variant="outline" className="text-sm" onClick={() => { api.adminGenerateToken(30, 1).then(() => refreshAdmin()); }}>30-day token</Button>
+          <Button variant="outline" className="text-sm" onClick={() => { api.adminListTokens().then(tokens => alert(JSON.stringify(tokens, null, 2))); }}>List tokens</Button>
         </div>
       </Card>
     </div>

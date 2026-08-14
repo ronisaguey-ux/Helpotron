@@ -1,0 +1,80 @@
+"""CSRF protection utilities.
+
+Uses double-submit cookie pattern: a token is set as a cookie (httpOnly=false)
+and must be submitted in a header or form field for state-changing requests.
+"""
+from __future__ import annotations
+
+import secrets
+from typing import Any
+from fastapi import HTTPException, Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+
+
+def generate_csrf_token() -> str:
+    """Generate a cryptographically secure random token."""
+    return secrets.token_urlsafe(32)
+
+
+def set_csrf_cookie(response: Response) -> str:
+    """Set a CSRF cookie and return the token."""
+    token = generate_csrf_token()
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,   # Must be readable by JavaScript to send back
+        secure=False,     # Set to True in production with HTTPS
+        samesite="lax",
+        path="/",
+    )
+    return token
+
+
+def validate_csrf(request: Request) -> None:
+    """Validate the CSRF token from cookie vs header.
+
+    Raises HTTPException 403 if validation fails.
+    """
+    # Skip for safe methods
+    if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return
+
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+    header_token = request.headers.get(CSRF_HEADER_NAME)
+
+    if not cookie_token or not header_token:
+        raise HTTPException(403, "CSRF token missing")
+
+    # Use constant-time comparison to avoid timing attacks
+    if not secrets.compare_digest(cookie_token, header_token):
+        raise HTTPException(403, "CSRF token invalid")
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """Middleware to enforce CSRF protection on state-changing requests."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Skip validation for safe methods and non-API routes
+        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return await call_next(request)
+
+        # Only apply to API endpoints
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        # Validate CSRF
+        try:
+            validate_csrf(request)
+        except HTTPException as e:
+            # If validation fails, return 403
+            from starlette.responses import JSONResponse
+            return JSONResponse(
+                {"detail": e.detail},
+                status_code=e.status_code
+            )
+
+        return await call_next(request)

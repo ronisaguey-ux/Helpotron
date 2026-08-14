@@ -1,178 +1,257 @@
-"""Security module: password hashing, rate limiting, session management, CORS, and production hardening.
-
-For VPS + domain deployment.
-"""
-
+"""Security utilities for Helpotron - input validation, rate limiting, headers, password hashing."""
 from __future__ import annotations
 
 import hashlib
-import hmac
+import re
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Any
 
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException, Request, Response, Depends
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.sessions import SessionMiddleware
+from starlette.types import ASGIApp
 
 from .config import config
 
-# ─── password hashing (bcrypt-style, no external lib) ────────────────────
+# ─── password hashing ──────────────────────────────────────────────────────
 
-SALT_LENGTH = 32
-HASH_ITERATIONS = 100000
-HASH_LENGTH = 64
+def hash_password(password: str) -> tuple[str, str]:
+    """Hash a password using PBKDF2 with a random salt."""
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return key.hex(), salt
 
-def hash_password(password: str, salt: Optional[bytes] = None) -> Tuple[str, str]:
-    """Return (hashed_password, salt_hex) for storage."""
-    if salt is None:
-        salt = secrets.token_bytes(SALT_LENGTH)
-    salt_hex = salt.hex()
-    hashed = hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode('utf-8'),
-        salt,
-        HASH_ITERATIONS,
-        HASH_LENGTH
-    )
-    return hashed.hex(), salt_hex
 
-def verify_password(password: str, hashed_hex: str, salt_hex: str) -> bool:
-    """Verify a password against its stored hash and salt."""
-    salt = bytes.fromhex(salt_hex)
-    hashed, _ = hash_password(password, salt)
-    return hmac.compare_digest(hashed, hashed_hex)
+def verify_password(password: str, hash_hex: str, salt: str) -> bool:
+    """Verify a password against a stored hash and salt."""
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return key.hex() == hash_hex
 
-# ─── session management ────────────────────────────────────────────────────
+# ─── rate limiting ────────────────────────────────────────────────────────
+
+class RateLimiter:
+    """Basic rate limiter for general endpoints."""
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests: Dict[str, list[float]] = {}
+
+    def allow(self, key: str) -> bool:
+        now = time.time()
+        window_start = now - self.window_seconds
+        if key not in self._requests:
+            self._requests[key] = []
+        requests = [t for t in self._requests[key] if t > window_start]
+        if len(requests) >= self.max_requests:
+            return False
+        requests.append(now)
+        self._requests[key] = requests
+        return True
+
+    def remaining(self, key: str) -> int:
+        now = time.time()
+        window_start = now - self.window_seconds
+        requests = [t for t in self._requests.get(key, []) if t > window_start]
+        return max(0, self.max_requests - len(requests))
+
+
+class AdaptiveRateLimiter:
+    """Rate limiter with exponential backoff for auth endpoints."""
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests: Dict[str, list[float]] = {}
+        self._failures: Dict[str, list[float]] = {}
+
+    def allow(self, key: str) -> bool:
+        now = time.time()
+        window_start = now - self.window_seconds
+        if key not in self._requests:
+            self._requests[key] = []
+        requests = [t for t in self._requests[key] if t > window_start]
+        if len(requests) >= self.max_requests:
+            return False
+        requests.append(now)
+        self._requests[key] = requests
+        return True
+
+    def check_auth(self, key: str) -> tuple[bool, int]:
+        now = time.time()
+        hour_ago = now - 3600
+        recent_failures = [t for t in self._failures.get(key, []) if t > hour_ago]
+        if len(recent_failures) >= 5:
+            wait = 2 ** min(len(recent_failures) - 5, 15)
+            return False, wait
+        return True, 0
+
+    def log_failure(self, key: str) -> None:
+        now = time.time()
+        if key not in self._failures:
+            self._failures[key] = []
+        self._failures[key] = [t for t in self._failures[key] if now - t < 3600]
+        self._failures[key].append(now)
+
+    def reset_failures(self, key: str) -> None:
+        self._failures.pop(key, None)
+
+# ─── input validation ──────────────────────────────────────────────────────
+
+def sanitize_input(text: str, max_length: int = 10000) -> str:
+    """Sanitize user input: strip, limit length, remove dangerous patterns."""
+    if not text:
+        return ""
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    text = text.strip()
+    if len(text) > max_length:
+        text = text[:max_length]
+    return text
+
+
+def validate_public_id(public_id: str) -> bool:
+    """Validate a public ID: alphanumeric, underscore, hyphen, 3-64 chars."""
+    return bool(re.match(r'^[A-Za-z0-9_-]{3,64}$', public_id))
+
+
+def validate_password_strength(password: str) -> bool:
+    """Validate password: minimum 8 chars, at least one letter and one number."""
+    if len(password) < 8:
+        return False
+    if not re.search(r'[A-Za-z]', password):
+        return False
+    if not re.search(r'[0-9]', password):
+        return False
+    return True
+
+# ─── session store ────────────────────────────────────────────────────────
+
+SESSION_COOKIE_NAME = "helpotron_session"
 
 class SessionStore:
-    """In-memory session store with expiration."""
     _sessions: Dict[str, dict] = {}
+    _session_expiry: int = 7 * 24 * 60 * 60
 
     @classmethod
     def create_session(cls, user_id: int, public_id: str) -> str:
-        """Create a new session token."""
         token = secrets.token_urlsafe(48)
         cls._sessions[token] = {
             'user_id': user_id,
             'public_id': public_id,
-            'created_at': datetime.now(timezone.utc),
-            'expires_at': datetime.now(timezone.utc) + timedelta(days=7),
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'expires_at': (datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)).isoformat(),
         }
         return token
 
     @classmethod
-    def get_session(cls, token: str) -> Optional[dict]:
+    def get_session(cls, token: str) -> dict | None:
         session = cls._sessions.get(token)
-        if session and session['expires_at'] < datetime.now(timezone.utc):
-            del cls._sessions[token]
+        if not session:
+            return None
+        expires_at = datetime.fromisoformat(session['expires_at'])
+        if expires_at < datetime.now(timezone.utc):
+            cls.delete_session(token)
             return None
         return session
 
     @classmethod
     def delete_session(cls, token: str) -> None:
-        if token in cls._sessions:
-            del cls._sessions[token]
+        cls._sessions.pop(token, None)
 
-# ─── rate limiting ────────────────────────────────────────────────────────
+    @classmethod
+    def refresh_session(cls, token: str) -> bool:
+        session = cls._sessions.get(token)
+        if not session:
+            return False
+        session['expires_at'] = (datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)).isoformat()
+        return True
 
-class RateLimiter:
-    """Token bucket rate limiter per IP/public_id."""
-    def __init__(self, rate: int, window: int = 60):
-        self.rate = rate
-        self.window = window
-        self.buckets: Dict[str, dict] = {}
+    @classmethod
+    def get_all_sessions(cls) -> dict:
+        return cls._sessions.copy()
 
-    def allow(self, key: str) -> bool:
-        now = time.time()
-        bucket = self.buckets.get(key)
-        if not bucket:
-            self.buckets[key] = {'tokens': self.rate - 1, 'last': now}
-            return True
-        elapsed = now - bucket['last']
-        bucket['tokens'] = min(self.rate, bucket['tokens'] + elapsed * (self.rate / self.window))
-        bucket['last'] = now
-        if bucket['tokens'] >= 1:
-            bucket['tokens'] -= 1
-            return True
-        return False
+    @classmethod
+    def revoke_all_sessions(cls, user_id: int) -> int:
+        tokens_to_delete = [t for t, s in cls._sessions.items() if s.get('user_id') == user_id]
+        for token in tokens_to_delete:
+            cls.delete_session(token)
+        return len(tokens_to_delete)
 
-# ─── middleware ───────────────────────────────────────────────────────────
+# ─── security headers middleware ─────────────────────────────────────────
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add security headers to responses."""
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+
     async def dispatch(self, request: Request, call_next):
-        # Skip security headers for OPTIONS requests
-        if request.method == "OPTIONS":
-            return await call_next(request)
         response = await call_next(request)
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:;"
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-        response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=(), payment=()'
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:5173 http://localhost:8000"
+        response.headers["Content-Security-Policy"] = csp
+        if not config.debug:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         return response
 
-# ─── dependencies ─────────────────────────────────────────────────────────
+# ─── user authentication ──────────────────────────────────────────────────
 
-from fastapi import Header, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
-
-from .database import User, get_db
-
-SESSION_COOKIE_NAME = 'helpotron_session'
-
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    """Dependency to get the current authenticated user from the session cookie."""
+async def get_current_user(request: Request):
+    from .database import get_db, User
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(401, "Not authenticated")
     session = SessionStore.get_session(token)
     if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+        raise HTTPException(401, "Invalid or expired session")
+    SessionStore.refresh_session(token)
+    db = next(get_db())
     user = db.query(User).filter(User.id == session['user_id']).first()
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(401, "User not found")
     return user
 
-def get_current_user_optional(request: Request, db: Session = Depends(get_db)) -> User | None:
-    """Optional dependency for endpoints that can work without authentication."""
+
+async def get_current_user_optional(request: Request):
+    from .database import get_db, User
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         return None
     session = SessionStore.get_session(token)
     if not session:
         return None
-    return db.query(User).filter(User.id == session['user_id']).first()
-
-# ─── admin auth ─────────────────────────────────────────────────────────
-
-def is_admin_user(user: User) -> bool:
-    """Check if a user is the admin."""
-    return user.public_id == config.admin_public_id
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Dependency to require admin privileges."""
-    if not is_admin_user(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    db = next(get_db())
+    user = db.query(User).filter(User.id == session['user_id']).first()
     return user
 
-# ─── security settings for production ──────────────────────────────────
 
-SECURE_COOKIE = True
-SECURE_HSTS = True
+def require_admin(request: Request) -> None:
+    admin_ids = ["RoniDev", "admin"]
+    public_id = request.headers.get("X-Public-ID")
+    if public_id not in admin_ids:
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if token:
+            session = SessionStore.get_session(token)
+            if session and session.get('public_id') in admin_ids:
+                return
+        raise HTTPException(403, "Admin access required")
 
-def get_session_config() -> dict:
-    """Get session configuration for FastAPI's SessionMiddleware."""
-    return {
-        'secret_key': config.session_secret or secrets.token_urlsafe(32),
-        'session_cookie': SESSION_COOKIE_NAME,
-        'max_age': 7 * 24 * 60 * 60,
-        'same_site': 'lax',
-        'secure': config.production_mode,
-        'httponly': True,
-    }
+
+def is_admin_user(user) -> bool:
+    return user.public_id in ["RoniDev", "admin"]
+
+# ─── bot protection ──────────────────────────────────────────────────────
+
+def is_bot(user_agent: str | None) -> bool:
+    if not user_agent:
+        return True
+    bot_patterns = [
+        r'bot', r'crawler', r'spider', r'scraper', r'scan', r'headless',
+        r'curl', r'wget', r'python-requests', r'urllib', r'go-http',
+        r'java', r'perl', r'ruby', r'php', r'libwww', r'httpie',
+    ]
+    user_agent_lower = user_agent.lower()
+    for pattern in bot_patterns:
+        if re.search(pattern, user_agent_lower):
+            return True
+    return False

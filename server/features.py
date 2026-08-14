@@ -17,8 +17,8 @@ from .llm import generate_with_deepseek
 def detect_assignment_type(prompt: str, title: str = "") -> str:
     """Classify assignment type: essay, quiz, discussion, coding, lab, presentation, other."""
     system = "Classify the assignment into one of: essay, quiz, discussion, coding, lab, presentation, other. Reply with only the category name."
-    user = f"Title: {title}\nPrompt: {prompt[:1000]}"
-    result = generate_with_deepseek(system, user, max_tokens=20)
+    user_msg = f"Title: {title}\nPrompt: {prompt[:1000]}"
+    result = generate_with_deepseek(prompt=user_msg, system=system, max_tokens=20)
     types = ["essay", "quiz", "discussion", "coding", "lab", "presentation", "other"]
     for t in types:
         if t in result.lower():
