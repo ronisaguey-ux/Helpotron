@@ -135,3 +135,14 @@ rejected ones deserve a human (or paid-model) second look.
 - [ ] Stripe webhook for real capture
 - [ ] Referral system
 - [ ] More transcription backends (faster-whisper tuning)
+
+---
+
+## 🔗 Companion Repositories & Toolchain Dependencies
+
+1. **[`drift-clean`](https://github.com/ronisaguey-ux/drift-clean.git)**:
+   - Universal AI Session Sanitizer, Drift Interceptor, and Hygiene Toolchain.
+2. **[`Insane-Custum-Claude-Settings`](https://github.com/ronisaguey-ux/Insane-Custum-Claude-Settings.git)**:
+   - Universal Claude Code settings, PreToolUse banned action hooks, and slash commands.
+3. **[`webchat-to-api-harness`](https://github.com/ronisaguey-ux/webchat-to-api-harness.git)**:
+   - Local multi-provider webchat gateway with CDP token interception.

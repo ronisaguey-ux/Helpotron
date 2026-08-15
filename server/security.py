@@ -95,6 +95,10 @@ class AdaptiveRateLimiter:
     def reset_failures(self, key: str) -> None:
         self._failures.pop(key, None)
 
+
+# Shared instance for the auth endpoints (login lockout, exponential backoff).
+auth_limiter = AdaptiveRateLimiter(max_requests=10, window_seconds=60)
+
 # ─── input validation ──────────────────────────────────────────────────────
 
 def sanitize_input(text: str, max_length: int = 10000) -> str:

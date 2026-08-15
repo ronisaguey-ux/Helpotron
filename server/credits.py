@@ -77,6 +77,14 @@ def charge_user(
     return True, cost
 
 
+def top_up(db: Session, user: User, amount: float, reason: str = "topup") -> None:
+    """Credit a user's balance (refunds, purchases, admin grants)."""
+    user.credits += amount
+    tx = CreditTransaction(user_id=user.id, delta=amount, reason=reason)
+    db.add(tx)
+    db.commit()
+
+
 def add_discount(user: User, db: Session) -> None:
     if user.discount_balance is None:
         user.discount_balance = 0.0

@@ -25,9 +25,8 @@ from .config import config
 from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_db
 from .payments import process_payment, refund_unused
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user
+from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
 from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
-from .ratelimit import auth_limiter
 
 # Import route modules
 from .routes_analytics import router as analytics_router
