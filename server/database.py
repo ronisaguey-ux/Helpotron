@@ -60,7 +60,7 @@ class User(Base):
     referrals = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", cascade="all, delete-orphan")
     referred = relationship("Referral", foreign_keys="Referral.referee_id", back_populates="referee", cascade="all, delete-orphan")
     study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
-    organization = relationship("Organization", back_populates="members")
+    organization = relationship("Organization", foreign_keys="User.organization_id", back_populates="members")
 
 
 class Organization(Base):
@@ -74,8 +74,8 @@ class Organization(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    members = relationship("User", back_populates="organization")
-    admin = relationship("User", foreign_keys=[admin_id])
+    members = relationship("User", foreign_keys="User.organization_id", back_populates="organization")
+    admin = relationship("User", foreign_keys="Organization.admin_id")
 
 
 class Assignment(Base):

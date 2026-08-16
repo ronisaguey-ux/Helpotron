@@ -131,3 +131,7 @@ def get_credit_summary(user: User) -> dict:
         "tier_price_cents": TIER_PRICE_CENTS.get(user.plan, 0),
         "tokens_per_credit": TOKENS_PER_CREDIT,
     }
+
+
+def get_balance(user: User) -> dict:
+    return get_credit_summary(user)
