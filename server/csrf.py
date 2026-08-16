@@ -14,6 +14,16 @@ from starlette.responses import Response
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 
+EXEMPT_PATHS = {
+    "/api/login",
+    "/api/signup",
+    "/api/csrf",
+    "/api/logout",
+    "/api/auth/login",
+    "/api/auth/signup",
+    "/api/auth/csrf",
+}
+
 
 def generate_csrf_token() -> str:
     """Generate a cryptographically secure random token."""
@@ -39,8 +49,10 @@ def validate_csrf(request: Request) -> None:
 
     Raises HTTPException 403 if validation fails.
     """
-    # Skip for safe methods
+    # Skip for safe methods and exempt paths
     if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return
+    if request.url.path in EXEMPT_PATHS:
         return
 
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
@@ -58,12 +70,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """Middleware to enforce CSRF protection on state-changing requests."""
 
     async def dispatch(self, request: Request, call_next):
-        # Skip validation for safe methods and non-API routes
+        # Skip validation for safe methods, non-API routes, and exempt endpoints
         if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
             return await call_next(request)
 
         # Only apply to API endpoints
         if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        if request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
         # Validate CSRF

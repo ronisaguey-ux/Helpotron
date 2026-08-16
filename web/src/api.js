@@ -22,8 +22,10 @@ function getBaseUrl() {
   return getServer();
 }
 
-// Get CSRF token from cookie
+// Get CSRF token from localStorage or cookie
 function getCsrfToken() {
+  const local = localStorage.getItem('helpotron_csrf_token');
+  if (local) return local;
   const name = 'csrf_token=';
   const decoded = decodeURIComponent(document.cookie);
   const parts = decoded.split(';');
@@ -65,6 +67,9 @@ async function request(endpoint, options = {}) {
     throw new Error(errorText || `HTTP ${response.status}`);
   }
   const data = await response.json();
+  if (data && data.csrf_token) {
+    localStorage.setItem('helpotron_csrf_token', data.csrf_token);
+  }
   console.log('📡 API Data:', data);
   return data;
 }

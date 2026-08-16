@@ -231,6 +231,13 @@ class SignupIn(BaseModel):
 
 # ─── auth endpoints ──────────────────────────────────────────────────────
 
+@app.get("/api/csrf")
+def get_csrf(response: Response):
+    """Retrieve/initialize a CSRF token cookie."""
+    token = set_csrf_cookie(response)
+    return {"csrf_token": token}
+
+
 @app.post("/api/login")
 def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user with public_id and password."""
@@ -274,7 +281,7 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
     # Set CSRF cookie (readable by JS)
     csrf_token = set_csrf_cookie(response)
     
-    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan, "credits": user.credits}
+    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan, "credits": user.credits, "csrf_token": csrf_token}
 
 
 @app.post("/api/signup")
