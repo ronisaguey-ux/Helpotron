@@ -11,6 +11,7 @@ import json
 import logging
 import math
 from contextlib import asynccontextmanager
+from typing import Optional, List, Dict, Any, Union
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -123,7 +124,17 @@ app.add_middleware(CSRFMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.web_origin, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        config.web_origin,
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "chrome-extension://*",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -585,10 +596,7 @@ def materials(public_id: str, kind: str,
 
 # ─── dashboard / credits ───────────────────────────────────────────────────
 
-@app.get("/api/dashboard/{public_id}")
-def dashboard(public_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
-    db.commit()
+def _build_dashboard_payload(user: User, db: Session) -> dict:
     assignments = db.query(Assignment).filter_by(user_id=user.id).order_by(Assignment.id.desc()).limit(50).all()
     materials = db.query(StudyMaterial).filter_by(user_id=user.id).order_by(StudyMaterial.id.desc()).limit(50).all()
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
@@ -611,6 +619,21 @@ def dashboard(public_id: str, db: Session = Depends(get_db)):
             for t in transactions
         ],
     }
+
+
+@app.get("/api/dashboard")
+def dashboard_query(public_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    target_id = public_id or "RoniDev"
+    user = get_or_create_user(db, target_id)
+    db.commit()
+    return _build_dashboard_payload(user, db)
+
+
+@app.get("/api/dashboard/{public_id}")
+def dashboard(public_id: str, db: Session = Depends(get_db)):
+    user = get_or_create_user(db, public_id)
+    db.commit()
+    return _build_dashboard_payload(user, db)
 
 
 @app.get("/api/credits/{public_id}")

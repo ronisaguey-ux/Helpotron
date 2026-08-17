@@ -1,9 +1,17 @@
 // Thin API client for the Helpotron backend.
 
-const DEFAULT_SERVER = 'http://localhost:8000';
+const DEFAULT_SERVER = '';
 
 export function getServer() {
-  return localStorage.getItem('helpotron_server') || DEFAULT_SERVER;
+  const saved = localStorage.getItem('helpotron_server');
+  if (saved && (saved.startsWith('http://') || saved.startsWith('https://'))) {
+    // If running on same host, prefer relative
+    if (typeof window !== 'undefined' && saved.includes(window.location.host)) {
+      return '';
+    }
+    return saved;
+  }
+  return '';
 }
 
 export function getUserId() {

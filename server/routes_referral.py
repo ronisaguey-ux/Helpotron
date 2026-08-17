@@ -5,23 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .database import get_db, User
-from .security import SessionStore, SESSION_COOKIE_NAME
+from .security import get_current_user
 from .referral import get_or_create_referral, redeem_referral, get_referral_stats
 
 router = APIRouter(prefix="/api/referrals", tags=["referrals"])
-
-
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(401, "Not authenticated")
-    session = SessionStore.get_session(token)
-    if not session:
-        raise HTTPException(401, "Invalid session")
-    user = db.query(User).filter(User.id == session["user_id"]).first()
-    if not user:
-        raise HTTPException(401, "User not found")
-    return user
 
 
 @router.get("/code")
