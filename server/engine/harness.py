@@ -48,6 +48,30 @@ class DeepSeekHarness:
         self.register_plugin("context_pruner", self.prune_context)
         self.register_plugin("telemetry_logger", self.log_telemetry)
 
+    async def execute(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        use_pro: bool = False,
+        temperature: float = 0.3,
+        json_schema: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Dispatches work to Flash or Pro with automatic AST error correction."""
+        model = self.pro_model if use_pro else self.flash_model
+        res = await self.execute_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            use_pro=use_pro,
+            json_mode=bool(json_schema),
+        )
+        if json_schema and res.get("type") == "json":
+            return res.get("data", {})
+        return {
+            "status": "success",
+            "content": res.get("content") or res.get("data") or "",
+            "model_used": res.get("model", model),
+        }
+
     async def execute_task(
         self,
         system_prompt: str,

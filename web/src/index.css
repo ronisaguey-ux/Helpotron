@@ -12,7 +12,7 @@
   body {
     background-color: var(--bg-base);
     color: #f1f5f9;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
@@ -20,12 +20,12 @@
 
 /* Ambient Static Mesh Background (No CPU/RAM Cost) */
 .ambient-grid {
-  background-color: var(--bg-base);
+  background-color: #07090e;
   background-image: 
-    radial-gradient(at 10% 10%, rgba(0, 240, 255, 0.08) 0px, transparent 50%),
-    radial-gradient(at 90% 90%, rgba(168, 85, 247, 0.08) 0px, transparent 50%),
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    radial-gradient(at 15% 15%, rgba(0, 240, 255, 0.07) 0px, transparent 45%),
+    radial-gradient(at 85% 85%, rgba(168, 85, 247, 0.07) 0px, transparent 45%),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
 }
 
@@ -40,7 +40,18 @@
 
 .glass-panel:hover {
   border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 20px -5px rgba(0, 240, 255, 0.15);
+  box-shadow: 0 0 25px -5px rgba(0, 240, 255, 0.12);
+}
+
+.glass-input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+.glass-input:focus {
+  border-color: #00f0ff;
+  outline: none;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
 }
 
 /* Low-Overhead Shimmer Effect */

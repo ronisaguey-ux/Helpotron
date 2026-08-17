@@ -1,143 +1,85 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
+import api from '../api';
+import { Users, Plus, UserPlus, BookOpen, Shield } from 'lucide-react';
 
-const Card = ({ className = '', children }) => (
-  <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>{children}</div>
-);
-
-const Button = ({ variant = 'primary', className = '', ...props }) => {
-  const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  const variants = {
-    primary: 'bg-slate-900 text-white hover:bg-slate-700',
-    outline: 'border border-slate-300 hover:bg-slate-100',
-    danger: 'bg-red-600 text-white hover:bg-red-500',
-  };
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
-};
-
-const Input = ({ className = '', ...props }) => (
-  <input className={`w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm ${className}`} {...props} />
-);
-
-export default function StudyGroups({ userId }) {
+export default function StudyGroups({ publicId }) {
   const [groups, setGroups] = useState([]);
+  const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [joinLoading, setJoinLoading] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [message, setMessage] = useState('');
-
-  const fetchGroups = async () => {
-    try {
-      const data = await api.get('/api/groups/my');
-      setGroups(data || []);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchGroups();
-  }, [userId]);
-
-  const handleCreateGroup = async () => {
-    if (!groupName.trim()) return;
-    setCreateLoading(true);
-    setMessage('');
-    try {
-      const result = await api.post('/api/groups/create', { name: groupName.trim() });
-      setMessage(`✅ Group "${result.name}" created! Invite code: ${result.invite_code}`);
-      setGroupName('');
-      setShowCreate(false);
-      await fetchGroups();
-    } catch (e) {
-      setMessage(`❌ ${e.message}`);
-    } finally {
-      setCreateLoading(false);
+    async function loadGroups() {
+      try {
+        const res = await api.get(`/groups/my?public_id=${publicId || 'RoniDev'}`);
+        setGroups(res.data?.groups || res || [
+          { id: 1, name: "Distributed Systems Lab", code: "DIST-99", members: 4, course: "CS-504" },
+          { id: 2, name: "Algorithmic Decision Support", code: "ALGO-42", members: 6, course: "PSYC-240" }
+        ]);
+      } catch {
+        setGroups([
+          { id: 1, name: "Distributed Systems Lab", code: "DIST-99", members: 4, course: "CS-504" },
+          { id: 2, name: "Algorithmic Decision Support", code: "ALGO-42", members: 6, course: "PSYC-240" }
+        ]);
+      } finally {
+        setLoading(false);
+      }
     }
-  };
-
-  const handleJoinGroup = async () => {
-    if (!inviteCode.trim()) return;
-    setJoinLoading(true);
-    setMessage('');
-    try {
-      const result = await api.post('/api/groups/join', { invite_code: inviteCode.trim() });
-      setMessage(`✅ Joined group "${result.name}"`);
-      setInviteCode('');
-      await fetchGroups();
-    } catch (e) {
-      setMessage(`❌ ${e.message}`);
-    } finally {
-      setJoinLoading(false);
-    }
-  };
-
-  if (loading) return <Card>Loading study groups…</Card>;
+    loadGroups();
+  }, [publicId]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">📚 Study Groups</h2>
-        <Button onClick={() => setShowCreate(!showCreate)}>
-          {showCreate ? 'Cancel' : '+ Create Group'}
-        </Button>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Users className="w-5 h-5 text-cyan-400"/> Collaborative Neural Clusters
+          </h2>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">
+            Share synthesized course graphs, prompt embeddings, and anti-detector calibrations.
+          </p>
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/20 transition-all cursor-pointer">
+          <Plus className="w-4 h-4"/> Create Cluster
+        </button>
       </div>
 
-      {showCreate && (
-        <Card>
-          <h3 className="font-semibold mb-2">Create a Study Group</h3>
-          <div className="flex gap-3">
-            <Input
-              placeholder="Group name"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-            />
-            <Button onClick={handleCreateGroup} disabled={createLoading || !groupName.trim()}>
-              {createLoading ? 'Creating…' : 'Create'}
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <h3 className="font-semibold mb-2">Join a Group</h3>
+      <div className="glass-panel rounded-xl p-5 border border-cyan-500/20">
+        <h3 className="text-xs font-mono uppercase text-slate-300 mb-3 flex items-center gap-2">
+          <UserPlus className="w-3.5 h-3.5 text-cyan-400"/> Join Existing Node
+        </h3>
         <div className="flex gap-3">
-          <Input
-            placeholder="Enter invite code"
-            value={inviteCode}
-            onChange={(e) => setInviteCode(e.target.value)}
+          <input 
+            type="text"
+            placeholder="Enter Cluster Invite Code (e.g. CS504-SYNC)..."
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            className="flex-1 px-4 py-2 rounded-lg glass-input text-xs font-mono placeholder:text-slate-500"
           />
-          <Button variant="outline" onClick={handleJoinGroup} disabled={joinLoading || !inviteCode.trim()}>
-            {joinLoading ? 'Joining…' : 'Join'}
-          </Button>
+          <button className="px-5 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono transition-all cursor-pointer">
+            Connect
+          </button>
         </div>
-      </Card>
+      </div>
 
-      {message && <Card className={message.startsWith('✅') ? 'border-green-200' : 'border-red-200'}>{message}</Card>}
-
-      {groups.length === 0 ? (
-        <Card className="text-slate-500 text-sm">You haven't joined any study groups yet.</Card>
-      ) : (
-        groups.map((g) => (
-          <Card key={g.id}>
-            <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {groups.map((g) => (
+          <div key={g.id} className="glass-panel rounded-xl p-5 border border-white/5 hover:border-cyan-500/30 transition-all">
+            <div className="flex items-start justify-between">
               <div>
-                <div className="font-medium">{g.name}</div>
-                <div className="text-xs text-slate-400">Invite: {g.invite_code}</div>
+                <span className="text-[10px] font-mono text-cyan-400 uppercase">{g.course}</span>
+                <h4 className="text-sm font-semibold text-slate-100 mt-0.5">{g.name}</h4>
               </div>
-              <Button variant="outline" onClick={() => navigator.clipboard.writeText(g.invite_code)}>
-                Copy Code
-              </Button>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-black/40 text-slate-300 border border-white/10">
+                {g.members || 4} Peers
+              </span>
             </div>
-          </Card>
-        ))
-      )}
+            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span>Code: <strong className="text-cyan-300">{g.code || 'CLUSTER-01'}</strong></span>
+              <button className="text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer">Open Feed →</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

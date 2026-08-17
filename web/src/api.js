@@ -1,11 +1,10 @@
-// Thin API client for the Helpotron backend.
+// Unified API client for Helpotron with automatic X-Public-ID and CSRF header handling.
 
 const DEFAULT_SERVER = '';
 
 export function getServer() {
   const saved = localStorage.getItem('helpotron_server');
   if (saved && (saved.startsWith('http://') || saved.startsWith('https://'))) {
-    // If running on same host, prefer relative
     if (typeof window !== 'undefined' && saved.includes(window.location.host)) {
       return '';
     }
@@ -15,7 +14,7 @@ export function getServer() {
 }
 
 export function getUserId() {
-  return localStorage.getItem('helpotron_public_id') || '';
+  return localStorage.getItem('public_id') || localStorage.getItem('helpotron_public_id') || 'RoniDev';
 }
 
 export function setServer(server) {
@@ -23,6 +22,7 @@ export function setServer(server) {
 }
 
 export function setUserId(id) {
+  localStorage.setItem('public_id', id);
   localStorage.setItem('helpotron_public_id', id);
 }
 
@@ -30,7 +30,6 @@ function getBaseUrl() {
   return getServer();
 }
 
-// Get CSRF token from localStorage or cookie
 function getCsrfToken() {
   const local = localStorage.getItem('helpotron_csrf_token');
   if (local) return local;
@@ -46,19 +45,28 @@ function getCsrfToken() {
   return null;
 }
 
-async function request(endpoint, options = {}) {
-  const url = `${getBaseUrl()}${endpoint}`;
+export async function request(endpoint, options = {}) {
+  // Ensure endpoint starts with /api if relative
+  let cleanEndpoint = endpoint;
+  if (!cleanEndpoint.startsWith('http://') && !cleanEndpoint.startsWith('https://') && !cleanEndpoint.startsWith('/api') && cleanEndpoint.startsWith('/')) {
+    cleanEndpoint = `/api${cleanEndpoint}`;
+  }
+  const url = `${getBaseUrl()}${cleanEndpoint}`;
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  const userId = getUserId() || 'RoniDev';
+  const userId = getUserId();
   if (userId) {
     headers['X-Public-ID'] = userId;
   }
 
-  // Add CSRF token for state-changing requests
+  const token = localStorage.getItem('token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const method = options.method || 'GET';
   if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && method !== 'TRACE') {
     const csrfToken = getCsrfToken();
@@ -67,31 +75,40 @@ async function request(endpoint, options = {}) {
     }
   }
 
-  console.log('📡 API Request:', { url, method, headers });
   const response = await fetch(url, {
     ...options,
     headers,
-    credentials: 'include',  // Include cookies for session
+    credentials: 'include',
   });
-  console.log('📡 API Response:', { status: response.status, statusText: response.statusText });
+
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ API Error:', errorText);
     throw new Error(errorText || `HTTP ${response.status}`);
   }
+
   const data = await response.json();
   if (data && data.csrf_token) {
     localStorage.setItem('helpotron_csrf_token', data.csrf_token);
   }
-  console.log('📡 API Data:', data);
+
+  // Support both raw data and axios-style .data access
+  if (data && typeof data === 'object') {
+    if (!('data' in data)) {
+      Object.defineProperty(data, 'data', {
+        get() { return this; },
+        enumerable: false,
+        configurable: true
+      });
+    }
+  }
   return data;
 }
 
 export const api = {
-  get: (endpoint) => request(endpoint, { method: 'GET' }),
-  post: (endpoint, data) => request(endpoint, { method: 'POST', body: JSON.stringify(data) }),
-  put: (endpoint, data) => request(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
+  get: (endpoint, opts = {}) => request(endpoint, { method: 'GET', ...opts }),
+  post: (endpoint, data, opts = {}) => request(endpoint, { method: 'POST', body: JSON.stringify(data), ...opts }),
+  put: (endpoint, data, opts = {}) => request(endpoint, { method: 'PUT', body: JSON.stringify(data), ...opts }),
+  delete: (endpoint, opts = {}) => request(endpoint, { method: 'DELETE', ...opts }),
   request,
   
   // Auth endpoints
@@ -103,7 +120,7 @@ export const api = {
   
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),
-  dashboard: (userId) => request(`/api/dashboard?public_id=${userId}`, { method: 'GET' }),
+  dashboard: (userId) => request(`/api/dashboard?public_id=${userId || 'RoniDev'}`, { method: 'GET' }),
   studyGuide: (body) => request('/api/study_guide', { method: 'POST', body: JSON.stringify(body) }),
   flashcards: (body) => request('/api/flashcards', { method: 'POST', body: JSON.stringify(body) }),
   practiceTest: (body) => request('/api/practice_test', { method: 'POST', body: JSON.stringify(body) }),
@@ -124,3 +141,5 @@ export const api = {
   adminDeactivateToken: (token) => request(`/api/admin/tokens/deactivate?token=${token}`, { method: 'POST' }),
   adminListTokens: () => request('/api/admin/tokens', { method: 'GET' }),
 };
+
+export default api;

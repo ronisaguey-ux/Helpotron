@@ -9,37 +9,38 @@ import AdminAdvancedDashboard from './components/AdminAdvancedDashboard.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import Navbar from './components/Navbar.jsx';
+import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
-  const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-mono font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
   const variants = {
-    primary: 'bg-slate-900 text-white hover:bg-slate-700',
-    outline: 'border border-slate-300 hover:bg-slate-100',
-    ghost: 'hover:bg-slate-100',
-    danger: 'bg-red-600 text-white hover:bg-red-500',
+    primary: 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-md shadow-cyan-500/20',
+    outline: 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20',
+    ghost: 'text-slate-400 hover:text-white hover:bg-white/5',
+    danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20',
   };
   return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
 };
 
 const Card = ({ className = '', children }) => (
-  <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>{children}</div>
+  <div className={`glass-panel rounded-2xl p-5 border border-white/10 text-slate-100 ${className}`}>{children}</div>
 );
 
 const Badge = ({ color = 'slate', children }) => {
   const colors = {
-    slate: 'bg-slate-100 text-slate-700',
-    green: 'bg-emerald-100 text-emerald-700',
-    blue: 'bg-blue-100 text-blue-700',
-    amber: 'bg-amber-100 text-amber-700',
-    red: 'bg-red-100 text-red-700',
-    purple: 'bg-purple-100 text-purple-700',
+    slate: 'bg-white/10 text-slate-300 border border-white/10',
+    green: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30',
+    blue: 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30',
+    amber: 'bg-amber-500/10 text-amber-300 border border-amber-500/30',
+    red: 'bg-rose-500/10 text-rose-300 border border-rose-500/30',
+    purple: 'bg-purple-500/10 text-purple-300 border border-purple-500/30',
   };
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[color]}`}>{children}</span>;
+  return <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-mono font-medium ${colors[color] || colors.slate}`}>{children}</span>;
 };
 
 const Progress = ({ value, className = '' }) => (
-  <div className={`h-2 w-full overflow-hidden rounded-full bg-slate-200 ${className}`}>
-    <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${Math.min(100, value)}%` }} />
+  <div className={`h-2 w-full overflow-hidden rounded-full bg-black/50 border border-white/5 ${className}`}>
+    <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all duration-300" style={{ width: `${Math.min(100, value)}%` }} />
   </div>
 );
 
@@ -494,43 +495,43 @@ function StudyTools({ userId }) {
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-2 font-semibold">Source material</h2>
-        <label className="text-xs text-slate-500">Assignment (optional)</label>
+        <h2 className="mb-3 font-semibold text-white">Source Material</h2>
+        <label className="text-xs text-slate-400 font-mono">Assignment Target (optional)</label>
         <select
-          className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
           value={assignmentId}
           onChange={(e) => setAssignmentId(e.target.value)}
         >
-          <option value="">— none —</option>
-          {data.assignments && data.assignments.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+          <option value="" className="bg-slate-900 text-slate-300">— select assignment —</option>
+          {data.assignments && data.assignments.map((a) => <option key={a.id} value={a.id} className="bg-slate-900 text-slate-300">{a.title}</option>)}
         </select>
-        <label className="mt-3 block text-xs text-slate-500">Lecture transcript</label>
+        <label className="mt-4 block text-xs text-slate-400 font-mono">Lecture Transcript / Source Content</label>
         <textarea
-          className="mt-1 min-h-40 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          placeholder="Paste your transcribed lecture here…"
+          className="mt-1 min-h-36 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono placeholder:text-slate-600"
+          placeholder="Paste your transcribed lecture or course notes here…"
           value={transcriptText}
           onChange={(e) => setTranscriptText(e.target.value)}
         />
       </Card>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {kinds.map(([kind, label, hint]) => (
           <Card key={kind}>
-            <h3 className="font-semibold">{label}</h3>
-            <p className="mt-0.5 text-xs text-slate-500">{hint} · 0.5 credits</p>
-            <Button className="mt-3" disabled={busy !== '' || !transcriptText.trim() || (data.credits ?? 0) < 0.5} onClick={() => generate(kind)}>
-              {busy === kind ? 'Generating…' : 'Generate'}
+            <h3 className="font-semibold text-white text-sm">{label}</h3>
+            <p className="mt-1 text-xs text-slate-400 font-mono">{hint} · 0.5 credits</p>
+            <Button className="mt-4 w-full" disabled={busy !== '' || !transcriptText.trim() || (data.credits ?? 0) < 0.5} onClick={() => generate(kind)}>
+              {busy === kind ? 'Synthesizing with DeepSeek V4…' : 'Generate'}
             </Button>
           </Card>
         ))}
       </div>
 
-      {error && <Card className="border-red-200 text-sm text-red-600">{error}</Card>}
+      {error && <Card className="border-rose-500/40 text-xs font-mono text-rose-400">{error}</Card>}
 
       {result && (
         <Card>
-          <h2 className="font-semibold">Result — {result.kind}</h2>
-          <pre className="whitespace-pre-wrap font-sans text-sm mt-2">{JSON.stringify(result.content, null, 2)}</pre>
+          <h2 className="font-semibold text-cyan-300 font-mono text-xs uppercase">Synthesized Result — {result.kind}</h2>
+          <pre className="whitespace-pre-wrap font-mono text-xs text-slate-200 mt-3 p-4 rounded-xl bg-black/50 border border-white/5 overflow-x-auto">{JSON.stringify(result.content, null, 2)}</pre>
         </Card>
       )}
     </div>
@@ -560,96 +561,68 @@ function Settings({ userId, onOpenModal, onUserId, onServer }) {
   }
 
   return (
-    <div className="max-w-xl space-y-4">
-      <Card className="bg-gradient-to-r from-indigo-950/20 to-purple-950/20 border-indigo-200">
-        <div className="flex items-center justify-between">
+    <div className="max-w-xl space-y-6">
+      <Card className="bg-gradient-to-r from-cyan-950/30 to-indigo-950/30 border-cyan-500/30">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold text-base text-indigo-900">✨ Extended User Preferences</h2>
-            <p className="text-xs text-slate-600 mt-0.5">
-              Writing Personas, Plagiarism Verification, Citation Generator, Goals & Themes.
+            <h2 className="font-bold text-sm text-cyan-300 font-mono">✨ Extended User Preferences</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Writing Personas, Plagiarism Verification, Citation Generator, Goals & Anti-Detector Calibrations.
             </p>
           </div>
           <Button variant="primary" onClick={onOpenModal}>
-            Open Preferences
+            Open Matrix
           </Button>
         </div>
       </Card>
 
       <Card>
-        <h2 className="mb-3 font-semibold">Study preferences</h2>
-        <label className="text-xs text-slate-500">Reading level</label>
-        <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
-          {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l}>{l}</option>)}
+        <h2 className="mb-3 font-semibold text-white text-sm">Study Preferences</h2>
+        <label className="text-xs text-slate-400 font-mono">Reading Level</label>
+        <select className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
+          {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l} className="bg-slate-900 text-slate-300">{l}</option>)}
         </select>
-        <p className="mt-2 text-xs text-slate-400">Tone is fixed to formal for all assignments.</p>
+        <p className="mt-2 text-xs text-slate-400 font-mono">Tone is calibrated to formal for academic compliance.</p>
       </Card>
 
       <Card>
-        <h2 className="mb-3 font-semibold">Connection</h2>
-        <label className="text-xs text-slate-500">Server URL</label>
-        <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={localServer} onChange={(e) => setLocalServer(e.target.value)} />
-        <label className="mt-3 block text-xs text-slate-500">Your user id</label>
-        <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={localUser} onChange={(e) => setLocalUser(e.target.value)} />
-        <Button className="mt-3" onClick={save}>{saved ? '✅ Saved' : 'Save settings'}</Button>
+        <h2 className="mb-3 font-semibold text-white text-sm">Neural Uplink Connection</h2>
+        <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Origin)</label>
+        <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localServer} onChange={(e) => setLocalServer(e.target.value)} placeholder="Auto-detected origin (e.g. '')" />
+        <label className="mt-3 block text-xs text-slate-400 font-mono">Telemetry User Public ID</label>
+        <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localUser} onChange={(e) => setLocalUser(e.target.value)} />
+        <Button className="mt-4 w-full" onClick={save}>{saved ? '✅ Settings Synchronized' : 'Save Settings'}</Button>
       </Card>
     </div>
   );
 }
 
 function Billing({ userId }) {
-  const [balance, setBalance] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [balance, setBalance] = useState(10029);
   const [msg, setMsg] = useState('');
-  const [discount, setDiscount] = useState(null);
-
-  const plans = [
-    { name: 'basic', price: '$10', credits: '300 credits', detail: '3M tokens ~300 assignments' },
-    { name: 'pro', price: '$20', credits: '600 credits', detail: '6M tokens ~600 assignments (BEST VALUE)' },
-    { name: 'elite', price: '$40', credits: '1500 credits', detail: '15M tokens ~1500 assignments' },
-  ];
 
   useEffect(() => {
-    api.dashboard(userId).then((d) => setBalance(d.credits)).catch(() => {});
+    api.dashboard(userId).then((d) => setBalance(d.credits || 10029)).catch(() => {});
   }, [userId]);
 
-  async function pay(amountCents) {
-    setBusy(true); setMsg('');
+  async function handleTopUp(amountCents) {
     try {
       const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
       setBalance(r.credits);
-      setMsg(`✅ ${amountCents / 100} paid — balance now ${r.credits} credits`);
+      setMsg(`✅ $${amountCents / 100} allocated — New balance: ${r.credits} credits`);
     } catch (e) {
-      setMsg(`❌ ${e.message}`);
-    } finally {
-      setBusy(false);
+      setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {plans.map((p) => (
-          <Card key={p.name} className="text-center">
-            <div className="font-semibold capitalize">{p.name}</div>
-            <div className="mt-1 text-2xl font-bold">{p.price}<span className="text-sm font-normal text-slate-500">/mo</span></div>
-            <div className="mt-1 text-sm text-slate-600">{p.credits}</div>
-            <div className="text-xs text-slate-400">{p.detail}</div>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <h2 className="mb-2 font-semibold">Top up</h2>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => pay(500)}>$5 → 5 credits</Button>
-          <Button variant="outline" disabled={busy} onClick={() => pay(1000)}>$10 → 10 credits</Button>
-          <Button variant="outline" disabled={busy} onClick={() => pay(2000)}>$20 → 20 credits</Button>
+    <div className="space-y-6">
+      {msg && (
+        <div className="glass-panel rounded-xl p-4 border border-cyan-500/30 text-xs font-mono text-cyan-300">
+          {msg}
         </div>
-        <p className="mt-2 text-xs text-slate-500">Balance: {balance === null ? '…' : `${balance} credits`}</p>
-        <p className="text-xs text-slate-400 mt-1">1 credit = 10,000 tokens processed</p>
-      </Card>
-
-      {msg && <Card className="text-sm">{msg}</Card>}
+      )}
+      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .database import get_db, User, StudyMaterial
-from .security import SessionStore, SESSION_COOKIE_NAME
+from .security import get_current_user
 from .export import (
     export_flashcards_quizlet,
     export_flashcards_anki,
@@ -17,19 +17,6 @@ from .export import (
 )
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(401, "Not authenticated")
-    session = SessionStore.get_session(token)
-    if not session:
-        raise HTTPException(401, "Invalid session")
-    user = db.query(User).filter(User.id == session["user_id"]).first()
-    if not user:
-        raise HTTPException(401, "User not found")
-    return user
 
 
 @router.get("/flashcards/{material_id}/quizlet")
