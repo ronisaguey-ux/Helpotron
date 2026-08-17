@@ -22,6 +22,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   const [sendingMsg, setSendingMsg] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState([]);
   const [activePermModal, setActivePermModal] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | rules
   const [simEnabled, setSimEnabled] = useState(true);
   const [simSeeding, setSimSeeding] = useState(false);
 
