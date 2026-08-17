@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AssignmentCard from './AssignmentCard';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -278,32 +279,36 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
 
   return (
     <div className="space-y-6">
-      {/* ─── Simulator & Test Control Banner ───────────────────────── */}
-      <div className="bg-gradient-to-r from-violet-900/10 via-indigo-900/10 to-purple-900/10 border border-indigo-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+      {/* ─── Simulator & Test Data Hub ────────────────────────────── */}
+      <div className="glass-panel border-cyan-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shadow-sm">
-            🧪
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <span className="text-base">🧪</span>
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900">User Activity Simulator</h4>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${simEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                {simEnabled ? '● Simulation ON' : '○ OFF'}
+              <span className="text-xs font-mono font-bold text-slate-100">Live Mock Activity Simulator</span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                simEnabled
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+              }`}>
+                {simEnabled ? 'ACTIVE (Real-time telemetry)' : 'DISABLED'}
               </span>
             </div>
-            <p className="text-xs text-slate-600 mt-0.5">
-              Simulates realistic multi-subject assignments, sub-agent streams, rubrics, and analytics.
+            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+              Simulates course assignments, progressive rubric stages, and live AI evasion scores.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap font-mono">
           <button
             onClick={toggleSimulator}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               simEnabled
-                ? 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700'
-                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
+                : 'glass-panel text-slate-400 hover:text-slate-200'
             }`}
           >
             {simEnabled ? 'Disable Simulator' : 'Enable Simulator'}
@@ -312,14 +317,14 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
           <button
             onClick={seedDemoData}
             disabled={simSeeding}
-            className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+            className="px-3 py-1.5 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
           >
             {simSeeding ? 'Seeding…' : '🔄 Seed Sample Courses'}
           </button>
 
           <button
             onClick={clearDemoData}
-            className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors font-medium"
+            className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors font-mono cursor-pointer"
           >
             Clear Data
           </button>
@@ -327,49 +332,51 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
       </div>
 
       {/* ─── Control Header: Modes & Rules ─────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+      <div className="glass-panel rounded-2xl p-5 border border-white/10 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🤖</span>
-              <h2 className="text-xl font-bold text-slate-900">Main Agent (Overlord) Hub</h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-sm">
+                🤖
+              </div>
+              <h2 className="text-base font-bold text-slate-100 font-mono tracking-wide">Main Agent (Overlord) Hub</h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
                 Online & Coordinating
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-400 mt-1 font-mono">
               Autonomous orchestration of sub-agent teams, rubric decomposition, and AI humanization.
             </p>
           </div>
 
           {/* Mode Selector Buttons */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 font-mono">
             <button
               onClick={() => switchMode('manual')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === 'manual'
-                  ? 'bg-white text-blue-700 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               🛡️ Manual
             </button>
             <button
               onClick={() => switchMode('auto')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === 'auto'
-                  ? 'bg-white text-emerald-700 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               ⚡ Auto
             </button>
             <button
               onClick={() => switchMode('yolo')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === 'yolo'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-rose-600 hover:bg-rose-50'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                  : 'text-rose-400 hover:bg-rose-500/10'
               }`}
             >
               🔥 YOLO
@@ -379,32 +386,32 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
 
         {/* YOLO Warning Banner */}
         {mode === 'yolo' && (
-          <div className="bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex items-start gap-3">
+          <div className="glass-panel border-rose-500/50 bg-rose-950/40 rounded-xl p-3.5 flex items-start gap-3 text-xs font-mono">
             <span className="text-xl">⚠️</span>
-            <div className="text-xs text-rose-900 leading-relaxed">
-              <span className="font-bold">YOLO MODE ACTIVE:</span> All sub-agent actions, drafts, external requests, and submissions execute immediately with zero confirmation prompts. Use at your own risk.
+            <div className="text-rose-200 leading-relaxed">
+              <span className="font-bold text-rose-400">YOLO MODE ACTIVE:</span> All sub-agent actions, drafts, external requests, and submissions execute immediately with zero confirmation prompts. Use at your own risk.
             </div>
           </div>
         )}
 
         {/* Tab switcher */}
-        <div className="flex gap-2 border-t border-slate-100 pt-3">
+        <div className="flex gap-4 border-t border-white/5 pt-3 font-mono text-xs">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`text-xs font-semibold pb-1 border-b-2 transition-all ${
+            className={`pb-1 border-b-2 transition-all cursor-pointer ${
               activeTab === 'dashboard'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-cyan-400 text-cyan-300 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             📋 Assignment Cards ({cards.length})
           </button>
           <button
             onClick={() => setActiveTab('rules')}
-            className={`text-xs font-semibold pb-1 border-b-2 transition-all ${
+            className={`pb-1 border-b-2 transition-all cursor-pointer ${
               activeTab === 'rules'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-cyan-400 text-cyan-300 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             ⚙️ Auto-Approved Rules ({autoRules.length})
@@ -416,57 +423,30 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
       {activeTab === 'dashboard' && (
         <>
           {loading ? (
-            <div className="text-center py-12 text-slate-400 text-sm">Loading assignment cards…</div>
+            <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading telemetry & assignment cards…</div>
           ) : cards.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+            <div className="glass-panel rounded-2xl p-12 text-center border-dashed border-white/10 font-mono">
               <span className="text-4xl">📚</span>
-              <h3 className="text-base font-semibold text-slate-800 mt-2">No active assignments</h3>
-              <p className="text-xs text-slate-500 mt-1">Assignments imported or synced from your LMS will appear here as cards.</p>
+              <h3 className="text-base font-semibold text-slate-200 mt-2">No active assignments</h3>
+              <p className="text-xs text-slate-400 mt-1">Assignments imported or synced from Canvas/LMS will appear here as cards.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {cards.map((c) => (
-                <div
+                <AssignmentCard
                   key={c.id}
-                  onClick={() => openFullView(c.id)}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer flex flex-col justify-between group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${getStatusColor(c.status)}`}>
-                        {c.status}
-                      </span>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        {c.class_code}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors text-base line-clamp-2">
-                        {c.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-1">{c.subject}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Teacher</span>
-                        <span className="font-medium text-slate-700">{c.teacher_name}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Est. Time</span>
-                        <span className="font-medium text-slate-700">⏱️ {c.estimated_time}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-indigo-600 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
-                      Expand Full View →
-                    </span>
-                    <span className="text-[10px] text-slate-400">Due: {c.due_date}</span>
-                  </div>
-                </div>
+                  id={c.id}
+                  title={c.name}
+                  course={c.class_code || c.subject}
+                  dueDate={c.due_date}
+                  status={c.status}
+                  urgency={c.status === "Humanizing" ? "high" : "normal"}
+                  detectorRisk={c.score_ai ? c.score_ai / 100 : 0.02}
+                  estimatedTime={c.estimated_time}
+                  scoreAI={c.score_ai}
+                  teacherName={c.teacher_name}
+                  onSelect={openFullView}
+                />
               ))}
             </div>
           )}

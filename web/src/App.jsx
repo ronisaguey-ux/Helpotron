@@ -240,7 +240,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="min-h-screen ambient-grid text-slate-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
         {/* Privacy Policy Modal Overlay */}
         <PrivacyPolicyModal
           isOpen={showPrivacyModal}
@@ -264,7 +264,7 @@ export default function App() {
 
       {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
       {isGuest && (
-        <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-sm">
+        <div className="bg-amber-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-amber-400/40">
           <div className="flex items-center gap-2">
             <span className="text-base">👁️</span>
             <span>
@@ -273,124 +273,70 @@ export default function App() {
           </div>
           <button
             onClick={() => setAuthModalOpen(true)}
-            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition cursor-pointer"
+            className="px-3 py-1 bg-slate-950 text-amber-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-amber-400/30 transition cursor-pointer"
           >
             Sign In or Create Account →
           </button>
         </div>
       )}
 
-      {/* ─── Main Header ───────────────────────────────────────────── */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🤖</span>
-            <div>
-              <h1 className="text-base font-black text-slate-900 tracking-tight">Helpotron Automator</h1>
-              <span className="text-[10px] font-mono text-slate-400 block -mt-0.5">Autonomous Academic Suite</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 flex-wrap">
-            <span className="font-mono bg-slate-100 px-2 py-1 rounded-lg text-slate-700">
-              user: <strong>{userId}</strong>
-            </span>
-            <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200">
-              💰 {credits} credits
-            </span>
-
-            {/* Visibility Toggle Dropdown */}
-            <div className="relative">
-              <Button
-                variant="outline"
-                className="text-xs px-2.5 py-1"
-                onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
-              >
-                👁️ Visibility ({activeTabs.length}/{allTabs.length})
-              </Button>
-
-              {showVisibilityMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-50 space-y-1.5 text-xs">
-                  <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
-                    Toggle Section Visibility
-                  </span>
-                  {allTabs.map((t) => (
-                    <label
-                      key={t.key}
-                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
-                    >
-                      <span className="font-medium text-slate-700">{t.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={visibleSections[t.key] !== false}
-                        onChange={() => toggleSection(t.key)}
-                        className="rounded accent-indigo-600"
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button
-              variant="outline"
-              className="text-xs px-2.5 py-1"
-              onClick={() => setSettingsModalOpen(true)}
-            >
-              ⚙️ Preferences
-            </Button>
-
-            {isAdmin && <Badge color="purple">👑 Admin</Badge>}
-
-            {isLoggedIn ? (
-              <Button variant="outline" className="text-xs px-2.5 py-1 text-rose-600 cursor-pointer" onClick={handleLogout}>
-                Logout
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                className="text-xs px-2.5 py-1 cursor-pointer"
-                onClick={() => setAuthModalOpen(true)}
-              >
-                Sign In
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+      {/* ─── Futuristic HUD Navbar ─────────────────────────────────── */}
+      <Navbar
+        activeAgent="Overlord Orchestrator"
+        systemHealth={connected ? "Nominal (100%)" : "Degraded"}
+        isLoggedIn={isLoggedIn}
+        isGuest={isGuest}
+        user={{ credits, public_id: userId }}
+        isAdmin={isAdmin}
+        onOpenSettings={() => setSettingsModalOpen(true)}
+        onOpenAuth={() => setAuthModalOpen(true)}
+        onLogout={handleLogout}
+        allTabs={allTabs}
+        visibleSections={visibleSections}
+        onToggleSection={toggleSection}
+        activeTabs={activeTabs}
+      />
 
       {!connected && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-700 text-center font-medium">
-          ⚠️ Server at {serverUrl} is unreachable — start it with <code>.venv/bin/uvicorn server.main:app --port 8000</code>
+        <div className="max-w-7xl mx-auto px-6 mb-4">
+          <div className="glass-panel border-rose-500/40 bg-rose-950/40 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono">
+            ⚠️ Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
+          </div>
         </div>
       )}
 
-      {/* ─── Navigation Tabs ───────────────────────────────────────── */}
-      <nav className="mx-auto flex max-w-6xl gap-1.5 px-4 py-3 flex-wrap">
-        {activeTabs.map((t) => (
-          <Button
-            key={t.key}
-            variant={tab === t.key ? 'primary' : 'ghost'}
-            onClick={() => setTab(t.key)}
-            className="capitalize text-xs font-semibold"
-          >
-            {t.label}
-          </Button>
-        ))}
-        {isAdmin && (
-          <Button
-            key="admin"
-            variant={tab === 'admin' ? 'primary' : 'ghost'}
-            onClick={() => setTab('admin')}
-            className="capitalize text-xs font-semibold text-purple-700"
-          >
-            🛡️ Admin Control
-          </Button>
-        )}
-      </nav>
-
       {/* ─── Main Content Views ────────────────────────────────────── */}
-      <main className="mx-auto max-w-6xl px-4 pb-16">
+      <main className="max-w-7xl mx-auto px-6 pb-16">
+        {/* HUD Navigation Sub-Pills */}
+        <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
+          {activeTabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                tab === t.key
+                  ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold'
+                  : 'glass-panel text-slate-400 hover:text-slate-200 hover:border-white/20'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+          {isAdmin && (
+            <button
+              key="admin"
+              onClick={() => setTab('admin')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                tab === 'admin'
+                  ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold shadow-md'
+                  : 'glass-panel text-purple-400 hover:text-purple-200 hover:border-purple-500/30'
+              }`}
+            >
+              🛡️ Admin Control
+            </button>
+          )}
+        </nav>
+
         {tab === 'assignments' && <AssignmentCardDashboard userId={userId} isGuest={isGuest} />}
         {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
         {tab === 'study-tools' && <StudyTools userId={userId} />}
