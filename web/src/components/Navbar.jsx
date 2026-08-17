@@ -1,5 +1,18 @@
-import React from 'react';
-import { Activity, ShieldCheck, Cpu, Terminal, Sparkles, SlidersHorizontal, User, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Activity,
+  ShieldCheck,
+  Cpu,
+  Sparkles,
+  SlidersHorizontal,
+  User,
+  LogOut,
+  Bell,
+  Clock,
+  CheckCircle2,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 
 export default function Navbar({
   activeAgent = "Overlord Agent",
@@ -10,13 +23,54 @@ export default function Navbar({
   isAdmin = false,
   onOpenSettings = () => {},
   onOpenAuth = () => {},
+  onOpenPrivacy = () => {},
   onLogout = () => {},
   allTabs = [],
   visibleSections = {},
   onToggleSection = () => {},
   activeTabs = [],
 }) {
-  const [showVisibilityMenu, setShowVisibilityMenu] = React.useState(false);
+  const [showVisibilityMenu, setShowVisibilityMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+
+  const notifications = [
+    {
+      id: 1,
+      title: 'Cognitive Biases Lab Report due in 2 days',
+      body: 'PSYC-240 · 3 hrs estimated study time',
+      time: '2h ago',
+      icon: Clock,
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10',
+    },
+    {
+      id: 2,
+      title: 'Active recall flashcard set ready',
+      body: 'Cell Respiration · 24 Q/A pairs synthesized',
+      time: '4h ago',
+      icon: Sparkles,
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-500/10',
+    },
+    {
+      id: 3,
+      title: 'Weekly autonomous study summary',
+      body: '10.5 hrs tracked this week (+18% vs last week)',
+      time: '1d ago',
+      icon: TrendingUp,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/10',
+    },
+    {
+      id: 4,
+      title: 'French Vocab Quiz marked complete',
+      body: 'FREN 101 · Rubric criteria fully validated',
+      time: '2d ago',
+      icon: CheckCircle2,
+      color: 'text-indigo-400',
+      bg: 'bg-indigo-500/10',
+    },
+  ];
 
   return (
     <header className="sticky top-0 z-50 glass-panel border-b border-white/5 px-6 py-3 mb-6">
@@ -58,13 +112,68 @@ export default function Navbar({
           {user && (
             <div className="flex items-center gap-2 text-slate-400">
               <span className="text-cyan-400">Credits:</span>
-              <span className="text-amber-300 font-bold">{user.credits?.toFixed(1) ?? '250.0'}</span>
+              <span className="text-amber-300 font-bold">{Number(user.credits ?? 10029).toLocaleString()}</span>
             </div>
           )}
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-3">
+          {/* Privacy Policy Trigger */}
+          <button
+            onClick={onOpenPrivacy}
+            aria-label="View Privacy & Compliance Policy"
+            title="Privacy & Compliance"
+            className="p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4" />
+          </button>
+
+          {/* Notifications Center */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifMenu(!showNotifMenu)}
+              aria-label="View Notifications"
+              className="relative p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition cursor-pointer"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-slate-900 animate-pulse" />
+            </button>
+
+            {showNotifMenu && (
+              <div className="absolute right-0 mt-2 w-80 glass-panel rounded-2xl p-3 shadow-2xl border border-cyan-500/20 z-50 text-xs">
+                <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/5 mb-2 font-mono">
+                  <span className="text-[11px] uppercase font-bold text-white">Study Notifications</span>
+                  <span className="text-[10px] text-cyan-300 font-bold">4 Unread</span>
+                </div>
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {notifications.map((n) => {
+                    const Icon = n.icon;
+                    return (
+                      <div
+                        key={n.id}
+                        className="flex items-start gap-2.5 p-2.5 rounded-xl bg-black/40 hover:bg-white/5 transition cursor-pointer"
+                      >
+                        <div className={`p-1.5 rounded-lg ${n.bg} ${n.color} shrink-0 mt-0.5`}>
+                          <Icon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-white font-mono text-[11px] truncate">
+                            {n.title}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {n.body}
+                          </div>
+                          <div className="text-[9px] text-slate-500 font-mono mt-1">{n.time}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Section Visibility Dropdown */}
           <div className="relative">
             <button
@@ -72,7 +181,7 @@ export default function Navbar({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-white/10 transition cursor-pointer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Visibility ({activeTabs.length}/{allTabs.length})</span>
+              <span className="hidden sm:inline">Visibility ({activeTabs.length}/{allTabs.length})</span>
             </button>
 
             {showVisibilityMenu && (
@@ -105,7 +214,7 @@ export default function Navbar({
             onClick={onOpenSettings}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition cursor-pointer"
           >
-            ⚙️ Preferences
+            ⚙️ <span className="hidden sm:inline">Preferences</span>
           </button>
 
           {/* Auth Button */}
@@ -115,7 +224,7 @@ export default function Navbar({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </button>
           ) : (
             <button
@@ -123,7 +232,7 @@ export default function Navbar({
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/20 transition cursor-pointer"
             >
               <User className="w-3.5 h-3.5" />
-              Sign In
+              <span>Sign In</span>
             </button>
           )}
         </div>

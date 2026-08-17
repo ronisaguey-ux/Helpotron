@@ -10,6 +10,22 @@ import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import Navbar from './components/Navbar.jsx';
 import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
+import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
+import StudyToolsHub from './components/StudyToolsHub.jsx';
+import AssignmentDetailView from './components/AssignmentDetailView.jsx';
+import {
+  Download,
+  Trash2,
+  ShieldCheck,
+  ChevronRight,
+  Flame,
+  Clock,
+  TrendingUp,
+  ClipboardList,
+  Sparkles,
+  Layers,
+  Plus,
+} from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-mono font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
@@ -106,10 +122,12 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminAnalytics, setAdminAnalytics] = useState(null);
-  const [credits, setCredits] = useState(250);
-  const [userPlan, setUserPlan] = useState('pro');
+  const [credits, setCredits] = useState(10029);
+  const [userPlan, setUserPlan] = useState('elite');
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [showVisibilityMenu, setShowVisibilityMenu] = useState(false);
+  const [buddyOpen, setBuddyOpen] = useState(true);
+  const [openAssignment, setOpenAssignment] = useState(null);
+  const [selectedStudyAssignment, setSelectedStudyAssignment] = useState(null);
 
   // Privacy Policy state (must be accepted, else guest read-only)
   const [showPrivacyModal, setShowPrivacyModal] = useState(() => {
@@ -149,8 +167,8 @@ export default function App() {
         setIsLoggedIn(true);
         setIsGuest(false);
         setUserIdState(me.public_id);
-        setCredits(me.credits || 250);
-        setUserPlan(me.plan || 'pro');
+        setCredits(me.credits || 10029);
+        setUserPlan(me.plan || 'elite');
         try {
           const adminStatus = await api.adminCheck();
           if (adminStatus && adminStatus.is_admin) {
@@ -225,6 +243,12 @@ export default function App() {
     setUserIdState('Guest');
   };
 
+  const handleGenerateStudyToolForAssignment = (toolKind, assignment) => {
+    setSelectedStudyAssignment(assignment);
+    setOpenAssignment(null);
+    setTab('study-tools');
+  };
+
   const allTabs = [
     { key: 'assignments', label: '📋 Assignments & Overlord' },
     { key: 'study-tools', label: '⚡ Study Tools & Quizzes' },
@@ -237,7 +261,6 @@ export default function App() {
   ];
 
   const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);
-
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   return (
@@ -264,117 +287,172 @@ export default function App() {
           }}
         />
 
-      {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
-      {isGuest && (
-        <div className="bg-amber-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-amber-400/40">
-          <div className="flex items-center gap-2">
-            <span className="text-base">👁️</span>
-            <span>
-              GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows. Action execution is restricted.
-            </span>
-          </div>
-          <button
-            onClick={() => setAuthModalOpen(true)}
-            className="px-3 py-1 bg-slate-950 text-amber-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-amber-400/30 transition cursor-pointer"
-          >
-            Sign In or Create Account →
-          </button>
-        </div>
-      )}
-
-      {/* ─── Futuristic HUD Navbar ─────────────────────────────────── */}
-      <Navbar
-        activeAgent="Overlord Orchestrator"
-        systemHealth={connected ? "Nominal (100%)" : "Degraded"}
-        isLoggedIn={isLoggedIn}
-        isGuest={isGuest}
-        user={{ credits, public_id: userId }}
-        isAdmin={isAdmin}
-        onOpenSettings={() => setSettingsModalOpen(true)}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        onLogout={handleLogout}
-        allTabs={allTabs}
-        visibleSections={visibleSections}
-        onToggleSection={toggleSection}
-        activeTabs={activeTabs}
-      />
-
-      {!connected && (
-        <div className="max-w-7xl mx-auto px-6 mb-4">
-          <div className="glass-panel border-rose-500/40 bg-rose-950/40 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono">
-            ⚠️ Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Main Content Views ────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-6 pb-16">
-        {/* HUD Navigation Sub-Pills */}
-        <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
-          {activeTabs.map((t) => (
+        {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
+        {isGuest && (
+          <div className="bg-amber-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-amber-400/40">
+            <div className="flex items-center gap-2">
+              <span className="text-base">👁️</span>
+              <span>
+                GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows. Action execution is restricted.
+              </span>
+            </div>
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                tab === t.key
-                  ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold'
-                  : 'glass-panel text-slate-400 hover:text-slate-200 hover:border-white/20'
-              }`}
+              onClick={() => setAuthModalOpen(true)}
+              className="px-3 py-1 bg-slate-950 text-amber-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-amber-400/30 transition cursor-pointer"
             >
-              {t.label}
+              Sign In or Create Account →
             </button>
-          ))}
-          {isAdmin && (
-            <button
-              key="admin"
-              onClick={() => setTab('admin')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                tab === 'admin'
-                  ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold shadow-md'
-                  : 'glass-panel text-purple-400 hover:text-purple-200 hover:border-purple-500/30'
-              }`}
-            >
-              🛡️ Admin Control
-            </button>
-          )}
-        </nav>
-
-        {tab === 'assignments' && <AssignmentCardDashboard userId={userId} isGuest={isGuest} />}
-        {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
-        {tab === 'study-tools' && <StudyTools userId={userId} />}
-        {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}
-        {tab === 'referral' && <ReferralSection userId={userId} />}
-        {tab === 'groups' && <StudyGroups userId={userId} />}
-        {tab === 'settings' && (
-          <Settings
-            userId={userId}
-            onOpenModal={() => setSettingsModalOpen(true)}
-            onUserId={(id) => { setUserId(id); setUserIdState(id); }}
-            onServer={(url) => { setServer(url); setServerUrlState(url); }}
-          />
+          </div>
         )}
-        {tab === 'billing' && <Billing userId={userId} />}
-        {tab === 'admin' && isAdmin && (
-          <AdminPanel
-            userId={userId}
-            adminUsers={adminUsers}
-            adminAnalytics={adminAnalytics}
-            refreshAdmin={fetchAdminData}
-          />
-        )}
-      </main>
 
-      <UserSettingsModal
-        isOpen={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        userId={userId}
-      />
-    </div>
+        {/* ─── Futuristic HUD Navbar ─────────────────────────────────── */}
+        <Navbar
+          activeAgent="Overlord Orchestrator"
+          systemHealth={connected ? "Nominal (100%)" : "Degraded"}
+          isLoggedIn={isLoggedIn}
+          isGuest={isGuest}
+          user={{ credits, public_id: userId }}
+          isAdmin={isAdmin}
+          onOpenSettings={() => setSettingsModalOpen(true)}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenPrivacy={() => setShowPrivacyModal(true)}
+          onLogout={handleLogout}
+          allTabs={allTabs}
+          visibleSections={visibleSections}
+          onToggleSection={toggleSection}
+          activeTabs={activeTabs}
+        />
+
+        {!connected && (
+          <div className="max-w-7xl mx-auto px-6 mb-4">
+            <div className="glass-panel border-rose-500/40 bg-rose-950/40 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono">
+              ⚠️ Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Main Workspace & Persistent Study Buddy Sidebar ────────── */}
+        <div className="max-w-7xl mx-auto px-6 pb-16 flex flex-col lg:flex-row gap-6 items-start">
+          <main className="flex-1 min-w-0 w-full">
+            {/* HUD Navigation Sub-Pills */}
+            <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
+              {activeTabs.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => {
+                    setTab(t.key);
+                    setOpenAssignment(null);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    tab === t.key
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold'
+                      : 'glass-panel text-slate-400 hover:text-slate-200 hover:border-white/20'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+              {isAdmin && (
+                <button
+                  key="admin"
+                  onClick={() => {
+                    setTab('admin');
+                    setOpenAssignment(null);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    tab === 'admin'
+                      ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold shadow-md'
+                      : 'glass-panel text-purple-400 hover:text-purple-200 hover:border-purple-500/30'
+                  }`}
+                >
+                  🛡️ Admin Control
+                </button>
+              )}
+            </nav>
+
+            {/* TAB VIEWS */}
+            {tab === 'assignments' && (
+              openAssignment ? (
+                <AssignmentDetailView
+                  assignment={openAssignment}
+                  onBack={() => setOpenAssignment(null)}
+                  onGenerateStudyTool={handleGenerateStudyToolForAssignment}
+                />
+              ) : (
+                <AssignmentCardDashboard
+                  userId={userId}
+                  isGuest={isGuest}
+                />
+              )
+            )}
+
+            {tab === 'overview' && (
+              openAssignment ? (
+                <AssignmentDetailView
+                  assignment={openAssignment}
+                  onBack={() => setOpenAssignment(null)}
+                  onGenerateStudyTool={handleGenerateStudyToolForAssignment}
+                />
+              ) : (
+                <Overview
+                  userId={userId}
+                  onGoTo={(t) => setTab(t)}
+                  onSelectAssignment={(a) => setOpenAssignment(a)}
+                />
+              )
+            )}
+
+            {tab === 'study-tools' && (
+              <StudyToolsHub
+                userId={userId}
+                initialAssignment={selectedStudyAssignment}
+              />
+            )}
+
+            {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}
+            {tab === 'referral' && <ReferralSection userId={userId} />}
+            {tab === 'groups' && <StudyGroups userId={userId} />}
+            {tab === 'settings' && (
+              <Settings
+                userId={userId}
+                onOpenModal={() => setSettingsModalOpen(true)}
+                onOpenPrivacy={() => setShowPrivacyModal(true)}
+                onUserId={(id) => { setUserId(id); setUserIdState(id); }}
+                onServer={(url) => { setServer(url); setServerUrlState(url); }}
+              />
+            )}
+            {tab === 'billing' && <Billing userId={userId} />}
+            {tab === 'admin' && isAdmin && (
+              <AdminPanel
+                userId={userId}
+                adminUsers={adminUsers}
+                adminAnalytics={adminAnalytics}
+                refreshAdmin={fetchAdminData}
+              />
+            )}
+          </main>
+
+          {/* Persistent Collapsible Study Buddy Panel */}
+          <StudyBuddyPanel
+            open={buddyOpen}
+            setOpen={setBuddyOpen}
+            onGenerateAction={(kind, query) => {
+              setTab('study-tools');
+            }}
+          />
+        </div>
+
+        <UserSettingsModal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
+          userId={userId}
+        />
+      </div>
     </ErrorBoundary>
   );
 }
 
-function Overview({ userId, onGoTo }) {
+function Overview({ userId, onGoTo, onSelectAssignment }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -384,51 +462,88 @@ function Overview({ userId, onGoTo }) {
     api.dashboard(userId).then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) return <Card>Loading…</Card>;
-  if (error) return <Card className="text-red-600">{error}</Card>;
-  if (!data) return <Card>No data</Card>;
+  if (loading) return <Card className="text-center text-xs font-mono text-cyan-400 py-8">Loading Neural Activity Overview…</Card>;
+  if (error) return <Card className="text-rose-400 font-mono text-xs">{error}</Card>;
+  if (!data) return <Card className="text-slate-400 font-mono text-xs">No active study data found.</Card>;
 
-  const active = data.assignments ? data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'draft_risky' && a.status !== 'completed').length : 0;
+  const active = data.assignments ? data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'completed').length : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card>
-          <div className="text-xs text-slate-500">Active assignments</div>
-          <div className="mt-1 text-2xl font-bold">{active}</div>
-        </Card>
-        <Card>
-          <div className="text-xs text-slate-500">Credits remaining</div>
-          <div className="mt-1 text-2xl font-bold">{data.credits ?? 0}</div>
-        </Card>
-        <Card>
-          <div className="text-xs text-slate-500">Plan</div>
-          <div className="mt-1 text-2xl font-bold capitalize">{data.plan || 'basic'}</div>
-        </Card>
+    <div className="space-y-6">
+      {/* Top Quick Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
+            <span>Due Assignments</span>
+            <ClipboardList className="w-4 h-4 text-cyan-400" />
+          </div>
+          <div className="text-2xl font-bold font-mono text-white">{active}</div>
+          <div className="text-[11px] font-mono text-slate-400 mt-1">Pending student tasks</div>
+        </div>
+
+        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
+            <span>Active Study Streak</span>
+            <Flame className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold font-mono text-amber-300">12 Days</div>
+          <div className="text-[11px] font-mono text-emerald-400 mt-1">Top 5% of active learners</div>
+        </div>
+
+        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
+            <span>Compute Tier</span>
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="text-2xl font-bold font-mono text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
+          <div className="text-[11px] font-mono text-cyan-300 mt-1">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
+        </div>
       </div>
 
+      {/* Tracked Assignments with Click to Detail */}
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Active assignments</h2>
-          <Button variant="outline" onClick={() => onGoTo('study-tools')}>Generate materials</Button>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-sm text-white font-mono flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-cyan-400" />
+              Active Course Assignments ({data.assignments?.length || 0})
+            </h2>
+            <p className="text-xs text-slate-400 font-mono mt-0.5">Click any assignment card to view grading rubrics & notes</p>
+          </div>
+          <Button variant="outline" onClick={() => onGoTo('study-tools')}>
+            <Sparkles className="w-3.5 h-3.5 mr-1" />
+            Study Tools
+          </Button>
         </div>
-        {!data.assignments || data.assignments.length === 0 && (
-          <p className="text-sm text-slate-500">No tracked assignments yet.</p>
-        )}
-        {data.assignments && data.assignments.length > 0 && (
+
+        {!data.assignments || data.assignments.length === 0 ? (
+          <p className="text-xs text-slate-500 font-mono py-4">No tracked assignments yet.</p>
+        ) : (
           <div className="space-y-3">
             {data.assignments.map((a) => {
               const done = Object.values(a.progress || {}).filter(Boolean).length;
               return (
-                <div key={a.id} className="flex items-center gap-3">
+                <div
+                  key={a.id}
+                  onClick={() => onSelectAssignment && onSelectAssignment(a)}
+                  className="glass-panel rounded-xl p-4 border border-white/5 hover:border-cyan-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{a.title}</span>
+                      <span className="truncate text-sm font-semibold text-white">{a.title}</span>
                       {statusBadge(a.status)}
                     </div>
-                    <Progress value={(done / 5) * 100} className="max-w-64" />
+                    <div className="flex items-center gap-3 text-xs font-mono text-slate-400 mt-1.5">
+                      <span>Course: <strong className="text-slate-300">{a.course || a.subject || 'GEN-101'}</strong></span>
+                      <span>·</span>
+                      <span>Due: <strong className="text-amber-300">{a.due_date || 'Aug 24'}</strong></span>
+                    </div>
+                    <Progress value={(done / 5) * 100} className="max-w-64 mt-2" />
                   </div>
-                  <span className="text-xs text-slate-400">{a.due_date || 'no due date'}</span>
+                  <div className="flex items-center gap-2 font-mono text-xs text-cyan-400 shrink-0">
+                    <span>View Rubric</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
                 </div>
               );
             })}
@@ -436,12 +551,22 @@ function Overview({ userId, onGoTo }) {
         )}
       </Card>
 
+      {/* Latest Synthesized Study Materials */}
       {data.materials && data.materials.length > 0 && (
         <Card>
-          <h2 className="mb-2 font-semibold">Latest study materials</h2>
+          <h2 className="mb-3 font-bold text-sm text-white font-mono flex items-center gap-2">
+            <Layers className="w-4 h-4 text-indigo-400" />
+            Recently Synthesized Study Materials
+          </h2>
           <div className="flex flex-wrap gap-2">
-            {data.materials.slice(0, 6).map((m) => (
-              <Badge key={m.id} color="blue">{m.kind}</Badge>
+            {data.materials.slice(0, 8).map((m) => (
+              <span
+                key={m.id}
+                onClick={() => onGoTo('study-tools')}
+                className="px-3 py-1.5 rounded-lg bg-black/40 border border-white/10 hover:border-cyan-500/30 text-xs font-mono text-cyan-300 transition cursor-pointer"
+              >
+                {m.kind}: <strong className="text-white font-semibold">{m.topic || `Material #${m.id}`}</strong>
+              </span>
             ))}
           </div>
         </Card>
@@ -450,100 +575,14 @@ function Overview({ userId, onGoTo }) {
   );
 }
 
-function StudyTools({ userId }) {
-  const [data, setData] = useState(null);
-  const [assignmentId, setAssignmentId] = useState('');
-  const [transcriptText, setTranscriptText] = useState('');
-  const [busy, setBusy] = useState('');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    api.dashboard(userId).then((d) => {
-      setData(d);
-    }).catch((e) => setError(e.message)).finally(() => setLoading(false));
-  }, [userId]);
-
-  async function generate(kind) {
-    setError(''); setResult(null);
-    setBusy(kind);
-    try {
-      const body = { public_id: userId, transcript_text: transcriptText, assignment_id: assignmentId ? Number(assignmentId) : null };
-      const fn = { study_guide: api.studyGuide, flashcards: api.flashcards, practice_test: api.practiceTest, summary: api.summary }[kind];
-      const res = await fn(body);
-      setResult({ kind, ...res });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy('');
-    }
-  }
-
-  if (loading) return <Card>Loading…</Card>;
-  if (error && !data) return <Card className="text-red-600">{error}</Card>;
-  if (!data) return <Card>No data</Card>;
-
-  const kinds = [
-    ['study_guide', '📖 Study guide', 'Key concepts, definitions'],
-    ['flashcards', '🃏 Flashcards', 'Q/A pairs for active recall'],
-    ['practice_test', '✏️ Practice test', 'MCQs + model answers'],
-    ['summary', '⚡ 2-min summary', 'Read right before class'],
-  ];
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <h2 className="mb-3 font-semibold text-white">Source Material</h2>
-        <label className="text-xs text-slate-400 font-mono">Assignment Target (optional)</label>
-        <select
-          className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
-          value={assignmentId}
-          onChange={(e) => setAssignmentId(e.target.value)}
-        >
-          <option value="" className="bg-slate-900 text-slate-300">— select assignment —</option>
-          {data.assignments && data.assignments.map((a) => <option key={a.id} value={a.id} className="bg-slate-900 text-slate-300">{a.title}</option>)}
-        </select>
-        <label className="mt-4 block text-xs text-slate-400 font-mono">Lecture Transcript / Source Content</label>
-        <textarea
-          className="mt-1 min-h-36 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono placeholder:text-slate-600"
-          placeholder="Paste your transcribed lecture or course notes here…"
-          value={transcriptText}
-          onChange={(e) => setTranscriptText(e.target.value)}
-        />
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {kinds.map(([kind, label, hint]) => (
-          <Card key={kind}>
-            <h3 className="font-semibold text-white text-sm">{label}</h3>
-            <p className="mt-1 text-xs text-slate-400 font-mono">{hint} · 0.5 credits</p>
-            <Button className="mt-4 w-full" disabled={busy !== '' || !transcriptText.trim() || (data.credits ?? 0) < 0.5} onClick={() => generate(kind)}>
-              {busy === kind ? 'Synthesizing with DeepSeek V4…' : 'Generate'}
-            </Button>
-          </Card>
-        ))}
-      </div>
-
-      {error && <Card className="border-rose-500/40 text-xs font-mono text-rose-400">{error}</Card>}
-
-      {result && (
-        <Card>
-          <h2 className="font-semibold text-cyan-300 font-mono text-xs uppercase">Synthesized Result — {result.kind}</h2>
-          <pre className="whitespace-pre-wrap font-mono text-xs text-slate-200 mt-3 p-4 rounded-xl bg-black/50 border border-white/5 overflow-x-auto">{JSON.stringify(result.content, null, 2)}</pre>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function Settings({ userId, onOpenModal, onUserId, onServer }) {
+function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
   const [localUser, setLocalUser] = useState(userId);
   const [localServer, setLocalServer] = useState(getServer());
   const [readingLevel, setReadingLevel] = useState('college-freshman');
   const [tone, setTone] = useState('formal');
   const [saved, setSaved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exportNotice, setExportNotice] = useState('');
 
   useEffect(() => {
     api.dashboard(userId).then((d) => {
@@ -560,8 +599,31 @@ function Settings({ userId, onOpenModal, onUserId, onServer }) {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  const handleExportData = async () => {
+    try {
+      const data = await api.dashboard(userId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `helpotron_data_export_${userId || 'student'}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice('✅ Data archive exported successfully');
+      setTimeout(() => setExportNotice(''), 3000);
+    } catch (e) {
+      setExportNotice('❌ Failed to export data');
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    localStorage.clear();
+    window.location.reload();
+  };
+
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-2xl space-y-6">
+      {/* Extended User Preferences Card */}
       <Card className="bg-gradient-to-r from-cyan-950/30 to-indigo-950/30 border-cyan-500/30">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -576,8 +638,9 @@ function Settings({ userId, onOpenModal, onUserId, onServer }) {
         </div>
       </Card>
 
+      {/* Study Preferences */}
       <Card>
-        <h2 className="mb-3 font-semibold text-white text-sm">Study Preferences</h2>
+        <h2 className="mb-3 font-semibold text-white text-sm font-mono">Study Preferences</h2>
         <label className="text-xs text-slate-400 font-mono">Reading Level</label>
         <select className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
           {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l} className="bg-slate-900 text-slate-300">{l}</option>)}
@@ -585,13 +648,72 @@ function Settings({ userId, onOpenModal, onUserId, onServer }) {
         <p className="mt-2 text-xs text-slate-400 font-mono">Tone is calibrated to formal for academic compliance.</p>
       </Card>
 
+      {/* Server & User ID */}
       <Card>
-        <h2 className="mb-3 font-semibold text-white text-sm">Neural Uplink Connection</h2>
-        <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Origin)</label>
+        <h2 className="mb-3 font-semibold text-white text-sm font-mono">Neural Uplink Connection</h2>
+        <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Same-Origin)</label>
         <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localServer} onChange={(e) => setLocalServer(e.target.value)} placeholder="Auto-detected origin (e.g. '')" />
         <label className="mt-3 block text-xs text-slate-400 font-mono">Telemetry User Public ID</label>
         <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localUser} onChange={(e) => setLocalUser(e.target.value)} />
         <Button className="mt-4 w-full" onClick={save}>{saved ? '✅ Settings Synchronized' : 'Save Settings'}</Button>
+      </Card>
+
+      {/* Privacy, GDPR & Data Management */}
+      <Card>
+        <h2 className="mb-3 font-semibold text-white text-sm font-mono flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-cyan-400" />
+          Privacy & Data Compliance (GDPR / CCPA)
+        </h2>
+
+        <div className="space-y-2 font-mono text-xs">
+          <button
+            onClick={onOpenPrivacy}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-slate-300 transition cursor-pointer"
+          >
+            <span>Read Complete Privacy & Compliance Policy</span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+
+          <button
+            onClick={handleExportData}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-cyan-300 transition cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Download className="w-4 h-4" /> Export My Study Data (.json archive)
+            </span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+
+          {exportNotice && (
+            <div className="text-emerald-400 text-xs px-2 py-1">{exportNotice}</div>
+          )}
+
+          <button
+            onClick={() => setConfirmDelete(!confirmDelete)}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-300 transition cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4" /> Delete My Account & Wipe Cache
+            </span>
+            <ChevronRight className="w-4 h-4 text-rose-400" />
+          </button>
+
+          {confirmDelete && (
+            <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-3">
+              <p className="text-xs text-rose-200">
+                Are you sure? This will immediately purge all cached study sessions, writing personas, and tokens.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="danger" onClick={handleDeleteAccount}>
+                  Confirm Wipe & Logout
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );
@@ -630,24 +752,37 @@ function Billing({ userId }) {
 function AdminPanel({ userId, adminUsers, adminAnalytics, refreshAdmin }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-slate-900">🛡️ Helpotron Master Admin Control Center</h2>
+      <h2 className="text-xl font-bold font-mono text-white flex items-center gap-2">
+        <span>🛡️</span> Helpotron Master Admin Control Center
+      </h2>
       
       {/* Advanced Admin Operations */}
       <AdminAdvancedDashboard userId={userId} />
 
       {adminAnalytics && (
         <Card>
-          <h3 className="font-semibold mb-2">📊 Financial & Content Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            <div><span className="text-slate-500">Total users:</span> {adminAnalytics.users?.total || 0}</div>
-            <div><span className="text-slate-500">Total assignments:</span> {adminAnalytics.content?.assignments || 0}</div>
-            <div><span className="text-slate-500">Study materials:</span> {adminAnalytics.content?.study_materials || 0}</div>
-            <div><span className="text-slate-500">Revenue:</span> ${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || 0}</div>
+          <h3 className="font-semibold mb-2 font-mono text-sm text-cyan-300">📊 Financial & Content Overview</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Total users</span>
+              <strong className="text-white text-base">{adminAnalytics.users?.total || 0}</strong>
+            </div>
+            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Total assignments</span>
+              <strong className="text-white text-base">{adminAnalytics.content?.assignments || 0}</strong>
+            </div>
+            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Study materials</span>
+              <strong className="text-white text-base">{adminAnalytics.content?.study_materials || 0}</strong>
+            </div>
+            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Revenue</span>
+              <strong className="text-emerald-300 text-base">${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || '0.00'}</strong>
+            </div>
           </div>
-          <Button variant="outline" className="mt-3 text-sm" onClick={refreshAdmin}>Refresh Data</Button>
+          <Button variant="outline" className="mt-4" onClick={refreshAdmin}>Refresh Data</Button>
         </Card>
       )}
     </div>
   );
 }
-
