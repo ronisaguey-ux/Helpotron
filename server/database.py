@@ -293,6 +293,11 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at DATETIME"))
                 if "preferred_model" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN preferred_model VARCHAR(64) DEFAULT 'deepseek-flash'"))
+
+                columns_materials = [row[1] for row in conn.execute(text("PRAGMA table_info(study_materials)")).fetchall()]
+                if "shared_with" not in columns_materials:
+                    conn.execute(text("ALTER TABLE study_materials ADD COLUMN shared_with JSON DEFAULT '[]'"))
+
                 conn.commit()
             except Exception:
                 pass

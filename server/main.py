@@ -36,6 +36,8 @@ from .routes_export import router as export_router
 from .routes_study_groups import router as study_groups_router
 from .routes_datalake import router as datalake_router
 from .routes_auth_2fa import router as auth_2fa_router
+from .routes_user_settings import router as user_settings_router
+from .routes_admin_advanced import router as admin_advanced_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -130,6 +132,9 @@ app.include_router(export_router)
 app.include_router(study_groups_router)
 app.include_router(datalake_router)
 app.include_router(auth_2fa_router)
+app.include_router(user_settings_router)
+app.include_router(admin_advanced_router)
+
 
 
 

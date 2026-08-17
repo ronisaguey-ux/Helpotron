@@ -3,6 +3,8 @@ import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
 import ReferralSection from './components/ReferralSection.jsx';
 import StudyGroups from './components/StudyGroups.jsx';
+import UserSettingsModal from './components/UserSettingsModal.jsx';
+import AdminAdvancedDashboard from './components/AdminAdvancedDashboard.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -62,6 +64,7 @@ export default function App() {
   const [adminAnalytics, setAdminAnalytics] = useState(null);
   const [credits, setCredits] = useState(0);
   const [userPlan, setUserPlan] = useState('basic');
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   const checkSession = async () => {
     try {
@@ -149,26 +152,16 @@ export default function App() {
               value={loginUser}
               onChange={(e) => setLoginUser(e.target.value)}
             />
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Password"
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm pr-10"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-slate-500 hover:text-slate-700"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </button>
-            </div>
-            {loginError && <p className="text-sm text-red-600">{loginError}</p>}
-            <Button className="w-full" onClick={handleLogin} disabled={loginLoading}>
-              {loginLoading ? 'Logging in...' : 'Sign In'}
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              value={loginPass}
+              onChange={(e) => setLoginPass(e.target.value)}
+            />
+            {loginError && <p className="text-xs text-red-600">{loginError}</p>}
+            <Button className="w-full" disabled={loginLoading} onClick={handleLogin}>
+              {loginLoading ? 'Signing in…' : 'Sign in'}
             </Button>
           </div>
         </Card>
@@ -185,6 +178,9 @@ export default function App() {
             <span>user: <code className="text-slate-700">{userId}</code></span>
             <span>💰 {credits} credits</span>
             <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <Button variant="outline" size="sm" onClick={() => setSettingsModalOpen(true)}>
+              ⚙️ Preferences
+            </Button>
             {isAdmin && <Badge color="purple">👑 Admin</Badge>}
             <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
           </div>
@@ -219,13 +215,27 @@ export default function App() {
         {tab === 'settings' && (
           <Settings
             userId={userId}
+            onOpenModal={() => setSettingsModalOpen(true)}
             onUserId={(id) => { setUserId(id); setUserIdState(id); }}
             onServer={(url) => { setServer(url); setServerUrlState(url); }}
           />
         )}
         {tab === 'billing' && <Billing userId={userId} />}
-        {tab === 'admin' && isAdmin && <AdminPanel adminUsers={adminUsers} adminAnalytics={adminAnalytics} refreshAdmin={fetchAdminData} />}
+        {tab === 'admin' && isAdmin && (
+          <AdminPanel
+            userId={userId}
+            adminUsers={adminUsers}
+            adminAnalytics={adminAnalytics}
+            refreshAdmin={fetchAdminData}
+          />
+        )}
       </main>
+
+      <UserSettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        userId={userId}
+      />
     </div>
   );
 }
@@ -394,7 +404,7 @@ function StudyTools({ userId }) {
   );
 }
 
-function Settings({ userId, onUserId, onServer }) {
+function Settings({ userId, onOpenModal, onUserId, onServer }) {
   const [localUser, setLocalUser] = useState(userId);
   const [localServer, setLocalServer] = useState(getServer());
   const [readingLevel, setReadingLevel] = useState('college-freshman');
@@ -418,6 +428,20 @@ function Settings({ userId, onUserId, onServer }) {
 
   return (
     <div className="max-w-xl space-y-4">
+      <Card className="bg-gradient-to-r from-indigo-950/20 to-purple-950/20 border-indigo-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-base text-indigo-900">✨ Extended User Preferences</h2>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Writing Personas, Plagiarism Verification, Citation Generator, Goals & Themes.
+            </p>
+          </div>
+          <Button variant="primary" onClick={onOpenModal}>
+            Open Preferences
+          </Button>
+        </div>
+      </Card>
+
       <Card>
         <h2 className="mb-3 font-semibold">Study preferences</h2>
         <label className="text-xs text-slate-500">Reading level</label>
@@ -468,19 +492,6 @@ function Billing({ userId }) {
     }
   }
 
-  async function submitData() {
-    setBusy(true); setMsg('');
-    try {
-      const r = await api.discount({ grades: 'anonymized example grade history' });
-      setDiscount(r);
-      setMsg(`✅ Data submitted — +${r.discount_earned}% discount`);
-    } catch (e) {
-      setMsg(`❌ ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -510,70 +521,27 @@ function Billing({ userId }) {
   );
 }
 
-function AdminPanel({ adminUsers, adminAnalytics, refreshAdmin }) {
-  const [adjustTarget, setAdjustTarget] = useState(null);
-  const [adjustAmount, setAdjustAmount] = useState(10);
-  const [adjustReason, setAdjustReason] = useState('admin adjustment');
-
+function AdminPanel({ userId, adminUsers, adminAnalytics, refreshAdmin }) {
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">🛡️ Admin Panel</h2>
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold text-slate-900">🛡️ Helpotron Master Admin Control Center</h2>
+      
+      {/* Advanced Admin Operations */}
+      <AdminAdvancedDashboard userId={userId} />
 
       {adminAnalytics && (
         <Card>
-          <h3 className="font-semibold mb-2">📊 Analytics</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <h3 className="font-semibold mb-2">📊 Financial & Content Overview</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
             <div><span className="text-slate-500">Total users:</span> {adminAnalytics.users?.total || 0}</div>
             <div><span className="text-slate-500">Total assignments:</span> {adminAnalytics.content?.assignments || 0}</div>
             <div><span className="text-slate-500">Study materials:</span> {adminAnalytics.content?.study_materials || 0}</div>
             <div><span className="text-slate-500">Revenue:</span> ${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || 0}</div>
           </div>
-          <Button variant="outline" className="mt-3 text-sm" onClick={refreshAdmin}>Refresh</Button>
+          <Button variant="outline" className="mt-3 text-sm" onClick={refreshAdmin}>Refresh Data</Button>
         </Card>
       )}
-
-      <Card>
-        <h3 className="font-semibold mb-2">👥 Users</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 px-2">User</th>
-                <th className="text-left py-2 px-2">Plan</th>
-                <th className="text-left py-2 px-2">Credits</th>
-                <th className="text-left py-2 px-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {adminUsers.map((u) => (
-                <tr key={u.id} className="border-b hover:bg-slate-50">
-                  <td className="py-2 px-2 font-mono text-xs">{u.public_id}</td>
-                  <td className="py-2 px-2"><Badge color={u.plan === 'elite' ? 'purple' : u.plan === 'pro' ? 'amber' : 'blue'}>{u.plan}</Badge></td>
-                  <td className="py-2 px-2">{u.credits}</td>
-                  <td className="py-2 px-2">
-                    <div className="flex gap-1 flex-wrap">
-                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminAdjustCredits(u.id, 10, 'admin bonus'); refreshAdmin(); }}>+10</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminSetPlan(u.id, 'pro'); refreshAdmin(); }}>Pro</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { api.adminSetPlan(u.id, 'elite'); refreshAdmin(); }}>Elite</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5 text-red-600" onClick={() => { if(confirm('Ban this user?')) { api.adminBanUser(u.id); refreshAdmin(); } }}>Ban</Button>
-                      <Button variant="outline" className="text-xs px-2 py-0.5" onClick={() => { const pw = prompt('New password for '+u.public_id+':'); if(pw && pw.length>=6) { api.adminResetPassword(u.id, pw); refreshAdmin(); } }}>Reset PW</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card>
-        <h3 className="font-semibold mb-2">🔑 Generate Token</h3>
-        <div className="flex gap-2">
-          <Button variant="outline" className="text-sm" onClick={() => { api.adminGenerateToken(7, 1).then(() => refreshAdmin()); }}>7-day token</Button>
-          <Button variant="outline" className="text-sm" onClick={() => { api.adminGenerateToken(30, 1).then(() => refreshAdmin()); }}>30-day token</Button>
-          <Button variant="outline" className="text-sm" onClick={() => { api.adminListTokens().then(tokens => alert(JSON.stringify(tokens, null, 2))); }}>List tokens</Button>
-        </div>
-      </Card>
     </div>
   );
 }
+
