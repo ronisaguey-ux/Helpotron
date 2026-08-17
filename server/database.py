@@ -271,3 +271,30 @@ def get_db() -> Generator[Any, None, None]:
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    if config.database_url.startswith("sqlite"):
+        # Safe migration for missing columns on existing tables
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            try:
+                columns_user = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+                if "discount_spillover" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN discount_spillover FLOAT DEFAULT 0.0"))
+                if "discount_balance" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN discount_balance FLOAT DEFAULT 0.0"))
+                if "password_hash" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(128)"))
+                if "password_salt" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN password_salt VARCHAR(64)"))
+                if "organization_id" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN organization_id INTEGER"))
+                if "role" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'member'"))
+                if "trial_expires_at" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at DATETIME"))
+                if "preferred_model" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN preferred_model VARCHAR(64) DEFAULT 'deepseek-flash'"))
+                conn.commit()
+            except Exception:
+                pass
+
+

@@ -49,6 +49,30 @@ class Config:
     copyleaks_email: str = os.getenv("COPYLEAKS_EMAIL", "")
     winston_api_key: str = os.getenv("WINSTON_API_KEY", "")
 
+    # User Verification & 2FA Secrets
+    jwt_secret: str = os.getenv("JWT_SECRET", "helpotron_jwt_secret_dev_key_32chars")
+    totp_secret: str = os.getenv("TOTP_SECRET", "JBSWY3DPEHPK3PXP")
+
+    # Email Verification & Email 2FA (SMTP)
+    email_host: str = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+    email_port: int = int(os.getenv("EMAIL_PORT", "587"))
+    email_user: str = os.getenv("EMAIL_USER", "")
+    email_password: str = os.getenv("EMAIL_PASSWORD", "")
+    email_from: str = os.getenv("EMAIL_FROM", "noreply@helpotron.com")
+    email_use_tls: bool = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
+
+    # SMS 2FA (Twilio)
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+
+    # Feature Toggles
+    enable_email_verification: bool = os.getenv("ENABLE_EMAIL_VERIFICATION", "false").lower() == "true"
+    enable_2fa: bool = os.getenv("ENABLE_2FA", "true").lower() == "true"
+    enable_sms_2fa: bool = os.getenv("ENABLE_SMS_2FA", "true").lower() == "true"
+    enable_totp_2fa: bool = os.getenv("ENABLE_TOTP_2FA", "true").lower() == "true"
+
+
     def validate(self) -> list[str]:
         issues = []
         if not self.omniroute_api_key:
