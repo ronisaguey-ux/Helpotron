@@ -291,7 +291,7 @@ class GoogleDocsStreamer:
                     await progress_callback(batches_sent, total_events, doc_url)
 
             if not aborted_for_correction:
-                return {
+                res_payload = {
                     "status": "success",
                     "document_id": doc_id,
                     "document_url": doc_url,
@@ -302,9 +302,23 @@ class GoogleDocsStreamer:
                     "attempts": attempts,
                     "final_char_count": current_index - 1
                 }
+                try:
+                    from .datalake import datalake_manager
+                    datalake_manager.log_gdocs_export_event(
+                        user_id=None,
+                        document_id=doc_id,
+                        total_events=total_events,
+                        revisions_count=batches_sent,
+                        checkpoints_verified=checkpoints_passed,
+                        retries_used=attempts - 1,
+                        status="success"
+                    )
+                except Exception:
+                    pass
+                return res_payload
 
         # Fallback if max attempts reached
-        return {
+        fallback_payload = {
             "status": "completed_with_fallback",
             "document_id": doc_id,
             "document_url": doc_url,
@@ -312,6 +326,21 @@ class GoogleDocsStreamer:
             "compliance_history": checker.compliance_history,
             "attempts": attempts
         }
+        try:
+            from .datalake import datalake_manager
+            datalake_manager.log_gdocs_export_event(
+                user_id=None,
+                document_id=doc_id,
+                total_events=total_events,
+                revisions_count=batches_sent,
+                checkpoints_verified=checkpoints_passed,
+                retries_used=attempts - 1,
+                status="completed_with_fallback"
+            )
+        except Exception:
+            pass
+        return fallback_payload
+
 
 
 gdocs_streamer = GoogleDocsStreamer()

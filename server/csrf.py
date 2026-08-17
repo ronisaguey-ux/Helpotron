@@ -22,6 +22,8 @@ EXEMPT_PATHS = {
     "/api/auth/login",
     "/api/auth/signup",
     "/api/auth/csrf",
+    "/api/feedback/submit",
+    "/api/feedback/",
 }
 
 
@@ -52,7 +54,7 @@ def validate_csrf(request: Request) -> None:
     # Skip for safe methods and exempt paths
     if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
         return
-    if request.url.path in EXEMPT_PATHS:
+    if request.url.path in EXEMPT_PATHS or any(p.endswith("/") and request.url.path.startswith(p) for p in EXEMPT_PATHS):
         return
 
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
@@ -78,8 +80,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
 
-        if request.url.path in EXEMPT_PATHS:
+        if request.url.path in EXEMPT_PATHS or any(p.endswith("/") and request.url.path.startswith(p) for p in EXEMPT_PATHS):
             return await call_next(request)
+
 
         # Validate CSRF
         try:

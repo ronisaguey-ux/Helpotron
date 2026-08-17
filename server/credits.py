@@ -38,6 +38,8 @@ BASE_TASK_COSTS = {
     "humanization": 2.0,
     "detection_bypass": 1.5,
 }
+TASK_COSTS = BASE_TASK_COSTS
+
 
 MAX_DISCOUNT_PCT = 20.0
 DISCOUNT_PER_SUBMISSION_PCT = 1.0

@@ -34,6 +34,7 @@ from .routes_referral import router as referral_router
 from .routes_organization import router as organization_router
 from .routes_export import router as export_router
 from .routes_study_groups import router as study_groups_router
+from .routes_datalake import router as datalake_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -101,6 +102,8 @@ app.include_router(referral_router)
 app.include_router(organization_router)
 app.include_router(export_router)
 app.include_router(study_groups_router)
+app.include_router(datalake_router)
+
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 

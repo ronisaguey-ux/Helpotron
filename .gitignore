@@ -22,8 +22,11 @@ web/dist/
 *.db-shm
 uploads/
 audio/
+data_lake/**/*.jsonl
+data_lake/**/*.json
 pipeline/state/*.json
 !pipeline/state/.gitkeep
 
 # OS
 .DS_Store
+

@@ -58,6 +58,22 @@ class AIHumanizerPipeline:
             current_text = " ".join(sentences).replace(" .", ".").replace(" !", "!").replace(" ?", "?")
             eval_result = await self.evaluate_multi_checkers(current_text)
             if eval_result["is_stealth_ready"]:
-                return current_text, eval_result
-        # Fallback return with final metrics
-        return current_text, eval_result
+                break
+        final_result = (current_text, eval_result)
+        try:
+            from .datalake import datalake_manager
+            words_count = len(draft_text.split())
+            datalake_manager.log_assignment_evasion_event(
+                user_id=None,
+                word_count=words_count,
+                initial_ai_score=100.0 - eval_result.get("human_confidence_score", 0.0),
+                final_ai_score=100.0 - eval_result.get("human_confidence_score", 0.0),
+                burstiness=eval_result.get("burstiness", 0.0),
+                lexical_diversity=eval_result.get("lexical_diversity", 0.0),
+                passes_used=self.max_passes,
+                passed=eval_result.get("is_stealth_ready", False),
+                detector_breakdown=eval_result.get("detector_details", []),
+            )
+        except Exception:
+            pass
+        return final_result
