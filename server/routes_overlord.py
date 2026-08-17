@@ -380,3 +380,77 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
         assignment_id=payload.assignment_id,
     )
     return {"status": "success", "execution_result": exec_res}
+
+
+# ─── Natural Language Overlord Command & Sandbox Endpoints ───────────────────
+
+class NLPCommandRequest(BaseModel):
+    text: str
+    mode_override: Optional[str] = None
+    target_key: Optional[str] = "global"
+    files: Optional[List[Dict[str, Any]]] = None
+
+
+class SandboxScriptRequest(BaseModel):
+    script_code: str
+    language: str = "python"
+    subagent_name: str = "sandbox_worker"
+    timeout: float = 30.0
+    input_files: Optional[Dict[str, str]] = None
+
+
+@router.post("/agent/command")
+async def execute_natural_language_command(
+    payload: NLPCommandRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Executes a natural language directive via the Overlord agent with full ecosystem control."""
+    user = _get_current_user(request, db)
+    res = await overlord_agent.parse_and_execute_command(
+        db=db,
+        user=user,
+        prompt=payload.text,
+        mode_override=payload.mode_override,
+        files=payload.files,
+        target_key=payload.target_key or "global",
+    )
+    return res
+
+
+@router.post("/agent/sandbox/execute")
+async def execute_sandbox_script_endpoint(
+    payload: SandboxScriptRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Executes a sub-agent script inside an isolated virtual sandbox with resource limits."""
+    user = _get_current_user(request, db)
+    from .engine.sandbox import sandbox_manager
+    res = await sandbox_manager.execute_subagent_task(
+        subagent_name=payload.subagent_name,
+        user_id=user.public_id,
+        script_code=payload.script_code,
+        language=payload.language,
+        input_files=payload.input_files,
+        auto_cleanup=True,
+        timeout=payload.timeout,
+    )
+    return {"status": "success", "sandbox_result": res}
+
+
+@router.get("/agent/sandbox/active")
+def list_active_sandboxes_endpoint(request: Request, db: Session = Depends(get_db)):
+    """Lists currently active virtual sub-agent sandboxes."""
+    from .engine.sandbox import sandbox_manager
+    return {"sandboxes": sandbox_manager.list_active()}
+
+
+@router.post("/agent/sandbox/cleanup")
+def cleanup_sandbox_endpoint(payload: Dict[str, str], request: Request, db: Session = Depends(get_db)):
+    """Manually cleans up a virtual sandbox."""
+    sandbox_id = payload.get("sandbox_id", "")
+    from .engine.sandbox import sandbox_manager
+    success = sandbox_manager.cleanup_sandbox(sandbox_id)
+    return {"status": "success" if success else "not_found", "sandbox_id": sandbox_id}
+
