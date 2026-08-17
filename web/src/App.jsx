@@ -224,14 +224,14 @@ export default function App() {
   };
 
   const allTabs = [
-    { key: 'assignments', label: '📋 Assignments' },
-    { key: 'overview', label: 'Overview' },
-    { key: 'study-tools', label: 'Study Tools' },
-    { key: 'analytics', label: 'Analytics' },
-    { key: 'referral', label: 'Referral' },
-    { key: 'groups', label: 'Study Groups' },
-    { key: 'settings', label: 'Settings' },
-    { key: 'billing', label: 'Billing' },
+    { key: 'assignments', label: '📋 Assignments & Overlord' },
+    { key: 'study-tools', label: '⚡ Study Tools & Quizzes' },
+    { key: 'analytics', label: '📊 Data Lake & Telemetry' },
+    { key: 'overview', label: '🧭 Activity Overview' },
+    { key: 'groups', label: '👥 Collaborative Groups' },
+    { key: 'referral', label: '🎁 Referral & Rewards' },
+    { key: 'billing', label: '💳 Credits & Billing' },
+    { key: 'settings', label: '⚙️ Settings & Personas' },
   ];
 
   const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);

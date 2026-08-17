@@ -893,3 +893,13 @@ async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = De
         raise HTTPException(500, f"Google Docs export failed: {e}")
 
 
+# ─── Unified Single Localhost Host Mount ──────────────────────────────────────
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+_WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+if _WEB_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_WEB_DIST), html=True), name="static_frontend")
+
+
+
