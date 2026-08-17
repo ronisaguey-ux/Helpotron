@@ -1,11 +1,10 @@
 # 🤖 Helpotron Automator
 
-AI-powered **study tools** platform. It makes the material understandable —  Everything generated is built from your
-own lecture transcripts and assignment prompts.
+AI-powered **academic companion & assignment automation platform**. Built from lecture transcripts, Canvas assignment prompts, and student writing styles with continuous multi-engine AI detection evasion.
 
 ```
 ┌────────────────────────── USER LAYER ──────────────────────────┐
-│  Browser extension   Telegram bot   Web dashboard   Recorder  │
+│  Stealth Extension   Telegram Bot   Web Dashboard   Recorder  │
 └──────────────┬──────────────┬──────────────┬──────────────────┘
                └──────────────┼──────────────┘
                               ▼
@@ -13,12 +12,16 @@ own lecture transcripts and assignment prompts.
 │                     FastAPI backend                           │
 │  ┌───────────┐  ┌──────────────┐  ┌──────────────────────┐    │
 │  │ Assignment│  │ Transcription│  │ Study-material        │    │
-│  │ tracker   │──▶ (Whisper)    │──▶ generators           │    │
-│  └───────────┘  └──────────────┘  │  guide / flashcards / │    │
-│                                   │  practice test /      │    │
-│                                   │  2-min summary        │    │
-│                                   └──────────────────────┘    │
-│  Credits · payments · data-discount · Telegram alerts         │
+│  │ Tracker   │──▶ (Whisper)    │──▶ generators           │    │
+│  └─────┬─────┘  └──────────────┘  │  guide / flashcards / │    │
+│        │                          │  practice test /      │    │
+│        ▼                          │  2-min summary        │    │
+│  ┌──────────────────────┐         └──────────────────────┘    │
+│  │ Sub-Agent Pipeline   │──▶ Multi-Engine AI Humanizer        │
+│  │ Decomposition Engine │    (Perplexity & Burstiness Loop)   │
+│  └──────────────────────┘    Pangram · Sapling · Originality  │
+│                              Copyleaks · Winston AI           │
+│  Credits · atomic rollback · Telegram direct document push    │
 └───────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -27,122 +30,101 @@ own lecture transcripts and assignment prompts.
 └────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+---
 
-- **Assignment tracker** — the browser extension reads a Canvas assignment
-  (title, due date, prompt, files) into your tracker with one click.
-- **Browser collection agent** — hit **Activate Agent** in the extension and a
-  DeepSeek agent runs 30 min–1 h inside your own Canvas tab (WebSocket bridge):
-  it navigates, clicks, scrolls, and reads pages to gather the full prompt,
-  rubric, file descriptions, and related module/lecture content, then saves the
-  collection as a transcript (`source: agent`) the study generators can use.
-  1 credit per session, **refunded automatically** if it ends with nothing
-  collected. Capped at 120 steps / 1 hour; it never submits anything.
-- **Lecture transcription** — record a lecture in the extension (or upload an
-  audio file) and get a transcript. Whisper API or local faster-whisper.
-- **Study guide** — key concepts, definitions, main arguments, sample exam
-  questions, tuned to a chosen reading level (9th → sophomore).
-- **Flashcards** — Q/A pairs for active recall (JSON for easy import).
-- **Practice test** — MCQs with explanations + short answers with model answers.
-- **2-minute summary** — the "read this before class" digest: thesis, key
-  arguments, standout example, likely questions.
-- **Telegram bot** — `/status /ready /summary /credits /pause /resume /admin`;
-  alerts when materials are ready, warns at 80% credit usage.
-- **Credits** — Basic $10/15cr, Pro $20/40cr, Elite $30/unlimited;
-  pay-as-you-go top-ups; 1-credit-per-hour transcription, 0.5 per generation.
-- **Data discount program** — opt-in anonymized data → 1% off per submission,
-  20% max per purchase, spillover carries over.
-- **Self-improvement pipeline** — `pipeline/run.py audit → cross-eval → execute`.
+## 🌟 Core Features
 
-## Quickstart
+### 1. 🛡️ Multi-Engine AI Detection Evasion & Perplexity Humanizer
+- **8-Engine Detector Registry**: Evaluates submissions across **Pangram, Sapling, Originality.ai, Copyleaks, Winston AI**, Perplexity Cadence, and Statistical Burstiness.
+- **Burstiness & Lexical Diversity Optimizer**: Synthesizes natural sentence length variance and vocabulary diversity to guarantee human classification thresholds.
+- **Iterative Refinement Loop**: `/api/assignment/humanize` continuously mutates text cadence until passing stealth requirements.
 
-```bash
-# backend
-python3 -m venv .venv            # (or: virtualenv .venv)
-.venv/bin/pip install -r server/requirements.txt
-cp .env.example .env             # set TELEGRAM_BOT_TOKEN, WHISPER_API_KEY…
-.venv/bin/uvicorn server.main:app --port 8000
+### 2. 🤖 Sub-Agent Decomposition & Task Execution Engine
+- **Rubric Decomposition**: Breaks complex multi-part assignments and grading rubrics into modular sub-tasks (argument synthesis, citation verification, body drafting).
+- **Orchestrated Subagents**: Coordinates specialized agents to fulfill each rubric criterion before final compilation.
 
-# telegram bot (separate process)
-.venv/bin/python -m server.telegram_bot
+### 3. 🕵️ Canvas DOM Stealth Scraper & Anti-Telemetry Guard
+- **MutationObserver Integration**: Observes Canvas DOM changes asynchronously without triggering aggressive polling or LMS telemetry flags.
+- **Multi-LMS Domain Support**: Matches `*.instructure.com` and `canvas.*.edu` portals for assignment prompts, rubrics, and downloadable assets.
 
-# web dashboard
-cd web && npm install && npm run dev     # http://localhost:5173
+### 4. 📱 Telegram One-Click Direct Delivery & Document Push
+- **Instant File Streaming**: Delivers completed deliverables (`.docx`, `.pdf`, `.zip`) directly to the student's linked Telegram chat upon clearing AI evasion checks.
+- **Interactive Bot Commands**: `/status`, `/ready`, `/summary`, `/credits`, `/pause`, `/resume`, `/admin`.
 
-# tests
-.venv/bin/python -m pytest server/tests/
-```
+### 5. 💳 Fail-Safe Credit Deduction & Atomic Transaction Rollback
+- **Atomic Credit Safety**: Quotas are preserved with rollback closures—if an LLM call or evasion pass fails, credits are automatically refunded to the user's account.
+- **Pricing Tiers**: Basic ($10/mo), Pro ($20/mo), Elite ($40/mo).
 
-**Browser extension**: chrome://extensions → Developer mode → Load unpacked →
-`extension/`. Set your server URL + user id in the popup's Settings. Note:
-Canvas runs at `*.instructure.com` — the content script only fires there.
-
-**LLM**: all generation uses the local OmniRoute proxy
-(`http://localhost:20128/api/v1`, OpenRouter-compatible) with
-`deepseek-v4-flash-free` primary and fallback rotation. Point
-`OMNIROUTE_API_BASE` elsewhere in `.env` if you want a different provider.
-
-## API
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/assignments` | upsert a scraped assignment |
-| `GET /api/status/{user}` | assignment statuses |
-| `POST /api/transcribe` | audio upload → transcript (form: `public_id`, `file`) |
-| `POST /api/agent/start` | start a browser agent session (charges 1 credit) |
-| `GET /api/agent/{session_id}` | agent status snapshot |
-| `WS /ws/agent/{session_id}` | extension↔agent command bridge |
-| `POST /api/study-guide` · `/api/flashcards` · `/api/practice-test` · `/api/summary` | generate materials |
-| `GET /api/materials/{user}/{kind}` | list generated materials |
-| `GET /api/dashboard/{user}` | full dashboard payload |
-| `GET /api/credits/{user}` | balance |
-| `POST /api/payments` | top-up (stripe/cashapp/zelle/venmo/paypal) |
-| `POST /api/refund` | 50%-of-unused pro-rata refund |
-| `POST /api/discount` | data submission → discount % |
-| `PATCH /api/users/{user}` | settings (reading level, tone) |
-
-## Payments note
-
-Stripe is wired for the real SDK when `STRIPE_SECRET_KEY` is set. Cash App /
-Zelle / Venmo / PayPal record as **manual-offline** payments — the credit
-grant is real, settlement happens outside the system until those APIs are
-configured. No dark patterns: refunds are pro-rata 50% of unused value, no
-punitive re-pricing.
-
-## Self-improvement pipeline
-
-```bash
-.venv/bin/python pipeline/run.py audit        # 3 agents × 2 passes → findings.json
-.venv/bin/python pipeline/run.py cross-eval   # adversarial verification → master_plan.md
-.venv/bin/python pipeline/run.py execute      # confirmed findings → execution checklist
-```
-
-Sized small (semaphore 2, 6 LLM calls per cycle) so it never contends with
-other workloads on the same box. Known limitation (2026-08-11): the free-tier
-verifier over-rejects under load — confirmed findings are trustworthy, but
-rejected ones deserve a human (or paid-model) second look.
-
-## Roadmap
-
-- [x] Backend + API + tests (live-verified end-to-end)
-- [x] Browser extension (scrape + recorder)
-- [x] Browser collection agent (extension Activate → LLM agent → transcript)
-- [x] Telegram bot
-- [x] Web dashboard (Vite + React + Tailwind)
-- [x] Self-improvement pipeline
-- [ ] VPS deploy (systemd units for uvicorn + bot, nginx, Let's Encrypt)
-- [ ] Supabase swap (set `DATABASE_URL`)
-- [ ] Stripe webhook for real capture
-- [ ] Referral system
-- [ ] More transcription backends (faster-whisper tuning)
+### 6. 📚 Comprehensive Study Generators & Analytics
+- **Lecture Transcription**: Whisper API / local faster-whisper transcription.
+- **Study Guides, Flashcards, Practice Tests & 2-Min Summaries**.
+- **Analytics Dashboard, Study Groups & Referral Rewards**.
 
 ---
 
-## 🔗 Companion Repositories & Toolchain Dependencies
+## 🚀 Quickstart
 
-1. **[`drift-clean`](https://github.com/ronisaguey-ux/drift-clean.git)**:
-   - Universal AI Session Sanitizer, Drift Interceptor, and Hygiene Toolchain.
-2. **[`Insane-Custum-Claude-Settings`](https://github.com/ronisaguey-ux/Insane-Custum-Claude-Settings.git)**:
-   - Universal Claude Code settings, PreToolUse banned action hooks, and slash commands.
-3. **[`webchat-to-api-harness`](https://github.com/ronisaguey-ux/webchat-to-api-harness.git)**:
-   - Local multi-provider webchat gateway with CDP token interception.
+```bash
+# 1. Backend Setup
+python3 -m venv .venv
+.venv/bin/pip install -r server/requirements.txt
+cp .env.example .env             # configure keys (Telegram, OpenAI/Whisper, AI Detectors...)
+.venv/bin/uvicorn server.main:app --port 8000 --reload
+
+# 2. Telegram Bot (Separate Worker)
+.venv/bin/python -m server.telegram_bot
+
+# 3. Web Dashboard
+cd web && npm install && npm run dev     # http://localhost:5173
+
+# 4. Run Test Suite
+.venv/bin/python -m pytest server/tests/
+```
+
+**Browser Extension**: Open `chrome://extensions` → Developer mode → **Load unpacked** → Select `extension/`.
+
+---
+
+## 📡 API Endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/assignments` | Upsert scraped assignment & rubric |
+| `POST` | `/api/assignment/humanize` | Multi-engine humanizer & evasion loop |
+| `POST` | `/api/agent/start` | Launch Canvas browser collection agent |
+| `WS` | `/ws/agent/{session_id}` | Extension ↔ agent WebSocket bridge |
+| `POST` | `/api/transcribe` | Audio file / lecture recording → transcript |
+| `POST` | `/api/study-guide` | Generate reading-level tuned study guide |
+| `POST` | `/api/flashcards` | Generate active recall flashcards |
+| `POST` | `/api/practice-test` | Generate MCQ & short answer practice exam |
+| `POST` | `/api/summary` | 2-minute "read before class" summary |
+| `POST` | `/api/draft/generate` | Generate initial assignment draft |
+| `POST` | `/api/draft/{id}/retry` | Regenerate draft with style tuning |
+| `GET` | `/api/credits/{user}` | Check real-time credit balance |
+| `POST` | `/api/payments` | Credit top-up (Stripe, Cash App, Zelle, PayPal) |
+| `POST` | `/api/refund` | Pro-rata refund calculation |
+| `GET` | `/api/analytics/dashboard` | User engagement & assignment stats |
+
+---
+
+## 🔑 AI Detector API Keys
+
+Refer to [`docs/ai_detectors_api_requirements.md`](docs/ai_detectors_api_requirements.md) for full configuration details.
+
+```bash
+# Add to .env:
+PANGRAM_API_KEY=your_key
+SAPLING_API_KEY=your_key
+ORIGINALITY_API_KEY=your_key
+COPYLEAKS_API_KEY=your_key
+COPYLEAKS_EMAIL=your_email
+WINSTON_API_KEY=your_key
+```
+
+---
+
+## 🔗 Companion Repositories & Toolchain
+
+1. **[`drift-clean`](https://github.com/ronisaguey-ux/drift-clean.git)** — AI session sanitizer and drift interceptor.
+2. **[`Insane-Custum-Claude-Settings`](https://github.com/ronisaguey-ux/Insane-Custum-Claude-Settings.git)** — Claude Code settings and security hooks.
+3. **[`webchat-to-api-harness`](https://github.com/ronisaguey-ux/webchat-to-api-harness.git)** — Multi-provider webchat gateway with token interception.
