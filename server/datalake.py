@@ -52,6 +52,7 @@ class DataLakeManager:
         self.telemetry_file = TELEMETRY_DIR / "operational_events.jsonl"
         self.feedback_file = FEEDBACK_DIR / "user_feedback.jsonl"
         self.insights_file = INSIGHTS_DIR / "latest_insights.json"
+        self.corpus_file = CORPUS_DIR / "humanized_samples.jsonl"
 
     def log_telemetry(self, event_type: str, data: Dict[str, Any]) -> None:
         """Appends an anonymized operational event record."""
@@ -125,6 +126,45 @@ class DataLakeManager:
                 "status": status,
             },
         )
+
+    def log_training_sample(self, text: str, metrics: Dict[str, Any]) -> Optional[str]:
+        """Stores a successful humanized writing sample as anonymized training data.
+
+        Deduplicated by content hash and capped to MAX_CORPUS_SAMPLES so the
+        corpus stays useful without unbounded disk growth. No user or document
+        identifier is stored — only the text and its metric tags.
+        """
+        MAX_CORPUS_SAMPLES = 5000
+        if not text or not text.strip():
+            return None
+        text = text.strip()[:5000]
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        try:
+            self.corpus_file.parent.mkdir(parents=True, exist_ok=True)
+            if self.corpus_file.exists():
+                with open(self.corpus_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip() and digest in line:
+                            return None
+                if sum(1 for _ in open(self.corpus_file, encoding="utf-8")) >= MAX_CORPUS_SAMPLES:
+                    return None
+        except Exception:
+            pass
+        sample = {
+            "sample_id": f"cor_{digest}",
+            "added_at": datetime.now(timezone.utc).isoformat(),
+            "text_hash": digest,
+            "text": text,
+            "metrics": {k: round(float(v), 2) for k, v in (metrics or {}).items() if isinstance(v, (int, float))},
+            "tag": "humanized_success",
+        }
+        try:
+            with open(self.corpus_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(sample, ensure_ascii=False) + "\n")
+            return digest
+        except Exception as e:
+            logger.error("Failed writing training sample: %s", e)
+            return None
 
     def record_feedback(
         self,
@@ -317,6 +357,14 @@ class DataLakeIntelligenceAgent:
                 "recommendation": "Ensure 10% checkpoint originality checks remain active during peak student submission hours.",
             })
 
+        # 5. Training Corpus Curation Stats
+        corpus_count = 0
+        try:
+            if self.manager.corpus_file.exists():
+                corpus_count = sum(1 for _ in open(self.manager.corpus_file, encoding="utf-8"))
+        except Exception:
+            pass
+
         insights_payload = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "telemetry_summary": {
@@ -338,6 +386,10 @@ class DataLakeIntelligenceAgent:
                 "categories": category_counts,
                 "urgencies": urgency_counts,
                 "top_requested_features": top_demanded_features,
+            },
+            "training_corpus": {
+                "humanized_samples": corpus_count,
+                "curation_note": "deduped by content hash, capped, anonymized",
             },
             "actionable_insights": actionable_insights,
         }

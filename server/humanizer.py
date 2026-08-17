@@ -74,6 +74,12 @@ class AIHumanizerPipeline:
                 passed=eval_result.get("is_stealth_ready", False),
                 detector_breakdown=eval_result.get("detector_details", []),
             )
+            if eval_result.get("is_stealth_ready", False):
+                datalake_manager.log_training_sample(current_text, {
+                    "human_confidence_score": eval_result.get("human_confidence_score", 0.0),
+                    "burstiness": eval_result.get("burstiness", 0.0),
+                    "lexical_diversity": eval_result.get("lexical_diversity", 0.0),
+                })
         except Exception:
             pass
         return final_result

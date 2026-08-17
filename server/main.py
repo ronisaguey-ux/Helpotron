@@ -42,12 +42,37 @@ logger = logging.getLogger("helpotron")
 ALL_MATERIAL_KINDS = ("study_guide", "flashcards", "practice_test", "summary")
 
 
+async def _datalake_background_loop(interval_seconds: int = 21600) -> None:
+    """Background Data Lake Intelligence Agent cycle (req 5: full automation).
+
+    Runs a lake analysis on startup and then every <interval> seconds,
+    autonomously, with no user intervention. Any failure is logged and the
+    loop continues — the lake analysis is best-effort and must never take
+    the API process down.
+    """
+    from .datalake import datalake_agent
+    while True:
+        try:
+            insights = await datalake_agent.analyze_lake()
+            n_insights = len(insights.get("actionable_insights", []))
+            logger.info("datalake: background analysis complete (%d actionable insights)", n_insights)
+        except Exception as e:
+            logger.warning("datalake: background analysis error: %s", e)
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     for problem in config.validate():
         logger.warning("config: %s", problem)
     init_db()
+    lake_task = asyncio.create_task(_datalake_background_loop())
     yield
+    lake_task.cancel()
+    try:
+        await lake_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
