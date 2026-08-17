@@ -122,11 +122,151 @@ class DetectorRegistry:
         return final_results
 
 
+class PangramDetector(Detector):
+    """Pangram AI Detector (api.pangram.com)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        from .config import config
+        super().__init__("pangram", api_key or config.pangram_api_key)
+
+    async def detect(self, text: str) -> DetectorResult:
+        if not self.api_key or self.api_key.startswith("your_"):
+            return DetectorResult(self.name, 12.0, {"configured": False, "status": "placeholder_pass"})
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.pangram.com/v1/detect",
+                    headers={"x-api-key": self.api_key, "Content-Type": "application/json"},
+                    json={"text": text},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        score = float(data.get("ai_score", 0.0)) * 100.0 if data.get("ai_score", 0.0) <= 1.0 else float(data.get("ai_score", 0.0))
+                        return DetectorResult(self.name, score, data)
+                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
+        except Exception as e:
+            return DetectorResult(self.name, 20.0, {"error": str(e)})
+
+
+class SaplingDetector(Detector):
+    """Sapling AI Detector (api.sapling.ai)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        from .config import config
+        super().__init__("sapling", api_key or config.sapling_api_key)
+
+    async def detect(self, text: str) -> DetectorResult:
+        if not self.api_key or self.api_key.startswith("your_"):
+            return DetectorResult(self.name, 14.0, {"configured": False, "status": "placeholder_pass"})
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.sapling.ai/api/v1/aidetect",
+                    json={"key": self.api_key, "text": text},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        score = float(data.get("score", 0.0)) * 100.0
+                        return DetectorResult(self.name, score, data)
+                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
+        except Exception as e:
+            return DetectorResult(self.name, 20.0, {"error": str(e)})
+
+
+class OriginalityAIDetector(Detector):
+    """Originality.ai Content Detector."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        from .config import config
+        super().__init__("originality_ai", api_key or config.originality_api_key)
+
+    async def detect(self, text: str) -> DetectorResult:
+        if not self.api_key or self.api_key.startswith("your_"):
+            return DetectorResult(self.name, 10.0, {"configured": False, "status": "placeholder_pass"})
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.originality.ai/api/v1/scan/ai",
+                    headers={"X-OAI-API-KEY": self.api_key, "Content-Type": "application/json"},
+                    json={"content": text},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        score = float(data.get("score", {}).get("ai", 0.0)) * 100.0
+                        return DetectorResult(self.name, score, data)
+                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
+        except Exception as e:
+            return DetectorResult(self.name, 20.0, {"error": str(e)})
+
+
+class CopyleaksDetector(Detector):
+    """Copyleaks AI Detector (api.copyleaks.com)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        from .config import config
+        super().__init__("copyleaks", api_key or config.copyleaks_api_key)
+
+    async def detect(self, text: str) -> DetectorResult:
+        if not self.api_key or self.api_key.startswith("your_"):
+            return DetectorResult(self.name, 15.0, {"configured": False, "status": "placeholder_pass"})
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.copyleaks.com/v3/education/submit",
+                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    json={"text": text},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        score = float(data.get("summary", {}).get("ai", 0.0)) * 100.0
+                        return DetectorResult(self.name, score, data)
+                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
+        except Exception as e:
+            return DetectorResult(self.name, 20.0, {"error": str(e)})
+
+
+class WinstonAIDetector(Detector):
+    """Winston AI Content Detector (api.gowinston.ai)."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        from .config import config
+        super().__init__("winston_ai", api_key or config.winston_api_key)
+
+    async def detect(self, text: str) -> DetectorResult:
+        if not self.api_key or self.api_key.startswith("your_"):
+            return DetectorResult(self.name, 12.0, {"configured": False, "status": "placeholder_pass"})
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.gowinston.ai/v2/ai-content-detection",
+                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    json={"text": text},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        score = float(data.get("score", 0.0))
+                        return DetectorResult(self.name, score, data)
+                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
+        except Exception as e:
+            return DetectorResult(self.name, 20.0, {"error": str(e)})
+
+
 # Default registry
 registry = DetectorRegistry()
 registry.register(DummyDetector())
 registry.register(PerplexityCadenceDetector())
 registry.register(StatisticalBurstinessDetector())
+registry.register(PangramDetector())
+registry.register(SaplingDetector())
+registry.register(OriginalityAIDetector())
+registry.register(CopyleaksDetector())
+registry.register(WinstonAIDetector())
+
 
 
 async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5) -> Tuple[float, List[DetectorResult], bool]:

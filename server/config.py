@@ -41,6 +41,14 @@ class Config:
     session_secret: str = os.getenv("SESSION_SECRET", "")
     production_mode: bool = os.getenv("PRODUCTION_MODE", "false").lower() == "true"
 
+    # AI Detectors API Keys (Pangram, Sapling, Originality.ai, Copyleaks, Winston AI)
+    pangram_api_key: str = os.getenv("PANGRAM_API_KEY", "")
+    sapling_api_key: str = os.getenv("SAPLING_API_KEY", "")
+    originality_api_key: str = os.getenv("ORIGINALITY_API_KEY", "")
+    copyleaks_api_key: str = os.getenv("COPYLEAKS_API_KEY", "")
+    copyleaks_email: str = os.getenv("COPYLEAKS_EMAIL", "")
+    winston_api_key: str = os.getenv("WINSTON_API_KEY", "")
+
     def validate(self) -> list[str]:
         issues = []
         if not self.omniroute_api_key:
