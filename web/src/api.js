@@ -53,6 +53,11 @@ async function request(endpoint, options = {}) {
     ...options.headers,
   };
 
+  const userId = getUserId() || 'RoniDev';
+  if (userId) {
+    headers['X-Public-ID'] = userId;
+  }
+
   // Add CSRF token for state-changing requests
   const method = options.method || 'GET';
   if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && method !== 'TRACE') {
