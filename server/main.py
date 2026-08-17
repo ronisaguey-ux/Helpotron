@@ -766,3 +766,46 @@ async def humanize_assignment_route(payload: dict, db: Session = Depends(get_db)
     sanitized_text, metrics = await humanizer_pipeline.humanize_loop(text)
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
+
+from .export import export_to_google_doc
+from .gdocs_exporter import HumanizedTypingSimulator
+
+@app.post("/api/assignment/{assignment_id}/export-gdocs")
+async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = Depends(get_db)):
+    """Explicit user-triggered export streaming content into Google Docs with human typing history."""
+    assignment = db.get(Assignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+
+    access_token = payload.get("google_access_token", "")
+    content = payload.get("content") or assignment.progress.get("draft") or assignment.prompt or "Assignment Content"
+    title = payload.get("title") or assignment.title or f"Assignment {assignment_id}"
+    simulation_speed = payload.get("speed", "fast")
+
+    if not access_token:
+        # Return generated keystroke timeline simulation payload for client-side / extension playback
+        sim = HumanizedTypingSimulator()
+        events = sim.generate_typing_events(content)
+        return {
+            "status": "ready_for_client_playback",
+            "assignment_id": assignment_id,
+            "title": title,
+            "events_count": len(events),
+            "events": events[:200],  # Sample timeline
+            "message": "Pass google_access_token to execute direct server-to-Google-Docs cloud stream, or use client events."
+        }
+
+    try:
+        res = await export_to_google_doc(
+            assignment_id=assignment_id,
+            access_token=access_token,
+            title=title,
+            content=content,
+            simulation_speed=simulation_speed
+        )
+        return res
+    except Exception as e:
+        logger.exception("Google Docs export failed: %s", e)
+        raise HTTPException(500, f"Google Docs export failed: {e}")
+
+

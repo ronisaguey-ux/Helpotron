@@ -63,3 +63,21 @@ async def export_and_relay_telegram(assignment_id: int, export_format: str, db: 
         except Exception:
             pass
     return file_path
+
+
+async def export_to_google_doc(
+    assignment_id: int,
+    access_token: str,
+    title: str,
+    content: str,
+    simulation_speed: str = "fast"
+) -> Dict[str, Any]:
+    """Streams assignment content into Google Docs with authentic typing history."""
+    from .gdocs_exporter import gdocs_streamer
+    return await gdocs_streamer.stream_assignment_to_doc(
+        access_token=access_token,
+        title=title,
+        content=content,
+        simulation_speed=simulation_speed
+    )
+
