@@ -22,14 +22,61 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState([]);
   const [activePermModal, setActivePermModal] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | rules
+  const [simEnabled, setSimEnabled] = useState(true);
+  const [simSeeding, setSimSeeding] = useState(false);
 
   // Load cards & mode on mount
   useEffect(() => {
     fetchDashboardData();
+    fetchSimulationStatus();
     const interval = setInterval(fetchPendingPermissions, 4000);
     return () => clearInterval(interval);
   }, [userId]);
+
+  async function fetchSimulationStatus() {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation/status`, { headers: getHeaders(userId) });
+      const data = await res.json();
+      if (data.is_enabled !== undefined) setSimEnabled(data.is_enabled);
+    } catch (e) {}
+  }
+
+  async function toggleSimulator() {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation/toggle`, {
+        method: 'POST',
+        headers: getHeaders(userId),
+        body: JSON.stringify({ enabled: !simEnabled }),
+      });
+      const data = await res.json();
+      setSimEnabled(data.is_enabled);
+      fetchDashboardData();
+    } catch (e) {}
+  }
+
+  async function seedDemoData() {
+    setSimSeeding(true);
+    try {
+      await fetch(`${API_BASE}/api/simulation/seed`, {
+        method: 'POST',
+        headers: getHeaders(userId),
+      });
+      await fetchDashboardData();
+    } catch (e) {} finally {
+      setSimSeeding(false);
+    }
+  }
+
+  async function clearDemoData() {
+    if (!confirm('Clear synthetic mock assignments?')) return;
+    try {
+      await fetch(`${API_BASE}/api/simulation/clear`, {
+        method: 'POST',
+        headers: getHeaders(userId),
+      });
+      await fetchDashboardData();
+    } catch (e) {}
+  }
 
   async function fetchDashboardData() {
     setLoading(true);
@@ -226,6 +273,54 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
 
   return (
     <div className="space-y-6">
+      {/* ─── Simulator & Test Control Banner ───────────────────────── */}
+      <div className="bg-gradient-to-r from-violet-900/10 via-indigo-900/10 to-purple-900/10 border border-indigo-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shadow-sm">
+            🧪
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900">User Activity Simulator</h4>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${simEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                {simEnabled ? '● Simulation ON' : '○ OFF'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Simulates realistic multi-subject assignments, sub-agent streams, rubrics, and analytics.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={toggleSimulator}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              simEnabled
+                ? 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700'
+                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {simEnabled ? 'Disable Simulator' : 'Enable Simulator'}
+          </button>
+
+          <button
+            onClick={seedDemoData}
+            disabled={simSeeding}
+            className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+          >
+            {simSeeding ? 'Seeding…' : '🔄 Seed Sample Courses'}
+          </button>
+
+          <button
+            onClick={clearDemoData}
+            className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors font-medium"
+          >
+            Clear Data
+          </button>
+        </div>
+      </div>
+
       {/* ─── Control Header: Modes & Rules ─────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

@@ -28,6 +28,7 @@ EXEMPT_PATHS = {
     "/api/agent/",
     "/api/assignments/",
     "/api/assignment/",
+    "/api/simulation/",
     "/api/feedback/submit",
     "/api/feedback/",
 }

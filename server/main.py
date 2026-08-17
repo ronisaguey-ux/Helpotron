@@ -39,6 +39,7 @@ from .routes_auth_2fa import router as auth_2fa_router
 from .routes_user_settings import router as user_settings_router
 from .routes_admin_advanced import router as admin_advanced_router
 from .routes_overlord import router as overlord_router
+from .routes_simulation import router as simulation_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -136,6 +137,14 @@ app.include_router(auth_2fa_router)
 app.include_router(user_settings_router)
 app.include_router(admin_advanced_router)
 app.include_router(overlord_router)
+app.include_router(simulation_router)
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok", "app": "Helpotron Automator", "version": "1.0.0"}
+
+
 
 
 
