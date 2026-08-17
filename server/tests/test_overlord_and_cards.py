@@ -144,14 +144,58 @@ def test_overlord_chat_and_permissions_workflow():
     assert pending_resp.status_code == 200
     assert pending_resp.json()["count"] >= 1
 
-    # 4. Approve permission
+    # 4. Approve permission with comment
     appr_resp = client.post(
         "/api/agent/permission/respond",
-        json={"permission_id": perm_id, "decision": "approve"},
+        json={"permission_id": perm_id, "decision": "approve", "comment": "Ensure citations format"},
         headers=headers,
     )
     assert appr_resp.status_code == 200
     assert appr_resp.json()["status"] == "success"
+    assert appr_resp.json()["comment"] == "Ensure citations format"
+
+
+def test_permission_rejection_and_write_something_else():
+    headers = {"X-Public-ID": "test_overlord_user"}
+    cards_resp = client.get("/api/assignments/cards", headers=headers)
+    assign_id = cards_resp.json()["cards"][0]["id"]
+
+    # 1. Trigger permission request
+    crit_resp = client.post(
+        "/api/agent/chat",
+        json={"assignment_id": assign_id, "text": "Submit assignment."},
+        headers=headers,
+    )
+    perm_id1 = crit_resp.json()["permission_request"]["id"]
+
+    # 2. Reject with reason comment
+    rej_resp = client.post(
+        "/api/agent/permission/respond",
+        json={"permission_id": perm_id1, "decision": "reject", "comment": "Need to add bibliography first"},
+        headers=headers,
+    )
+    assert rej_resp.status_code == 200
+    assert rej_resp.json()["status"] == "rejected"
+    assert rej_resp.json()["note"] == "Need to add bibliography first"
+
+    # 3. Trigger second permission request
+    crit_resp2 = client.post(
+        "/api/agent/chat",
+        json={"assignment_id": assign_id, "text": "Submit assignment."},
+        headers=headers,
+    )
+    perm_id2 = crit_resp2.json()["permission_request"]["id"]
+
+    # 4. Write Something Else (Neutral cancel & new instruction)
+    wse_resp = client.post(
+        "/api/agent/permission/respond",
+        json={"permission_id": perm_id2, "decision": "write_something_else", "replacement_text": "Please summarize key findings first"},
+        headers=headers,
+    )
+    assert wse_resp.status_code == 200
+    assert wse_resp.json()["status"] == "cancelled"
+    assert wse_resp.json()["message"] == "Please summarize key findings first"
+
 
 
 def test_auto_approved_rules_management():

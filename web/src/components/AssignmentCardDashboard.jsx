@@ -134,6 +134,8 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
     }
   }
 
+  const [permComment, setPermComment] = useState('');
+
   async function handlePermissionDecision(decision) {
     if (!activePermModal) return;
     try {
@@ -143,23 +145,36 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
         body: JSON.stringify({
           permission_id: activePermModal.id,
           decision: decision,
+          comment: permComment.trim() || undefined,
+          replacement_text: decision === 'write_something_else' ? permComment.trim() || 'New task direction requested.' : undefined,
         }),
       });
       const data = await res.json();
       setActivePermModal(null);
+      setPermComment('');
       fetchPendingPermissions();
 
       if (decision === 'always_approve') {
         fetchDashboardData();
       }
 
-      if (data.execution_result) {
+      if (data.decision === 'reject') {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `rej_${Date.now()}`,
+            sender: 'overlord',
+            text: `❌ Action rejected. ${permComment ? `Note: "${permComment}"` : ''}`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      } else if (data.execution_result) {
         setChatMessages((prev) => [
           ...prev,
           {
             id: `res_${Date.now()}`,
             sender: 'overlord',
-            text: `✅ Action executed: ${data.execution_result.message || 'Completed'}`,
+            text: `✅ Action executed: ${data.execution_result.message || 'Completed'}${permComment ? ` (with user note: "${permComment}")` : ''}`,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -572,10 +587,24 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
               {activePermModal.description || 'This action requires explicit approval in current operation mode.'}
             </p>
 
-            <div className="space-y-2 pt-2">
+            {/* Optional Comment / Instruction Input */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Additional Notes or Instructions (Optional)
+              </label>
+              <textarea
+                placeholder="e.g. 'Use APA citation format' or 'Only summarize the first 2 pages' or rejection reason..."
+                value={permComment}
+                onChange={(e) => setPermComment(e.target.value)}
+                rows={2}
+                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1">
               <button
                 onClick={() => handlePermissionDecision('approve')}
-                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors"
+                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
               >
                 ✅ Approve (Execute Once)
               </button>
@@ -589,9 +618,16 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
 
               <button
                 onClick={() => handlePermissionDecision('reject')}
+                className="w-full py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors"
+              >
+                ❌ Reject (Decline Action)
+              </button>
+
+              <button
+                onClick={() => handlePermissionDecision('write_something_else')}
                 className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-200 transition-colors"
               >
-                ✍️ Write Something Else (Cancel)
+                ✍️ Write Something Else (Cancel & Reframe)
               </button>
             </div>
           </div>

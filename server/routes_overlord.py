@@ -32,7 +32,8 @@ class ChatMessageRequest(BaseModel):
 
 class PermissionResponseRequest(BaseModel):
     permission_id: str
-    decision: str = Field(..., description="approve | reject | always_approve")
+    decision: str = Field(..., description="approve | reject | always_approve | write_something_else")
+    comment: Optional[str] = None
     replacement_text: Optional[str] = None
 
 
@@ -172,17 +173,41 @@ async def get_pending_permissions(request: Request, db: Session = Depends(get_db
 
 @router.post("/agent/permission/respond")
 async def respond_to_permission(payload: PermissionResponseRequest, request: Request, db: Session = Depends(get_db)):
-    """Handles user approval decision: approve, reject, or always_approve."""
+    """Handles user approval decision: approve, reject, always_approve, or write_something_else."""
     user = _get_current_user(request, db)
     perm_entry = overlord_agent._pending_permissions.get(payload.permission_id)
     if not perm_entry:
         raise HTTPException(404, "Permission request not found")
 
     decision = payload.decision.lower()
+    assignment_id = perm_entry.get("assignment_id")
+
+    if decision == "write_something_else":
+        perm_entry["status"] = "cancelled"
+        replacement = payload.replacement_text or payload.comment or "Cancelled in favor of alternative instructions."
+        if assignment_id:
+            overlord_agent.add_chat_message(
+                assignment_id,
+                sender="user",
+                text=replacement,
+            )
+            overlord_agent.add_chat_message(
+                assignment_id,
+                sender="overlord",
+                text=f"Understood. Pending action '{perm_entry['action_type']}' cancelled. Processing your new instruction: {replacement}",
+            )
+        return {"status": "cancelled", "decision": "write_something_else", "message": replacement}
 
     if decision == "reject":
         perm_entry["status"] = "rejected"
-        return {"status": "cancelled", "message": "Action cancelled by user."}
+        reject_note = payload.comment or "Declined by user."
+        if assignment_id:
+            overlord_agent.add_chat_message(
+                assignment_id,
+                sender="overlord",
+                text=f"❌ Action '{perm_entry['action_type']}' rejected by user. Note: {reject_note}",
+            )
+        return {"status": "rejected", "decision": "reject", "note": reject_note}
 
     if decision == "always_approve":
         # Add action type to user's persistent auto_approved_actions
@@ -193,16 +218,26 @@ async def respond_to_permission(payload: PermissionResponseRequest, request: Req
         user.settings = settings
         db.commit()
 
-    # Execute approved action
+    # Execute approved action (with optional user instructions/comments merged in)
     perm_entry["status"] = "approved"
+    action_payload = dict(perm_entry["payload"])
+    if payload.comment:
+        action_payload["user_instruction"] = payload.comment
+
     exec_res = await overlord_agent.execute_task_action(
         db,
         user=user,
         action_type=perm_entry["action_type"],
-        payload=perm_entry["payload"],
-        assignment_id=perm_entry.get("assignment_id"),
+        payload=action_payload,
+        assignment_id=assignment_id,
     )
-    return {"status": "success", "decision": decision, "execution_result": exec_res}
+    if assignment_id and payload.comment:
+        overlord_agent.add_chat_message(
+            assignment_id,
+            sender="user",
+            text=f"Approval Note: {payload.comment}",
+        )
+    return {"status": "success", "decision": decision, "execution_result": exec_res, "comment": payload.comment}
 
 
 # ─── 3. Auto-Approved Actions Rule Manager ────────────────────────────────────
