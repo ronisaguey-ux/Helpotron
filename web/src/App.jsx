@@ -4,6 +4,7 @@ import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
 import ReferralSection from './components/ReferralSection.jsx';
 import StudyGroups from './components/StudyGroups.jsx';
 import UserSettingsModal from './components/UserSettingsModal.jsx';
+import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import AdminAdvancedDashboard from './components/AdminAdvancedDashboard.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -52,7 +53,7 @@ export default function App() {
   const [userId, setUserIdState] = useState(getUserId);
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState('assignments');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -194,9 +195,9 @@ export default function App() {
       )}
 
       <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3 flex-wrap">
-        {['overview', 'study-tools', 'analytics', 'referral', 'groups', 'settings', 'billing'].map((t) => (
+        {['assignments', 'overview', 'study-tools', 'analytics', 'referral', 'groups', 'settings', 'billing'].map((t) => (
           <Button key={t} variant={tab === t ? 'primary' : 'ghost'} onClick={() => setTab(t)} className="capitalize">
-            {t.replace('-', ' ')}
+            {t === 'assignments' ? '📋 Assignments' : t.replace('-', ' ')}
           </Button>
         ))}
         {isAdmin && (
@@ -207,6 +208,7 @@ export default function App() {
       </nav>
 
       <main className="mx-auto max-w-5xl px-4 pb-16">
+        {tab === 'assignments' && <AssignmentCardDashboard userId={userId} />}
         {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
         {tab === 'study-tools' && <StudyTools userId={userId} />}
         {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}

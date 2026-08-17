@@ -39,23 +39,34 @@ AI-powered **academic companion & assignment automation platform**. Built from l
 - **Burstiness & Lexical Diversity Optimizer**: Synthesizes natural sentence length variance and vocabulary diversity to guarantee human classification thresholds.
 - **Iterative Refinement Loop**: `/api/assignment/humanize` continuously mutates text cadence until passing stealth requirements.
 
-### 2. 🤖 Sub-Agent Decomposition & Task Execution Engine
-- **Rubric Decomposition**: Breaks complex multi-part assignments and grading rubrics into modular sub-tasks (argument synthesis, citation verification, body drafting).
-- **Orchestrated Subagents**: Coordinates specialized agents to fulfill each rubric criterion before final compilation.
+### 2. 🤖 Overlord Main Agent & Sub-Agent Orchestration Hub
+- **Single Central Overlord**: Oversees all user operations, coordinates specialized sub-agent clusters (thesis synthesis, citations, cadence humanizer), and offers direct conversational chat.
+- **Three Operation Modes**:
+  - 🛡️ **Manual Mode**: Requires explicit user approval for every action before execution.
+  - ⚡ **Auto Mode**: Auto-approves routine actions (drafting, analyzing rubrics, citing) while prompting permission for critical actions (submitting, data deletion, large credit deductions).
+  - 🔥 **YOLO Mode**: Auto-approves and executes all actions with zero prompts.
+    > ⚠️ **CAUTION**: YOLO mode executes all actions without confirmation. Use at your own risk. The system will not ask for permission.
+- **Permission Request System & Auto-Approved Rules**:
+  - Options: **Approve (Execute Once)**, **Write Something Else (Cancel & Reframe)**, **Always Approve This Action Type**.
+  - Persistent rule engine: Rules saved to user profile (e.g. `humanize`, `analyze_rubric`) to bypass confirmations permanently in any mode.
 
-### 3. 🕵️ Canvas DOM Stealth Scraper & Anti-Telemetry Guard
+### 3. 📋 Assignment Card Dashboard & Full-Page Workspace
+- **Collapsed Cards**: Essential information at a glance (Name, Subject, Course Code, Professor Name, Estimated Time, Status Badge, AI Score).
+- **Full-Page View**: Complete prompt, rubric breakdown, attached materials, live sub-agent progress stepper, interactive chat, and 1-click task presets.
+
+### 4. 🕵️ Canvas DOM Stealth Scraper & Anti-Telemetry Guard
 - **MutationObserver Integration**: Observes Canvas DOM changes asynchronously without triggering aggressive polling or LMS telemetry flags.
 - **Multi-LMS Domain Support**: Matches `*.instructure.com` and `canvas.*.edu` portals for assignment prompts, rubrics, and downloadable assets.
 
-### 4. 📱 Telegram One-Click Direct Delivery & Document Push
+### 5. 📱 Telegram One-Click Direct Delivery & Document Push
 - **Instant File Streaming**: Delivers completed deliverables (`.docx`, `.pdf`, `.zip`) directly to the student's linked Telegram chat upon clearing AI evasion checks.
 - **Interactive Bot Commands**: `/status`, `/ready`, `/summary`, `/credits`, `/pause`, `/resume`, `/admin`.
 
-### 5. 💳 Fail-Safe Credit Deduction & Atomic Transaction Rollback
+### 6. 💳 Fail-Safe Credit Deduction & Atomic Transaction Rollback
 - **Atomic Credit Safety**: Quotas are preserved with rollback closures—if an LLM call or evasion pass fails, credits are automatically refunded to the user's account.
 - **Pricing Tiers**: Basic ($10/mo), Pro ($20/mo), Elite ($40/mo).
 
-### 6. 📚 Comprehensive Study Generators & Analytics
+### 7. 📚 Comprehensive Study Generators & Analytics
 - **Lecture Transcription**: Whisper API / local faster-whisper transcription.
 - **Study Guides, Flashcards, Practice Tests & 2-Min Summaries**.
 - **Analytics Dashboard, Study Groups & Referral Rewards**.
