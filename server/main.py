@@ -893,13 +893,26 @@ async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = De
         raise HTTPException(500, f"Google Docs export failed: {e}")
 
 
-# ─── Unified Single Localhost Host Mount ──────────────────────────────────────
+# ─── Unified Single Localhost Host Mount & SPA Route ──────────────────────────
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 if _WEB_DIST.exists():
-    app.mount("/", StaticFiles(directory=str(_WEB_DIST), html=True), name="static_frontend")
+    if (_WEB_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(_WEB_DIST / "assets")), name="static_assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa_frontend(full_path: str):
+        # Let FastAPI router handle any unhandled api routes with 404
+        if full_path.startswith("api"):
+            raise HTTPException(404, "API route not found")
+        target = _WEB_DIST / full_path
+        if full_path and target.is_file():
+            return FileResponse(target)
+        return FileResponse(_WEB_DIST / "index.html")
+
 
 
 
