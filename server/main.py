@@ -68,9 +68,12 @@ async def _datalake_background_loop(interval_seconds: int = 21600) -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from pathlib import Path
     for problem in config.validate():
         logger.warning("config: %s", problem)
     init_db()
+    Path("./exports").mkdir(parents=True, exist_ok=True)
+    Path("./datalake_storage").mkdir(parents=True, exist_ok=True)
     lake_task = asyncio.create_task(_datalake_background_loop())
     yield
     lake_task.cancel()
@@ -120,7 +123,7 @@ app.add_middleware(CSRFMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.web_origin, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174"],
+    allow_origins=[config.web_origin, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -142,7 +145,7 @@ app.include_router(simulation_router)
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "app": "Helpotron Automator", "version": "1.0.0"}
+    return {"status": "ok", "app": "Helpotron Automator", "version": "1.0.0", "env": config.ENVIRONMENT}
 
 
 
@@ -619,14 +622,14 @@ def credits_balance(public_id: str, db: Session = Depends(get_db)):
 # ─── payments / discounts ──────────────────────────────────────────────────
 
 @app.post("/api/payments")
-async def pay(body: PaymentIn, db: Session = Depends(get_db)):
+def pay(body: PaymentIn, db: Session = Depends(get_db)):
     user = get_or_create_user(db, body.public_id)
     try:
-        payment = await process_payment(db, user, body.provider, body.amount_cents)
+        payment = process_payment(db, user, body.provider, body.amount_cents)
     except ValueError as e:
         raise HTTPException(400, str(e))
     db.commit()
-    return {"payment_id": payment.id, "status": payment.status, "credits": credits.get_balance(user)}
+    return {"payment_id": payment["id"], "status": payment["status"], "credits": credits.get_balance(user)}
 
 
 @app.post("/api/refund")

@@ -25,10 +25,10 @@ TOKENS_PER_CREDIT = 10000
 
 BASE_TASK_COSTS = {
     "transcription_per_hour": 1.0,
-    "study_guide": 0.8,
-    "flashcards": 0.6,
-    "practice_test": 0.8,
-    "summary": 0.4,
+    "study_guide": 0.5,
+    "flashcards": 0.5,
+    "practice_test": 0.5,
+    "summary": 0.5,
     "agent_session": 2.0,
     "draft_generation": 3.0,
     "draft_retry": 2.0,
@@ -117,6 +117,20 @@ def charge_user(
     return True, cost
 
 
+def charge(db: Session, user: User, task_type: str, amount: Optional[float] = None) -> bool:
+    """Convenience credit charger returning bool success status."""
+    if getattr(user, "plan", "") == "elite":
+        return True
+    cost = amount if amount is not None else BASE_TASK_COSTS.get(task_type, 1.0)
+    if user.credits < cost:
+        return False
+    user.credits -= cost
+    tx = CreditTransaction(user_id=user.id, delta=-cost, reason=f"charge:{task_type}")
+    db.add(tx)
+    db.commit()
+    return True
+
+
 def top_up(db: Session, user: User, amount: float, reason: str = "topup") -> None:
     """Credit a user's balance (refunds, purchases, admin grants)."""
     user.credits += amount
@@ -173,5 +187,14 @@ def get_credit_summary(user: User) -> dict:
     }
 
 
-def get_balance(user: User) -> dict:
-    return get_credit_summary(user)
+def get_balance(user: User) -> float:
+    return float(user.credits)
+
+
+def record_data_submission(db: Session, user: User, payload: Any = None) -> dict:
+    add_discount(user, db)
+    return {
+        "discount_balance": user.discount_balance,
+        "next_purchase_discount": compute_applicable_discount(user),
+        "status": "recorded",
+    }

@@ -1,47 +1,71 @@
-"""Helpotron configuration — env-driven, .env.example documents every key."""
+"""Helpotron configuration — standardized with Pydantic Settings & fallback defaults."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from typing import List
+from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-class Config:
-    # LLM
-    omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "http://localhost:20128/api/v1")
-    omniroute_api_key: str = os.getenv("OMNIROUTE_API_KEY", "")
-    primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash")
+class Settings(BaseSettings):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    # Core
+    project_name: str = "Helpotron Automator"
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    debug: bool = os.getenv("DEBUG", "True").lower() == "true"
+
+    # Server & Security
+    host: str = os.getenv("HOST", "127.0.0.1")
+    port: int = int(os.getenv("PORT", "8000"))
+    secret_key: str = os.getenv("SECRET_KEY", "dev-insecure-secret-key-change-in-prod-32bytesmin")
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24
 
     # Database
     database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/helpotron.db")
 
-    # Web
+    # CORS
+    cors_origins: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "chrome-extension://*",
+    ]
+
+    # LLM & Third-Party APIs
+    omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "http://localhost:20128/api/v1")
+    omniroute_api_key: str = os.getenv("OMNIROUTE_API_KEY", "")
+    primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
+    deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+    whisper_api_key: str = os.getenv("WHISPER_API_KEY", "")
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_admin_chat_id: str = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")
+    chat_timeout_seconds: int = 30
+
+    # Web & Origin
     web_origin: str = os.getenv("WEB_ORIGIN", "http://localhost:5173")
 
     # Payments (Stripe)
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-    # Admin — set your public_id here to access /api/admin/*
-    admin_public_id: str = os.getenv("ADMIN_PUBLIC_ID", "")
+    # Admin
+    admin_public_id: str = os.getenv("ADMIN_PUBLIC_ID", "RoniDev")
 
-    # Telegram
-    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-
-    # DeepSeek
-    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
-    deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-
-    # Security
-    session_secret: str = os.getenv("SESSION_SECRET", "")
+    # Security & Sessions
+    session_secret: str = os.getenv("SESSION_SECRET", "helpotron_session_secret_dev_key_32chars")
     production_mode: bool = os.getenv("PRODUCTION_MODE", "false").lower() == "true"
+    jwt_secret: str = os.getenv("JWT_SECRET", "helpotron_jwt_secret_dev_key_32chars")
+    totp_secret: str = os.getenv("TOTP_SECRET", "JBSWY3DPEHPK3PXP")
 
-    # AI Detectors API Keys (Pangram, Sapling, Originality.ai, Copyleaks, Winston AI)
+    # AI Detectors
     pangram_api_key: str = os.getenv("PANGRAM_API_KEY", "")
     sapling_api_key: str = os.getenv("SAPLING_API_KEY", "")
     originality_api_key: str = os.getenv("ORIGINALITY_API_KEY", "")
@@ -49,11 +73,7 @@ class Config:
     copyleaks_email: str = os.getenv("COPYLEAKS_EMAIL", "")
     winston_api_key: str = os.getenv("WINSTON_API_KEY", "")
 
-    # User Verification & 2FA Secrets
-    jwt_secret: str = os.getenv("JWT_SECRET", "helpotron_jwt_secret_dev_key_32chars")
-    totp_secret: str = os.getenv("TOTP_SECRET", "JBSWY3DPEHPK3PXP")
-
-    # Email Verification & Email 2FA (SMTP)
+    # Email Verification & SMTP
     email_host: str = os.getenv("EMAIL_HOST", "smtp.gmail.com")
     email_port: int = int(os.getenv("EMAIL_PORT", "587"))
     email_user: str = os.getenv("EMAIL_USER", "")
@@ -61,7 +81,7 @@ class Config:
     email_from: str = os.getenv("EMAIL_FROM", "noreply@helpotron.com")
     email_use_tls: bool = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
 
-    # SMS 2FA (Twilio)
+    # SMS (Twilio)
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "")
@@ -72,16 +92,44 @@ class Config:
     enable_sms_2fa: bool = os.getenv("ENABLE_SMS_2FA", "true").lower() == "true"
     enable_totp_2fa: bool = os.getenv("ENABLE_TOTP_2FA", "true").lower() == "true"
 
+    # Uppercase aliases for settings
+    @property
+    def PROJECT_NAME(self) -> str:
+        return self.project_name
+
+    @property
+    def ENVIRONMENT(self) -> str:
+        return self.environment
+
+    @property
+    def DEBUG(self) -> bool:
+        return self.debug
+
+    @property
+    def SECRET_KEY(self) -> str:
+        return self.secret_key
+
+    @property
+    def CORS_ORIGINS(self) -> List[str]:
+        return self.cors_origins
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return self.database_url
 
     def validate(self) -> list[str]:
-        issues = []
-        if not self.omniroute_api_key:
-            issues.append("OMNIROUTE_API_KEY not set")
-        if not self.database_url:
-            issues.append("DATABASE_URL not set")
+        problems = []
+        if self.omniroute_api_base and not (self.omniroute_api_base.startswith("http://") or self.omniroute_api_base.startswith("https://")):
+            problems.append("OMNIROUTE_API_BASE must start with http:// or https://")
+        if not self.primary_model or not str(self.primary_model).strip():
+            problems.append("PRIMARY_MODEL must be non-empty")
+        if getattr(self, "chat_timeout_seconds", 30) < 5:
+            problems.append("CHAT_TIMEOUT_SECONDS must be at least 5s")
         if self.production_mode and not self.session_secret:
-            issues.append("SESSION_SECRET required in production mode")
-        return issues
+            problems.append("SESSION_SECRET required in production mode")
+        return problems
 
 
-config = Config()
+Config = Settings
+settings = Settings()
+config = settings

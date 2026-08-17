@@ -9,13 +9,23 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Generator
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, create_engine
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from .config import config
 
 _connect_args = {"check_same_thread": False} if config.database_url.startswith("sqlite") else {}
 engine = create_engine(config.database_url, connect_args=_connect_args)
+
+# Enable SQLite Write-Ahead Logging (WAL) mode for concurrency
+if config.database_url.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

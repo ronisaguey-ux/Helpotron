@@ -54,14 +54,18 @@ def set_csrf_cookie(response: Response) -> str:
 
 
 def validate_csrf(request: Request) -> None:
-    """Validate the CSRF token from cookie vs header.
+    """Validate the CSRF token from cookie vs header when session cookie is present.
 
-    Raises HTTPException 403 if validation fails.
+    Raises HTTPException 403 if validation fails on cookie-authenticated requests.
     """
     # Skip for safe methods and exempt paths
     if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
         return
     if request.url.path in EXEMPT_PATHS or any(p.endswith("/") and request.url.path.startswith(p) for p in EXEMPT_PATHS):
+        return
+
+    session_cookie = request.cookies.get("helpotron_session")
+    if not session_cookie:
         return
 
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)

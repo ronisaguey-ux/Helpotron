@@ -1,7 +1,9 @@
 """Export API routes for study materials."""
 from __future__ import annotations
 
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .database import get_db, User, StudyMaterial
@@ -139,3 +141,16 @@ async def export_summary(
         media_type="text/plain",
         headers={"Content-Disposition": f"attachment; filename=summary_{material_id}.txt"}
     )
+
+
+EXPORT_DIR = Path("./exports").resolve()
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@router.get("/download/{filename}")
+def download_export(filename: str, user: User = Depends(get_current_user)):
+    """Safely downloads an exported file with strict path traversal prevention."""
+    safe_path = (EXPORT_DIR / filename).resolve()
+    if not str(safe_path).startswith(str(EXPORT_DIR)) or not safe_path.exists() or not safe_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found or access denied.")
+    return FileResponse(path=safe_path, filename=filename, media_type="application/octet-stream")
