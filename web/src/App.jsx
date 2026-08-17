@@ -6,6 +6,8 @@ import StudyGroups from './components/StudyGroups.jsx';
 import UserSettingsModal from './components/UserSettingsModal.jsx';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import AdminAdvancedDashboard from './components/AdminAdvancedDashboard.jsx';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
+import AuthModal from './components/AuthModal.jsx';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -50,45 +52,71 @@ const statusBadge = (status) => ({
 }[status] ?? <Badge>{status}</Badge>);
 
 export default function App() {
-  const [userId, setUserIdState] = useState(getUserId);
+  const [userId, setUserIdState] = useState(() => getUserId() || 'RoniDev');
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
   const [tab, setTab] = useState('assignments');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginUser, setLoginUser] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminAnalytics, setAdminAnalytics] = useState(null);
-  const [credits, setCredits] = useState(0);
-  const [userPlan, setUserPlan] = useState('basic');
+  const [credits, setCredits] = useState(250);
+  const [userPlan, setUserPlan] = useState('pro');
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [showVisibilityMenu, setShowVisibilityMenu] = useState(false);
+
+  // Privacy Policy state (must be accepted, else guest read-only)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(() => {
+    return localStorage.getItem('helpotron_privacy_accepted') !== 'true';
+  });
+
+  // Feature Visibility Toggles
+  const [visibleSections, setVisibleSections] = useState(() => {
+    const saved = localStorage.getItem('helpotron_visible_sections');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      assignments: true,
+      overview: true,
+      'study-tools': true,
+      analytics: true,
+      referral: true,
+      groups: true,
+      settings: true,
+      billing: true,
+    };
+  });
+
+  const toggleSection = (sectionKey) => {
+    setVisibleSections((prev) => {
+      const updated = { ...prev, [sectionKey]: !prev[sectionKey] };
+      localStorage.setItem('helpotron_visible_sections', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const checkSession = async () => {
     try {
       const me = await api.me();
       if (me && me.public_id) {
         setIsLoggedIn(true);
+        setIsGuest(false);
         setUserIdState(me.public_id);
-        setCredits(me.credits || 0);
-        setUserPlan(me.plan || 'basic');
+        setCredits(me.credits || 250);
+        setUserPlan(me.plan || 'pro');
         try {
           const adminStatus = await api.adminCheck();
           if (adminStatus && adminStatus.is_admin) {
             setIsAdmin(true);
             fetchAdminData();
           }
-        } catch (e) {
-          console.log('Admin check failed:', e.message);
-        }
+        } catch (e) {}
         return true;
       }
       return false;
     } catch (e) {
-      console.log('Not authenticated:', e.message);
       return false;
     }
   };
@@ -99,7 +127,7 @@ export default function App() {
       setAdminUsers(users || []);
       const analytics = await api.adminAnalytics();
       setAdminAnalytics(analytics);
-    } catch (e) { console.error('Admin fetch error', e); }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -107,31 +135,26 @@ export default function App() {
     checkSession();
   }, [serverUrl]);
 
-  const handleLogin = async () => {
-    setLoginLoading(true);
-    setLoginError('');
-    try {
-      const res = await api.login(loginUser, loginPass);
-      if (res.message === 'Logged in') {
-        const loggedIn = await checkSession();
-        if (loggedIn) {
-          setLoginUser('');
-          setLoginPass('');
-        }
-      } else {
-        setLoginError('Login failed');
-      }
-    } catch (e) {
-      setLoginError(e.message || 'Invalid credentials');
-    }
-    setLoginLoading(false);
+  const handleLoginSuccess = async (userPublicId) => {
+    setIsLoggedIn(true);
+    setIsGuest(false);
+    setUserIdState(userPublicId);
+    setUserId(userPublicId);
+    await checkSession();
+  };
+
+  const handleContinueGuest = () => {
+    setIsGuest(true);
+    setIsLoggedIn(false);
+    setUserIdState('Guest');
   };
 
   const handleLogout = async () => {
     try {
       await api.logout();
-    } catch (e) { console.log('Logout error:', e); }
+    } catch (e) {}
     setIsLoggedIn(false);
+    setIsGuest(false);
     setIsAdmin(false);
     setAdminUsers([]);
     setAdminAnalytics(null);
@@ -139,76 +162,185 @@ export default function App() {
     setUserPlan('basic');
   };
 
-  if (!isLoggedIn) {
+  const handleAcceptPrivacy = () => {
+    localStorage.setItem('helpotron_privacy_accepted', 'true');
+    setShowPrivacyModal(false);
+  };
+
+  const handleDeclinePrivacy = () => {
+    localStorage.setItem('helpotron_privacy_accepted', 'declined');
+    setShowPrivacyModal(false);
+    setIsGuest(true);
+    setIsLoggedIn(false);
+    setUserIdState('Guest');
+  };
+
+  const allTabs = [
+    { key: 'assignments', label: '📋 Assignments' },
+    { key: 'overview', label: 'Overview' },
+    { key: 'study-tools', label: 'Study Tools' },
+    { key: 'analytics', label: 'Analytics' },
+    { key: 'referral', label: 'Referral' },
+    { key: 'groups', label: 'Study Groups' },
+    { key: 'settings', label: 'Settings' },
+    { key: 'billing', label: 'Billing' },
+  ];
+
+  const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);
+
+  // If user has not accepted privacy and modal is open
+  if (showPrivacyModal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Card className="w-96">
-          <h1 className="text-xl font-bold mb-4">🤖 Helpotron Automator</h1>
-          <p className="text-sm text-slate-500 mb-4">Sign in to continue.</p>
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Username"
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-              value={loginUser}
-              onChange={(e) => setLoginUser(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-            />
-            {loginError && <p className="text-xs text-red-600">{loginError}</p>}
-            <Button className="w-full" disabled={loginLoading} onClick={handleLogin}>
-              {loginLoading ? 'Signing in…' : 'Sign in'}
-            </Button>
-          </div>
-        </Card>
-      </div>
+      <PrivacyPolicyModal
+        isOpen={true}
+        onAccept={handleAcceptPrivacy}
+        onDecline={handleDeclinePrivacy}
+      />
+    );
+  }
+
+  // If not logged in and not in guest exploration mode
+  if (!isLoggedIn && !isGuest) {
+    return (
+      <AuthModal
+        onLoginSuccess={handleLoginSuccess}
+        onContinueGuest={handleContinueGuest}
+      />
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold">🤖 Helpotron Automator</h1>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span>user: <code className="text-slate-700">{userId}</code></span>
-            <span>💰 {credits} credits</span>
-            <span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <Button variant="outline" size="sm" onClick={() => setSettingsModalOpen(true)}>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
+      {isGuest && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-base">👁️</span>
+            <span>
+              GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows. Action execution is restricted.
+            </span>
+          </div>
+          <button
+            onClick={() => { setIsGuest(false); setIsLoggedIn(false); }}
+            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition"
+          >
+            Sign In or Create Account →
+          </button>
+        </div>
+      )}
+
+      {/* ─── Main Header ───────────────────────────────────────────── */}
+      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🤖</span>
+            <div>
+              <h1 className="text-base font-black text-slate-900 tracking-tight">Helpotron Automator</h1>
+              <span className="text-[10px] font-mono text-slate-400 block -mt-0.5">Autonomous Academic Suite</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 flex-wrap">
+            <span className="font-mono bg-slate-100 px-2 py-1 rounded-lg text-slate-700">
+              user: <strong>{userId}</strong>
+            </span>
+            <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200">
+              💰 {credits} credits
+            </span>
+
+            {/* Visibility Toggle Dropdown */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                className="text-xs px-2.5 py-1"
+                onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
+              >
+                👁️ Visibility ({activeTabs.length}/{allTabs.length})
+              </Button>
+
+              {showVisibilityMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-50 space-y-1.5 text-xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+                    Toggle Section Visibility
+                  </span>
+                  {allTabs.map((t) => (
+                    <label
+                      key={t.key}
+                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    >
+                      <span className="font-medium text-slate-700">{t.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={visibleSections[t.key] !== false}
+                        onChange={() => toggleSection(t.key)}
+                        className="rounded accent-indigo-600"
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              className="text-xs px-2.5 py-1"
+              onClick={() => setSettingsModalOpen(true)}
+            >
               ⚙️ Preferences
             </Button>
+
             {isAdmin && <Badge color="purple">👑 Admin</Badge>}
-            <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
+
+            {isLoggedIn ? (
+              <Button variant="outline" className="text-xs px-2.5 py-1 text-rose-600" onClick={handleLogout}>
+                Logout
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                className="text-xs px-2.5 py-1"
+                onClick={() => { setIsGuest(false); setIsLoggedIn(false); }}
+              >
+                Sign In
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       {!connected && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700">
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-700 text-center font-medium">
           ⚠️ Server at {serverUrl} is unreachable — start it with <code>.venv/bin/uvicorn server.main:app --port 8000</code>
         </div>
       )}
 
-      <nav className="mx-auto flex max-w-5xl gap-1 px-4 py-3 flex-wrap">
-        {['assignments', 'overview', 'study-tools', 'analytics', 'referral', 'groups', 'settings', 'billing'].map((t) => (
-          <Button key={t} variant={tab === t ? 'primary' : 'ghost'} onClick={() => setTab(t)} className="capitalize">
-            {t === 'assignments' ? '📋 Assignments' : t.replace('-', ' ')}
+      {/* ─── Navigation Tabs ───────────────────────────────────────── */}
+      <nav className="mx-auto flex max-w-6xl gap-1.5 px-4 py-3 flex-wrap">
+        {activeTabs.map((t) => (
+          <Button
+            key={t.key}
+            variant={tab === t.key ? 'primary' : 'ghost'}
+            onClick={() => setTab(t.key)}
+            className="capitalize text-xs font-semibold"
+          >
+            {t.label}
           </Button>
         ))}
         {isAdmin && (
-          <Button key="admin" variant={tab === 'admin' ? 'primary' : 'ghost'} onClick={() => setTab('admin')} className="capitalize">
-            🛡️ Admin
+          <Button
+            key="admin"
+            variant={tab === 'admin' ? 'primary' : 'ghost'}
+            onClick={() => setTab('admin')}
+            className="capitalize text-xs font-semibold text-purple-700"
+          >
+            🛡️ Admin Control
           </Button>
         )}
       </nav>
 
-      <main className="mx-auto max-w-5xl px-4 pb-16">
-        {tab === 'assignments' && <AssignmentCardDashboard userId={userId} />}
+      {/* ─── Main Content Views ────────────────────────────────────── */}
+      <main className="mx-auto max-w-6xl px-4 pb-16">
+        {tab === 'assignments' && <AssignmentCardDashboard userId={userId} isGuest={isGuest} />}
         {tab === 'overview' && <Overview userId={userId} onGoTo={(t) => setTab(t)} />}
         {tab === 'study-tools' && <StudyTools userId={userId} />}
         {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}

@@ -9,7 +9,7 @@ function getHeaders(userId) {
   };
 }
 
-export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
+export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
@@ -141,6 +141,10 @@ export default function AssignmentCardDashboard({ userId = 'student_demo' }) {
   }
 
   async function sendChatMessage(presetText = null) {
+    if (isGuest) {
+      alert('⚠️ Guest Mode (Read-Only): You can explore all courses and rubrics. Please sign in or create an account to dispatch AI tasks.');
+      return;
+    }
     const textToSend = presetText || inputMsg;
     if (!textToSend.trim() || !selectedCardId) return;
 
