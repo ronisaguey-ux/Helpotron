@@ -51,6 +51,49 @@ const statusBadge = (status) => ({
   completed: <Badge color="green">✅ completed</Badge>,
 }[status] ?? <Badge>{status}</Badge>);
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('App Error caught by boundary:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-lg w-full p-8 text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl bg-rose-600/20 text-rose-400 text-3xl font-bold flex items-center justify-center mx-auto">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-bold">Something went wrong</h2>
+            <p className="text-xs text-slate-400">
+              An unexpected error occurred during rendering. You can reset session state below.
+            </p>
+            <div className="p-3 bg-slate-950 rounded-xl text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32">
+              {this.state.error?.message || 'Unknown runtime error'}
+            </div>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition"
+            >
+              🔄 Reset App Cache & Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [userId, setUserIdState] = useState(() => getUserId() || 'RoniDev');
   const [serverUrl, setServerUrlState] = useState(getServer);
@@ -165,6 +208,11 @@ export default function App() {
   const handleAcceptPrivacy = () => {
     localStorage.setItem('helpotron_privacy_accepted', 'true');
     setShowPrivacyModal(false);
+    setIsLoggedIn(true);
+    setIsGuest(false);
+    const activeId = getUserId() || 'RoniDev';
+    setUserIdState(activeId);
+    setUserId(activeId);
   };
 
   const handleDeclinePrivacy = () => {
@@ -191,26 +239,31 @@ export default function App() {
   // If user has not accepted privacy and modal is open
   if (showPrivacyModal) {
     return (
-      <PrivacyPolicyModal
-        isOpen={true}
-        onAccept={handleAcceptPrivacy}
-        onDecline={handleDeclinePrivacy}
-      />
+      <ErrorBoundary>
+        <PrivacyPolicyModal
+          isOpen={true}
+          onAccept={handleAcceptPrivacy}
+          onDecline={handleDeclinePrivacy}
+        />
+      </ErrorBoundary>
     );
   }
 
   // If not logged in and not in guest exploration mode
   if (!isLoggedIn && !isGuest) {
     return (
-      <AuthModal
-        onLoginSuccess={handleLoginSuccess}
-        onContinueGuest={handleContinueGuest}
-      />
+      <ErrorBoundary>
+        <AuthModal
+          onLoginSuccess={handleLoginSuccess}
+          onContinueGuest={handleContinueGuest}
+        />
+      </ErrorBoundary>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
       {isGuest && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-sm">
@@ -371,6 +424,7 @@ export default function App() {
         userId={userId}
       />
     </div>
+    </ErrorBoundary>
   );
 }
 
