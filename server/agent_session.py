@@ -217,3 +217,19 @@ async def _send(session: AgentSession, payload: dict) -> None:
 
 
 manager = AgentManager()
+
+
+async def execute_session_with_preservation(session_id: str, cost: float, db, user, runner_fn):
+    """Execute session runner with atomic credit deduction and fail-safe refund rollback."""
+    from .credits import safe_deduct_with_rollback
+    success, rollback_or_err = safe_deduct_with_rollback(db, user, cost, f"session_{session_id}")
+    if not success:
+        return {"status": "failed", "error": rollback_or_err}
+    try:
+        result = await runner_fn()
+        return {"status": "success", "data": result}
+    except Exception as e:
+        if callable(rollback_or_err):
+            rollback_or_err()
+        return {"status": "failed", "error": str(e), "refunded": True}
+

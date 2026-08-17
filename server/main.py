@@ -754,3 +754,15 @@ def admin_help(draft_id: int, db: Session = Depends(get_db)):
     # We would call the telegram bot here
     # For simplicity, we'll just return a message
     return {"status": "admin notified", "message": "The developer has been alerted. They will respond shortly."}
+
+
+from .humanizer import AIHumanizerPipeline
+
+humanizer_pipeline = AIHumanizerPipeline()
+
+@app.post("/api/assignment/humanize")
+async def humanize_assignment_route(payload: dict, db: Session = Depends(get_db)):
+    text = payload.get("content", "")
+    sanitized_text, metrics = await humanizer_pipeline.humanize_loop(text)
+    return {"status": "success", "metrics": metrics, "content": sanitized_text}
+

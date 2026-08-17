@@ -31,5 +31,28 @@ function readAssignment() {
   return { title, dueDate, prompt, files, canvasId };
 }
 
+function scrapeAssignmentStealth() {
+  const titleElem = document.querySelector('h1.title, .assignment-title, #assignment_show .title, .ig-title');
+  const title = titleElem ? titleElem.innerText.trim() : document.title;
+  const descElem = document.querySelector('.user_content, #assignment_description, .description');
+  const description = descElem ? descElem.innerText.trim() : '';
+  const rubricElems = Array.from(document.querySelectorAll('.rubric_criterion, .rubric-criterion, table.rubric'));
+  const rubricText = rubricElems.map(e => e.innerText.trim()).join('\n---\n');
+  const fileLinks = Array.from(document.querySelectorAll('a.instructure_file_link, a.file_download_btn, a[download], a.file-link, a[href*="/files/"]')).map(a => a.href);
+  return { title, description, rubric: rubricText, files: fileLinks, scraped_at: new Date().toISOString() };
+}
+
+if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body) {
+  const observer = new MutationObserver((mutations, obs) => {
+    const readyElement = document.querySelector('.user_content, #assignment_show, .ig-title');
+    if (readyElement) {
+      window.__helpotronScrapedPayload = scrapeAssignmentStealth();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 // Expose for the background service worker (chrome.scripting.executeScript).
 window.__helpotron_read_assignment = readAssignment;
+window.__helpotron_scrape_stealth = scrapeAssignmentStealth;
+

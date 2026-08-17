@@ -10,8 +10,12 @@ Profit margin: ~70% on Basic, ~75% on Pro, ~65% on Elite.
 """
 from __future__ import annotations
 
+import logging
+from typing import Any, Callable, Optional, Tuple
 from sqlalchemy.orm import Session
 from .database import CreditTransaction, User
+
+logger = logging.getLogger("helpotron.credits")
 
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
 TIER_MONTHLY_CREDITS = {"basic": 300, "pro": 600, "elite": 1500}
@@ -52,6 +56,40 @@ def calculate_actual_cost(
     retry_penalty = 1.0 + (retries * 0.15)
     total = (base_cost + token_cost + time_cost) * complexity * retry_penalty
     return max(total, 0.05)
+
+
+def safe_deduct_with_rollback(
+    db: Session,
+    user: User,
+    amount: float,
+    operation_desc: str = "operation"
+) -> Tuple[bool, Optional[Callable[[], None]]]:
+    """Safely deducts credits with a rollback closure if subsequent actions fail."""
+    if getattr(user, "plan", "") == "elite":
+        return True, None
+    if user.credits < amount:
+        return False, None
+    user.credits -= amount
+    tx = CreditTransaction(
+        user_id=user.id,
+        delta=-amount,
+        reason=f"safe_deduct:{operation_desc}"
+    )
+    db.add(tx)
+    db.commit()
+
+    def rollback():
+        user.credits += amount
+        rb_tx = CreditTransaction(
+            user_id=user.id,
+            delta=amount,
+            reason=f"refund:{operation_desc}"
+        )
+        db.add(rb_tx)
+        db.commit()
+        logger.info("Rolled back %s credits for user %s (%s)", amount, user.id, operation_desc)
+
+    return True, rollback
 
 
 def charge_user(

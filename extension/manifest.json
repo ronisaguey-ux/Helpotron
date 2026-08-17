@@ -13,6 +13,7 @@
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
+    "*://canvas.*.edu/*",
     "http://localhost:8000/*"
   ],
   "background": {
@@ -20,7 +21,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.instructure.com/*"],
+      "matches": ["https://*.instructure.com/*", "*://canvas.*.edu/*"],
       "js": ["content.js"]
     }
   ],

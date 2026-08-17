@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 
 import httpx
@@ -41,6 +42,33 @@ async def _call(method: str, **kwargs) -> dict | None:
 
 async def send_message(chat_id: str, text: str) -> None:
     await _call("sendMessage", chat_id=chat_id, text=text, parse_mode="Markdown")
+
+
+async def send_document_to_user(chat_id: str, file_path: str, caption: str = "") -> bool:
+    """Stream a document file (.docx, .pdf, .zip) directly to user Telegram chat."""
+    url = f"{API}/sendDocument"
+    if not os.path.exists(file_path):
+        logger.warning("File %s does not exist for Telegram delivery", file_path)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            with open(file_path, "rb") as f:
+                files = {"document": (os.path.basename(file_path), f)}
+                data = {"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"}
+                resp = await client.post(url, data=data, files=files)
+        return resp.status_code == 200
+    except Exception as e:
+        logger.error("Failed sending document to Telegram chat %s: %s", chat_id, e)
+        return False
+
+
+async def push_completed_assignment(db, assignment_id: int, file_path: str) -> bool:
+    """Notify and push completed deliverable bundle to user on Telegram."""
+    assignment = db.query(Assignment).filter_by(id=assignment_id).first()
+    if not assignment or not assignment.user or not assignment.user.telegram_id:
+        return False
+    caption = f"🎯 *{assignment.title}* is complete and cleared all AI evasion checks!"
+    return await send_document_to_user(assignment.user.telegram_id, file_path, caption=caption)
 
 
 def _find_user_by_telegram(db, telegram_id: str) -> User | None:

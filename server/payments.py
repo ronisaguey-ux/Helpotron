@@ -30,3 +30,18 @@ def refund_unused(db: Session, user: User, amount_cents: int) -> dict:
     """Refund unused credits."""
     # Implement refund logic here
     return {"message": f"Refund of ${amount_cents/100:.2f} processed"}
+
+
+def usage_percent(user: User) -> float:
+    """Calculate percentage of credits or quota used."""
+    plan_limits = {
+        "free": 100.0,
+        "starter": 500.0,
+        "pro": 2000.0,
+        "elite": 10000.0,
+    }
+    limit = plan_limits.get(getattr(user, "plan", "free"), 100.0)
+    current_credits = getattr(user, "credits", 0.0) or 0.0
+    used = max(0.0, limit - current_credits)
+    return min(100.0, (used / max(1.0, limit)) * 100.0)
+

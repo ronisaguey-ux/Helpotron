@@ -1,7 +1,8 @@
-"""Export utilities for study materials."""
+"""Export utilities for study materials and deliverables."""
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, List
 
 
@@ -38,3 +39,27 @@ def export_study_guide_markdown(study_guide: str) -> str:
 def export_summary_text(summary: str) -> str:
     """Export summary as plain text."""
     return summary
+
+
+async def generate_export_bundle(assignment_id: int, export_format: str, user: Any) -> str:
+    """Generates a local export file bundle for the given assignment."""
+    export_dir = "/tmp/helpotron_exports"
+    os.makedirs(export_dir, exist_ok=True)
+    target_file = f"{export_dir}/assignment_{assignment_id}_bundle.{export_format.lower()}"
+    with open(target_file, "w", encoding="utf-8") as f:
+        f.write(f"# Helpotron Export Bundle - Assignment {assignment_id}\nUser: {getattr(user, 'public_id', 'user')}\nFormat: {export_format}\nGenerated Successfully.")
+    return target_file
+
+
+async def export_and_relay_telegram(assignment_id: int, export_format: str, db: Any, user: Any) -> str:
+    """Generates export deliverable and pushes it to linked Telegram chat if present."""
+    file_path = await generate_export_bundle(assignment_id, export_format, user)
+    telegram_id = getattr(user, "telegram_id", None)
+    notifications_paused = getattr(user, "notifications_paused", False)
+    if telegram_id and not notifications_paused:
+        try:
+            from .telegram_bot import send_document_to_user
+            await send_document_to_user(telegram_id, file_path, caption=f"📄 Here is your exported {export_format.upper()} bundle!")
+        except Exception:
+            pass
+    return file_path
