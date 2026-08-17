@@ -388,6 +388,39 @@ def admin_check(request: Request, db: Session = Depends(get_db)):
     return {"is_admin": is_admin_user(user), "public_id": user.public_id}
 
 
+@app.get("/api/admin/users")
+def get_admin_users(request: Request, db: Session = Depends(get_db)):
+    """List all registered users for admin dashboard."""
+    users = db.query(User).all()
+    return [
+        {
+            "id": u.id,
+            "public_id": u.public_id,
+            "plan": u.plan,
+            "credits": u.credits,
+            "is_active": True,
+            "role": getattr(u, "role", "user"),
+            "created_at": str(u.created_at) if hasattr(u, "created_at") else None,
+        }
+        for u in users
+    ]
+
+
+@app.get("/api/admin/analytics")
+def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
+    """Summary metrics for admin dashboard."""
+    total_users = db.query(User).count()
+    total_assignments = db.query(Assignment).count()
+    total_materials = db.query(StudyMaterial).count()
+    return {
+        "total_users": total_users,
+        "total_assignments": total_assignments,
+        "total_study_materials": total_materials,
+        "system_status": "operational",
+        "simulation_mode": True,
+    }
+
+
 # ─── health ────────────────────────────────────────────────────────────────
 
 @app.get("/health")

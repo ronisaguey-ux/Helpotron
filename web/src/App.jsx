@@ -236,34 +236,32 @@ export default function App() {
 
   const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);
 
-  // If user has not accepted privacy and modal is open
-  if (showPrivacyModal) {
-    return (
-      <ErrorBoundary>
-        <PrivacyPolicyModal
-          isOpen={true}
-          onAccept={handleAcceptPrivacy}
-          onDecline={handleDeclinePrivacy}
-        />
-      </ErrorBoundary>
-    );
-  }
-
-  // If not logged in and not in guest exploration mode
-  if (!isLoggedIn && !isGuest) {
-    return (
-      <ErrorBoundary>
-        <AuthModal
-          onLoginSuccess={handleLoginSuccess}
-          onContinueGuest={handleContinueGuest}
-        />
-      </ErrorBoundary>
-    );
-  }
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-slate-50 text-slate-900">
+        {/* Privacy Policy Modal Overlay */}
+        <PrivacyPolicyModal
+          isOpen={showPrivacyModal}
+          onAccept={handleAcceptPrivacy}
+          onDecline={handleDeclinePrivacy}
+        />
+
+        {/* 3-Option Auth Modal Overlay */}
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onLoginSuccess={(u) => {
+            handleLoginSuccess(u);
+            setAuthModalOpen(false);
+          }}
+          onContinueGuest={() => {
+            handleContinueGuest();
+            setAuthModalOpen(false);
+          }}
+        />
+
       {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
       {isGuest && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-sm">
@@ -274,8 +272,8 @@ export default function App() {
             </span>
           </div>
           <button
-            onClick={() => { setIsGuest(false); setIsLoggedIn(false); }}
-            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition"
+            onClick={() => setAuthModalOpen(true)}
+            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition cursor-pointer"
           >
             Sign In or Create Account →
           </button>
@@ -345,14 +343,14 @@ export default function App() {
             {isAdmin && <Badge color="purple">👑 Admin</Badge>}
 
             {isLoggedIn ? (
-              <Button variant="outline" className="text-xs px-2.5 py-1 text-rose-600" onClick={handleLogout}>
+              <Button variant="outline" className="text-xs px-2.5 py-1 text-rose-600 cursor-pointer" onClick={handleLogout}>
                 Logout
               </Button>
             ) : (
               <Button
                 variant="primary"
-                className="text-xs px-2.5 py-1"
-                onClick={() => { setIsGuest(false); setIsLoggedIn(false); }}
+                className="text-xs px-2.5 py-1 cursor-pointer"
+                onClick={() => setAuthModalOpen(true)}
               >
                 Sign In
               </Button>

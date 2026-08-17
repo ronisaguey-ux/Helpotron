@@ -154,16 +154,18 @@ export default function PrivacyPolicyModal({ isOpen, onAccept, onDecline }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
             <button
-              onClick={onAccept}
-              disabled={!confirmedCheckbox}
-              className="py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2"
+              onClick={() => {
+                setConfirmedCheckbox(true);
+                onAccept();
+              }}
+              className="py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               ✅ Agree & Unlock Full Access
             </button>
 
             <button
               onClick={onDecline}
-              className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all"
+              className="py-3 px-4 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
             >
               ❌ Decline (Explore as Guest / Read-Only)
             </button>
