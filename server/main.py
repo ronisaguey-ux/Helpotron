@@ -43,6 +43,7 @@ from .routes_user_settings import router as user_settings_router
 from .routes_admin_advanced import router as admin_advanced_router
 from .routes_overlord import router as overlord_router
 from .routes_simulation import router as simulation_router
+from .routes_dump import router as dump_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -158,6 +159,7 @@ app.include_router(user_settings_router)
 app.include_router(admin_advanced_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
+app.include_router(dump_router)
 
 
 @app.get("/api/health")

@@ -49,6 +49,12 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   const [tokenMaxUses, setTokenMaxUses] = useState(1);
   const [tokenMsg, setTokenMsg] = useState('');
 
+  // Cost & Usage State
+  const [costsSummary, setCostsSummary] = useState(null);
+  const [usersCosts, setUsersCosts] = useState([]);
+  const [multiplierMap, setMultiplierMap] = useState({});
+  const [costMsg, setCostMsg] = useState('');
+
   const fetchUsers = async () => {
     try {
       const res = await api.adminUsers();
@@ -125,6 +131,24 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
     }
   };
 
+  const fetchCosts = async () => {
+    try {
+      const summary = await api.adminCostsSummary();
+      if (summary) setCostsSummary(summary);
+      const usersData = await api.adminUsersCosts();
+      if (usersData && Array.isArray(usersData.users)) {
+        setUsersCosts(usersData.users);
+        const map = {};
+        usersData.users.forEach((u) => {
+          map[u.public_id] = u.token_cost_multiplier;
+        });
+        setMultiplierMap(map);
+      }
+    } catch (e) {
+      console.warn('Failed fetching costs:', e);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchHealth();
@@ -132,7 +156,21 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
     fetchModelMetrics();
     fetchAdminMessages();
     fetchTokens();
+    fetchCosts();
   }, [userId]);
+
+  const handleUpdateMultiplier = async (publicId, mult) => {
+    try {
+      const res = await api.adminSetUserMultiplier(publicId, Number(mult));
+      if (res && res.status === 'success') {
+        setCostMsg(`✅ Multiplier updated for ${publicId} to ${mult}x`);
+        fetchCosts();
+        setTimeout(() => setCostMsg(''), 4000);
+      }
+    } catch (e) {
+      setCostMsg('❌ Failed updating multiplier');
+    }
+  };
 
   const handleBulkExecute = async (banStatus = null) => {
     if (!selectedUserIds || selectedUserIds.length === 0) return;
@@ -242,6 +280,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
       <div className="flex border-b border-slate-800 bg-slate-950/60 rounded-2xl overflow-x-auto text-xs font-semibold p-1.5 gap-1">
         {[
           ['bulk_users', `👥 User Operations (${safeUsers.length})`],
+          ['costs', '💰 Cost & Usage'],
           ['inbox', `💬 Inquiries Inbox (${safeAdminMessages.length})`],
           ['tokens', `🔑 Tokens & Keys (${safeTokensList.length})`],
           ['models', '⚡ Model Scorecards'],
@@ -610,6 +649,162 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: COST & USAGE MONITORING */}
+      {activeTab === 'costs' && (
+        <div className="space-y-6 animate-fadeIn">
+          {costMsg && (
+            <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-xs text-purple-300 font-mono">
+              {costMsg}
+            </div>
+          )}
+
+          {/* Top Platform Metrics */}
+          {costsSummary && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase">Total API Cost</span>
+                <strong className="text-rose-400 text-lg">${costsSummary.total_cost_usd || '0.00'}</strong>
+                <span className="text-[10px] text-slate-500 block">Baseline Provider Expense</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase">Total Charged (w/ Multipliers)</span>
+                <strong className="text-purple-400 text-lg">${costsSummary.total_charged_usd || '0.00'}</strong>
+                <span className="text-[10px] text-slate-500 block">User Token Equivalent</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase">Est. Platform Profit</span>
+                <strong className="text-emerald-400 text-lg">${costsSummary.platform_profit_summary?.estimated_profit_usd || '0.00'}</strong>
+                <span className="text-[10px] text-emerald-400/80 block">{costsSummary.platform_profit_summary?.profit_margin_pct}% Margin</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
+                <span className="text-slate-400 block text-[10px] uppercase">Total API Calls</span>
+                <strong className="text-blue-400 text-lg">{costsSummary.total_logs || 0}</strong>
+                <span className="text-[10px] text-slate-500 block">LLM, Audio, Vision, Detectors</span>
+              </div>
+            </div>
+          )}
+
+          {/* Per-User Token Cost Multiplier Adjustment */}
+          <div className="clean-card rounded-3xl p-6 bg-slate-950/60 border border-white/10 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  Per-User Token Multiplier & Pricing Control
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Adjust individual user multipliers (e.g. 0.5x for beta testers, 1.0x standard, 1.5x premium, 2.0x heavy usage).
+                </p>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono">{usersCosts.length} Users</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400 text-[11px] font-mono">
+                    <th className="pb-3">User</th>
+                    <th className="pb-3">Plan</th>
+                    <th className="pb-3">Calls</th>
+                    <th className="pb-3">API Cost</th>
+                    <th className="pb-3">Profit Margin</th>
+                    <th className="pb-3">Token Multiplier</th>
+                    <th className="pb-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-mono">
+                  {usersCosts.map((u) => {
+                    const currentVal = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : u.token_cost_multiplier;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-white/[0.02]">
+                        <td className="py-3 font-semibold text-white">{u.public_id}</td>
+                        <td className="py-3 uppercase text-[10px] font-bold text-purple-300">{u.plan}</td>
+                        <td className="py-3 text-slate-400">{u.total_calls}</td>
+                        <td className="py-3 text-rose-400">${u.total_cost_usd}</td>
+                        <td className="py-3 text-emerald-400 font-bold">
+                          {u.profit_margin_pct}% (${u.estimated_profit_usd})
+                        </td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0.1"
+                              max="10.0"
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
+                              }}
+                              className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center"
+                            />
+                            <span className="text-slate-400 text-[11px]">x</span>
+                          </div>
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateMultiplier(u.public_id, currentVal)}
+                            className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                          >
+                            Save
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Model & Tool Breakdown + Usage Trends */}
+          {costsSummary && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Tool / Model Cost Breakdown */}
+              <div className="clean-card rounded-3xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                  Cost Breakdown by Tool / Model
+                </h4>
+                <div className="space-y-2 text-xs font-mono">
+                  {costsSummary.tool_breakdown?.map((tool, i) => (
+                    <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
+                      <div>
+                        <span className="font-bold text-white block">{tool.tool_or_model}</span>
+                        <span className="text-[10px] text-slate-500">{tool.call_count} invocations</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-rose-400 font-bold block">${tool.total_base_cost}</span>
+                        <span className="text-[10px] text-purple-300">Charged: ${tool.total_charged}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 7-Day Usage & Cost Trends */}
+              <div className="clean-card rounded-3xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                  Usage Trends (Last 7 Days)
+                </h4>
+                <div className="space-y-2 text-xs font-mono">
+                  {costsSummary.trends?.map((day, i) => (
+                    <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
+                      <div>
+                        <span className="font-bold text-white">{day.date} ({day.day_name})</span>
+                        <span className="text-[10px] text-slate-500 block">{day.calls} API calls</span>
+                      </div>
+                      <span className="text-purple-300 font-bold">${day.cost_usd}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

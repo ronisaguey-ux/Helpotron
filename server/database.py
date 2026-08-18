@@ -70,6 +70,9 @@ class User(Base):
     subscription_status: Mapped[str] = mapped_column(String(32), default="none")  # none, trialing, active, past_due, canceled
     is_student_verified: Mapped[bool] = mapped_column(default=False)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    token_cost_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
+    monthly_budget_usd: Mapped[float] = mapped_column(Float, default=50.0)
+    default_effort_level: Mapped[int] = mapped_column(Integer, default=5)
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="user", cascade="all, delete-orphan")
@@ -310,6 +313,46 @@ class AdminMessage(Base):
     replied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class ApiUsageLog(Base):
+    """Detailed ledger for all API calls (LLMs, Audio Transcription, Vision, Detectors)."""
+    __tablename__ = "api_usage_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    public_id: Mapped[str] = mapped_column(String(64), index=True)
+    tool_or_model: Mapped[str] = mapped_column(String(128), index=True)
+    category: Mapped[str] = mapped_column(String(64), default="llm")  # llm, transcription, vision, detector, subagent
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    base_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    user_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
+    charged_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+
+
+class UniversalDumpItem(Base):
+    """Stores raw dumped files (PDF, audio, image, video, text) and Overlord assignment routing state."""
+    __tablename__ = "universal_dump_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    file_name: Mapped[str] = mapped_column(String(512))
+    file_type: Mapped[str] = mapped_column(String(64))  # document, audio, video, image, text
+    file_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    status: Mapped[str] = mapped_column(String(64), default="pending_analysis")  # pending_analysis, processing, matched, unmatched, manual_routed, finalized
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    matched_assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True, index=True)
+    auto_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    overlord_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user = relationship("User")
+    matched_assignment = relationship("Assignment")
+
+
 def get_db() -> Generator[Any, None, None]:
     db = SessionLocal()
     try:
@@ -352,6 +395,12 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_student_verified BOOLEAN DEFAULT 0"))
                 if "last_active_at" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
+                if "token_cost_multiplier" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN token_cost_multiplier FLOAT DEFAULT 1.0"))
+                if "monthly_budget_usd" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN monthly_budget_usd FLOAT DEFAULT 50.0"))
+                if "default_effort_level" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN default_effort_level INTEGER DEFAULT 5"))
 
                 columns_materials = [row[1] for row in conn.execute(text("PRAGMA table_info(study_materials)")).fetchall()]
                 if "shared_with" not in columns_materials:

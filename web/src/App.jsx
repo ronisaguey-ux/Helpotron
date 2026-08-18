@@ -16,6 +16,7 @@ import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import MessageAdminView from './components/MessageAdminView.jsx';
 import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
 import DataLakeView from './components/DataLakeView.jsx';
+import AssignmentDumpView from './components/AssignmentDumpView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
@@ -45,6 +46,7 @@ import {
   LogOut,
   MessageSquare,
   Database,
+  UploadCloud,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -250,6 +252,7 @@ export default function App() {
   const menuItems = [
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: null },
+    { key: 'dump', label: 'Assignment Dump', icon: UploadCloud, badge: 'AI-ROUTE' },
     { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Database, badge: '+CR' },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
@@ -460,6 +463,7 @@ export default function App() {
                   <p className="text-xs text-slate-400">
                     {activeView === 'overview' && 'High-level course progress, study streak tracking, and interactive assignment bubbles'}
                     {activeView === 'history' && 'Audit trail of past assignments, verification scores, and CSV exports'}
+                    {activeView === 'dump' && 'Universal material dropzone with Gemini 3.1 Flash-Lite audio transcription & Overlord auto-routing'}
                     {activeView === 'datalake' && 'Anonymized training pool, empirical rubric contributions, and micro-credits earning'}
                     {activeView === 'analytics' && 'Study time logs, accuracy trends, and review consistency'}
                     {activeView === 'groups' && 'Collaborative study pools and shared notes'}
@@ -490,6 +494,16 @@ export default function App() {
                     onSelectAssignment={(a) => setOpenAssignment(a)}
                   />
                 )
+              )}
+
+              {activeView === 'dump' && (
+                <AssignmentDumpView
+                  userId={userId}
+                  onSelectAssignment={(a) => {
+                    setOpenAssignment(a);
+                    setActiveView('overview');
+                  }}
+                />
               )}
 
               {activeView === 'analytics' && (

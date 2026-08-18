@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # LLM & Third-Party APIs
     omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "http://localhost:20128/api/v1")
     omniroute_api_key: str = os.getenv("OMNIROUTE_API_KEY", "")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    gemini_flash_lite_model: str = os.getenv("GEMINI_FLASH_LITE_MODEL", "gemini-3.1-flash-lite")
+    gemini_flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.7-flash")
     primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
@@ -52,9 +55,15 @@ class Settings(BaseSettings):
     # Web & Origin
     web_origin: str = os.getenv("WEB_ORIGIN", "http://localhost:5173")
 
-    # Payments (Stripe)
+    # Payments (Stripe & PayPal)
+    stripe_api_key: str = os.getenv("STRIPE_API_KEY", "")
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    paypal_client_id: str = os.getenv("PAYPAL_CLIENT_ID", "")
+    paypal_secret: str = os.getenv("PAYPAL_SECRET", "")
+
+    # Data Lake Storage
+    data_lake_dir: str = os.getenv("DATA_LAKE_DIR", str(BASE_DIR / "datalake_storage"))
 
     # Admin
     admin_public_id: str = os.getenv("ADMIN_PUBLIC_ID", "RoniDev")

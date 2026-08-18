@@ -198,6 +198,35 @@ export const api = {
   adminGenerateToken: (durationDays, maxUses) => request('/api/admin/tokens/generate', { method: 'POST', body: JSON.stringify({ duration_days: durationDays, max_uses: maxUses }) }),
   adminDeactivateToken: (token) => request(`/api/admin/tokens/deactivate?token=${token}`, { method: 'POST' }),
   adminListTokens: () => request('/api/admin/tokens', { method: 'GET' }),
+
+  // Cost Monitoring & Per-User Token Multipliers
+  adminCostsSummary: () => request('/api/admin/costs/summary', { method: 'GET' }),
+  adminUsersCosts: () => request('/api/admin/costs/users', { method: 'GET' }),
+  adminSetUserMultiplier: (publicId, multiplier) => request(`/api/admin/costs/users/${publicId}/multiplier`, { method: 'POST', body: JSON.stringify({ multiplier }) }),
+
+  // User Budget, Effort Level & Pre-Flight Cost Estimator
+  getUserBudget: (userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  updateUserBudget: (data, userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
+  estimateTaskCost: (data, userId) => request(`/api/admin/costs/estimate?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Universal Assignment Dump & Overlord Routing
+  uploadDumpFile: async (formData) => {
+    const res = await fetch(`${getServer()}/api/dump/upload`, {
+      method: 'POST',
+      headers: {
+        'X-Public-ID': getUserId() || 'RoniDev',
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Dump upload failed');
+    }
+    return res.json();
+  },
+  getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId || 'RoniDev'}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
+  routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
 };
 
 export default api;

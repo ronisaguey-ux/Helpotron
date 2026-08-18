@@ -108,29 +108,29 @@ const DEFAULT_SUBJECTS = [
 
 function getEffortInfo(score) {
   const s = Math.max(1, Math.min(1000, Number(score || 500)));
-  if (s <= 350) {
+  if (s <= 400) {
     return {
-      tier: 'Low Effort (1–350)',
-      label: '🚀 Cost-Optimized & High-Throughput',
+      tier: 'Low Effort (1–4)',
+      label: '⚡ Gemini 3.1 Flash-Lite ($0.50/1M tokens)',
       color: 'text-amber-400',
       badgeColor: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
-      description: 'Bulk lecture summaries, flashcard generation, and keyword extractions are heavily offloaded to ultra-efficient high-speed utility tiers.',
+      description: 'Ultra-fast, cost-effective default for audio transcription, OCR, text extraction, and rapid drafts.',
     };
-  } else if (s <= 750) {
+  } else if (s <= 700) {
     return {
-      tier: 'Medium Effort (351–750)',
-      label: '⚖️ Balanced Rigor & Evasion',
+      tier: 'Medium Effort (5–7)',
+      label: '⚖️ Balanced Tier (Flash-Lite + Gemini 3.7 Flash)',
       color: 'text-blue-400',
       badgeColor: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
-      description: 'Balanced multi-agent orchestration pairing rubric parsing engines with structured drafting and multi-pass evasion synthesis.',
+      description: 'Pairs Gemini 3.1 Flash-Lite for transcription and drafting with Gemini 3.7 Flash for humanization and detector evasion.',
     };
   } else {
     return {
-      tier: 'High Effort (751–1000)',
-      label: '🧠 Flagship Cognitive Depth',
+      tier: 'High Effort (8–10)',
+      label: '🧠 Flagship Gemini 3.7 Flash',
       color: 'text-emerald-400',
       badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-      description: 'Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship cognitive synthesis tiers.',
+      description: 'Deep cognitive reasoning, comprehensive literature synthesis, and flagship anti-detection evasion across all passes.',
     };
   }
 }
