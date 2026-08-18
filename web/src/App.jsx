@@ -678,35 +678,10 @@ function Billing({ userId }) {
   );
 }
 
-function AdminPanel({ userId, adminUsers, adminAnalytics, refreshAdmin }) {
+function AdminPanel({ userId }) {
   return (
     <div className="space-y-6">
       <AdminAdvancedDashboard userId={userId} />
-
-      {adminAnalytics && (
-        <div className="clean-card p-5">
-          <h3 className="font-semibold mb-3 text-sm text-blue-300">Platform Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Total Users</span>
-              <strong className="text-white text-base">{adminAnalytics.users?.total || 0}</strong>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Assignments</span>
-              <strong className="text-white text-base">{adminAnalytics.content?.assignments || 0}</strong>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Study Materials</span>
-              <strong className="text-white text-base">{adminAnalytics.content?.study_materials || 0}</strong>
-            </div>
-            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Revenue</span>
-              <strong className="text-emerald-300 text-base font-mono">${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || '0.00'}</strong>
-            </div>
-          </div>
-          <Button variant="outline" className="mt-4" onClick={refreshAdmin}>Refresh Metrics</Button>
-        </div>
-      )}
     </div>
   );
 }
