@@ -20,8 +20,17 @@ export default function AssignmentCard({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(id)}
-      className="relative group glass-panel rounded-xl p-5 transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer border border-white/10 hover:border-cyan-500/40"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(id);
+        }
+      }}
+      aria-label={`Select assignment: ${title}`}
+      className="relative group glass-panel rounded-xl p-5 transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer border border-white/10 hover:border-cyan-500/40 focus-visible:ring-2 focus-visible:ring-cyan-400 focus:outline-none"
     >
       {/* Corner Accent Edge */}
       <div className="absolute top-0 right-0 w-12 h-12 overflow-hidden pointer-events-none">

@@ -73,6 +73,26 @@ async def _datalake_background_loop(interval_seconds: int = 21600) -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def _cleanup_temp_files_loop(interval_seconds: int = 3600):
+    """Background task purging temporary files in uploads and exports older than 24h."""
+    import time
+    while True:
+        try:
+            now = time.time()
+            for folder in ["./uploads", "./exports", "/tmp/helpotron_exports"]:
+                if os.path.exists(folder):
+                    for fname in os.listdir(folder):
+                        fpath = os.path.join(folder, fname)
+                        if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > 86400):
+                            try:
+                                os.remove(fpath)
+                            except Exception:
+                                pass
+        except Exception as e:
+            logger.warning("temp_cleanup: error: %s", e)
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from pathlib import Path
@@ -80,17 +100,39 @@ async def lifespan(_app: FastAPI):
         logger.warning("config: %s", problem)
     init_db()
     Path("./exports").mkdir(parents=True, exist_ok=True)
+    Path("./uploads").mkdir(parents=True, exist_ok=True)
     Path("./datalake_storage").mkdir(parents=True, exist_ok=True)
     lake_task = asyncio.create_task(_datalake_background_loop())
+    cleanup_task = asyncio.create_task(_cleanup_temp_files_loop())
     yield
     lake_task.cancel()
+    cleanup_task.cancel()
     try:
         await lake_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await cleanup_task
     except asyncio.CancelledError:
         pass
 
 
 app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global structured JSON exception handler for uncaught server errors."""
+    logger.error("Unhandled exception at %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "error": "Internal Server Error",
+            "message": str(exc) if not config.production_mode else "An unexpected server error occurred.",
+            "path": request.url.path,
+        },
+    )
 
 # ─── rate limiting (dependency-free, in-memory) ────────────────────────────
 # Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the

@@ -41,14 +41,33 @@ def export_summary_text(summary: str) -> str:
     return summary
 
 
+ALLOWED_EXPORT_DIR = "/tmp/helpotron_exports"
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitizes filename and prevents directory traversal attacks."""
+    import re
+    cleaned = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", filename)
+    return os.path.basename(cleaned)
+
+
 async def generate_export_bundle(assignment_id: int, export_format: str, user: Any) -> str:
-    """Generates a local export file bundle for the given assignment."""
-    export_dir = "/tmp/helpotron_exports"
-    os.makedirs(export_dir, exist_ok=True)
-    target_file = f"{export_dir}/assignment_{assignment_id}_bundle.{export_format.lower()}"
-    with open(target_file, "w", encoding="utf-8") as f:
+    """Generates a local export file bundle for the given assignment strictly within allowed export directory."""
+    from pathlib import Path
+    safe_base = Path(ALLOWED_EXPORT_DIR).resolve()
+    safe_base.mkdir(parents=True, exist_ok=True)
+    
+    clean_fmt = sanitize_filename(export_format.lower())
+    target_filename = f"assignment_{int(assignment_id)}_bundle.{clean_fmt}"
+    target_path = (safe_base / target_filename).resolve()
+    
+    # Boundary traversal assertion
+    if not str(target_path).startswith(str(safe_base)):
+        raise ValueError("Path traversal attempt detected.")
+        
+    with open(target_path, "w", encoding="utf-8") as f:
         f.write(f"# Helpotron Export Bundle - Assignment {assignment_id}\nUser: {getattr(user, 'public_id', 'user')}\nFormat: {export_format}\nGenerated Successfully.")
-    return target_file
+    return str(target_path)
 
 
 async def export_and_relay_telegram(assignment_id: int, export_format: str, db: Any, user: Any) -> str:

@@ -528,6 +528,29 @@ async def permanent_delete_request_route(payload: PermanentDataDeleteRequest, re
     }
 
 
+@router.delete("/account")
+async def delete_account_route(request: Request, db: Session = Depends(get_db)):
+    """GDPR Article 17 Right to Erasure: Instantly cascades and permanently deletes user account, assignments, materials, sessions, and logs."""
+    from .database import Material, Transcript, DataSubmission, UserSession
+    user = _get_current_user(request, db)
+    uid = user.id
+    public_id = user.public_id
+
+    # Cascade deletes
+    db.query(Material).filter(Material.user_id == uid).delete(synchronize_session=False)
+    db.query(Assignment).filter(Assignment.user_id == uid).delete(synchronize_session=False)
+    db.query(Transcript).filter(Transcript.user_id == uid).delete(synchronize_session=False)
+    db.query(DataSubmission).filter(DataSubmission.user_id == uid).delete(synchronize_session=False)
+    db.query(UserSession).filter(UserSession.user_id == uid).delete(synchronize_session=False)
+    db.delete(user)
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Account '{public_id}' and all associated academic records, study artifacts, and sessions have been permanently erased pursuant to GDPR Article 17.",
+    }
+
+
 @router.get("/assignment-history")
 async def get_assignment_history_route(
     request: Request,

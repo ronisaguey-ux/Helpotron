@@ -397,6 +397,17 @@ export default function UserSettingsModal({
     }
   }, [initialTab]);
 
+  // Escape key listener for modal closing
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isModal && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModal, onClose]);
+
   // Custom Subject Form
   const [newSubjName, setNewSubjName] = useState('');
   const [newSubjDesc, setNewSubjDesc] = useState('');

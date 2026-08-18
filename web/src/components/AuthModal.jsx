@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 
 export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onContinueGuest }) {
@@ -17,7 +17,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
   const [verifyTarget, setVerifyTarget] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [consentAgreed, setConsentAgreed] = useState(false);
   const [signupSuccessMsg, setSignupSuccessMsg] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -281,11 +292,25 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                   />
                 </div>
 
+                {/* AI Processing & Terms Consent Checkbox */}
+                <label className="flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={consentAgreed}
+                    onChange={(e) => setConsentAgreed(e.target.checked)}
+                    className="mt-0.5 rounded accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>
+                    I agree to the <strong>Privacy Policy</strong> and provide affirmative consent to automated AI study material generation via authorized subprocessors.
+                  </span>
+                </label>
+
                 <button
                   type="button"
-                  disabled={loading}
+                  disabled={loading || !consentAgreed}
                   onClick={handleSendVerificationCode}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl font-bold shadow-md transition-all cursor-pointer"
                 >
                   {loading ? 'Sending Code…' : 'Send 6-Digit Verification Code'}
                 </button>
@@ -308,7 +333,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50"
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {loading ? 'Verifying…' : 'Verify Code & Activate Account'}
                 </button>
@@ -316,7 +341,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                 <button
                   type="button"
                   onClick={() => setCodeSent(false)}
-                  className="w-full text-center text-slate-400 hover:text-slate-600 py-1"
+                  className="w-full text-center text-slate-400 hover:text-slate-600 py-1 cursor-pointer"
                 >
                   ← Change Email/Phone
                 </button>
