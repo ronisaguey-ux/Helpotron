@@ -565,6 +565,52 @@ class UserSettingsService:
         settings = UserSettingsService.get_user_settings(user)
         return settings.get("custom_subjects", DEFAULT_CUSTOM_SUBJECTS)
 
+    # ─── Custom Bubbles Management ───────────────────────────────────────────
+
+    @staticmethod
+    def add_custom_bubble(
+        db: Session,
+        user: User,
+        title: str,
+        description: str,
+        color: Optional[str] = "blue",
+        icon: Optional[str] = "🫧",
+    ) -> Dict[str, Any]:
+        """Creates a custom assignment bubble for organizing coursework."""
+        settings = UserSettingsService.get_user_settings(user)
+        bubbles = list(settings.get("custom_bubbles", []))
+        bubble_id = f"bubble_{uuid.uuid4().hex[:6]}"
+        new_bubble = {
+            "id": bubble_id,
+            "title": title.strip(),
+            "description": description.strip(),
+            "color": color or "blue",
+            "icon": icon or "🫧",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        bubbles.append(new_bubble)
+        settings["custom_bubbles"] = bubbles
+        user.settings = settings
+        db.commit()
+        return new_bubble
+
+    @staticmethod
+    def delete_custom_bubble(db: Session, user: User, bubble_id: str) -> bool:
+        """Deletes a custom bubble."""
+        settings = UserSettingsService.get_user_settings(user)
+        bubbles = [b for b in settings.get("custom_bubbles", []) if b.get("id") != bubble_id]
+        settings["custom_bubbles"] = bubbles
+        user.settings = settings
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_custom_bubbles(db: Session, user: User) -> List[Dict[str, Any]]:
+        """Returns list of custom organization bubbles."""
+        settings = UserSettingsService.get_user_settings(user)
+        return settings.get("custom_bubbles", [])
+
+
 
     @staticmethod
     def resolve_effective_settings(

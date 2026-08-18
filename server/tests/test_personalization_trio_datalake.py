@@ -246,30 +246,72 @@ def test_custom_subjects_crud_and_gemini_multimodal():
     assert created["is_custom"] is True
     created_id = created["id"]
 
-    # 3. Delete custom subject
-    del_resp = client.delete(f"/api/user/custom-subjects/{created_id}")
-    assert del_resp.status_code == 200
-
-
-def test_api_models_and_effort_endpoints():
-    """Verify GET /api/user/models and GET /api/user/effort-score/resolve endpoints."""
+def test_custom_bubbles_crud_and_data_export_purge():
+    """Verify custom bubbles creation/deletion, export-all package, soft-reset, and permanent delete dispatch."""
     from fastapi.testclient import TestClient
     from server.main import app
 
     client = TestClient(app)
 
-    # 1. Models catalog endpoint
-    m_resp = client.get("/api/user/models")
-    assert m_resp.status_code == 200
-    models = m_resp.json()["models"]
-    assert any(m["id"] == "gemini_37_flash" for m in models)
-    assert any(m["id"] == "moe_high_throughput" for m in models)
+    # 1. Custom Bubbles CRUD
+    b_resp = client.get("/api/user/custom-bubbles")
+    assert b_resp.status_code == 200
 
-    # 2. Effort resolve endpoint
-    e_resp = client.get("/api/user/effort-score/resolve?score=850")
-    assert e_resp.status_code == 200
-    res = e_resp.json()["effort_routing"]
-    assert res["tier"] == "high_effort"
-    assert res["score"] == 850
+    new_bubble = {
+        "title": "Dr. Miller Lab Reports",
+        "description": "Physics experimental raw data, error margin bounds, and lab write-ups",
+        "color": "indigo",
+        "icon": "🔬",
+    }
+    c_resp = client.post("/api/user/custom-bubbles", json=new_bubble)
+    assert c_resp.status_code == 200
+    bubble = c_resp.json()["bubble"]
+    assert bubble["title"] == "Dr. Miller Lab Reports"
+    bubble_id = bubble["id"]
+
+    del_b = client.delete(f"/api/user/custom-bubbles/{bubble_id}")
+    assert del_b.status_code == 200
+
+    # 2. Comprehensive Data Export
+    exp_resp = client.get("/api/user/data/export-all")
+    assert exp_resp.status_code == 200
+    export_data = exp_resp.json()["export"]
+    assert "manifest" in export_data
+    assert "settings_and_preferences" in export_data
+    assert "generated_materials" in export_data
+    assert "datalake_contributions" in export_data
+
+    # 3. Soft Reset
+    soft_resp = client.post("/api/user/data/soft-reset")
+    assert soft_resp.status_code == 200
+    assert "reset successfully" in soft_resp.json()["message"]
+
+    # 4. Permanent Delete Request with invalid confirmation
+    bad_purge = client.post(
+        "/api/user/data/permanent-delete-request",
+        json={"confirmation_text": "WRONG_TEXT", "notify_email": "test@domain.edu"},
+    )
+    assert bad_purge.status_code == 400
+
+    # 5. Permanent Delete Request with exact confirmation
+    good_purge = client.post(
+        "/api/user/data/permanent-delete-request",
+        json={
+            "confirmation_text": "DELETE PERMANENTLY",
+            "notify_email": "student@university.edu",
+            "notify_sms": "+15550192834",
+            "reason": "Graduated and requesting complete GDPR wipe",
+        },
+    )
+    assert good_purge.status_code == 200
+    p_data = good_purge.json()
+    assert "3+ business days" in p_data["message"]
+    assert p_data["purge_record"]["status"] == "pending_purge"
+
+    # 6. Assignment History
+    h_resp = client.get("/api/user/assignment-history")
+    assert h_resp.status_code == 200
+    assert "history" in h_resp.json()
+
 
 

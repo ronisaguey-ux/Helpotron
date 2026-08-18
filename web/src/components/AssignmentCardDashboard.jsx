@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
 import api from '../api';
 import {
-  BookOpen,
   Layers,
   Sparkles,
   Bot,
@@ -10,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   Zap,
+  ArrowLeft,
   ArrowRight,
   Filter,
   Flame,
@@ -17,15 +17,25 @@ import {
   Play,
   RotateCcw,
   Plus,
+  Minus,
+  Trash2,
+  Download,
+  ShieldAlert,
+  Archive,
+  History as HistoryIcon,
+  Search,
+  Check,
+  Bell,
+  X,
 } from 'lucide-react';
 
-const DEFAULT_SUBJECTS = [
-  { id: 'subj_math', name: 'Mathematics', description: 'Calculus, linear algebra, statistics & formal proofs', color: 'blue', icon: '📐' },
-  { id: 'subj_english', name: 'English & Literature', description: 'Literary analysis, rhetorical essays & close reading', color: 'purple', icon: '📖' },
-  { id: 'subj_history', name: 'History & Social Studies', description: 'Historiography, primary source evaluation & analysis', color: 'amber', icon: '🏛️' },
-  { id: 'subj_cs', name: 'Computer Science', description: 'Algorithms, data structures & software engineering', color: 'emerald', icon: '💻' },
-  { id: 'subj_biology', name: 'Biology & Life Sciences', description: 'Genetics, cellular biology & lab investigations', color: 'teal', icon: '🧬' },
-  { id: 'subj_psychology', name: 'Psychology & Cognitive Sciences', description: 'Empirical research, cognitive neuroscience & case studies', color: 'indigo', icon: '🧠' },
+const DEFAULT_SUBJECT_BUBBLES = [
+  { id: 'subj_math', title: 'Mathematics', description: 'Calculus, linear algebra, statistics & formal proofs', color: 'blue', icon: '📐' },
+  { id: 'subj_english', title: 'English & Literature', description: 'Literary analysis, rhetorical essays & close reading', color: 'purple', icon: '📖' },
+  { id: 'subj_history', title: 'History & Social Studies', description: 'Historiography, primary source evaluation & analysis', color: 'amber', icon: '🏛️' },
+  { id: 'subj_cs', title: 'Computer Science', description: 'Algorithms, data structures & software engineering', color: 'emerald', icon: '💻' },
+  { id: 'subj_biology', title: 'Biology & Life Sciences', description: 'Genetics, cellular biology & lab investigations', color: 'teal', icon: '🧬' },
+  { id: 'subj_psychology', title: 'Psychology & Cognitive Sciences', description: 'Empirical research, cognitive neuroscience & case studies', color: 'indigo', icon: '🧠' },
 ];
 
 export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
@@ -33,38 +43,82 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [fullViewData, setFullViewData] = useState(null);
-  const [mode, setMode] = useState('auto');
-  const [autoRules, setAutoRules] = useState([]);
-  const [newRule, setNewRule] = useState('');
-  const [chatMessages, setChatMessages] = useState([]);
-  const [inputMsg, setInputMsg] = useState('');
-  const [sendingMsg, setSendingMsg] = useState(false);
-  const [pendingPermissions, setPendingPermissions] = useState([]);
-  const [activePermModal, setActivePermModal] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | rules
+
+  // Active View: 'bubbles' | 'history'
+  const [dashboardTab, setDashboardTab] = useState('bubbles'); // 'bubbles' | 'history'
+
+  // Selected active bubble (null = showing bubble grid; 'ALL' or bubble object = showing bubble's assignments)
+  const [activeBubble, setActiveBubble] = useState(null);
+
+  // Custom Bubbles & Subjects
+  const [customBubbles, setCustomBubbles] = useState([]);
+  const [isCreatingBubble, setIsCreatingBubble] = useState(false);
+  const [newBubbleTitle, setNewBubbleTitle] = useState('');
+  const [newBubbleDesc, setNewBubbleDesc] = useState('');
+  const [newBubbleColor, setNewBubbleColor] = useState('blue');
+  const [newBubbleIcon, setNewBubbleIcon] = useState('🫧');
+
+  // Assignment History State
+  const [historyList, setHistoryList] = useState([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historySubjectFilter, setHistorySubjectFilter] = useState('ALL');
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Data Export & Deletion Modals
+  const [exportNotice, setExportNotice] = useState('');
+  const [showSoftResetModal, setShowSoftResetModal] = useState(false);
+  const [showPermanentDeleteModal, setShowPermanentDeleteModal] = useState(false);
+  const [permDeleteConfirmText, setPermDeleteConfirmText] = useState('');
+  const [permDeleteNotifyEmail, setPermDeleteNotifyEmail] = useState('');
+  const [permDeleteNotifyPhone, setPermDeleteNotifyPhone] = useState('');
+  const [permDeleteSendNotification, setPermDeleteSendNotification] = useState(true);
+  const [permDeleteStatus, setPermDeleteStatus] = useState('');
+
+  // Simulator
   const [simEnabled, setSimEnabled] = useState(true);
   const [simSeeding, setSimSeeding] = useState(false);
 
-  // Subject filtering and custom subjects
-  const [customSubjects, setCustomSubjects] = useState(DEFAULT_SUBJECTS);
-  const [selectedSubject, setSelectedSubject] = useState('ALL'); // 'ALL' or subject name
-
-  // Load cards, custom subjects & mode on mount
   useEffect(() => {
     fetchDashboardData();
-    fetchCustomSubjects();
+    fetchCustomBubbles();
     fetchSimulationStatus();
-    const interval = setInterval(fetchPendingPermissions, 12000);
-    return () => clearInterval(interval);
   }, [userId]);
 
-  async function fetchCustomSubjects() {
+  useEffect(() => {
+    if (dashboardTab === 'history') {
+      fetchAssignmentHistory();
+    }
+  }, [dashboardTab, historySubjectFilter]);
+
+  async function fetchCustomBubbles() {
     try {
-      const data = await api.getCustomSubjects();
-      if (data?.subjects && data.subjects.length > 0) {
-        setCustomSubjects(data.subjects);
-      }
+      const data = await api.getCustomBubbles();
+      if (data?.bubbles) setCustomBubbles(data.bubbles);
     } catch (e) {}
+  }
+
+  async function fetchDashboardData() {
+    setLoading(true);
+    try {
+      const cardsData = await api.assignmentCards();
+      if (cardsData?.cards) setCards(cardsData.cards);
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchAssignmentHistory() {
+    setHistoryLoading(true);
+    try {
+      const data = await api.getAssignmentHistory(historySubjectFilter === 'ALL' ? '' : historySubjectFilter);
+      if (data?.history) setHistoryList(data.history);
+    } catch (e) {
+      console.error('Failed to load assignment history:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function fetchSimulationStatus() {
@@ -74,416 +128,655 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
     } catch (e) {}
   }
 
-  async function toggleSimulator() {
-    try {
-      const data = await api.simulationToggle(!simEnabled);
-      if (data?.is_enabled !== undefined) setSimEnabled(data.is_enabled);
-      fetchDashboardData();
-    } catch (e) {}
-  }
-
   async function seedDemoData() {
     setSimSeeding(true);
     try {
       await api.simulationSeed();
       await fetchDashboardData();
+      if (dashboardTab === 'history') fetchAssignmentHistory();
     } catch (e) {} finally {
       setSimSeeding(false);
     }
   }
 
-  async function clearDemoData() {
-    if (!confirm('Clear synthetic mock assignments?')) return;
-    try {
-      await api.simulationClear();
-      await fetchDashboardData();
-    } catch (e) {}
-  }
-
-  async function fetchDashboardData() {
-    setLoading(true);
-    try {
-      const [cardsData, modeData, rulesData] = await Promise.all([
-        api.assignmentCards(),
-        api.agentMode(),
-        api.agentPermissionRules(),
-      ]);
-
-      if (cardsData?.cards) setCards(cardsData.cards);
-      if (modeData?.operation_mode) setMode(modeData.operation_mode);
-      if (rulesData?.rules) setAutoRules(rulesData.rules);
-    } catch (err) {
-      console.error('Error loading dashboard data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchPendingPermissions() {
-    try {
-      const data = await api.agentPermissionsPending();
-      if (data?.pending) {
-        setPendingPermissions(data.pending);
-        if (data.pending.length > 0 && !activePermModal) {
-          setActivePermModal(data.pending[0]);
-        }
-      }
-    } catch (e) {}
-  }
-
-  async function switchMode(newMode) {
-    setMode(newMode);
-    try {
-      await api.setAgentMode(newMode);
-    } catch (err) {
-      console.error('Failed to update mode:', err);
-    }
-  }
-
-  async function openFullView(assignmentId) {
-    if (onSelectAssignment) {
-      onSelectAssignment(assignmentId);
-      return;
-    }
-    setSelectedCardId(assignmentId);
-    try {
-      const data = await api.assignmentFullView(assignmentId);
-      setFullViewData(data);
-    } catch (err) {
-      console.error('Failed to load assignment full view:', err);
-    }
-  }
-
-  async function sendOverlordMessage(e) {
+  // Create Custom Bubble
+  const handleCreateBubble = async (e) => {
     e.preventDefault();
-    if (!inputMsg.trim()) return;
-
-    const userText = inputMsg.trim();
-    setInputMsg('');
-    setChatMessages((prev) => [...prev, { sender: 'user', text: userText }]);
-    setSendingMsg(true);
-
+    if (!newBubbleTitle.trim() || !newBubbleDesc.trim()) return;
     try {
-      const data = await api.overlordChat(userText);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          sender: 'overlord',
-          text: data?.response || 'Acknowledged.',
-          actions: data?.suggested_actions,
-        },
-      ]);
-    } catch (err) {
-      setChatMessages((prev) => [
-        ...prev,
-        { sender: 'overlord', text: 'Error contacting Overlord agent.' },
-      ]);
-    } finally {
-      setSendingMsg(false);
+      const res = await api.addCustomBubble({
+        title: newBubbleTitle.trim(),
+        description: newBubbleDesc.trim(),
+        color: newBubbleColor,
+        icon: newBubbleIcon,
+      });
+      if (res?.bubble) {
+        setCustomBubbles((prev) => [...prev, res.bubble]);
+        setNewBubbleTitle('');
+        setNewBubbleDesc('');
+        setIsCreatingBubble(false);
+      }
+    } catch (e) {
+      alert('Failed to create custom bubble.');
     }
-  }
-
-  // Helper to map card to subject
-  const matchSubject = (courseName, targetSubjectName) => {
-    if (!courseName || !targetSubjectName) return false;
-    const c = courseName.toLowerCase();
-    const s = targetSubjectName.toLowerCase();
-    return c.includes(s) || s.includes(c) ||
-      (s.includes('math') && (c.includes('math') || c.includes('calc') || c.includes('algebra') || c.includes('stat'))) ||
-      (s.includes('english') && (c.includes('eng') || c.includes('lit') || c.includes('writing') || c.includes('essay'))) ||
-      (s.includes('history') && (c.includes('hist') || c.includes('social') || c.includes('gov') || c.includes('civic'))) ||
-      (s.includes('computer') && (c.includes('cs') || c.includes('code') || c.includes('comp') || c.includes('prog'))) ||
-      (s.includes('biology') && (c.includes('bio') || c.includes('life') || c.includes('chem') || c.includes('lab'))) ||
-      (s.includes('psychology') && (c.includes('psych') || c.includes('cog') || c.includes('behav')));
   };
 
-  // Filtered Cards
-  const filteredCards = selectedSubject === 'ALL'
-    ? cards
-    : cards.filter((c) => matchSubject(c.course, selectedSubject));
+  // Delete Custom Bubble
+  const handleDeleteBubble = async (bubbleId, e) => {
+    e.stopPropagation();
+    if (!confirm('Delete this custom bubble?')) return;
+    try {
+      await api.deleteCustomBubble(bubbleId);
+      setCustomBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
+      if (activeBubble?.id === bubbleId) {
+        setActiveBubble(null);
+      }
+    } catch (e) {}
+  };
+
+  // Export EVERYTHING
+  const handleExportAllData = async () => {
+    try {
+      const data = await api.exportAllUserData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `helpotron_complete_user_export_${userId || 'student'}_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice('✅ Complete data archive exported successfully (100% of telemetry, prompts, assignments, and datalake records).');
+      setTimeout(() => setExportNotice(''), 4000);
+    } catch (e) {
+      setExportNotice('❌ Failed to export data.');
+    }
+  };
+
+  // Soft Reset (Restorable)
+  const handleSoftReset = async () => {
+    try {
+      await api.softResetData();
+      setShowSoftResetModal(false);
+      setExportNotice('✅ Local cached workspace and staging cleared. Account data safely archived on server.');
+      fetchDashboardData();
+      setTimeout(() => setExportNotice(''), 4000);
+    } catch (e) {
+      alert('Reset failed.');
+    }
+  };
+
+  // Permanent Delete Request (Legal / Cryptographic Wipe - 3+ business days)
+  const handlePermanentDelete = async (e) => {
+    e.preventDefault();
+    if (permDeleteConfirmText !== 'DELETE PERMANENTLY') {
+      alert('Please type "DELETE PERMANENTLY" exactly.');
+      return;
+    }
+    try {
+      const res = await api.permanentDeleteRequest({
+        reason: 'User requested legal/privacy erasure',
+        notify_email: permDeleteSendNotification ? permDeleteNotifyEmail : null,
+        notify_sms: permDeleteSendNotification ? permDeleteNotifyPhone : null,
+        confirmation_text: permDeleteConfirmText,
+      });
+      setPermDeleteStatus(res?.message || 'Purge request registered.');
+      setTimeout(() => {
+        setShowPermanentDeleteModal(false);
+        setPermDeleteStatus('');
+        setPermDeleteConfirmText('');
+      }, 4000);
+    } catch (e) {
+      alert('Failed to dispatch purge request.');
+    }
+  };
+
+  // Helper to match card to bubble
+  const matchCardToBubble = (card, bubble) => {
+    if (!bubble || bubble.id === 'all') return true;
+    const title = (bubble.title || '').toLowerCase();
+    const desc = (bubble.description || '').toLowerCase();
+    const cName = (card.course || '').toLowerCase();
+    const aTitle = (card.title || '').toLowerCase();
+
+    return cName.includes(title) || aTitle.includes(title) ||
+      (title.includes('math') && (cName.includes('math') || cName.includes('calc') || cName.includes('algebra'))) ||
+      (title.includes('english') && (cName.includes('eng') || cName.includes('lit') || cName.includes('writing') || cName.includes('essay'))) ||
+      (title.includes('history') && (cName.includes('hist') || cName.includes('social') || cName.includes('gov'))) ||
+      (title.includes('computer') && (cName.includes('cs') || cName.includes('code') || cName.includes('comp'))) ||
+      (title.includes('biology') && (cName.includes('bio') || cName.includes('life') || cName.includes('lab'))) ||
+      (title.includes('psychology') && (cName.includes('psych') || cName.includes('cog') || cName.includes('behav'))) ||
+      (desc.length > 5 && (cName.includes(desc.slice(0, 10)) || aTitle.includes(desc.slice(0, 10))));
+  };
+
+  const allBubblesList = [
+    { id: 'all', title: 'All Course Assignments', description: 'Universal view of all coursework across all subjects & modules', icon: '🌐', color: 'blue', is_all: true },
+    ...DEFAULT_SUBJECT_BUBBLES,
+    ...customBubbles.map((b) => ({ ...b, is_custom: true })),
+  ];
+
+  // Cards for active bubble
+  const currentBubbleCards = activeBubble
+    ? cards.filter((c) => matchCardToBubble(c, activeBubble))
+    : [];
 
   return (
     <div className="space-y-6">
       
-      {/* ─── 1. SIMULATOR & TELEMETRY HUB ────────────────────────────── */}
-      <div className="glass-panel border-cyan-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* ─── TOP CONTROL BAR (EXPORT ALL, RESET & PERMANENT DELETE) ───── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-950/60 border border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-            <span className="text-base">🧪</span>
+          {/* Dashboard Tab Selector */}
+          <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-white/5 text-xs font-semibold">
+            <button
+              onClick={() => {
+                setDashboardTab('bubbles');
+                setActiveBubble(null);
+              }}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                dashboardTab === 'bubbles' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🫧 Assignment Bubbles</span>
+            </button>
+            <button
+              onClick={() => setDashboardTab('history')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                dashboardTab === 'history' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <HistoryIcon className="w-3.5 h-3.5" />
+              <span>Assignment History</span>
+            </button>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-bold text-slate-100">Live Mock Activity Simulator</span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                simEnabled
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
-              }`}>
-                {simEnabled ? 'ACTIVE (Real-time telemetry)' : 'DISABLED'}
-              </span>
-            </div>
-            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-              Simulates course assignments, progressive sub-agent teams, and Gemini 3.7 Flash multimodal runs.
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={seedDemoData}
             disabled={simSeeding}
-            className="px-3.5 py-1.5 bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+            className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-semibold transition cursor-pointer"
           >
-            {simSeeding ? 'Seeding…' : '🔄 Seed Sample Courses'}
+            {simSeeding ? 'Seeding…' : '🔄 Refresh/Seed Data'}
+          </button>
+        </div>
+
+        {/* Global Data Actions */}
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            onClick={handleExportAllData}
+            className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl font-semibold transition cursor-pointer flex items-center gap-1.5"
+            title="Export full account archive: prompts, assignments, datalake, and messages"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export All Data</span>
           </button>
 
           <button
-            onClick={clearDemoData}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+            onClick={() => setShowSoftResetModal(true)}
+            className="px-2.5 py-1.5 bg-amber-600/15 hover:bg-amber-600/25 text-amber-300 border border-amber-500/25 rounded-xl font-semibold transition cursor-pointer"
+            title="Clear local active workspace cache"
           >
-            Clear Data
+            Clear Local Data
+          </button>
+
+          <button
+            onClick={() => setShowPermanentDeleteModal(true)}
+            className="px-2.5 py-1.5 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-500/30 rounded-xl font-semibold transition cursor-pointer flex items-center gap-1"
+            title="Permanent legal data wipe request (3+ business days)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete All Off Helpotron</span>
           </button>
         </div>
       </div>
 
-      {/* ─── 2. INTERACTIVE SUBJECT BOXES / CLUSTERS ─────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-blue-400" />
-            Curriculum Subject Hubs ({customSubjects.length})
-          </h3>
-          {selectedSubject !== 'ALL' && (
-            <button
-              onClick={() => setSelectedSubject('ALL')}
-              className="text-[11px] font-mono text-blue-400 hover:underline cursor-pointer"
-            >
-              Reset to All Subjects
-            </button>
-          )}
+      {exportNotice && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-mono">
+          {exportNotice}
         </div>
+      )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {/* ALL SUBJECTS CARD */}
-          <div
-            onClick={() => setSelectedSubject('ALL')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-              selectedSubject === 'ALL'
-                ? 'bg-blue-600/15 border-blue-500/50 shadow-lg ring-1 ring-blue-500/30'
-                : 'bg-slate-950/40 hover:bg-slate-900/60 border-white/10'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-lg">🌐</span>
-              <span className="text-[11px] font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                {cards.length} Total
-              </span>
+      {/* ─── TAB 1: ASSIGNMENT BUBBLES VIEW ──────────────────────────── */}
+      {dashboardTab === 'bubbles' && (
+        <>
+          {/* LEVEL 1: BUBBLE GRID (NO ASSIGNMENTS SHOWN BY DEFAULT) */}
+          {!activeBubble ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-400" />
+                    Curriculum Assignment Bubbles ({allBubblesList.length})
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Click any bubble to enter its workspace and view organized assignments and sub-agent teams.
+                  </p>
+                </div>
+
+                {/* + Button for Custom Bubble */}
+                <button
+                  onClick={() => setIsCreatingBubble(true)}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Custom Bubble</span>
+                </button>
+              </div>
+
+              {/* Create Custom Bubble Modal */}
+              {isCreatingBubble && (
+                <div className="p-5 rounded-2xl bg-slate-950/90 border border-blue-500/40 space-y-3.5 text-xs animate-fadeIn shadow-2xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                      <span>🫧</span> Add a New Custom Assignment Bubble
+                    </h3>
+                    <button
+                      onClick={() => setIsCreatingBubble(false)}
+                      className="text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateBubble} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Bubble Title (e.g. Dr. Miller Lab Reports, Exam 2 Prep)..."
+                        value={newBubbleTitle}
+                        onChange={(e) => setNewBubbleTitle(e.target.value)}
+                        className="sm:col-span-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white placeholder:text-slate-600"
+                      />
+                      <select
+                        value={newBubbleIcon}
+                        onChange={(e) => setNewBubbleIcon(e.target.value)}
+                        className="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                      >
+                        <option value="🫧">🫧 Bubble</option>
+                        <option value="🔬">🔬 Lab Science</option>
+                        <option value="📚">📚 Exam Prep</option>
+                        <option value="📝">📝 Term Papers</option>
+                        <option value="🎯">🎯 Milestone</option>
+                      </select>
+                    </div>
+
+                    <textarea
+                      rows={2}
+                      placeholder="Describe what goes inside this bubble so AI auto-organizes your scraped assignments into it..."
+                      value={newBubbleDesc}
+                      onChange={(e) => setNewBubbleDesc(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white placeholder:text-slate-600"
+                    />
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingBubble(false)}
+                        className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!newBubbleTitle.trim() || !newBubbleDesc.trim()}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl font-semibold cursor-pointer"
+                      >
+                        Save Bubble
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Bubble Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {allBubblesList.map((bubble) => {
+                  const count = bubble.id === 'all'
+                    ? cards.length
+                    : cards.filter((c) => matchCardToBubble(c, bubble)).length;
+
+                  return (
+                    <div
+                      key={bubble.id}
+                      onClick={() => setActiveBubble(bubble)}
+                      className="group p-5 rounded-3xl bg-slate-950/60 hover:bg-slate-900/80 border border-white/10 hover:border-blue-500/40 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 hover:shadow-xl hover:-translate-y-0.5 relative overflow-hidden"
+                    >
+                      {/* Top Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl">
+                          {bubble.icon || '🫧'}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                            {count} Assignment{count === 1 ? '' : 's'}
+                          </span>
+
+                          {/* - Button for Custom Bubbles */}
+                          {bubble.is_custom && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteBubble(bubble.id, e)}
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                              title="Delete custom bubble"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div>
+                        <div className="font-bold text-sm text-white group-hover:text-blue-300 transition-colors flex items-center gap-1.5">
+                          <span>{bubble.title}</span>
+                          {bubble.is_custom && (
+                            <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-mono">
+                              Custom
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                          {bubble.description}
+                        </p>
+                      </div>
+
+                      {/* Footer Info */}
+                      <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <Bot className="w-3.5 h-3.5" /> {count > 0 ? `${count} Teams Active` : 'Idle'}
+                        </span>
+                        <span className="text-blue-400 group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                          Open Bubble <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="mt-2">
-              <div className="font-bold text-xs text-white">All Subjects</div>
-              <div className="text-[10px] text-slate-400 truncate mt-0.5">Complete course overview</div>
+          ) : (
+            /* LEVEL 2: ACTIVE BUBBLE WORKSPACE VIEW (ASSIGNMENTS ONLY VISIBLE HERE) */
+            <div className="space-y-5 animate-fadeIn">
+              {/* Back Bar & Bubble Info */}
+              <div className="p-5 rounded-3xl bg-slate-950/70 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveBubble(null)}
+                    className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-white/10 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-blue-400" />
+                    <span>Back to All Bubbles</span>
+                  </button>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{activeBubble.icon || '🫧'}</span>
+                      <h2 className="text-base font-bold text-white">{activeBubble.title}</h2>
+                      <span className="text-xs font-mono bg-blue-500/15 text-blue-300 border border-blue-500/25 px-2 py-0.5 rounded-full">
+                        {currentBubbleCards.length} Assignments
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{activeBubble.description}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl">
+                    🤖 Sub-Agent Teams Synchronized
+                  </span>
+                </div>
+              </div>
+
+              {/* Assignments Inside Active Bubble */}
+              {currentBubbleCards.length === 0 ? (
+                <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+                  <span className="text-4xl">🫧</span>
+                  <h3 className="text-base font-semibold text-slate-200 mt-2">
+                    No assignments currently inside &quot;{activeBubble.title}&quot;
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Scraped assignments matching this bubble&apos;s description will be automatically organized here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {currentBubbleCards.map((card) => {
+                    const hasVideoOrMedia = (card.title || '').toLowerCase().includes('video') ||
+                      (card.title || '').toLowerCase().includes('lecture') ||
+                      (card.title || '').toLowerCase().includes('presentation') ||
+                      (card.course || '').toLowerCase().includes('biology');
+
+                    return (
+                      <div key={card.id} className="relative group">
+                        <AssignmentCard
+                          id={card.id}
+                          title={card.title}
+                          course={card.course}
+                          dueDate={card.due_date}
+                          status={card.status}
+                          urgency={card.urgency}
+                          detectorRisk={card.detector_risk}
+                          teacherName={card.teacher_name}
+                          onSelect={() => {
+                            if (onSelectAssignment) onSelectAssignment(card.id);
+                            else setSelectedCardId(card.id);
+                          }}
+                        />
+
+                        {/* Gemini 3.7 Flash Multimodal Attachment */}
+                        {hasVideoOrMedia && (
+                          <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono pointer-events-none">
+                            <Video className="w-3 h-3 text-indigo-400" />
+                            <span>Gemini 3.7 Flash</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ─── TAB 2: ASSIGNMENT HISTORY SECTION ──────────────────────── */}
+      {dashboardTab === 'history' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <HistoryIcon className="w-5 h-5 text-blue-400" />
+                Assignment Archive & Historical Submissions
+              </h2>
+              <p className="text-xs text-slate-400">
+                Permanent chronological record of all completed, verified, and submitted assignments.
+              </p>
+            </div>
+
+            {/* Filter & Search */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search history by title..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-600"
+              />
+              <select
+                value={historySubjectFilter}
+                onChange={(e) => setHistorySubjectFilter(e.target.value)}
+                className="bg-slate-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white"
+              >
+                <option value="ALL">All Subjects</option>
+                <option value="Math">Mathematics</option>
+                <option value="English">English</option>
+                <option value="History">History</option>
+                <option value="CS">Computer Science</option>
+              </select>
             </div>
           </div>
 
-          {/* INDIVIDUAL SUBJECT BOXES */}
-          {customSubjects.map((subj) => {
-            const count = cards.filter((c) => matchSubject(c.course, subj.name)).length;
-            const isSelected = selectedSubject === subj.name;
+          {/* History List Table */}
+          {historyLoading ? (
+            <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment archive…</div>
+          ) : historyList.length === 0 ? (
+            <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+              <Archive className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+              <h3 className="text-sm font-semibold text-slate-300">No historical assignments found</h3>
+              <p className="text-xs text-slate-500 mt-1">Completed assignments will automatically populate here.</p>
+            </div>
+          ) : (
+            <div className="clean-card rounded-2xl overflow-hidden border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 border-b border-white/10 text-slate-400 font-mono">
+                  <tr>
+                    <th className="p-3.5">Assignment Title</th>
+                    <th className="p-3.5">Subject / Course</th>
+                    <th className="p-3.5">Instructor</th>
+                    <th className="p-3.5">Grade</th>
+                    <th className="p-3.5">AI Evasion</th>
+                    <th className="p-3.5">Date Completed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {historyList
+                    .filter((h) => !historySearch || h.title.toLowerCase().includes(historySearch.toLowerCase()))
+                    .map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-900/40 transition">
+                        <td className="p-3.5 font-semibold text-white">{item.title}</td>
+                        <td className="p-3.5 text-slate-300">{item.course}</td>
+                        <td className="p-3.5 text-slate-400">{item.teacher_name}</td>
+                        <td className="p-3.5 font-mono text-blue-400 font-bold">{item.grade_letter} ({item.score_predicted}%)</td>
+                        <td className="p-3.5 font-mono text-emerald-400">{(item.detector_score * 100).toFixed(0)}% AI Risk</td>
+                        <td className="p-3.5 text-slate-400 font-mono">{item.completed_at}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
-            return (
-              <div
-                key={subj.id || subj.name}
-                onClick={() => setSelectedSubject(isSelected ? 'ALL' : subj.name)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between relative group ${
-                  isSelected
-                    ? 'bg-blue-600/20 border-blue-500/60 shadow-lg ring-1 ring-blue-500/40'
-                    : 'bg-slate-950/40 hover:bg-slate-900/60 border-white/10'
-                }`}
+      {/* ─── MODAL: SOFT RESET (RESTORABLE) ──────────────────────────── */}
+      {showSoftResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+          <div className="clean-card rounded-3xl w-full max-w-md p-6 space-y-4 border border-amber-500/30 text-xs">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-amber-400" />
+              Clear Local Workspace Cache
+            </h3>
+            <p className="text-slate-300 leading-relaxed">
+              This resets your in-memory active assignment cards and staging views to a clean slate. Your permanent account profile and server data are preserved and can be restored anytime.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowSoftResetModal(false)}
+                className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl cursor-pointer"
               >
-                <div className="flex items-start justify-between gap-1">
-                  <span className="text-lg">{subj.icon || '📚'}</span>
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                    count > 0 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'
-                  }`}>
-                    {count} Active
-                  </span>
-                </div>
+                Cancel
+              </button>
+              <button
+                onClick={handleSoftReset}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl cursor-pointer"
+              >
+                Confirm Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="mt-2">
-                  <div className="font-bold text-xs text-white flex items-center justify-between">
-                    <span className="truncate">{subj.name}</span>
-                    {subj.is_custom && (
-                      <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 rounded font-mono">
-                        Custom
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
-                    {subj.description}
-                  </div>
-                </div>
+      {/* ─── MODAL: PERMANENT DATA DELETION OFF HELPOTRON (LEGAL WIPE) ── */}
+      {showPermanentDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="clean-card rounded-3xl w-full max-w-lg p-6 space-y-4 border border-rose-500/40 text-xs shadow-2xl">
+            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-sm">
+              <ShieldAlert className="w-5 h-5" />
+              <span>Permanent Legal & Privacy Data Erasure Request</span>
+            </div>
 
-                {/* Sub-agent Team Indicator */}
-                {count > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-slate-400">
-                    <span className="flex items-center gap-1 text-blue-300">
-                      <Bot className="w-3 h-3 text-blue-400" /> {count} Teams Working
-                    </span>
-                    <span className="flex items-center gap-1 text-purple-300">
-                      <Sparkles className="w-3 h-3 text-purple-400" /> Humanized
-                    </span>
+            {/* Crucial Warning Box */}
+            <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-200 space-y-2 leading-relaxed">
+              <p className="font-bold">⚠️ CRITICAL LEGAL & PRIVACY WARNING:</p>
+              <p>
+                Permanent deletion <strong>CANNOT BE RESTORED</strong> under any circumstances. Per legal & privacy compliance, this dispatches a cryptographic purge request to system administrators to permanently delete all server databases, training cache records, encrypted backups, and audit logs.
+              </p>
+              <p className="text-[11px] text-amber-300 font-mono pt-1">
+                ⏳ Notice: Full permanent data deletion across off-site backup cold storage may take <strong>3+ business days</strong> to complete.
+              </p>
+            </div>
+
+            <form onSubmit={handlePermanentDelete} className="space-y-3 pt-1">
+              {/* Notification Preference */}
+              <div className="space-y-2 p-3 rounded-xl bg-slate-950/60 border border-white/5">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-200 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={permDeleteSendNotification}
+                    onChange={(e) => setPermDeleteSendNotification(e.target.checked)}
+                    className="rounded accent-rose-500"
+                  />
+                  <span>Send notification when data is completely deleted</span>
+                </label>
+
+                {permDeleteSendNotification && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                    <input
+                      type="email"
+                      placeholder="Notification Email..."
+                      value={permDeleteNotifyEmail}
+                      onChange={(e) => setPermDeleteNotifyEmail(e.target.value)}
+                      className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="SMS Phone Number (Optional)..."
+                      value={permDeleteNotifyPhone}
+                      onChange={(e) => setPermDeleteNotifyPhone(e.target.value)}
+                      className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white"
+                    />
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* ─── 3. ASSIGNMENT CARDS GRID ────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400">
-              Active Assignment Workspaces {selectedSubject !== 'ALL' && `(${selectedSubject})`}
-            </h3>
-            <span className="text-[10px] font-mono bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">
-              {filteredCards.length} Cards
-            </span>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment workspaces…</div>
-        ) : filteredCards.length === 0 ? (
-          <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
-            <span className="text-4xl">📚</span>
-            <h3 className="text-base font-semibold text-slate-200 mt-2">
-              No assignments found for {selectedSubject === 'ALL' ? 'current courses' : selectedSubject}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Click &quot;Seed Sample Courses&quot; above to simulate realistic student coursework with sub-agent teams.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCards.map((card) => {
-              const hasVideoOrMedia = card.title?.toLowerCase().includes('video') ||
-                card.title?.toLowerCase().includes('lecture') ||
-                card.title?.toLowerCase().includes('presentation') ||
-                card.course?.toLowerCase().includes('biology');
-
-              return (
-                <div key={card.id} className="relative group">
-                  <AssignmentCard
-                    id={card.id}
-                    title={card.title}
-                    course={card.course}
-                    dueDate={card.due_date}
-                    status={card.status}
-                    urgency={card.urgency}
-                    detectorRisk={card.detector_risk}
-                    teacherName={card.teacher_name}
-                    onSelect={openFullView}
-                  />
-
-                  {/* Gemini 3.7 Flash Multimodal Team Indicator */}
-                  {hasVideoOrMedia && (
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono pointer-events-none">
-                      <Video className="w-3 h-3 text-indigo-400" />
-                      <span>Gemini 3.7 Flash</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ─── 4. FULL VIEW MODAL WITH SUB-AGENT TEAMS ─────────────────── */}
-      {selectedCardId && fullViewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="clean-card rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-6 border border-white/10 shadow-2xl">
-            {/* Header */}
-            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              {/* Confirmation Text Requirement */}
               <div>
-                <span className="text-xs font-mono uppercase text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20">
-                  {fullViewData.course || 'Course Work'}
-                </span>
-                <h2 className="text-xl font-bold text-white mt-2">{fullViewData.title}</h2>
-                <div className="flex gap-4 text-xs text-slate-400 font-mono mt-1">
-                  <span>Instructor: {fullViewData.teacher_name || 'Prof. Department'}</span>
-                  <span>Due: {fullViewData.due_date || 'Upcoming'}</span>
-                  <span>Target Grade: <strong className="text-blue-400">A (92%)</strong></span>
-                </div>
+                <label className="text-slate-400 block mb-1">
+                  Type <strong className="text-rose-400 font-mono">DELETE PERMANENTLY</strong> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={permDeleteConfirmText}
+                  onChange={(e) => setPermDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE PERMANENTLY"
+                  className="w-full bg-slate-900 border border-rose-500/40 rounded-xl px-3 py-2 text-white font-mono"
+                />
               </div>
-              <button
-                onClick={() => {
-                  setSelectedCardId(null);
-                  setFullViewData(null);
-                }}
-                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            {/* Sub-Agent Team Bubble Display */}
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-3">
-              <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-blue-400" />
-                Active Sub-Agent Bubble Team
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <div className="p-3 rounded-xl bg-slate-900 border border-blue-500/20">
-                  <div className="font-bold text-white">📑 Research Lead</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Syllabus & Lecture Mining</div>
-                  <div className="text-[10px] text-emerald-400 font-mono mt-2">Active</div>
+              {permDeleteStatus && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 font-mono">
+                  {permDeleteStatus}
                 </div>
+              )}
 
-                <div className="p-3 rounded-xl bg-slate-900 border border-purple-500/20">
-                  <div className="font-bold text-white">📋 Rubric Auditor</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">HelpSteer Compliance</div>
-                  <div className="text-[10px] text-emerald-400 font-mono mt-2">Verified (95%)</div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/20">
-                  <div className="font-bold text-white">🛡️ Humanizer Specialist</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Cadence & Evasion</div>
-                  <div className="text-[10px] text-emerald-400 font-mono mt-2">0% AI Score</div>
-                </div>
-
-                {/* Gemini 3.7 Flash Multimodal Team Specialist */}
-                <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30">
-                  <div className="font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Gemini 3.7 Flash</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Multimodal Video & Vision</div>
-                  <div className="text-[10px] text-indigo-400 font-mono mt-2">Spawned in Bubble</div>
-                </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowPermanentDeleteModal(false)}
+                  className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={permDeleteConfirmText !== 'DELETE PERMANENTLY'}
+                  className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-30 text-white font-semibold rounded-xl cursor-pointer"
+                >
+                  Dispatch Purge Request
+                </button>
               </div>
-            </div>
-
-            {/* Rubric Breakdown */}
-            {fullViewData.rubric_breakdown && (
-              <div className="space-y-3">
-                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400">Institutional Rubric Criteria</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  {fullViewData.rubric_breakdown.map((r, i) => (
-                    <div key={i} className="p-3 rounded-xl bg-slate-950/40 border border-white/5 space-y-1">
-                      <div className="flex justify-between font-bold text-slate-200">
-                        <span>{r.criterion}</span>
-                        <span className="text-cyan-400 font-mono">{r.points} pts</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">{r.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            </form>
           </div>
         </div>
       )}
