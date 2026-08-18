@@ -38,45 +38,45 @@ import {
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
-  const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-mono font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
+  const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-medium transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
   const variants = {
-    primary: 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-md shadow-cyan-500/20 font-bold',
-    outline: 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20',
+    primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/20 font-semibold',
+    outline: 'border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20',
     ghost: 'text-slate-400 hover:text-white hover:bg-white/5',
-    danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20',
+    danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-600/20',
   };
   return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
 };
 
 const Card = ({ className = '', children }) => (
-  <div className={`glass-panel rounded-2xl p-5 border border-white/10 text-slate-100 ${className}`}>{children}</div>
+  <div className={`clean-card p-5 text-slate-100 ${className}`}>{children}</div>
 );
 
 const Badge = ({ color = 'slate', children }) => {
   const colors = {
-    slate: 'bg-white/10 text-slate-300 border border-white/10',
+    slate: 'bg-white/5 text-slate-300 border border-white/10',
     green: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30',
-    blue: 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30',
+    blue: 'bg-blue-500/10 text-blue-300 border border-blue-500/30',
     amber: 'bg-amber-500/10 text-amber-300 border border-amber-500/30',
     red: 'bg-rose-500/10 text-rose-300 border border-rose-500/30',
     purple: 'bg-purple-500/10 text-purple-300 border border-purple-500/30',
   };
-  return <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-mono font-medium ${colors[color] || colors.slate}`}>{children}</span>;
+  return <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium ${colors[color] || colors.slate}`}>{children}</span>;
 };
 
 const Progress = ({ value, className = '' }) => (
-  <div className={`h-2 w-full overflow-hidden rounded-full bg-black/50 border border-white/5 ${className}`}>
-    <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all duration-300" style={{ width: `${Math.min(100, value)}%` }} />
+  <div className={`h-2 w-full overflow-hidden rounded-full bg-slate-950 border border-white/5 ${className}`}>
+    <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300" style={{ width: `${Math.min(100, value)}%` }} />
   </div>
 );
 
 const statusBadge = (status) => ({
-  tracked: <Badge color="slate">tracked</Badge>,
-  transcribed: <Badge color="blue">transcribed</Badge>,
-  materials_ready: <Badge color="green">ready</Badge>,
-  draft_ready: <Badge color="green">draft ready</Badge>,
-  draft_risky: <Badge color="red">risky</Badge>,
-  completed: <Badge color="green">✅ completed</Badge>,
+  tracked: <Badge color="slate">Tracked</Badge>,
+  transcribed: <Badge color="blue">Transcribed</Badge>,
+  materials_ready: <Badge color="green">Ready</Badge>,
+  draft_ready: <Badge color="green">Draft Ready</Badge>,
+  draft_risky: <Badge color="red">Review Needed</Badge>,
+  completed: <Badge color="green">Completed</Badge>,
 }[status] ?? <Badge>{status}</Badge>);
 
 class ErrorBoundary extends React.Component {
@@ -93,16 +93,16 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-lg w-full p-8 text-center space-y-4 shadow-2xl">
-            <div className="w-14 h-14 rounded-2xl bg-rose-600/20 text-rose-400 text-3xl font-bold flex items-center justify-center mx-auto">
+        <div className="min-h-screen bg-[#090d16] text-white flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-3xl max-w-lg w-full p-8 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
               ⚠️
             </div>
-            <h2 className="text-xl font-bold">Something went wrong</h2>
+            <h2 className="text-lg font-semibold">Something went wrong</h2>
             <p className="text-xs text-slate-400">
               An unexpected error occurred during rendering. You can reset session state below.
             </p>
-            <div className="p-3 bg-slate-950 rounded-xl text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32">
+            <div className="p-3 bg-slate-950/80 rounded-xl text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-white/5">
               {this.state.error?.message || 'Unknown runtime error'}
             </div>
             <button
@@ -111,9 +111,9 @@ class ErrorBoundary extends React.Component {
                 try { localStorage.clear(); } catch (e) {}
                 window.location.reload();
               }}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-xs transition cursor-pointer"
             >
-              🔄 Reset App Cache & Reload
+              Reset Session Cache & Reload
             </button>
           </div>
         </div>
@@ -250,24 +250,24 @@ export default function App() {
 
   // Nav Items for Collapsible Side Menu
   const menuItems = [
-    { key: 'assignments', label: 'Assignments Hub', icon: ClipboardList, badge: null },
-    { key: 'overview', label: 'Activity Overview', icon: Eye, badge: null },
-    { key: 'analytics', label: 'Data Lake & Telemetry', icon: TrendingUp, badge: null },
+    { key: 'assignments', label: 'Assignments', icon: ClipboardList, badge: null },
+    { key: 'overview', label: 'Overview', icon: Eye, badge: null },
+    { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'groups', label: 'Study Groups', icon: Users, badge: null },
-    { key: 'referral', label: 'Referral Program', icon: Award, badge: '+50 cr' },
-    { key: 'billing', label: 'Pricing & Compute', icon: CreditCard, badge: null },
-    { key: 'settings', label: 'Workspace Settings', icon: SettingsIcon, badge: null },
+    { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
+    { key: 'billing', label: 'Plans & Credits', icon: CreditCard, badge: null },
+    { key: 'settings', label: 'Settings', icon: SettingsIcon, badge: null },
   ];
 
   if (isAdmin) {
-    menuItems.push({ key: 'admin', label: 'Admin Infrastructure', icon: ShieldAlert, badge: 'ADMIN' });
+    menuItems.push({ key: 'admin', label: 'Admin Panel', icon: ShieldAlert, badge: 'ADMIN' });
   }
 
   const currentItem = menuItems.find((m) => m.key === activeView) || menuItems[0];
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+      <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
         
         {/* Privacy Policy Modal Overlay */}
         <PrivacyPolicyModal
@@ -292,19 +292,19 @@ export default function App() {
 
         {/* Guest Warning Banner */}
         {isGuest && (
-          <div className="bg-amber-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-amber-400/40">
+          <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-base">👁️</span>
+              <span>👁️</span>
               <span>
-                GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows.
+                <strong>Guest Mode:</strong> You are exploring simulated courses and workflows.
               </span>
             </div>
             <button
               type="button"
               onClick={() => setAuthModalOpen(true)}
-              className="px-3 py-1 bg-slate-950 text-amber-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-amber-400/30 transition cursor-pointer"
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg text-xs transition cursor-pointer"
             >
-              Sign In or Create Account →
+              Sign In or Register →
             </button>
           </div>
         )}
@@ -315,17 +315,17 @@ export default function App() {
           const pct = (credits / planLimit) * 100;
           if (pct < 15) {
             return (
-              <div className="bg-rose-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-rose-400/40">
+              <div className="bg-rose-500/15 border-b border-rose-500/30 text-rose-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-base">⚠️</span>
+                  <span>⚠️</span>
                   <span>
-                    LOW CREDIT WARNING: You have {Math.floor(credits)} credits remaining.
+                    <strong>Low Credit Balance:</strong> You have {Math.floor(credits)} credits remaining.
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleSelectView('billing')}
-                  className="px-3 py-1 bg-slate-950 text-rose-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-rose-400/30 transition cursor-pointer"
+                  className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition cursor-pointer"
                 >
                   Upgrade / Top Up →
                 </button>
@@ -335,10 +335,8 @@ export default function App() {
           return null;
         })()}
 
-        {/* Futuristic HUD Navbar */}
+        {/* Modern SaaS Navbar */}
         <Navbar
-          activeAgent="Overlord Orchestrator"
-          systemHealth={connected ? "Nominal (100%)" : "Degraded"}
           isLoggedIn={isLoggedIn}
           isGuest={isGuest}
           user={{ credits, public_id: userId }}
@@ -351,34 +349,33 @@ export default function App() {
 
         {!connected && (
           <div className="max-w-7xl mx-auto px-6 mb-4">
-            <div className="glass-panel border-rose-500/40 bg-rose-950/40 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono">
+            <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono">
               ⚠️ Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
             </div>
           </div>
         )}
 
-        {/* ─── Main Workspace: Collapsible Side Menu + Dynamic Full-Page View + Overlord Side-dock ────────── */}
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pb-16 flex gap-6 items-start relative">
+        {/* ─── Main Workspace: Collapsible Side Menu + Dynamic Full-Page View + Assistant Side-dock ────────── */}
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pb-16 pt-6 flex gap-6 items-start relative">
           
-          {/* ─── SLEEK 3-LINE VERTICAL COLLAPSIBLE SIDE MENU ─── */}
-          <aside className={`shrink-0 transition-all duration-300 sticky top-24 z-30 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
-            <div className="glass-panel rounded-2xl border border-white/10 bg-slate-950/70 backdrop-blur-xl p-3 flex flex-col justify-between min-h-[560px] shadow-2xl">
+          {/* ─── COLLAPSIBLE SIDE MENU WITH 3-LINE VERTICAL BUTTON ─── */}
+          <aside className={`shrink-0 transition-all duration-300 sticky top-24 z-30 ${sidebarOpen ? 'w-60' : 'w-16'}`}>
+            <div className="clean-card p-3 flex flex-col justify-between min-h-[520px] shadow-lg">
               
               {/* Top Header with 3-Line Vertical Icon Button */}
               <div>
-                <div className="flex items-center justify-between px-2 py-2 mb-3 border-b border-white/5">
+                <div className="flex items-center justify-between px-2 py-2 mb-2 border-b border-white/5">
                   {sidebarOpen && (
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                      Navigation
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Menu
                     </span>
                   )}
                   <button
                     type="button"
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     aria-label="Toggle Side Menu"
-                    className="p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition flex items-center justify-center cursor-pointer min-w-[36px] min-h-[36px]"
+                    className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/5 transition flex items-center justify-center cursor-pointer min-w-[32px] min-h-[32px]"
                   >
-                    {/* Clean 3-Line Vertical Design */}
                     <div className="flex flex-col gap-1 items-center justify-center w-4 h-4">
                       <span className="w-3.5 h-0.5 bg-current rounded-full transition-all" />
                       <span className="w-3.5 h-0.5 bg-current rounded-full transition-all" />
@@ -388,7 +385,7 @@ export default function App() {
                 </div>
 
                 {/* Vertical Menu Navigation Options */}
-                <nav className="space-y-1 font-mono text-xs">
+                <nav className="space-y-1 text-xs">
                   {menuItems.map((item) => {
                     const Icon = item.icon;
                     const isSelected = activeView === item.key;
@@ -401,16 +398,16 @@ export default function App() {
                         aria-pressed={isSelected}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition cursor-pointer select-none ${
                           isSelected
-                            ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 font-bold shadow-sm shadow-cyan-500/10'
+                            ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30 font-medium'
                             : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
                         } ${!sidebarOpen ? 'justify-center px-2' : ''}`}
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-blue-400' : 'text-slate-400'}`} />
                         {sidebarOpen && (
                           <div className="flex-1 flex items-center justify-between truncate text-left">
                             <span className="truncate">{item.label}</span>
                             {item.badge && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/20 font-mono">
                                 {item.badge}
                               </span>
                             )}
@@ -424,13 +421,13 @@ export default function App() {
 
               {/* Bottom Quick Status in Side Menu */}
               {sidebarOpen && (
-                <div className="p-3 rounded-xl bg-black/40 border border-white/5 font-mono text-[11px] space-y-1">
-                  <div className="text-slate-500 uppercase text-[9px]">Active Engine</div>
-                  <div className="text-slate-200 font-bold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Overlord Autonomous
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-[11px] space-y-1">
+                  <div className="text-slate-400 text-[10px]">Assistant Status</div>
+                  <div className="text-slate-200 font-medium flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Ready & Online
                   </div>
-                  <div className="text-cyan-400 text-[10px] mt-1">{Number(credits).toLocaleString()} Compute Credits</div>
+                  <div className="text-blue-400 text-[11px] mt-1 font-mono">{Number(credits).toLocaleString()} Credits</div>
                 </div>
               )}
             </div>
@@ -439,29 +436,29 @@ export default function App() {
           {/* ─── DYNAMIC FULL-PAGE VIEW CONTAINER ─── */}
           <main className="flex-1 min-w-0 w-full">
             {/* View Header Title Banner */}
-            <div className="mb-6 glass-panel rounded-2xl px-6 py-4 border border-white/10 flex items-center justify-between bg-slate-950/40">
+            <div className="mb-6 clean-card px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
                   <currentItem.icon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h1 className="text-base font-bold font-mono text-white tracking-wide">{currentItem.label}</h1>
-                  <p className="text-xs text-slate-400 font-mono">
-                    {activeView === 'assignments' && 'Manage course assignments, rubrics, and launch targeted study tools'}
-                    {activeView === 'overview' && 'High-level course progress, study streak telemetry, and recent synthesis'}
-                    {activeView === 'analytics' && 'Real-time telemetry, model performance metrics, and study time logs'}
-                    {activeView === 'groups' && 'Collaborative study pools and synchronized peer course material'}
-                    {activeView === 'referral' && 'Invite classmates to earn task-based compute credits'}
-                    {activeView === 'billing' && 'Transparent task-based credit packages and ledger history'}
-                    {activeView === 'settings' && 'Writing persona matrices, anti-detector configurations, and GDPR data export'}
-                    {activeView === 'admin' && 'Infrastructure cluster health, telemetry ledger, and user management'}
+                  <h1 className="text-base font-semibold text-white">{currentItem.label}</h1>
+                  <p className="text-xs text-slate-400">
+                    {activeView === 'assignments' && 'Manage course assignments, view rubrics, and launch targeted study tools'}
+                    {activeView === 'overview' && 'High-level course progress, study streak tracking, and recent activity'}
+                    {activeView === 'analytics' && 'Study time logs, accuracy trends, and review consistency'}
+                    {activeView === 'groups' && 'Collaborative study pools and shared notes'}
+                    {activeView === 'referral' && 'Invite classmates and earn study credits'}
+                    {activeView === 'billing' && 'Task-based credit packages and billing history'}
+                    {activeView === 'settings' && 'Study preferences, writing personas, and data export'}
+                    {activeView === 'admin' && 'System overview, user administration, and content stats'}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Render ONLY the Active View */}
-            <div className="transition-opacity duration-200">
+            <div>
               {activeView === 'assignments' && (
                 openAssignment ? (
                   <AssignmentDetailView
@@ -531,14 +528,11 @@ export default function App() {
             </div>
           </main>
 
-          {/* ─── PERSISTENT OVERLORD SIDE-DOCK PANEL ─── */}
-          <div className={`transition-all duration-300 shrink-0 sticky top-24 ${buddyOpen ? 'w-full lg:w-96' : 'w-12'}`}>
+          {/* ─── PERSISTENT STUDY ASSISTANT PANEL ─── */}
+          <div className={`transition-all duration-300 shrink-0 sticky top-24 ${buddyOpen ? 'w-full lg:w-96' : 'w-10'}`}>
             <StudyBuddyPanel
               open={buddyOpen}
               setOpen={setBuddyOpen}
-              onGenerateAction={(kind, query) => {
-                handleSelectView('assignments');
-              }}
             />
           </div>
         </div>
@@ -563,9 +557,9 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
     api.dashboard(userId).then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) return <Card className="text-center text-xs font-mono text-cyan-400 py-8">Loading Neural Activity Overview…</Card>;
-  if (error) return <Card className="text-rose-400 font-mono text-xs">{error}</Card>;
-  if (!data) return <Card className="text-slate-400 font-mono text-xs">No active study data found.</Card>;
+  if (loading) return <Card className="text-center text-xs text-blue-400 py-8">Loading Overview…</Card>;
+  if (error) return <Card className="text-rose-400 text-xs">{error}</Card>;
+  if (!data) return <Card className="text-slate-400 text-xs">No active study data found.</Card>;
 
   const active = data.assignments ? data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'completed').length : 0;
 
@@ -573,31 +567,31 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
     <div className="space-y-6">
       {/* Top Quick Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
+        <div className="clean-card p-5">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span>Due Assignments</span>
-            <ClipboardList className="w-4 h-4 text-cyan-400" />
+            <ClipboardList className="w-4 h-4 text-blue-400" />
           </div>
-          <div className="text-2xl font-bold font-mono text-white">{active}</div>
-          <div className="text-[11px] font-mono text-slate-400 mt-1">Pending student tasks</div>
+          <div className="text-2xl font-bold text-white">{active}</div>
+          <div className="text-[11px] text-slate-400 mt-1">Pending tasks</div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
-            <span>Active Study Streak</span>
+        <div className="clean-card p-5">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span>Study Streak</span>
             <Flame className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-bold font-mono text-amber-300">12 Days</div>
-          <div className="text-[11px] font-mono text-emerald-400 mt-1">Top 5% of active learners</div>
+          <div className="text-2xl font-bold text-amber-300">12 Days</div>
+          <div className="text-[11px] text-emerald-400 mt-1">Top 5% of active learners</div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
-            <span>Compute Tier</span>
+        <div className="clean-card p-5">
+          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <span>Active Plan</span>
             <Sparkles className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-2xl font-bold font-mono text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
-          <div className="text-[11px] font-mono text-cyan-300 mt-1">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
+          <div className="text-2xl font-bold text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
+          <div className="text-[11px] text-blue-300 mt-1 font-mono">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
         </div>
       </div>
 
@@ -605,16 +599,16 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-sm text-white font-mono flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-cyan-400" />
-              Active Course Assignments ({data.assignments?.length || 0})
+            <h2 className="font-semibold text-sm text-white flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-blue-400" />
+              Active Assignments ({data.assignments?.length || 0})
             </h2>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">Click any assignment card to view rubrics & study tools</p>
+            <p className="text-xs text-slate-400 mt-0.5">Click any assignment card to view rubrics & study tools</p>
           </div>
         </div>
 
         {!data.assignments || data.assignments.length === 0 ? (
-          <p className="text-xs text-slate-500 font-mono py-4">No tracked assignments yet.</p>
+          <p className="text-xs text-slate-500 py-4">No tracked assignments yet.</p>
         ) : (
           <div className="space-y-3">
             {data.assignments.map((a) => {
@@ -623,22 +617,22 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
                 <div
                   key={a.id}
                   onClick={() => onSelectAssignment && onSelectAssignment(a)}
-                  className="glass-panel rounded-xl p-4 border border-white/5 hover:border-cyan-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/30"
+                  className="clean-card p-4 hover:border-blue-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-white">{a.title}</span>
                       {statusBadge(a.status)}
                     </div>
-                    <div className="flex items-center gap-3 text-xs font-mono text-slate-400 mt-1.5">
+                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-1.5">
                       <span>Course: <strong className="text-slate-300">{a.course || a.subject || 'GEN-101'}</strong></span>
                       <span>·</span>
-                      <span>Due: <strong className="text-amber-300">{a.due_date || 'Aug 24'}</strong></span>
+                      <span>Due: <strong className="text-amber-300">{a.due_date || 'Upcoming'}</strong></span>
                     </div>
                     <Progress value={(done / 5) * 100} className="max-w-64 mt-2" />
                   </div>
-                  <div className="flex items-center gap-2 font-mono text-xs text-cyan-400 shrink-0">
-                    <span>Inspect Assignment</span>
+                  <div className="flex items-center gap-1.5 text-xs text-blue-400 font-medium shrink-0">
+                    <span>Inspect</span>
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
@@ -702,75 +696,74 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
   return (
     <div className="max-w-3xl space-y-6">
       {/* Extended User Preferences Card */}
-      <div className="glass-panel rounded-2xl p-5 border border-cyan-500/30 bg-gradient-to-r from-cyan-950/20 to-indigo-950/20">
+      <div className="clean-card p-5 border border-blue-500/20 bg-gradient-to-r from-blue-950/20 to-indigo-950/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold text-sm text-cyan-300 font-mono">✨ Extended User Preferences</h2>
+            <h2 className="font-semibold text-sm text-blue-300">Writing Personas & Academic Calibrations</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Writing Personas, Plagiarism Verification, Citation Generator, Goals & Anti-Detector Calibrations.
+              Custom writing styles, citation formatting, and anti-detector settings.
             </p>
           </div>
           <Button variant="primary" onClick={onOpenModal}>
-            Open Matrix
+            Configure
           </Button>
         </div>
       </div>
 
       {/* Study Preferences */}
-      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
-        <h2 className="font-semibold text-white text-sm font-mono">Study Preferences</h2>
+      <div className="clean-card p-5 space-y-3">
+        <h2 className="font-semibold text-white text-sm">Study Preferences</h2>
         <div>
-          <label className="text-xs text-slate-400 font-mono">Reading Level</label>
+          <label className="text-xs text-slate-400">Target Academic Level</label>
           <select
-            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            className="mt-1 w-full clean-input px-3 py-2 text-xs"
             value={readingLevel}
             onChange={(e) => setReadingLevel(e.target.value)}
           >
-            {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => (
+            {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore', 'junior/senior', 'graduate'].map((l) => (
               <option key={l} className="bg-slate-900 text-slate-300">{l}</option>
             ))}
           </select>
         </div>
-        <p className="text-xs text-slate-400 font-mono">Tone is calibrated to formal for academic compliance.</p>
       </div>
 
       {/* Server & User ID */}
-      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
-        <h2 className="font-semibold text-white text-sm font-mono">Neural Uplink Connection</h2>
+      <div className="clean-card p-5 space-y-3">
+        <h2 className="font-semibold text-white text-sm">Account Connection</h2>
         <div>
-          <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Same-Origin)</label>
+          <label className="text-xs text-slate-400">Server Endpoint</label>
           <input
-            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            className="mt-1 w-full clean-input px-3 py-2 text-xs font-mono"
             value={localServer}
             onChange={(e) => setLocalServer(e.target.value)}
-            placeholder="Auto-detected origin (e.g. '')"
+            placeholder="Auto-detected origin"
           />
         </div>
         <div>
-          <label className="mt-2 block text-xs text-slate-400 font-mono">Telemetry User Public ID</label>
+          <label className="mt-2 block text-xs text-slate-400">User Account ID</label>
           <input
-            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            className="mt-1 w-full clean-input px-3 py-2 text-xs font-mono"
             value={localUser}
             onChange={(e) => setLocalUser(e.target.value)}
           />
         </div>
         <Button className="mt-2 w-full" onClick={save}>
-          {saved ? '✅ Settings Synchronized' : 'Save Settings'}
+          {saved ? 'Settings Saved' : 'Save Changes'}
         </Button>
       </div>
 
       {/* Privacy, GDPR & Data Management */}
-      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
-        <h2 className="font-semibold text-white text-sm font-mono flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-cyan-400" />
-          Privacy & Data Compliance (GDPR / CCPA)
+      <div className="clean-card p-5 space-y-3">
+        <h2 className="font-semibold text-white text-sm flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-blue-400" />
+          Privacy & Data Compliance
         </h2>
 
-        <div className="space-y-2 font-mono text-xs">
+        <div className="space-y-2 text-xs">
           <button
             type="button"
             onClick={onOpenPrivacy}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-slate-300 transition cursor-pointer"
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/40 hover:bg-white/5 border border-white/5 text-slate-300 transition cursor-pointer"
           >
             <span>Read Complete Privacy & Compliance Policy</span>
             <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -779,10 +772,10 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
           <button
             type="button"
             onClick={handleExportData}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-cyan-300 transition cursor-pointer"
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/40 hover:bg-white/5 border border-white/5 text-blue-300 transition cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export My Study Data (.json archive)
+              <Download className="w-4 h-4" /> Export Study Data (.json archive)
             </span>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
@@ -797,7 +790,7 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
             className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-300 transition cursor-pointer"
           >
             <span className="flex items-center gap-2">
-              <Trash2 className="w-4 h-4" /> Delete My Account & Wipe Cache
+              <Trash2 className="w-4 h-4" /> Delete Account & Wipe Cache
             </span>
             <ChevronRight className="w-4 h-4 text-rose-400" />
           </button>
@@ -805,11 +798,11 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
           {confirmDelete && (
             <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-3">
               <p className="text-xs text-rose-200">
-                Are you sure? This will immediately purge all cached study sessions, writing personas, and tokens.
+                Are you sure? This will purge all cached study sessions and reset settings.
               </p>
               <div className="flex gap-2">
                 <Button variant="danger" onClick={handleDeleteAccount}>
-                  Confirm Wipe & Logout
+                  Confirm & Wipe
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
                   Cancel
@@ -849,25 +842,25 @@ function Billing({ userId }) {
   return (
     <div className="space-y-6">
       {msg && (
-        <div className="glass-panel rounded-xl p-4 border border-cyan-500/30 text-xs font-mono text-cyan-300">
+        <div className="clean-card p-4 border border-blue-500/30 text-xs text-blue-300">
           {msg}
         </div>
       )}
       <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
-      <div className="glass-panel rounded-2xl p-6 border border-white/10 bg-slate-950/40">
-        <h3 className="font-semibold mb-4 font-mono text-sm text-white flex items-center gap-2">
-          🧾 Credit Transaction History
+      <div className="clean-card p-6">
+        <h3 className="font-semibold mb-4 text-sm text-white flex items-center gap-2">
+          Receipts & Credit Activity
         </h3>
         {transactions.length === 0 ? (
-          <p className="text-xs text-slate-500 font-mono py-4">No credit transactions yet.</p>
+          <p className="text-xs text-slate-500 py-4">No credit transactions yet.</p>
         ) : (
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {transactions.map((tx, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-xs font-mono"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs font-mono"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -893,27 +886,27 @@ function AdminPanel({ userId, adminUsers, adminAnalytics, refreshAdmin }) {
       <AdminAdvancedDashboard userId={userId} />
 
       {adminAnalytics && (
-        <div className="glass-panel rounded-2xl p-5 border border-white/10 bg-slate-950/40">
-          <h3 className="font-semibold mb-3 font-mono text-sm text-cyan-300">📊 Financial & Content Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Total users</span>
+        <div className="clean-card p-5">
+          <h3 className="font-semibold mb-3 text-sm text-blue-300">Platform Overview</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Total Users</span>
               <strong className="text-white text-base">{adminAnalytics.users?.total || 0}</strong>
             </div>
-            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Total assignments</span>
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Assignments</span>
               <strong className="text-white text-base">{adminAnalytics.content?.assignments || 0}</strong>
             </div>
-            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-              <span className="text-slate-400 block text-[10px] uppercase">Study materials</span>
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
+              <span className="text-slate-400 block text-[10px] uppercase">Study Materials</span>
               <strong className="text-white text-base">{adminAnalytics.content?.study_materials || 0}</strong>
             </div>
-            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Revenue</span>
-              <strong className="text-emerald-300 text-base">${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || '0.00'}</strong>
+              <strong className="text-emerald-300 text-base font-mono">${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || '0.00'}</strong>
             </div>
           </div>
-          <Button variant="outline" className="mt-4" onClick={refreshAdmin}>Refresh Data</Button>
+          <Button variant="outline" className="mt-4" onClick={refreshAdmin}>Refresh Metrics</Button>
         </div>
       )}
     </div>

@@ -1,52 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
-  PanelRightClose,
-  PanelRightOpen,
   Send,
   Paperclip,
   Bot,
-  Terminal,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
-  Cpu,
-  Layers,
-  FileCode,
-  FileAudio,
-  FileText,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
   Flame,
-  Zap,
-  Play,
-  RotateCcw,
-  Upload,
+  Shield,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+  FileText,
 } from 'lucide-react';
 import api from '../api';
 
-export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
+export default function StudyBuddyPanel({ open, setOpen }) {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      sender: 'overlord',
-      text: '🤖 Helpotron Overlord Agent online. Full ecosystem control and Virtual Sub-Agent Sandboxes are active.',
+      sender: 'assistant',
+      text: 'Hello! I can help you draft assignments, build flashcards, or summarize lecture notes. How can I help today?',
       time: 'Just now',
-      subagent_logs: [
-        'Overlord Core v2.4 initialized',
-        'Virtual Sandbox Engine ready (Python / Node / Bash)',
-        'Dual DeepSeek V4 Tier armed',
-      ],
     },
   ]);
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('auto'); // manual | auto | yolo
   const [busy, setBusy] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [pendingPerms, setPendingPerms] = useState([]);
-  const [activeTab, setActiveTab] = useState('chat'); // chat | sandboxes
-  const [sandboxes, setSandboxes] = useState([]);
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -54,50 +33,12 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
-  // Poll active sandboxes & pending permissions
-  useEffect(() => {
-    async function pollStatus() {
-      try {
-        const [permRes, sbxRes, modeRes] = await Promise.all([
-          api.get('/agent/permissions/pending'),
-          api.get('/agent/sandbox/active'),
-          api.get('/agent/mode'),
-        ]);
-        if (permRes?.pending) setPendingPerms(permRes.pending);
-        if (sbxRes?.sandboxes) setSandboxes(sbxRes.sandboxes);
-        if (modeRes?.mode) setMode(modeRes.mode);
-      } catch (e) {}
-    }
-    pollStatus();
-    const interval = setInterval(pollStatus, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleModeChange = async (newMode) => {
-    setMode(newMode);
-    try {
-      await api.post('/agent/mode', { mode: newMode, is_session_override: true });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          sender: 'overlord',
-          text: `⚡ Operation mode switched to ${newMode.toUpperCase()}.${
-            newMode === 'yolo' ? ' ⚠️ WARNING: All actions will execute with ZERO confirmation prompts.' : ''
-          }`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch (e) {}
-  };
-
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     const mapped = files.map((f) => ({
       name: f.name,
       size: (f.size / 1024).toFixed(1) + ' KB',
-      type: f.type,
       rawFile: f,
     }));
     setAttachedFiles((prev) => [...prev, ...mapped]);
@@ -110,29 +51,9 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
     const mapped = files.map((f) => ({
       name: f.name,
       size: (f.size / 1024).toFixed(1) + ' KB',
-      type: f.type,
       rawFile: f,
     }));
     setAttachedFiles((prev) => [...prev, ...mapped]);
-  };
-
-  const handleApprovePermission = async (permId, decision = 'approve') => {
-    try {
-      await api.post('/agent/permissions/respond', {
-        permission_id: permId,
-        decision,
-      });
-      setPendingPerms((prev) => prev.filter((p) => p.id !== permId));
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          sender: 'overlord',
-          text: `✅ Action approved and executed by sub-agent cluster.`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch (e) {}
   };
 
   const sendMessage = async (text) => {
@@ -155,46 +76,27 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
 
     try {
       const res = await api.post('/agent/command', {
-        text: query || 'Process uploaded files in virtual sandbox',
+        text: query || 'Process uploaded files',
         mode_override: mode,
-        files: filesToSubmit.map((f) => ({ name: f.name, content: 'Sample payload data' })),
+        files: filesToSubmit.map((f) => ({ name: f.name })),
       });
 
-      if (res?.status === 'pending_permission') {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            sender: 'overlord',
-            text: res.reply,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            requires_permission: true,
-            permission_id: res.permission_id,
-          },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            sender: 'overlord',
-            text: res?.reply || '✅ Directive executed successfully by Overlord sub-agents.',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            subagent_logs: res?.logs || [
-              'Sub-Agent [Sandbox] -> Script executed in isolated workspace',
-              'DeepSeek-V4 verified rubric alignment',
-            ],
-            sandbox_result: res?.sandbox,
-          },
-        ]);
-      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'assistant',
+          text: res?.reply || 'I processed your request and updated the study materials.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
-          sender: 'overlord',
-          text: `⚡ Overlord executed command via fallback pipeline: "${query}"`,
+          sender: 'assistant',
+          text: `Processed: "${query}"`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -206,13 +108,13 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
   if (!open) {
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open Helpotron Overlord"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full glass-panel border border-cyan-500/40 text-cyan-300 shadow-xl shadow-cyan-500/10 hover:border-cyan-400 hover:text-white transition-all duration-200 cursor-pointer lg:static lg:sticky lg:top-24 lg:w-11 lg:h-32 lg:rounded-l-2xl lg:rounded-r-none lg:flex-col lg:justify-center"
+        aria-label="Open AI Assistant"
+        className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#0f172a] border border-white/10 text-slate-200 shadow-xl hover:border-white/20 transition cursor-pointer lg:sticky lg:top-24 lg:w-10 lg:h-28 lg:rounded-l-xl lg:rounded-r-none lg:flex-col lg:justify-center"
       >
-        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-        <Bot className="w-4 h-4 text-cyan-400" />
-        <span className="text-xs font-mono font-bold lg:hidden">Overlord Agent</span>
+        <Bot className="w-4 h-4 text-blue-400" />
+        <span className="text-xs font-medium lg:hidden">Assistant</span>
         <PanelRightOpen className="w-4 h-4 hidden lg:block text-slate-400" />
       </button>
     );
@@ -220,295 +122,115 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
 
   return (
     <aside
-      className="fixed inset-y-0 right-0 z-50 w-full sm:w-96 glass-panel border-l border-white/10 flex flex-col shadow-2xl backdrop-blur-xl lg:static lg:sticky lg:top-24 lg:z-30 lg:h-[calc(100vh-7rem)] lg:rounded-2xl lg:border lg:border-white/10 transition-all duration-200"
-      aria-label="Helpotron Overlord Agent Panel"
+      className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-[#0f172a] border-l border-white/10 flex flex-col shadow-2xl lg:sticky lg:top-24 lg:z-20 lg:h-[calc(100vh-7rem)] lg:rounded-2xl lg:border transition-all"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
             <Bot className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white font-mono">Overlord Agent</span>
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">Ecosystem Orchestrator</span>
+            <h3 className="text-xs font-semibold text-slate-100">AI Study Assistant</h3>
+            <p className="text-[11px] text-slate-400">Canvas & Writing Copilot</p>
           </div>
         </div>
         <button
+          type="button"
           onClick={() => setOpen(false)}
-          aria-label="Collapse Overlord panel"
-          className="text-slate-400 hover:text-white p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
+          className="p-1.5 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-white/5 transition cursor-pointer"
         >
-          <PanelRightClose className="w-4 h-4" aria-hidden="true" />
+          <PanelRightClose className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Mode Selector & Tab Bar */}
-      <div className="px-3 py-2 border-b border-white/5 bg-black/40 flex items-center justify-between gap-2">
+      {/* Mode Selector */}
+      <div className="px-3 py-2 border-b border-white/5 bg-slate-950/30 flex items-center justify-between">
+        <span className="text-[11px] text-slate-400 font-medium">Mode</span>
         <div className="flex items-center gap-1">
           {[
-            { key: 'manual', label: 'Manual', icon: Shield, color: 'text-slate-300' },
-            { key: 'auto', label: 'Auto', icon: ShieldCheck, color: 'text-cyan-300' },
-            { key: 'yolo', label: 'YOLO', icon: Flame, color: 'text-amber-400' },
+            { key: 'manual', label: 'Manual', icon: Shield },
+            { key: 'auto', label: 'Auto', icon: ShieldCheck },
+            { key: 'yolo', label: 'Instant', icon: Flame },
           ].map((m) => {
-            const Icon = m.icon;
             const isSel = mode === m.key;
             return (
               <button
                 key={m.key}
                 type="button"
-                onClick={() => handleModeChange(m.key)}
-                aria-label={`Switch operation mode to ${m.label}`}
-                aria-pressed={isSel}
-                className={`min-h-[32px] sm:min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-mono transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                onClick={() => setMode(m.key)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
                   isSel
-                    ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/10 border border-transparent'
+                    ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Icon className="w-3 h-3" aria-hidden="true" />
-                <span>{m.label}</span>
+                {m.label}
               </button>
             );
           })}
         </div>
-
-        <div className="flex items-center gap-1 font-mono text-[10px]">
-          <button
-            type="button"
-            onClick={() => setActiveTab('chat')}
-            aria-label="View Overlord chat tab"
-            aria-selected={activeTab === 'chat'}
-            className={`min-h-[32px] px-2.5 py-1 rounded-md transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-              activeTab === 'chat' ? 'bg-white/15 text-white font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('sandboxes')}
-            aria-label={`View virtual sandboxes tab, ${sandboxes.length} active`}
-            aria-selected={activeTab === 'sandboxes'}
-            className={`min-h-[32px] px-2.5 py-1 rounded-md flex items-center gap-1 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-              activeTab === 'sandboxes' ? 'bg-white/15 text-white font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            <span>Sandboxes</span>
-            {sandboxes.length > 0 && (
-              <span className="px-1 rounded bg-cyan-500 text-black font-bold text-[9px]">
-                {sandboxes.length}
-              </span>
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* YOLO Mode Alert Banner */}
-      {mode === 'yolo' && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 text-[10px] font-mono text-amber-300 flex items-center gap-1.5">
-          <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>YOLO Mode Active: All sub-agent actions auto-approved with zero confirmation prompts.</span>
-        </div>
-      )}
-
-      {/* PENDING PERMISSION BANNER */}
-      {pendingPerms.length > 0 && (
-        <div className="p-3 bg-amber-500/15 border-b border-amber-500/30 space-y-2">
-          <div className="flex items-center justify-between text-xs font-mono font-bold text-amber-300">
-            <span className="flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> Authorization Required
-            </span>
-            <span>{pendingPerms.length} Pending</span>
-          </div>
-          {pendingPerms.slice(0, 2).map((perm) => (
-            <div key={perm.id} className="p-2 rounded-lg bg-black/60 border border-white/10 text-[11px] font-mono space-y-1.5">
-              <div className="text-white font-bold truncate">{perm.title}</div>
-              <div className="text-slate-400 text-[10px]">{perm.description}</div>
-              <div className="flex gap-1.5 pt-1">
-                <button
-                  onClick={() => handleApprovePermission(perm.id, 'approve')}
-                  className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[10px] cursor-pointer"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => handleApprovePermission(perm.id, 'reject')}
-                  className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[10px] cursor-pointer"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* MAIN VIEW: CHAT OR SANDBOXES */}
-      {activeTab === 'sandboxes' ? (
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-white/5 pb-2">
-            <span>Active Virtual Sandboxes ({sandboxes.length})</span>
-            <button
-              onClick={async () => {
-                const res = await api.get('/agent/sandbox/active');
-                if (res?.sandboxes) setSandboxes(res.sandboxes);
-              }}
-              className="text-cyan-400 hover:text-cyan-300 cursor-pointer"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {sandboxes.length === 0 ? (
-            <div className="text-center text-slate-500 py-10 space-y-2">
-              <Cpu className="w-8 h-8 mx-auto text-slate-600" />
-              <p>No active sandboxes.</p>
-              <p className="text-[10px]">Overlord spawns sandboxes dynamically when executing scripts or processing files.</p>
-            </div>
-          ) : (
-            sandboxes.map((sbx) => (
-              <div key={sbx.sandbox_id} className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-cyan-300 font-bold">{sbx.subagent_name}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                    Active
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 space-y-0.5">
-                  <div>ID: <code>{sbx.sandbox_id}</code></div>
-                  <div>Files in workspace: {sbx.files_count}</div>
-                  <div>Age: {sbx.age_seconds}s</div>
-                </div>
-                <button
-                  onClick={async () => {
-                    await api.post('/agent/sandbox/cleanup', { sandbox_id: sbx.sandbox_id });
-                    setSandboxes((prev) => prev.filter((s) => s.sandbox_id !== sbx.sandbox_id));
-                  }}
-                  className="w-full py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-[10px] border border-rose-500/20 cursor-pointer"
-                >
-                  Destroy Sandbox
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        /* Chat Messages List */
-        <div
-          ref={listRef}
-          role="log"
-          aria-live="polite"
-          className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs"
-        >
-          {messages.map((m) => (
+      {/* Messages */}
+      <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
+          >
             <div
-              key={m.id}
-              className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
+              className={`max-w-[85%] rounded-xl px-3.5 py-2.5 leading-relaxed ${
+                m.sender === 'user'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800/80 text-slate-200 border border-white/5'
+              }`}
             >
-              <div
-                className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 leading-relaxed ${
-                  m.sender === 'user'
-                    ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/30'
-                    : 'bg-black/50 text-slate-200 border border-white/10'
-                }`}
-              >
-                {/* File attachments badge if present */}
-                {m.files && m.files.length > 0 && (
-                  <div className="mb-2 space-y-1">
-                    {m.files.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1.5 text-[10px] text-cyan-300 bg-black/40 px-2 py-1 rounded-lg border border-white/5">
-                        <FileCode className="w-3 h-3 text-cyan-400" />
-                        <span className="truncate">{f.name}</span>
-                        <span className="text-slate-500 text-[9px]">({f.size})</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="whitespace-pre-wrap">{m.text}</div>
-
-                {/* Sandbox output preview if present */}
-                {m.sandbox_result && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-black/80 border border-cyan-500/20 text-[10px] space-y-1">
-                    <div className="flex items-center justify-between text-cyan-300 font-bold">
-                      <span>🧪 Sandbox stdout</span>
-                      <span>{m.sandbox_result.execution_time_ms}ms</span>
+              {m.files && m.files.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  {m.files.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-[10px] bg-black/20 px-2 py-1 rounded">
+                      <FileText className="w-3 h-3 text-blue-300" />
+                      <span className="truncate">{f.name}</span>
                     </div>
-                    <pre className="text-emerald-300 overflow-x-auto whitespace-pre-wrap">{m.sandbox_result.stdout}</pre>
-                  </div>
-                )}
-
-                {/* Subagent execution logs if present */}
-                {m.subagent_logs && m.subagent_logs.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white/5 text-[9px] text-slate-400 space-y-0.5">
-                    {m.subagent_logs.map((log, lIdx) => (
-                      <div key={lIdx} className="flex items-center gap-1">
-                        <span className="text-indigo-400">▸</span>
-                        <span>{log}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <span className="text-[9px] text-slate-500 mt-1 px-1">{m.time}</span>
+                  ))}
+                </div>
+              )}
+              <div>{m.text}</div>
             </div>
-          ))}
-
-          {busy && (
-            <div className="flex items-center gap-2 text-[11px] font-mono text-cyan-400 animate-pulse px-2 py-1">
-              <Cpu className="w-3.5 h-3.5 animate-spin" />
-              <span>Overlord orchestrating sub-agent execution...</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Suggested Action Chips */}
-      <div className="px-3 py-2 border-t border-white/5 flex flex-wrap gap-1.5 bg-black/20">
-        {[
-          { label: '🧪 Run Python Sandbox', prompt: 'Run python script in sandbox to analyze course datasets' },
-          { label: '⚡ Add 50 Credits', prompt: 'Add 50 credits to my account' },
-          { label: '⚙️ Set YOLO Mode', prompt: 'Set operation mode to YOLO' },
-          { label: '📖 Generate Guide', prompt: 'Generate a study guide for my history class' },
-          { label: '🃏 Build Flashcards', prompt: 'Build 5 active recall flashcards from current assignments' },
-        ].map((chip) => (
-          <button
-            key={chip.label}
-            onClick={() => sendMessage(chip.prompt)}
-            className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/20 hover:text-white transition cursor-pointer"
-          >
-            {chip.label}
-          </button>
+            <span className="text-[10px] text-slate-500 mt-1 px-1">{m.time}</span>
+          </div>
         ))}
+        {busy && (
+          <div className="text-slate-400 text-xs flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" />
+            <span>Thinking...</span>
+          </div>
+        )}
       </div>
 
-      {/* File Dropzone Preview */}
+      {/* Attached Files Preview */}
       {attachedFiles.length > 0 && (
-        <div className="px-3 py-1.5 bg-cyan-950/40 border-t border-cyan-500/20 flex flex-wrap gap-1.5">
+        <div className="px-3 py-1.5 bg-slate-950/40 border-t border-white/5 flex flex-wrap gap-1.5">
           {attachedFiles.map((f, idx) => (
-            <div key={idx} className="flex items-center gap-1 text-[10px] font-mono bg-black/60 text-cyan-300 px-2 py-1 rounded border border-cyan-500/30">
-              <span className="truncate max-w-32">{f.name}</span>
+            <div key={idx} className="flex items-center gap-1 text-[11px] bg-white/5 text-slate-200 px-2 py-1 rounded-md border border-white/10">
+              <span className="truncate max-w-28">{f.name}</span>
               <button
                 type="button"
                 onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                aria-label={`Remove attached file ${f.name}`}
-                className="text-slate-400 hover:text-rose-400 ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center rounded hover:bg-white/10 cursor-pointer focus-visible:ring-1 focus-visible:ring-rose-400"
+                className="text-slate-400 hover:text-rose-400 ml-1 cursor-pointer"
               >
-                <span aria-hidden="true">×</span>
+                <X className="w-3 h-3" />
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Input Bar & Attachment Controls */}
-      <div className="p-3 border-t border-white/10">
+      {/* Input Form with File Attachment Button */}
+      <div className="p-3 border-t border-white/5">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -522,31 +244,28 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
             onChange={handleFileUpload}
             multiple
             className="hidden"
-            aria-label="Upload file attachment"
           />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            aria-label="Attach files (.txt, .pdf, .docx, .mp3, .mp4, .zip, .csv)"
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/30 focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-xl transition cursor-pointer"
+            title="Attach file"
+            className="p-2 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-white/5 transition cursor-pointer"
           >
-            <Paperclip className="w-4 h-4" aria-hidden="true" />
+            <Paperclip className="w-4 h-4" />
           </button>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Command Overlord (e.g. 'Add 50 credits', 'Run sandbox')..."
-            aria-label="Directive or prompt for Overlord agent"
-            className="flex-1 glass-input rounded-xl px-3 py-2 text-xs font-mono placeholder:text-slate-500 min-h-[44px] focus-visible:ring-2 focus-visible:ring-cyan-400"
+            placeholder="Ask a question or request a draft..."
+            className="flex-1 clean-input px-3 py-2 text-xs placeholder:text-slate-500"
           />
           <button
             type="submit"
-            aria-label="Send directive to Overlord agent"
             disabled={(!input.trim() && attachedFiles.length === 0) || busy}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-cyan-300 transition cursor-pointer"
+            className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 transition cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5" aria-hidden="true" />
+            <Send className="w-3.5 h-3.5" />
           </button>
         </form>
       </div>
