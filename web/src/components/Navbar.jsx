@@ -1,15 +1,33 @@
-import React from 'react';
-import { User, Zap, Puzzle } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  User,
+  Zap,
+  Puzzle,
+  Menu,
+  X,
+  ShieldCheck,
+  FileText,
+  Settings,
+  LogOut,
+  Sparkles,
+} from 'lucide-react';
 
 export default function Navbar({
   isLoggedIn = false,
   isGuest = false,
   user = null,
+  isAdmin = false,
+  onOpenSettings = () => {},
   onOpenAuth = () => {},
+  onOpenPrivacy = () => {},
+  onOpenTerms = () => {},
   onOpenExtensionGuide = () => {},
+  onLogout = () => {},
 }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-white/5 px-6 py-3">
+    <header className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-white/5 px-4 sm:px-6 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
         {/* Brand */}
@@ -23,13 +41,13 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Minimalist Top Indicator */}
-        <div className="flex items-center gap-3">
+        {/* Desktop Navigation & Actions */}
+        <div className="hidden sm:flex items-center gap-3">
           <button
             type="button"
             onClick={onOpenExtensionGuide}
             title="Setup & Download Chrome Extension"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 hover:text-white transition font-medium cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 hover:text-white transition font-medium cursor-pointer"
           >
             <Puzzle className="w-3.5 h-3.5 text-emerald-400" />
             <span>Extension Guide</span>
@@ -43,7 +61,7 @@ export default function Navbar({
             </div>
           )}
 
-          {!isLoggedIn && (
+          {!isLoggedIn ? (
             <button
               type="button"
               onClick={onOpenAuth}
@@ -52,9 +70,135 @@ export default function Navbar({
               <User className="w-3.5 h-3.5" />
               <span>Sign In</span>
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              aria-label="Open Settings"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           )}
         </div>
+
+        {/* Mobile Hamburger Toggle Button (DES-MOB-001) */}
+        <div className="flex sm:hidden items-center gap-2">
+          {user && (
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-300 font-mono">
+              <Zap className="w-3 h-3 text-blue-400" />
+              <span>{Number(user.credits ?? 10029).toLocaleString()}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle Mobile Navigation Drawer"
+            className="p-2 rounded-xl text-slate-300 hover:text-white bg-slate-900 border border-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile Navigation Drawer Overlay (DES-MOB-001) */}
+      {mobileMenuOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile Navigation Menu"
+          className="sm:hidden fixed inset-x-0 top-[53px] bottom-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-white/10 p-5 overflow-y-auto animate-fadeIn flex flex-col justify-between"
+        >
+          <div className="space-y-3">
+            <div className="p-3 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+                <Puzzle className="w-4 h-4 text-emerald-400" /> Chrome Extension
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenExtensionGuide();
+                }}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold cursor-pointer min-h-[44px] flex items-center"
+              >
+                Setup Guide →
+              </button>
+            </div>
+
+            {user && (
+              <div className="p-3.5 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">Available Credits:</span>
+                <span className="text-blue-400 font-bold flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5" /> {Number(user.credits ?? 10029).toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-1 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenSettings();
+                }}
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+              >
+                <Settings className="w-4 h-4 text-slate-400" /> User Settings & Models
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenPrivacy();
+                }}
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Privacy Policy & FERPA
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenTerms();
+                }}
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-indigo-400" /> Terms of Service
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-6 border-t border-white/10">
+            {!isLoggedIn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAuth();
+                }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+              >
+                <User className="w-4 h-4" /> Sign In / Register
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full py-3 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/20 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+              >
+                <LogOut className="w-4 h-4" /> Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
