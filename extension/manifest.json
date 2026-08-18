@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Helpotron Automator",
-  "version": "1.0.0",
-  "description": "Track your Canvas assignments and record lectures for study tools.",
+  "name": "Helpotron Universal Automator",
+  "version": "2.0.0",
+  "description": "Universal educational assignment scraper, lecture recorder, and AI subagent across Canvas, Google Classroom, Blackboard, Moodle, and any arbitrary webpage.",
   "permissions": [
     "tabs",
     "activeTab",
@@ -12,17 +12,16 @@
     "microphone"
   ],
   "host_permissions": [
-    "https://*.instructure.com/*",
-    "*://canvas.*.edu/*",
-    "http://localhost:8000/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://*.instructure.com/*", "*://canvas.*.edu/*"],
-      "js": ["content.js"]
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {

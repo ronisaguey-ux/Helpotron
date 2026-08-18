@@ -1,4 +1,5 @@
-// Helpotron service worker: Canvas scraping, recording upload, server sync.
+// Helpotron Universal Extension Service Worker
+// Multi-Platform Scraping, Subagent Automation, and Data Lake Integration
 
 const DEFAULT_SERVER = 'http://localhost:8000';
 
@@ -9,46 +10,67 @@ async function getServer() {
 
 async function getPublicId() {
   const { public_id } = await chrome.storage.local.get('public_id');
-  return public_id || 'dev-user';
+  return public_id || 'RoniDev';
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'getTabs') {
+    chrome.tabs.query({}, (tabs) => {
+      sendResponse({
+        ok: true,
+        tabs: tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active })),
+      });
+    });
+    return true;
+  }
+
   if (message.action === 'startScrape') {
-    startScrape().then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
-    return true; // async response
-  }
-  if (message.action === 'startRecording') {
-    startRecording().then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
+    startScrape(message.tabId).then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
     return true;
   }
+
   if (message.action === 'activateAgent') {
-    activateAgent().then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
+    activateAgent(message.tabId).then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
     return true;
   }
+
   if (message.action === 'agentStatus') {
     agentStatus().then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
     return true;
   }
-});
 
-// ─── browser agent bridge ──────────────────────────────────────────────────
+  if (message.action === 'openDataLake') {
+    getServer().then((srv) => {
+      chrome.tabs.create({ url: `${srv}/#datalake` });
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+});
 
 let agentSocket = null;
 let agentSessionId = null;
+let targetTabId = null;
 
-async function activateAgent() {
+async function activateAgent(chosenTabId) {
   const server = await getServer();
   const public_id = await getPublicId();
-  const tabs = await chrome.tabs.query({ url: 'https://*.instructure.com/*' });
-  const canvasTab = tabs.find((t) => t.active) || tabs[0];
-  if (!canvasTab) return { ok: false, error: 'No Canvas tab open — open the assignment first' };
+
+  if (chosenTabId) {
+    targetTabId = Number(chosenTabId);
+  } else {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    targetTabId = tabs[0]?.id;
+  }
+
+  if (!targetTabId) return { ok: false, error: 'No browser tab selected for AI scraping.' };
 
   const resp = await fetch(`${server}/api/agent/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ public_id }),
   });
-  if (!resp.ok) return { ok: false, error: `Server: ${resp.status}` };
+  if (!resp.ok) return { ok: false, error: `Server error: ${resp.status}` };
   const body = await resp.json();
   agentSessionId = body.session_id;
   connectAgentSocket(server, agentSessionId);
@@ -59,38 +81,58 @@ function connectAgentSocket(server, sessionId) {
   const wsUrl = server.replace(/^http/, 'ws') + `/ws/agent/${sessionId}`;
   const ws = new WebSocket(wsUrl);
   agentSocket = ws;
-  ws.onopen = () => console.log(`[helpotron] agent ${sessionId} connected`);
+  ws.onopen = () => console.log(`[helpotron] Universal agent ${sessionId} connected on tab ${targetTabId}`);
   ws.onmessage = async (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       if (msg.type === 'command') {
-        const result = await executeTabCommand(msg.command);
-        ws.send(JSON.stringify({ type: 'result', command_id: msg.command_id, ok: result.ok, error: result.error, result: result.result }));
+        const result = await executeTabCommand(targetTabId, msg.command);
+        ws.send(
+          JSON.stringify({
+            type: 'result',
+            command_id: msg.command_id,
+            ok: result.ok,
+            error: result.error,
+            result: result.result,
+          })
+        );
       } else if (msg.type === 'finished') {
         console.log('[helpotron] agent finished:', msg.summary);
+        if (msg.assignment && msg.assignment.title) {
+          await ingestScrapedAssignment(msg.assignment);
+        }
+        ws.close();
+        agentSocket = null;
+      } else if (msg.type === 'unparseable') {
+        console.warn('[helpotron] website unparseable:', msg.reason);
+        chrome.runtime.sendMessage({
+          action: 'unparseable_report',
+          reason: msg.reason,
+        }).catch(() => {});
         ws.close();
         agentSocket = null;
       }
     } catch (e) {
-      console.error('[helpotron] bridge error', e);
+      console.error('[helpotron] Universal agent bridge error:', e);
     }
   };
-  ws.onclose = () => { agentSocket = null; };
+  ws.onclose = () => {
+    agentSocket = null;
+  };
 }
 
-async function executeTabCommand(command) {
-  const tabs = await chrome.tabs.query({ url: 'https://*.instructure.com/*' });
-  const tab = tabs.find((t) => t.active) || tabs[0];
-  if (!tab) return { ok: false, error: 'no canvas tab' };
+async function executeTabCommand(tabId, command) {
+  if (!tabId) return { ok: false, error: 'No active tab ID available' };
 
   if (command.action === 'navigate') {
-    await chrome.tabs.update(tab.id, { url: command.url });
-    await new Promise((r) => setTimeout(r, 4000)); // let the page settle
+    await chrome.tabs.update(tabId, { url: command.url });
+    await new Promise((r) => setTimeout(r, 3500));
     return { ok: true, result: { url: command.url } };
   }
+
   try {
     const res = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId },
       func: runPageCommand,
       args: [command],
     });
@@ -100,26 +142,57 @@ async function executeTabCommand(command) {
   }
 }
 
-// Runs INSIDE the Canvas page. Self-contained (no closures over extension APIs).
+// Runs inside the target page execution context
 function runPageCommand(cmd) {
   switch (cmd.action) {
     case 'read_page': {
       const text = (document.body ? document.body.innerText : '').slice(0, 30000);
       const links = Array.from(document.querySelectorAll('a[href]'))
-        .filter((a) => a.href && !a.href.startsWith('javascript'))
+        .filter((a) => a.href && !a.href.startsWith('javascript:'))
         .map((a) => ({ text: (a.innerText || '').trim().slice(0, 80), href: a.href }))
         .slice(0, 120);
-      return { text, links, url: location.href, title: document.title };
+
+      // Extract metadata
+      const isDRM = document.querySelector('canvas:only-child, embed[type="application/pdf"], iframe[src*="protected"]');
+      const isCoursework = Boolean(
+        document.querySelector('h1, h2, table, .rubric, #assignment_description, .user_content, .c3I1v')
+      );
+
+      return {
+        text,
+        links,
+        url: location.href,
+        title: document.title,
+        is_drm_protected: Boolean(isDRM && text.length < 100),
+        has_coursework_markers: isCoursework,
+      };
+    }
+    case 'inspect_dom': {
+      const el = document.querySelector(cmd.selector);
+      if (!el) return { error: `Element not found: ${cmd.selector}` };
+      return { html: el.outerHTML.slice(0, 5000), text: el.innerText.slice(0, 2000) };
+    }
+    case 'extract_rubric': {
+      const rubrics = Array.from(document.querySelectorAll('table, .rubric, .rubric-table'))
+        .map((t) => t.innerText.trim())
+        .filter(Boolean);
+      return { rubrics };
+    }
+    case 'extract_files': {
+      const files = Array.from(document.querySelectorAll('a[download], a[href$=".pdf"], a[href$=".docx"], a[href*="drive.google"]'))
+        .map((a) => a.href)
+        .slice(0, 50);
+      return { files };
     }
     case 'click': {
       const el = document.querySelector(cmd.selector);
-      if (!el) return { error: `no element for ${cmd.selector}` };
+      if (!el) return { error: `Element not found for selector: ${cmd.selector}` };
       el.click();
       return { clicked: cmd.selector };
     }
     case 'type': {
       const el = document.querySelector(cmd.selector);
-      if (!el) return { error: `no element for ${cmd.selector}` };
+      if (!el) return { error: `Element not found: ${cmd.selector}` };
       el.value = cmd.text || '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
       return { typed: true };
@@ -129,7 +202,77 @@ function runPageCommand(cmd) {
       return { scrolled: cmd.direction };
     }
     default:
-      return { error: `unknown action ${cmd.action}` };
+      return { error: `Unknown action: ${cmd.action}` };
+  }
+}
+
+async function startScrape(chosenTabId) {
+  let tabId = chosenTabId ? Number(chosenTabId) : null;
+  if (!tabId) {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    tabId = tabs[0]?.id;
+  }
+  if (!tabId) return { ok: false, error: 'No tab selected' };
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => (window.__helpotron_scrape_universal ? window.__helpotron_scrape_universal() : null),
+    });
+    const data = results?.[0]?.result;
+
+    if (!data || (!data.title && !data.prompt)) {
+      return {
+        ok: false,
+        unparseable: true,
+        error: '⚠️ Helpotron was unable to parse structured assignment data from this page (e.g. protected webview or no syllabus/rubric detected). Submit to Data Lake for micro-credits!',
+      };
+    }
+
+    const server = await getServer();
+    const public_id = await getPublicId();
+    const resp = await fetch(`${server}/api/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        public_id,
+        title: data.title,
+        due_date: data.dueDate,
+        prompt: data.prompt,
+        file_urls: data.files || [],
+        rubric: data.rubric || '',
+      }),
+    });
+    if (!resp.ok) return { ok: false, error: `Server returned ${resp.status}` };
+    const body = await resp.json();
+    return { ok: true, assignment_id: body.assignment_id, title: data.title };
+  } catch (e) {
+    return {
+      ok: false,
+      unparseable: true,
+      error: `⚠️ Unable to read page: ${String(e)}. You can submit this page format to the Data Lake to earn micro-credits!`,
+    };
+  }
+}
+
+async function ingestScrapedAssignment(assignment) {
+  try {
+    const server = await getServer();
+    const public_id = await getPublicId();
+    await fetch(`${server}/api/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        public_id,
+        title: assignment.title || 'Scraped Coursework',
+        due_date: assignment.due_date || '',
+        prompt: assignment.prompt || '',
+        file_urls: assignment.file_urls || [],
+        rubric: assignment.rubric || '',
+      }),
+    });
+  } catch (e) {
+    console.error('Failed to ingest assignment:', e);
   }
 }
 
@@ -139,64 +282,4 @@ async function agentStatus() {
   const resp = await fetch(`${server}/api/agent/${agentSessionId}`);
   if (!resp.ok) return { ok: false, error: `Server: ${resp.status}` };
   return { ok: true, active: true, ...(await resp.json()) };
-}
-
-async function startScrape() {
-  const tabs = await chrome.tabs.query({ url: 'https://*.instructure.com/*' });
-  const canvasTab = tabs.find((t) => t.active) || tabs[0];
-  if (!canvasTab) return { ok: false, error: 'No Canvas tab open' };
-
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: canvasTab.id },
-    func: () => window.__helpotron_read_assignment ? window.__helpotron_read_assignment() : null,
-  });
-  let data = results?.[0]?.result;
-  if (!data) {
-    // fallback: run the extractor inline
-    const fallback = await chrome.scripting.executeScript({
-      target: { tabId: canvasTab.id },
-      func: () => {
-        const t = document.querySelector('.ig-title')?.innerText?.trim() || document.title;
-        return { title: t, dueDate: '', prompt: '', files: [], canvasId: null };
-      },
-    });
-    data = fallback?.[0]?.result;
-  }
-  if (!data || !data.title) return { ok: false, error: 'Could not read the page' };
-
-  const server = await getServer();
-  const public_id = await getPublicId();
-  const resp = await fetch(`${server}/api/assignments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      public_id,
-      canvas_id: data.canvasId,
-      title: data.title,
-      due_date: data.dueDate,
-      prompt: data.prompt,
-      file_urls: data.files || [],
-    }),
-  });
-  if (!resp.ok) return { ok: false, error: `Server said ${resp.status}` };
-  const body = await resp.json();
-  return { ok: true, assignment_id: body.assignment_id, title: data.title };
-}
-
-async function startRecording() {
-  const server = await getServer();
-  const public_id = await getPublicId();
-
-  // Check that the server is reachable first — fail fast with a clear message.
-  try {
-    const probe = await fetch(`${server}/health`);
-    if (!probe.ok) return { ok: false, error: `Server at ${server} not healthy` };
-  } catch {
-    return { ok: false, error: `Server at ${server} unreachable — is it running?` };
-  }
-
-  // Pop a standalone recording tab; it will post its blob to the server itself.
-  const popupUrl = chrome.runtime.getURL('recorder.html');
-  chrome.tabs.create({ url: `${popupUrl}?server=${encodeURIComponent(server)}&public_id=${encodeURIComponent(public_id)}` });
-  return { ok: true };
 }

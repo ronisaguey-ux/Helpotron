@@ -314,7 +314,7 @@ class DataLakeManager:
         reasoning = (
             f"Sub-Agent evaluated submission type '{data_type}': "
             f"Relevance={relevance}/10, Uniqueness={uniqueness}/10, Actionability={actionability}/10. "
-            f"Awarded {credit_award} Micro-Credits."
+            f"Estimated {credit_award} Micro-Credits upon utilization."
         )
 
         sub_id = f"mc_{uuid.uuid4().hex[:8]}"
@@ -328,7 +328,8 @@ class DataLakeManager:
             "snippet": data_content[:200] + ("..." if len(data_content) > 200 else ""),
             "credits_awarded": credit_award,
             "usd_value": round(credit_award / 100.0, 2),
-            "status": "awarded",
+            "status": "pending_utilization",  # Credited once actually used/verified in synthesis
+            "utilization_notice": "⏳ Micro-credits from Data Lake entries are credited once your submitted data is verified and utilized in synthesis. Processing may take 2+ business days for credits to arrive in your balance.",
             "valuation": {
                 "relevance": relevance,
                 "uniqueness": uniqueness,

@@ -349,5 +349,78 @@ def test_credits_leaderboard_and_custom_alias():
     assert l_resp2.json()["user_stats"]["current_alias"] == "ApexScholar_777"
 
 
+def test_datalake_microcredits_pending_policy():
+    """Verify microcredits submissions receive pending_utilization status and honest 2+ business days notice."""
+    from fastapi.testclient import TestClient
+    from server.main import app
+
+    client = TestClient(app)
+
+    sub_payload = {
+        "data_type": "teacher_quirk",
+        "title": "Dr. Vance Rubric Guidelines",
+        "data_content": "Dr. Vance automatically deducts 5% for missing APA in-text citations and awards 10 bonus points for primary source quotes.",
+        "user_id": "RoniDev",
+    }
+
+    resp = client.post("/api/datalake/microcredits/submit", json=sub_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    submission = data["submission"]
+    assert submission["status"] == "pending_utilization"
+    assert "2+ business days" in submission["utilization_notice"]
+    assert submission["credits_awarded"] >= 5
+
+
+def test_message_admin_workflow():
+    """Verify sending direct messages to Admin, retrieving user message history, and admin replies."""
+    from fastapi.testclient import TestClient
+    from server.main import app
+
+    client = TestClient(app)
+
+    # 1. Student sends message to Admin
+    msg_payload = {
+        "subject": "Universal Extension on Custom School Portal",
+        "category": "feature_request",
+        "message": "Can you check why our university portal table isn't auto-scraped? Link attached in syllabus.",
+    }
+    send_resp = client.post("/api/user/message-admin", json=msg_payload)
+    assert send_resp.status_code == 200
+    res_data = send_resp.json()
+    assert res_data["status"] == "success"
+    msg_id = res_data["message_id"]
+    assert "delivered directly to Admin" in res_data["message"]
+
+    # 2. Student views their message history
+    my_msgs_resp = client.get("/api/user/my-admin-messages")
+    assert my_msgs_resp.status_code == 200
+    my_msgs = my_msgs_resp.json()["messages"]
+    assert any(m["id"] == msg_id for m in my_msgs)
+
+    # 3. Admin retrieves all incoming inquiries
+    admin_msgs_resp = client.get("/api/admin/messages")
+    assert admin_msgs_resp.status_code == 200
+    admin_msgs = admin_msgs_resp.json()["messages"]
+    assert any(m["id"] == msg_id for m in admin_msgs)
+
+    # 4. Admin replies to student inquiry
+    reply_resp = client.post(
+        f"/api/admin/messages/{msg_id}/reply",
+        json={"reply": "Investigating the portal DOM structure now. Universal extension subagent will support it in the next push."},
+    )
+    assert reply_resp.status_code == 200
+    assert reply_resp.json()["status"] == "replied"
+
+    # 5. Student sees admin reply
+    my_msgs_resp2 = client.get("/api/user/my-admin-messages")
+    assert my_msgs_resp2.status_code == 200
+    updated_msg = next(m for m in my_msgs_resp2.json()["messages"] if m["id"] == msg_id)
+    assert updated_msg["status"] == "replied"
+    assert "Universal extension subagent" in updated_msg["admin_reply"]
+
+
+
 
 

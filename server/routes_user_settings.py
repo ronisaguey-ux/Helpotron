@@ -575,3 +575,127 @@ async def export_history_csv_route(request: Request, db: Session = Depends(get_d
         headers={"Content-Disposition": f"attachment; filename=helpotron_history_{user.public_id}.csv"},
     )
 
+
+# ─── MESSAGE ADMIN DIRECT CHANNEL ──────────────────────────────────────────
+
+class MessageAdminPayload(BaseModel):
+    subject: str = Field("Direct Message to Admin", max_length=256)
+    category: str = Field("general", description="general | bug_report | feature_request | support | billing | academic")
+    message: str = Field(..., min_length=3, max_length=10000)
+
+
+class AdminReplyPayload(BaseModel):
+    reply: str = Field(..., min_length=1, max_length=10000)
+
+
+@router.post("/message-admin")
+async def send_message_to_admin_route(payload: MessageAdminPayload, request: Request, db: Session = Depends(get_db)):
+    """Allows any student/user to send a direct message or inquiry directly to Admin (Roni)."""
+    from .database import AdminMessage
+    user = _get_current_user(request, db)
+
+    msg = AdminMessage(
+        user_id=user.public_id,
+        subject=payload.subject,
+        category=payload.category,
+        message=payload.message,
+        status="sent",
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    return {
+        "status": "success",
+        "message": "Your message has been delivered directly to Admin. You will receive an in-app and email alert once reviewed.",
+        "message_id": msg.id,
+        "entry": {
+            "id": msg.id,
+            "subject": msg.subject,
+            "category": msg.category,
+            "message": msg.message,
+            "status": msg.status,
+            "created_at": msg.created_at.isoformat() if hasattr(msg.created_at, "isoformat") else str(msg.created_at),
+        },
+    }
+
+
+@router.get("/my-admin-messages")
+async def get_my_admin_messages_route(request: Request, db: Session = Depends(get_db)):
+    """Retrieves conversation thread of messages sent by current user to Admin."""
+    from .database import AdminMessage
+    user = _get_current_user(request, db)
+
+    msgs = (
+        db.query(AdminMessage)
+        .filter(AdminMessage.user_id == user.public_id)
+        .order_by(AdminMessage.id.desc())
+        .limit(100)
+        .all()
+    )
+
+    return {
+        "status": "success",
+        "count": len(msgs),
+        "messages": [
+            {
+                "id": m.id,
+                "subject": m.subject,
+                "category": m.category,
+                "message": m.message,
+                "status": m.status,
+                "admin_reply": m.admin_reply,
+                "created_at": m.created_at.isoformat() if hasattr(m.created_at, "isoformat") else str(m.created_at),
+                "replied_at": m.replied_at.isoformat() if m.replied_at and hasattr(m.replied_at, "isoformat") else str(m.replied_at) if m.replied_at else None,
+            }
+            for m in msgs
+        ],
+    }
+
+
+@router.get("/admin/messages")
+async def get_all_admin_messages_route(request: Request, limit: int = 100, db: Session = Depends(get_db)):
+    """Admin endpoint: lists all incoming messages from students/users."""
+    from .database import AdminMessage
+    msgs = db.query(AdminMessage).order_by(AdminMessage.id.desc()).limit(limit).all()
+    return {
+        "status": "success",
+        "count": len(msgs),
+        "messages": [
+            {
+                "id": m.id,
+                "user_id": m.user_id,
+                "subject": m.subject,
+                "category": m.category,
+                "message": m.message,
+                "status": m.status,
+                "admin_reply": m.admin_reply,
+                "created_at": m.created_at.isoformat() if hasattr(m.created_at, "isoformat") else str(m.created_at),
+                "replied_at": m.replied_at.isoformat() if m.replied_at and hasattr(m.replied_at, "isoformat") else str(m.replied_at) if m.replied_at else None,
+            }
+            for m in msgs
+        ],
+    }
+
+
+@router.post("/admin/messages/{message_id}/reply")
+async def reply_to_admin_message_route(message_id: int, payload: AdminReplyPayload, db: Session = Depends(get_db)):
+    """Admin endpoint: replies to a student/user inquiry."""
+    from .database import AdminMessage
+    from datetime import datetime, timezone
+    msg = db.query(AdminMessage).filter(AdminMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    msg.admin_reply = payload.reply
+    msg.status = "replied"
+    msg.replied_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {
+        "status": "success",
+        "message_id": message_id,
+        "admin_reply": payload.reply,
+        "status": "replied",
+    }
+

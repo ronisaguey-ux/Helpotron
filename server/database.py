@@ -296,6 +296,20 @@ class SharedMaterial(Base):
     shared_by = relationship("User")
 
 
+class AdminMessage(Base):
+    __tablename__ = "admin_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    subject: Mapped[str] = mapped_column(String(256), default="Message to Admin")
+    category: Mapped[str] = mapped_column(String(64), default="general")
+    message: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="sent")  # sent, read, replied
+    admin_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 def get_db() -> Generator[Any, None, None]:
     db = SessionLocal()
     try:

@@ -175,6 +175,12 @@ export const api = {
   sendPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-challenge', { method: 'POST', body: JSON.stringify(data) }),
   verifyPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-verify', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Message Admin Direct Channel
+  sendMessageToAdmin: (data) => request('/api/user/message-admin', { method: 'POST', body: JSON.stringify(data) }),
+  getMyAdminMessages: () => request('/api/user/my-admin-messages', { method: 'GET' }),
+  getAllAdminMessages: () => request('/api/admin/messages', { method: 'GET' }),
+  replyToAdminMessage: (messageId, reply) => request(`/api/admin/messages/${messageId}/reply`, { method: 'POST', body: JSON.stringify({ reply }) }),
+
   // Admin endpoints
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),
   adminAnalytics: () => request('/api/admin/analytics', { method: 'GET' }),

@@ -108,3 +108,55 @@ async def set_model_override_endpoint(
     require_admin(request)
     res = admin_advanced_service.set_routing_override(payload.task_type, payload.model_id)
     return res
+
+
+@router.get("/messages")
+async def get_all_admin_messages_endpoint(request: Request, limit: int = 100, db: Session = Depends(get_db)):
+    """Admin endpoint: lists all incoming messages from students/users."""
+    from .database import AdminMessage
+    msgs = db.query(AdminMessage).order_by(AdminMessage.id.desc()).limit(limit).all()
+    return {
+        "status": "success",
+        "count": len(msgs),
+        "messages": [
+            {
+                "id": m.id,
+                "user_id": m.user_id,
+                "subject": m.subject,
+                "category": m.category,
+                "message": m.message,
+                "status": m.status,
+                "admin_reply": m.admin_reply,
+                "created_at": m.created_at.isoformat() if hasattr(m.created_at, "isoformat") else str(m.created_at),
+                "replied_at": m.replied_at.isoformat() if m.replied_at and hasattr(m.replied_at, "isoformat") else str(m.replied_at) if m.replied_at else None,
+            }
+            for m in msgs
+        ],
+    }
+
+
+class AdminReplyPayload(BaseModel):
+    reply: str = Field(..., min_length=1, max_length=10000)
+
+
+@router.post("/messages/{message_id}/reply")
+async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPayload, db: Session = Depends(get_db)):
+    """Admin endpoint: replies to a student/user inquiry."""
+    from .database import AdminMessage
+    from datetime import datetime, timezone
+    msg = db.query(AdminMessage).filter(AdminMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    msg.admin_reply = payload.reply
+    msg.status = "replied"
+    msg.replied_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {
+        "status": "success",
+        "message_id": message_id,
+        "admin_reply": payload.reply,
+        "status": "replied",
+    }
+

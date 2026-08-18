@@ -51,6 +51,7 @@ import {
   FileSpreadsheet,
   Archive,
   Search,
+  MessageSquare,
 } from 'lucide-react';
 
 const GRADE_LETTER_MAP = [
@@ -863,6 +864,7 @@ export default function UserSettingsModal({
               { key: 'permissions', label: 'Auto-Approved Actions', icon: CheckCircle2 },
               { key: 'notifications', label: 'Notifications Center', icon: Bell },
               { key: 'privacy_policy', label: 'Privacy Policy', icon: ShieldCheck },
+              { key: 'message_admin', label: 'Message Admin', icon: MessageSquare, badge: 'DIRECT' },
               { key: 'account', label: 'Data Compliance & Account', icon: Lock },
             ].map((tab) => {
               const Icon = tab.icon;
@@ -1761,6 +1763,14 @@ export default function UserSettingsModal({
                     </div>
                   )}
 
+                  {/* Honest Crediting Policy Notice */}
+                  <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <strong>Micro-Credits Crediting & Utilization Policy:</strong> Micro-credits are only awarded once your submitted data is verified and utilized by the synthesis engine. Please note: Processing may take <strong>2+ business days</strong> for credits to arrive in your balance.
+                    </div>
+                  </div>
+
                   {/* Data Submission Box with Sub-Agent Valuation */}
                   <div className="clean-card p-5 space-y-4">
                     <div>
@@ -1806,19 +1816,22 @@ export default function UserSettingsModal({
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                       >
                         <Send className="w-3.5 h-3.5" />
-                        <span>{submittingData ? 'Sub-Agent Ranking in Progress...' : 'Submit to Data Lake & Earn Credits'}</span>
+                        <span>{submittingData ? 'Sub-Agent Ranking in Progress...' : 'Submit to Data Lake (2+ Days Verification)'}</span>
                       </button>
                     </form>
 
                     {/* Live Valuation Breakdown Card */}
                     {valuationResult && (
-                      <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/30 text-xs space-y-2 animate-fadeIn">
-                        <div className="flex items-center justify-between text-emerald-400 font-bold">
-                          <span>✅ Awarded +{valuationResult.credits_awarded} Micro-Credits</span>
-                          <span className="font-mono">${valuationResult.usd_value} USD</span>
+                      <div className="p-4 rounded-xl bg-slate-950/80 border border-amber-500/30 text-xs space-y-2 animate-fadeIn">
+                        <div className="flex items-center justify-between text-amber-400 font-bold">
+                          <span>⏳ Estimated +{valuationResult.credits_awarded} Micro-Credits</span>
+                          <span className="font-mono text-xs text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Pending Utilization (2+ Business Days)</span>
                         </div>
                         <p className="text-slate-300 text-[11px] leading-relaxed">{valuationResult.valuation?.reasoning}</p>
-                        <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10px] text-slate-400">
+                        <div className="text-[11px] text-amber-200/90 font-mono">
+                          {valuationResult.utilization_notice || '⏳ Micro-credits will be credited once verified and utilized in synthesis.'}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10px] text-slate-400 border-t border-white/5">
                           <div>Relevance: {valuationResult.valuation?.relevance}/10</div>
                           <div>Uniqueness: {valuationResult.valuation?.uniqueness}/10</div>
                           <div>Actionability: {valuationResult.valuation?.actionability}/10</div>
@@ -1838,12 +1851,70 @@ export default function UserSettingsModal({
                               <span className="font-semibold text-white">{sub.title}</span>
                               <span className="text-[10px] text-slate-500 ml-2 font-mono">{sub.data_type}</span>
                             </div>
-                            <span className="text-emerald-400 font-mono font-bold">+{sub.credits_awarded} cr</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                {sub.status === 'credited' ? '✅ Credited' : '⏳ Pending (2+ days)'}
+                              </span>
+                              <span className="text-emerald-400 font-mono font-bold">+{sub.credits_awarded} cr</span>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ─── 8. MESSAGE ADMIN TAB ─── */}
+              {activeTab === 'message_admin' && (
+                <div className="space-y-4">
+                  <div className="clean-card p-5 rounded-2xl bg-slate-950/60 border border-white/10 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-blue-400" />
+                        Direct Message to Admin
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Reach Admin directly regarding custom extensions, parsers, feature requests, or urgent inquiries.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Direct Message Form inside settings */}
+                  <div className="clean-card p-5 rounded-2xl bg-slate-950/40 border border-white/10 space-y-3 text-xs">
+                    <label className="text-slate-300 block font-semibold">Send Direct Message to Admin</label>
+                    <textarea
+                      rows={4}
+                      placeholder="Describe your inquiry, request, or issue..."
+                      value={newRuleInput}
+                      onChange={(e) => setNewRuleInput(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!newRuleInput.trim()) return;
+                          try {
+                            await api.sendMessageToAdmin({
+                              subject: 'Direct Message from Settings',
+                              category: 'general',
+                              message: newRuleInput.trim(),
+                            });
+                            setSaveStatus('✅ Message delivered directly to Admin.');
+                            setNewRuleInput('');
+                            setTimeout(() => setSaveStatus(''), 4000);
+                          } catch (e) {
+                            setSaveStatus('Error dispatching message.');
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send to Admin</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

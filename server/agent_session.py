@@ -31,28 +31,32 @@ COMMAND_TIMEOUT = 40  # seconds to wait for the extension to execute one command
 ATTACH_TIMEOUT = 60   # seconds to wait for the extension to connect after start
 
 AGENT_SYSTEM = (
-    "You are the Helpotron collection agent working inside the user's own "
-    "Canvas tab. Your mission: gather everything needed to build study "
-    "materials for the current assignment — the full prompt, rubric or "
-    "requirements, attached-file descriptions, and any related module or "
-    "lecture pages. Navigate and read pages with the tools; you can see the "
-    "page text after read_page. When the assignment details are complete, "
-    "call finish with a short summary of what you collected. Never submit "
-    "anything, never click destructive actions. Stay inside the user's own "
-    "Canvas account. Prefer read_page to inspect a page before clicking links."
+    "You are the Helpotron Universal Collection Subagent working inside the user's selected browser tab. "
+    "Your mission: slowly and methodically gather everything needed to build structured assignment data and study "
+    "materials from ANY educational platform or arbitrary website (Canvas, Google Classroom, Blackboard, Brightspace, Moodle, Schoology, Google Docs, Notion, or custom faculty pages). "
+    "Extract the assignment title, due date, full prompt/description, rubric criteria/tables, instructor guidance, and attached files. "
+    "Navigate and inspect pages using your tool calls. When the assignment details are complete, call 'finish' with the structured JSON payload. "
+    "If the page is heavily obfuscated, DRM-protected, or does not contain readable assignment data, honestly call 'report_unparseable' and suggest submitting feedback to the Data Lake. "
+    "Never submit anything, never take destructive actions."
 )
 
 TOOL_DOC = """Tools (call EXACTLY one per turn, as JSON):
-{"tool": "read_page"} — current page text + links + url + title
-{"tool": "click", "args": {"selector": "<css selector>"}} — click an element
+{"tool": "read_page"} — current page text + links + url + title + detected LMS metadata
+{"tool": "inspect_dom", "args": {"selector": "<css selector>"}} — targeted element inspection
+{"tool": "extract_rubric", "args": {"selector": "<optional table or container selector>"}} — structured rubric parser
+{"tool": "extract_files"} — gathers all downloadable attachment links, PDFs, and Google Drive links
+{"tool": "click", "args": {"selector": "<css selector>"}} — click an element (e.g. accordion, rubric tab)
 {"tool": "type", "args": {"selector": "<css>", "text": "<value>"}} — fill an input
-{"tool": "scroll", "args": {"direction": "down"|"up"}}
-{"tool": "navigate", "args": {"url": "<full canvas url>"}}
-{"tool": "finish", "args": {"summary": "<what you collected>"}} — end the session
+{"tool": "scroll", "args": {"direction": "down"|"up"}} — methodically scroll to trigger lazy-loaded sections
+{"tool": "navigate", "args": {"url": "<full target url>"}} — navigate to related syllabus/assignment links
+{"tool": "report_unparseable", "args": {"reason": "<honest explanation of why this page cannot be parsed>"}} — report unparseable page and direct to Data Lake
+{"tool": "finish", "args": {"summary": "<summary>", "assignment": {"title": "...", "due_date": "...", "prompt": "...", "rubric": "...", "file_urls": []}}} — end session and ingest data into Helpotron
 
-Strategy: after navigate/click, always read_page to see what loaded. If a
-selector fails, try links from the previous read_page instead of guessing.
-If you already have the full assignment details, finish — don't wander."""
+Strategy:
+1. Call 'read_page' first to analyze page contents and detect page type.
+2. If sections are collapsed, use 'click' to open rubrics or files.
+3. If complete assignment data is extracted, call 'finish'.
+4. If page cannot be parsed, honestly call 'report_unparseable'."""
 
 
 class AgentSession:
@@ -162,11 +166,24 @@ class AgentManager:
 
                 tool = decision["tool"]
                 args = decision.get("args") or {}
+                if tool == "report_unparseable":
+                    session.status = "unparseable"
+                    reason = args.get("reason", "This website cannot be automatically parsed due to proprietary layout, DRM, or missing assignment data.")
+                    session.result_text = f"⚠️ Unparseable Website: {reason} Please submit this page/syllabus to the Data Lake to earn micro-credits and help train our platform."
+                    session.log.append({"step": session.steps, "event": "report_unparseable", "detail": reason[:200]})
+                    await _send(session, {
+                        "type": "unparseable",
+                        "reason": reason,
+                        "datalake_prompt": "Submit snippet to Data Lake to earn micro-credits.",
+                    })
+                    return
+
                 if tool == "finish":
                     session.status = "done"
                     session.result_text = str(args.get("summary", ""))[:4000]
+                    assignment_data = args.get("assignment") or {}
                     session.log.append({"step": session.steps, "event": "finish", "detail": session.result_text[:200]})
-                    await _send(session, {"type": "finished", "summary": session.result_text})
+                    await _send(session, {"type": "finished", "summary": session.result_text, "assignment": assignment_data})
                     return
 
                 step = session.steps + 1

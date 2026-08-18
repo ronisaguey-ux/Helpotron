@@ -14,6 +14,7 @@ import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
+import MessageAdminView from './components/MessageAdminView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
@@ -41,6 +42,7 @@ import {
   Trophy,
   History as HistoryIcon,
   LogOut,
+  MessageSquare,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -257,6 +259,7 @@ export default function App() {
     { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
     { key: 'billing', label: 'Plans & Credits', icon: CreditCard, badge: null },
+    { key: 'message_admin', label: 'Message Admin', icon: MessageSquare, badge: 'DIRECT' },
     { key: 'settings', label: 'Settings', icon: SettingsIcon, badge: null },
     { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, badge: null },
   ];
@@ -525,6 +528,10 @@ export default function App() {
 
               {activeView === 'billing' && (
                 <Billing userId={userId} />
+              )}
+
+              {activeView === 'message_admin' && (
+                <MessageAdminView userId={userId} />
               )}
 
               {activeView === 'history' && (
