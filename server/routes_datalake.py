@@ -26,12 +26,9 @@ class FeedbackStatusUpdate(BaseModel):
 
 
 class MicroCreditSubmission(BaseModel):
-    data_type: str = Field(
-        ...,
-        description="assignment_score (1-5 cr) | teacher_quirk (5-15 cr) | lecture_notes (5-25 cr) | instructor_feedback (10-25 cr) | feedback_sample (10-25 cr)",
-    )
-    title: str = Field("Untitled Data Submission", min_length=2, max_length=200)
-    data_content: str = Field(..., min_length=5, max_length=15000)
+    data_type: Optional[str] = None
+    title: Optional[str] = None
+    data_content: str = Field("", max_length=50000)
     user_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 

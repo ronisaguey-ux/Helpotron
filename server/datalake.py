@@ -277,45 +277,86 @@ class DataLakeManager:
     def evaluate_and_record_microcredit_submission(
         self,
         user_id: Any,
-        data_type: str,
-        title: str,
-        data_content: str,
+        data_type: Optional[str] = None,
+        title: Optional[str] = None,
+        data_content: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Evaluates a data submission against the Valuation Rubric (Relevance, Uniqueness, Actionability)
+        """Dedicated AI Sub-Agent interprets and classifies data lake submission, awarding 0-25 Micro-Credits."""
+        meta = metadata or {}
+        file_name = meta.get("file_name", "")
+        clean_text = (data_content or "").strip()
+        combined_text = f"{file_name} {clean_text}".strip()
 
-        Awards 1-25 Micro-Credits and saves submission.
-        """
-        # Rubric boundaries per data type
-        val_bounds = {
-            "assignment_score": (1, 5),
-            "teacher_quirk": (5, 15),
-            "lecture_notes": (5, 25),
-            "instructor_feedback": (10, 25),
-            "feedback_sample": (10, 25),
-        }
-        min_cr, max_cr = val_bounds.get(data_type, (1, 10))
+        # Autonomous Sub-Agent Classification Logic
+        lower = combined_text.lower()
+        if any(w in lower for w in ["quirk", "strict", "grader", "prefers", "hates", "deducts", "pet peeve", "harsh"]):
+            classified_category = "Teacher Grading Quirk & Bias"
+            base_category_bonus = 12
+        elif any(w in lower for w in ["rubric", "criteria", "points", "grade scale", "grading breakdown", "weight", "marks"]):
+            classified_category = "Grading Rubric Breakdown"
+            base_category_bonus = 15
+        elif any(w in lower for w in ["syllabus", "schedule", "course outline", "office hours", "prerequisites", "textbook"]):
+            classified_category = "Course Syllabus & Schedule"
+            base_category_bonus = 10
+        elif any(w in lower for w in ["lecture", "transcript", "audio", "notes", "summary", "slides", "chapter"]):
+            classified_category = "Lecture Notes & Audio Transcripts"
+            base_category_bonus = 14
+        elif any(w in lower for w in ["feedback", "comments", "professor noted", "ta feedback", "revision", "peer review"]):
+            classified_category = "Instructor & Peer Feedback"
+            base_category_bonus = 16
+        else:
+            classified_category = "Academic Dataset & General Notes"
+            base_category_bonus = 8
 
-        content_len = len(data_content.strip())
-        words = data_content.strip().split()
+        # Auto-generate Title if missing
+        if not title or title.strip() in ("", "Untitled Data Submission", "auto"):
+            if file_name:
+                auto_title = file_name.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+            else:
+                first_line = clean_text.split("\n")[0][:60].strip()
+                auto_title = first_line if len(first_line) > 5 else f"{classified_category} Extract"
+        else:
+            auto_title = title.strip()
 
-        # Rubric evaluations (1 to 10 scale)
-        # Relevance: Did user provide structured detail?
-        relevance = min(10, max(3, 4 + min(4, len(words) // 20)))
-        # Uniqueness: Non-trivial lexical density
-        uniqueness = min(10, max(4, 5 + min(5, len(set(words)) // 15)))
-        # Actionability: Specific references / scores
-        actionability = min(10, max(4, 6 if any(c in data_content for c in ["deduct", "rubric", "MLA", "APA", "grade", "%", "score"]) else 4))
+        # Score calculation from 0 to 25 Micro-Credits
+        words = clean_text.split()
+        word_count = len(words)
+        has_file = bool(file_name)
 
-        avg_score = (relevance + uniqueness + actionability) / 30.0  # 0.0 to 1.0
-        credit_award = int(round(min_cr + (max_cr - min_cr) * avg_score))
-        credit_award = max(min_cr, min(max_cr, credit_award))
+        if word_count < 3 and not has_file:
+            # Low quality / insufficient
+            credit_award = 0
+            relevance = 1
+            uniqueness = 1
+            actionability = 1
+            reasoning = "Sub-Agent evaluation: Submission contains insufficient textual density to train models. 0 Micro-Credits awarded."
+        else:
+            # Detailed algorithmic evaluation on 1-10 scales
+            relevance = min(10, max(3, 4 + min(4, word_count // 15) + (2 if has_file else 0)))
+            uniqueness = min(10, max(3, 3 + min(5, len(set(words)) // 12) + (2 if has_file else 0)))
+            actionability = min(10, max(4, 5 + (3 if any(c in lower for c in ["%", "score", "grade", "rubric", "format", "turnitin", "page", "citation"]) else 0)))
 
-        reasoning = (
-            f"Sub-Agent evaluated submission type '{data_type}': "
-            f"Relevance={relevance}/10, Uniqueness={uniqueness}/10, Actionability={actionability}/10. "
-            f"Estimated {credit_award} Micro-Credits upon utilization."
-        )
+            score_norm = (relevance * 0.35 + uniqueness * 0.35 + actionability * 0.30) / 10.0
+            computed = int(round(score_norm * (base_category_bonus + 10)))
+            credit_award = max(0, min(25, computed))
+
+            val_bounds = {
+                "assignment_score": (1, 5),
+                "teacher_quirk": (5, 15),
+                "lecture_notes": (5, 25),
+                "instructor_feedback": (10, 25),
+                "feedback_sample": (10, 25),
+            }
+            if data_type in val_bounds:
+                min_c, max_c = val_bounds[data_type]
+                credit_award = max(min_c, min(max_c, credit_award))
+
+            reasoning = (
+                f"Sub-Agent classified this submission as '{classified_category}'. "
+                f"Evaluation: Relevance={relevance}/10, Uniqueness={uniqueness}/10, Actionability={actionability}/10. "
+                f"Awarded {credit_award}/25 Micro-Credits based on empirical training value."
+            )
 
         sub_id = f"mc_{uuid.uuid4().hex[:8]}"
         record = {
@@ -323,20 +364,23 @@ class DataLakeManager:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_hash": _anonymize_id(user_id),
             "raw_user_id": str(user_id) if user_id else "RoniDev",
-            "data_type": data_type,
-            "title": title or f"Submission ({data_type})",
-            "snippet": data_content[:200] + ("..." if len(data_content) > 200 else ""),
+            "data_type": classified_category,
+            "title": auto_title,
+            "snippet": clean_text[:200] + ("..." if len(clean_text) > 200 else ""),
+            "has_file": has_file,
+            "file_name": file_name if has_file else None,
             "credits_awarded": credit_award,
             "usd_value": round(credit_award / 100.0, 2),
-            "status": "pending_utilization",  # Credited once actually used/verified in synthesis
+            "status": "pending_utilization",  # Credited once verified/utilized in synthesis
             "utilization_notice": "⏳ Micro-credits from Data Lake entries are credited once your submitted data is verified and utilized in synthesis. Processing may take 2+ business days for credits to arrive in your balance.",
             "valuation": {
+                "category": classified_category,
                 "relevance": relevance,
                 "uniqueness": uniqueness,
                 "actionability": actionability,
                 "reasoning": reasoning,
             },
-            "metadata": metadata or {},
+            "metadata": meta,
         }
 
         try:
