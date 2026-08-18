@@ -1,44 +1,91 @@
 """Default writing style samples for each reading level and grade target.
 
-These are excerpts from public domain books (Project Gutenberg) to use as
-fallback writing styles when the student hasn't uploaded custom text.
+Excerpts from public domain literature and scholarly texts (Project Gutenberg / Open Access)
+to use as fallback writing styles when the user hasn't uploaded custom text samples.
+Supports 3rd Grade through PhD Professor.
 """
 
-# Map reading level -> grade target -> sample text
-# Grade targets: 'F', 'D', 'D+', 'C', 'C+', 'B', 'B+', 'A', 'A+'
-# For simplicity, we use one sample per reading level; the grade target can
-# influence the complexity of the sample, but we'll keep it simple.
-
 DEFAULT_STYLES = {
-    "9th": {
-        "default": """Tom Sawyer was a boy of about twelve years old. He lived with his Aunt Polly in a small town on the Mississippi River. Tom was always getting into trouble. He hated school and loved adventure. One day, he decided to play hooky and went swimming instead of going to school. His aunt punished him by making him whitewash the fence on a Saturday. But Tom was clever. He convinced his friends that whitewashing was a great privilege, and they paid him to do it for him. Tom's adventures were many and varied. He and his friend Huckleberry Finn once witnessed a murder in the graveyard. They ran away and became pirates on an island. They even attended their own funeral. Tom was always full of schemes and pranks, but he had a good heart. He eventually found treasure and became the richest boy in town."""
+    "3rd_grade": {
+        "label": "3rd Grade Elementary",
+        "default": "Wilbur loved Charlotte. She was kind and smart. Every day she would spin a new word in her web. All the animals on the farm watched in wonder. Wilbur felt safe and happy in the barn with all his new friends."
     },
-    "10th": {
-        "default": """It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of some one or other of their daughters. My dear Mr. Bennet, said his lady to him one day, have you heard that Netherfield Park is let at last? Mr. Bennet replied that he had not. But it is, returned she; for Mrs. Long has just been here, and she told me all about it. Mr. Bennet made no answer. Do you not want to know who has taken it? cried his wife impatiently. You want to tell me, and I have no objection to hearing it. This was invitation enough. Why, my dear, you must know, Mrs. Long says that Netherfield is taken by a young man of large fortune from the north of England; that he came down on Monday in a chaise and four to see the place, and was so much delighted with it, that he agreed with Mr. Morris immediately; that he is to take possession before Michaelmas, and some of his servants are to be in the house by the end of next week."""
+    "4th_grade": {
+        "label": "4th Grade Elementary",
+        "default": "Peter lived with his family near Central Park. His little brother Fudge was always getting into mischief. One day Fudge swallowed Peter's pet turtle. Peter was very upset, but his parents helped him understand how to take care of his family."
     },
-    "11th": {
-        "default": """The Picture of Dorian Gray is a novel by Oscar Wilde. The story is about a young man named Dorian Gray who has his portrait painted by a friend. Dorian is so beautiful that he wishes to remain young forever, while the portrait ages instead. His wish comes true, and he leads a life of pleasure and vice, while the portrait becomes more and more hideous. Dorian eventually murders the painter and tries to destroy the portrait, but in doing so, he kills himself. The novel is a study of aestheticism, morality, and the consequences of vanity. Wilde's writing is witty and full of epigrams. One of the most famous lines from the book is: 'There is no such thing as a moral or an immoral book. Books are well written, or badly written. That is all.' Dorian Gray's story is a cautionary tale about the dangers of narcissism and the pursuit of pleasure at all costs."""
+    "5th_grade": {
+        "label": "5th Grade Intermediate",
+        "default": "Jess and Leslie created a secret kingdom called Terabithia deep in the woods across the creek. They spent their afternoons building castles, imagining adventures, and helping each other overcome their fears at school."
     },
-    "12th": {
-        "default": """Frankenstein; or, The Modern Prometheus is a novel written by Mary Shelley. The story begins with a man named Victor Frankenstein who discovers the secret of life and creates a creature from dead body parts. He is horrified by his creation and abandons it. The creature, however, is intelligent and sensitive, and it eventually seeks revenge on Victor for his abandonment. The creature kills Victor's family and friends, and Victor pursues it to the Arctic. The novel explores themes of creation, responsibility, and the consequences of playing God. Shelley's writing is Gothic and romantic, and the book is considered one of the earliest works of science fiction. The creature's final words to Victor are: 'I am the devil, but I am also your child.' The novel raises questions about what it means to be human and the ethics of scientific advancement."""
+    "6th_grade": {
+        "label": "6th Grade Middle School",
+        "default": "Meg Murry, her small brother Charles Wallace, and their mother were sitting in the kitchen during a terrible storm. A mysterious visitor arrived with news of the fifth dimension and a journey across time and space."
     },
-    "college-freshman": {
-        "default": """The Time Machine is a science fiction novella by H.G. Wells. It tells the story of a time traveler who invents a machine that can travel through time. He travels to the year 802,701 AD, where he finds two species of creatures: the Eloi, a peaceful but weak race, and the Morlocks, a subterranean race that preys on the Eloi. The time traveler then travels further into the future, to a time when the Earth is dying and the sun is fading. The novella is a commentary on class divisions and the evolution of humanity. Wells's writing is imaginative and thought-provoking. The time traveler's final journey into the far future leaves him stranded, and he never returns. The story is a classic of early science fiction and explores themes of time, progress, and the ultimate fate of humanity."""
+    "7th_grade": {
+        "label": "7th Grade Middle School",
+        "default": "Jonas was feeling apprehensive. It was almost December, and the Ceremony of Twelve was approaching. In their community, life was orderly, predictable, and free from pain, but Jonas was about to discover the hidden truth behind their memories."
     },
-    "sophomore": {
-        "default": """The Count of Monte Cristo is an adventure novel by Alexandre Dumas. The story is about a young sailor named Edmond Dantès who is unjustly imprisoned on the island of Château d'If. He spends years in prison, but eventually escapes and discovers a hidden treasure on the island of Monte Cristo. He reinvents himself as the Count of Monte Cristo and sets out to seek revenge on the three men who betrayed him. The novel is a tale of justice, redemption, and the consequences of obsession. Dumas's writing is rich and full of dramatic twists. The Count's plan is elaborate and methodical, and he slowly destroys his enemies one by one. However, he also learns that revenge has its limits, and he ultimately finds a measure of peace. The novel is one of the most popular works of French literature and has been adapted into numerous films and television shows."""
-    }
+    "8th_grade": {
+        "label": "8th Grade Middle School",
+        "default": "Scout Finch lived with her father Atticus and brother Jem in Maycomb, Alabama. Atticus taught his children that you never really understand a person until you consider things from his point of view—until you climb into his skin and walk around in it."
+    },
+    "high_school": {
+        "label": "High School (Default)",
+        "default": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of their daughters."
+    },
+    "undergrad_freshman": {
+        "label": "Undergraduate Freshman",
+        "default": "The investigation of natural phenomena requires rigorous observational discipline combined with structured theoretical models. In analyzing the principles of mechanical velocity and thermodynamic equilibrium, one must account for systematic measurement errors and contextual boundary conditions."
+    },
+    "undergrad_senior": {
+        "label": "Undergraduate Senior",
+        "default": "The discourse surrounding cognitive synthesis and linguistic determinism suggests that syntactic structures significantly constrain semantic retrieval. Empirical studies demonstrate that semantic priming accelerates lexeme categorization across distributed neuro-computational architectures."
+    },
+    "masters": {
+        "label": "Master's Scholar",
+        "default": "A comprehensive meta-analysis of epistemological methodologies indicates significant divergence between post-positivist empiricism and hermeneutic phenomenology. Quantitative regressors reveal robust correlations between institutional governance frameworks and socio-economic resilience metrics under exogenous shocks."
+    },
+    "phd_candidate": {
+        "label": "PhD Candidate",
+        "default": "By formalizing the variational free energy principle within non-equilibrium stochastic thermodynamics, we delineate the mathematical bounds of active inference. The resulting Markov blankets enforce conditional statistical independence across hierarchical latent representations."
+    },
+    "phd_professor": {
+        "label": "PhD Professor / Post-Doc",
+        "default": "The hermeneutic deconstruction of relativistic paradigms necessitates a recalibration of ontological priors. Through axiomatic formalization of non-Abelian gauge symmetries, we substantiate the dialectical convergence of quantum statistical mechanics and higher-order topological invariants."
+    },
 }
+
+ACADEMIC_LEVELS = [
+    {"key": "3rd_grade", "label": "3rd Grade (Elementary)"},
+    {"key": "4th_grade", "label": "4th Grade (Elementary)"},
+    {"key": "5th_grade", "label": "5th Grade (Elementary)"},
+    {"key": "6th_grade", "label": "6th Grade (Middle School)"},
+    {"key": "7th_grade", "label": "7th Grade (Middle School)"},
+    {"key": "8th_grade", "label": "8th Grade (Middle School)"},
+    {"key": "high_school", "label": "High School (Default)"},
+    {"key": "undergrad_freshman", "label": "Undergraduate (Freshman/Sophomore)"},
+    {"key": "undergrad_senior", "label": "Undergraduate (Junior/Senior)"},
+    {"key": "masters", "label": "Master's Graduate Scholar"},
+    {"key": "phd_candidate", "label": "PhD Candidate / Researcher"},
+    {"key": "phd_professor", "label": "PhD Professor / Principal Investigator"},
+]
 
 
 def get_default_style(reading_level: str, target_grade: str = "default") -> str:
-    """Return a default writing style sample for the given reading level and target grade."""
-    level = reading_level or "college-freshman"
-    # Normalize: if level not in dict, default to college-freshman
+    """Return a default writing style sample for the given reading level."""
+    level = reading_level or "high_school"
     if level not in DEFAULT_STYLES:
-        level = "college-freshman"
-    # Try to get target_grade-specific, else fallback to "default"
-    style_dict = DEFAULT_STYLES[level]
-    if target_grade in style_dict:
-        return style_dict[target_grade]
-    return style_dict.get("default", "")  # fallback to empty string
+        # Fallback aliases
+        alias_map = {
+            "9th": "high_school",
+            "10th": "high_school",
+            "11th": "high_school",
+            "12th": "high_school",
+            "college-freshman": "undergrad_freshman",
+            "sophomore": "undergrad_freshman",
+        }
+        level = alias_map.get(level, "high_school")
+    
+    style_entry = DEFAULT_STYLES.get(level, DEFAULT_STYLES["high_school"])
+    return style_entry.get("default", "")

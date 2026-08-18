@@ -53,6 +53,7 @@ class DataLakeManager:
         self.feedback_file = FEEDBACK_DIR / "user_feedback.jsonl"
         self.insights_file = INSIGHTS_DIR / "latest_insights.json"
         self.corpus_file = CORPUS_DIR / "humanized_samples.jsonl"
+        self.microcredits_file = DATALAKE_DIR / "microcredit_submissions.jsonl"
 
     def log_telemetry(self, event_type: str, data: Dict[str, Any]) -> None:
         """Appends an anonymized operational event record."""
@@ -273,12 +274,103 @@ class DataLakeManager:
             logger.error("Error reading telemetry file: %s", e)
         return events[-limit:]
 
+    def evaluate_and_record_microcredit_submission(
+        self,
+        user_id: Any,
+        data_type: str,
+        title: str,
+        data_content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Evaluates a data submission against the Valuation Rubric (Relevance, Uniqueness, Actionability)
+
+        Awards 1-25 Micro-Credits and saves submission.
+        """
+        # Rubric boundaries per data type
+        val_bounds = {
+            "assignment_score": (1, 5),
+            "teacher_quirk": (5, 15),
+            "lecture_notes": (5, 25),
+            "instructor_feedback": (10, 25),
+            "feedback_sample": (10, 25),
+        }
+        min_cr, max_cr = val_bounds.get(data_type, (1, 10))
+
+        content_len = len(data_content.strip())
+        words = data_content.strip().split()
+
+        # Rubric evaluations (1 to 10 scale)
+        # Relevance: Did user provide structured detail?
+        relevance = min(10, max(3, 4 + min(4, len(words) // 20)))
+        # Uniqueness: Non-trivial lexical density
+        uniqueness = min(10, max(4, 5 + min(5, len(set(words)) // 15)))
+        # Actionability: Specific references / scores
+        actionability = min(10, max(4, 6 if any(c in data_content for c in ["deduct", "rubric", "MLA", "APA", "grade", "%", "score"]) else 4))
+
+        avg_score = (relevance + uniqueness + actionability) / 30.0  # 0.0 to 1.0
+        credit_award = int(round(min_cr + (max_cr - min_cr) * avg_score))
+        credit_award = max(min_cr, min(max_cr, credit_award))
+
+        reasoning = (
+            f"Sub-Agent evaluated submission type '{data_type}': "
+            f"Relevance={relevance}/10, Uniqueness={uniqueness}/10, Actionability={actionability}/10. "
+            f"Awarded {credit_award} Micro-Credits."
+        )
+
+        sub_id = f"mc_{uuid.uuid4().hex[:8]}"
+        record = {
+            "submission_id": sub_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user_hash": _anonymize_id(user_id),
+            "raw_user_id": str(user_id) if user_id else "RoniDev",
+            "data_type": data_type,
+            "title": title or f"Submission ({data_type})",
+            "snippet": data_content[:200] + ("..." if len(data_content) > 200 else ""),
+            "credits_awarded": credit_award,
+            "usd_value": round(credit_award / 100.0, 2),
+            "status": "awarded",
+            "valuation": {
+                "relevance": relevance,
+                "uniqueness": uniqueness,
+                "actionability": actionability,
+                "reasoning": reasoning,
+            },
+            "metadata": metadata or {},
+        }
+
+        try:
+            with open(self.microcredits_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.error("Failed recording microcredit submission: %s", e)
+
+        return record
+
+    def list_microcredit_submissions(self, user_id: Optional[Any] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Lists user's microcredit submissions."""
+        if not self.microcredits_file.exists():
+            return []
+        items = []
+        user_str = str(user_id) if user_id else None
+        try:
+            with open(self.microcredits_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    rec = json.loads(line)
+                    if user_str and rec.get("raw_user_id") and rec.get("raw_user_id") != user_str:
+                        continue
+                    items.append(rec)
+        except Exception as e:
+            logger.error("Error reading microcredits file: %s", e)
+        return items[::-1][:limit]
+
 
 class DataLakeIntelligenceAgent:
     """Autonomous agent that analyzes telemetry and feedback to produce system insights."""
 
     def __init__(self, manager: Optional[DataLakeManager] = None) -> None:
-        self.manager = manager or DataLakeManager()
+        self.manager = manager or datalake_manager
 
     async def analyze_lake(self) -> Dict[str, Any]:
         """Runs pattern discovery, feedback correlation, and performance synthesis."""

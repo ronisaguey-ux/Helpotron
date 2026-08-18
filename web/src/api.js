@@ -143,8 +143,20 @@ export const api = {
   simulationStatus: () => request('/api/simulation/status', { method: 'GET' }),
   simulationToggle: (enabled) => request('/api/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
   simulationSeed: () => request('/api/simulation/seed', { method: 'POST' }),
-  simulationClear: () => request('/api/simulation/clear', { method: 'POST' }),
-  
+  // Settings, Custom Styles, TRIO & Academic Levels
+  getUserSettings: () => request('/api/user/settings', { method: 'GET' }),
+  getAcademicLevels: () => request('/api/user/academic-levels', { method: 'GET' }),
+  addStyleSample: (data) => request('/api/user/styles', { method: 'POST', body: JSON.stringify(data) }),
+  deleteStyleSample: (id) => request(`/api/user/styles/${id}`, { method: 'DELETE' }),
+  saveTrioRule: (data) => request('/api/user/trio', { method: 'POST', body: JSON.stringify(data) }),
+  deleteTrioRule: (id) => request(`/api/user/trio/${id}`, { method: 'DELETE' }),
+  resolveTrioContext: (data) => request('/api/user/trio/resolve', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Data Lake & Micro-Credits
+  submitDataLakeMicrocredits: (data) => request('/api/datalake/microcredits/submit', { method: 'POST', body: JSON.stringify(data) }),
+  getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  redeemMicrocredits: (data) => request('/api/datalake/microcredits/redeem', { method: 'POST', body: JSON.stringify(data) }),
+
   // Admin endpoints
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),
   adminAnalytics: () => request('/api/admin/analytics', { method: 'GET' }),

@@ -1,4 +1,13 @@
-"""User Settings, Personas, Citations, Goals, and Privacy Services for Helpotron."""
+"""User Settings, Personas, Citations, Goals, and Privacy Services for Helpotron.
+
+Includes:
+1. Target Score & Grade Scheduling Engine (Letter grades + 0-100 numeric mapping + Trajectory).
+2. Academic Level Engine (3rd Grade to PhD Professor).
+3. Multi-Sample Writing Style Customization (Scoped to Subject/Teacher, distinct from Data Lake).
+4. Individual AI Detector Toggles.
+5. Model Selection (Flash vs Pro).
+6. TRIO Context-Aware Resolution Engine (Target, Restriction, Inclusion, Override).
+"""
 from __future__ import annotations
 
 import csv
@@ -13,8 +22,38 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 from .database import Assignment, StudyMaterial, Transcript, User, get_db
+from .default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
 
 logger = logging.getLogger("helpotron.user_settings")
+
+GRADE_LETTER_MAP = [
+    {"letter": "F", "min": 0, "max": 59, "default_num": 50},
+    {"letter": "F+", "min": 60, "max": 62, "default_num": 61},
+    {"letter": "D", "min": 63, "max": 66, "default_num": 65},
+    {"letter": "D+", "min": 67, "max": 69, "default_num": 68},
+    {"letter": "C", "min": 70, "max": 73, "default_num": 72},
+    {"letter": "C+", "min": 74, "max": 76, "default_num": 75},
+    {"letter": "B", "min": 77, "max": 82, "default_num": 80},
+    {"letter": "B+", "min": 83, "max": 86, "default_num": 85},
+    {"letter": "A", "min": 87, "max": 92, "default_num": 90},
+    {"letter": "A+", "min": 93, "max": 100, "default_num": 98},
+]
+
+
+def score_to_letter(score: int | float) -> str:
+    s = max(0, min(100, int(round(score))))
+    for g in reversed(GRADE_LETTER_MAP):
+        if s >= g["min"]:
+            return g["letter"]
+    return "F"
+
+
+def letter_to_score(letter: str) -> int:
+    for g in GRADE_LETTER_MAP:
+        if g["letter"].upper() == letter.upper():
+            return g["default_num"]
+    return 85  # Default B+
+
 
 DEFAULT_PERSONAS = [
     {
@@ -48,61 +87,91 @@ DEFAULT_PERSONAS = [
 
 
 class UserSettingsService:
-    """Manages writing personas, display, localization, privacy, goals, and citations."""
+    """Manages context-aware personalization, TRIO scopes, styles, detectors, and scheduling."""
 
     @staticmethod
     def get_user_settings(user: User) -> Dict[str, Any]:
-        """Returns full normalized settings dictionary with robust defaults."""
+        """Returns full normalized settings dictionary with comprehensive context-aware defaults."""
         settings = dict(user.settings or {})
         defaults = {
-            "reading_level": "college-freshman",
-            "tone": "formal",
+            # 1. Target Grade & Academic Level
+            "academic_level": "high_school",  # 3rd_grade through phd_professor
+            "target_score_numeric": 88,
+            "target_score_letter": "A",
+            "grade_scheduling": {
+                "enabled": False,
+                "start_score": 75,  # C+
+                "target_score": 92,  # A
+                "rate_unit": "week",  # day | week | month
+                "increment_points": 3,
+                "increment_interval": 7,  # e.g. every 7 days
+                "start_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            },
+
+            # 2. Writing Customization & Humanization
+            "tone": "formal",  # formal | semi_formal | conversational
+            "vocabulary_level": "advanced",  # basic | intermediate | advanced | expert
+            "sentence_length": "mixed",  # short | medium | long | mixed
+            "creativity_level": "balanced",  # conservative | balanced | creative
+            "burstiness": 88,  # 0 - 100
+            "perplexity": 92,  # 0 - 100
             "active_persona_id": "persona_balanced",
             "personas": DEFAULT_PERSONAS,
+            "custom_style_samples": [],  # Array of { id, title, content, target_subject, target_teacher, extracted_style }
+
+            # 3. Individual AI Detectors
+            "ai_detectors": {
+                "pangram": True,
+                "sapling": True,
+                "originality_ai": True,
+                "copyleaks": True,
+                "winston_ai": True,
+                "perplexity_cadence": True,
+                "statistical_burstiness": True,
+            },
+
+            # 4. Model Selection (Flash vs Pro)
+            "model_selection": {
+                "draft_model": "flash",  # flash | pro
+                "humanizer_model": "pro",  # flash | pro
+                "default_model": "flash",
+            },
+
+            # 5. Data Lake & Micro-Credits
+            "datalake_opt_in": True,
+            "micro_credits_balance": 21,  # 100 micro-credits = $1.00 USD
+            "micro_credits_auto_redeem": False,
+
+            # 6. Context-Aware TRIO Overrides
+            "trio_rules": [],  # Array of { id, name, target: {type, value}, restriction, inclusion, overrides, apply_to_all }
+
+            # Display & General
             "display": {
                 "theme": "dark",
-                "custom_color": "#6366f1",
-                "font_size": "medium",  # small | medium | large | xlarge
-                "font_family": "sans-serif",  # sans-serif | serif | monospace | system
+                "custom_color": "#3b82f6",
+                "font_size": "medium",
                 "compact_mode": False,
-                "animation_level": "full",  # full | reduced | disabled
-            },
-            "feature_toggles": {
-                "plagiarism_checker": True,
-                "citation_generator": True,
-                "goal_tracker": True,
-                "study_groups": True,
-                "data_discount": True,
-                "gdocs_export": True,
             },
             "localization": {
-                "language": "en",  # en | es | fr
-                "date_format": "YYYY-MM-DD",  # MM/DD/YYYY | DD/MM/YYYY | YYYY-MM-DD
-                "timezone": "UTC",
+                "language": "en",
+                "date_format": "YYYY-MM-DD",
+                "timezone": "America/New_York",
             },
             "notifications": {
                 "email_assignment_completion": True,
-                "email_feedback_updates": True,
-                "email_announcements": True,
-                "email_security_alerts": True,
                 "inapp_notifications": True,
+                "telegram_notifications": True,
                 "quiet_hours_enabled": False,
                 "quiet_hours_start": "22:00",
                 "quiet_hours_end": "08:00",
             },
-            "privacy": {
-                "datalake_opt_in": True,
-                "anonymize_analytics": True,
-            },
-            "shortcuts": {
-                "submit_assignment": "Ctrl+Enter",
-                "save_draft": "Ctrl+S",
-                "toggle_sidebar": "Ctrl+B",
-            },
-            "accessibility": {
-                "high_contrast": False,
-                "reduced_motion": False,
-                "screen_reader_mode": False,
+            "permissions": {
+                "auto_approved_rules": [
+                    "generate_flashcards",
+                    "summarize_lecture",
+                    "format_citations",
+                    "audit_rubric",
+                ],
             },
             "goals": {
                 "weekly_target_assignments": 5,
@@ -117,10 +186,14 @@ class UserSettingsService:
         for k, v in defaults.items():
             if k not in settings:
                 settings[k] = v
-            elif isinstance(v, dict):
+            elif isinstance(v, dict) and isinstance(settings.get(k), dict):
                 for sub_k, sub_v in v.items():
                     if sub_k not in settings[k]:
                         settings[k][sub_k] = sub_v
+
+        # Ensure letter / numeric consistency
+        if "target_score_numeric" in settings and "target_score_letter" not in settings:
+            settings["target_score_letter"] = score_to_letter(settings["target_score_numeric"])
 
         return settings
 
@@ -133,11 +206,18 @@ class UserSettingsService:
                 current[k].update(v)
             else:
                 current[k] = v
+
+        # Recalculate target score mappings if either is updated
+        if "target_score_numeric" in updates and "target_score_letter" not in updates:
+            current["target_score_letter"] = score_to_letter(updates["target_score_numeric"])
+        elif "target_score_letter" in updates and "target_score_numeric" not in updates:
+            current["target_score_numeric"] = letter_to_score(updates["target_score_letter"])
+
         user.settings = current
         db.commit()
         return current
 
-    # ─── Writing Personas ───────────────────────────────────────────────────
+    # ─── Personas Lifecycle ──────────────────────────────────────────────────
 
     @staticmethod
     def save_persona(db: Session, user: User, persona: Dict[str, Any]) -> Dict[str, Any]:
@@ -146,7 +226,6 @@ class UserSettingsService:
         p_id = persona.get("id") or f"persona_{uuid.uuid4().hex[:6]}"
         persona["id"] = p_id
 
-        # Replace existing or append
         updated = False
         for idx, p in enumerate(personas):
             if p.get("id") == p_id:
@@ -172,7 +251,227 @@ class UserSettingsService:
         db.commit()
         return True
 
-    # ─── Assignment History & Export ────────────────────────────────────────
+    # ─── Custom Writing Style Samples (Private Per User) ────────────────────
+
+    @staticmethod
+    def add_custom_style_sample(
+        db: Session,
+        user: User,
+        title: str,
+        content: str,
+        target_subject: Optional[str] = None,
+        target_teacher: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Extracts stylistic traits and adds private sample to user settings."""
+        settings = UserSettingsService.get_user_settings(user)
+        samples = list(settings.get("custom_style_samples", []))
+
+        words = content.split()
+        avg_sentence_len = round(len(words) / max(1, content.count(".") + content.count("!") + content.count("?")), 1)
+        unique_words = len(set(w.lower() for w in words))
+        ttr = round(unique_words / max(1, len(words)), 2)
+
+        sample_id = f"style_{uuid.uuid4().hex[:8]}"
+        sample_entry = {
+            "id": sample_id,
+            "title": title or f"Writing Sample {len(samples) + 1}",
+            "content_snippet": content[:300] + ("..." if len(content) > 300 else ""),
+            "full_content": content,
+            "word_count": len(words),
+            "target_subject": target_subject or "All Subjects",
+            "target_teacher": target_teacher or "All Teachers",
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "extracted_style": {
+                "avg_sentence_length": avg_sentence_len,
+                "lexical_diversity": ttr,
+                "cadence": "High Variance" if avg_sentence_len > 18 else "Structured",
+                "estimated_level": "College Upper" if ttr > 0.65 else "Standard",
+            },
+        }
+
+        samples.append(sample_entry)
+        settings["custom_style_samples"] = samples
+        user.settings = settings
+        db.commit()
+        return sample_entry
+
+    @staticmethod
+    def delete_custom_style_sample(db: Session, user: User, sample_id: str) -> bool:
+        settings = UserSettingsService.get_user_settings(user)
+        samples = [s for s in settings.get("custom_style_samples", []) if s.get("id") != sample_id]
+        settings["custom_style_samples"] = samples
+        user.settings = settings
+        db.commit()
+        return True
+
+    # ─── TRIO (Target, Restriction, Inclusion, Override) Resolution ─────────
+
+    @staticmethod
+    def save_trio_rule(db: Session, user: User, rule: Dict[str, Any]) -> Dict[str, Any]:
+        """Saves a context-aware TRIO rule."""
+        settings = UserSettingsService.get_user_settings(user)
+        rules = list(settings.get("trio_rules", []))
+        rule_id = rule.get("id") or f"trio_{uuid.uuid4().hex[:8]}"
+        rule["id"] = rule_id
+        rule["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+        updated = False
+        for idx, r in enumerate(rules):
+            if r.get("id") == rule_id:
+                rules[idx] = rule
+                updated = True
+                break
+        if not updated:
+            rules.append(rule)
+
+        settings["trio_rules"] = rules
+        user.settings = settings
+        db.commit()
+        return rule
+
+    @staticmethod
+    def delete_trio_rule(db: Session, user: User, rule_id: str) -> bool:
+        settings = UserSettingsService.get_user_settings(user)
+        rules = [r for r in settings.get("trio_rules", []) if r.get("id") != rule_id]
+        settings["trio_rules"] = rules
+        user.settings = settings
+        db.commit()
+        return True
+
+    @staticmethod
+    def resolve_effective_settings(
+        user_settings: Dict[str, Any],
+        subject: Optional[str] = None,
+        teacher: Optional[str] = None,
+        assignment_title: Optional[str] = None,
+        class_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cascades settings through the TRIO hierarchy: Global -> Subject -> Class -> Teacher -> Assignment."""
+        effective = dict(user_settings)
+        rules: List[Dict[str, Any]] = user_settings.get("trio_rules", [])
+
+        priority_weights = {
+            "assignment": 40,
+            "teacher": 30,
+            "class": 20,
+            "subject": 10,
+            "global": 0,
+        }
+
+        sorted_rules = sorted(
+            rules,
+            key=lambda r: (
+                priority_weights.get(r.get("target", {}).get("type", "global"), 0) + r.get("override_priority", 0)
+            )
+        )
+
+        for rule in sorted_rules:
+            if rule.get("apply_to_all"):
+                effective.update(rule.get("overrides", {}))
+                continue
+
+            target_type = rule.get("target", {}).get("type")
+            target_val = (rule.get("target", {}).get("value") or "").strip().lower()
+
+            matched = False
+            if target_type == "subject" and subject and target_val in subject.lower():
+                matched = True
+            elif target_type == "teacher" and teacher and target_val in teacher.lower():
+                matched = True
+            elif target_type == "class" and class_code and target_val in class_code.lower():
+                matched = True
+            elif target_type == "assignment" and assignment_title and target_val in assignment_title.lower():
+                matched = True
+
+            if matched:
+                restriction = (rule.get("restriction") or "").strip().lower()
+                inclusion = (rule.get("inclusion") or "").strip().lower()
+
+                if inclusion and subject and inclusion in subject.lower():
+                    continue
+
+                effective.update(rule.get("overrides", {}))
+
+        # Calculate scheduled grade if grade_scheduling is active
+        sched = effective.get("grade_scheduling", {})
+        if sched.get("enabled"):
+            try:
+                start_d = datetime.strptime(sched.get("start_date", "2026-01-01"), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                days_elapsed = max(0, (now - start_d).days)
+
+                interval = max(1, sched.get("increment_interval", 7))
+                pts = sched.get("increment_points", 3)
+                start_score = sched.get("start_score", 75)
+                target_score = sched.get("target_score", 92)
+
+                steps = days_elapsed // interval
+                current_score = min(target_score, start_score + (steps * pts))
+                effective["target_score_numeric"] = current_score
+                effective["target_score_letter"] = score_to_letter(current_score)
+            except Exception:
+                pass
+
+        return effective
+
+    # ─── AI Citation & Export Helpers ────────────────────────────────────────
+
+    @staticmethod
+    def generate_citation(
+        style: str,
+        source_type: str,
+        title: str,
+        authors: List[str],
+        year: str,
+        url_or_doi: Optional[str] = None,
+        publisher: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generates formatted academic citations across APA, MLA, Chicago, and Harvard."""
+        author_str = ", ".join(authors) if authors else "Author Unknown"
+        first_author = authors[0] if authors else "Unknown"
+        style_lower = style.lower()
+
+        if style_lower == "apa":
+            citation = f"{author_str} ({year}). *{title}*."
+            if publisher:
+                citation += f" {publisher}."
+            if url_or_doi:
+                citation += f" {url_or_doi}"
+
+        elif style_lower == "mla":
+            citation = f'{first_author}. "{title}." '
+            if publisher:
+                citation += f"{publisher}, "
+            citation += f"{year}."
+            if url_or_doi:
+                citation += f" {url_or_doi}."
+
+        elif style_lower == "chicago":
+            citation = f'{author_str}. "{title}." '
+            if publisher:
+                citation += f"{publisher}, "
+            citation += f"{year}."
+            if url_or_doi:
+                citation += f" {url_or_doi}."
+
+        else:  # Harvard default
+            citation = f"{author_str}, {year}. *{title}*."
+            if publisher:
+                citation += f" {publisher}."
+            if url_or_doi:
+                citation += f" Available at: {url_or_doi}."
+
+        return {
+            "id": f"cit_{uuid.uuid4().hex[:8]}",
+            "style": style.upper(),
+            "source_type": source_type,
+            "title": title,
+            "authors": authors,
+            "year": year,
+            "url_or_doi": url_or_doi,
+            "formatted_text": citation.strip(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     @staticmethod
     def query_assignment_history(
@@ -222,161 +521,6 @@ class UserSettingsService:
                 h["created_at"],
             ])
         return output.getvalue()
-
-    # ─── AI Citation Generator ──────────────────────────────────────────────
-
-    @staticmethod
-    def generate_citation(
-        style: str,
-        source_type: str,
-        title: str,
-        authors: List[str],
-        year: str,
-        url_or_doi: Optional[str] = None,
-        publisher: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Generates formatted academic citations across APA, MLA, Chicago, and Harvard."""
-        author_str = ", ".join(authors) if authors else "Author Unknown"
-        first_author = authors[0] if authors else "Unknown"
-        style_lower = style.lower()
-
-        if style_lower == "apa":
-            citation = f"{author_str} ({year}). *{title}*."
-            if publisher:
-                citation += f" {publisher}."
-            if url_or_doi:
-                citation += f" {url_or_doi}"
-
-        elif style_lower == "mla":
-            citation = f"{author_str}. \"{title}.\""
-            if publisher:
-                citation += f" *{publisher}*,"
-            citation += f" {year}."
-            if url_or_doi:
-                citation += f" {url_or_doi}."
-
-        elif style_lower == "chicago":
-            citation = f"{author_str}. {year}. *{title}*."
-            if publisher:
-                citation += f" {publisher}."
-            if url_or_doi:
-                citation += f" {url_or_doi}."
-
-        elif style_lower == "harvard":
-            citation = f"{author_str}, {year}. *{title}*."
-            if publisher:
-                citation += f" {publisher}."
-            if url_or_doi:
-                citation += f" Available at: <{url_or_doi}>."
-
-        else:
-            citation = f"{author_str} ({year}). {title}. {url_or_doi or ''}"
-
-        return {
-            "id": f"cit_{uuid.uuid4().hex[:8]}",
-            "style": style.upper(),
-            "source_type": source_type,
-            "title": title,
-            "authors": authors,
-            "year": year,
-            "url_or_doi": url_or_doi,
-            "publisher": publisher,
-            "formatted_text": citation.strip(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-    # ─── Goals & Streaks ────────────────────────────────────────────────────
-
-    @staticmethod
-    def record_submission_streak(db: Session, user: User) -> Dict[str, Any]:
-        settings = UserSettingsService.get_user_settings(user)
-        goals = settings.get("goals", {})
-
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        last_date_str = goals.get("last_submission_date")
-        streak = goals.get("current_streak_days", 0)
-
-        if last_date_str == today_str:
-            pass  # already counted today
-        elif last_date_str:
-            try:
-                last_dt = datetime.strptime(last_date_str, "%Y-%m-%d")
-                if datetime.now(timezone.utc) - last_dt <= timedelta(days=2):
-                    streak += 1
-                else:
-                    streak = 1
-            except Exception:
-                streak = 1
-        else:
-            streak = 1
-
-        goals["current_streak_days"] = streak
-        goals["last_submission_date"] = today_str
-
-        # Award Badges
-        badges = set(goals.get("badges_earned", []))
-        if streak >= 7:
-            badges.add("7-Day Streak Master")
-        if streak >= 14:
-            badges.add("Fortnight Dedication")
-        if streak >= 30:
-            badges.add("30-Day Legend")
-        goals["badges_earned"] = list(badges)
-
-        settings["goals"] = goals
-        user.settings = settings
-        db.commit()
-        return goals
-
-    # ─── Privacy & GDPR Data Export ─────────────────────────────────────────
-
-    @staticmethod
-    def export_full_user_data(db: Session, user: User) -> Dict[str, Any]:
-        """Produces full GDPR-compliant JSON dump of all user data."""
-        return {
-            "export_metadata": {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "public_id": user.public_id,
-                "plan": user.plan,
-                "credits": user.credits,
-            },
-            "settings": UserSettingsService.get_user_settings(user),
-            "assignments": [
-                {
-                    "id": a.id,
-                    "title": a.title,
-                    "prompt": a.prompt,
-                    "due_date": a.due_date,
-                    "status": a.status,
-                    "created_at": a.created_at.isoformat() if a.created_at else None,
-                }
-                for a in user.assignments
-            ],
-            "transcripts": [
-                {
-                    "id": t.id,
-                    "source": t.source,
-                    "length": len(t.text or ""),
-                    "created_at": t.created_at.isoformat() if t.created_at else None,
-                }
-                for t in user.transcripts
-            ],
-            "study_materials": [
-                {
-                    "id": m.id,
-                    "kind": m.kind,
-                    "created_at": m.created_at.isoformat() if m.created_at else None,
-                }
-                for m in user.materials
-            ],
-        }
-
-    @staticmethod
-    def delete_full_user_data(db: Session, user: User) -> bool:
-        """Deletes all user content, assignments, transcripts, and account records."""
-        db.delete(user)
-        db.commit()
-        return True
 
 
 user_settings_service = UserSettingsService()

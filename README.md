@@ -73,6 +73,25 @@ AI-powered **academic companion & assignment automation platform**. Built from l
 
 ---
 
+### 8. 🎯 Context-Aware Personalization Engine & TRIO Scopes
+- **Target Grade & Academic Levels**:
+  - Full span from **3rd Grade Elementary** to **PhD Professor / Principal Investigator**.
+  - Dual Input: Letter grade selection (F to A+) and 0–100 numeric slider with automatic bi-directional mapping.
+  - **Grade Scheduling Engine**: Incremental improvement trajectory over time (e.g. +3 points every 7 days from C+ to A) to mimic natural academic progression.
+- **Writing Customization & Multi-Sample Ingestion**:
+  - Private per-user custom writing sample uploaders (scoped to Subject / Teacher).
+  - Automated stylistic trait analysis: Sentence length variance, Type-Token lexical diversity, and cadence classification.
+  - Tone, Vocabulary Level, Sentence Length, Creativity, Burstiness & Perplexity customization.
+- **AI Detector Toggles**: Individual on/off evasion gates for **Pangram, Sapling, Originality.ai, Copyleaks, Winston AI, Perplexity Cadence, and Statistical Burstiness**.
+- **Model Tiers**: Flash (fast drafting) and Pro (deep humanization) model selection.
+- **TRIO Cascading Hierarchy**: `Global → Subject → Class → Teacher → Assignment` with universal "Apply to All" overrides.
+- **Training Data Lake & Micro-Credits (100 cr = $1.00 USD)**:
+  - Students submit empirical grading data, teacher quirks, lecture notes, and rubric feedback.
+  - Dedicated **Valuation Sub-Agent** ranks submissions on **Relevance (1-10)**, **Uniqueness (1-10)**, and **Actionability (1-10)** to award 1–25 Micro-Credits.
+  - Instant redemption toward Helpotron compute credits or cash-out.
+
+---
+
 ## 🚀 Quickstart
 
 ```bash
@@ -88,7 +107,7 @@ cp .env.example .env             # configure keys (Telegram, OpenAI/Whisper, AI 
 # 3. Web Dashboard
 cd web && npm install && npm run dev     # http://localhost:5173
 
-# 4. Run Test Suite
+# 4. Run Test Suite (70+ Tests Passing)
 .venv/bin/python -m pytest server/tests/
 ```
 
@@ -97,6 +116,23 @@ cd web && npm install && npm run dev     # http://localhost:5173
 ---
 
 ## 📡 API Endpoints
+
+### Personalization & TRIO Settings
+- `GET /api/user/settings`: Full user profile, academic levels, personas, detector toggles, and TRIO rules.
+- `PATCH /api/user/settings`: Update settings preferences.
+- `GET /api/user/academic-levels`: List supported levels from 3rd Grade to PhD Professor with reference snippets.
+- `POST /api/user/styles`: Add private custom writing style sample.
+- `DELETE /api/user/styles/{id}`: Delete custom writing sample.
+- `POST /api/user/trio`: Save a context-aware TRIO rule.
+- `DELETE /api/user/trio/{id}`: Delete a TRIO rule.
+- `POST /api/user/trio/resolve`: Resolve cascading effective settings for a given subject/teacher/assignment context.
+
+### Training Data Lake & Micro-Credits
+- `POST /api/datalake/microcredits/submit`: Submit empirical data for sub-agent valuation & award (1-25 cr).
+- `GET /api/datalake/microcredits/history`: List user data submissions and sub-agent valuation scores.
+- `POST /api/datalake/microcredits/redeem`: Convert Micro-Credits (100 cr = $1 USD) to compute credits or cash-out.
+- `GET /api/datalake/insights`: Synthesized telemetry and feedback insights from the intelligence agent.
+
 
 | Method | Endpoint | Purpose |
 |---|---|---|

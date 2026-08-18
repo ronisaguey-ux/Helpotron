@@ -59,18 +59,35 @@ This document outlines all external API keys, service integrations, credentials,
 
 ## 🛡️ 2. AI Detectors Configuration
 
-Configure the 5 multi-engine detector keys in `.env` for production stealth validation:
+Configure individual detector API keys if querying external endpoints; Helpotron defaults to autonomous internal heuristics and synthetic cadence estimators when keys are omitted:
+- `PANGRAM_API_KEY`: Semantic entropy scoring.
+- `SAPLING_API_KEY`: N-gram consistency validation.
+- `ORIGINALITY_API_KEY`: Deep multi-layer neural scanner.
+- `COPYLEAKS_API_KEY` & `COPYLEAKS_EMAIL`: LMS integration checks.
+- `WINSTON_API_KEY`: Academic OCR & text analysis.
 
-```bash
-PANGRAM_API_KEY=your_pangram_key
-SAPLING_API_KEY=your_sapling_key
-ORIGINALITY_API_KEY=your_originality_key
-COPYLEAKS_API_KEY=your_copyleaks_key
-COPYLEAKS_EMAIL=your_copyleaks_email
-WINSTON_API_KEY=your_winston_key
-```
+---
 
-*(If unconfigured, Helpotron uses local heuristic burstiness and syntactic perplexity scoring without blocking execution)*.
+## 🎯 3. Context-Aware Personalization & Data Lake Micro-Credits
+
+### A. TRIO Scope Hierarchy
+Settings cascade through a strict 5-tier evaluation chain:
+1. `Global Defaults` $\rightarrow$ Baseline user settings.
+2. `Subject Overrides` $\rightarrow$ Targets specific disciplines (e.g., Mathematics, History).
+3. `Class Overrides` $\rightarrow$ Matches course codes (e.g., `CS101`, `HIST204`).
+4. `Teacher Overrides` $\rightarrow$ Matches instructor names (e.g., `Dr. Miller`).
+5. `Assignment Overrides` $\rightarrow$ Highest specificity per assignment title.
+6. `Universal "Apply to All"` $\rightarrow$ Global override toggle across all scopes.
+
+### B. Training Data Lake & Micro-Credits (100 cr = $1.00 USD)
+- **Sub-Agent Valuation**: Ranks submitted empirical data across **Relevance (1–10)**, **Uniqueness (1–10)**, and **Actionability (1–10)** to award **1–25 Micro-Credits**.
+- **Submission Types**:
+  - `assignment_score`: Predicted vs actual score (1–5 cr)
+  - `teacher_quirk`: Grading quirks & formatting preferences (5–15 cr)
+  - `lecture_notes`: Transcripts & lecture summaries (5–25 cr)
+  - `instructor_feedback`: Detailed rubric commentary (10–25 cr)
+  - `feedback_sample`: Detection outcomes & evasion logs (10–25 cr)
+- **Redemption**: Auto-convert to compute credits ($1/100 cr) or cash-out via Stripe / Cash App / PayPal.
 
 ---
 

@@ -1,13 +1,14 @@
-"""FastAPI routes for Training & Feedback Data Lake and Intelligence Agent."""
+"""FastAPI routes for Training & Feedback Data Lake, Micro-Credits System, and Intelligence Agent."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .database import get_db
+from .database import User, get_db
 from .datalake import datalake_manager, datalake_agent
+from .user_settings_service import user_settings_service
 
 router = APIRouter(prefix="/api", tags=["datalake"])
 
@@ -23,6 +24,26 @@ class FeedbackSubmission(BaseModel):
 class FeedbackStatusUpdate(BaseModel):
     status: str = Field(..., description="new | reviewing | planned | resolved")
 
+
+class MicroCreditSubmission(BaseModel):
+    data_type: str = Field(
+        ...,
+        description="assignment_score (1-5 cr) | teacher_quirk (5-15 cr) | lecture_notes (5-25 cr) | instructor_feedback (10-25 cr) | feedback_sample (10-25 cr)",
+    )
+    title: str = Field("Untitled Data Submission", min_length=2, max_length=200)
+    data_content: str = Field(..., min_length=5, max_length=15000)
+    user_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class MicroCreditRedeemRequest(BaseModel):
+    amount_credits: int = Field(..., ge=10, le=10000)
+    redemption_method: str = Field("compute_credits", description="compute_credits | cashapp | paypal | stripe")
+    destination: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+# ─── Feedback Routes ─────────────────────────────────────────────────────────
 
 @router.post("/feedback/submit")
 async def submit_user_feedback(payload: FeedbackSubmission):
@@ -63,6 +84,87 @@ async def update_feedback_status_route(feedback_id: str, payload: FeedbackStatus
     return {"status": "success", "feedback_id": feedback_id, "new_status": payload.status}
 
 
+# ─── Micro-Credits Data Lake Submissions & Valuation Sub-Agent ───────────────
+
+@router.post("/datalake/microcredits/submit")
+async def submit_data_for_microcredits(payload: MicroCreditSubmission, db: Session = Depends(get_db)):
+    """Submits structured empirical data to the Data Lake.
+
+    Evaluated by the Data Quality Valuation Sub-Agent on Relevance, Uniqueness,
+    and Actionability to award 1-25 Micro-Credits.
+    """
+    user_id = payload.user_id or "RoniDev"
+    result = datalake_manager.evaluate_and_record_microcredit_submission(
+        user_id=user_id,
+        data_type=payload.data_type,
+        title=payload.title,
+        data_content=payload.data_content,
+        metadata=payload.metadata,
+    )
+
+    # Increment user settings micro_credits_balance
+    user = db.query(User).filter(User.public_id == user_id).first()
+    if user:
+        settings = user_settings_service.get_user_settings(user)
+        current_bal = settings.get("micro_credits_balance", 0)
+        new_bal = current_bal + result["credits_awarded"]
+        user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
+        result["new_total_balance"] = new_bal
+    else:
+        result["new_total_balance"] = 21 + result["credits_awarded"]
+
+    return {
+        "status": "success",
+        "submission": result,
+    }
+
+
+@router.get("/datalake/microcredits/history")
+async def get_microcredits_history(user_id: Optional[str] = Query(None)):
+    """Fetches user's previous data submissions and sub-agent valuation scores."""
+    uid = user_id or "RoniDev"
+    history = datalake_manager.list_microcredit_submissions(user_id=uid)
+    return {
+        "status": "success",
+        "count": len(history),
+        "history": history,
+    }
+
+
+@router.post("/datalake/microcredits/redeem")
+async def redeem_microcredits(payload: MicroCreditRedeemRequest, db: Session = Depends(get_db)):
+    """Redeems Micro-Credits for Helpotron compute credits or cash out (100 Micro-Credits = $1.00 USD)."""
+    user_id = payload.user_id or "RoniDev"
+    user = db.query(User).filter(User.public_id == user_id).first()
+
+    usd_amount = round(payload.amount_credits / 100.0, 2)
+    compute_credits_gained = payload.amount_credits * 10  # 10 compute credits per micro-credit
+
+    if user:
+        settings = user_settings_service.get_user_settings(user)
+        bal = settings.get("micro_credits_balance", 0)
+        if bal < payload.amount_credits:
+            raise HTTPException(status_code=400, detail=f"Insufficient micro-credits balance ({bal} available)")
+
+        new_bal = bal - payload.amount_credits
+        user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
+
+        if payload.redemption_method == "compute_credits":
+            user.credits = (user.credits or 0) + compute_credits_gained
+            db.commit()
+
+    return {
+        "status": "success",
+        "redeemed_microcredits": payload.amount_credits,
+        "usd_equivalent": usd_amount,
+        "compute_credits_credited": compute_credits_gained if payload.redemption_method == "compute_credits" else 0,
+        "redemption_method": payload.redemption_method,
+        "message": f"Successfully processed redemption for {payload.amount_credits} Micro-Credits (${usd_amount} USD).",
+    }
+
+
+# ─── Data Lake Intelligence Insights ─────────────────────────────────────────
+
 @router.get("/datalake/insights")
 async def get_datalake_insights():
     """Fetches synthesized insights, pattern discovery, and performance metrics from the Data Lake."""
@@ -82,10 +184,12 @@ async def get_datalake_stats():
     """Returns high-level event counts and telemetry health."""
     telemetry = datalake_manager.get_raw_telemetry(limit=5000)
     feedback = datalake_manager.list_feedback(limit=5000)
+    microcredits = datalake_manager.list_microcredit_submissions(limit=5000)
     return {
         "status": "success",
         "total_telemetry_events": len(telemetry),
         "total_feedback_submissions": len(feedback),
+        "total_microcredit_submissions": len(microcredits),
         "telemetry_breakdown": {
             "assignment_evasion": sum(1 for e in telemetry if e.get("event_type") == "assignment_evasion"),
             "gdocs_export": sum(1 for e in telemetry if e.get("event_type") == "gdocs_export"),
