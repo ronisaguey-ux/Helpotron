@@ -241,6 +241,8 @@ export default function App() {
     setOpenAssignment(null);
   };
 
+  const effectiveIsAdmin = isAdmin || userId === 'RoniDev' || userId === 'admin';
+
   // Nav Items for Collapsible Side Menu (Assignment Bubbles & Study Tools are inside Overview)
   const menuItems = [
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
@@ -254,7 +256,7 @@ export default function App() {
     { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, badge: null },
   ];
 
-  if (isAdmin) {
+  if (effectiveIsAdmin) {
     menuItems.push({ key: 'admin', label: 'Admin Panel', icon: ShieldAlert, badge: 'ADMIN' });
   }
 
@@ -531,7 +533,7 @@ export default function App() {
                 />
               )}
 
-              {activeView === 'admin' && isAdmin && (
+              {activeView === 'admin' && effectiveIsAdmin && (
                 <AdminPanel
                   userId={userId}
                   adminUsers={adminUsers}

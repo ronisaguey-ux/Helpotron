@@ -160,3 +160,52 @@ async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPa
         "status": "replied",
     }
 
+
+# ─── Tokens & Access Keys Management ──────────────────────────────────────────
+
+class GenerateTokenPayload(BaseModel):
+    duration_days: int = Field(30, ge=1, le=365)
+    max_uses: int = Field(1, ge=1, le=1000)
+
+
+_in_memory_tokens: List[Dict[str, Any]] = []
+
+
+@router.post("/tokens/generate")
+async def generate_admin_token(payload: GenerateTokenPayload, request: Request):
+    """Admin endpoint: generates a platform access token or coupon key."""
+    require_admin(request)
+    import secrets
+    from datetime import datetime, timezone, timedelta
+
+    tok = {
+        "token": f"hlp_{secrets.token_hex(16)}",
+        "duration_days": payload.duration_days,
+        "max_uses": payload.max_uses,
+        "uses_count": 0,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=payload.duration_days)).isoformat(),
+    }
+    _in_memory_tokens.append(tok)
+    return {"status": "success", "token": tok}
+
+
+@router.get("/tokens")
+async def list_admin_tokens(request: Request):
+    """Admin endpoint: lists all platform tokens and coupon keys."""
+    require_admin(request)
+    return {"status": "success", "tokens": _in_memory_tokens}
+
+
+@router.post("/tokens/deactivate")
+async def deactivate_admin_token(request: Request, token: str = ""):
+    """Admin endpoint: deactivates an active token."""
+    require_admin(request)
+    for t in _in_memory_tokens:
+        if t["token"] == token:
+            t["is_active"] = False
+            return {"status": "success", "message": f"Token {token} deactivated"}
+    return {"status": "error", "message": "Token not found"}
+
+

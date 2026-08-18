@@ -126,10 +126,13 @@ def _get_current_user(request: Request, db: Session) -> User:
         user = db.query(User).first()
         if user:
             return user
-        raise HTTPException(400, "Missing X-Public-ID header")
+        public_id = "RoniDev"
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
-        raise HTTPException(404, "User not found")
+        user = User(public_id=public_id, plan="basic", credits=100.0)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return user
 
 

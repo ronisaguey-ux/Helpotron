@@ -232,7 +232,7 @@ class Referral(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     referee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
-    referral_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    referral_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
