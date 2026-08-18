@@ -157,6 +157,10 @@ export const api = {
   getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
   redeemMicrocredits: (data) => request('/api/datalake/microcredits/redeem', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Mandatory 2FA Purchase Authentication
+  sendPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-challenge', { method: 'POST', body: JSON.stringify(data) }),
+  verifyPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-verify', { method: 'POST', body: JSON.stringify(data) }),
+
   // Admin endpoints
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),
   adminAnalytics: () => request('/api/admin/analytics', { method: 'GET' }),

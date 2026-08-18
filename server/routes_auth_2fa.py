@@ -7,7 +7,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from .config import config
-from .database import User, get_db
+from .database import User, Payment, get_db
+from .security import verify_password, hash_password
 from .auth_2fa import code_store, email_service, sms_service, totp_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth_2fa"])
@@ -52,6 +53,23 @@ class TwoFactorVerifyChallengeRequest(BaseModel):
 class TwoFactorDisableRequest(BaseModel):
     user_id: str
     code: str = Field(..., min_length=6, max_length=6)
+
+
+class PurchaseChallengeRequest(BaseModel):
+    public_id: str
+    method: str = Field(..., description="email | sms")
+    destination: Optional[str] = None
+
+
+class PurchaseVerifyRequest(BaseModel):
+    public_id: str
+    password: str
+    method: str = Field(..., description="email | sms")
+    code: str = Field(..., min_length=6, max_length=6)
+    destination: Optional[str] = None
+    plan: str
+    amount_cents: Optional[int] = 0
+    discount_credits_used: Optional[float] = 0.0
 
 
 # ─── Verification Routes ──────────────────────────────────────────────────────
@@ -222,3 +240,116 @@ async def disable_two_factor(payload: TwoFactorDisableRequest, db: Session = Dep
     db.commit()
 
     return {"status": "success", "message": "Two-Factor Authentication has been disabled."}
+
+
+# ─── Mandatory 2FA Purchase Authentication Routes ─────────────────────────────
+
+@router.post("/2fa/purchase-challenge")
+async def send_purchase_challenge(payload: PurchaseChallengeRequest, db: Session = Depends(get_db)):
+    """Sends a mandatory 6-digit 2FA purchase verification code via Email or SMS."""
+    method = payload.method.lower()
+    target = payload.destination or payload.public_id
+
+    if not target or not target.strip():
+        raise HTTPException(400, "Destination email or phone number is required.")
+
+    code = code_store.generate_code(target.strip(), purpose="purchase_verification")
+
+    if method == "email":
+        sent = email_service.send_verification_code(target.strip(), code, purpose_label="Purchase Authorization")
+        if not sent:
+            raise HTTPException(500, "Failed to send purchase verification email.")
+        return {
+            "status": "success",
+            "method": "email",
+            "destination": target.strip(),
+            "message": f"6-digit purchase verification code sent to {target.strip()}.",
+        }
+
+    elif method == "sms":
+        sent = await sms_service.send_sms_code(target.strip(), code)
+        if not sent:
+            raise HTTPException(500, "Failed to send purchase verification SMS.")
+        return {
+            "status": "success",
+            "method": "sms",
+            "destination": target.strip(),
+            "message": f"6-digit purchase verification code sent via SMS to {target.strip()}.",
+        }
+
+    else:
+        raise HTTPException(400, f"Unsupported purchase 2FA method: {method}. Must be 'email' or 'sms'.")
+
+
+@router.post("/2fa/purchase-verify")
+async def verify_purchase_challenge(payload: PurchaseVerifyRequest, db: Session = Depends(get_db)):
+    """Validates account password + 6-digit Email/SMS 2FA code, and finalizes purchase."""
+    method = payload.method.lower()
+    target = (payload.destination or payload.public_id).strip()
+
+    if not payload.password or not payload.password.strip():
+        raise HTTPException(400, "Account password is required for purchase authorization.")
+
+    user = db.query(User).filter(User.public_id == payload.public_id).first()
+    if not user:
+        # Create user if new
+        user = User(public_id=payload.public_id, plan="free", credits=1000)
+        h, s = hash_password(payload.password)
+        user.password_hash = h
+        user.password_salt = s
+        db.add(user)
+        db.flush()
+    else:
+        # Verify password if user has password set
+        if user.password_hash and user.password_salt:
+            if not verify_password(payload.password, user.password_hash, user.password_salt):
+                raise HTTPException(401, "Invalid account password.")
+        else:
+            # Set initial password for user
+            h, s = hash_password(payload.password)
+            user.password_hash = h
+            user.password_salt = s
+
+    # Verify 6-digit 2FA code
+    valid, msg = code_store.verify_code(target, payload.code, purpose="purchase_verification")
+    if not valid:
+        raise HTTPException(400, msg)
+
+    # Process Plan & Credits Grant
+    plan = payload.plan.lower()
+    credits_to_add = 0
+    if plan == "elite":
+        user.plan = "elite"
+        credits_to_add = 4000
+    elif plan == "pro":
+        user.plan = "pro"
+        credits_to_add = 2000
+    elif plan == "basic":
+        user.plan = "basic"
+        credits_to_add = 1000
+    else:
+        credits_to_add = max(100, (payload.amount_cents or 500) * 10)
+
+    user.credits = (user.credits or 0) + credits_to_add
+
+    # Create Payment record
+    payment_rec = Payment(
+        user_id=user.id,
+        provider=f"2fa_{method}",
+        amount_cents=payload.amount_cents or 0,
+        status="captured",
+        provider_ref=f"2fa_{code_store.generate_code(user.public_id, purpose='receipt')}",
+    )
+    db.add(payment_rec)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "verified": True,
+        "new_plan": user.plan,
+        "new_credits": user.credits,
+        "credits_added": credits_to_add,
+        "payment_id": payment_rec.id,
+        "message": f"✅ 2FA Verification successful! Plan upgraded to {user.plan.upper()} with +{credits_to_add} Credits.",
+    }

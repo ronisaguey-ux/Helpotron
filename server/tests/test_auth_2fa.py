@@ -124,3 +124,96 @@ def test_api_auth_2fa_routes():
     )
     assert verify_resp.status_code == 200
     assert verify_resp.json()["status"] == "success"
+
+
+def test_api_mandatory_purchase_2fa_routes():
+    user_id = "test_purchase_user_2fa"
+    password = "SuperSecretPassword123!"
+
+    # 1. Send Email 2FA challenge for purchase
+    email_dest = "student_buyer@univ.edu"
+    chal_resp = client.post(
+        "/api/auth/2fa/purchase-challenge",
+        json={
+            "public_id": user_id,
+            "method": "email",
+            "destination": email_dest,
+        },
+    )
+    assert chal_resp.status_code == 200
+    assert chal_resp.json()["status"] == "success"
+
+    # Grab code from code_store
+    code_entry = code_store._store.get((email_dest, "purchase_verification"))
+    assert code_entry is not None
+    code = code_entry["code"]
+
+    # 2. Try verifying with wrong code -> Should fail
+    fail_resp = client.post(
+        "/api/auth/2fa/purchase-verify",
+        json={
+            "public_id": user_id,
+            "password": password,
+            "method": "email",
+            "code": "000000",
+            "destination": email_dest,
+            "plan": "pro",
+            "amount_cents": 2000,
+        },
+    )
+    assert fail_resp.status_code == 400
+
+    # 3. Verify with correct code and password -> Upgrade to Pro
+    success_resp = client.post(
+        "/api/auth/2fa/purchase-verify",
+        json={
+            "public_id": user_id,
+            "password": password,
+            "method": "email",
+            "code": code,
+            "destination": email_dest,
+            "plan": "pro",
+            "amount_cents": 2000,
+        },
+    )
+    assert success_resp.status_code == 200
+    res_data = success_resp.json()
+    assert res_data["verified"] is True
+    assert res_data["new_plan"] == "pro"
+    assert res_data["credits_added"] == 2000
+
+    # 4. Test SMS 2FA Purchase Flow
+    sms_dest = "+15559876543"
+    sms_chal_resp = client.post(
+        "/api/auth/2fa/purchase-challenge",
+        json={
+            "public_id": user_id,
+            "method": "sms",
+            "destination": sms_dest,
+        },
+    )
+    assert sms_chal_resp.status_code == 200
+
+    sms_code_entry = code_store._store.get((sms_dest, "purchase_verification"))
+    assert sms_code_entry is not None
+    sms_code = sms_code_entry["code"]
+
+    # 5. Verify SMS 2FA for Elite upgrade
+    sms_verify_resp = client.post(
+        "/api/auth/2fa/purchase-verify",
+        json={
+            "public_id": user_id,
+            "password": password,
+            "method": "sms",
+            "code": sms_code,
+            "destination": sms_dest,
+            "plan": "elite",
+            "amount_cents": 4000,
+        },
+    )
+    assert sms_verify_resp.status_code == 200
+    sms_data = sms_verify_resp.json()
+    assert sms_data["verified"] is True
+    assert sms_data["new_plan"] == "elite"
+    assert sms_data["credits_added"] == 4000
+
