@@ -143,9 +143,11 @@ export const api = {
   simulationStatus: () => request('/api/simulation/status', { method: 'GET' }),
   simulationToggle: (enabled) => request('/api/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
   simulationSeed: () => request('/api/simulation/seed', { method: 'POST' }),
-  // Settings, Custom Styles, TRIO & Academic Levels
+  // Settings, Custom Styles, TRIO, Models & Academic Levels
   getUserSettings: () => request('/api/user/settings', { method: 'GET' }),
   getAcademicLevels: () => request('/api/user/academic-levels', { method: 'GET' }),
+  getAvailableModels: () => request('/api/user/models', { method: 'GET' }),
+  resolveEffortScore: (score) => request(`/api/user/effort-score/resolve?score=${score || 500}`, { method: 'GET' }),
   addStyleSample: (data) => request('/api/user/styles', { method: 'POST', body: JSON.stringify(data) }),
   deleteStyleSample: (id) => request(`/api/user/styles/${id}`, { method: 'DELETE' }),
   saveTrioRule: (data) => request('/api/user/trio', { method: 'POST', body: JSON.stringify(data) }),

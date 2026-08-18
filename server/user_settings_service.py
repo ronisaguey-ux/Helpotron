@@ -86,6 +86,108 @@ DEFAULT_PERSONAS = [
 ]
 
 
+AVAILABLE_MODELS = [
+    {
+        "id": "nemotron_3_super",
+        "name": "Nemotron 3 Super (120B-A12B MoE)",
+        "pricing": "$0.085 – $0.10 / $0.40 – $0.50",
+        "context_window": 1000000,
+        "recommended_use": "Bulk Lecture Summaries & Long Transcripts",
+        "description": "Active-12B MoE architecture gives high throughput and low pricing with massive context.",
+        "category": "bulk_throughput",
+        "min_effort": 1,
+    },
+    {
+        "id": "nemotron_nano_9b",
+        "name": "Nemotron Nano (9B v2)",
+        "pricing": "$0.04 / $0.16",
+        "context_window": 131072,
+        "recommended_use": "Fast Flashcards & Term Extraction",
+        "description": "Ultra-cheap, low-latency utility worker for repetitive keyword extraction.",
+        "category": "utility_fast",
+        "min_effort": 1,
+    },
+    {
+        "id": "llama_nemotron_70b",
+        "name": "Llama 3.1 Nemotron 70B Instruct",
+        "pricing": "$0.20 – $0.35 / $0.40 – $0.80",
+        "context_window": 131072,
+        "recommended_use": "Grading Rubrics & Practice Test Generation",
+        "description": "Exceptionally strong instruction following from HelpSteer2 post-training.",
+        "category": "instruction_following",
+        "min_effort": 350,
+    },
+    {
+        "id": "deepseek_r1_v3",
+        "name": "DeepSeek R1 / V3 Thinking",
+        "pricing": "$0.14 / $0.55",
+        "context_window": 128000,
+        "recommended_use": "Cognitive Deep Reasoning & Academic Research",
+        "description": "Flagship multi-step reasoning model with chain-of-thought verification.",
+        "category": "deep_reasoning",
+        "min_effort": 750,
+    },
+    {
+        "id": "pro",
+        "name": "Pro Model Tier (Gemini / Claude Pro)",
+        "pricing": "$1.25 / $5.00",
+        "context_window": 200000,
+        "recommended_use": "High-Stakes Multi-Pass Evasion & Complex Synthesis",
+        "description": "Elite synthesis and style replication engine.",
+        "category": "elite_synthesis",
+        "min_effort": 750,
+    },
+    {
+        "id": "flash",
+        "name": "Flash Model Tier",
+        "pricing": "$0.075 / $0.30",
+        "context_window": 1000000,
+        "recommended_use": "Sub-Second Outline Drafting",
+        "description": "Ultra high-speed execution tier.",
+        "category": "fast_draft",
+        "min_effort": 1,
+    },
+]
+
+
+def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
+    """Calculates model workload distribution based on effort score (1 - 1000)."""
+    score = max(1, min(1000, int(effort_score if effort_score is not None else 500)))
+    if score <= 350:
+        return {
+            "tier": "low_effort",
+            "tier_label": "High Speed / Cost-Saving (1–350)",
+            "score": score,
+            "description": "Bulk work and term extraction are heavily offloaded to ultra-cheap, fast utility models (Nemotron Nano 9B & Nemotron 3 Super MoE).",
+            "summary_model": "nemotron_3_super",
+            "flashcard_model": "nemotron_nano_9b",
+            "draft_model": "flash",
+            "humanizer_model": "llama_nemotron_70b",
+        }
+    elif score <= 750:
+        return {
+            "tier": "medium_effort",
+            "tier_label": "Balanced Rigor & Evasion (351–750)",
+            "score": score,
+            "description": "Balanced orchestration pairing Llama 3.1 Nemotron 70B for rubrics with Flash & Pro synthesis.",
+            "summary_model": "nemotron_3_super",
+            "flashcard_model": "nemotron_nano_9b",
+            "draft_model": "llama_nemotron_70b",
+            "humanizer_model": "pro",
+        }
+    else:
+        return {
+            "tier": "high_effort",
+            "tier_label": "Flagship Cognitive Synthesis (751–1000)",
+            "score": score,
+            "description": "Maximum cognitive depth and reasoning passes offloaded to flagship models like DeepSeek R1/V3 and Pro Tier.",
+            "summary_model": "deepseek_r1_v3",
+            "flashcard_model": "llama_nemotron_70b",
+            "draft_model": "deepseek_r1_v3",
+            "humanizer_model": "pro",
+        }
+
+
 class UserSettingsService:
     """Manages context-aware personalization, TRIO scopes, styles, detectors, and scheduling."""
 
@@ -108,7 +210,11 @@ class UserSettingsService:
                 "start_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             },
 
-            # 2. Writing Customization & Humanization
+            # 2. Effort Level Score & Auto-Start Configuration
+            "effort_score": 500,  # 1 - 1000 scale
+            "auto_start": False,  # True = Auto-start execution on assignment bubble organization; False = Manual staging approval
+
+            # 3. Writing Customization & Humanization
             "tone": "formal",  # formal | semi_formal | conversational
             "vocabulary_level": "advanced",  # basic | intermediate | advanced | expert
             "sentence_length": "mixed",  # short | medium | long | mixed
@@ -119,7 +225,7 @@ class UserSettingsService:
             "personas": DEFAULT_PERSONAS,
             "custom_style_samples": [],  # Array of { id, title, content, target_subject, target_teacher, extracted_style }
 
-            # 3. Individual AI Detectors
+            # 4. Individual AI Detectors
             "ai_detectors": {
                 "pangram": True,
                 "sapling": True,
@@ -130,14 +236,17 @@ class UserSettingsService:
                 "statistical_burstiness": True,
             },
 
-            # 4. Model Selection (Flash vs Pro)
+            # 5. Model Selection & Specialized Task Routing
             "model_selection": {
-                "draft_model": "flash",  # flash | pro
-                "humanizer_model": "pro",  # flash | pro
-                "default_model": "flash",
+                "summary_model": "nemotron_3_super",  # Nemotron 3 Super (120B-A12B MoE)
+                "flashcard_model": "nemotron_nano_9b",  # Nemotron Nano (9B v2)
+                "rubric_model": "llama_nemotron_70b",  # Llama 3.1 Nemotron 70B Instruct
+                "draft_model": "flash",  # flash | pro | deepseek_r1_v3
+                "humanizer_model": "pro",  # pro | flash
+                "default_model": "nemotron_3_super",
             },
 
-            # 5. Data Lake & Micro-Credits
+            # 6. Data Lake & Micro-Credits
             "datalake_opt_in": True,
             "micro_credits_balance": 21,  # 100 micro-credits = $1.00 USD
             "micro_credits_auto_redeem": False,

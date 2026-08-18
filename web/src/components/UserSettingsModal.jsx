@@ -35,6 +35,10 @@ import {
   Download,
   ShieldCheck,
   ChevronRight,
+  Gauge,
+  PlayCircle,
+  PauseCircle,
+  Bot,
 } from 'lucide-react';
 
 const GRADE_LETTER_MAP = [
@@ -79,6 +83,92 @@ const ACADEMIC_LEVELS = [
   { key: 'phd_candidate', label: 'PhD Candidate / Researcher' },
   { key: 'phd_professor', label: 'PhD Professor / Principal Investigator' },
 ];
+
+const MODEL_CATALOG = [
+  {
+    id: 'nemotron_3_super',
+    name: 'Nemotron 3 Super (120B-A12B MoE)',
+    pricing: '$0.085 – $0.10 / $0.40 – $0.50',
+    context_window: '1,000,000 tokens',
+    recommended_use: 'Bulk Lecture Summaries & Long Transcripts',
+    description: 'Active-12B MoE architecture gives high throughput and low pricing with massive context.',
+    tag: 'MoE High-Throughput',
+  },
+  {
+    id: 'nemotron_nano_9b',
+    name: 'Nemotron Nano (9B v2)',
+    pricing: '$0.04 / $0.16',
+    context_window: '131,072 tokens',
+    recommended_use: 'Fast Flashcards & Term Extraction',
+    description: 'Ultra-cheap, low-latency utility worker for repetitive keyword extraction.',
+    tag: 'Ultra-Fast Utility',
+  },
+  {
+    id: 'llama_nemotron_70b',
+    name: 'Llama 3.1 Nemotron 70B Instruct',
+    pricing: '$0.20 – $0.35 / $0.40 – $0.80',
+    context_window: '131,072 tokens',
+    recommended_use: 'Grading Rubrics & Practice Test Generation',
+    description: 'Exceptionally strong instruction following from HelpSteer2 post-training.',
+    tag: 'HelpSteer2 Precision',
+  },
+  {
+    id: 'deepseek_r1_v3',
+    name: 'DeepSeek R1 / V3 Thinking',
+    pricing: '$0.14 / $0.55',
+    context_window: '128,000 tokens',
+    recommended_use: 'Cognitive Deep Reasoning & Academic Research',
+    description: 'Flagship multi-step reasoning model with chain-of-thought verification.',
+    tag: 'Deep Reasoning',
+  },
+  {
+    id: 'pro',
+    name: 'Pro Model Tier (Gemini / Claude Pro)',
+    pricing: '$1.25 / $5.00',
+    context_window: '200,000 tokens',
+    recommended_use: 'High-Stakes Multi-Pass Evasion & Complex Synthesis',
+    description: 'Elite synthesis and style replication engine.',
+    tag: 'Elite Synthesis',
+  },
+  {
+    id: 'flash',
+    name: 'Flash Model Tier',
+    pricing: '$0.075 / $0.30',
+    context_window: '1,000,000 tokens',
+    recommended_use: 'Sub-Second Outline Drafting',
+    description: 'Ultra high-speed execution tier.',
+    tag: 'Speed & Scale',
+  },
+];
+
+function getEffortInfo(score) {
+  const s = Math.max(1, Math.min(1000, Number(score || 500)));
+  if (s <= 350) {
+    return {
+      tier: 'Low Effort (1–350)',
+      label: '🚀 Cost-Optimized & High-Throughput',
+      color: 'text-amber-400',
+      badgeColor: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+      description: 'Bulk lecture summaries, flashcard generation, and term extraction are heavily offloaded to ultra-cheap utility models (Nemotron Nano 9B & Nemotron 3 Super MoE).',
+    };
+  } else if (s <= 750) {
+    return {
+      tier: 'Medium Effort (351–750)',
+      label: '⚖️ Balanced Rigor & Evasion',
+      color: 'text-blue-400',
+      badgeColor: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+      description: 'Balanced orchestration pairing Llama 3.1 Nemotron 70B for rubrics with Flash & Pro synthesis passes.',
+    };
+  } else {
+    return {
+      tier: 'High Effort (751–1000)',
+      label: '🧠 Flagship Cognitive Depth',
+      color: 'text-emerald-400',
+      badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      description: 'Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship models like DeepSeek R1/V3 and Pro Tier.',
+    };
+  }
+}
 
 /**
  * Reusable Scope Control Component
@@ -216,6 +306,7 @@ export default function UserSettingsModal({
   const [saveStatus, setSaveStatus] = useState('');
   const [academicLevels, setAcademicLevels] = useState(ACADEMIC_LEVELS);
   const [defaultStyles, setDefaultStyles] = useState({});
+  const [modelsList, setModelsList] = useState(MODEL_CATALOG);
 
   // Style Sample Form State
   const [sampleTitle, setSampleTitle] = useState('');
@@ -258,6 +349,7 @@ export default function UserSettingsModal({
     if (isOpen) {
       fetchSettings();
       fetchAcademicLevels();
+      fetchModels();
       fetchDataLakeHistory();
     }
   }, [isOpen, userId]);
@@ -281,6 +373,13 @@ export default function UserSettingsModal({
       const data = await api.getAcademicLevels();
       if (data?.levels) setAcademicLevels(data.levels);
       if (data?.default_styles) setDefaultStyles(data.default_styles);
+    } catch (e) {}
+  }
+
+  async function fetchModels() {
+    try {
+      const data = await api.getAvailableModels();
+      if (data?.models) setModelsList(data.models);
     } catch (e) {}
   }
 
@@ -544,6 +643,8 @@ export default function UserSettingsModal({
 
   if (!isOpen) return null;
 
+  const currentEffortInfo = getEffortInfo(settings?.effort_score || 500);
+
   const content = (
     <div className={`clean-card rounded-3xl w-full flex flex-col shadow-2xl border border-white/10 overflow-hidden text-slate-100 ${isModal ? 'max-w-5xl max-h-[92vh]' : 'min-h-[750px]'}`}>
       
@@ -555,7 +656,7 @@ export default function UserSettingsModal({
           </div>
           <div>
             <h2 className="text-base font-bold text-white">Personalization & Settings Engine</h2>
-            <p className="text-xs text-slate-400">Granular academic levels, custom writing styles, detector toggles, and universal scopes</p>
+            <p className="text-xs text-slate-400">Academic level, effort score routing, Nemotron models, auto-start, and universal scopes</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -579,9 +680,10 @@ export default function UserSettingsModal({
         <nav className="w-full md:w-64 border-r border-white/10 bg-slate-950/40 p-3 space-y-1 overflow-y-auto shrink-0 text-xs">
           {[
             { key: 'general', label: 'General & Target Grade', icon: GraduationCap },
+            { key: 'effort_autostart', label: 'Effort & Auto-Start', icon: Gauge },
+            { key: 'models', label: 'AI Models & Task Routing', icon: Cpu },
             { key: 'writing', label: 'Custom Writing Styles', icon: FileText },
             { key: 'detectors', label: 'AI Detector Toggles', icon: Shield },
-            { key: 'models', label: 'Model Selection', icon: Cpu },
             { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Tag, badge: `${settings?.micro_credits_balance || 0} cr` },
             { key: 'trio', label: 'Context & TRIO Scopes', icon: Layers },
             { key: 'permissions', label: 'Auto-Approved Actions', icon: CheckCircle2 },
@@ -825,7 +927,292 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 2. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
+              {/* ─── 2. EFFORT & AUTO-START PIPELINE CONFIGURATION ─── */}
+              {activeTab === 'effort_autostart' && (
+                <div className="space-y-6">
+                  {/* Auto-Start Setting */}
+                  <div className="clean-card p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                          <PlayCircle className="w-4 h-4 text-emerald-400" />
+                          Auto-Start Assignment Sub-Agent Execution
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          When assignments are scraped from LMS and organized into topic bubbles with sub-agent teams, choose whether they start automatically or pause in staging for review.
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={settings.auto_start || false}
+                          onChange={(e) => handleSaveSettings({ auto_start: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
+                      </label>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5 text-xs text-slate-300">
+                      {settings.auto_start ? (
+                        <div className="flex items-center gap-2 text-emerald-300">
+                          <PlayCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                          <span><strong>Autonomous Mode Active:</strong> Newly scraped & organized assignments automatically trigger sub-agent team execution without manual staging.</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-amber-300">
+                          <PauseCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                          <span><strong>Staged Approval Mode (Recommended):</strong> Scraped assignments wait in your inbox for approval, rubric modifications, or custom source attachments before running.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <SettingScopeControl
+                      settingKey="auto_start"
+                      settingLabel="Auto-Start Sub-Agents"
+                      scopes={getSettingScopes('auto_start')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
+                  </div>
+
+                  {/* Effort Score Slider (1 - 1000) */}
+                  <div className="clean-card p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                          <Gauge className="w-4 h-4 text-blue-400" />
+                          AI Execution Effort Score (1 – 1000)
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Lower scores offload bulk tasks to cheap utility models (Nemotron Nano / 3 Super). Higher scores route heavy synthesis to flagship deep reasoning models (DeepSeek R1/V3 & Pro).
+                        </p>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-blue-400 font-mono">{settings.effort_score || 500}</span>
+                        <span className="text-xs text-slate-400 font-mono">/ 1000</span>
+                      </div>
+                    </div>
+
+                    {/* Live Effort Tier Badge */}
+                    <div className={`p-3 rounded-xl border text-xs space-y-1 ${currentEffortInfo.badgeColor}`}>
+                      <div className="flex items-center justify-between font-bold">
+                        <span>{currentEffortInfo.label}</span>
+                        <span className="font-mono text-[11px]">{currentEffortInfo.tier}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{currentEffortInfo.description}</p>
+                    </div>
+
+                    {/* Slider & Presets */}
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                        <span>1 (Cheapest / Ultra-Fast)</span>
+                        <span>500 (Balanced Synthesis)</span>
+                        <span>1000 (Maximum Cognitive Depth)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="1000"
+                        value={settings.effort_score || 500}
+                        onChange={(e) => handleSaveSettings({ effort_score: Number(e.target.value) })}
+                        className="w-full accent-blue-500 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Preset Buttons */}
+                    <div className="flex flex-wrap gap-2 pt-1 text-xs">
+                      {[
+                        { label: '🚀 Cost-Saver (150)', val: 150 },
+                        { label: '⚖️ Balanced (500)', val: 500 },
+                        { label: '🧠 Deep Research (850)', val: 850 },
+                        { label: '🏆 Maximum Rigor (1000)', val: 1000 },
+                      ].map((p) => (
+                        <button
+                          key={p.val}
+                          type="button"
+                          onClick={() => handleSaveSettings({ effort_score: p.val })}
+                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition cursor-pointer ${
+                            settings.effort_score === p.val
+                              ? 'bg-blue-600 text-white border-blue-500'
+                              : 'bg-slate-950 border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <SettingScopeControl
+                      settingKey="effort_score"
+                      settingLabel="Effort Score"
+                      scopes={getSettingScopes('effort_score')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ─── 3. AI MODELS & TASK ROUTING ─── */}
+              {activeTab === 'models' && (
+                <div className="space-y-6">
+                  {/* Model Catalog Transparency */}
+                  <div className="clean-card p-5 space-y-4">
+                    <div>
+                      <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-blue-400" />
+                        Integrated AI Model Catalog
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Transparent specs, pricing, context windows, and recommended task allocations.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {modelsList.map((m) => (
+                        <div key={m.id} className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-bold text-white text-xs">{m.name}</span>
+                              <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded font-mono shrink-0">
+                                {m.tag || 'Model'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{m.description}</p>
+                          </div>
+                          <div className="pt-2 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] font-mono text-slate-400">
+                            <span>Price: <strong className="text-emerald-400">{m.pricing}</strong></span>
+                            <span>Context: <strong className="text-slate-200">{m.context_window}</strong></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Granular Task Assignment Matrix */}
+                  <div className="clean-card p-5 space-y-4 text-xs">
+                    <h3 className="text-xs font-semibold text-white">Granular Task Model Routing</h3>
+                    <p className="text-[11px] text-slate-400">
+                      Override model assignments for specific sub-agent pipeline jobs.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Lecture Summaries */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
+                        <label className="font-semibold text-white flex items-center justify-between">
+                          <span>📑 Bulk Summaries & Transcripts</span>
+                          <span className="text-[10px] text-emerald-400 font-mono">1M Context</span>
+                        </label>
+                        <select
+                          value={settings.model_selection?.summary_model || 'nemotron_3_super'}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              model_selection: {
+                                ...(settings.model_selection || {}),
+                                summary_model: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        >
+                          <option value="nemotron_3_super">Nemotron 3 Super (120B-A12B MoE) [Recommended]</option>
+                          <option value="flash">Flash Model Tier</option>
+                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
+                        </select>
+                      </div>
+
+                      {/* Flashcards */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
+                        <label className="font-semibold text-white flex items-center justify-between">
+                          <span>🃏 Flashcards & Keywords</span>
+                          <span className="text-[10px] text-blue-400 font-mono">Ultra-Cheap</span>
+                        </label>
+                        <select
+                          value={settings.model_selection?.flashcard_model || 'nemotron_nano_9b'}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              model_selection: {
+                                ...(settings.model_selection || {}),
+                                flashcard_model: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        >
+                          <option value="nemotron_nano_9b">Nemotron Nano (9B v2) [Recommended]</option>
+                          <option value="flash">Flash Model Tier</option>
+                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B</option>
+                        </select>
+                      </div>
+
+                      {/* Rubrics & Practice Tests */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
+                        <label className="font-semibold text-white flex items-center justify-between">
+                          <span>📋 Rubrics & Practice Tests</span>
+                          <span className="text-[10px] text-purple-400 font-mono">HelpSteer2</span>
+                        </label>
+                        <select
+                          value={settings.model_selection?.rubric_model || 'llama_nemotron_70b'}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              model_selection: {
+                                ...(settings.model_selection || {}),
+                                rubric_model: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        >
+                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B Instruct [Recommended]</option>
+                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
+                          <option value="pro">Pro Model Tier</option>
+                        </select>
+                      </div>
+
+                      {/* Humanization & Evasion */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
+                        <label className="font-semibold text-white flex items-center justify-between">
+                          <span>🛡️ Humanization & Polish</span>
+                          <span className="text-[10px] text-rose-400 font-mono">High Variance</span>
+                        </label>
+                        <select
+                          value={settings.model_selection?.humanizer_model || 'pro'}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              model_selection: {
+                                ...(settings.model_selection || {}),
+                                humanizer_model: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        >
+                          <option value="pro">Pro Model Tier (Gemini / Claude Pro) [Recommended]</option>
+                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
+                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <SettingScopeControl
+                      settingKey="model_selection"
+                      settingLabel="Model Tier Selection"
+                      scopes={getSettingScopes('model_selection')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ─── 4. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
               {activeTab === 'writing' && (
                 <div className="space-y-6">
                   <div className="clean-card p-5 space-y-4">
@@ -927,7 +1314,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 3. AI DETECTOR TOGGLES ─── */}
+              {/* ─── 5. AI DETECTOR TOGGLES ─── */}
               {activeTab === 'detectors' && (
                 <div className="clean-card p-6 space-y-4">
                   <div>
@@ -994,76 +1381,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 4. MODEL SELECTION ─── */}
-              {activeTab === 'models' && (
-                <div className="clean-card p-6 space-y-5">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                      <Cpu className="w-4 h-4 text-blue-400" />
-                      AI Execution Model Tier Selection
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Configure model tiers across initial drafts and final humanization passes.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    {/* Draft Model */}
-                    <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3">
-                      <div className="font-semibold text-white">Draft Generation Model</div>
-                      <p className="text-[11px] text-slate-400">Used for fast outline generation and initial task structuring.</p>
-                      <select
-                        value={settings.model_selection?.draft_model || 'flash'}
-                        onChange={(e) =>
-                          handleSaveSettings({
-                            model_selection: {
-                              ...(settings.model_selection || {}),
-                              draft_model: e.target.value,
-                            },
-                          })
-                        }
-                        className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      >
-                        <option value="flash">⚡ Flash Model (Fast & Efficient)</option>
-                        <option value="pro">🧠 Pro Model (Deep Synthesis)</option>
-                      </select>
-                    </div>
-
-                    {/* Humanizer Model */}
-                    <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3">
-                      <div className="font-semibold text-white">Humanization & Final Polish Model</div>
-                      <p className="text-[11px] text-slate-400">Used for deep stylistic variation and institutional evasion.</p>
-                      <select
-                        value={settings.model_selection?.humanizer_model || 'pro'}
-                        onChange={(e) =>
-                          handleSaveSettings({
-                            model_selection: {
-                              ...(settings.model_selection || {}),
-                              humanizer_model: e.target.value,
-                            },
-                          })
-                        }
-                        className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                      >
-                        <option value="flash">⚡ Flash Model (Fast Pass)</option>
-                        <option value="pro">🧠 Pro Model (Highest Quality & Variance)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <SettingScopeControl
-                    settingKey="model_selection"
-                    settingLabel="Model Tier Selection"
-                    scopes={getSettingScopes('model_selection')}
-                    onApplyToAll={handleApplyToAll}
-                    onRemoveAll={handleRemoveAll}
-                    onAddScope={handleAddScope}
-                    onDeleteScope={handleDeleteScope}
-                  />
-                </div>
-              )}
-
-              {/* ─── 5. DATA LAKE & MICRO-CREDITS ─── */}
+              {/* ─── 6. DATA LAKE & MICRO-CREDITS ─── */}
               {activeTab === 'datalake' && (
                 <div className="space-y-6">
                   {/* Micro-Credits Balance Header */}
@@ -1200,7 +1518,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 6. CONTEXT & TRIO SCOPES ─── */}
+              {/* ─── 7. CONTEXT & TRIO SCOPES ─── */}
               {activeTab === 'trio' && (
                 <div className="space-y-6">
                   <div className="clean-card p-5 space-y-4">
@@ -1310,7 +1628,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 7. AUTO-APPROVED ACTIONS (PERMISSIONS) ─── */}
+              {/* ─── 8. AUTO-APPROVED ACTIONS (PERMISSIONS) ─── */}
               {activeTab === 'permissions' && (
                 <div className="clean-card p-6 space-y-5">
                   <div>
@@ -1367,7 +1685,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 8. NOTIFICATIONS ─── */}
+              {/* ─── 9. NOTIFICATIONS ─── */}
               {activeTab === 'notifications' && (
                 <div className="clean-card p-6 space-y-4">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -1415,7 +1733,7 @@ export default function UserSettingsModal({
                 </div>
               )}
 
-              {/* ─── 9. ACCOUNT CONNECTION & DATA COMPLIANCE ─── */}
+              {/* ─── 10. ACCOUNT CONNECTION & DATA COMPLIANCE ─── */}
               {activeTab === 'account' && (
                 <div className="space-y-6">
                   {/* Account Connection */}

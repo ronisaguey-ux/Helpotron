@@ -8,11 +8,27 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .database import User, get_db
-from .user_settings_service import user_settings_service
+from .user_settings_service import user_settings_service, AVAILABLE_MODELS, resolve_effort_tier
 from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES
 from .humanizer import AIHumanizerPipeline
 
 router = APIRouter(prefix="/api/user", tags=["user_settings"])
+
+
+# ─── Model Catalog & Effort Level Resolution ──────────────────────────────────
+
+@router.get("/models")
+async def get_available_models():
+    """Returns the comprehensive AI model catalog including Nemotron 3 Super, Nemotron Nano, Llama 3.1 Nemotron 70B, DeepSeek, and Pro tiers."""
+    return {"status": "success", "models": AVAILABLE_MODELS}
+
+
+@router.get("/effort-score/resolve")
+async def resolve_effort_score_route(score: int = 500):
+    """Resolves effort score (1-1000) to its model distribution tier and workload routing description."""
+    resolved = resolve_effort_tier(score)
+    return {"status": "success", "effort_routing": resolved}
+
 
 
 # ─── Pydantic Schemas ─────────────────────────────────────────────────────────

@@ -159,3 +159,85 @@ def test_ai_detectors_individual_toggling():
     assert detectors["pangram"] is True
     assert detectors["sapling"] is False
     assert detectors["winston_ai"] is False
+
+
+def test_models_catalog_and_effort_score_tiers():
+    """Verify Nemotron 3 Super, Nemotron Nano, Llama 3.1 Nemotron 70B, and effort resolution."""
+    from server.user_settings_service import AVAILABLE_MODELS, resolve_effort_tier
+
+    # 1. Models catalog contains new models with correct metadata
+    model_ids = {m["id"] for m in AVAILABLE_MODELS}
+    assert "nemotron_3_super" in model_ids
+    assert "nemotron_nano_9b" in model_ids
+    assert "llama_nemotron_70b" in model_ids
+    assert "deepseek_r1_v3" in model_ids
+    assert "pro" in model_ids
+    assert "flash" in model_ids
+
+    # 2. Low effort score (1 - 350) -> routes to cheap/fast utility models
+    low = resolve_effort_tier(200)
+    assert low["tier"] == "low_effort"
+    assert low["flashcard_model"] == "nemotron_nano_9b"
+    assert low["summary_model"] == "nemotron_3_super"
+
+    # 3. Medium effort score (351 - 750) -> routes to balanced orchestration
+    med = resolve_effort_tier(500)
+    assert med["tier"] == "medium_effort"
+    assert med["draft_model"] == "llama_nemotron_70b"
+
+    # 4. High effort score (751 - 1000) -> routes to deep reasoning flagship models
+    high = resolve_effort_tier(900)
+    assert high["tier"] == "high_effort"
+    assert high["draft_model"] == "deepseek_r1_v3"
+    assert high["humanizer_model"] == "pro"
+
+
+def test_auto_start_and_effort_trio_scoping():
+    """Verify effort_score and auto_start cascade cleanly through TRIO context resolution."""
+    base_settings = {
+        "effort_score": 300,
+        "auto_start": False,
+        "trio_rules": [
+            {
+                "id": "rule_history_high_effort",
+                "name": "History 101 High Effort & Auto-Start",
+                "target": {"type": "subject", "value": "History"},
+                "apply_to_all": False,
+                "overrides": {"effort_score": 900, "auto_start": True},
+            }
+        ],
+    }
+
+    # Global context -> effort 300, auto_start False
+    eff_global = user_settings_service.resolve_effective_settings(base_settings, subject="Chemistry")
+    assert eff_global["effort_score"] == 300
+    assert eff_global["auto_start"] is False
+
+    # History context -> effort 900, auto_start True
+    eff_history = user_settings_service.resolve_effective_settings(base_settings, subject="History 101")
+    assert eff_history["effort_score"] == 900
+    assert eff_history["auto_start"] is True
+
+
+def test_api_models_and_effort_endpoints():
+    """Verify GET /api/user/models and GET /api/user/effort-score/resolve endpoints."""
+    from fastapi.testclient import TestClient
+    from server.main import app
+
+    client = TestClient(app)
+
+    # 1. Models catalog endpoint
+    m_resp = client.get("/api/user/models")
+    assert m_resp.status_code == 200
+    models = m_resp.json()["models"]
+    assert any(m["id"] == "nemotron_3_super" for m in models)
+    assert any(m["id"] == "nemotron_nano_9b" for m in models)
+    assert any(m["id"] == "llama_nemotron_70b" for m in models)
+
+    # 2. Effort resolve endpoint
+    e_resp = client.get("/api/user/effort-score/resolve?score=850")
+    assert e_resp.status_code == 200
+    res = e_resp.json()["effort_routing"]
+    assert res["tier"] == "high_effort"
+    assert res["score"] == 850
+
