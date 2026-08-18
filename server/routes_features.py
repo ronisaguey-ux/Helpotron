@@ -173,3 +173,7 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     
     return {"status": "success", "message": "Account and all associated academic data permanently deleted."}
 
+
+# <<<FIX B3 - Missing Progress Indicators on Long-Running AI Generation Tasks>>>
+# Description: Implement WebSocket or Server-Sent Events (SSE) progress streaming with a 4-step progress bar (Parsing syllabus -> Extracting key concepts -> Generating quiz -> Verifying accuracy).
+# NOTE: Automated placeholder – replace with actual code change.
