@@ -381,8 +381,8 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                   <th className="pb-3">User ID</th>
                   <th className="pb-3">Plan</th>
                   <th className="pb-3">Credits</th>
-                  <th className="pb-3">Role</th>
-                  <th className="pb-3">Actions</th>
+                  <th className="pb-3">Token Multiplier</th>
+                  <th className="pb-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 font-mono">
@@ -393,36 +393,93 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                     </td>
                   </tr>
                 ) : (
-                  safeUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-white/[0.02]">
-                      <td className="py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedUserIds.includes(u.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedUserIds([...selectedUserIds, u.id]);
-                            else setSelectedUserIds(selectedUserIds.filter((id) => id !== u.id));
-                          }}
-                        />
-                      </td>
-                      <td className="py-3 font-semibold text-white">{u.public_id}</td>
-                      <td className="py-3 capitalize text-blue-300">{u.plan || 'basic'}</td>
-                      <td className="py-3 text-emerald-400 font-bold">{u.credits || 0} cr</td>
-                      <td className="py-3 text-slate-400">{u.role || 'member'}</td>
-                      <td className="py-3">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await api.adminAdjustCredits(u.id, 50, 'Admin Grant');
-                            fetchUsers();
-                          }}
-                          className="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] mr-2"
-                        >
-                          +50 cr
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  safeUsers.map((u) => {
+                    const currentMult = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : (u.token_cost_multiplier || 1.0);
+
+                    return (
+                      <tr key={u.id} className="hover:bg-white/[0.02]">
+                        <td className="py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(u.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedUserIds([...selectedUserIds, u.id]);
+                              else setSelectedUserIds(selectedUserIds.filter((id) => id !== u.id));
+                            }}
+                          />
+                        </td>
+                        <td className="py-3 font-semibold text-white">
+                          <div className="flex items-center gap-1.5">
+                            <span>{u.public_id}</span>
+                            {u.role === 'admin' && (
+                              <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded">ADMIN</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 uppercase text-[11px] font-bold text-blue-300">{u.plan || 'basic'}</td>
+                        <td className="py-3 text-emerald-400 font-bold">{u.credits || 0} cr</td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0.1"
+                              max="10.0"
+                              value={currentMult}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
+                              }}
+                              className="w-16 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
+                              title="Token Cost Multiplier (e.g. 0.5x, 1.0x, 1.5x)"
+                            />
+                            <span className="text-slate-400 text-xs">x</span>
+
+                            {/* Quick Presets */}
+                            <div className="hidden sm:flex items-center gap-1">
+                              {[0.5, 1.0, 1.5, 2.0].map((preset) => (
+                                <button
+                                  key={preset}
+                                  type="button"
+                                  onClick={() => {
+                                    setMultiplierMap((prev) => ({ ...prev, [u.public_id]: preset }));
+                                    handleUpdateMultiplier(u.public_id, preset);
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] transition ${
+                                    Number(currentMult) === preset
+                                      ? 'bg-purple-600 text-white font-bold'
+                                      : 'bg-white/5 hover:bg-white/10 text-slate-400'
+                                  }`}
+                                >
+                                  {preset}x
+                                </button>
+                              ))}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateMultiplier(u.public_id, currentMult)}
+                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer ml-1 shadow-sm shadow-purple-600/20"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await api.adminAdjustCredits(u.id, 50, 'Admin Grant');
+                              fetchUsers();
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] font-medium transition cursor-pointer"
+                          >
+                            +50 cr
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
