@@ -13,6 +13,7 @@ import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import StudyToolsHub from './components/StudyToolsHub.jsx';
+import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
@@ -527,14 +528,7 @@ export default function App() {
               )}
 
               {activeView === 'history' && (
-                <UserSettingsModal
-                  isOpen={true}
-                  isModal={false}
-                  userId={userId}
-                  onLogout={handleLogout}
-                  onOpenPrivacy={() => setShowPrivacyModal(true)}
-                  initialTab="history"
-                />
+                <AssignmentHistoryView userId={userId} />
               )}
 
               {activeView === 'privacy' && (
