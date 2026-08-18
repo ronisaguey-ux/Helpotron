@@ -11,11 +11,10 @@ import {
   Clock,
   CheckCircle2,
   TrendingUp,
-  X,
 } from 'lucide-react';
 
 export default function Navbar({
-  activeAgent = "Overlord Agent",
+  activeAgent = "Overlord Orchestrator",
   systemHealth = "Nominal",
   isLoggedIn = false,
   isGuest = false,
@@ -73,38 +72,36 @@ export default function Navbar({
   ];
 
   return (
-    <header className="sticky top-0 z-50 glass-panel border-b border-white/5 px-6 py-3 mb-6">
+    <header className="sticky top-0 z-50 bg-[#0d1527]/80 backdrop-blur-xl border-b border-white/5 px-6 py-3.5 mb-6">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
-        {/* Brand & HUD Node */}
+        {/* Brand Node */}
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Cpu className="w-5 h-5 animate-pulse" />
-            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 ring-4 ring-cyan-500/20" />
+          <div className="relative w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <Cpu className="w-4 h-4 animate-pulse" aria-hidden="true" />
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-cyan-500/20" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold tracking-wider text-base bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">
-                HELPOTRON
-              </span>
-              <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                v2.4 Core
+              <span className="font-mono text-xs font-bold tracking-wider text-white">HELPOTRON // CORE</span>
+              <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                v2.4 Node
               </span>
             </div>
-            <p className="text-[11px] font-mono text-slate-400">Autonomous Canvas Agent</p>
+            <p className="text-[10px] font-mono text-slate-500">Autonomous Canvas Agent</p>
           </div>
         </div>
 
-        {/* Real-time Telemetry Counters */}
+        {/* Real-time Telemetry Counters (Desktop) */}
         <div className="hidden lg:flex items-center gap-6 text-xs font-mono">
           <div className="flex items-center gap-2 text-slate-400">
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <Activity className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
             <span>Telemetry:</span>
             <span className="text-emerald-400 font-semibold">{systemHealth}</span>
           </div>
 
           <div className="flex items-center gap-2 text-slate-400">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" aria-hidden="true" />
             <span>Active Worker:</span>
             <span className="text-slate-200">{activeAgent}</span>
           </div>
@@ -117,45 +114,47 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-3">
-          {/* Privacy Policy Trigger */}
+        {/* Navigation Elements */}
+        <div className="flex items-center gap-2.5">
+          
+          {/* Explicit Privacy Access Route */}
           <button
+            type="button"
             onClick={onOpenPrivacy}
             aria-label="View Privacy & Compliance Policy"
-            title="Privacy & Compliance"
-            className="p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition cursor-pointer"
+            className="text-xs font-mono font-medium px-3 py-1.5 min-h-[36px] rounded-lg border border-white/5 bg-slate-950/30 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
           >
-            <ShieldCheck className="w-4 h-4" />
+            Privacy Policy
           </button>
 
-          {/* Notifications Center */}
+          {/* Clean Notification Center */}
           <div className="relative">
             <button
-              onClick={() => setShowNotifMenu(!showNotifMenu)}
-              aria-label="View Notifications"
-              className="relative p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition cursor-pointer"
+              type="button"
+              onClick={() => { setShowNotifMenu(!showNotifMenu); setShowVisibilityMenu(false); }}
+              className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer relative"
+              aria-label="Toggle user notifications"
+              aria-expanded={showNotifMenu}
             >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-slate-900 animate-pulse" />
+              <Bell className="w-4 h-4" aria-hidden="true" />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-cyan-400 ring-2 ring-slate-900 animate-pulse" />
             </button>
-
             {showNotifMenu && (
-              <div className="absolute right-0 mt-2 w-80 glass-panel rounded-2xl p-3 shadow-2xl border border-cyan-500/20 z-50 text-xs">
-                <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/5 mb-2 font-mono">
-                  <span className="text-[11px] uppercase font-bold text-white">Study Notifications</span>
-                  <span className="text-[10px] text-cyan-300 font-bold">4 Unread</span>
+              <div className="absolute right-0 mt-2 w-80 bg-[#0d1324] border border-white/10 rounded-xl p-2.5 shadow-2xl z-50 animate-fadeIn">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 text-[11px] font-mono font-bold text-slate-400">
+                  <span>NOTIFICATIONS</span>
+                  <span className="text-[10px] text-cyan-300 font-bold">4 Active</span>
                 </div>
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                <div className="space-y-1.5 max-h-72 overflow-y-auto mt-2">
                   {notifications.map((n) => {
                     const Icon = n.icon;
                     return (
                       <div
                         key={n.id}
-                        className="flex items-start gap-2.5 p-2.5 rounded-xl bg-black/40 hover:bg-white/5 transition cursor-pointer"
+                        className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-950/40 hover:bg-white/5 transition cursor-pointer"
                       >
                         <div className={`p-1.5 rounded-lg ${n.bg} ${n.color} shrink-0 mt-0.5`}>
-                          <Icon className="w-3.5 h-3.5" />
+                          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-white font-mono text-[11px] truncate">
@@ -174,36 +173,34 @@ export default function Navbar({
             )}
           </div>
 
-          {/* Section Visibility Dropdown */}
+          {/* Modular HUD Section Controller */}
           <div className="relative">
             <button
-              onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
+              type="button"
+              onClick={() => { setShowVisibilityMenu(!showVisibilityMenu); setShowNotifMenu(false); }}
               aria-label={`Visibility settings, ${activeTabs.length} of ${allTabs.length} modules visible`}
               aria-expanded={showVisibilityMenu}
               aria-haspopup="true"
-              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-white/10 hover:border-cyan-500/40 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 min-h-[36px] text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-slate-300 hover:text-white hover:border-cyan-500/30 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" />
-              <span className="hidden sm:inline">Visibility ({activeTabs.length}/{allTabs.length})</span>
+              <span>Modules ({activeTabs.length})</span>
             </button>
-
             {showVisibilityMenu && (
-              <div className="absolute right-0 mt-2 w-56 glass-panel rounded-xl p-2.5 shadow-2xl border border-cyan-500/20 z-50 text-xs">
+              <div className="absolute right-0 mt-2 w-64 bg-[#0d1324] border border-white/10 rounded-xl p-2.5 shadow-2xl z-50 animate-fadeIn">
                 <div className="text-[10px] font-mono uppercase text-slate-400 px-2 py-1 border-b border-white/5 mb-1.5">
-                  Toggle HUD Modules
+                  Toggle Workspace Modules
                 </div>
                 <div className="space-y-1">
-                  {allTabs.map((t) => (
-                    <label
-                      key={t.key}
-                      className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-cyan-500/10 cursor-pointer text-slate-200 transition"
-                    >
-                      <span className="font-mono text-xs">{t.label}</span>
+                  {allTabs.map(t => (
+                    <label key={t.key} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer text-slate-300 text-xs font-mono transition">
+                      <span className="truncate pr-2">{t.label}</span>
                       <input
                         type="checkbox"
                         checked={visibleSections[t.key] !== false}
                         onChange={() => onToggleSection(t.key)}
                         className="rounded accent-cyan-500 cursor-pointer"
+                        aria-label={`Toggle module ${t.label}`}
                       />
                     </label>
                   ))}
@@ -214,25 +211,27 @@ export default function Navbar({
 
           {/* Preferences Button */}
           <button
+            type="button"
             onClick={onOpenSettings}
             aria-label="Account preferences and persona settings"
-            className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/60 focus-visible:ring-2 focus-visible:ring-indigo-400 transition cursor-pointer"
+            className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg bg-slate-900 border border-white/5 text-slate-300 text-xs font-mono hover:text-white hover:border-cyan-500/30 focus-visible:ring-2 focus-visible:ring-indigo-400 transition cursor-pointer"
           >
-            <span aria-hidden="true">⚙️</span> <span className="hidden sm:inline">Preferences</span>
+            <span aria-hidden="true">⚙️</span>
           </button>
 
           {/* Auth Button */}
           {isLoggedIn ? (
             <button
+              type="button"
               onClick={onLogout}
               aria-label="Sign out of account"
-              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/60 focus-visible:ring-2 focus-visible:ring-rose-400 transition cursor-pointer"
+              className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 focus-visible:ring-2 focus-visible:ring-rose-400 transition cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Logout</span>
+              <LogOut className="w-4 h-4" aria-hidden="true" />
             </button>
           ) : (
             <button
+              type="button"
               onClick={onOpenAuth}
               aria-label="Sign in or create account"
               className="min-h-[36px] flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-300 transition cursor-pointer"
@@ -242,7 +241,6 @@ export default function Navbar({
             </button>
           )}
         </div>
-
       </div>
     </header>
   );

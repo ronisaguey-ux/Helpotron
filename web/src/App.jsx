@@ -13,6 +13,8 @@ import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
+import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
+
 import {
   Download,
   Trash2,
@@ -25,6 +27,12 @@ import {
   Sparkles,
   Layers,
   Plus,
+  Eye,
+  Settings as SettingsIcon,
+  Users,
+  Award,
+  CreditCard,
+  ShieldAlert,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -96,11 +104,12 @@ class ErrorBoundary extends React.Component {
               {this.state.error?.message || 'Unknown runtime error'}
             </div>
             <button
+              type="button"
               onClick={() => {
-                localStorage.clear();
+                try { localStorage.clear(); } catch (e) {}
                 window.location.reload();
               }}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition cursor-pointer"
             >
               🔄 Reset App Cache & Reload
             </button>
@@ -113,7 +122,13 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
-  const [userId, setUserIdState] = useState(() => getUserId() || 'RoniDev');
+  const [userId, setUserIdState] = useState(() => {
+    try {
+      return getUserId() || 'RoniDev';
+    } catch (e) {
+      return 'RoniDev';
+    }
+  });
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
   const [tab, setTab] = useState('assignments');
@@ -128,34 +143,43 @@ export default function App() {
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [selectedStudyAssignment, setSelectedStudyAssignment] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Privacy Policy state (must be accepted, else guest read-only)
   const [showPrivacyModal, setShowPrivacyModal] = useState(() => {
-    return localStorage.getItem('helpotron_privacy_accepted') !== 'true';
+    try {
+      return localStorage.getItem('helpotron_privacy_accepted') !== 'true';
+    } catch (e) {
+      return false;
+    }
   });
 
-  // Feature Visibility Toggles
+  // Feature Visibility Toggles with safe try/catch deserialization
   const [visibleSections, setVisibleSections] = useState(() => {
-    const saved = localStorage.getItem('helpotron_visible_sections');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
+    try {
+      const saved = localStorage.getItem('helpotron_visible_sections');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {}
     return {
       assignments: true,
-      overview: true,
       'study-tools': true,
       analytics: true,
-      referral: true,
+      overview: true,
       groups: true,
-      settings: true,
+      referral: true,
       billing: true,
+      settings: true,
     };
   });
 
   const toggleSection = (sectionKey) => {
     setVisibleSections((prev) => {
       const updated = { ...prev, [sectionKey]: !prev[sectionKey] };
-      localStorage.setItem('helpotron_visible_sections', JSON.stringify(updated));
+      try {
+        localStorage.setItem('helpotron_visible_sections', JSON.stringify(updated));
+      } catch (e) {}
       return updated;
     });
   };
@@ -226,7 +250,9 @@ export default function App() {
   };
 
   const handleAcceptPrivacy = () => {
-    localStorage.setItem('helpotron_privacy_accepted', 'true');
+    try {
+      localStorage.setItem('helpotron_privacy_accepted', 'true');
+    } catch (e) {}
     setShowPrivacyModal(false);
     setIsLoggedIn(true);
     setIsGuest(false);
@@ -236,7 +262,9 @@ export default function App() {
   };
 
   const handleDeclinePrivacy = () => {
-    localStorage.setItem('helpotron_privacy_accepted', 'declined');
+    try {
+      localStorage.setItem('helpotron_privacy_accepted', 'declined');
+    } catch (e) {}
     setShowPrivacyModal(false);
     setIsGuest(true);
     setIsLoggedIn(false);
@@ -250,22 +278,22 @@ export default function App() {
   };
 
   const allTabs = [
-    { key: 'assignments', label: '📋 Assignments & Overlord' },
-    { key: 'study-tools', label: '⚡ Study Tools & Quizzes' },
-    { key: 'analytics', label: '📊 Data Lake & Telemetry' },
-    { key: 'overview', label: '🧭 Activity Overview' },
-    { key: 'groups', label: '👥 Collaborative Groups' },
-    { key: 'referral', label: '🎁 Referral & Rewards' },
-    { key: 'billing', label: '💳 Credits & Billing' },
-    { key: 'settings', label: '⚙️ Settings & Personas' },
+    { key: 'assignments', label: '📋 Assignments Hub', icon: ClipboardList, desc: 'Grading rubric tracking and source file maps' },
+    { key: 'study-tools', label: '⚡ Study Tools & Quizzes', icon: Sparkles, desc: 'Active recall models, flashcards and interactive tests' },
+    { key: 'analytics', label: '📊 Data Lake & Telemetry', icon: TrendingUp, desc: 'Real-time pipeline metrics and study time telemetry' },
+    { key: 'overview', label: '🧭 Activity Dashboard', icon: Eye, desc: 'High-level course progress and study streak' },
+    { key: 'groups', label: '👥 Collaborative Groups', icon: Users, desc: 'Shared synchronization peer pools' },
+    { key: 'referral', label: '🎁 Referral Program', icon: Award, desc: 'Earn compute credits via invitation nodes' },
+    { key: 'billing', label: '💳 Compute Ledger & Top-Up', icon: CreditCard, desc: 'Hardware tier scaling and credit transactions' },
+    { key: 'settings', label: '⚙️ Workspace Profiling', icon: SettingsIcon, desc: 'LLM constraints, writing personas and data exports' },
   ];
 
   const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen ambient-grid text-slate-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+      <div className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+        
         {/* Privacy Policy Modal Overlay */}
         <PrivacyPolicyModal
           isOpen={showPrivacyModal}
@@ -297,6 +325,7 @@ export default function App() {
               </span>
             </div>
             <button
+              type="button"
               onClick={() => setAuthModalOpen(true)}
               className="px-3 py-1 bg-slate-950 text-amber-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-amber-400/30 transition cursor-pointer"
             >
@@ -319,6 +348,7 @@ export default function App() {
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setTab('billing')}
                   className="px-3 py-1 bg-slate-950 text-rose-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-rose-400/30 transition cursor-pointer"
                 >
@@ -339,6 +369,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setTab('billing')}
                 className="px-3 py-1.5 bg-cyan-500 text-black rounded-lg text-xs font-semibold hover:bg-cyan-400 transition cursor-pointer"
               >
@@ -375,114 +406,117 @@ export default function App() {
         )}
 
         {/* ─── Main Workspace & Persistent Study Buddy Sidebar ────────── */}
-        <div className="max-w-7xl mx-auto px-6 pb-16 flex flex-col lg:flex-row gap-6 items-start">
-          <main className="flex-1 min-w-0 w-full">
-            {/* HUD Navigation Sub-Pills */}
-            <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
-              {activeTabs.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => {
-                    setTab(t.key);
-                    setOpenAssignment(null);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    tab === t.key
-                      ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 text-cyan-300 shadow-md shadow-cyan-500/10 font-bold'
-                      : 'glass-panel text-slate-400 hover:text-slate-200 hover:border-white/20'
-                  }`}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 flex flex-col lg:flex-row gap-8 items-start relative">
+          
+          {/* Main Dashboard Section Container */}
+          <main className="flex-1 min-w-0 w-full space-y-6">
+            
+            {/* Highly Sectionized Hub Architecture */}
+            {allTabs.map((section) => {
+              if (!visibleSections[section.key]) return null;
+              
+              return (
+                <CollapsibleSection
+                  key={section.key}
+                  title={section.label}
+                  subtitle={section.desc}
+                  icon={section.icon}
+                  defaultOpen={tab === section.key || (tab === 'assignments' && section.key === 'assignments')}
                 >
-                  {t.label}
-                </button>
-              ))}
-              {isAdmin && (
-                <button
-                  key="admin"
-                  onClick={() => {
-                    setTab('admin');
-                    setOpenAssignment(null);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    tab === 'admin'
-                      ? 'bg-purple-500/20 border border-purple-500/40 text-purple-300 font-bold shadow-md'
-                      : 'glass-panel text-purple-400 hover:text-purple-200 hover:border-purple-500/30'
-                  }`}
-                >
-                  🛡️ Admin Control
-                </button>
-              )}
-            </nav>
+                  {section.key === 'assignments' && (
+                    openAssignment ? (
+                      <AssignmentDetailView
+                        assignment={openAssignment}
+                        onBack={() => setOpenAssignment(null)}
+                        onGenerateStudyTool={handleGenerateStudyToolForAssignment}
+                      />
+                    ) : (
+                      <AssignmentCardDashboard
+                        userId={userId}
+                        isGuest={isGuest}
+                      />
+                    )
+                  )}
 
-            {/* TAB VIEWS */}
-            {tab === 'assignments' && (
-              openAssignment ? (
-                <AssignmentDetailView
-                  assignment={openAssignment}
-                  onBack={() => setOpenAssignment(null)}
-                  onGenerateStudyTool={handleGenerateStudyToolForAssignment}
-                />
-              ) : (
-                <AssignmentCardDashboard
+                  {section.key === 'study-tools' && (
+                    <StudyToolsHub
+                      userId={userId}
+                      initialAssignment={selectedStudyAssignment}
+                    />
+                  )}
+
+                  {section.key === 'analytics' && (
+                    <AnalyticsDashboard userId={userId} />
+                  )}
+
+                  {section.key === 'overview' && (
+                    openAssignment ? (
+                      <AssignmentDetailView
+                        assignment={openAssignment}
+                        onBack={() => setOpenAssignment(null)}
+                        onGenerateStudyTool={handleGenerateStudyToolForAssignment}
+                      />
+                    ) : (
+                      <Overview
+                        userId={userId}
+                        onGoTo={(t) => setTab(t)}
+                        onSelectAssignment={(a) => setOpenAssignment(a)}
+                      />
+                    )
+                  )}
+
+                  {section.key === 'groups' && (
+                    <StudyGroups userId={userId} />
+                  )}
+
+                  {section.key === 'referral' && (
+                    <ReferralSection userId={userId} />
+                  )}
+
+                  {section.key === 'billing' && (
+                    <Billing userId={userId} />
+                  )}
+
+                  {section.key === 'settings' && (
+                    <Settings
+                      userId={userId}
+                      onOpenModal={() => setSettingsModalOpen(true)}
+                      onOpenPrivacy={() => setShowPrivacyModal(true)}
+                      onUserId={(id) => { setUserId(id); setUserIdState(id); }}
+                      onServer={(url) => { setServer(url); setServerUrlState(url); }}
+                    />
+                  )}
+                </CollapsibleSection>
+              );
+            })}
+
+            {isAdmin && (
+              <CollapsibleSection
+                title="🛡️ Core Infrastructure Management"
+                subtitle="Financial ledgers and sandbox runtime clusters"
+                icon={ShieldAlert}
+                defaultOpen={true}
+              >
+                <AdminPanel
                   userId={userId}
-                  isGuest={isGuest}
+                  adminUsers={adminUsers}
+                  adminAnalytics={adminAnalytics}
+                  refreshAdmin={fetchAdminData}
                 />
-              )
-            )}
-
-            {tab === 'overview' && (
-              openAssignment ? (
-                <AssignmentDetailView
-                  assignment={openAssignment}
-                  onBack={() => setOpenAssignment(null)}
-                  onGenerateStudyTool={handleGenerateStudyToolForAssignment}
-                />
-              ) : (
-                <Overview
-                  userId={userId}
-                  onGoTo={(t) => setTab(t)}
-                  onSelectAssignment={(a) => setOpenAssignment(a)}
-                />
-              )
-            )}
-
-            {tab === 'study-tools' && (
-              <StudyToolsHub
-                userId={userId}
-                initialAssignment={selectedStudyAssignment}
-              />
-            )}
-
-            {tab === 'analytics' && <AnalyticsDashboard userId={userId} />}
-            {tab === 'referral' && <ReferralSection userId={userId} />}
-            {tab === 'groups' && <StudyGroups userId={userId} />}
-            {tab === 'settings' && (
-              <Settings
-                userId={userId}
-                onOpenModal={() => setSettingsModalOpen(true)}
-                onOpenPrivacy={() => setShowPrivacyModal(true)}
-                onUserId={(id) => { setUserId(id); setUserIdState(id); }}
-                onServer={(url) => { setServer(url); setServerUrlState(url); }}
-              />
-            )}
-            {tab === 'billing' && <Billing userId={userId} />}
-            {tab === 'admin' && isAdmin && (
-              <AdminPanel
-                userId={userId}
-                adminUsers={adminUsers}
-                adminAnalytics={adminAnalytics}
-                refreshAdmin={fetchAdminData}
-              />
+              </CollapsibleSection>
             )}
           </main>
 
-          {/* Persistent Collapsible Study Buddy Panel */}
-          <StudyBuddyPanel
-            open={buddyOpen}
-            setOpen={setBuddyOpen}
-            onGenerateAction={(kind, query) => {
-              setTab('study-tools');
-            }}
-          />
+          {/* Persistent Side-dock Overlord Agent Panel */}
+          <div className={`transition-all duration-300 shrink-0 sticky top-24 ${buddyOpen ? 'w-full lg:w-96' : 'w-12'}`}>
+            <StudyBuddyPanel
+              open={buddyOpen}
+              setOpen={setBuddyOpen}
+              onGenerateAction={(kind, query) => {
+                setTab('study-tools');
+              }}
+            />
+          </div>
         </div>
 
         <UserSettingsModal
@@ -515,7 +549,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
     <div className="space-y-6">
       {/* Top Quick Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
           <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
             <span>Due Assignments</span>
             <ClipboardList className="w-4 h-4 text-cyan-400" />
@@ -524,7 +558,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
           <div className="text-[11px] font-mono text-slate-400 mt-1">Pending student tasks</div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
           <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
             <span>Active Study Streak</span>
             <Flame className="w-4 h-4 text-amber-400" />
@@ -533,7 +567,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
           <div className="text-[11px] font-mono text-emerald-400 mt-1">Top 5% of active learners</div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 border border-white/5">
+        <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/40">
           <div className="flex items-center justify-between text-slate-400 text-xs font-mono mb-1">
             <span>Compute Tier</span>
             <Sparkles className="w-4 h-4 text-indigo-400" />
@@ -544,8 +578,8 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
       </div>
 
       {/* Tracked Assignments with Click to Detail */}
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
             <h2 className="font-bold text-sm text-white font-mono flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-cyan-400" />
@@ -569,7 +603,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
                 <div
                   key={a.id}
                   onClick={() => onSelectAssignment && onSelectAssignment(a)}
-                  className="glass-panel rounded-xl p-4 border border-white/5 hover:border-cyan-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className="glass-panel rounded-xl p-4 border border-white/5 hover:border-cyan-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/30"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -592,11 +626,11 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
             })}
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Latest Synthesized Study Materials */}
       {data.materials && data.materials.length > 0 && (
-        <Card>
+        <div className="pt-2">
           <h2 className="mb-3 font-bold text-sm text-white font-mono flex items-center gap-2">
             <Layers className="w-4 h-4 text-indigo-400" />
             Recently Synthesized Study Materials
@@ -612,7 +646,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
               </span>
             ))}
           </div>
-        </Card>
+        </div>
       )}
     </div>
   );
@@ -660,14 +694,16 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
   };
 
   const handleDeleteAccount = () => {
-    localStorage.clear();
+    try {
+      localStorage.clear();
+    } catch (e) {}
     window.location.reload();
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       {/* Extended User Preferences Card */}
-      <Card className="bg-gradient-to-r from-cyan-950/30 to-indigo-950/30 border-cyan-500/30">
+      <div className="glass-panel rounded-2xl p-5 border border-cyan-500/30 bg-gradient-to-r from-cyan-950/20 to-indigo-950/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="font-bold text-sm text-cyan-300 font-mono">✨ Extended User Preferences</h2>
@@ -679,37 +715,61 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
             Open Matrix
           </Button>
         </div>
-      </Card>
+      </div>
 
       {/* Study Preferences */}
-      <Card>
-        <h2 className="mb-3 font-semibold text-white text-sm font-mono">Study Preferences</h2>
-        <label className="text-xs text-slate-400 font-mono">Reading Level</label>
-        <select className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={readingLevel} onChange={(e) => setReadingLevel(e.target.value)}>
-          {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => <option key={l} className="bg-slate-900 text-slate-300">{l}</option>)}
-        </select>
-        <p className="mt-2 text-xs text-slate-400 font-mono">Tone is calibrated to formal for academic compliance.</p>
-      </Card>
+      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
+        <h2 className="font-semibold text-white text-sm font-mono">Study Preferences</h2>
+        <div>
+          <label className="text-xs text-slate-400 font-mono">Reading Level</label>
+          <select
+            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            value={readingLevel}
+            onChange={(e) => setReadingLevel(e.target.value)}
+          >
+            {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore'].map((l) => (
+              <option key={l} className="bg-slate-900 text-slate-300">{l}</option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-slate-400 font-mono">Tone is calibrated to formal for academic compliance.</p>
+      </div>
 
       {/* Server & User ID */}
-      <Card>
-        <h2 className="mb-3 font-semibold text-white text-sm font-mono">Neural Uplink Connection</h2>
-        <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Same-Origin)</label>
-        <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localServer} onChange={(e) => setLocalServer(e.target.value)} placeholder="Auto-detected origin (e.g. '')" />
-        <label className="mt-3 block text-xs text-slate-400 font-mono">Telemetry User Public ID</label>
-        <input className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono" value={localUser} onChange={(e) => setLocalUser(e.target.value)} />
-        <Button className="mt-4 w-full" onClick={save}>{saved ? '✅ Settings Synchronized' : 'Save Settings'}</Button>
-      </Card>
+      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
+        <h2 className="font-semibold text-white text-sm font-mono">Neural Uplink Connection</h2>
+        <div>
+          <label className="text-xs text-slate-400 font-mono">Server URL (Relative / Same-Origin)</label>
+          <input
+            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            value={localServer}
+            onChange={(e) => setLocalServer(e.target.value)}
+            placeholder="Auto-detected origin (e.g. '')"
+          />
+        </div>
+        <div>
+          <label className="mt-2 block text-xs text-slate-400 font-mono">Telemetry User Public ID</label>
+          <input
+            className="mt-1 w-full rounded-xl glass-input px-3 py-2 text-xs font-mono"
+            value={localUser}
+            onChange={(e) => setLocalUser(e.target.value)}
+          />
+        </div>
+        <Button className="mt-2 w-full" onClick={save}>
+          {saved ? '✅ Settings Synchronized' : 'Save Settings'}
+        </Button>
+      </div>
 
       {/* Privacy, GDPR & Data Management */}
-      <Card>
-        <h2 className="mb-3 font-semibold text-white text-sm font-mono flex items-center gap-2">
+      <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-slate-950/30 space-y-3">
+        <h2 className="font-semibold text-white text-sm font-mono flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-cyan-400" />
           Privacy & Data Compliance (GDPR / CCPA)
         </h2>
 
         <div className="space-y-2 font-mono text-xs">
           <button
+            type="button"
             onClick={onOpenPrivacy}
             className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-slate-300 transition cursor-pointer"
           >
@@ -718,6 +778,7 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
           </button>
 
           <button
+            type="button"
             onClick={handleExportData}
             className="w-full flex items-center justify-between p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 text-cyan-300 transition cursor-pointer"
           >
@@ -732,6 +793,7 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
           )}
 
           <button
+            type="button"
             onClick={() => setConfirmDelete(!confirmDelete)}
             className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-300 transition cursor-pointer"
           >
@@ -757,7 +819,7 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
             </div>
           )}
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -779,7 +841,6 @@ function Billing({ userId }) {
       const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
       setBalance(r.credits);
       setMsg(`✅ $${amountCents / 100} allocated — New balance: ${r.credits} credits`);
-      // Refresh transactions after top-up
       api.dashboard(userId).then((d) => setTransactions(d.recent_transactions || [])).catch(() => {});
     } catch (e) {
       setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
@@ -796,7 +857,7 @@ function Billing({ userId }) {
       <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
-      <div className="glass-panel rounded-2xl p-6 border border-white/10">
+      <div className="glass-panel rounded-2xl p-6 border border-white/10 bg-slate-950/40">
         <h3 className="font-semibold mb-4 font-mono text-sm text-white flex items-center gap-2">
           🧾 Credit Transaction History
         </h3>
@@ -830,36 +891,31 @@ function Billing({ userId }) {
 function AdminPanel({ userId, adminUsers, adminAnalytics, refreshAdmin }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold font-mono text-white flex items-center gap-2">
-        <span>🛡️</span> Helpotron Master Admin Control Center
-      </h2>
-      
-      {/* Advanced Admin Operations */}
       <AdminAdvancedDashboard userId={userId} />
 
       {adminAnalytics && (
-        <Card>
-          <h3 className="font-semibold mb-2 font-mono text-sm text-cyan-300">📊 Financial & Content Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+        <div className="glass-panel rounded-2xl p-5 border border-white/10 bg-slate-950/40">
+          <h3 className="font-semibold mb-3 font-mono text-sm text-cyan-300">📊 Financial & Content Overview</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Total users</span>
               <strong className="text-white text-base">{adminAnalytics.users?.total || 0}</strong>
             </div>
-            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Total assignments</span>
               <strong className="text-white text-base">{adminAnalytics.content?.assignments || 0}</strong>
             </div>
-            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Study materials</span>
               <strong className="text-white text-base">{adminAnalytics.content?.study_materials || 0}</strong>
             </div>
-            <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Revenue</span>
               <strong className="text-emerald-300 text-base">${adminAnalytics.finance?.total_revenue_usd?.toFixed(2) || '0.00'}</strong>
             </div>
           </div>
           <Button variant="outline" className="mt-4" onClick={refreshAdmin}>Refresh Data</Button>
-        </Card>
+        </div>
       )}
     </div>
   );
