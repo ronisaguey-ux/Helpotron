@@ -130,14 +130,25 @@ async def export_summary(
     )
 
 
-EXPORT_DIR = Path("./exports").resolve()
+from .config import BASE_DIR
+
+EXPORT_DIR = (BASE_DIR / "exports").resolve()
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.get("/download/{filename}")
 def download_export(filename: str, user: User = Depends(get_current_user)):
     """Safely downloads an exported file with strict path traversal prevention."""
+    # Disallow slashes, dots prefixes, and enforce relative resolution
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename parameter.")
+        
     safe_path = (EXPORT_DIR / filename).resolve()
-    if not str(safe_path).startswith(str(EXPORT_DIR)) or not safe_path.exists() or not safe_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found or access denied.")
+    try:
+        if not safe_path.is_relative_to(EXPORT_DIR) or not safe_path.exists() or not safe_path.is_file():
+            raise HTTPException(status_code=404, detail="File not found or access denied.")
+    except (ValueError, AttributeError):
+        if not str(safe_path).startswith(str(EXPORT_DIR)) or not safe_path.exists() or not safe_path.is_file():
+            raise HTTPException(status_code=404, detail="File not found or access denied.")
+            
     return FileResponse(path=safe_path, filename=filename, media_type="application/octet-stream")
