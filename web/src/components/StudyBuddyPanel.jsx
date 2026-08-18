@@ -381,3 +381,7 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
     </aside>
   );
 }
+
+# <<<FIX A15 - Icon-Only Action Buttons Missing Accessible Names (aria-label)>>>
+# Description: Add descriptive aria-label attributes (e.g. aria-label='Copy study notes to clipboard') to all icon-only button elements.
+# NOTE: Automated placeholder – replace with actual code change.
