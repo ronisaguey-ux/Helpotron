@@ -12,6 +12,8 @@ import Navbar from './components/Navbar.jsx';
 import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
+import StudyToolsHub from './components/StudyToolsHub.jsx';
+import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
   Menu,
@@ -434,9 +436,40 @@ export default function App() {
           </aside>
 
           {/* ─── DYNAMIC FULL-PAGE VIEW CONTAINER ─── */}
-          <main className="flex-1 min-w-0 w-full">
+          <main className="flex-1 min-w-0 w-full space-y-5">
+            {/* Tier 1: Domain Switching Selector Strip */}
+            <div className="clean-card p-1.5 flex items-center gap-1.5 overflow-x-auto select-none">
+              {[
+                { id: 'academic', label: '🎓 Academic Workspace', defaultView: 'assignments' },
+                { id: 'account', label: '👤 Account & Billing', defaultView: 'billing' },
+                { id: 'infra', label: '🛡️ System Control', defaultView: 'admin' },
+              ].map((d) => {
+                const isDomainActive = 
+                  (d.id === 'academic' && (activeView === 'assignments' || activeView === 'overview')) ||
+                  (d.id === 'account' && (activeView === 'billing' || activeView === 'referral' || activeView === 'settings')) ||
+                  (d.id === 'infra' && (activeView === 'admin' || activeView === 'analytics' || activeView === 'groups'));
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      handleSelectView(d.defaultView);
+                      setOpenAssignment(null);
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-medium font-sans whitespace-nowrap transition-all cursor-pointer ${
+                      isDomainActive
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* View Header Title Banner */}
-            <div className="mb-6 clean-card px-6 py-4 flex items-center justify-between">
+            <div className="clean-card px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
                   <currentItem.icon className="w-5 h-5" />
@@ -457,7 +490,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Render ONLY the Active View */}
+            {/* Render Active View Hierarchy */}
             <div>
               {activeView === 'assignments' && (
                 openAssignment ? (
@@ -467,11 +500,19 @@ export default function App() {
                     onBack={() => setOpenAssignment(null)}
                   />
                 ) : (
-                  <AssignmentCardDashboard
-                    userId={userId}
-                    isGuest={isGuest}
-                    onSelectAssignment={(a) => setOpenAssignment(a)}
-                  />
+                  <div className="space-y-4 animate-fadeIn">
+                    <CollapsibleSection title="Active Assignment Trackers" subtitle="Canvas LMS progressive pipelines & autonomous card dispatch" defaultOpen={true}>
+                      <AssignmentCardDashboard
+                        userId={userId}
+                        isGuest={isGuest}
+                        onSelectAssignment={(a) => setOpenAssignment(a)}
+                      />
+                    </CollapsibleSection>
+
+                    <CollapsibleSection title="Active Recall Frameworks" subtitle="Spaced repetition models & interactive active recall deck" defaultOpen={false}>
+                      <StudyToolsHub userId={userId} />
+                    </CollapsibleSection>
+                  </div>
                 )
               )}
 

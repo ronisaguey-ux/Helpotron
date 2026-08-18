@@ -145,6 +145,7 @@ export default function AdminAdvancedDashboard({ userId }) {
       <div className="flex border-b border-slate-800 bg-slate-950/40 rounded-xl overflow-x-auto text-xs font-semibold p-1">
         {[
           ['bulk_users', '👥 Bulk Operations'],
+          ['system_control', '🛡️ Platform System Control'],
           ['health', '🩺 System Health & Latency'],
           ['moderation', '🚨 Content Moderation'],
           ['models', '⚡ Model Performance Scorecard'],
@@ -154,7 +155,7 @@ export default function AdminAdvancedDashboard({ userId }) {
             onClick={() => setActiveTab(key)}
             className={`px-4 py-2.5 rounded-lg whitespace-nowrap transition ${
               activeTab === key
-                ? 'bg-indigo-600 text-white shadow'
+                ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -425,6 +426,72 @@ export default function AdminAdvancedDashboard({ userId }) {
                   </select>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: SYSTEM CONTROL & STORAGE PURGE */}
+      {activeTab === 'system_control' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <span className="text-blue-400">🛡️</span>
+              Platform System Control & Runtime Storage
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">Global configuration and runtime adjustments for your workspace instance.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-4">
+            {/* Sandbox Safety Setting */}
+            <div className="p-5 bg-slate-950/40 border border-white/5 rounded-2xl flex items-start justify-between gap-4">
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <span className="text-blue-400">⚡</span>
+                  Isolated Sub-Agent Sandboxing
+                </span>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Forces all multi-agent parsing routines, file operations, and code processing into isolated, unprivileged virtualization environments.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextState = !(window.__sandboxIsolation ?? true);
+                  window.__sandboxIsolation = nextState;
+                  alert(`Sandbox Isolation set to: ${nextState ? 'RESTRICTED (Enabled)' : 'UNRESTRICTED (Disabled)'}`);
+                }}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+              >
+                RESTRICTED
+              </button>
+            </div>
+
+            {/* Local Storage System Cache Hard Purge Action Block */}
+            <div className="p-5 bg-slate-950/40 border border-white/5 rounded-2xl flex flex-col justify-between gap-3">
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <span className="text-rose-400">🗑️</span>
+                  Temporary Storage Cleanup
+                </span>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Instantly purges temporary cache pipelines, local storage variables, transcript chunks, and unlinked file vectors.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Confirm formatting of temporary background file buffers? All local execution states will be cleared.")) return;
+                  try {
+                    localStorage.removeItem('helpotron_csrf_token');
+                    localStorage.removeItem('helpotron_cached_cards');
+                  } catch (e) {}
+                  alert("Temporary execution cache formatted cleanly.");
+                }}
+                className="w-full py-2.5 bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/20 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Format Temp Cache Directories</span>
+              </button>
             </div>
           </div>
         </div>

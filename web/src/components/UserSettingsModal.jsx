@@ -246,6 +246,7 @@ export default function UserSettingsModal({ isOpen, onClose, userId }) {
         <div className="flex border-b border-slate-800 bg-slate-950/30 overflow-x-auto text-sm font-medium px-4">
           {[
             ['personas', '🎭 Personas'],
+            ['context_digestion', '⚡ Context & Digestion'],
             ['originality_citations', '🛡️ Originality & Citations'],
             ['goals', '🎯 Goals & Streaks'],
             ['display', '🎨 Display & Theme'],
@@ -258,7 +259,7 @@ export default function UserSettingsModal({ isOpen, onClose, userId }) {
               onClick={() => setActiveTab(key)}
               className={`px-4 py-3 border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === key
-                  ? 'border-indigo-500 text-indigo-400 font-semibold'
+                  ? 'border-blue-500 text-blue-400 font-semibold'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -828,6 +829,102 @@ export default function UserSettingsModal({ isOpen, onClose, userId }) {
                     >
                       Export Data (JSON)
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 8: CONTEXT & DIGESTION CONTROLS */}
+              {activeTab === 'context_digestion' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-semibold text-white">Advanced Context Controls</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Configure parameters for automated document digestion and background tasks.
+                    </p>
+                  </div>
+
+                  <div className="space-y-5 border-t border-slate-800 pt-4">
+                    {/* Token Budget Constraint Slider */}
+                    <div className="space-y-2 p-4 rounded-xl border border-slate-800 bg-slate-950/40">
+                      <div className="flex justify-between items-center text-xs">
+                        <label className="text-slate-300 font-medium">Context Window Allocation Limit</label>
+                        <span className="text-blue-400 font-mono font-bold">
+                          {(settings.context_controls?.token_budget ?? 250000).toLocaleString()} tokens
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={50000}
+                        max={1000000}
+                        step={50000}
+                        value={settings.context_controls?.token_budget ?? 250000}
+                        onChange={(e) =>
+                          saveSettings({
+                            context_controls: {
+                              ...settings.context_controls,
+                              token_budget: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full accent-blue-500 bg-slate-950 rounded-lg h-2 cursor-pointer"
+                      />
+                      <p className="text-[11px] text-slate-500">Maximum context tokens ingested during active assignment analysis and code synthesis.</p>
+                    </div>
+
+                    {/* Typing Export Speed Selection Dropdown */}
+                    <div className="space-y-2 p-4 rounded-xl border border-slate-800 bg-slate-950/40">
+                      <label className="text-xs text-slate-300 block font-medium">Cloud Export Playback Vector Speed</label>
+                      <select
+                        value={settings.context_controls?.stream_speed ?? 'natural'}
+                        onChange={(e) =>
+                          saveSettings({
+                            context_controls: {
+                              ...settings.context_controls,
+                              stream_speed: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="stealth">Stealth (Variable Delay 120-350ms per token)</option>
+                        <option value="natural">Natural (Variable Delay 45-110ms per character)</option>
+                        <option value="burst">Burst Continuous (Unchecked Pipeline Ingestion)</option>
+                      </select>
+                      <p className="text-[11px] text-slate-500">Controls typing simulation speed when synchronizing formatted drafts with LMS inputs.</p>
+                    </div>
+
+                    {/* DOM Document Scraping Depth Mode Toggle */}
+                    <div className="space-y-2 p-4 rounded-xl border border-slate-800 bg-slate-950/40">
+                      <label className="text-xs text-slate-300 block font-medium">LMS/Canvas Document Digestion Depth</label>
+                      <div className="grid grid-cols-3 gap-2 font-mono text-[11px]">
+                        {['surface', 'standard', 'deep'].map((depth) => {
+                          const currentDepth = settings.context_controls?.parsing_depth ?? 'standard';
+                          const isSelected = currentDepth === depth;
+                          return (
+                            <button
+                              key={depth}
+                              type="button"
+                              onClick={() =>
+                                saveSettings({
+                                  context_controls: {
+                                    ...settings.context_controls,
+                                    parsing_depth: depth,
+                                  },
+                                })
+                              }
+                              className={`py-2 rounded-xl border capitalize transition font-medium ${
+                                isSelected
+                                  ? 'bg-blue-600/10 border-blue-500 text-blue-400'
+                                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              {depth}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-slate-500">Surface captures prompts only; Deep parses all nested rubric criteria, attachments, and sub-pages.</p>
+                    </div>
                   </div>
                 </div>
               )}
