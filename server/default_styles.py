@@ -30,6 +30,22 @@ DEFAULT_STYLES = {
         "label": "8th Grade Middle School",
         "default": "Scout Finch lived with her father Atticus and brother Jem in Maycomb, Alabama. Atticus taught his children that you never really understand a person until you consider things from his point of view—until you climb into his skin and walk around in it."
     },
+    "9th_grade": {
+        "label": "9th Grade (High School Freshman)",
+        "default": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of their daughters."
+    },
+    "10th_grade": {
+        "label": "10th Grade (High School Sophomore)",
+        "default": "Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world."
+    },
+    "11th_grade": {
+        "label": "11th Grade (High School Junior)",
+        "default": "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since. 'Whenever you feel like criticizing any one,' he told me, 'just remember that all the people in this world haven't had the advantages that you've had.'"
+    },
+    "12th_grade": {
+        "label": "12th Grade (High School Senior)",
+        "default": "The transition from classical antiquity to modern philosophical thought represents a fundamental shift in epistemic inquiry. Authors of the Enlightenment challenged conventional dogmas by insisting upon empirical observation, deductive reasoning, and institutional accountability."
+    },
     "high_school": {
         "label": "High School (Default)",
         "default": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of their daughters."
@@ -63,7 +79,10 @@ ACADEMIC_LEVELS = [
     {"key": "6th_grade", "label": "6th Grade (Middle School)"},
     {"key": "7th_grade", "label": "7th Grade (Middle School)"},
     {"key": "8th_grade", "label": "8th Grade (Middle School)"},
-    {"key": "high_school", "label": "High School (Default)"},
+    {"key": "9th_grade", "label": "9th Grade (High School Freshman)"},
+    {"key": "10th_grade", "label": "10th Grade (High School Sophomore)"},
+    {"key": "11th_grade", "label": "11th Grade (High School Junior)"},
+    {"key": "12th_grade", "label": "12th Grade (High School Senior)"},
     {"key": "undergrad_freshman", "label": "Undergraduate (Freshman/Sophomore)"},
     {"key": "undergrad_senior", "label": "Undergraduate (Junior/Senior)"},
     {"key": "masters", "label": "Master's Graduate Scholar"},
@@ -74,18 +93,20 @@ ACADEMIC_LEVELS = [
 
 def get_default_style(reading_level: str, target_grade: str = "default") -> str:
     """Return a default writing style sample for the given reading level."""
-    level = reading_level or "high_school"
+    level = reading_level or "10th_grade"
     if level not in DEFAULT_STYLES:
         # Fallback aliases
         alias_map = {
-            "9th": "high_school",
-            "10th": "high_school",
-            "11th": "high_school",
-            "12th": "high_school",
+            "9th": "9th_grade",
+            "10th": "10th_grade",
+            "11th": "11th_grade",
+            "12th": "12th_grade",
+            "high_school": "10th_grade",
+            "highschool": "10th_grade",
             "college-freshman": "undergrad_freshman",
             "sophomore": "undergrad_freshman",
         }
-        level = alias_map.get(level, "high_school")
+        level = alias_map.get(level, "10th_grade")
     
-    style_entry = DEFAULT_STYLES.get(level, DEFAULT_STYLES["high_school"])
+    style_entry = DEFAULT_STYLES.get(level, DEFAULT_STYLES["10th_grade"])
     return style_entry.get("default", "")
