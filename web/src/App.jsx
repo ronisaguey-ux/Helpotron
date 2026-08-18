@@ -38,6 +38,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Trophy,
+  History as HistoryIcon,
+  LogOut,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -246,7 +248,8 @@ export default function App() {
 
   // Nav Items for Collapsible Side Menu
   const menuItems = [
-    { key: 'assignments', label: 'Assignments', icon: ClipboardList, badge: null },
+    { key: 'assignments', label: 'Assignment Bubbles', icon: ClipboardList, badge: null },
+    { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: null },
     { key: 'study_tools', label: 'Study Tools & Flashcards', icon: Sparkles, badge: null },
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
@@ -254,6 +257,7 @@ export default function App() {
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
     { key: 'billing', label: 'Plans & Credits', icon: CreditCard, badge: null },
     { key: 'settings', label: 'Settings', icon: SettingsIcon, badge: null },
+    { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, badge: null },
   ];
 
   if (isAdmin) {
@@ -416,15 +420,28 @@ export default function App() {
                 </nav>
               </div>
 
-              {/* Bottom Quick Status in Side Menu */}
+              {/* Bottom Quick Status & Sign Out in Side Menu */}
               {sidebarOpen && (
-                <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-[11px] space-y-1">
-                  <div className="text-slate-400 text-[10px]">Overlord Agent</div>
-                  <div className="text-slate-200 font-medium flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    Autonomous & Active
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-[11px] space-y-1">
+                    <div className="text-slate-400 text-[10px]">Overlord Agent</div>
+                    <div className="text-slate-200 font-medium flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      Autonomous & Active
+                    </div>
+                    <div className="text-blue-400 text-[11px] mt-1 font-mono">{Number(credits).toLocaleString()} Credits</div>
                   </div>
-                  <div className="text-blue-400 text-[11px] mt-1 font-mono">{Number(credits).toLocaleString()} Credits</div>
+
+                  {isLoggedIn && (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs font-semibold transition cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -509,12 +526,36 @@ export default function App() {
                 <Billing userId={userId} />
               )}
 
+              {activeView === 'history' && (
+                <UserSettingsModal
+                  isOpen={true}
+                  isModal={false}
+                  userId={userId}
+                  onLogout={handleLogout}
+                  onOpenPrivacy={() => setShowPrivacyModal(true)}
+                  initialTab="history"
+                />
+              )}
+
+              {activeView === 'privacy' && (
+                <UserSettingsModal
+                  isOpen={true}
+                  isModal={false}
+                  userId={userId}
+                  onLogout={handleLogout}
+                  onOpenPrivacy={() => setShowPrivacyModal(true)}
+                  initialTab="privacy_policy"
+                />
+              )}
+
               {activeView === 'settings' && (
                 <UserSettingsModal
                   isOpen={true}
                   isModal={false}
                   userId={userId}
+                  onLogout={handleLogout}
                   onOpenPrivacy={() => setShowPrivacyModal(true)}
+                  initialTab="general"
                 />
               )}
 

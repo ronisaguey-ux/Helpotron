@@ -44,6 +44,13 @@ import {
   FolderPlus,
   Compass,
   Trophy,
+  History as HistoryIcon,
+  RotateCcw,
+  AlertTriangle,
+  LogOut,
+  FileSpreadsheet,
+  Archive,
+  Search,
 } from 'lucide-react';
 
 const GRADE_LETTER_MAP = [
@@ -372,13 +379,22 @@ export default function UserSettingsModal({
   onClose = () => {},
   userId = 'RoniDev',
   onOpenPrivacy = () => {},
+  onLogout = () => {},
+  initialTab = 'general',
 }) {
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState(initialTab || 'general');
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState('');
   const [academicLevels, setAcademicLevels] = useState(ACADEMIC_LEVELS);
   const [customSubjects, setCustomSubjects] = useState(DEFAULT_SUBJECTS);
+
+  // Sync initialTab if changed from parent sidebar
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Custom Subject Form
   const [newSubjName, setNewSubjName] = useState('');
@@ -407,6 +423,26 @@ export default function UserSettingsModal({
   // Auto-approved rules state
   const [newRuleInput, setNewRuleInput] = useState('');
 
+  // Assignment History State
+  const [historyList, setHistoryList] = useState([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historySubjectFilter, setHistorySubjectFilter] = useState('ALL');
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Data Actions State
+  const [simSeeding, setSimSeeding] = useState(false);
+  const [seedNotice, setSeedNotice] = useState('');
+  const [exportAllNotice, setExportAllNotice] = useState('');
+  const [showSoftResetModal, setShowSoftResetModal] = useState(false);
+  const [softResetNotice, setSoftResetNotice] = useState('');
+  const [showPermanentDeleteModal, setShowPermanentDeleteModal] = useState(false);
+  const [permDeleteConfirmText, setPermDeleteConfirmText] = useState('');
+  const [permDeleteReason, setPermDeleteReason] = useState('');
+  const [permDeleteSendNotification, setPermDeleteSendNotification] = useState(true);
+  const [permDeleteNotifyEmail, setPermDeleteNotifyEmail] = useState('');
+  const [permDeleteNotifyPhone, setPermDeleteNotifyPhone] = useState('');
+  const [permDeleteStatus, setPermDeleteStatus] = useState('');
+
   // Account & Connection state
   const [localUser, setLocalUser] = useState(userId);
   const [localServer, setLocalServer] = useState(getServer());
@@ -419,8 +455,90 @@ export default function UserSettingsModal({
       fetchAcademicLevels();
       fetchCustomSubjects();
       fetchDataLakeHistory();
+      fetchAssignmentHistory();
     }
   }, [isOpen, userId]);
+
+  async function fetchAssignmentHistory(subj) {
+    setHistoryLoading(true);
+    try {
+      const res = await api.getAssignmentHistory(subj === 'ALL' ? null : subj);
+      if (res && res.history) {
+        setHistoryList(res.history);
+      }
+    } catch (e) {
+      console.warn('History fetch error:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  const handleSeedDemoData = async () => {
+    setSimSeeding(true);
+    setSeedNotice('');
+    try {
+      await api.simulateSeed();
+      setSeedNotice('✅ Demo coursework seeded successfully into assignment bubbles and history.');
+      setTimeout(() => setSeedNotice(''), 4000);
+      await fetchAssignmentHistory();
+    } catch (e) {
+      setSeedNotice('Seed status updated.');
+    } finally {
+      setSimSeeding(false);
+    }
+  };
+
+  const handleExportAllData = async () => {
+    try {
+      const res = await api.exportAllUserData();
+      const exportBlob = new Blob([JSON.stringify(res.export || res, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(exportBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `helpotron_complete_user_export_${userId}_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportAllNotice('✅ Full data export archive downloaded successfully.');
+      setTimeout(() => setExportAllNotice(''), 5000);
+    } catch (err) {
+      console.error('Export error:', err);
+    }
+  };
+
+  const handleSoftReset = async () => {
+    try {
+      await api.softResetData();
+      setShowSoftResetModal(false);
+      setSoftResetNotice('✅ Local workspace cache cleared. Can be restored from server archive anytime.');
+      setTimeout(() => setSoftResetNotice(''), 5000);
+    } catch (err) {
+      console.error('Reset error:', err);
+    }
+  };
+
+  const handlePermanentDelete = async (e) => {
+    e?.preventDefault();
+    if (permDeleteConfirmText !== 'DELETE PERMANENTLY') return;
+
+    try {
+      const res = await api.permanentDeleteRequest({
+        confirmation_text: permDeleteConfirmText,
+        reason: permDeleteReason || 'User requested permanent GDPR wipe',
+        notify_email: permDeleteNotifyEmail || undefined,
+        notify_sms: permDeleteNotifyPhone || undefined,
+      });
+      setPermDeleteStatus(res.message || '⚠️ Permanent data deletion request dispatched. Estimated completion: 3+ business days.');
+      setTimeout(() => {
+        setShowPermanentDeleteModal(false);
+        setPermDeleteStatus('');
+        setPermDeleteConfirmText('');
+      }, 6000);
+    } catch (err) {
+      console.error('Permanent delete request failed:', err);
+    }
+  };
 
   async function fetchSettings() {
     setLoading(true);
@@ -731,58 +849,163 @@ export default function UserSettingsModal({
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
         
         {/* Side Menu */}
-        <nav className="w-full md:w-64 border-r border-white/10 bg-slate-950/40 p-3 space-y-1 overflow-y-auto shrink-0 text-xs">
-          {[
-            { key: 'general', label: 'General & Target Grade', icon: GraduationCap },
-            { key: 'effort_autostart', label: 'Effort & Auto-Start', icon: Gauge },
-            { key: 'gemini', label: 'Gemini 3.7 Flash Studio', icon: Video, badge: 'Multimodal' },
-            { key: 'subjects', label: 'Custom Subjects Taxonomy', icon: FolderPlus, badge: `${customSubjects.length}` },
-            { key: 'writing', label: 'Custom Writing Styles', icon: FileText },
-            { key: 'detectors', label: 'AI Detector Toggles', icon: Shield },
-            { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Tag, badge: `${settings?.micro_credits_balance || 0} cr` },
-            { key: 'permissions', label: 'Auto-Approved Actions', icon: CheckCircle2 },
-            { key: 'notifications', label: 'Notifications', icon: Bell },
-            { key: 'account', label: 'Account & Data Compliance', icon: Lock },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isSelected = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
-                  isSelected
-                    ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-blue-400' : 'text-slate-400'}`} />
-                  <span className="truncate">{tab.label}</span>
-                </div>
-                {tab.badge && (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <nav className="w-full md:w-64 border-r border-white/10 bg-slate-950/40 p-3 space-y-1 overflow-y-auto shrink-0 text-xs flex flex-col justify-between">
+          <div className="space-y-1">
+            {[
+              { key: 'general', label: 'General & Target Grade', icon: GraduationCap },
+              { key: 'effort_autostart', label: 'Effort & Auto-Start', icon: Gauge },
+              { key: 'gemini', label: 'Gemini 3.7 Flash Studio', icon: Video, badge: 'Multimodal' },
+              { key: 'subjects', label: 'Custom Subjects Taxonomy', icon: FolderPlus, badge: `${customSubjects.length}` },
+              { key: 'writing', label: 'Custom Writing Styles', icon: FileText },
+              { key: 'detectors', label: 'AI Detector Toggles', icon: Shield },
+              { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Tag, badge: `${settings?.micro_credits_balance || 0} cr` },
+              { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: `${historyList.length}` },
+              { key: 'permissions', label: 'Auto-Approved Actions', icon: CheckCircle2 },
+              { key: 'notifications', label: 'Notifications Center', icon: Bell },
+              { key: 'privacy_policy', label: 'Privacy Policy', icon: ShieldCheck },
+              { key: 'account', label: 'Data Compliance & Account', icon: Lock },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 font-semibold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-blue-400' : 'text-slate-400'}`} />
+                    <span className="truncate">{tab.label}</span>
+                  </div>
+                  {tab.badge && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Dedicated Sign Out Button on Side Menu */}
+          <div className="pt-3 mt-3 border-t border-white/5">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition cursor-pointer font-semibold text-xs"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out of Helpotron</span>
+            </button>
+          </div>
         </nav>
 
         {/* Tab Content Stage */}
         <div className="flex-1 p-6 overflow-y-auto space-y-6">
           {loading ? (
-            <div className="py-16 text-center text-slate-400 text-xs">Loading personalization engine...</div>
+            <div className="text-center text-xs text-blue-400 py-16 font-mono flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Loading Preferences & Scopes…
+            </div>
           ) : !settings ? (
-            <div className="py-16 text-center text-rose-400 text-xs">Failed to load user settings profile.</div>
+            <div className="text-center text-xs text-rose-400 py-16">
+              Failed to load settings. Ensure server is online.
+            </div>
           ) : (
             <>
-              {/* ─── 1. GENERAL & TARGET GRADE ─── */}
+              {/* Note: Other tabs are rendered above */}
+
+              {/* ─── 8. ASSIGNMENT HISTORY ARCHIVE TAB ─── */}
+              {activeTab === 'history' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 clean-card p-4 rounded-2xl bg-slate-950/60 border border-white/10">
+                    <div>
+                      <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                        <HistoryIcon className="w-4 h-4 text-blue-400" />
+                        Assignment Archive & Historical Submissions
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        Permanent chronological record of all completed, verified, and submitted coursework.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder="Search history..."
+                          value={historySearch}
+                          onChange={(e) => setHistorySearch(e.target.value)}
+                          className="bg-slate-900 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none"
+                        />
+                      </div>
+                      <select
+                        value={historySubjectFilter}
+                        onChange={(e) => {
+                          setHistorySubjectFilter(e.target.value);
+                          fetchAssignmentHistory(e.target.value);
+                        }}
+                        className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      >
+                        <option value="ALL">All Subjects</option>
+                        <option value="Math">Mathematics</option>
+                        <option value="English">English</option>
+                        <option value="History">History</option>
+                        <option value="CS">Computer Science</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {historyLoading ? (
+                    <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment archive…</div>
+                  ) : historyList.length === 0 ? (
+                    <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+                      <Archive className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                      <h3 className="text-sm font-semibold text-slate-300">No historical assignments found</h3>
+                      <p className="text-xs text-slate-500 mt-1">Completed assignments will automatically populate here.</p>
+                    </div>
+                  ) : (
+                    <div className="clean-card rounded-2xl overflow-hidden border border-white/10">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-950/80 border-b border-white/10 text-slate-400 font-mono text-[11px]">
+                          <tr>
+                            <th className="p-3.5">Assignment Title</th>
+                            <th className="p-3.5">Subject / Course</th>
+                            <th className="p-3.5">Instructor</th>
+                            <th className="p-3.5">Grade Output</th>
+                            <th className="p-3.5">AI Evasion</th>
+                            <th className="p-3.5">Date Completed</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {historyList
+                            .filter((h) => !historySearch || h.title.toLowerCase().includes(historySearch.toLowerCase()))
+                            .map((item) => (
+                              <tr key={item.id} className="hover:bg-slate-900/40 transition">
+                                <td className="p-3.5 font-semibold text-white">{item.title}</td>
+                                <td className="p-3.5 text-slate-300">{item.course}</td>
+                                <td className="p-3.5 text-slate-400">{item.teacher_name}</td>
+                                <td className="p-3.5 font-mono text-blue-400 font-bold">{item.grade_letter} ({item.score_predicted}%)</td>
+                                <td className="p-3.5 font-mono text-emerald-400">{(item.detector_score * 100).toFixed(0)}% AI Risk</td>
+                                <td className="p-3.5 text-slate-400 font-mono">{item.completed_at}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ─── 1. GENERAL & TARGET GRADE TAB ─── */}
               {activeTab === 'general' && (
                 <div className="space-y-6">
-                  {/* Target Academic Level */}
                   <div className="clean-card p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-white flex items-center gap-2">
