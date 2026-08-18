@@ -247,6 +247,7 @@ export default function App() {
   // Nav Items for Collapsible Side Menu
   const menuItems = [
     { key: 'assignments', label: 'Assignments', icon: ClipboardList, badge: null },
+    { key: 'study_tools', label: 'Study Tools & Flashcards', icon: Sparkles, badge: null },
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'groups', label: 'Study Groups', icon: Users, badge: null },
@@ -351,7 +352,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── Main Workspace: Collapsible Side Menu + Dynamic Full-Page View + Assistant Side-dock ────────── */}
+        {/* ─── Main Workspace: Collapsible Side Menu + Dynamic Full-Page View + Overlord Agent Side-dock ────────── */}
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pb-16 pt-6 flex gap-6 items-start relative">
           
           {/* ─── COLLAPSIBLE SIDE MENU WITH 3-LINE VERTICAL BUTTON ─── */}
@@ -363,7 +364,7 @@ export default function App() {
                 <div className="flex items-center justify-between px-2 py-2 mb-2 border-b border-white/5">
                   {sidebarOpen && (
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Menu
+                      Navigation
                     </span>
                   )}
                   <button
@@ -418,10 +419,10 @@ export default function App() {
               {/* Bottom Quick Status in Side Menu */}
               {sidebarOpen && (
                 <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-[11px] space-y-1">
-                  <div className="text-slate-400 text-[10px]">Assistant Status</div>
+                  <div className="text-slate-400 text-[10px]">Overlord Agent</div>
                   <div className="text-slate-200 font-medium flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    Ready & Online
+                    Autonomous & Active
                   </div>
                   <div className="text-blue-400 text-[11px] mt-1 font-mono">{Number(credits).toLocaleString()} Credits</div>
                 </div>
@@ -431,37 +432,6 @@ export default function App() {
 
           {/* ─── DYNAMIC FULL-PAGE VIEW CONTAINER ─── */}
           <main className="flex-1 min-w-0 w-full space-y-5">
-            {/* Tier 1: Domain Switching Selector Strip */}
-            <div className="clean-card p-1.5 flex items-center gap-1.5 overflow-x-auto select-none">
-              {[
-                { id: 'academic', label: '🎓 Academic Workspace', defaultView: 'assignments' },
-                { id: 'account', label: '👤 Account & Billing', defaultView: 'billing' },
-                { id: 'infra', label: '🛡️ System Control', defaultView: 'admin' },
-              ].map((d) => {
-                const isDomainActive = 
-                  (d.id === 'academic' && (activeView === 'assignments' || activeView === 'overview')) ||
-                  (d.id === 'account' && (activeView === 'billing' || activeView === 'referral' || activeView === 'settings')) ||
-                  (d.id === 'infra' && (activeView === 'admin' || activeView === 'analytics' || activeView === 'groups'));
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => {
-                      handleSelectView(d.defaultView);
-                      setOpenAssignment(null);
-                    }}
-                    className={`px-4 py-2 rounded-xl text-xs font-medium font-sans whitespace-nowrap transition-all cursor-pointer ${
-                      isDomainActive
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 font-semibold'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                );
-              })}
-            </div>
-
             {/* View Header Title Banner */}
             <div className="clean-card px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -472,6 +442,7 @@ export default function App() {
                   <h1 className="text-base font-semibold text-white">{currentItem.label}</h1>
                   <p className="text-xs text-slate-400">
                     {activeView === 'assignments' && 'Manage course assignments, view rubrics, and launch targeted study tools'}
+                    {activeView === 'study_tools' && 'Interactive active recall flashcards, quiz generator, and summary engine'}
                     {activeView === 'overview' && 'High-level course progress, study streak tracking, and recent activity'}
                     {activeView === 'analytics' && 'Study time logs, accuracy trends, and review consistency'}
                     {activeView === 'groups' && 'Collaborative study pools and shared notes'}
@@ -484,7 +455,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Render Active View Hierarchy */}
+            {/* Render Active Full-Page View */}
             <div>
               {activeView === 'assignments' && (
                 openAssignment ? (
@@ -494,20 +465,16 @@ export default function App() {
                     onBack={() => setOpenAssignment(null)}
                   />
                 ) : (
-                  <div className="space-y-4 animate-fadeIn">
-                    <CollapsibleSection title="Active Assignment Trackers" subtitle="Canvas LMS progressive pipelines & autonomous card dispatch" defaultOpen={true}>
-                      <AssignmentCardDashboard
-                        userId={userId}
-                        isGuest={isGuest}
-                        onSelectAssignment={(a) => setOpenAssignment(a)}
-                      />
-                    </CollapsibleSection>
-
-                    <CollapsibleSection title="Active Recall Frameworks" subtitle="Spaced repetition models & interactive active recall deck" defaultOpen={false}>
-                      <StudyToolsHub userId={userId} />
-                    </CollapsibleSection>
-                  </div>
+                  <AssignmentCardDashboard
+                    userId={userId}
+                    isGuest={isGuest}
+                    onSelectAssignment={(a) => setOpenAssignment(a)}
+                  />
                 )
+              )}
+
+              {activeView === 'study_tools' && (
+                <StudyToolsHub userId={userId} />
               )}
 
               {activeView === 'overview' && (
@@ -563,11 +530,12 @@ export default function App() {
             </div>
           </main>
 
-          {/* ─── PERSISTENT STUDY ASSISTANT PANEL ─── */}
+          {/* ─── PERSISTENT OVERLORD AGENT CONTROLLER SIDEBAR ─── */}
           <div className={`transition-all duration-300 shrink-0 sticky top-24 ${buddyOpen ? 'w-full lg:w-96' : 'w-10'}`}>
             <StudyBuddyPanel
               open={buddyOpen}
               setOpen={setBuddyOpen}
+              userId={userId}
             />
           </div>
         </div>
