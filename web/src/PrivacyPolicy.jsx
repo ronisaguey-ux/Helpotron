@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   Shield,
   Lock,
@@ -31,7 +31,7 @@ const SECTIONS = [
   { id: 'sec-7', number: '7.0', title: 'Data Retention and Account Lifecycle Policy', icon: FileText },
   { id: 'sec-8', number: '8.0', title: 'User Rights and Data Subject Access Mechanisms', icon: UserCheck },
   { id: 'sec-9', number: '9.0', title: "Children's Privacy & Educational Data (COPPA & FERPA)", icon: Shield },
-  { id: 'sec-10', number: '10.0', title: 'International Data Transfers & Standard Contractual Clauses', icon: Globe },
+  { id: 'sec-10', number: '10.0', title: 'International Data Transfers (SCCs)', icon: Globe },
   { id: 'sec-11', number: '11.0', title: 'Data Breach Notification Protocol (72-Hour Standard)', icon: AlertTriangle },
   { id: 'sec-12', number: '12.0', title: 'Policy Modifications and Notification Mechanisms', icon: Layers },
   { id: 'sec-13', number: '13.0', title: 'Data Protection Officer & Contact Information', icon: BookOpen },
@@ -82,13 +82,13 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
           </div>
           <div>
             <h1 className="text-sm font-semibold text-white">Helpotron Privacy Policy & Data Governance Charter</h1>
-            <p className="text-[11px] text-slate-400 font-mono">v4.0.0-PROD · Multi-Jurisdiction Legal Framework</p>
+            <p className="text-[11px] text-slate-400 font-mono">v4.0.0-PROD · Complete 19-Section Statutory Framework</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleDownloadMarkdown}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white hover:bg-white/5 transition font-medium"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white hover:bg-white/5 transition font-medium cursor-pointer"
             title="Download full Markdown policy"
           >
             <Download className="w-3.5 h-3.5 text-blue-400" />
@@ -97,7 +97,7 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
           {onClose && (
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5 font-medium"
+              className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white hover:bg-white/5 transition flex items-center gap-1.5 font-medium cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Workspace</span>
@@ -183,7 +183,7 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
         </aside>
 
         {/* Main Document Content */}
-        <main className="lg:col-span-8 space-y-10">
+        <main className="lg:col-span-8 space-y-8">
           {/* Document Hero */}
           <div className="border border-white/10 rounded-2xl p-8 bg-gradient-to-br from-slate-900/80 via-[#0f172a]/50 to-slate-950/90 backdrop-blur-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -232,6 +232,9 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
               <p>
                 This Policy applies to all services, software extensions, and automated systems operated by Helpotron Automator Systems Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”), including the Web Application Dashboard, Canvas Browser Extension, Autonomous Collection Agent, Audio Transcription Engine, Generative Study Tool Suite, and the Research Data Lake.
               </p>
+              <p>
+                By registering an account, installing the extension, uploading files, or redeeming credits, you represent that you have read, understood, and agreed to this Policy. If you do not agree, you must immediately terminate use and request data deletion via <code className="text-blue-300">dpo@helpotron.com</code>.
+              </p>
             </div>
           </section>
 
@@ -246,23 +249,30 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
               <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
                 <strong className="text-white block font-semibold">2.1 Information Provided Directly by the User:</strong>
                 <ul className="list-disc pl-5 space-y-1 text-slate-300 text-xs">
-                  <li><strong>Account Credentials:</strong> Unique public pseudonym (`public_id`), salted PBKDF2 password hashes (100,000+ HMAC-SHA256 iterations), and cryptographic session tokens.</li>
-                  <li><strong>Stylistic Profiles:</strong> Custom writing excerpts and essays uploaded to train few-shot style mimicry templates (average sentence length, lexical diversity, cadence).</li>
-                  <li><strong>Financial Ledgers:</strong> Subscription tier records (Basic, Pro, Elite), token usage ledgers, and Stripe transaction references. (Helpotron never stores raw credit card numbers or CVVs).</li>
+                  <li><strong>Account Credentials:</strong> Public identifier (<code className="text-blue-300">public_id</code>), salted PBKDF2 password hashes (100,000+ HMAC-SHA256 iterations), and cryptographic session tokens.</li>
+                  <li><strong>Stylistic Writing Vault:</strong> Unedited student essays uploaded to train few-shot style mimicry templates (sentence lengths, lexical density, syntactic cadence).</li>
+                  <li><strong>Billing & Token Ledgers:</strong> Subscription tier records (Basic, Pro, Elite), token consumption metrics, and Stripe transaction references. (Helpotron never stores raw credit card numbers or CVVs).</li>
                 </ul>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
                 <strong className="text-white block font-semibold">2.2 Academic & LMS Data via Browser Extension:</strong>
                 <p className="text-xs text-slate-300">
-                  When active on Canvas LMS (`*.instructure.com`), the extension captures assignment titles, descriptions, due dates, rubrics, and syllabus materials. The Autonomous Browser Agent operates in read-only mode and never alters submissions or accesses non-course administrative resources.
+                  When active on Canvas LMS (<code className="text-blue-300">*.instructure.com</code>), the extension extracts assignment titles, rubrics, due dates, and syllabus materials. The Autonomous Browser Agent operates strictly in read-only mode and never modifies student submissions or accesses non-course administrative resources.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
                 <strong className="text-white block font-semibold">2.3 Audio Recordings & Lecture Transcripts:</strong>
                 <p className="text-xs text-slate-300">
-                  Classroom audio (.webm, .wav, .mp3, .m4a) processed via Gemini 3.1 Flash-Lite or faster-whisper. Raw audio in staging is purged automatically within 24 hours post-transcription.
+                  Classroom audio (.webm, .wav, .mp3, .m4a) processed via Gemini 3.1 Flash-Lite or faster-whisper. Raw staging audio in <code className="text-blue-300">/uploads</code> is permanently expunged within 24 hours post-transcription.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
+                <strong className="text-white block font-semibold">2.4 Synthetic Educational Artifacts & Telemetry:</strong>
+                <p className="text-xs text-slate-300">
+                  Study guides, active recall flashcards, practice tests, 2-minute class prep digests, and multi-detector composite scores (0–100 scale).
                 </p>
               </div>
             </div>
@@ -278,16 +288,16 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
             <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5">
-                  <strong className="text-blue-400 block mb-1">1. Contractual (Art. 6(1)(b))</strong>
-                  <span>Delivering study guides, active recall flashcards, practice tests, and credit billing management.</span>
+                  <strong className="text-blue-400 block mb-1">1. Contractual Necessity (Art. 6(1)(b))</strong>
+                  <span>Account authentication, study guide synthesis, flashcard generation, lecture transcription, and token billing ledgers.</span>
                 </div>
                 <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5">
                   <strong className="text-emerald-400 block mb-1">2. Legitimate Interests (Art. 6(1)(f))</strong>
-                  <span>Infrastructure firewall defense, brute-force mitigation, bot detection, and rate limiting.</span>
+                  <span>Infrastructure defense, firewall packet inspection, rate limiting, and brute-force mitigation.</span>
                 </div>
                 <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5">
                   <strong className="text-purple-400 block mb-1">3. Explicit Consent (Art. 6(1)(a))</strong>
-                  <span>Data Lake anonymized contributions, style calibration, and optional Telegram notification alerts.</span>
+                  <span>Opt-in Research Data Lake submissions (Data Discount Program), stylistic calibration, and optional Telegram alerts.</span>
                 </div>
               </div>
             </div>
@@ -305,10 +315,10 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
                 Helpotron deploys a multi-tier foundation model architecture:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-xs text-slate-300">
-                <li><strong>Tier 1 — High-Throughput Workers (Gemini 3.1 Flash-Lite, DeepSeek-V4-Flash):</strong> High-frequency flashcard generation, 2-minute class prep digests, topic classification, and slide structural outlines.</li>
+                <li><strong>Tier 1 — High-Throughput Models (Gemini 3.1 Flash-Lite, DeepSeek-V4-Flash):</strong> High-frequency flashcards, 2-minute class prep digests, topic classification, and slide structural outlines.</li>
                 <li><strong>Tier 2 — Advanced Reasoning Specialists (Gemini 3.7 Flash, DeepSeek-Chat):</strong> Multi-page comprehensive study guides, pedagogical practice tests, visual layout design logic, and presentation narrative synthesis.</li>
                 <li><strong>Tier 3 — Neural Audio & Transcription (Local Faster-Whisper, Gemini Multimodal Speech):</strong> High-precision lecture transcription with speaker diarization and timestamps.</li>
-                <li><strong>Presentation Pure-Gemini Bypass:</strong> Slide and PowerPoint assignments (`.pptx`, `.ppt`, `.gslides`) bypass general LLMs and execute 100% on Google Gemini with customizable model ratio splits.</li>
+                <li><strong>Presentation Pure-Gemini Bypass:</strong> Slide and PowerPoint assignments (.pptx, .ppt, .gslides) bypass general LLMs and execute 100% on Google Gemini with customizable model ratio splits.</li>
                 <li><strong>Zero Data Retention (ZDR):</strong> Commercial enterprise API tiers mandate zero data retention. Your coursework and prompts are never used to train public foundation models.</li>
               </ul>
             </div>
@@ -351,6 +361,12 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
                     <td className="p-3 font-mono">PCI-DSS Level 1</td>
                   </tr>
                   <tr>
+                    <td className="p-3 font-semibold text-white">Telegram Messenger</td>
+                    <td className="p-3">Optional Notification Relay</td>
+                    <td className="p-3">Global</td>
+                    <td className="p-3 font-mono">MTProto Protocol</td>
+                  </tr>
+                  <tr>
                     <td className="p-3 font-semibold text-white">Let's Encrypt (ISRG)</td>
                     <td className="p-3">SSL/TLS Authority</td>
                     <td className="p-3">US</td>
@@ -369,14 +385,11 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
             </div>
             <h2 className="text-xl font-bold text-white">6. Data Storage, Encryption, and Security Hardening</h2>
             <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
-              <p>
-                Helpotron implements defense-in-depth infrastructure protections:
-              </p>
               <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
-                <li><strong>Data in Transit:</strong> Mandatory TLS 1.3 and HSTS (`max-age=63072000; includeSubDomains; preload`).</li>
+                <li><strong>Data in Transit:</strong> Mandatory TLS 1.3 and HSTS (<code className="text-blue-300">max-age=63072000; includeSubDomains; preload</code>).</li>
                 <li><strong>Data at Rest:</strong> Database volumes and student records encrypted with AES-256.</li>
-                <li><strong>Password Hashes:</strong> Salted PBKDF2 with 100,000+ SHA-256 iterations and random 16-byte salts.</li>
-                <li><strong>Host Hardening:</strong> UFW firewall exposing only ports 22, 80, 443; Uvicorn loopback binding (`127.0.0.1:8000`), Fail2ban brute-force jails.</li>
+                <li><strong>Password Hashes:</strong> Salted PBKDF2 with 100,000+ SHA-256 iterations and random 16-byte hexadecimal salts.</li>
+                <li><strong>Host Hardening:</strong> UFW firewall exposing only ports 22, 80, 443; Uvicorn loopback binding (<code className="text-blue-300">127.0.0.1:8000</code>), Fail2ban brute-force jails.</li>
               </ul>
             </div>
           </section>
@@ -390,7 +403,7 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
             <h2 className="text-xl font-bold text-white">7. Data Retention and Account Lifecycle Policy</h2>
             <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
               <p>
-                Personal study records are retained for the duration of active subscription. Inactive accounts with zero logins for 24 consecutive months are flagged for automated purge. Raw audio uploads in `/uploads` are expunged within 24 hours of successful transcript generation.
+                Personal study records are retained for the duration of active subscription. Inactive accounts with zero logins for 24 consecutive months are flagged for automated purge. Raw audio uploads in <code className="text-blue-300">/uploads</code> are expunged within 24 hours of successful transcript generation.
               </p>
             </div>
           </section>
@@ -404,7 +417,7 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
             <h2 className="text-xl font-bold text-white">8. User Rights and Data Subject Access Mechanisms</h2>
             <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
               <p>
-                Under GDPR and CCPA/CPRA, users possess the Right to Access, Rectification, Erasure (Right to be Forgotten), and Portability. Students can trigger instant downloads of flashcards in CSV, tests in JSON, and study guides in Markdown via `/api/export/*` or request complete cryptographic data wipes via `dpo@helpotron.com`.
+                Under GDPR and CCPA/CPRA, users possess the Right to Access, Rectification, Erasure (Right to be Forgotten), and Portability. Students can trigger instant downloads of flashcards in CSV, tests in JSON, and study guides in Markdown via <code className="text-blue-300">/api/export/*</code> or request complete cryptographic data wipes via <code className="text-blue-300">dpo@helpotron.com</code>.
               </p>
             </div>
           </section>
@@ -423,56 +436,204 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
             </div>
           </section>
 
-          {/* ─── SECTION 10.0 to 19.0 OVERVIEW CARDS ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <section id="sec-10" className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
-              <div className="text-xs font-mono text-blue-400 font-bold">Section 10.0 · Cross-Border Transfers</div>
-              <h3 className="text-sm font-bold text-white">International Data Transfers</h3>
-              <p className="text-xs text-slate-300">Protected via European Commission Standard Contractual Clauses (SCCs) and end-to-end TLS 1.3 encryption.</p>
-            </section>
+          {/* ─── SECTION 10.0 ─── */}
+          <section id="sec-10" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Globe className="w-4 h-4" />
+              <span>Section 10.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">10. International Data Transfers</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                Helpotron operates server infrastructure located primarily in the United States and the European Economic Area (EEA). To safeguard cross-border transfers from the EEA and UK to the United States, Helpotron relies on European Commission Standard Contractual Clauses (Commission Implementing Decision (EU) 2021/914) combined with end-to-end TLS 1.3 transport encryption.
+              </p>
+            </div>
+          </section>
 
-            <section id="sec-11" className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
-              <div className="text-xs font-mono text-blue-400 font-bold">Section 11.0 · Security Incidents</div>
-              <h3 className="text-sm font-bold text-white">72-Hour Breach Notification</h3>
-              <p className="text-xs text-slate-300">Mandates regulatory disclosures to supervisory authorities within 72 hours and prompt student notification.</p>
-            </section>
+          {/* ─── SECTION 11.0 ─── */}
+          <section id="sec-11" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Section 11.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">11. Data Breach Notification Protocol (72-Hour Standard)</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                In the event of a confirmed security incident or data breach compromising personal student data:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>0–12 Hours:</strong> Node isolation, system secret rotation, and forensic investigation.</li>
+                <li><strong>Within 72 Hours:</strong> Formal notification of competent supervisory authorities (EU DPAs and US State AGs) in accordance with Article 33 of the GDPR.</li>
+                <li><strong>User Notification:</strong> Direct email broadcasts and prominent in-app dashboard banners detailing breach scope and protective actions.</li>
+              </ul>
+            </div>
+          </section>
 
-            <section id="sec-14" className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
-              <div className="text-xs font-mono text-blue-400 font-bold">Section 14.0 · State Privacy Laws</div>
-              <h3 className="text-sm font-bold text-white">CCPA / CPRA & US State Addenda</h3>
-              <p className="text-xs text-slate-300">Zero selling or sharing of student data for cross-context behavioral advertising; full right to delete and correct.</p>
-            </section>
+          {/* ─── SECTION 12.0 ─── */}
+          <section id="sec-12" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Layers className="w-4 h-4" />
+              <span>Section 12.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">12. Policy Modifications and Notification Mechanisms</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                Helpotron reserves the right to revise this Privacy Policy periodically. When material modifications occur, we update the "Last Updated" date, display an in-app modal notice across the dashboard, and transmit an email digest at least fourteen (14) days prior to the effective date.
+              </p>
+            </div>
+          </section>
 
-            <section id="sec-18" className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
-              <div className="text-xs font-mono text-blue-400 font-bold">Section 18.0 · Universal Design</div>
-              <h3 className="text-sm font-bold text-white">WCAG 2.1 AA Accessibility</h3>
-              <p className="text-xs text-slate-300">Minimum 4.5:1 text contrast ratios, complete keyboard navigability, focus-trapped dialogs, and screen reader compatibility.</p>
-            </section>
-          </div>
-
-          {/* ─── SECTION 13.0 DPO CONTACT ─── */}
-          <section id="sec-13" className="clean-card p-6 border border-blue-500/30 bg-gradient-to-r from-blue-950/30 to-slate-950/60 space-y-3">
+          {/* ─── SECTION 13.0 ─── */}
+          <section id="sec-13" className="space-y-4 clean-card p-6 border border-blue-500/30 bg-gradient-to-r from-blue-950/30 to-slate-950/60">
             <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
               <BookOpen className="w-4 h-4" />
               <span>Section 13.0</span>
             </div>
-            <h2 className="text-lg font-bold text-white">Data Protection Officer & Compliance Contact</h2>
-            <p className="text-xs text-slate-300">
-              For formal statutory rights requests, FERPA institutional agreements, or security disclosures:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono pt-2">
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
-                <span className="text-slate-500 block text-[10px]">DPO Inquiries</span>
-                <strong className="text-blue-300">dpo@helpotron.com</strong>
+            <h2 className="text-xl font-bold text-white">13. Data Protection Officer & Contact Information</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                For statutory rights inquiries, DPA requests, or security vulnerability disclosures:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono pt-1">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block text-[10px]">DPO Inquiries</span>
+                  <strong className="text-blue-300">dpo@helpotron.com</strong>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block text-[10px]">Security Operations</span>
+                  <strong className="text-emerald-300">security@helpotron.com</strong>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block text-[10px]">Accessibility</span>
+                  <strong className="text-purple-300">accessibility@helpotron.com</strong>
+                </div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
-                <span className="text-slate-500 block text-[10px]">Security Incident Response</span>
-                <strong className="text-emerald-300">security@helpotron.com</strong>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5">
-                <span className="text-slate-500 block text-[10px]">Accessibility Coordinator</span>
-                <strong className="text-purple-300">accessibility@helpotron.com</strong>
-              </div>
+            </div>
+          </section>
+
+          {/* ─── SECTION 14.0 ─── */}
+          <section id="sec-14" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <FileCode className="w-4 h-4" />
+              <span>Section 14.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">14. US State-Specific Privacy Rights and Statutory Addenda</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                <strong>California Consumer Privacy Act (CCPA) & CPRA:</strong> Helpotron does NOT sell student personal information and does NOT share data for cross-context behavioral advertising.
+              </p>
+              <p>
+                <strong>Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), and Florida (FDBR):</strong> Eligible residents may submit requests to confirm processing, access, correct, delete, or obtain portable copies of their personal data by emailing <code className="text-blue-300">dpo@helpotron.com</code>.
+              </p>
+            </div>
+          </section>
+
+          {/* ─── SECTION 15.0 ─── */}
+          <section id="sec-15" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Key className="w-4 h-4" />
+              <span>Section 15.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">15. Detailed Cookie, Tracking, and Local Storage Governance</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-white/10 rounded-xl overflow-hidden">
+                <thead className="bg-slate-950 text-slate-300 border-b border-white/10">
+                  <tr>
+                    <th className="p-3">Cookie Identifier</th>
+                    <th className="p-3">Category</th>
+                    <th className="p-3">Duration</th>
+                    <th className="p-3">Security Flags</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 bg-slate-900/60 text-slate-300">
+                  <tr>
+                    <td className="p-3 font-mono text-white">helpotron_session</td>
+                    <td className="p-3">Authentication</td>
+                    <td className="p-3">7 Days</td>
+                    <td className="p-3 font-mono">HttpOnly, Secure, SameSite=Strict</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-white">csrf_token</td>
+                    <td className="p-3">CSRF Defense</td>
+                    <td className="p-3">Session</td>
+                    <td className="p-3 font-mono">Secure, SameSite=Lax</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-mono text-white">theme_preference</td>
+                    <td className="p-3">Visual UI Token</td>
+                    <td className="p-3">365 Days</td>
+                    <td className="p-3 font-mono">SameSite=Lax</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* ─── SECTION 16.0 ─── */}
+          <section id="sec-16" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Scale className="w-4 h-4" />
+              <span>Section 16.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">16. Educational Institution Data Protection Agreement (FERPA Addendum)</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                When deployed across school districts, colleges, or universities:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li>Helpotron is designated as a School Official with legitimate educational interests pursuant to 34 CFR § 99.31(a)(1)(i).</li>
+                <li>All student education records remain under the direct control and ownership of the educational agency.</li>
+                <li>Upon contract expiration, student data is returned or permanently expunged within sixty (60) days.</li>
+              </ul>
+            </div>
+          </section>
+
+          {/* ─── SECTION 17.0 ─── */}
+          <section id="sec-17" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Shield className="w-4 h-4" />
+              <span>Section 17.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">17. Technical Security Specification and Incident Protocols</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>Kernel & Firewall Hardening:</strong> Stateful UFW packet filtering exposing only ports 22, 80, 443 with internal loopback binding for API (<code className="text-blue-300">127.0.0.1:8000</code>).</li>
+                <li><strong>Nginx Dual-Zone Rate Limiting:</strong> Standard rate limit (30 req/s) with strict auth protection (5 req/s) and 50MB payload limits.</li>
+                <li><strong>Automated Vulnerability Remediation:</strong> Continuous CVE patching via unattended security upgrades.</li>
+              </ul>
+            </div>
+          </section>
+
+          {/* ─── SECTION 18.0 ─── */}
+          <section id="sec-18" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <UserCheck className="w-4 h-4" />
+              <span>Section 18.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">18. Accessibility, Equal Access, and Non-Discrimination (WCAG 2.1 AA)</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                Helpotron adheres to Section 508 of the Rehabilitation Act, Title III of the ADA, and WCAG 2.1 Level AA:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>Perceivable:</strong> High-contrast palette ($\ge 4.5:1$ text ratio), clear descriptive semantic labels.</li>
+                <li><strong>Operable:</strong> Full keyboard navigation (<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">Tab</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">Enter</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">Esc</kbd>), focus-trapped modals, zero keyboard traps.</li>
+                <li><strong>Understandable:</strong> Plain-language system alerts and live ARIA status notifications.</li>
+              </ul>
+            </div>
+          </section>
+
+          {/* ─── SECTION 19.0 ─── */}
+          <section id="sec-19" className="space-y-4 clean-card p-6 border border-white/10 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-blue-400 font-mono text-xs uppercase font-bold">
+              <Scale className="w-4 h-4" />
+              <span>Section 19.0</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">19. Final Legal Disclosures and Supremacy</h2>
+            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                This Privacy Policy, together with the Terms of Service, constitutes the entire data governance agreement between you and Helpotron Automator Systems Inc. Governed by the laws of the State of Florida, United States, or competent EU supervisory tribunals where mandated by GDPR Article 79.
+              </p>
             </div>
           </section>
 
