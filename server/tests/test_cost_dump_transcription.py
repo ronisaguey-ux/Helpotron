@@ -112,3 +112,39 @@ def test_file_category_detection():
     assert AssignmentDumpManager.detect_file_category("recording.m4a") == "audio"
     assert AssignmentDumpManager.detect_file_category("board_photo.png") == "image"
     assert AssignmentDumpManager.detect_file_category("screen_rec.mp4") == "video"
+    assert AssignmentDumpManager.detect_file_category("quarterly_report.pptx") == "presentation"
+    assert AssignmentDumpManager.detect_file_category("deck.gslides") == "presentation"
+
+
+def test_presentation_pure_gemini_split():
+    # PowerPoint task detection
+    is_pres = ModelTieringEngine.is_presentation_task(
+        prompt="Create a 10-slide PowerPoint presentation on Climate Change",
+        file_name="deck.pptx",
+    )
+    assert is_pres is True
+
+    # Pure-Gemini model split resolution (e.g. 70% Flash-Lite / 30% 3.7 Flash)
+    res = ModelTieringEngine.resolve_presentation_gemini_models(flash_lite_percent=70)
+    assert res["engine_mode"] == "pure_gemini"
+    assert "nemotron-3-super" in res["bypassed_subagents"]
+    assert "deepseek-v4-flash" in res["bypassed_subagents"]
+    assert res["active_models"]["gemini-3.1-flash-lite"]["percentage"] == 70
+    assert res["active_models"]["gemini-3.7-flash"]["percentage"] == 30
+
+
+def test_fake_writing_history_generation():
+    text = "The Industrial Revolution catalyzed unprecedented urban migration and transformed European manufacturing infrastructure."
+    history = ModelTieringEngine.generate_fake_writing_history(
+        content=text,
+        wpm=60,
+        version_count=5,
+        burstiness="natural_academic",
+    )
+    assert history["enabled"] is True
+    assert history["audit_trail_ready"] is True
+    assert history["simulated_versions_count"] == 5
+    assert len(history["versions"]) == 5
+    assert history["versions"][0]["version_number"] == 1
+    assert history["versions"][-1]["version_number"] == 5
+

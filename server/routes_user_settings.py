@@ -702,3 +702,61 @@ async def reply_to_admin_message_route(message_id: int, payload: AdminReplyPaylo
         "status": "replied",
     }
 
+
+# ─── Fake Writing History & Presentation Gemini Configuration ─────────────────
+
+class FakeWritingHistorySimulationRequest(BaseModel):
+    content: str = Field(..., min_length=10, max_length=50000)
+    wpm: int = Field(65, ge=20, le=140)
+    version_count: int = Field(8, ge=3, le=30)
+    burstiness: str = "natural_academic"
+
+
+class PresentationGeminiConfigRequest(BaseModel):
+    pure_gemini_exclusive: bool = True
+    flash_lite_percent: int = Field(60, ge=0, le=100)
+    speaker_notes_enabled: bool = True
+    visual_layout_instructions: bool = True
+
+
+@router.post("/fake-writing-history/simulate")
+async def simulate_fake_writing_history_route(payload: FakeWritingHistorySimulationRequest):
+    """Simulates realistic keystroke intervals and Google Docs/LMS incremental version history snapshots for audit evasion."""
+    from .model_tiering import model_tiering_engine
+    history = model_tiering_engine.generate_fake_writing_history(
+        content=payload.content,
+        wpm=payload.wpm,
+        version_count=payload.version_count,
+        burstiness=payload.burstiness,
+    )
+    return {"status": "success", "history": history}
+
+
+@router.get("/presentation-config")
+async def get_presentation_gemini_config(request: Request, db: Session = Depends(get_db)):
+    """Returns presentation / Google Slides pure-Gemini routing configuration."""
+    user = _get_current_user(request, db)
+    settings = user_settings_service.get_user_settings(user)
+    config = settings.get("presentation_gemini_config", {
+        "pure_gemini_exclusive": True,
+        "flash_lite_percent": 60,
+        "speaker_notes_enabled": True,
+        "visual_layout_instructions": True,
+    })
+    return {"status": "success", "config": config}
+
+
+@router.post("/presentation-config")
+async def update_presentation_gemini_config(
+    payload: PresentationGeminiConfigRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Updates presentation / Google Slides pure-Gemini routing distribution."""
+    user = _get_current_user(request, db)
+    updated = user_settings_service.update_user_settings(db, user, {
+        "presentation_gemini_config": payload.model_dump()
+    })
+    return {"status": "success", "config": updated.get("presentation_gemini_config")}
+
+

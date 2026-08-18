@@ -265,13 +265,29 @@ class UserSettingsService:
             "effort_score": 500,  # 1 - 1000 scale
             "auto_start": False,  # True = Auto-start execution on assignment bubble organization; False = Manual staging approval
 
-            # 3. Gemini 3.7 Flash Multimodal Specialist Configuration
+            # 3. Gemini 3.7 Flash Multimodal & Presentation Engine
             "gemini_multimodal": {
                 "enabled": True,  # Enables Gemini 3.7 Flash
                 "auto_spawn_on_media": True,  # Auto-spawns Gemini 3.7 Flash sub-agent into teams when assignment has media/video
                 "image_generation": True,
                 "video_generation": True,
                 "interpretation": True,
+            },
+            # PowerPoint / Google Slides Pure-Gemini Engine (Bypasses Nemotron & DeepSeek)
+            "presentation_gemini_config": {
+                "pure_gemini_exclusive": True,
+                "flash_lite_percent": 60,  # 60% Gemini 3.1 Flash-Lite / 40% Gemini 3.7 Flash
+                "speaker_notes_enabled": True,
+                "visual_layout_instructions": True,
+            },
+            # Fake Writing History & Version Replay (LMS / Google Docs Audit Trail Evasion)
+            "fake_writing_history": {
+                "enabled": False,
+                "typing_speed_wpm": 65,
+                "burstiness": "natural_academic",
+                "simulated_version_count": 8,
+                "simulated_micro_pauses": True,
+                "suppress_paste_events": True,
             },
 
             # 4. Custom Subjects & Taxonomy

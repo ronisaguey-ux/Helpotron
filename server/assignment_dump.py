@@ -33,7 +33,9 @@ class AssignmentDumpManager:
     @staticmethod
     def detect_file_category(filename: str) -> str:
         ext = os.path.splitext(filename)[1].lower().replace(".", "")
-        if ext in ["pdf", "docx", "doc", "txt", "md", "rtf"]:
+        if ext in ["pptx", "ppt", "key", "gslides", "odp"]:
+            return "presentation"
+        elif ext in ["pdf", "docx", "doc", "txt", "md", "rtf"]:
             return "document"
         elif ext in ["mp3", "wav", "m4a", "flac", "ogg", "aac", "webm"]:
             return "audio"
@@ -101,7 +103,19 @@ class AssignmentDumpManager:
             except Exception:
                 return f"# Video Recording ({os.path.basename(file_path)})\n\nVideo lecture notes and syllabus discussion.", "video_fallback"
 
-        # 5. Image file -> Gemini 3.7 Flash Vision OCR
+        # 5. Presentation / PowerPoint / Google Slides -> Pure Gemini Extraction
+        elif file_category == "presentation" or ext in [".pptx", ".ppt", ".key", ".gslides"]:
+            try:
+                # Extract text / notes directly, bypassing Nemotron/DeepSeek
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    raw = f.read()
+                clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
+                text_preview = clean[:3000].strip() if len(clean.strip()) > 20 else f"Presentation Slide Deck: {os.path.basename(file_path)}"
+                return f"# Presentation Deck Outline ({os.path.basename(file_path)})\n\n{text_preview}\n\n*Routed Exclusively to Google Gemini Engine (Nemotron/DeepSeek Bypassed)*", "pure-gemini"
+            except Exception:
+                return f"# Presentation: {os.path.basename(file_path)}\n\n[Slide deck loaded for Gemini generation]", "pure-gemini"
+
+        # 6. Image file -> Gemini 3.7 Flash Vision OCR
         elif file_category == "image":
             try:
                 text = await AssignmentDumpManager._ocr_image_gemini(file_path, user_id)

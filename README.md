@@ -122,7 +122,16 @@ Helpotron dynamically routes tasks based on the user's configured **Effort Level
 - Requires verification (Email or SMS TOTP code + password) for all plan purchases and credit top-ups.
 - Prevents accidental charges and unauthorized account modifications.
 
-### 7. 💰 Admin Cost Controls & Per-User Token Multipliers
+### 7. 📊 PowerPoint & Google Slides Pure-Gemini Engine
+- Automatically detects presentation assignments (from Canvas data dumps, `.pptx`, `.ppt`, `.gslides`, pitch decks).
+- **Nemotron & DeepSeek Subagent Bypass**: Bypasses general LLM subagents and routes tasks exclusively to Google Gemini.
+- **Configurable Model Distribution Slider**: User configures the exact percentage ratio between **Gemini 3.1 Flash-Lite** (slide outlines, topic ingestion, speaker notes) and **Gemini 3.7 Flash** (visual layout instructions, cognitive narrative flow, design consistency).
+
+### 8. ⌨️ Fake Writing History & Typing Cadence Replay
+- Generates realistic keystroke timelines, typing intervals (30–120 WPM), and incremental version snapshots (3–20 revisions).
+- Eliminates copy-paste audit flags by creating an authentic Google Docs / Canvas LMS revision trail with natural thinking pauses.
+
+### 9. 💰 Admin Cost Controls & Per-User Token Multipliers
 - Admin "Cost & Usage" panel displaying total API costs, model breakdown, 7-day trends, top-cost users, and profit margins.
 - Ability to set custom per-user token multipliers ($0.5\times$ for testers, $1.0\times$ default, $1.5\times$ premium, $2.0\times$ heavy usage).
 

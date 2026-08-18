@@ -450,6 +450,33 @@ export default function UserSettingsModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [exportNotice, setExportNotice] = useState('');
 
+  // Fake Writing History Simulation State
+  const [simHistoryResult, setSimHistoryResult] = useState(null);
+  const [simulatingHistory, setSimulatingHistory] = useState(false);
+
+  const handleSimulateHistory = async () => {
+    setSimulatingHistory(true);
+    try {
+      const fwh = settings?.fake_writing_history || {};
+      const res = await api.request('/api/user/fake-writing-history/simulate', {
+        method: 'POST',
+        body: JSON.stringify({
+          content: sampleContent || 'The socio-economic impacts of the Industrial Revolution catalyzed unprecedented urban migration, fundamentally reshaping labor institutions and technological infrastructure across nineteenth-century Western Europe.',
+          wpm: fwh.typing_speed_wpm || 65,
+          version_count: fwh.simulated_version_count || 8,
+          burstiness: fwh.burstiness || 'natural_academic',
+        }),
+      });
+      if (res && res.history) {
+        setSimHistoryResult(res.history);
+      }
+    } catch (e) {
+      alert('Simulation error: ' + e.message);
+    } finally {
+      setSimulatingHistory(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchSettings();
@@ -1477,6 +1504,66 @@ export default function UserSettingsModal({
                       onDeleteSubSetting={handleDeleteSubSetting}
                     />
                   </div>
+
+                  {/* ─── POWERPOINT & GOOGLE SLIDES PURE-GEMINI ENGINE ─── */}
+                  <div className="clean-card p-6 space-y-4 border border-purple-500/30 bg-gradient-to-r from-purple-950/20 to-slate-950/40">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xl font-bold">
+                          📊
+                        </div>
+                        <div>
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-mono font-semibold mb-1">
+                            🛡️ Pure Gemini Exclusive (Nemotron & DeepSeek Bypassed)
+                          </div>
+                          <h3 className="text-sm font-bold text-white">
+                            PowerPoint & Google Slides AI Engine
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            When an assignment requires presentation slide decks, Helpotron executes exclusively with Google Gemini.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Gemini Ratio Distribution Slider */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-slate-300 font-semibold">Gemini Model Split for Presentations:</span>
+                        <span className="text-purple-300 font-bold">
+                          {settings.presentation_gemini_config?.flash_lite_percent ?? 60}% 3.1 Flash-Lite / {100 - (settings.presentation_gemini_config?.flash_lite_percent ?? 60)}% 3.7 Flash
+                        </span>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={settings.presentation_gemini_config?.flash_lite_percent ?? 60}
+                        onChange={(e) =>
+                          handleSaveSettings({
+                            presentation_gemini_config: {
+                              ...(settings.presentation_gemini_config || {}),
+                              flash_lite_percent: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 font-mono">
+                        <div className="p-2 rounded-lg bg-slate-900 border border-white/5">
+                          <strong className="text-blue-400 block">⚡ Gemini 3.1 Flash-Lite ({settings.presentation_gemini_config?.flash_lite_percent ?? 60}%)</strong>
+                          <span className="text-slate-400 text-[10px]">Slide Outlines, Ingestion, Raw Bullet Points, Speaker Notes</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-900 border border-white/5">
+                          <strong className="text-emerald-400 block">🧠 Gemini 3.7 Flash ({100 - (settings.presentation_gemini_config?.flash_lite_percent ?? 60)}%)</strong>
+                          <span className="text-slate-400 text-[10px]">Visual Layout Rules, High-Cognition Narrative, Design Logic</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1646,11 +1733,6 @@ export default function UserSettingsModal({
                                   {sample.target_subject}
                                 </span>
                               </div>
-                              <div className="flex gap-3 text-[11px] text-slate-400 mt-1 font-mono">
-                                <span>Avg Sentence: {sample.extracted_style?.avg_sentence_length} words</span>
-                                <span>Lexical Diversity: {sample.extracted_style?.lexical_diversity}</span>
-                                <span>Cadence: {sample.extracted_style?.cadence}</span>
-                              </div>
                             </div>
                             <button
                               type="button"
@@ -1663,6 +1745,190 @@ export default function UserSettingsModal({
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* ─── FAKE WRITING HISTORY & REVISION REPLAY (AUDIT EVASION) ─── */}
+                  <div className="clean-card p-6 space-y-4 border border-emerald-500/30 bg-gradient-to-r from-emerald-950/20 to-slate-950/40">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl font-bold">
+                          ⌨️
+                        </div>
+                        <div>
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-mono font-semibold mb-1">
+                            🛡️ Google Docs & LMS Version History Evasion
+                          </div>
+                          <h3 className="text-sm font-bold text-white">
+                            Fake Writing History & Typing Cadence Simulation
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Generates realistic keystroke replay timelines, natural typing pauses, and incremental version snapshots to prevent copy-paste audit flags.
+                          </p>
+                        </div>
+                      </div>
+
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={settings.fake_writing_history?.enabled === true}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              fake_writing_history: {
+                                ...(settings.fake_writing_history || {}),
+                                enabled: e.target.checked,
+                              },
+                            })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
+                      </label>
+                    </div>
+
+                    {/* Cadence & Version Controls */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Typing Speed (WPM) */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between font-mono text-[11px]">
+                            <span className="text-slate-300 font-semibold">Simulated Typing Speed:</span>
+                            <span className="text-emerald-400 font-bold">{settings.fake_writing_history?.typing_speed_wpm || 65} WPM</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="30"
+                            max="120"
+                            step="5"
+                            value={settings.fake_writing_history?.typing_speed_wpm || 65}
+                            onChange={(e) =>
+                              handleSaveSettings({
+                                fake_writing_history: {
+                                  ...(settings.fake_writing_history || {}),
+                                  typing_speed_wpm: Number(e.target.value),
+                                },
+                              })
+                            }
+                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          />
+                        </div>
+
+                        {/* Revision Snapshot Count */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between font-mono text-[11px]">
+                            <span className="text-slate-300 font-semibold">Simulated Revision Snapshots:</span>
+                            <span className="text-emerald-400 font-bold">{settings.fake_writing_history?.simulated_version_count || 8} Versions</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="3"
+                            max="20"
+                            step="1"
+                            value={settings.fake_writing_history?.simulated_version_count || 8}
+                            onChange={(e) =>
+                              handleSaveSettings({
+                                fake_writing_history: {
+                                  ...(settings.fake_writing_history || {}),
+                                  simulated_version_count: Number(e.target.value),
+                                },
+                              })
+                            }
+                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Burstiness & Anti-Paste Options */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/5 text-[11px]">
+                        <div>
+                          <label className="text-slate-400 block mb-1 font-semibold">Keystroke Burstiness Profile:</label>
+                          <select
+                            value={settings.fake_writing_history?.burstiness || 'natural_academic'}
+                            onChange={(e) =>
+                              handleSaveSettings({
+                                fake_writing_history: {
+                                  ...(settings.fake_writing_history || {}),
+                                  burstiness: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono"
+                          >
+                            <option value="natural_academic">Natural Academic (Variable pauses & rewrites)</option>
+                            <option value="steady">Steady Flow (Consistent typing rhythm)</option>
+                            <option value="bursty">Late-Night Crunch (High burst velocity)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2 pt-3">
+                          <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={settings.fake_writing_history?.simulated_micro_pauses !== false}
+                              onChange={(e) =>
+                                handleSaveSettings({
+                                  fake_writing_history: {
+                                    ...(settings.fake_writing_history || {}),
+                                    simulated_micro_pauses: e.target.checked,
+                                  },
+                                })
+                              }
+                              className="rounded accent-emerald-500 w-3.5 h-3.5"
+                            />
+                            <span>Simulate Thinking Pauses (15s–120s intervals)</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={settings.fake_writing_history?.suppress_paste_events !== false}
+                              onChange={(e) =>
+                                handleSaveSettings({
+                                  fake_writing_history: {
+                                    ...(settings.fake_writing_history || {}),
+                                    suppress_paste_events: e.target.checked,
+                                  },
+                                })
+                              }
+                              className="rounded accent-emerald-500 w-3.5 h-3.5"
+                            />
+                            <span>Suppress Bulk Paste Detection in Revision Log</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Interactive Simulation & Test Button */}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleSimulateHistory}
+                          disabled={simulatingHistory}
+                          className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-xl font-semibold transition cursor-pointer flex items-center gap-2"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{simulatingHistory ? 'Simulating Keystrokes...' : 'Test & Preview Replay Timeline'}</span>
+                        </button>
+                      </div>
+
+                      {/* Live Simulation Audit Preview */}
+                      {simHistoryResult && (
+                        <div className="mt-3 p-3.5 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-2 font-mono text-[11px] animate-fadeIn">
+                          <div className="flex items-center justify-between text-emerald-400 font-bold">
+                            <span>✅ Audit Trail Generated ({simHistoryResult.simulated_versions_count} Versions)</span>
+                            <span>{simHistoryResult.simulated_duration_minutes} Minutes Total Typing Time</span>
+                          </div>
+                          <div className="max-h-40 overflow-y-auto space-y-1.5 divide-y divide-white/5">
+                            {simHistoryResult.versions?.map((v) => (
+                              <div key={v.version_number} className="pt-1.5 flex items-center justify-between gap-2">
+                                <div>
+                                  <strong className="text-white">v{v.version_number}: {v.edit_type}</strong>
+                                  <span className="text-slate-500 block text-[10px]">{v.timestamp}</span>
+                                </div>
+                                <span className="text-slate-300 shrink-0 font-bold">{v.word_count} words ({v.character_count} chars)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
