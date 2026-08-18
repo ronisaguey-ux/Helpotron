@@ -181,6 +181,7 @@ class CostEngine:
         for row in top_users_raw:
             user = db.query(User).filter(User.public_id == row.public_id).first()
             multiplier = user.token_cost_multiplier if user else 1.0
+            plan = getattr(user, "plan", "basic") if user else "basic"
             # Revenue from plan: basic=$10.00, pro=$20.00, elite=$40.00
             plan_revenue = 40.00 if plan == "elite" else (20.00 if plan == "pro" else 10.00)
             user_cost = float(row.total_cost or 0)

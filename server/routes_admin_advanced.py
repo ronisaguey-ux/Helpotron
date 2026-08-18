@@ -290,9 +290,10 @@ async def update_user_token_multiplier(
 
 
 @router.get("/costs/budget")
-async def get_user_budget_endpoint(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_user_budget_endpoint(user_id: Optional[str] = None, request: Request = None, db: Session = Depends(get_db)):
     """User endpoint: Returns monthly budget and current usage/alert state."""
     from .database import User, ApiUsageLog
+    from .security import is_admin_user
     from sqlalchemy import func
     from datetime import datetime, timezone
     uid = user_id or "RoniDev"
@@ -314,16 +315,20 @@ async def get_user_budget_endpoint(user_id: Optional[str] = None, db: Session = 
     percent_used = round((month_spent / budget) * 100, 1) if budget > 0 else 0
     is_approaching_limit = percent_used >= 80.0
 
-    return {
+    resp = {
         "status": "success",
         "public_id": uid,
         "monthly_budget_usd": budget,
         "current_month_spent_usd": round(float(month_spent), 4),
         "percent_budget_used": percent_used,
         "is_approaching_limit": is_approaching_limit,
-        "token_cost_multiplier": multiplier,
         "default_effort_level": effort,
     }
+    # Completely suppress multiplier unless user is an authenticated platform administrator
+    if user and is_admin_user(user):
+        resp["token_cost_multiplier"] = multiplier
+
+    return resp
 
 
 @router.post("/costs/budget")
