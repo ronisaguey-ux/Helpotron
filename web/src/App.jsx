@@ -17,6 +17,8 @@ import MessageAdminView from './components/MessageAdminView.jsx';
 import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
 import DataLakeView from './components/DataLakeView.jsx';
 import AssignmentDumpView from './components/AssignmentDumpView.jsx';
+import ExtensionGuideModal from './components/ExtensionGuideModal.jsx';
+import ExtensionUpdateBanner from './components/ExtensionUpdateBanner.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
@@ -47,6 +49,7 @@ import {
   MessageSquare,
   Database,
   UploadCloud,
+  Puzzle,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -157,6 +160,7 @@ export default function App() {
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [extensionGuideOpen, setExtensionGuideOpen] = useState(false);
 
   // Privacy Policy modal state (opened on demand via Navbar or Settings)
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -195,8 +199,9 @@ export default function App() {
     setAuthModalOpen(false);
     setIsLoggedIn(true);
     setIsGuest(false);
-    setUserIdState(userPublicId);
-    setUserId(userPublicId);
+    const activeId = userPublicId || getUserId() || 'RoniDev';
+    setUserIdState(activeId);
+    setUserId(activeId);
     await checkSession();
   };
 
@@ -242,6 +247,10 @@ export default function App() {
   };
 
   const handleSelectView = (viewKey) => {
+    if (viewKey === 'extension_guide') {
+      setExtensionGuideOpen(true);
+      return;
+    }
     setActiveView(viewKey);
     setOpenAssignment(null);
   };
@@ -254,6 +263,7 @@ export default function App() {
     { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: null },
     { key: 'dump', label: 'Assignment Dump', icon: UploadCloud, badge: 'AI-ROUTE' },
     { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Database, badge: '+CR' },
+    { key: 'extension_guide', label: 'Extension Setup', icon: Puzzle, badge: 'v2.0' },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
@@ -292,6 +302,17 @@ export default function App() {
             handleContinueGuest();
             setAuthModalOpen(false);
           }}
+        />
+
+        {/* Extension Setup & Update Guide Modal */}
+        <ExtensionGuideModal
+          isOpen={extensionGuideOpen}
+          onClose={() => setExtensionGuideOpen(false)}
+        />
+
+        {/* Real-Time Extension Update Notification Banner */}
+        <ExtensionUpdateBanner
+          onOpenGuide={() => setExtensionGuideOpen(true)}
         />
 
         {/* Guest Warning Banner */}
@@ -348,6 +369,7 @@ export default function App() {
           onOpenSettings={() => setSettingsModalOpen(true)}
           onOpenAuth={() => setAuthModalOpen(true)}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
+          onOpenExtensionGuide={() => setExtensionGuideOpen(true)}
           onLogout={handleLogout}
         />
 

@@ -132,6 +132,20 @@
   <button id="startScrape" class="btn-secondary">📄 Quick Scrape Selected Tab</button>
   <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
 
+  <!-- Extension Update Alert Banner -->
+  <div id="updateBanner" style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-weight: 700; font-size: 11px; color: #6ee7b7;">✨ New Version Available!</span>
+      <span id="updateVersionBadge" style="font-size: 10px; background: #059669; padding: 2px 6px; border-radius: 4px; color: white;">v2.0.0</span>
+    </div>
+    <p style="margin: 4px 0 6px 0; font-size: 10px; color: #a7f3d0; line-height: 1.3;">
+      A newer version of the Helpotron Extension is ready. Download to keep all features running smoothly.
+    </p>
+    <button id="btnDownloadUpdate" style="width: 100%; padding: 6px; background: #10b981; border: none; border-radius: 6px; color: #022c22; font-weight: 700; font-size: 11px; cursor: pointer;">
+      📥 Download Latest Extension Zip
+    </button>
+  </div>
+
   <div id="status">Ready. Select a tab above to begin.</div>
 
   <!-- Honest Unparseable Warning Box with Direct Data Lake Prompt -->

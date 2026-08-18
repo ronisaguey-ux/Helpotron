@@ -1,11 +1,12 @@
 import React from 'react';
-import { User, Zap } from 'lucide-react';
+import { User, Zap, Puzzle } from 'lucide-react';
 
 export default function Navbar({
   isLoggedIn = false,
   isGuest = false,
   user = null,
   onOpenAuth = () => {},
+  onOpenExtensionGuide = () => {},
 }) {
   return (
     <header className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-white/5 px-6 py-3">
@@ -24,15 +25,15 @@ export default function Navbar({
 
         {/* Minimalist Top Indicator */}
         <div className="flex items-center gap-3">
-          <a
-            href="/api/extension/download"
-            download="helpotron-extension.zip"
-            title="Download Chrome & Canvas Companion Extension"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-blue-500/30 text-slate-300 hover:text-white transition font-medium cursor-pointer"
+          <button
+            type="button"
+            onClick={onOpenExtensionGuide}
+            title="Setup & Download Chrome Extension"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 hover:text-white transition font-medium cursor-pointer"
           >
-            <span className="text-blue-400 font-bold">🧩</span>
-            <span>Extension</span>
-          </a>
+            <Puzzle className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Extension Guide</span>
+          </button>
 
           {user && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs text-slate-300 font-mono">

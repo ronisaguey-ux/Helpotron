@@ -20,9 +20,27 @@ function hideUnparseable() {
 }
 
 async function init() {
-  const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+  const { server, public_id, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'update_available', 'latest_version']);
   serverInput.value = server || 'http://localhost:8000';
   publicIdInput.value = public_id || 'RoniDev';
+
+  const updateBanner = document.getElementById('updateBanner');
+  const updateBadge = document.getElementById('updateVersionBadge');
+  const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
+
+  if (update_available && latest_version) {
+    updateBanner.style.display = 'block';
+    if (updateBadge) updateBadge.innerText = `v${latest_version}`;
+  } else {
+    updateBanner.style.display = 'none';
+  }
+
+  if (btnDownloadUpdate) {
+    btnDownloadUpdate.addEventListener('click', async () => {
+      const srv = serverInput.value.trim() || 'http://localhost:8000';
+      chrome.tabs.create({ url: `${srv}/api/extension/download` });
+    });
+  }
 
   // Populate open tabs into dropdown
   chrome.runtime.sendMessage({ action: 'getTabs' }, (resp) => {

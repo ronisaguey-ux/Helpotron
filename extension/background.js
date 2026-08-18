@@ -283,3 +283,46 @@ async function agentStatus() {
   if (!resp.ok) return { ok: false, error: `Server: ${resp.status}` };
   return { ok: true, active: true, ...(await resp.json()) };
 }
+
+// ─── Periodic Extension Update Checker ────────────────────────────────────────
+
+const CURRENT_VERSION = '2.0.0';
+
+async function checkForExtensionUpdate() {
+  try {
+    const server = await getServer();
+    const resp = await fetch(`${server}/api/extension/version`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const latestVersion = data.latest_version;
+
+    if (latestVersion && latestVersion !== CURRENT_VERSION) {
+      console.log(`[Helpotron] Update available: v${CURRENT_VERSION} -> v${latestVersion}`);
+      
+      // Set update badge on extension icon
+      if (chrome.action && chrome.action.setBadgeText) {
+        chrome.action.setBadgeText({ text: 'NEW' });
+        chrome.action.setBadgeBackgroundColor({ color: '#10B981' }); // Emerald Green
+      }
+
+      // Store update status in storage
+      await chrome.storage.local.set({
+        update_available: true,
+        latest_version: latestVersion,
+        update_notes: data.release_notes || [],
+      });
+    } else {
+      if (chrome.action && chrome.action.setBadgeText) {
+        chrome.action.setBadgeText({ text: '' });
+      }
+      await chrome.storage.local.set({ update_available: false });
+    }
+  } catch (e) {
+    // Server might be offline, ignore silently
+  }
+}
+
+// Run version check on startup and every 30 minutes
+checkForExtensionUpdate();
+setInterval(checkForExtensionUpdate, 30 * 60 * 1000);
+

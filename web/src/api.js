@@ -233,6 +233,10 @@ export const api = {
   getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId || 'RoniDev'}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
   routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(payload) }),
   deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
+
+  // Extension Version & Updates
+  getExtensionVersion: () => request('/api/extension/version', { method: 'GET' }),
+  checkExtensionUpdate: (currentVersion) => request('/api/extension/check-update', { method: 'POST', body: JSON.stringify({ current_version: currentVersion }) }),
 };
 
 export default api;

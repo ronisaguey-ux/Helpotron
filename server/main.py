@@ -46,6 +46,7 @@ from .routes_overlord import router as overlord_router
 from .routes_simulation import router as simulation_router
 from .routes_dump import router as dump_router
 from .routes_math import router as math_router
+from .routes_extension import router as extension_router
 from .admin import router as admin_router
 from .routes_features import router as features_router
 
@@ -209,6 +210,7 @@ app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)
 app.include_router(math_router)
+app.include_router(extension_router)
 
 
 @app.get("/api/health")
