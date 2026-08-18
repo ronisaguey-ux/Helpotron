@@ -162,34 +162,35 @@ def test_ai_detectors_individual_toggling():
 
 
 def test_models_catalog_and_effort_score_tiers():
-    """Verify Nemotron 3 Super, Nemotron Nano, Llama 3.1 Nemotron 70B, and effort resolution."""
+    """Verify functional model tiers, Gemini 3.7 Flash multimodal, and effort tier resolution."""
     from server.user_settings_service import AVAILABLE_MODELS, resolve_effort_tier
 
-    # 1. Models catalog contains new models with correct metadata
+    # 1. Models catalog contains functional tiers and Gemini 3.7 Flash
     model_ids = {m["id"] for m in AVAILABLE_MODELS}
-    assert "nemotron_3_super" in model_ids
-    assert "nemotron_nano_9b" in model_ids
-    assert "llama_nemotron_70b" in model_ids
-    assert "deepseek_r1_v3" in model_ids
-    assert "pro" in model_ids
-    assert "flash" in model_ids
+    assert "moe_high_throughput" in model_ids
+    assert "fast_utility_worker" in model_ids
+    assert "instruction_parser" in model_ids
+    assert "deep_cognitive_engine" in model_ids
+    assert "elite_humanizer_tier" in model_ids
+    assert "fast_draft_tier" in model_ids
+    assert "gemini_37_flash" in model_ids
 
     # 2. Low effort score (1 - 350) -> routes to cheap/fast utility models
     low = resolve_effort_tier(200)
     assert low["tier"] == "low_effort"
-    assert low["flashcard_model"] == "nemotron_nano_9b"
-    assert low["summary_model"] == "nemotron_3_super"
+    assert low["flashcard_model"] == "fast_utility_worker"
+    assert low["summary_model"] == "moe_high_throughput"
 
     # 3. Medium effort score (351 - 750) -> routes to balanced orchestration
     med = resolve_effort_tier(500)
     assert med["tier"] == "medium_effort"
-    assert med["draft_model"] == "llama_nemotron_70b"
+    assert med["draft_model"] == "instruction_parser"
 
     # 4. High effort score (751 - 1000) -> routes to deep reasoning flagship models
     high = resolve_effort_tier(900)
     assert high["tier"] == "high_effort"
-    assert high["draft_model"] == "deepseek_r1_v3"
-    assert high["humanizer_model"] == "pro"
+    assert high["draft_model"] == "deep_cognitive_engine"
+    assert high["humanizer_model"] == "elite_humanizer_tier"
 
 
 def test_auto_start_and_effort_trio_scoping():
@@ -219,6 +220,37 @@ def test_auto_start_and_effort_trio_scoping():
     assert eff_history["auto_start"] is True
 
 
+def test_custom_subjects_crud_and_gemini_multimodal():
+    """Verify custom subject creation, description persistence, and Gemini 3.7 Flash settings."""
+    from fastapi.testclient import TestClient
+    from server.main import app
+
+    client = TestClient(app)
+
+    # 1. Fetch default subjects
+    s_resp = client.get("/api/user/custom-subjects")
+    assert s_resp.status_code == 200
+    subjects = s_resp.json()["subjects"]
+    assert any(s["name"] == "Mathematics" for s in subjects)
+
+    # 2. Add custom subject
+    new_sub = {
+        "name": "Organic Chemistry",
+        "description": "Reaction mechanisms, stereochemistry, and lab synthesis write-ups",
+        "color": "emerald",
+    }
+    create_resp = client.post("/api/user/custom-subjects", json=new_sub)
+    assert create_resp.status_code == 200
+    created = create_resp.json()["subject"]
+    assert created["name"] == "Organic Chemistry"
+    assert created["is_custom"] is True
+    created_id = created["id"]
+
+    # 3. Delete custom subject
+    del_resp = client.delete(f"/api/user/custom-subjects/{created_id}")
+    assert del_resp.status_code == 200
+
+
 def test_api_models_and_effort_endpoints():
     """Verify GET /api/user/models and GET /api/user/effort-score/resolve endpoints."""
     from fastapi.testclient import TestClient
@@ -230,9 +262,8 @@ def test_api_models_and_effort_endpoints():
     m_resp = client.get("/api/user/models")
     assert m_resp.status_code == 200
     models = m_resp.json()["models"]
-    assert any(m["id"] == "nemotron_3_super" for m in models)
-    assert any(m["id"] == "nemotron_nano_9b" for m in models)
-    assert any(m["id"] == "llama_nemotron_70b" for m in models)
+    assert any(m["id"] == "gemini_37_flash" for m in models)
+    assert any(m["id"] == "moe_high_throughput" for m in models)
 
     # 2. Effort resolve endpoint
     e_resp = client.get("/api/user/effort-score/resolve?score=850")
@@ -240,4 +271,5 @@ def test_api_models_and_effort_endpoints():
     res = e_resp.json()["effort_routing"]
     assert res["tier"] == "high_effort"
     assert res["score"] == 850
+
 

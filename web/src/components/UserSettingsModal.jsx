@@ -39,6 +39,10 @@ import {
   PlayCircle,
   PauseCircle,
   Bot,
+  Video,
+  Image as ImageIcon,
+  FolderPlus,
+  Compass,
 } from 'lucide-react';
 
 const GRADE_LETTER_MAP = [
@@ -84,61 +88,13 @@ const ACADEMIC_LEVELS = [
   { key: 'phd_professor', label: 'PhD Professor / Principal Investigator' },
 ];
 
-const MODEL_CATALOG = [
-  {
-    id: 'nemotron_3_super',
-    name: 'Nemotron 3 Super (120B-A12B MoE)',
-    pricing: '$0.085 – $0.10 / $0.40 – $0.50',
-    context_window: '1,000,000 tokens',
-    recommended_use: 'Bulk Lecture Summaries & Long Transcripts',
-    description: 'Active-12B MoE architecture gives high throughput and low pricing with massive context.',
-    tag: 'MoE High-Throughput',
-  },
-  {
-    id: 'nemotron_nano_9b',
-    name: 'Nemotron Nano (9B v2)',
-    pricing: '$0.04 / $0.16',
-    context_window: '131,072 tokens',
-    recommended_use: 'Fast Flashcards & Term Extraction',
-    description: 'Ultra-cheap, low-latency utility worker for repetitive keyword extraction.',
-    tag: 'Ultra-Fast Utility',
-  },
-  {
-    id: 'llama_nemotron_70b',
-    name: 'Llama 3.1 Nemotron 70B Instruct',
-    pricing: '$0.20 – $0.35 / $0.40 – $0.80',
-    context_window: '131,072 tokens',
-    recommended_use: 'Grading Rubrics & Practice Test Generation',
-    description: 'Exceptionally strong instruction following from HelpSteer2 post-training.',
-    tag: 'HelpSteer2 Precision',
-  },
-  {
-    id: 'deepseek_r1_v3',
-    name: 'DeepSeek R1 / V3 Thinking',
-    pricing: '$0.14 / $0.55',
-    context_window: '128,000 tokens',
-    recommended_use: 'Cognitive Deep Reasoning & Academic Research',
-    description: 'Flagship multi-step reasoning model with chain-of-thought verification.',
-    tag: 'Deep Reasoning',
-  },
-  {
-    id: 'pro',
-    name: 'Pro Model Tier (Gemini / Claude Pro)',
-    pricing: '$1.25 / $5.00',
-    context_window: '200,000 tokens',
-    recommended_use: 'High-Stakes Multi-Pass Evasion & Complex Synthesis',
-    description: 'Elite synthesis and style replication engine.',
-    tag: 'Elite Synthesis',
-  },
-  {
-    id: 'flash',
-    name: 'Flash Model Tier',
-    pricing: '$0.075 / $0.30',
-    context_window: '1,000,000 tokens',
-    recommended_use: 'Sub-Second Outline Drafting',
-    description: 'Ultra high-speed execution tier.',
-    tag: 'Speed & Scale',
-  },
+const DEFAULT_SUBJECTS = [
+  { id: 'subj_math', name: 'Mathematics', description: 'Calculus, linear algebra, statistics, discrete mathematics, and formal proofs', color: 'blue' },
+  { id: 'subj_english', name: 'English & Literature', description: 'Literary analysis, rhetorical essays, creative writing, and close textual reading', color: 'purple' },
+  { id: 'subj_history', name: 'History & Social Studies', description: 'Historiography, source evaluation, archival synthesis, and political science', color: 'amber' },
+  { id: 'subj_cs', name: 'Computer Science', description: 'Algorithms, data structures, system architecture, and software engineering', color: 'emerald' },
+  { id: 'subj_biology', name: 'Biology & Life Sciences', description: 'Cellular biology, genetics, ecology, physiology, and laboratory reports', color: 'teal' },
+  { id: 'subj_psychology', name: 'Psychology & Cognitive Sciences', description: 'Empirical methodology, cognitive biases, behavioral neuroscience, and case studies', color: 'indigo' },
 ];
 
 function getEffortInfo(score) {
@@ -149,7 +105,7 @@ function getEffortInfo(score) {
       label: '🚀 Cost-Optimized & High-Throughput',
       color: 'text-amber-400',
       badgeColor: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
-      description: 'Bulk lecture summaries, flashcard generation, and term extraction are heavily offloaded to ultra-cheap utility models (Nemotron Nano 9B & Nemotron 3 Super MoE).',
+      description: 'Bulk lecture summaries, flashcard generation, and keyword extractions are heavily offloaded to ultra-efficient high-speed utility tiers.',
     };
   } else if (s <= 750) {
     return {
@@ -157,7 +113,7 @@ function getEffortInfo(score) {
       label: '⚖️ Balanced Rigor & Evasion',
       color: 'text-blue-400',
       badgeColor: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
-      description: 'Balanced orchestration pairing Llama 3.1 Nemotron 70B for rubrics with Flash & Pro synthesis passes.',
+      description: 'Balanced multi-agent orchestration pairing rubric parsing engines with structured drafting and multi-pass evasion synthesis.',
     };
   } else {
     return {
@@ -165,36 +121,57 @@ function getEffortInfo(score) {
       label: '🧠 Flagship Cognitive Depth',
       color: 'text-emerald-400',
       badgeColor: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-      description: 'Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship models like DeepSeek R1/V3 and Pro Tier.',
+      description: 'Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship cognitive synthesis tiers.',
     };
   }
 }
 
 /**
- * Reusable Scope Control Component
- * Every setting has a collapsible menu where users choose where that setting applies
- * (Subject, Teacher, Class, Assignment) with "Apply to All" and "Remove All".
+ * Universal Multi-Scoped Subsetting Control Component
+ * Allows adding multiple distinct subsetting overrides (e.g. English: 300, Math: 850)
+ * with individual value controls, target selectors, and delete buttons.
  */
-function SettingScopeControl({
+function MultiScopedSettingControl({
   settingKey,
   settingLabel,
-  scopes = [],
+  valueType = 'number', // 'number' | 'select' | 'boolean'
+  selectOptions = [],
+  min = 1,
+  max = 1000,
+  defaultValue = 500,
+  unitLabel = '',
+  subSettings = [],
+  customSubjects = [],
   onApplyToAll,
   onRemoveAll,
-  onAddScope,
-  onDeleteScope,
+  onAddSubSetting,
+  onDeleteSubSetting,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [targetType, setTargetType] = useState('subject');
   const [targetValue, setTargetValue] = useState('');
+  const [customTargetText, setCustomTargetText] = useState('');
+  const [overrideValue, setOverrideValue] = useState(defaultValue);
 
-  const isGlobal = scopes.some((s) => s.apply_to_all) || scopes.length === 0;
+  const allSubjects = customSubjects.length > 0 ? customSubjects : DEFAULT_SUBJECTS;
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (!targetValue.trim()) return;
-    onAddScope(settingKey, targetType, targetValue.trim());
-    setTargetValue('');
+    const finalTarget = targetType === 'subject'
+      ? (targetValue || allSubjects[0]?.name || 'Mathematics')
+      : customTargetText.trim();
+
+    if (!finalTarget) return;
+
+    onAddSubSetting(settingKey, {
+      id: `subsetting_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      target_type: targetType,
+      target_value: finalTarget,
+      value: overrideValue,
+      label: `${finalTarget}: ${overrideValue}${unitLabel}`,
+    });
+
+    setCustomTargetText('');
   };
 
   return (
@@ -206,14 +183,14 @@ function SettingScopeControl({
           className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
         >
           <Layers className="w-3.5 h-3.5 text-blue-400" />
-          <span>Scope:</span>
-          {isGlobal ? (
+          <span>Subsetting Overrides ({subSettings.length}):</span>
+          {subSettings.length === 0 ? (
             <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
-              🌐 Applied to All (Universal)
+              🌐 Universal Default Active
             </span>
           ) : (
             <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono">
-              🎯 Scoped to {scopes.length} Target{scopes.length > 1 ? 's' : ''}
+              🎯 {subSettings.length} Distinct Subsetting{subSettings.length > 1 ? 's' : ''} Configured
             </span>
           )}
           {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
@@ -238,55 +215,150 @@ function SettingScopeControl({
       </div>
 
       {isExpanded && (
-        <div className="mt-3 p-3 rounded-xl bg-slate-950/60 border border-white/10 space-y-2.5 animate-fadeIn text-xs">
-          <form onSubmit={handleAdd} className="flex flex-wrap sm:flex-nowrap gap-2">
-            <select
-              value={targetType}
-              onChange={(e) => setTargetType(e.target.value)}
-              className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs"
-            >
-              <option value="subject">Subject</option>
-              <option value="teacher">Teacher</option>
-              <option value="class">Class / Course Code</option>
-              <option value="assignment">Specific Assignment</option>
-            </select>
-            <input
-              type="text"
-              placeholder={`Enter ${targetType} name (e.g. History 101, Dr. Miller)...`}
-              value={targetValue}
-              onChange={(e) => setTargetValue(e.target.value)}
-              className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-slate-600"
-            />
-            <button
-              type="submit"
-              disabled={!targetValue.trim()}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-lg text-xs font-semibold shrink-0 cursor-pointer"
-            >
-              + Add Target Scope
-            </button>
-          </form>
-
-          {/* Active Target Scope Badges */}
-          {scopes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {scopes.map((s, idx) => (
-                <span
-                  key={s.id || idx}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px]"
-                >
-                  <span className="font-semibold capitalize text-slate-300">{s.type}:</span>
-                  <span className="font-mono text-white">{s.value}</span>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteScope(settingKey, s.id || idx)}
-                    className="text-slate-400 hover:text-rose-400 ml-1 transition"
+        <div className="mt-3 p-4 rounded-xl bg-slate-950/70 border border-white/10 space-y-3.5 animate-fadeIn text-xs">
+          {/* Active Subsettings List */}
+          {subSettings.length > 0 && (
+            <div className="space-y-2 pb-2 border-b border-white/5">
+              <div className="text-[11px] font-semibold text-slate-400">Configured Subsettings:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {subSettings.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="p-2.5 rounded-xl bg-slate-900 border border-blue-500/30 flex items-center justify-between gap-2"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
+                    <div className="truncate">
+                      <span className="text-[10px] text-blue-400 uppercase font-mono mr-1.5 font-bold">
+                        [{sub.target_type}]
+                      </span>
+                      <strong className="text-white text-xs">{sub.target_value}</strong>
+                      <div className="text-[11px] text-emerald-400 font-mono mt-0.5 font-semibold">
+                        Value: {String(sub.value)} {unitLabel}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteSubSetting(settingKey, sub.id)}
+                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer shrink-0"
+                      title="Delete Subsetting"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Add New Subsetting Form */}
+          <form onSubmit={handleAdd} className="space-y-2.5">
+            <div className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5 text-emerald-400" />
+              <span>+ Add a New Subsetting Override</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* Target Type Picker */}
+              <select
+                value={targetType}
+                onChange={(e) => {
+                  setTargetType(e.target.value);
+                  if (e.target.value === 'subject' && allSubjects.length > 0) {
+                    setTargetValue(allSubjects[0].name);
+                  }
+                }}
+                className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs"
+              >
+                <option value="subject">Subject / Course</option>
+                <option value="teacher">Specific Teacher</option>
+                <option value="class">Class Code</option>
+                <option value="assignment">Assignment Name</option>
+              </select>
+
+              {/* Target Value Input or Subject Dropdown */}
+              {targetType === 'subject' ? (
+                <select
+                  value={targetValue || allSubjects[0]?.name}
+                  onChange={(e) => setTargetValue(e.target.value)}
+                  className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs sm:col-span-2"
+                >
+                  {allSubjects.map((s) => (
+                    <option key={s.id || s.name} value={s.name}>
+                      {s.name} {s.is_custom ? '(Custom)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={`Enter ${targetType} (e.g. Dr. Miller)...`}
+                  value={customTargetText}
+                  onChange={(e) => setCustomTargetText(e.target.value)}
+                  className="sm:col-span-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs placeholder:text-slate-600"
+                />
+              )}
+            </div>
+
+            {/* Value Selector for this specific Subsetting */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 pt-1">
+              <span className="text-slate-400 text-xs shrink-0 font-medium">Subsetting Value:</span>
+
+              {valueType === 'number' && (
+                <div className="flex-1 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    value={overrideValue}
+                    onChange={(e) => setOverrideValue(Number(e.target.value))}
+                    className="flex-1 accent-blue-500 cursor-pointer"
+                  />
+                  <input
+                    type="number"
+                    min={min}
+                    max={max}
+                    value={overrideValue}
+                    onChange={(e) => setOverrideValue(Number(e.target.value))}
+                    className="w-20 bg-slate-900 border border-white/10 rounded-xl px-2 py-1 text-white text-xs font-mono"
+                  />
+                  <span className="text-slate-400 text-[11px] font-mono">{unitLabel}</span>
+                </div>
+              )}
+
+              {valueType === 'select' && (
+                <select
+                  value={overrideValue}
+                  onChange={(e) => setOverrideValue(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs"
+                >
+                  {selectOptions.map((opt) => (
+                    <option key={opt.key || opt.value} value={opt.key || opt.value}>
+                      {opt.label || opt.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {valueType === 'boolean' && (
+                <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(overrideValue)}
+                    onChange={(e) => setOverrideValue(e.target.checked)}
+                    className="rounded accent-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="font-semibold">{overrideValue ? 'Enabled (ON)' : 'Disabled (OFF)'}</span>
+                </label>
+              )}
+
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Subsetting</span>
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
@@ -305,8 +377,13 @@ export default function UserSettingsModal({
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState('');
   const [academicLevels, setAcademicLevels] = useState(ACADEMIC_LEVELS);
-  const [defaultStyles, setDefaultStyles] = useState({});
-  const [modelsList, setModelsList] = useState(MODEL_CATALOG);
+  const [customSubjects, setCustomSubjects] = useState(DEFAULT_SUBJECTS);
+
+  // Custom Subject Form
+  const [newSubjName, setNewSubjName] = useState('');
+  const [newSubjDesc, setNewSubjDesc] = useState('');
+  const [newSubjColor, setNewSubjColor] = useState('blue');
+  const [addingSubj, setAddingSubj] = useState(false);
 
   // Style Sample Form State
   const [sampleTitle, setSampleTitle] = useState('');
@@ -326,16 +403,6 @@ export default function UserSettingsModal({
   const [redeemMethod, setRedeemMethod] = useState('compute_credits');
   const [redeemMsg, setRedeemMsg] = useState('');
 
-  // TRIO Rule Form State
-  const [trioName, setTrioName] = useState('');
-  const [trioTargetType, setTrioTargetType] = useState('subject');
-  const [trioTargetValue, setTrioTargetValue] = useState('');
-  const [trioRestriction, setTrioRestriction] = useState('');
-  const [trioInclusion, setTrioInclusion] = useState('');
-  const [trioApplyAll, setTrioApplyAll] = useState(false);
-  const [trioOverrideGrade, setTrioOverrideGrade] = useState('A');
-  const [addingTrio, setAddingTrio] = useState(false);
-
   // Auto-approved rules state
   const [newRuleInput, setNewRuleInput] = useState('');
 
@@ -349,7 +416,7 @@ export default function UserSettingsModal({
     if (isOpen) {
       fetchSettings();
       fetchAcademicLevels();
-      fetchModels();
+      fetchCustomSubjects();
       fetchDataLakeHistory();
     }
   }, [isOpen, userId]);
@@ -372,14 +439,13 @@ export default function UserSettingsModal({
     try {
       const data = await api.getAcademicLevels();
       if (data?.levels) setAcademicLevels(data.levels);
-      if (data?.default_styles) setDefaultStyles(data.default_styles);
     } catch (e) {}
   }
 
-  async function fetchModels() {
+  async function fetchCustomSubjects() {
     try {
-      const data = await api.getAvailableModels();
-      if (data?.models) setModelsList(data.models);
+      const data = await api.getCustomSubjects();
+      if (data?.subjects) setCustomSubjects(data.subjects);
     } catch (e) {}
   }
 
@@ -403,38 +469,69 @@ export default function UserSettingsModal({
     }
   }
 
-  // Handle Scope Actions for any setting
-  const getSettingScopes = (settingKey) => {
-    return settings?.setting_scopes?.[settingKey] || [];
+  // Multi-Scoped Subsettings Handlers
+  const getSubSettings = (settingKey) => {
+    return settings?.scoped_subsettings?.[settingKey] || [];
+  };
+
+  const handleAddSubSetting = (settingKey, subEntry) => {
+    const currentMap = { ...(settings?.scoped_subsettings || {}) };
+    const list = [...(currentMap[settingKey] || []), subEntry];
+    currentMap[settingKey] = list;
+    handleSaveSettings({ scoped_subsettings: currentMap });
+  };
+
+  const handleDeleteSubSetting = (settingKey, subId) => {
+    const currentMap = { ...(settings?.scoped_subsettings || {}) };
+    currentMap[settingKey] = (currentMap[settingKey] || []).filter((s) => s.id !== subId);
+    handleSaveSettings({ scoped_subsettings: currentMap });
   };
 
   const handleApplyToAll = (settingKey) => {
-    const currentScopes = { ...(settings?.setting_scopes || {}) };
-    currentScopes[settingKey] = [{ id: 'global', type: 'global', value: 'All Scopes', apply_to_all: true }];
-    handleSaveSettings({ setting_scopes: currentScopes });
+    const currentMap = { ...(settings?.scoped_subsettings || {}) };
+    currentMap[settingKey] = [];
+    handleSaveSettings({ scoped_subsettings: currentMap });
   };
 
   const handleRemoveAll = (settingKey) => {
-    const currentScopes = { ...(settings?.setting_scopes || {}) };
-    currentScopes[settingKey] = [];
-    handleSaveSettings({ setting_scopes: currentScopes });
+    const currentMap = { ...(settings?.scoped_subsettings || {}) };
+    currentMap[settingKey] = [];
+    handleSaveSettings({ scoped_subsettings: currentMap });
   };
 
-  const handleAddScope = (settingKey, type, value) => {
-    const currentScopes = { ...(settings?.setting_scopes || {}) };
-    const list = (currentScopes[settingKey] || []).filter((s) => !s.apply_to_all);
-    list.push({ id: `scope_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`, type, value, apply_to_all: false });
-    currentScopes[settingKey] = list;
-    handleSaveSettings({ setting_scopes: currentScopes });
+  // Add Custom Subject
+  const handleAddCustomSubject = async (e) => {
+    e.preventDefault();
+    if (!newSubjName.trim() || !newSubjDesc.trim()) return;
+    setAddingSubj(true);
+    try {
+      const res = await api.addCustomSubject({
+        name: newSubjName.trim(),
+        description: newSubjDesc.trim(),
+        color: newSubjColor,
+      });
+      if (res?.subject) {
+        setCustomSubjects((prev) => [...prev, res.subject]);
+        setNewSubjName('');
+        setNewSubjDesc('');
+        setSaveStatus('✅ Custom subject added to global taxonomy');
+        setTimeout(() => setSaveStatus(''), 2500);
+      }
+    } catch (e) {
+      alert('Failed to add custom subject.');
+    } finally {
+      setAddingSubj(false);
+    }
   };
 
-  const handleDeleteScope = (settingKey, scopeId) => {
-    const currentScopes = { ...(settings?.setting_scopes || {}) };
-    currentScopes[settingKey] = (currentScopes[settingKey] || []).filter((s, idx) => s.id !== scopeId && idx !== scopeId);
-    handleSaveSettings({ setting_scopes: currentScopes });
+  const handleDeleteCustomSubject = async (subjectId) => {
+    try {
+      await api.deleteCustomSubject(subjectId);
+      setCustomSubjects((prev) => prev.filter((s) => s.id !== subjectId));
+    } catch (e) {}
   };
 
-  // Handle Target Grade & Score Mapping
+  // Target Grade & Score Mapping
   const handleScoreSliderChange = (num) => {
     const score = Number(num);
     const letter = scoreToLetter(score);
@@ -452,7 +549,7 @@ export default function UserSettingsModal({
     });
   };
 
-  // Add Custom Writing Style Sample
+  // Add Style Sample
   const handleAddStyleSample = async (e) => {
     e.preventDefault();
     if (!sampleTitle.trim() || !sampleContent.trim()) return;
@@ -491,7 +588,7 @@ export default function UserSettingsModal({
     } catch (e) {}
   };
 
-  // Submit Data Lake Entry for Micro-Credits
+  // Data Lake
   const handleSubmitDataLake = async (e) => {
     e.preventDefault();
     if (!dataLakeTitle.trim() || !dataLakeContent.trim()) return;
@@ -543,50 +640,7 @@ export default function UserSettingsModal({
     }
   };
 
-  // Add TRIO Rule
-  const handleAddTrioRule = async (e) => {
-    e.preventDefault();
-    if (!trioApplyAll && !trioTargetValue.trim()) return;
-    setAddingTrio(true);
-    try {
-      const rulePayload = {
-        name: trioName.trim() || `${trioTargetType}: ${trioTargetValue}`,
-        target: { type: trioTargetType, value: trioTargetValue.trim() },
-        restriction: trioRestriction.trim() || null,
-        inclusion: trioInclusion.trim() || null,
-        apply_to_all: trioApplyAll,
-        overrides: {
-          target_score_letter: trioOverrideGrade,
-          target_score_numeric: letterToScore(trioOverrideGrade),
-        },
-      };
-      const res = await api.saveTrioRule(rulePayload);
-      if (res?.rule) {
-        setSettings((prev) => ({
-          ...prev,
-          trio_rules: [...(prev.trio_rules || []), res.rule],
-        }));
-        setTrioName('');
-        setTrioTargetValue('');
-        setTrioRestriction('');
-        setTrioInclusion('');
-      }
-    } catch (e) {} finally {
-      setAddingTrio(false);
-    }
-  };
-
-  const handleDeleteTrioRule = async (ruleId) => {
-    try {
-      await api.deleteTrioRule(ruleId);
-      setSettings((prev) => ({
-        ...prev,
-        trio_rules: (prev.trio_rules || []).filter((r) => r.id !== ruleId),
-      }));
-    } catch (e) {}
-  };
-
-  // Add Auto-Approved Action Rule
+  // Permissions Rule
   const handleAddPermRule = () => {
     if (!newRuleInput.trim()) return;
     const rule = newRuleInput.trim();
@@ -608,7 +662,7 @@ export default function UserSettingsModal({
     });
   };
 
-  // Save Account Connection
+  // Connection & GDPR
   const handleSaveConnection = () => {
     setUserId(localUser.trim());
     setServer(localServer.trim());
@@ -616,7 +670,6 @@ export default function UserSettingsModal({
     setTimeout(() => setSaveStatus(''), 2500);
   };
 
-  // Export Data Archive
   const handleExportData = async () => {
     try {
       const data = await api.dashboard(userId);
@@ -655,8 +708,8 @@ export default function UserSettingsModal({
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Personalization & Settings Engine</h2>
-            <p className="text-xs text-slate-400">Academic level, effort score routing, Nemotron models, auto-start, and universal scopes</p>
+            <h2 className="text-base font-bold text-white">Personalization & Personal Settings Engine</h2>
+            <p className="text-xs text-slate-400">Multi-scoped subsettings, Gemini 3.7 Flash studio, custom taxonomy, and auto-start pipeline</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -681,11 +734,11 @@ export default function UserSettingsModal({
           {[
             { key: 'general', label: 'General & Target Grade', icon: GraduationCap },
             { key: 'effort_autostart', label: 'Effort & Auto-Start', icon: Gauge },
-            { key: 'models', label: 'AI Models & Task Routing', icon: Cpu },
+            { key: 'gemini', label: 'Gemini 3.7 Flash Studio', icon: Video, badge: 'Multimodal' },
+            { key: 'subjects', label: 'Custom Subjects Taxonomy', icon: FolderPlus, badge: `${customSubjects.length}` },
             { key: 'writing', label: 'Custom Writing Styles', icon: FileText },
             { key: 'detectors', label: 'AI Detector Toggles', icon: Shield },
             { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Tag, badge: `${settings?.micro_credits_balance || 0} cr` },
-            { key: 'trio', label: 'Context & TRIO Scopes', icon: Layers },
             { key: 'permissions', label: 'Auto-Approved Actions', icon: CheckCircle2 },
             { key: 'notifications', label: 'Notifications', icon: Bell },
             { key: 'account', label: 'Account & Data Compliance', icon: Lock },
@@ -750,18 +803,19 @@ export default function UserSettingsModal({
                         </option>
                       ))}
                     </select>
-                    <p className="text-[11px] text-slate-400">
-                      The AI adapts writing style, vocabulary, sentence depth, and argument rigor to the selected academic level.
-                    </p>
 
-                    <SettingScopeControl
+                    {/* Multi-Scoped Subsetting Overrides */}
+                    <MultiScopedSettingControl
                       settingKey="academic_level"
                       settingLabel="Academic Level"
-                      scopes={getSettingScopes('academic_level')}
+                      valueType="select"
+                      selectOptions={academicLevels}
+                      subSettings={getSubSettings('academic_level')}
+                      customSubjects={customSubjects}
                       onApplyToAll={handleApplyToAll}
                       onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
+                      onAddSubSetting={handleAddSubSetting}
+                      onDeleteSubSetting={handleDeleteSubSetting}
                     />
                   </div>
 
@@ -816,14 +870,21 @@ export default function UserSettingsModal({
                       />
                     </div>
 
-                    <SettingScopeControl
+                    {/* Multi-Scoped Subsetting Overrides */}
+                    <MultiScopedSettingControl
                       settingKey="target_score"
-                      settingLabel="Target Grade & Score"
-                      scopes={getSettingScopes('target_score')}
+                      settingLabel="Target Score"
+                      valueType="number"
+                      min={0}
+                      max={100}
+                      defaultValue={88}
+                      unitLabel="pts"
+                      subSettings={getSubSettings('target_score')}
+                      customSubjects={customSubjects}
                       onApplyToAll={handleApplyToAll}
                       onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
+                      onAddSubSetting={handleAddSubSetting}
+                      onDeleteSubSetting={handleDeleteSubSetting}
                     />
                   </div>
 
@@ -913,16 +974,6 @@ export default function UserSettingsModal({
                         </div>
                       </div>
                     )}
-
-                    <SettingScopeControl
-                      settingKey="grade_scheduling"
-                      settingLabel="Grade Scheduling"
-                      scopes={getSettingScopes('grade_scheduling')}
-                      onApplyToAll={handleApplyToAll}
-                      onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
-                    />
                   </div>
                 </div>
               )}
@@ -962,19 +1013,23 @@ export default function UserSettingsModal({
                       ) : (
                         <div className="flex items-center gap-2 text-amber-300">
                           <PauseCircle className="w-4 h-4 shrink-0 text-amber-400" />
-                          <span><strong>Staged Approval Mode (Recommended):</strong> Scraped assignments wait in your inbox for approval, rubric modifications, or custom source attachments before running.</span>
+                          <span><strong>Staged Approval Mode (Recommended):</strong> Scraped assignments wait in staging for user approval, rubric modifications, or custom source attachments before running.</span>
                         </div>
                       )}
                     </div>
 
-                    <SettingScopeControl
+                    {/* Multi-Scoped Subsetting Overrides for Auto-Start */}
+                    <MultiScopedSettingControl
                       settingKey="auto_start"
                       settingLabel="Auto-Start Sub-Agents"
-                      scopes={getSettingScopes('auto_start')}
+                      valueType="boolean"
+                      defaultValue={false}
+                      subSettings={getSubSettings('auto_start')}
+                      customSubjects={customSubjects}
                       onApplyToAll={handleApplyToAll}
                       onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
+                      onAddSubSetting={handleAddSubSetting}
+                      onDeleteSubSetting={handleDeleteSubSetting}
                     />
                   </div>
 
@@ -987,7 +1042,7 @@ export default function UserSettingsModal({
                           AI Execution Effort Score (1 – 1000)
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          Lower scores offload bulk tasks to cheap utility models (Nemotron Nano / 3 Super). Higher scores route heavy synthesis to flagship deep reasoning models (DeepSeek R1/V3 & Pro).
+                          Lower scores offload bulk tasks to high-speed utility tiers. Higher scores route heavy synthesis to flagship cognitive deep reasoning tiers.
                         </p>
                       </div>
                       <div className="flex items-baseline gap-2">
@@ -1005,10 +1060,10 @@ export default function UserSettingsModal({
                       <p className="text-[11px] text-slate-300 leading-relaxed">{currentEffortInfo.description}</p>
                     </div>
 
-                    {/* Slider & Presets */}
+                    {/* Slider */}
                     <div className="space-y-2 pt-2">
                       <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-                        <span>1 (Cheapest / Ultra-Fast)</span>
+                        <span>1 (High-Speed Utility)</span>
                         <span>500 (Balanced Synthesis)</span>
                         <span>1000 (Maximum Cognitive Depth)</span>
                       </div>
@@ -1045,187 +1100,218 @@ export default function UserSettingsModal({
                       ))}
                     </div>
 
-                    <SettingScopeControl
+                    {/* Multi-Scoped Subsetting Overrides (e.g. Math: 850, English: 300) */}
+                    <MultiScopedSettingControl
                       settingKey="effort_score"
                       settingLabel="Effort Score"
-                      scopes={getSettingScopes('effort_score')}
+                      valueType="number"
+                      min={1}
+                      max={1000}
+                      defaultValue={500}
+                      unitLabel="/1000"
+                      subSettings={getSubSettings('effort_score')}
+                      customSubjects={customSubjects}
                       onApplyToAll={handleApplyToAll}
                       onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
+                      onAddSubSetting={handleAddSubSetting}
+                      onDeleteSubSetting={handleDeleteSubSetting}
                     />
                   </div>
                 </div>
               )}
 
-              {/* ─── 3. AI MODELS & TASK ROUTING ─── */}
-              {activeTab === 'models' && (
+              {/* ─── 3. GEMINI 3.7 FLASH MULTIMODAL STUDIO ─── */}
+              {activeTab === 'gemini' && (
                 <div className="space-y-6">
-                  {/* Model Catalog Transparency */}
+                  <div className="clean-card p-6 space-y-4 border border-blue-500/30 bg-gradient-to-r from-blue-950/20 to-indigo-950/20">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                          <Video className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            Gemini 3.7 Flash Multimodal Sub-Agent
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Image & Video Generation, Visual Diagramming, and Video Assignment Interpretation.
+                          </p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={settings.gemini_multimodal?.enabled !== false}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              gemini_multimodal: {
+                                ...(settings.gemini_multimodal || {}),
+                                enabled: e.target.checked,
+                              },
+                            })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+                      </label>
+                    </div>
+
+                    {/* Credit Usage Warning Banner */}
+                    <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        <strong>Credit Consumption Notice:</strong> Multimodal video generation, image rendering, and high-resolution video prompt interpretation with Gemini 3.7 Flash consumes dynamic compute credits based on resolution and media duration.
+                      </div>
+                    </div>
+
+                    {/* Auto-Spawn Sub-Agent Feature */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-white">Auto-Spawn on Assignment Media</div>
+                          <div className="text-[11px] text-slate-400">
+                            When an assignment has video lectures, diagrams, or image attachments, automatically spawn Gemini 3.7 Flash into that assignment's sub-agent team bubble.
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={settings.gemini_multimodal?.auto_spawn_on_media !== false}
+                          onChange={(e) =>
+                            handleSaveSettings({
+                              gemini_multimodal: {
+                                ...(settings.gemini_multimodal || {}),
+                                auto_spawn_on_media: e.target.checked,
+                              },
+                            })
+                          }
+                          className="rounded accent-blue-500 w-4 h-4 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Multi-Scoped Subsetting Overrides for Gemini */}
+                    <MultiScopedSettingControl
+                      settingKey="gemini_multimodal"
+                      settingLabel="Gemini 3.7 Flash Auto-Spawn"
+                      valueType="boolean"
+                      defaultValue={true}
+                      subSettings={getSubSettings('gemini_multimodal')}
+                      customSubjects={customSubjects}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddSubSetting={handleAddSubSetting}
+                      onDeleteSubSetting={handleDeleteSubSetting}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ─── 4. CUSTOM SUBJECTS & TAXONOMY MANAGER ─── */}
+              {activeTab === 'subjects' && (
+                <div className="space-y-6">
                   <div className="clean-card p-5 space-y-4">
                     <div>
                       <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-blue-400" />
-                        Integrated AI Model Catalog
+                        <FolderPlus className="w-4 h-4 text-blue-400" />
+                        Custom Subjects & Curriculum Taxonomy
                       </h3>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Transparent specs, pricing, context windows, and recommended task allocations.
+                        Add custom subjects with specific descriptions. Once added, they are rendered everywhere across the website, assignment cards, filters, and team assignment bubbles.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                      {modelsList.map((m) => (
-                        <div key={m.id} className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2 flex flex-col justify-between">
-                          <div>
+                    {/* Add Subject Form */}
+                    <form onSubmit={handleAddCustomSubject} className="p-4 rounded-xl bg-slate-950/60 border border-white/10 space-y-3 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Subject Name (e.g. Organic Chemistry, Macroeconomics)"
+                          value={newSubjName}
+                          onChange={(e) => setNewSubjName(e.target.value)}
+                          className="sm:col-span-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
+                        />
+                        <select
+                          value={newSubjColor}
+                          onChange={(e) => setNewSubjColor(e.target.value)}
+                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white"
+                        >
+                          <option value="blue">Blue Badge</option>
+                          <option value="purple">Purple Badge</option>
+                          <option value="emerald">Emerald Badge</option>
+                          <option value="amber">Amber Badge</option>
+                          <option value="teal">Teal Badge</option>
+                          <option value="rose">Rose Badge</option>
+                        </select>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        placeholder="Subject Description (e.g. Molecular reaction mechanisms, laboratory write-ups, and synthesis pathways)..."
+                        value={newSubjDesc}
+                        onChange={(e) => setNewSubjDesc(e.target.value)}
+                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white placeholder:text-slate-600"
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={addingSubj || !newSubjName.trim() || !newSubjDesc.trim()}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{addingSubj ? 'Registering Subject...' : 'Register Custom Subject'}</span>
+                      </button>
+                    </form>
+
+                    {/* Active Subjects List */}
+                    <div className="space-y-2 pt-2">
+                      <h4 className="text-xs font-semibold text-slate-300">Active Curriculum Subjects ({customSubjects.length})</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        {customSubjects.map((subj) => (
+                          <div
+                            key={subj.id || subj.name}
+                            className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 flex flex-col justify-between space-y-2"
+                          >
                             <div className="flex items-start justify-between gap-2">
-                              <span className="font-bold text-white text-xs">{m.name}</span>
-                              <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded font-mono shrink-0">
-                                {m.tag || 'Model'}
-                              </span>
+                              <div>
+                                <span className="font-semibold text-white">{subj.name}</span>
+                                {subj.is_custom && (
+                                  <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono ml-2">
+                                    Custom
+                                  </span>
+                                )}
+                              </div>
+                              {subj.is_custom && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCustomSubject(subj.id)}
+                                  className="text-slate-500 hover:text-rose-400 transition cursor-pointer"
+                                  title="Delete Custom Subject"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
-                            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{m.description}</p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">{subj.description}</p>
                           </div>
-                          <div className="pt-2 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] font-mono text-slate-400">
-                            <span>Price: <strong className="text-emerald-400">{m.pricing}</strong></span>
-                            <span>Context: <strong className="text-slate-200">{m.context_window}</strong></span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Granular Task Assignment Matrix */}
-                  <div className="clean-card p-5 space-y-4 text-xs">
-                    <h3 className="text-xs font-semibold text-white">Granular Task Model Routing</h3>
-                    <p className="text-[11px] text-slate-400">
-                      Override model assignments for specific sub-agent pipeline jobs.
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Lecture Summaries */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
-                        <label className="font-semibold text-white flex items-center justify-between">
-                          <span>📑 Bulk Summaries & Transcripts</span>
-                          <span className="text-[10px] text-emerald-400 font-mono">1M Context</span>
-                        </label>
-                        <select
-                          value={settings.model_selection?.summary_model || 'nemotron_3_super'}
-                          onChange={(e) =>
-                            handleSaveSettings({
-                              model_selection: {
-                                ...(settings.model_selection || {}),
-                                summary_model: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                        >
-                          <option value="nemotron_3_super">Nemotron 3 Super (120B-A12B MoE) [Recommended]</option>
-                          <option value="flash">Flash Model Tier</option>
-                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
-                        </select>
-                      </div>
-
-                      {/* Flashcards */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
-                        <label className="font-semibold text-white flex items-center justify-between">
-                          <span>🃏 Flashcards & Keywords</span>
-                          <span className="text-[10px] text-blue-400 font-mono">Ultra-Cheap</span>
-                        </label>
-                        <select
-                          value={settings.model_selection?.flashcard_model || 'nemotron_nano_9b'}
-                          onChange={(e) =>
-                            handleSaveSettings({
-                              model_selection: {
-                                ...(settings.model_selection || {}),
-                                flashcard_model: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                        >
-                          <option value="nemotron_nano_9b">Nemotron Nano (9B v2) [Recommended]</option>
-                          <option value="flash">Flash Model Tier</option>
-                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B</option>
-                        </select>
-                      </div>
-
-                      {/* Rubrics & Practice Tests */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
-                        <label className="font-semibold text-white flex items-center justify-between">
-                          <span>📋 Rubrics & Practice Tests</span>
-                          <span className="text-[10px] text-purple-400 font-mono">HelpSteer2</span>
-                        </label>
-                        <select
-                          value={settings.model_selection?.rubric_model || 'llama_nemotron_70b'}
-                          onChange={(e) =>
-                            handleSaveSettings({
-                              model_selection: {
-                                ...(settings.model_selection || {}),
-                                rubric_model: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                        >
-                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B Instruct [Recommended]</option>
-                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
-                          <option value="pro">Pro Model Tier</option>
-                        </select>
-                      </div>
-
-                      {/* Humanization & Evasion */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
-                        <label className="font-semibold text-white flex items-center justify-between">
-                          <span>🛡️ Humanization & Polish</span>
-                          <span className="text-[10px] text-rose-400 font-mono">High Variance</span>
-                        </label>
-                        <select
-                          value={settings.model_selection?.humanizer_model || 'pro'}
-                          onChange={(e) =>
-                            handleSaveSettings({
-                              model_selection: {
-                                ...(settings.model_selection || {}),
-                                humanizer_model: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
-                        >
-                          <option value="pro">Pro Model Tier (Gemini / Claude Pro) [Recommended]</option>
-                          <option value="deepseek_r1_v3">DeepSeek R1 / V3 Thinking</option>
-                          <option value="llama_nemotron_70b">Llama 3.1 Nemotron 70B</option>
-                        </select>
+                        ))}
                       </div>
                     </div>
-
-                    <SettingScopeControl
-                      settingKey="model_selection"
-                      settingLabel="Model Tier Selection"
-                      scopes={getSettingScopes('model_selection')}
-                      onApplyToAll={handleApplyToAll}
-                      onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
-                    />
                   </div>
                 </div>
               )}
 
-              {/* ─── 4. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
+              {/* ─── 5. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
               {activeTab === 'writing' && (
                 <div className="space-y-6">
                   <div className="clean-card p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-400" />
-                          Custom Writing Style Samples (Private Per User)
-                        </h3>
-                        <p className="text-[11px] text-slate-400">
-                          Upload your past essays or writing samples. The AI emulates your exact authentic tone and rhythm.
-                        </p>
-                      </div>
+                    <div>
+                      <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-400" />
+                        Custom Writing Style Samples (Private Per User)
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Upload your past essays or writing samples. The AI emulates your exact authentic tone, lexical diversity, and cadence.
+                      </p>
                     </div>
 
                     {/* Add Sample Form */}
@@ -1233,18 +1319,21 @@ export default function UserSettingsModal({
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                         <input
                           type="text"
-                          placeholder="Sample Title (e.g. My History Term Paper)"
+                          placeholder="Sample Title (e.g. History Term Paper)"
                           value={sampleTitle}
                           onChange={(e) => setSampleTitle(e.target.value)}
-                          className="sm:col-span-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Target Subject (e.g. History)"
-                          value={sampleSubject}
-                          onChange={(e) => setSampleSubject(e.target.value)}
                           className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
                         />
+                        <select
+                          value={sampleSubject}
+                          onChange={(e) => setSampleSubject(e.target.value)}
+                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white"
+                        >
+                          <option value="All Subjects">All Subjects</option>
+                          {customSubjects.map((s) => (
+                            <option key={s.id || s.name} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
                         <input
                           type="text"
                           placeholder="Target Teacher (e.g. Dr. Miller)"
@@ -1300,21 +1389,11 @@ export default function UserSettingsModal({
                         ))}
                       </div>
                     )}
-
-                    <SettingScopeControl
-                      settingKey="custom_styles"
-                      settingLabel="Custom Writing Styles"
-                      scopes={getSettingScopes('custom_styles')}
-                      onApplyToAll={handleApplyToAll}
-                      onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
-                    />
                   </div>
                 </div>
               )}
 
-              {/* ─── 5. AI DETECTOR TOGGLES ─── */}
+              {/* ─── 6. AI DETECTOR TOGGLES ─── */}
               {activeTab === 'detectors' && (
                 <div className="clean-card p-6 space-y-4">
                   <div>
@@ -1368,20 +1447,10 @@ export default function UserSettingsModal({
                       );
                     })}
                   </div>
-
-                  <SettingScopeControl
-                    settingKey="ai_detectors"
-                    settingLabel="AI Detector Defense Gates"
-                    scopes={getSettingScopes('ai_detectors')}
-                    onApplyToAll={handleApplyToAll}
-                    onRemoveAll={handleRemoveAll}
-                    onAddScope={handleAddScope}
-                    onDeleteScope={handleDeleteScope}
-                  />
                 </div>
               )}
 
-              {/* ─── 6. DATA LAKE & MICRO-CREDITS ─── */}
+              {/* ─── 7. DATA LAKE & MICRO-CREDITS ─── */}
               {activeTab === 'datalake' && (
                 <div className="space-y-6">
                   {/* Micro-Credits Balance Header */}
@@ -1422,13 +1491,11 @@ export default function UserSettingsModal({
 
                   {/* Data Submission Box with Sub-Agent Valuation */}
                   <div className="clean-card p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xs font-semibold text-white">Submit Training Data to Earn Micro-Credits</h3>
-                        <p className="text-[11px] text-slate-400">
-                          A dedicated AI sub-agent evaluates your submission on Relevance, Uniqueness, and Actionability (1–25 cr).
-                        </p>
-                      </div>
+                    <div>
+                      <h3 className="text-xs font-semibold text-white">Submit Training Data to Earn Micro-Credits</h3>
+                      <p className="text-[11px] text-slate-400">
+                        A dedicated AI sub-agent evaluates your submission on Relevance, Uniqueness, and Actionability (1–25 cr).
+                      </p>
                     </div>
 
                     <form onSubmit={handleSubmitDataLake} className="space-y-3 text-xs">
@@ -1486,16 +1553,6 @@ export default function UserSettingsModal({
                         </div>
                       </div>
                     )}
-
-                    <SettingScopeControl
-                      settingKey="data_lake"
-                      settingLabel="Data Lake Contribution"
-                      scopes={getSettingScopes('data_lake')}
-                      onApplyToAll={handleApplyToAll}
-                      onRemoveAll={handleRemoveAll}
-                      onAddScope={handleAddScope}
-                      onDeleteScope={handleDeleteScope}
-                    />
                   </div>
 
                   {/* Submission History */}
@@ -1515,116 +1572,6 @@ export default function UserSettingsModal({
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* ─── 7. CONTEXT & TRIO SCOPES ─── */}
-              {activeTab === 'trio' && (
-                <div className="space-y-6">
-                  <div className="clean-card p-5 space-y-4">
-                    <div>
-                      <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-400" />
-                        Context-Aware TRIO Overrides (Target, Restriction, Inclusion, Override)
-                      </h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Settings cascade: <strong>Global → Subject → Class → Teacher → Assignment</strong>.
-                      </p>
-                    </div>
-
-                    {/* Add TRIO Rule Form */}
-                    <form onSubmit={handleAddTrioRule} className="p-4 rounded-xl bg-slate-950/60 border border-white/10 space-y-3 text-xs">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input
-                          type="text"
-                          placeholder="Rule Name (e.g. History Essays Only)"
-                          value={trioName}
-                          onChange={(e) => setTrioName(e.target.value)}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
-                        />
-                        <select
-                          value={trioTargetType}
-                          onChange={(e) => setTrioTargetType(e.target.value)}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white"
-                        >
-                          <option value="subject">Target: Specific Subject</option>
-                          <option value="teacher">Target: Specific Teacher</option>
-                          <option value="class">Target: Course Code</option>
-                          <option value="assignment">Target: Specific Assignment</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Target Value (e.g. History 101 / Dr. Smith)"
-                          value={trioTargetValue}
-                          onChange={(e) => setTrioTargetValue(e.target.value)}
-                          disabled={trioApplyAll}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600 disabled:opacity-40"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          placeholder="Optional Restriction (e.g. Only for essays)"
-                          value={trioRestriction}
-                          onChange={(e) => setTrioRestriction(e.target.value)}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Optional Inclusion Exception (e.g. Except Lab Reports)"
-                          value={trioInclusion}
-                          onChange={(e) => setTrioInclusion(e.target.value)}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-white placeholder:text-slate-600"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                        <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={trioApplyAll}
-                            onChange={(e) => setTrioApplyAll(e.target.checked)}
-                            className="rounded accent-blue-500"
-                          />
-                          <span className="text-xs font-semibold text-blue-300">Apply to All (Universal Override)</span>
-                        </label>
-
-                        <button
-                          type="submit"
-                          disabled={addingTrio || (!trioApplyAll && !trioTargetValue.trim())}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Save TRIO Scope Rule</span>
-                        </button>
-                      </div>
-                    </form>
-
-                    {/* Active TRIO Rules List */}
-                    {settings.trio_rules?.length > 0 && (
-                      <div className="space-y-2 pt-2">
-                        <h4 className="text-xs font-semibold text-slate-300">Active TRIO Scope Rules</h4>
-                        {settings.trio_rules.map((rule) => (
-                          <div key={rule.id} className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 flex items-center justify-between text-xs">
-                            <div>
-                              <span className="font-semibold text-white">{rule.name}</span>
-                              <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded font-mono ml-2">
-                                {rule.apply_to_all ? 'UNIVERSAL' : `${rule.target?.type}: ${rule.target?.value}`}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTrioRule(rule.id)}
-                              className="text-slate-500 hover:text-rose-400 transition cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -1672,16 +1619,6 @@ export default function UserSettingsModal({
                       </div>
                     ))}
                   </div>
-
-                  <SettingScopeControl
-                    settingKey="auto_approved_rules"
-                    settingLabel="Auto-Approved Rules"
-                    scopes={getSettingScopes('auto_approved_rules')}
-                    onApplyToAll={handleApplyToAll}
-                    onRemoveAll={handleRemoveAll}
-                    onAddScope={handleAddScope}
-                    onDeleteScope={handleDeleteScope}
-                  />
                 </div>
               )}
 
@@ -1720,16 +1657,6 @@ export default function UserSettingsModal({
                       );
                     })}
                   </div>
-
-                  <SettingScopeControl
-                    settingKey="notifications"
-                    settingLabel="Notifications"
-                    scopes={getSettingScopes('notifications')}
-                    onApplyToAll={handleApplyToAll}
-                    onRemoveAll={handleRemoveAll}
-                    onAddScope={handleAddScope}
-                    onDeleteScope={handleDeleteScope}
-                  />
                 </div>
               )}
 

@@ -88,63 +88,74 @@ DEFAULT_PERSONAS = [
 
 AVAILABLE_MODELS = [
     {
-        "id": "nemotron_3_super",
-        "name": "Nemotron 3 Super (120B-A12B MoE)",
+        "id": "moe_high_throughput",
+        "name": "High-Throughput MoE Tier (1M Context)",
         "pricing": "$0.085 – $0.10 / $0.40 – $0.50",
         "context_window": 1000000,
         "recommended_use": "Bulk Lecture Summaries & Long Transcripts",
-        "description": "Active-12B MoE architecture gives high throughput and low pricing with massive context.",
+        "description": "Massive context throughput for audio transcripts and comprehensive multi-week syllabus summaries.",
         "category": "bulk_throughput",
         "min_effort": 1,
     },
     {
-        "id": "nemotron_nano_9b",
-        "name": "Nemotron Nano (9B v2)",
+        "id": "fast_utility_worker",
+        "name": "Ultra-Fast Utility Engine",
         "pricing": "$0.04 / $0.16",
         "context_window": 131072,
         "recommended_use": "Fast Flashcards & Term Extraction",
-        "description": "Ultra-cheap, low-latency utility worker for repetitive keyword extraction.",
+        "description": "Low-latency worker optimized for active recall cards and repetitive keyword extraction.",
         "category": "utility_fast",
         "min_effort": 1,
     },
     {
-        "id": "llama_nemotron_70b",
-        "name": "Llama 3.1 Nemotron 70B Instruct",
+        "id": "instruction_parser",
+        "name": "Instruction-Tuned Rubric Engine",
         "pricing": "$0.20 – $0.35 / $0.40 – $0.80",
         "context_window": 131072,
         "recommended_use": "Grading Rubrics & Practice Test Generation",
-        "description": "Exceptionally strong instruction following from HelpSteer2 post-training.",
+        "description": "High-precision instruction adherence for strict institutional rubrics and diagnostic test banks.",
         "category": "instruction_following",
         "min_effort": 350,
     },
     {
-        "id": "deepseek_r1_v3",
-        "name": "DeepSeek R1 / V3 Thinking",
+        "id": "deep_cognitive_engine",
+        "name": "Deep Cognitive Synthesis Engine",
         "pricing": "$0.14 / $0.55",
         "context_window": 128000,
         "recommended_use": "Cognitive Deep Reasoning & Academic Research",
-        "description": "Flagship multi-step reasoning model with chain-of-thought verification.",
+        "description": "Flagship multi-step reasoning engine with chain-of-thought verification.",
         "category": "deep_reasoning",
         "min_effort": 750,
     },
     {
-        "id": "pro",
-        "name": "Pro Model Tier (Gemini / Claude Pro)",
+        "id": "elite_humanizer_tier",
+        "name": "Elite Style & Humanization Tier",
         "pricing": "$1.25 / $5.00",
         "context_window": 200000,
         "recommended_use": "High-Stakes Multi-Pass Evasion & Complex Synthesis",
-        "description": "Elite synthesis and style replication engine.",
+        "description": "Elite stylistic synthesis and institutional detector defense engine.",
         "category": "elite_synthesis",
         "min_effort": 750,
     },
     {
-        "id": "flash",
-        "name": "Flash Model Tier",
+        "id": "fast_draft_tier",
+        "name": "High-Speed Drafting Engine",
         "pricing": "$0.075 / $0.30",
         "context_window": 1000000,
-        "recommended_use": "Sub-Second Outline Drafting",
-        "description": "Ultra high-speed execution tier.",
+        "recommended_use": "Sub-Second Outline Structuring",
+        "description": "Ultra high-speed execution tier for preliminary assignment scaffolding.",
         "category": "fast_draft",
+        "min_effort": 1,
+    },
+    {
+        "id": "gemini_37_flash",
+        "name": "Gemini 3.7 Flash",
+        "pricing": "Dynamic Compute Credits (Media Heavy)",
+        "context_window": 1000000,
+        "recommended_use": "Video & Image Generation, Vision Analysis & Media Interpretation",
+        "description": "Specialized multimodal sub-agent. Automatically spawned into assignment teams when images, videos, or diagrams are detected.",
+        "category": "multimodal_vision",
+        "is_multimodal": True,
         "min_effort": 1,
     },
 ]
@@ -158,34 +169,74 @@ def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
             "tier": "low_effort",
             "tier_label": "High Speed / Cost-Saving (1–350)",
             "score": score,
-            "description": "Bulk work and term extraction are heavily offloaded to ultra-cheap, fast utility models (Nemotron Nano 9B & Nemotron 3 Super MoE).",
-            "summary_model": "nemotron_3_super",
-            "flashcard_model": "nemotron_nano_9b",
-            "draft_model": "flash",
-            "humanizer_model": "llama_nemotron_70b",
+            "description": "Bulk work and term extraction are heavily offloaded to ultra-efficient high-speed utility tiers.",
+            "summary_model": "moe_high_throughput",
+            "flashcard_model": "fast_utility_worker",
+            "draft_model": "fast_draft_tier",
+            "humanizer_model": "instruction_parser",
         }
     elif score <= 750:
         return {
             "tier": "medium_effort",
             "tier_label": "Balanced Rigor & Evasion (351–750)",
             "score": score,
-            "description": "Balanced orchestration pairing Llama 3.1 Nemotron 70B for rubrics with Flash & Pro synthesis.",
-            "summary_model": "nemotron_3_super",
-            "flashcard_model": "nemotron_nano_9b",
-            "draft_model": "llama_nemotron_70b",
-            "humanizer_model": "pro",
+            "description": "Balanced orchestration pairing instruction-tuned engines for rubrics with high-speed drafting and elite synthesis.",
+            "summary_model": "moe_high_throughput",
+            "flashcard_model": "fast_utility_worker",
+            "draft_model": "instruction_parser",
+            "humanizer_model": "elite_humanizer_tier",
         }
     else:
         return {
             "tier": "high_effort",
             "tier_label": "Flagship Cognitive Synthesis (751–1000)",
             "score": score,
-            "description": "Maximum cognitive depth and reasoning passes offloaded to flagship models like DeepSeek R1/V3 and Pro Tier.",
-            "summary_model": "deepseek_r1_v3",
-            "flashcard_model": "llama_nemotron_70b",
-            "draft_model": "deepseek_r1_v3",
-            "humanizer_model": "pro",
+            "description": "Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship cognitive engines.",
+            "summary_model": "deep_cognitive_engine",
+            "flashcard_model": "instruction_parser",
+            "draft_model": "deep_cognitive_engine",
+            "humanizer_model": "elite_humanizer_tier",
         }
+
+
+DEFAULT_CUSTOM_SUBJECTS = [
+    {
+        "id": "subj_math",
+        "name": "Mathematics",
+        "description": "Calculus, linear algebra, statistics, discrete mathematics, and formal proofs",
+        "color": "blue",
+    },
+    {
+        "id": "subj_english",
+        "name": "English & Literature",
+        "description": "Literary analysis, rhetorical essays, creative writing, and close textual reading",
+        "color": "purple",
+    },
+    {
+        "id": "subj_history",
+        "name": "History & Social Studies",
+        "description": "Historiography, source evaluation, archival synthesis, and political science",
+        "color": "amber",
+    },
+    {
+        "id": "subj_cs",
+        "name": "Computer Science",
+        "description": "Algorithms, data structures, system architecture, and software engineering",
+        "color": "emerald",
+    },
+    {
+        "id": "subj_biology",
+        "name": "Biology & Life Sciences",
+        "description": "Cellular biology, genetics, ecology, physiology, and laboratory reports",
+        "color": "teal",
+    },
+    {
+        "id": "subj_psychology",
+        "name": "Psychology & Cognitive Sciences",
+        "description": "Empirical methodology, cognitive biases, behavioral neuroscience, and case studies",
+        "color": "indigo",
+    },
+]
 
 
 class UserSettingsService:
@@ -214,7 +265,29 @@ class UserSettingsService:
             "effort_score": 500,  # 1 - 1000 scale
             "auto_start": False,  # True = Auto-start execution on assignment bubble organization; False = Manual staging approval
 
-            # 3. Writing Customization & Humanization
+            # 3. Gemini 3.7 Flash Multimodal Specialist Configuration
+            "gemini_multimodal": {
+                "enabled": True,  # Enables Gemini 3.7 Flash
+                "auto_spawn_on_media": True,  # Auto-spawns Gemini 3.7 Flash sub-agent into teams when assignment has media/video
+                "image_generation": True,
+                "video_generation": True,
+                "interpretation": True,
+            },
+
+            # 4. Custom Subjects & Taxonomy
+            "custom_subjects": DEFAULT_CUSTOM_SUBJECTS,
+
+            # 5. Multi-Scoped Subsetting Overrides Map
+            # Key: settingKey -> List of { id, target_type, target_value, value, label }
+            "scoped_subsettings": {
+                "effort_score": [],
+                "academic_level": [],
+                "target_score": [],
+                "auto_start": [],
+                "gemini_multimodal": [],
+            },
+
+            # 6. Writing Customization & Humanization
             "tone": "formal",  # formal | semi_formal | conversational
             "vocabulary_level": "advanced",  # basic | intermediate | advanced | expert
             "sentence_length": "mixed",  # short | medium | long | mixed
@@ -225,7 +298,7 @@ class UserSettingsService:
             "personas": DEFAULT_PERSONAS,
             "custom_style_samples": [],  # Array of { id, title, content, target_subject, target_teacher, extracted_style }
 
-            # 4. Individual AI Detectors
+            # 7. Individual AI Detectors
             "ai_detectors": {
                 "pangram": True,
                 "sapling": True,
@@ -236,17 +309,18 @@ class UserSettingsService:
                 "statistical_burstiness": True,
             },
 
-            # 5. Model Selection & Specialized Task Routing
+            # 8. Model Selection & Specialized Task Routing
             "model_selection": {
-                "summary_model": "nemotron_3_super",  # Nemotron 3 Super (120B-A12B MoE)
-                "flashcard_model": "nemotron_nano_9b",  # Nemotron Nano (9B v2)
-                "rubric_model": "llama_nemotron_70b",  # Llama 3.1 Nemotron 70B Instruct
-                "draft_model": "flash",  # flash | pro | deepseek_r1_v3
-                "humanizer_model": "pro",  # pro | flash
-                "default_model": "nemotron_3_super",
+                "summary_model": "moe_high_throughput",
+                "flashcard_model": "fast_utility_worker",
+                "rubric_model": "instruction_parser",
+                "draft_model": "fast_draft_tier",
+                "humanizer_model": "elite_humanizer_tier",
+                "default_model": "moe_high_throughput",
+                "gemini_multimodal": "gemini_37_flash",
             },
 
-            # 6. Data Lake & Micro-Credits
+            # 9. Data Lake & Micro-Credits
             "datalake_opt_in": True,
             "micro_credits_balance": 21,  # 100 micro-credits = $1.00 USD
             "micro_credits_auto_redeem": False,
@@ -446,6 +520,51 @@ class UserSettingsService:
         user.settings = settings
         db.commit()
         return True
+
+    # ─── Custom Subjects Management ──────────────────────────────────────────
+
+    @staticmethod
+    def add_custom_subject(
+        db: Session,
+        user: User,
+        name: str,
+        description: str,
+        color: Optional[str] = "blue",
+    ) -> Dict[str, Any]:
+        """Adds a user custom subject to their taxonomy."""
+        settings = UserSettingsService.get_user_settings(user)
+        subjects = list(settings.get("custom_subjects", []))
+        subject_id = f"subj_custom_{uuid.uuid4().hex[:6]}"
+        new_subj = {
+            "id": subject_id,
+            "name": name.strip(),
+            "description": description.strip(),
+            "color": color or "blue",
+            "is_custom": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        subjects.append(new_subj)
+        settings["custom_subjects"] = subjects
+        user.settings = settings
+        db.commit()
+        return new_subj
+
+    @staticmethod
+    def delete_custom_subject(db: Session, user: User, subject_id: str) -> bool:
+        """Deletes a custom subject from taxonomy."""
+        settings = UserSettingsService.get_user_settings(user)
+        subjects = [s for s in settings.get("custom_subjects", []) if s.get("id") != subject_id]
+        settings["custom_subjects"] = subjects
+        user.settings = settings
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_custom_subjects(db: Session, user: User) -> List[Dict[str, Any]]:
+        """Returns full list of standard and custom subjects."""
+        settings = UserSettingsService.get_user_settings(user)
+        return settings.get("custom_subjects", DEFAULT_CUSTOM_SUBJECTS)
+
 
     @staticmethod
     def resolve_effective_settings(

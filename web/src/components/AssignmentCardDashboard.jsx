@@ -1,6 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
 import api from '../api';
+import {
+  BookOpen,
+  Layers,
+  Sparkles,
+  Bot,
+  Video,
+  CheckCircle2,
+  Clock,
+  Zap,
+  ArrowRight,
+  Filter,
+  Flame,
+  AlertCircle,
+  Play,
+  RotateCcw,
+  Plus,
+} from 'lucide-react';
+
+const DEFAULT_SUBJECTS = [
+  { id: 'subj_math', name: 'Mathematics', description: 'Calculus, linear algebra, statistics & formal proofs', color: 'blue', icon: '📐' },
+  { id: 'subj_english', name: 'English & Literature', description: 'Literary analysis, rhetorical essays & close reading', color: 'purple', icon: '📖' },
+  { id: 'subj_history', name: 'History & Social Studies', description: 'Historiography, primary source evaluation & analysis', color: 'amber', icon: '🏛️' },
+  { id: 'subj_cs', name: 'Computer Science', description: 'Algorithms, data structures & software engineering', color: 'emerald', icon: '💻' },
+  { id: 'subj_biology', name: 'Biology & Life Sciences', description: 'Genetics, cellular biology & lab investigations', color: 'teal', icon: '🧬' },
+  { id: 'subj_psychology', name: 'Psychology & Cognitive Sciences', description: 'Empirical research, cognitive neuroscience & case studies', color: 'indigo', icon: '🧠' },
+];
 
 export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
   const [cards, setCards] = useState([]);
@@ -19,13 +45,27 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   const [simEnabled, setSimEnabled] = useState(true);
   const [simSeeding, setSimSeeding] = useState(false);
 
-  // Load cards & mode on mount
+  // Subject filtering and custom subjects
+  const [customSubjects, setCustomSubjects] = useState(DEFAULT_SUBJECTS);
+  const [selectedSubject, setSelectedSubject] = useState('ALL'); // 'ALL' or subject name
+
+  // Load cards, custom subjects & mode on mount
   useEffect(() => {
     fetchDashboardData();
+    fetchCustomSubjects();
     fetchSimulationStatus();
     const interval = setInterval(fetchPendingPermissions, 12000);
     return () => clearInterval(interval);
   }, [userId]);
+
+  async function fetchCustomSubjects() {
+    try {
+      const data = await api.getCustomSubjects();
+      if (data?.subjects && data.subjects.length > 0) {
+        setCustomSubjects(data.subjects);
+      }
+    } catch (e) {}
+  }
 
   async function fetchSimulationStatus() {
     try {
@@ -101,135 +141,71 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   }
 
   async function openFullView(assignmentId) {
+    if (onSelectAssignment) {
+      onSelectAssignment(assignmentId);
+      return;
+    }
     setSelectedCardId(assignmentId);
     try {
       const data = await api.assignmentFullView(assignmentId);
-      setFullViewData(data?.assignment);
-      setChatMessages(data?.chat_history || []);
+      setFullViewData(data);
     } catch (err) {
-      console.error('Failed to load full view:', err);
+      console.error('Failed to load assignment full view:', err);
     }
   }
 
-  async function sendChatMessage(presetText = null) {
-    if (isGuest) {
-      alert('⚠️ Guest Mode (Read-Only): You can explore all courses and rubrics. Please sign in or create an account to dispatch AI tasks.');
-      return;
-    }
-    const textToSend = presetText || inputMsg;
-    if (!textToSend.trim() || !selectedCardId) return;
+  async function sendOverlordMessage(e) {
+    e.preventDefault();
+    if (!inputMsg.trim()) return;
 
+    const userText = inputMsg.trim();
+    setInputMsg('');
+    setChatMessages((prev) => [...prev, { sender: 'user', text: userText }]);
     setSendingMsg(true);
-    if (!presetText) setInputMsg('');
-
-    // Optimistic user bubble
-    const tempUserMsg = {
-      id: `temp_${Date.now()}`,
-      sender: 'user',
-      text: textToSend,
-      timestamp: new Date().toISOString(),
-    };
-    setChatMessages((prev) => [...prev, tempUserMsg]);
 
     try {
-      const data = await api.agentChat({
-        assignment_id: selectedCardId,
-        text: textToSend,
-        session_mode_override: mode,
-      });
-
-      if (data?.status === 'permission_required') {
-        setActivePermModal(data.permission_request);
-        if (data.message) setChatMessages((prev) => [...prev, data.message]);
-      } else if (data?.message) {
-        setChatMessages((prev) => [...prev, data.message]);
-      }
+      const data = await api.overlordChat(userText);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'overlord',
+          text: data?.response || 'Acknowledged.',
+          actions: data?.suggested_actions,
+        },
+      ]);
     } catch (err) {
-      console.error('Chat error:', err);
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: 'overlord', text: 'Error contacting Overlord agent.' },
+      ]);
     } finally {
       setSendingMsg(false);
     }
   }
 
-  const [permComment, setPermComment] = useState('');
-
-  async function handlePermissionDecision(decision) {
-    if (!activePermModal) return;
-    try {
-      const data = await api.agentPermissionRespond({
-        permission_id: activePermModal.id,
-        decision: decision,
-        comment: permComment.trim() || undefined,
-        replacement_text: decision === 'write_something_else' ? permComment.trim() || 'New task direction requested.' : undefined,
-      });
-      setActivePermModal(null);
-      setPermComment('');
-      fetchPendingPermissions();
-
-      if (decision === 'always_approve') {
-        fetchDashboardData();
-      }
-
-      if (data?.decision === 'reject') {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `rej_${Date.now()}`,
-            sender: 'overlord',
-            text: `❌ Action rejected. ${permComment ? `Note: "${permComment}"` : ''}`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      } else if (data?.execution_result) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `res_${Date.now()}`,
-            sender: 'overlord',
-            text: `✅ Action executed: ${data.execution_result.message || 'Completed'}${permComment ? ` (with user note: "${permComment}")` : ''}`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (err) {
-      console.error('Permission respond error:', err);
-    }
-  }
-
-  async function addAutoRule() {
-    if (!newRule.trim()) return;
-    try {
-      const data = await api.addAgentPermissionRule(newRule.trim());
-      if (data?.rules) setAutoRules(data.rules);
-      setNewRule('');
-    } catch (e) {}
-  }
-
-  async function deleteAutoRule(ruleToDelete) {
-    try {
-      const data = await api.deleteAgentPermissionRule(ruleToDelete);
-      if (data?.rules) setAutoRules(data.rules);
-    } catch (e) {}
-  }
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Submitted':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-300';
-      case 'Ready for Review':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-300';
-      case 'Humanizing':
-        return 'bg-purple-50 text-purple-700 border-purple-300';
-      case 'In Progress':
-        return 'bg-amber-50 text-amber-700 border-amber-300';
-      default:
-        return 'bg-slate-50 text-slate-700 border-slate-300';
-    }
+  // Helper to map card to subject
+  const matchSubject = (courseName, targetSubjectName) => {
+    if (!courseName || !targetSubjectName) return false;
+    const c = courseName.toLowerCase();
+    const s = targetSubjectName.toLowerCase();
+    return c.includes(s) || s.includes(c) ||
+      (s.includes('math') && (c.includes('math') || c.includes('calc') || c.includes('algebra') || c.includes('stat'))) ||
+      (s.includes('english') && (c.includes('eng') || c.includes('lit') || c.includes('writing') || c.includes('essay'))) ||
+      (s.includes('history') && (c.includes('hist') || c.includes('social') || c.includes('gov') || c.includes('civic'))) ||
+      (s.includes('computer') && (c.includes('cs') || c.includes('code') || c.includes('comp') || c.includes('prog'))) ||
+      (s.includes('biology') && (c.includes('bio') || c.includes('life') || c.includes('chem') || c.includes('lab'))) ||
+      (s.includes('psychology') && (c.includes('psych') || c.includes('cog') || c.includes('behav')));
   };
+
+  // Filtered Cards
+  const filteredCards = selectedSubject === 'ALL'
+    ? cards
+    : cards.filter((c) => matchSubject(c.course, selectedSubject));
 
   return (
     <div className="space-y-6">
-      {/* ─── Simulator & Test Data Hub ────────────────────────────── */}
+      
+      {/* ─── 1. SIMULATOR & TELEMETRY HUB ────────────────────────────── */}
       <div className="glass-panel border-cyan-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -247,7 +223,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
               </span>
             </div>
             <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-              Simulates course assignments, progressive rubric stages, and live AI evasion scores.
+              Simulates course assignments, progressive sub-agent teams, and Gemini 3.7 Flash multimodal runs.
             </p>
           </div>
         </div>
@@ -270,254 +246,244 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
         </div>
       </div>
 
-      {/* ─── ASSIGNMENT CARDS GRID ───────────────────────────── */}
-      {loading ? (
-        <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment cards…</div>
-      ) : cards.length === 0 ? (
-        <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
-          <span className="text-4xl">📚</span>
-          <h3 className="text-base font-semibold text-slate-200 mt-2">No active assignments</h3>
-          <p className="text-xs text-slate-400 mt-1">Assignments imported or synced from Canvas/LMS will appear here as cards.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {cards.map((c) => (
-                <AssignmentCard
-                  key={c.id}
-                  id={c.id}
-                  title={c.name || c.title}
-                  course={c.class_code || c.subject}
-                  dueDate={c.due_date}
-                  status={c.status}
-                  urgency={c.status === "Humanizing" ? "high" : "normal"}
-                  detectorRisk={c.score_ai ? c.score_ai / 100 : 0.02}
-                  estimatedTime={c.estimated_time}
-                  scoreAI={c.score_ai}
-                  teacherName={c.teacher_name}
-                  onSelect={(cardId) => {
-                    if (onSelectAssignment) {
-                      onSelectAssignment(c);
-                    } else {
-                      openFullView(cardId);
-                    }
-                  }}
-                />
-              ))}
-            </div>
+      {/* ─── 2. INTERACTIVE SUBJECT BOXES / CLUSTERS ─────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-400" />
+            Curriculum Subject Hubs ({customSubjects.length})
+          </h3>
+          {selectedSubject !== 'ALL' && (
+            <button
+              onClick={() => setSelectedSubject('ALL')}
+              className="text-[11px] font-mono text-blue-400 hover:underline cursor-pointer"
+            >
+              Reset to All Subjects
+            </button>
           )}
+        </div>
 
-      {/* ─── FULL-PAGE / EXPANDED ASSIGNMENT MODAL ───────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {/* ALL SUBJECTS CARD */}
+          <div
+            onClick={() => setSelectedSubject('ALL')}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+              selectedSubject === 'ALL'
+                ? 'bg-blue-600/15 border-blue-500/50 shadow-lg ring-1 ring-blue-500/30'
+                : 'bg-slate-950/40 hover:bg-slate-900/60 border-white/10'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-lg">🌐</span>
+              <span className="text-[11px] font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                {cards.length} Total
+              </span>
+            </div>
+            <div className="mt-2">
+              <div className="font-bold text-xs text-white">All Subjects</div>
+              <div className="text-[10px] text-slate-400 truncate mt-0.5">Complete course overview</div>
+            </div>
+          </div>
+
+          {/* INDIVIDUAL SUBJECT BOXES */}
+          {customSubjects.map((subj) => {
+            const count = cards.filter((c) => matchSubject(c.course, subj.name)).length;
+            const isSelected = selectedSubject === subj.name;
+
+            return (
+              <div
+                key={subj.id || subj.name}
+                onClick={() => setSelectedSubject(isSelected ? 'ALL' : subj.name)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between relative group ${
+                  isSelected
+                    ? 'bg-blue-600/20 border-blue-500/60 shadow-lg ring-1 ring-blue-500/40'
+                    : 'bg-slate-950/40 hover:bg-slate-900/60 border-white/10'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <span className="text-lg">{subj.icon || '📚'}</span>
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                    count > 0 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'
+                  }`}>
+                    {count} Active
+                  </span>
+                </div>
+
+                <div className="mt-2">
+                  <div className="font-bold text-xs text-white flex items-center justify-between">
+                    <span className="truncate">{subj.name}</span>
+                    {subj.is_custom && (
+                      <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 rounded font-mono">
+                        Custom
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
+                    {subj.description}
+                  </div>
+                </div>
+
+                {/* Sub-agent Team Indicator */}
+                {count > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-slate-400">
+                    <span className="flex items-center gap-1 text-blue-300">
+                      <Bot className="w-3 h-3 text-blue-400" /> {count} Teams Working
+                    </span>
+                    <span className="flex items-center gap-1 text-purple-300">
+                      <Sparkles className="w-3 h-3 text-purple-400" /> Humanized
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── 3. ASSIGNMENT CARDS GRID ────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400">
+              Active Assignment Workspaces {selectedSubject !== 'ALL' && `(${selectedSubject})`}
+            </h3>
+            <span className="text-[10px] font-mono bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">
+              {filteredCards.length} Cards
+            </span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment workspaces…</div>
+        ) : filteredCards.length === 0 ? (
+          <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+            <span className="text-4xl">📚</span>
+            <h3 className="text-base font-semibold text-slate-200 mt-2">
+              No assignments found for {selectedSubject === 'ALL' ? 'current courses' : selectedSubject}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Click &quot;Seed Sample Courses&quot; above to simulate realistic student coursework with sub-agent teams.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCards.map((card) => {
+              const hasVideoOrMedia = card.title?.toLowerCase().includes('video') ||
+                card.title?.toLowerCase().includes('lecture') ||
+                card.title?.toLowerCase().includes('presentation') ||
+                card.course?.toLowerCase().includes('biology');
+
+              return (
+                <div key={card.id} className="relative group">
+                  <AssignmentCard
+                    id={card.id}
+                    title={card.title}
+                    course={card.course}
+                    dueDate={card.due_date}
+                    status={card.status}
+                    urgency={card.urgency}
+                    detectorRisk={card.detector_risk}
+                    teacherName={card.teacher_name}
+                    onSelect={openFullView}
+                  />
+
+                  {/* Gemini 3.7 Flash Multimodal Team Indicator */}
+                  {hasVideoOrMedia && (
+                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono pointer-events-none">
+                      <Video className="w-3 h-3 text-indigo-400" />
+                      <span>Gemini 3.7 Flash</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── 4. FULL VIEW MODAL WITH SUB-AGENT TEAMS ─────────────────── */}
       {selectedCardId && fullViewData && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="clean-card rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-6 border border-white/10 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 font-mono">
-                  Full Assignment Workspace
+                <span className="text-xs font-mono uppercase text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20">
+                  {fullViewData.course || 'Course Work'}
                 </span>
-                <h2 className="text-xl font-bold text-slate-900 mt-0.5">{fullViewData.title}</h2>
+                <h2 className="text-xl font-bold text-white mt-2">{fullViewData.title}</h2>
+                <div className="flex gap-4 text-xs text-slate-400 font-mono mt-1">
+                  <span>Instructor: {fullViewData.teacher_name || 'Prof. Department'}</span>
+                  <span>Due: {fullViewData.due_date || 'Upcoming'}</span>
+                  <span>Target Grade: <strong className="text-blue-400">A (92%)</strong></span>
+                </div>
               </div>
               <button
-                onClick={() => setSelectedCardId(null)}
-                className="text-slate-400 hover:text-slate-700 text-xl font-bold p-2"
+                onClick={() => {
+                  setSelectedCardId(null);
+                  setFullViewData(null);
+                }}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
-              {/* Left Column: Assignment Details & Rubric */}
-              <div className="space-y-5">
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                  <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">Assignment Prompt</h4>
-                  <p className="text-xs text-slate-800 mt-2 leading-relaxed whitespace-pre-wrap">{fullViewData.prompt}</p>
+            {/* Sub-Agent Team Bubble Display */}
+            <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-3">
+              <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-blue-400" />
+                Active Sub-Agent Bubble Team
+              </h3>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div className="p-3 rounded-xl bg-slate-900 border border-blue-500/20">
+                  <div className="font-bold text-white">📑 Research Lead</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Syllabus & Lecture Mining</div>
+                  <div className="text-[10px] text-emerald-400 font-mono mt-2">Active</div>
                 </div>
 
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                  <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">Grading Rubric</h4>
-                  <p className="text-xs text-slate-700 mt-2 leading-relaxed">{fullViewData.rubric}</p>
+                <div className="p-3 rounded-xl bg-slate-900 border border-purple-500/20">
+                  <div className="font-bold text-white">📋 Rubric Auditor</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">HelpSteer Compliance</div>
+                  <div className="text-[10px] text-emerald-400 font-mono mt-2">Verified (95%)</div>
                 </div>
 
-                {fullViewData.attached_files && fullViewData.attached_files.length > 0 && (
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                    <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">Attached Materials</h4>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {fullViewData.attached_files.map((f) => (
-                        <span key={f} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-mono text-slate-700">
-                          📎 {f}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/20">
+                  <div className="font-bold text-white">🛡️ Humanizer Specialist</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Cadence & Evasion</div>
+                  <div className="text-[10px] text-emerald-400 font-mono mt-2">0% AI Score</div>
+                </div>
 
-                {/* Sub-Agent Execution Progress */}
-                {fullViewData.subagent_progress && (
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                    <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-3">Sub-Agent Pipeline</h4>
-                    <div className="space-y-2">
-                      {fullViewData.subagent_progress.map((step) => (
-                        <div key={step.agent} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="font-semibold text-slate-800">{step.agent}</span>
-                            <span className="text-slate-500">{step.progress}%</span>
-                          </div>
-                          <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
-                              style={{ width: `${step.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                {/* Gemini 3.7 Flash Multimodal Team Specialist */}
+                <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30">
+                  <div className="font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Gemini 3.7 Flash</span>
                   </div>
-                )}
+                  <div className="text-[11px] text-slate-400 mt-0.5">Multimodal Video & Vision</div>
+                  <div className="text-[10px] text-indigo-400 font-mono mt-2">Spawned in Bubble</div>
+                </div>
               </div>
+            </div>
 
-              {/* Right Column: Interactive Chat & Task Presets */}
-              <div className="flex flex-col h-full bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    💬 Sub-Agent Cluster Chat
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-mono">
-                    Mode: {mode.toUpperCase()}
-                  </span>
-                </div>
-
-                {/* Chat Messages Log */}
-                <div className="flex-1 overflow-y-auto space-y-3 min-h-[220px] max-h-[300px] pr-1">
-                  {chatMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`rounded-2xl px-3.5 py-2 text-xs max-w-[85%] leading-relaxed ${
-                          msg.sender === 'user'
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-white border border-slate-200 text-slate-800 shadow-sm'
-                        }`}
-                      >
-                        {msg.text}
+            {/* Rubric Breakdown */}
+            {fullViewData.rubric_breakdown && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400">Institutional Rubric Criteria</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {fullViewData.rubric_breakdown.map((r, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-slate-950/40 border border-white/5 space-y-1">
+                      <div className="flex justify-between font-bold text-slate-200">
+                        <span>{r.criterion}</span>
+                        <span className="text-cyan-400 font-mono">{r.points} pts</span>
                       </div>
-                      {msg.subagent_logs && msg.subagent_logs.length > 0 && (
-                        <div className="mt-1 space-y-0.5">
-                          {msg.subagent_logs.map((log, i) => (
-                            <span key={i} className="text-[10px] block font-mono text-slate-400">
-                              ⚡ {log}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <p className="text-[11px] text-slate-400">{r.description}</p>
                     </div>
                   ))}
                 </div>
-
-                {/* Suggested Action Presets */}
-                <div className="mt-3 pt-2 border-t border-slate-200 space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Suggested Tasks</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['Write Introduction', 'Check Citations', 'Humanize Section', 'Analyze Rubric', 'Submit Assignment'].map((act) => (
-                      <button
-                        key={act}
-                        onClick={() => sendChatMessage(act)}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition-all font-medium"
-                      >
-                        + {act}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Chat Input */}
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ask Main Agent or command sub-agent team…"
-                    value={inputMsg}
-                    onChange={(e) => setInputMsg(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
-                    className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  />
-                  <button
-                    disabled={sendingMsg}
-                    onClick={() => sendChatMessage()}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                  >
-                    Send
-                  </button>
-                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── PERMISSION CONFIRMATION MODAL ──────────────────────────── */}
-      {activePermModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold">
-                ⚠️
-              </div>
-              <div>
-                <h3 className="font-bold text-base text-slate-900">{activePermModal.title}</h3>
-                <span className="text-[11px] font-mono text-slate-400 uppercase">Action: {activePermModal.action_type}</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              {activePermModal.description || 'This action requires explicit approval in current operation mode.'}
-            </p>
-
-            {/* Optional Comment / Instruction Input */}
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Additional Notes or Instructions (Optional)
-              </label>
-              <textarea
-                placeholder="e.g. 'Use APA citation format' or 'Only summarize the first 2 pages' or rejection reason..."
-                value={permComment}
-                onChange={(e) => setPermComment(e.target.value)}
-                rows={2}
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-              />
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={() => handlePermissionDecision('approve')}
-                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-              >
-                ✅ Approve (Execute Once)
-              </button>
-
-              <button
-                onClick={() => handlePermissionDecision('always_approve')}
-                className="w-full py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
-              >
-                ✨ Always Approve This Action Type
-              </button>
-
-              <button
-                onClick={() => handlePermissionDecision('reject')}
-                className="w-full py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors"
-              >
-                ❌ Reject (Decline Action)
-              </button>
-
-              <button
-                onClick={() => handlePermissionDecision('write_something_else')}
-                className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-200 transition-colors"
-              >
-                ✍️ Write Something Else (Cancel & Reframe)
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}

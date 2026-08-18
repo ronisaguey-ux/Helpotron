@@ -73,6 +73,12 @@ class StyleSampleRequest(BaseModel):
     target_teacher: Optional[str] = None
 
 
+class CustomSubjectRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80)
+    description: str = Field(..., min_length=3, max_length=300)
+    color: Optional[str] = "blue"
+
+
 class TrioRuleRequest(BaseModel):
     id: Optional[str] = None
     name: str = Field("Custom Context Rule", min_length=2, max_length=100)
@@ -156,6 +162,38 @@ async def delete_style_sample_route(sample_id: str, request: Request, db: Sessio
     user = _get_current_user(request, db)
     user_settings_service.delete_custom_style_sample(db, user, sample_id)
     return {"status": "success", "message": f"Style sample {sample_id} deleted."}
+
+
+# ─── Custom Subjects Taxonomy Management ─────────────────────────────────────
+
+@router.get("/custom-subjects")
+async def get_custom_subjects_route(request: Request, db: Session = Depends(get_db)):
+    """Retrieves standard and custom user subjects."""
+    user = _get_current_user(request, db)
+    subjects = user_settings_service.get_custom_subjects(db, user)
+    return {"status": "success", "subjects": subjects}
+
+
+@router.post("/custom-subjects")
+async def add_custom_subject_route(payload: CustomSubjectRequest, request: Request, db: Session = Depends(get_db)):
+    """Adds a custom user subject with name, description, and color."""
+    user = _get_current_user(request, db)
+    created = user_settings_service.add_custom_subject(
+        db=db,
+        user=user,
+        name=payload.name,
+        description=payload.description,
+        color=payload.color,
+    )
+    return {"status": "success", "subject": created}
+
+
+@router.delete("/custom-subjects/{subject_id}")
+async def delete_custom_subject_route(subject_id: str, request: Request, db: Session = Depends(get_db)):
+    """Deletes a custom user subject."""
+    user = _get_current_user(request, db)
+    user_settings_service.delete_custom_subject(db, user, subject_id)
+    return {"status": "success", "message": f"Subject {subject_id} deleted."}
 
 
 # ─── Context-Aware TRIO (Target, Restriction, Inclusion, Override) Rules ─────
