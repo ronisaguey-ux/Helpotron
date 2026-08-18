@@ -141,7 +141,7 @@ export default function App() {
   });
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
-  const [activeView, setActiveView] = useState('assignments'); // single-view mode
+  const [activeView, setActiveView] = useState('overview'); // single-view mode
   const [sidebarOpen, setSidebarOpen] = useState(true); // collapsible side menu
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
@@ -159,43 +159,36 @@ export default function App() {
 
   const checkSession = async () => {
     try {
-      const me = await api.me();
-      if (me && me.public_id) {
+      const data = await api.me();
+      if (data && data.authenticated) {
         setIsLoggedIn(true);
         setIsGuest(false);
-        setUserIdState(me.public_id);
-        setCredits(me.credits || 10029);
-        setUserPlan(me.plan || 'elite');
-        try {
-          const adminStatus = await api.adminCheck();
-          if (adminStatus && adminStatus.is_admin) {
-            setIsAdmin(true);
-            fetchAdminData();
-          }
-        } catch (e) {}
-        return true;
+        setUserIdState(data.public_id || 'RoniDev');
+        setUserId(data.public_id || 'RoniDev');
+        setCredits(data.credits ?? 10029);
+        setUserPlan(data.plan || 'elite');
+        setIsAdmin(!!data.is_admin);
+        return;
       }
-      return false;
-    } catch (e) {
-      return false;
+    } catch (e) {}
+    const localUser = getUserId();
+    if (localUser && localUser !== 'Guest') {
+      setIsLoggedIn(true);
+      setIsGuest(false);
+      setUserIdState(localUser);
+    } else {
+      setIsGuest(true);
+      setIsLoggedIn(false);
+      setUserIdState('Guest');
     }
   };
 
-  const fetchAdminData = async () => {
-    try {
-      const users = await api.adminUsers();
-      setAdminUsers(users || []);
-      const analytics = await api.adminAnalytics();
-      setAdminAnalytics(analytics);
-    } catch (e) {}
-  };
-
   useEffect(() => {
-    api.health().then(() => setConnected(true)).catch(() => setConnected(false));
     checkSession();
-  }, [serverUrl]);
+  }, []);
 
   const handleLoginSuccess = async (userPublicId) => {
+    setAuthModalOpen(false);
     setIsLoggedIn(true);
     setIsGuest(false);
     setUserIdState(userPublicId);
@@ -249,12 +242,11 @@ export default function App() {
     setOpenAssignment(null);
   };
 
-  // Nav Items for Collapsible Side Menu
+  // Nav Items for Collapsible Side Menu (Assignment Bubbles is inside Overview)
   const menuItems = [
-    { key: 'assignments', label: 'Assignment Bubbles', icon: ClipboardList, badge: null },
+    { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: null },
     { key: 'study_tools', label: 'Study Tools & Flashcards', icon: Sparkles, badge: null },
-    { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
@@ -462,13 +454,14 @@ export default function App() {
                 <div>
                   <h1 className="text-base font-semibold text-white">{currentItem.label}</h1>
                   <p className="text-xs text-slate-400">
-                    {activeView === 'assignments' && 'Manage course assignments, view rubrics, and launch targeted study tools'}
+                    {activeView === 'overview' && 'High-level course progress, study streak tracking, and interactive assignment bubbles'}
                     {activeView === 'study_tools' && 'Interactive active recall flashcards, quiz generator, and summary engine'}
-                    {activeView === 'overview' && 'High-level course progress, study streak tracking, and recent activity'}
+                    {activeView === 'history' && 'Audit trail of past assignments, verification scores, and CSV exports'}
                     {activeView === 'analytics' && 'Study time logs, accuracy trends, and review consistency'}
                     {activeView === 'groups' && 'Collaborative study pools and shared notes'}
                     {activeView === 'referral' && 'Invite classmates and earn study credits'}
                     {activeView === 'billing' && 'Task-based credit packages and billing history'}
+                    {activeView === 'message_admin' && 'Direct encrypted channel to platform admin'}
                     {activeView === 'settings' && 'Study preferences, writing personas, and data export'}
                     {activeView === 'admin' && 'System overview, user administration, and content stats'}
                   </p>
@@ -478,26 +471,6 @@ export default function App() {
 
             {/* Render Active Full-Page View */}
             <div>
-              {activeView === 'assignments' && (
-                openAssignment ? (
-                  <AssignmentDetailView
-                    assignment={openAssignment}
-                    userId={userId}
-                    onBack={() => setOpenAssignment(null)}
-                  />
-                ) : (
-                  <AssignmentCardDashboard
-                    userId={userId}
-                    isGuest={isGuest}
-                    onSelectAssignment={(a) => setOpenAssignment(a)}
-                  />
-                )
-              )}
-
-              {activeView === 'study_tools' && (
-                <StudyToolsHub userId={userId} />
-              )}
-
               {activeView === 'overview' && (
                 openAssignment ? (
                   <AssignmentDetailView
@@ -508,10 +481,15 @@ export default function App() {
                 ) : (
                   <Overview
                     userId={userId}
+                    isGuest={isGuest}
                     onGoTo={(t) => handleSelectView(t)}
                     onSelectAssignment={(a) => setOpenAssignment(a)}
                   />
                 )
+              )}
+
+              {activeView === 'study_tools' && (
+                <StudyToolsHub userId={userId} />
               )}
 
               {activeView === 'analytics' && (
@@ -585,7 +563,7 @@ export default function App() {
   );
 }
 
-function Overview({ userId, onGoTo, onSelectAssignment }) {
+function Overview({ userId, isGuest, onGoTo, onSelectAssignment }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -595,90 +573,48 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
     api.dashboard(userId).then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [userId]);
 
-  if (loading) return <Card className="text-center text-xs text-blue-400 py-8">Loading Overview…</Card>;
-  if (error) return <Card className="text-rose-400 text-xs">{error}</Card>;
-  if (!data) return <Card className="text-slate-400 text-xs">No active study data found.</Card>;
-
-  const active = data.assignments ? data.assignments.filter((a) => a.status !== 'materials_ready' && a.status !== 'draft_ready' && a.status !== 'completed').length : 0;
-
   return (
     <div className="space-y-6">
       {/* Top Quick Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="clean-card p-5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Due Assignments</span>
-            <ClipboardList className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="text-2xl font-bold text-white">{active}</div>
-          <div className="text-[11px] text-slate-400 mt-1">Pending tasks</div>
-        </div>
-
-        <div className="clean-card p-5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Study Streak</span>
-            <Flame className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl font-bold text-amber-300">12 Days</div>
-          <div className="text-[11px] text-emerald-400 mt-1">Top 5% of active learners</div>
-        </div>
-
-        <div className="clean-card p-5">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Active Plan</span>
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="text-2xl font-bold text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
-          <div className="text-[11px] text-blue-300 mt-1 font-mono">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
-        </div>
-      </div>
-
-      {/* Tracked Assignments with Click to Detail */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-sm text-white flex items-center gap-2">
+      {data && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="clean-card p-5">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+              <span>Due Assignments</span>
               <ClipboardList className="w-4 h-4 text-blue-400" />
-              Active Assignments ({data.assignments?.length || 0})
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Click any assignment card to view rubrics & study tools</p>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {data.assignments ? data.assignments.filter((a) => a.status !== 'completed').length : 0}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">Pending coursework tasks</div>
+          </div>
+
+          <div className="clean-card p-5">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+              <span>Study Streak</span>
+              <Flame className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-amber-300">12 Days</div>
+            <div className="text-[11px] text-emerald-400 mt-1">Top 5% of active learners</div>
+          </div>
+
+          <div className="clean-card p-5">
+            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+              <span>Active Plan</span>
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div className="text-2xl font-bold text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
+            <div className="text-[11px] text-blue-300 mt-1 font-mono">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
           </div>
         </div>
+      )}
 
-        {!data.assignments || data.assignments.length === 0 ? (
-          <p className="text-xs text-slate-500 py-4">No tracked assignments yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {data.assignments.map((a) => {
-              const done = Object.values(a.progress || {}).filter(Boolean).length;
-              return (
-                <div
-                  key={a.id}
-                  onClick={() => onSelectAssignment && onSelectAssignment(a)}
-                  className="clean-card p-4 hover:border-blue-500/40 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-white">{a.title}</span>
-                      {statusBadge(a.status)}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-1.5">
-                      <span>Course: <strong className="text-slate-300">{a.course || a.subject || 'GEN-101'}</strong></span>
-                      <span>·</span>
-                      <span>Due: <strong className="text-amber-300">{a.due_date || 'Upcoming'}</strong></span>
-                    </div>
-                    <Progress value={(done / 5) * 100} className="max-w-64 mt-2" />
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-blue-400 font-medium shrink-0">
-                    <span>Inspect</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Assignment Bubbles Section: Coursework and progress are contained inside bubbles */}
+      <AssignmentCardDashboard
+        userId={userId}
+        isGuest={isGuest}
+        onSelectAssignment={onSelectAssignment}
+      />
     </div>
   );
 }
