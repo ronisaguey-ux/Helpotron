@@ -310,17 +310,70 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
               <span>Section 4.0</span>
             </div>
             <h2 className="text-xl font-bold text-white">4. Artificial Intelligence, Large Language Models, and Automated Processing</h2>
-            <div className="text-xs sm:text-sm text-slate-300 space-y-3 leading-relaxed">
+            <div className="text-xs sm:text-sm text-slate-300 space-y-4 leading-relaxed">
               <p>
-                Helpotron deploys a multi-tier foundation model architecture:
+                Helpotron deploys a calibrated multi-model orchestration hierarchy consisting of Google Gemini, DeepSeek, NVIDIA Nemotron, and Meta Llama model families:
               </p>
-              <ul className="list-disc pl-5 space-y-1.5 text-xs text-slate-300">
-                <li><strong>Tier 1 — High-Throughput Models (Gemini 3.1 Flash-Lite, DeepSeek-V4-Flash):</strong> High-frequency flashcards, 2-minute class prep digests, topic classification, and slide structural outlines.</li>
-                <li><strong>Tier 2 — Advanced Reasoning Specialists (Gemini 3.7 Flash, DeepSeek-Chat):</strong> Multi-page comprehensive study guides, pedagogical practice tests, visual layout design logic, and presentation narrative synthesis.</li>
-                <li><strong>Tier 3 — Neural Audio & Transcription (Local Faster-Whisper, Gemini Multimodal Speech):</strong> High-precision lecture transcription with speaker diarization and timestamps.</li>
-                <li><strong>Presentation Pure-Gemini Bypass:</strong> Slide and PowerPoint assignments (.pptx, .ppt, .gslides) bypass general LLMs and execute 100% on Google Gemini with customizable model ratio splits.</li>
-                <li><strong>Zero Data Retention (ZDR):</strong> Commercial enterprise API tiers mandate zero data retention. Your coursework and prompts are never used to train public foundation models.</li>
-              </ul>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 space-y-1.5">
+                  <strong className="text-blue-400 block font-semibold">1. Google Gemini Suite</strong>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                    <li><strong>Gemini 3.1 Flash-Lite:</strong> High-throughput workhorse for lecture audio transcription, OCR, topic classification, and rapid study digests.</li>
+                    <li><strong>Gemini 3.7 Flash:</strong> Flagship multimodal vision engine for image/video assignments, diagram analysis, and complex presentation logic.</li>
+                  </ul>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 space-y-1.5">
+                  <strong className="text-purple-400 block font-semibold">2. DeepSeek Intelligence Suite</strong>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                    <li><strong>DeepSeek-V4 Flash:</strong> Ultra-low latency reasoning specialist for initial scaffolds, active recall flashcards, and summary outlines.</li>
+                    <li><strong>DeepSeek-V4 Pro:</strong> Flagship cognitive engine for multi-step reasoning, mathematical proofs, and deep academic research.</li>
+                  </ul>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 space-y-1.5">
+                  <strong className="text-emerald-400 block font-semibold">3. NVIDIA Nemotron Suite</strong>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                    <li><strong>Nemotron-3 Super:</strong> High-precision instruction following for institutional rubrics and diagnostic test banks.</li>
+                    <li><strong>Nemotron Nano:</strong> Lightweight edge worker for fast active recall question extraction and flashcards.</li>
+                  </ul>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 space-y-1.5">
+                  <strong className="text-amber-400 block font-semibold">4. Meta Llama & Style Engines</strong>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                    <li><strong>Llama 3.3 Nemotron 70B:</strong> Advanced stylistic synthesis engine calibrated to replicate authentic student writing cadence and humanized essays.</li>
+                    <li><strong>Llama 3.1 8B:</strong> Rapid helper model for structural drafting and preliminary assignment scaffolding.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2 text-xs">
+                <strong className="text-white block font-semibold">4.1 Effort Score Dynamic Workload Allocation (1–1000 Scale):</strong>
+                <p>
+                  The user-configured Effort Score determines the proportional distribution of compute across high-throughput and deep-reasoning models:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-slate-300">
+                  <li><strong>Low Effort (1–350):</strong> Offloads 85%+ of workloads to fast utility models (Gemini 3.1 Flash-Lite, DeepSeek-V4 Flash, Nemotron Nano, Llama 3.1 8B) for ultra-fast turnarounds and cost efficiency.</li>
+                  <li><strong>Medium Effort (351–750):</strong> Balanced orchestration pairing instruction-tuned rubric models (Nemotron-3 Super) with selective stylistic drafting passes (Llama 3.3 Nemotron 70B).</li>
+                  <li><strong>High Effort (751–1000):</strong> Maximizes deep multi-pass cognitive synthesis and thorough revision through flagship engines (DeepSeek-V4 Pro, Gemini 3.7 Flash, Llama 3.3 Nemotron 70B).</li>
+                </ul>
+              </div>
+
+              <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/20 space-y-2 text-xs">
+                <strong className="text-blue-300 block font-semibold">4.2 Pure-Gemini Presentation Engine (Nemotron/DeepSeek Bypass):</strong>
+                <p>
+                  Assignments requiring PowerPoint or Google Slides (.pptx, .ppt, .gslides) bypass general subagents and execute 100% on the Google Gemini suite, with the compute split between Gemini 3.1 Flash-Lite and Gemini 3.7 Flash governed by the user's presentation settings.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 text-xs text-slate-300">
+                <strong className="text-white block font-semibold mb-1">4.3 Zero Data Retention (ZDR) Guarantee:</strong>
+                <p>
+                  All commercial enterprise API channels mandate Zero Data Retention (ZDR). Prompts, essays, lecture audio streams, and synthesized study materials are never stored by third-party model providers, nor are they used to train public or private foundation models.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -336,41 +389,47 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
                 <thead className="bg-slate-950 text-slate-300 border-b border-white/10">
                   <tr>
                     <th className="p-3">Subprocessor</th>
-                    <th className="p-3">Function</th>
+                    <th className="p-3">Models / Function</th>
                     <th className="p-3">Jurisdiction</th>
-                    <th className="p-3">Security Safeguards</th>
+                    <th className="p-3">Security & Privacy Safeguards</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 bg-slate-900/60 text-slate-300">
+                <tbody className="divide-y divide-white/5 bg-slate-900/60 text-slate-300 font-mono text-[11px]">
                   <tr>
-                    <td className="p-3 font-semibold text-white">Google Cloud / Gemini</td>
-                    <td className="p-3">AI Inference & Transcription</td>
+                    <td className="p-3 font-semibold text-white">Google Cloud</td>
+                    <td className="p-3 font-sans">Gemini 3.1 Flash-Lite & Gemini 3.7 Flash</td>
                     <td className="p-3">US / Global</td>
-                    <td className="p-3 font-mono">SOC 2 Type II, TLS 1.3, HIPAA</td>
+                    <td className="p-3">SOC 2 Type II, TLS 1.3, HIPAA, Zero-Retention</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-semibold text-white">DeepSeek AI</td>
-                    <td className="p-3">Auxiliary Model Reasoning</td>
+                    <td className="p-3 font-sans">DeepSeek-V4 Flash & DeepSeek-V4 Pro</td>
                     <td className="p-3">Regional API</td>
-                    <td className="p-3 font-mono">Zero-Retention DPA</td>
+                    <td className="p-3">Zero-Retention DPA, Encrypted Transit</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-semibold text-white">NVIDIA / Meta Host</td>
+                    <td className="p-3 font-sans">Nemotron-3 Super, Nemotron Nano, Llama 3.3 70B</td>
+                    <td className="p-3">US / EU</td>
+                    <td className="p-3">Confidential Computing, Zero Data Retention</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-semibold text-white">Stripe, Inc.</td>
-                    <td className="p-3">Subscription Billing</td>
+                    <td className="p-3 font-sans">Subscription & Token Billing</td>
                     <td className="p-3">US / EU</td>
-                    <td className="p-3 font-mono">PCI-DSS Level 1</td>
+                    <td className="p-3">PCI-DSS Level 1 Compliant</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-semibold text-white">Telegram Messenger</td>
-                    <td className="p-3">Optional Notification Relay</td>
+                    <td className="p-3 font-sans">Optional Notification Relay</td>
                     <td className="p-3">Global</td>
-                    <td className="p-3 font-mono">MTProto Protocol</td>
+                    <td className="p-3">MTProto Protocol Encryption</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-semibold text-white">Let's Encrypt (ISRG)</td>
-                    <td className="p-3">SSL/TLS Authority</td>
+                    <td className="p-3 font-sans">SSL/TLS Authority</td>
                     <td className="p-3">US</td>
-                    <td className="p-3 font-mono">Automated ACME Protocol</td>
+                    <td className="p-3">Automated ACME Protocol</td>
                   </tr>
                 </tbody>
               </table>

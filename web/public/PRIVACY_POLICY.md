@@ -134,25 +134,44 @@ Under Article 6 of the General Data Protection Regulation (GDPR) and equivalent 
 
 Helpotron leverages cutting-edge artificial intelligence, machine learning architectures, and natural language processing pipelines. We are deeply committed to transparency, algorithmic integrity, and user agency regarding all automated processing workflows.
 
-### 4.1 AI Model Architecture & Multi-Tier Execution Hierarchy
-- **Tier 1 — High-Efficiency Foundation Models (e.g., Google Gemini 3.1 Flash-Lite, DeepSeek-V4-Flash)**: Deployed for high-frequency, low-latency generative tasks including active recall flashcard generation, 2-minute class prep digests, assignment classification, and structured slide outlines.
-- **Tier 2 — Advanced Reasoning & Multimodal Specialists (e.g., Google Gemini 3.7 Flash, DeepSeek-Chat)**: Deployed for complex multi-page study guide structuring, pedagogical practice test creation with explanatory distractors, visual layout design logic, and presentation narrative synthesis.
-- **Tier 3 — Neural Audio & Transcription Models (e.g., Local Faster-Whisper, Gemini 3.1 Flash-Lite Speech)**: Deployed to convert spoken classroom lectures, technical symposiums, and seminar recordings into formatted textual transcripts with timestamps and speaker tags.
-- **Presentation Tasks (Pure-Gemini Routing)**: Presentation and slide assignments (`.pptx`, `.ppt`, `.gslides`, pitch decks) automatically bypass general LLM subagents and are routed exclusively to Google Gemini, with a user-configurable model ratio split (0–100%).
+### 4.1 AI Model Architecture & Multi-Tier Orchestration Hierarchy
+Helpotron deploys a calibrated multi-model orchestration hierarchy consisting of Google Gemini, DeepSeek, NVIDIA Nemotron, and Meta Llama model families:
 
-### 4.2 Data Handling by Third-Party AI Inference Providers
-When queries, assignment text, or transcripts are submitted to third-party model inference APIs (including Google Cloud Vertex AI / Gemini API, DeepSeek AI, and OpenAI-compatible OmniRoute gateways):
+1. **Google Gemini Suite**:
+   - **Gemini 3.1 Flash-Lite**: High-throughput workhorse for lecture audio transcription, OCR, topic classification, and rapid study digests ($0.50 / $1.50 per 1M tokens).
+   - **Gemini 3.7 Flash**: Flagship multimodal vision engine for image/video assignments, diagram analysis, and complex presentation logic ($2.50 / $10.00 per 1M tokens).
+2. **DeepSeek Intelligence Suite**:
+   - **DeepSeek-V4 Flash**: Ultra-low latency reasoning specialist for initial scaffolds, active recall flashcards, and summary outlines ($0.14 / $0.28 per 1M tokens).
+   - **DeepSeek-V4 Pro**: Flagship cognitive engine for multi-step reasoning, mathematical proofs, and deep academic research ($0.55 / $2.19 per 1M tokens).
+3. **NVIDIA Nemotron Suite**:
+   - **Nemotron-3 Super**: High-precision instruction following for institutional rubrics, strict constraints, and diagnostic test banks ($0.20 / $0.80 per 1M tokens).
+   - **Nemotron Nano**: Lightweight edge worker for fast active recall question extraction and flashcards ($0.05 / $0.20 per 1M tokens).
+4. **Meta Llama & Style Engines**:
+   - **Llama 3.3 Nemotron 70B**: Advanced stylistic synthesis engine calibrated to replicate authentic student writing cadence and humanized essays ($0.35 / $1.40 per 1M tokens).
+   - **Llama 3.1 8B**: Rapid helper model for structural drafting and preliminary assignment scaffolding ($0.08 / $0.30 per 1M tokens).
+
+### 4.2 Effort Score Dynamic Workload Allocation (1–1000 Scale)
+The user-configured Effort Score determines the proportional distribution of compute across high-throughput and deep-reasoning models:
+- **Low Effort (1–350)**: Offloads 85%+ of workloads to fast utility models (Gemini 3.1 Flash-Lite, DeepSeek-V4 Flash, Nemotron Nano, Llama 3.1 8B) for ultra-fast turnarounds and cost efficiency.
+- **Medium Effort (351–750)**: Balanced orchestration pairing instruction-tuned rubric models (Nemotron-3 Super) with selective stylistic drafting passes (Llama 3.3 Nemotron 70B).
+- **High Effort (751–1000)**: Maximizes deep multi-pass cognitive synthesis and thorough revision through flagship engines (DeepSeek-V4 Pro, Gemini 3.7 Flash, Llama 3.3 Nemotron 70B).
+
+### 4.3 Pure-Gemini Presentation Engine (Nemotron/DeepSeek Bypass)
+Presentation and slide assignments (`.pptx`, `.ppt`, `.gslides`, pitch decks) automatically bypass general LLM subagents and are routed exclusively to the Google Gemini suite, with a user-configurable model ratio split (0–100%) between Gemini 3.1 Flash-Lite and Gemini 3.7 Flash.
+
+### 4.4 Data Handling & Zero Data Retention (ZDR) by Third-Party AI Inference Providers
+When queries, assignment text, or transcripts are submitted to third-party model inference APIs (including Google Cloud Gemini, DeepSeek AI, and NVIDIA/Meta Open-Weights inference endpoints):
 - Data is transmitted exclusively over encrypted TLS 1.3 connections.
-- We utilize commercial enterprise API tiers that enforce **Zero Data Retention for Training** by default. Your proprietary assignment prompts, lecture transcripts, and student essays are NOT used by model vendors to train, fine-tune, or improve public foundation models.
+- We utilize commercial enterprise API tiers that enforce **Zero Data Retention (ZDR) for Training** by default. Your proprietary assignment prompts, lecture transcripts, and student essays are NEVER used by model vendors to train, fine-tune, or improve public foundation models.
 - Prompts and contextual transcripts are retained in transient memory solely for the duration required to complete the streaming inference request.
 
-### 4.3 Automated Decision-Making and Student Rights (GDPR Article 22)
+### 4.5 Automated Decision-Making and Student Rights (GDPR Article 22)
 Helpotron does NOT make legal, academic, or disciplinary decisions regarding any student based solely on automated processing.
 - The AI Detection scoring module in `server/draft.py` provides informational, heuristic estimates of text originality and AI likelihood. These scores are designed solely as diagnostic feedback for the student's self-evaluation.
 - Helpotron's automated systems do not grade assignments, submit work to institutions, or communicate with instructors without explicit human agency.
 - Users maintain the right to obtain human intervention, contest any automated feedback, and request manual administrative review of account restrictions.
 
-### 4.4 The Helpotron Research Data Lake & Educational Model Development
+### 4.6 The Helpotron Research Data Lake & Educational Model Development
 - **Voluntary Opt-In**: Users may choose to contribute anonymized assignment prompts, study guides, and grading criteria to the Helpotron Research Data Lake in exchange for promotional billing credits (the Data Discount Program).
 - **De-Identification & Anonymization Standards**: Prior to ingestion into the Data Lake, all submissions pass through an automated privacy sanitizer that strips student names, instructor names, institution names, email addresses, phone numbers, and unique identifiers.
 - **Irreversibility**: Anonymized records within the Data Lake are permanently severed from the user's account ID and cannot be re-identified.
@@ -165,8 +184,9 @@ To operate our globally distributed cloud architecture, Helpotron engages vetted
 
 | Subprocessor | Purpose / Function | Location / Jurisdiction | Data Categories Processed | Security Safeguards |
 | :--- | :--- | :--- | :--- | :--- |
-| **Google Cloud Platform / Gemini API** | AI Model Inference, Transcription, Multimodal Processing | United States / Global | Anonymized prompts, transcripts, audio streams | ISO 27001, SOC 2 Type II, HIPAA compliant, TLS 1.3 |
-| **DeepSeek AI / Moonshot AI** | Auxiliary Language Model Reasoning | Global / Regional Endpoints | Assignment prompts, study guide requests | Enterprise API DPA, Zero Data Retention Agreements |
+| **Google Cloud / Gemini API** | Gemini 3.1 Flash-Lite & 3.7 Flash AI Inference, Transcription, Multimodal Vision | United States / Global | Anonymized prompts, transcripts, audio streams | ISO 27001, SOC 2 Type II, HIPAA compliant, TLS 1.3, Zero-Retention DPA |
+| **DeepSeek AI** | DeepSeek-V4 Flash & DeepSeek-V4 Pro Reasoning Engine | Regional API Endpoints | Assignment prompts, study guide requests | Enterprise API DPA, Zero Data Retention Agreements |
+| **NVIDIA / Meta Host** | Nemotron-3 Super, Nemotron Nano, Llama 3.3 70B Style Engines | United States / EU | Stylistic templates, rubric constraints | Confidential Computing, Zero Data Retention |
 | **Stripe, Inc.** | Payment Processing & Subscription Billing | United States / EU | Billing address, transaction amounts, payment tokens | PCI-DSS Level 1, SOC 1/2/3, Tokenized Vaults |
 | **Telegram Messenger Inc.** | Optional Student Bot Notification Relay | Global | Chat IDs, notification alert text, summary snippets | MTProto Encryption, User-Configurable Disconnect |
 | **VPS Hosting Infrastructure Provider** | Bare-metal VPS, Linux Host Virtualization, Storage | United States / EU Datacenters | Encrypted database files, uploads, application logs | SOC 2 Type II, Physical Datacenter Access Control |
