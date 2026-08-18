@@ -12,7 +12,6 @@ import Navbar from './components/Navbar.jsx';
 import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
-import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import MessageAdminView from './components/MessageAdminView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
@@ -242,11 +241,10 @@ export default function App() {
     setOpenAssignment(null);
   };
 
-  // Nav Items for Collapsible Side Menu (Assignment Bubbles is inside Overview)
+  // Nav Items for Collapsible Side Menu (Assignment Bubbles & Study Tools are inside Overview)
   const menuItems = [
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'history', label: 'Assignment History', icon: HistoryIcon, badge: null },
-    { key: 'study_tools', label: 'Study Tools & Flashcards', icon: Sparkles, badge: null },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
     { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
@@ -455,7 +453,6 @@ export default function App() {
                   <h1 className="text-base font-semibold text-white">{currentItem.label}</h1>
                   <p className="text-xs text-slate-400">
                     {activeView === 'overview' && 'High-level course progress, study streak tracking, and interactive assignment bubbles'}
-                    {activeView === 'study_tools' && 'Interactive active recall flashcards, quiz generator, and summary engine'}
                     {activeView === 'history' && 'Audit trail of past assignments, verification scores, and CSV exports'}
                     {activeView === 'analytics' && 'Study time logs, accuracy trends, and review consistency'}
                     {activeView === 'groups' && 'Collaborative study pools and shared notes'}
@@ -486,10 +483,6 @@ export default function App() {
                     onSelectAssignment={(a) => setOpenAssignment(a)}
                   />
                 )
-              )}
-
-              {activeView === 'study_tools' && (
-                <StudyToolsHub userId={userId} />
               )}
 
               {activeView === 'analytics' && (
