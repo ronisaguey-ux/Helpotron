@@ -34,8 +34,9 @@ class MicroCreditSubmission(BaseModel):
 
 
 class MicroCreditRedeemRequest(BaseModel):
-    amount_credits: int = Field(..., ge=10, le=10000)
-    redemption_method: str = Field("compute_credits", description="compute_credits | cashapp | paypal | stripe")
+    amount_credits: Optional[int] = None
+    amount: Optional[int] = None
+    redemption_method: Optional[str] = "compute_credits"
     destination: Optional[str] = None
     user_id: Optional[str] = None
 
@@ -169,29 +170,32 @@ async def redeem_microcredits(payload: MicroCreditRedeemRequest, db: Session = D
     user_id = payload.user_id or "RoniDev"
     user = db.query(User).filter(User.public_id == user_id).first()
 
-    usd_amount = round(payload.amount_credits / 100.0, 2)
-    compute_credits_gained = payload.amount_credits * 10  # 10 compute credits per micro-credit
+    credits_to_redeem = payload.amount_credits or payload.amount or 20
+    method = payload.redemption_method or payload.destination or "compute_credits"
+
+    usd_amount = round(credits_to_redeem / 100.0, 2)
+    compute_credits_gained = credits_to_redeem * 10  # 10 compute credits per micro-credit
 
     if user:
         settings = user_settings_service.get_user_settings(user)
         bal = settings.get("micro_credits_balance", 0)
-        if bal < payload.amount_credits:
+        if bal < credits_to_redeem:
             raise HTTPException(status_code=400, detail=f"Insufficient micro-credits balance ({bal} available)")
 
-        new_bal = bal - payload.amount_credits
+        new_bal = bal - credits_to_redeem
         user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
 
-        if payload.redemption_method == "compute_credits":
+        if method == "compute_credits":
             user.credits = (user.credits or 0) + compute_credits_gained
             db.commit()
 
     return {
         "status": "success",
-        "redeemed_microcredits": payload.amount_credits,
+        "redeemed_microcredits": credits_to_redeem,
         "usd_equivalent": usd_amount,
-        "compute_credits_credited": compute_credits_gained if payload.redemption_method == "compute_credits" else 0,
-        "redemption_method": payload.redemption_method,
-        "message": f"Successfully processed redemption for {payload.amount_credits} Micro-Credits (${usd_amount} USD).",
+        "compute_credits_credited": compute_credits_gained if method == "compute_credits" else 0,
+        "redemption_method": method,
+        "message": f"Successfully processed redemption for {credits_to_redeem} Micro-Credits (${usd_amount} USD).",
     }
 
 

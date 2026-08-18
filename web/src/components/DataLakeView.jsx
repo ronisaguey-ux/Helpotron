@@ -104,7 +104,9 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
     setRedeemMsg('');
     try {
       const res = await api.redeemMicrocredits({
+        amount_credits: 20,
         amount: 20,
+        redemption_method: 'compute_credits',
         destination: 'compute_credits',
       });
       setRedeemMsg(res.message || '✅ 20 Micro-Credits redeemed successfully toward compute credits.');
