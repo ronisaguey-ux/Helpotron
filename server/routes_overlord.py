@@ -263,6 +263,19 @@ async def add_auto_approved_rule(payload: AutoApprovedRuleRequest, request: Requ
     return {"status": "success", "rules": list(rules)}
 
 
+@router.post("/agent/permissions/rules/delete")
+async def delete_auto_approved_rule_payload(payload: AutoApprovedRuleRequest, request: Request, db: Session = Depends(get_db)):
+    """Removes a custom rule from auto-approved actions using structured JSON payload."""
+    user = _get_current_user(request, db)
+    settings = dict(user.settings or {})
+    target_rule = payload.rule.strip()
+    rules = [r for r in settings.get("auto_approved_actions", []) if r != target_rule]
+    settings["auto_approved_actions"] = rules
+    user.settings = settings
+    db.commit()
+    return {"status": "success", "rules": rules}
+
+
 @router.delete("/agent/permissions/rules/{rule}")
 async def remove_auto_approved_rule(rule: str, request: Request, db: Session = Depends(get_db)):
     """Removes a custom rule from auto-approved actions."""

@@ -120,7 +120,7 @@ export const api = {
   
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),
-  dashboard: (userId) => request(`/api/dashboard?public_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  dashboard: (userId, limit = 50, offset = 0) => request(`/api/dashboard?public_id=${userId || 'RoniDev'}&limit=${limit}&offset=${offset}`, { method: 'GET' }),
   studyGuide: (body) => request('/api/study-guide', { method: 'POST', body: JSON.stringify(body) }),
   flashcards: (body) => request('/api/flashcards', { method: 'POST', body: JSON.stringify(body) }),
   practiceTest: (body) => request('/api/practice-test', { method: 'POST', body: JSON.stringify(body) }),
@@ -128,6 +128,22 @@ export const api = {
   updateSettings: (settings) => request('/api/user/settings', { method: 'PATCH', body: JSON.stringify(settings) }),
   pay: (body) => request('/api/payments', { method: 'POST', body: JSON.stringify(body) }),
   discount: (body) => request('/api/discount', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Assignment Cards & Overlord Dashboard
+  assignmentCards: () => request('/api/assignments/cards', { method: 'GET' }),
+  assignmentFullView: (id) => request(`/api/assignment/${id}/full-view`, { method: 'GET' }),
+  agentMode: () => request('/api/agent/mode', { method: 'GET' }),
+  setAgentMode: (mode) => request('/api/agent/mode', { method: 'POST', body: JSON.stringify({ mode, is_session_override: true }) }),
+  agentPermissionsPending: () => request('/api/agent/permissions/pending', { method: 'GET' }),
+  agentPermissionRespond: (data) => request('/api/agent/permission/respond', { method: 'POST', body: JSON.stringify(data) }),
+  agentPermissionRules: () => request('/api/agent/permissions/rules', { method: 'GET' }),
+  addAgentPermissionRule: (rule) => request('/api/agent/permissions/rules', { method: 'POST', body: JSON.stringify({ rule }) }),
+  deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
+  agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  simulationStatus: () => request('/api/simulation/status', { method: 'GET' }),
+  simulationToggle: (enabled) => request('/api/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
+  simulationSeed: () => request('/api/simulation/seed', { method: 'POST' }),
+  simulationClear: () => request('/api/simulation/clear', { method: 'POST' }),
   
   // Admin endpoints
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),

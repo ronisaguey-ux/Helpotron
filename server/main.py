@@ -91,9 +91,9 @@ app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
 # ─── rate limiting (dependency-free, in-memory) ────────────────────────────
 # Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
 # LLM-costing paths, 30/min elsewhere. 429 with Retry-After when exceeded.
-IP_LIMIT = 600
-USER_STRICT_LIMIT = 20
-USER_GENERAL_LIMIT = 60
+IP_LIMIT = 120
+USER_STRICT_LIMIT = 10
+USER_GENERAL_LIMIT = 30
 STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
 
 
@@ -166,9 +166,8 @@ async def health_check():
     from .database import SessionLocal
     db_status = "ok"
     try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
     except Exception as e:
         db_status = f"error: {e}"
 
@@ -643,9 +642,11 @@ def materials(public_id: str, kind: str,
 
 # ─── dashboard / credits ───────────────────────────────────────────────────
 
-def _build_dashboard_payload(user: User, db: Session) -> dict:
-    assignments = db.query(Assignment).filter_by(user_id=user.id).order_by(Assignment.id.desc()).limit(50).all()
-    materials = db.query(StudyMaterial).filter_by(user_id=user.id).order_by(StudyMaterial.id.desc()).limit(50).all()
+def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: int = 0) -> dict:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    assignments = db.query(Assignment).filter_by(user_id=user.id).order_by(Assignment.id.desc()).offset(offset).limit(limit).all()
+    materials = db.query(StudyMaterial).filter_by(user_id=user.id).order_by(StudyMaterial.id.desc()).offset(offset).limit(limit).all()
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
         credits.CreditTransaction.id.desc()).limit(20).all()
     monthly = credits.TIER_MONTHLY_CREDITS[user.plan]
@@ -659,6 +660,7 @@ def _build_dashboard_payload(user: User, db: Session) -> dict:
         "monthly_credits": None if monthly == float("inf") else monthly,
         "settings": user.settings,
         "discount_balance": user.discount_balance,
+        "pagination": {"limit": limit, "offset": offset},
         "user": {
             "public_id": user.public_id,
             "tier": (user.plan or "pro").capitalize(),
@@ -704,20 +706,22 @@ def _build_dashboard_payload(user: User, db: Session) -> dict:
 def dashboard_query(
     request: Request,
     public_id: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     x_public_id: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     target_id = public_id or x_public_id or request.headers.get("X-Public-ID") or "RoniDev"
     user = get_or_create_user(db, target_id)
     db.commit()
-    return _build_dashboard_payload(user, db)
+    return _build_dashboard_payload(user, db, limit=limit, offset=offset)
 
 
 @app.get("/api/dashboard/{public_id}")
-def dashboard(public_id: str, db: Session = Depends(get_db)):
+def dashboard(public_id: str, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     user = get_or_create_user(db, public_id)
     db.commit()
-    return _build_dashboard_payload(user, db)
+    return _build_dashboard_payload(user, db, limit=limit, offset=offset)
 
 
 @app.get("/api/credits/{public_id}")
@@ -813,8 +817,7 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
     await agent_manager.run(session)
     from .database import SessionLocal
 
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         user = db.query(User).filter(User.public_id == session.public_id).first()
         if session.status == "done" and session.result_text and user:
             t = Transcript(user_id=user.id, assignment_id=session.assignment_id,
@@ -839,8 +842,6 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
                            reason="refund:agent:failed")
             db.commit()
             logger.info("agent %s failed with nothing collected; credit refunded", session.session_id)
-    finally:
-        db.close()
 
 
 @app.get("/api/agent/{session_id}")

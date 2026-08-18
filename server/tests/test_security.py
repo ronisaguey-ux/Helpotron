@@ -185,6 +185,12 @@ def _persist(session, monkeypatch, refunds):
         def close(self):
             pass
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.close()
+
         def get(self, _model, _id):
             return None
 

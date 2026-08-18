@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
-
-const API_BASE = '';
-
-function getHeaders(userId) {
-  return {
-    'Content-Type': 'application/json',
-    'X-Public-ID': userId || 'anon',
-  };
-}
+import api from '../api';
 
 export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
   const [cards, setCards] = useState([]);
@@ -37,21 +29,15 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
 
   async function fetchSimulationStatus() {
     try {
-      const res = await fetch(`${API_BASE}/api/simulation/status`, { headers: getHeaders(userId) });
-      const data = await res.json();
-      if (data.is_enabled !== undefined) setSimEnabled(data.is_enabled);
+      const data = await api.simulationStatus();
+      if (data?.is_enabled !== undefined) setSimEnabled(data.is_enabled);
     } catch (e) {}
   }
 
   async function toggleSimulator() {
     try {
-      const res = await fetch(`${API_BASE}/api/simulation/toggle`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-        body: JSON.stringify({ enabled: !simEnabled }),
-      });
-      const data = await res.json();
-      setSimEnabled(data.is_enabled);
+      const data = await api.simulationToggle(!simEnabled);
+      if (data?.is_enabled !== undefined) setSimEnabled(data.is_enabled);
       fetchDashboardData();
     } catch (e) {}
   }
@@ -59,10 +45,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function seedDemoData() {
     setSimSeeding(true);
     try {
-      await fetch(`${API_BASE}/api/simulation/seed`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-      });
+      await api.simulationSeed();
       await fetchDashboardData();
     } catch (e) {} finally {
       setSimSeeding(false);
@@ -72,10 +55,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function clearDemoData() {
     if (!confirm('Clear synthetic mock assignments?')) return;
     try {
-      await fetch(`${API_BASE}/api/simulation/clear`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-      });
+      await api.simulationClear();
       await fetchDashboardData();
     } catch (e) {}
   }
@@ -83,18 +63,15 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function fetchDashboardData() {
     setLoading(true);
     try {
-      const [cardsRes, modeRes, rulesRes] = await Promise.all([
-        fetch(`${API_BASE}/api/assignments/cards`, { headers: getHeaders(userId) }),
-        fetch(`${API_BASE}/api/agent/mode`, { headers: getHeaders(userId) }),
-        fetch(`${API_BASE}/api/agent/permissions/rules`, { headers: getHeaders(userId) }),
+      const [cardsData, modeData, rulesData] = await Promise.all([
+        api.assignmentCards(),
+        api.agentMode(),
+        api.agentPermissionRules(),
       ]);
-      const cardsData = await cardsRes.json();
-      const modeData = await modeRes.json();
-      const rulesData = await rulesRes.json();
 
-      if (cardsData.cards) setCards(cardsData.cards);
-      if (modeData.operation_mode) setMode(modeData.operation_mode);
-      if (rulesData.rules) setAutoRules(rulesData.rules);
+      if (cardsData?.cards) setCards(cardsData.cards);
+      if (modeData?.operation_mode) setMode(modeData.operation_mode);
+      if (rulesData?.rules) setAutoRules(rulesData.rules);
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
@@ -104,9 +81,8 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
 
   async function fetchPendingPermissions() {
     try {
-      const res = await fetch(`${API_BASE}/api/agent/permissions/pending`, { headers: getHeaders(userId) });
-      const data = await res.json();
-      if (data.pending) {
+      const data = await api.agentPermissionsPending();
+      if (data?.pending) {
         setPendingPermissions(data.pending);
         if (data.pending.length > 0 && !activePermModal) {
           setActivePermModal(data.pending[0]);
@@ -118,11 +94,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function switchMode(newMode) {
     setMode(newMode);
     try {
-      await fetch(`${API_BASE}/api/agent/mode`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-        body: JSON.stringify({ mode: newMode, is_session_override: true }),
-      });
+      await api.setAgentMode(newMode);
     } catch (err) {
       console.error('Failed to update mode:', err);
     }
@@ -131,12 +103,9 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function openFullView(assignmentId) {
     setSelectedCardId(assignmentId);
     try {
-      const res = await fetch(`${API_BASE}/api/assignment/${assignmentId}/full-view`, {
-        headers: getHeaders(userId),
-      });
-      const data = await res.json();
-      setFullViewData(data.assignment);
-      setChatMessages(data.chat_history || []);
+      const data = await api.assignmentFullView(assignmentId);
+      setFullViewData(data?.assignment);
+      setChatMessages(data?.chat_history || []);
     } catch (err) {
       console.error('Failed to load full view:', err);
     }
@@ -163,21 +132,16 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
     setChatMessages((prev) => [...prev, tempUserMsg]);
 
     try {
-      const res = await fetch(`${API_BASE}/api/agent/chat`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-        body: JSON.stringify({
-          assignment_id: selectedCardId,
-          text: textToSend,
-          session_mode_override: mode,
-        }),
+      const data = await api.agentChat({
+        assignment_id: selectedCardId,
+        text: textToSend,
+        session_mode_override: mode,
       });
-      const data = await res.json();
 
-      if (data.status === 'permission_required') {
+      if (data?.status === 'permission_required') {
         setActivePermModal(data.permission_request);
         if (data.message) setChatMessages((prev) => [...prev, data.message]);
-      } else if (data.message) {
+      } else if (data?.message) {
         setChatMessages((prev) => [...prev, data.message]);
       }
     } catch (err) {
@@ -192,17 +156,12 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function handlePermissionDecision(decision) {
     if (!activePermModal) return;
     try {
-      const res = await fetch(`${API_BASE}/api/agent/permission/respond`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-        body: JSON.stringify({
-          permission_id: activePermModal.id,
-          decision: decision,
-          comment: permComment.trim() || undefined,
-          replacement_text: decision === 'write_something_else' ? permComment.trim() || 'New task direction requested.' : undefined,
-        }),
+      const data = await api.agentPermissionRespond({
+        permission_id: activePermModal.id,
+        decision: decision,
+        comment: permComment.trim() || undefined,
+        replacement_text: decision === 'write_something_else' ? permComment.trim() || 'New task direction requested.' : undefined,
       });
-      const data = await res.json();
       setActivePermModal(null);
       setPermComment('');
       fetchPendingPermissions();
@@ -211,7 +170,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
         fetchDashboardData();
       }
 
-      if (data.decision === 'reject') {
+      if (data?.decision === 'reject') {
         setChatMessages((prev) => [
           ...prev,
           {
@@ -221,7 +180,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
             timestamp: new Date().toISOString(),
           },
         ]);
-      } else if (data.execution_result) {
+      } else if (data?.execution_result) {
         setChatMessages((prev) => [
           ...prev,
           {
@@ -240,25 +199,16 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   async function addAutoRule() {
     if (!newRule.trim()) return;
     try {
-      const res = await fetch(`${API_BASE}/api/agent/permissions/rules`, {
-        method: 'POST',
-        headers: getHeaders(userId),
-        body: JSON.stringify({ rule: newRule.trim() }),
-      });
-      const data = await res.json();
-      if (data.rules) setAutoRules(data.rules);
+      const data = await api.addAgentPermissionRule(newRule.trim());
+      if (data?.rules) setAutoRules(data.rules);
       setNewRule('');
     } catch (e) {}
   }
 
   async function deleteAutoRule(ruleToDelete) {
     try {
-      const res = await fetch(`${API_BASE}/api/agent/permissions/rules/${encodeURIComponent(ruleToDelete)}`, {
-        method: 'DELETE',
-        headers: getHeaders(userId),
-      });
-      const data = await res.json();
-      if (data.rules) setAutoRules(data.rules);
+      const data = await api.deleteAgentPermissionRule(ruleToDelete);
+      if (data?.rules) setAutoRules(data.rules);
     } catch (e) {}
   }
 
