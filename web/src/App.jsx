@@ -15,6 +15,7 @@ import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import MessageAdminView from './components/MessageAdminView.jsx';
 import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
+import TermsOfServiceView from './components/TermsOfServiceView.jsx';
 import DataLakeView from './components/DataLakeView.jsx';
 import AssignmentDumpView from './components/AssignmentDumpView.jsx';
 import ExtensionGuideModal from './components/ExtensionGuideModal.jsx';
@@ -50,6 +51,7 @@ import {
   Database,
   UploadCloud,
   Puzzle,
+  FileText,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -271,6 +273,7 @@ export default function App() {
     { key: 'message_admin', label: 'Message Admin', icon: MessageSquare, badge: 'DIRECT' },
     { key: 'settings', label: 'Settings', icon: SettingsIcon, badge: null },
     { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, badge: null },
+    { key: 'terms', label: 'Terms of Service', icon: FileText, badge: null },
   ];
 
   if (effectiveIsAdmin) {
@@ -369,6 +372,7 @@ export default function App() {
           onOpenSettings={() => setSettingsModalOpen(true)}
           onOpenAuth={() => setAuthModalOpen(true)}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
+          onOpenTerms={() => handleSelectView('terms')}
           onOpenExtensionGuide={() => setExtensionGuideOpen(true)}
           onLogout={handleLogout}
         />
@@ -558,6 +562,10 @@ export default function App() {
 
               {activeView === 'privacy' && (
                 <PrivacyPolicyView />
+              )}
+
+              {activeView === 'terms' && (
+                <TermsOfServiceView onBack={() => handleSelectView('overview')} />
               )}
 
               {activeView === 'settings' && (
