@@ -16,6 +16,7 @@ import {
   Search,
 } from 'lucide-react';
 import api from '../api';
+import Button from './ui/Button.jsx';
 
 export default function StudyToolsHub({ userId, initialAssignment = null }) {
   const [activeTool, setActiveTool] = useState('flashcards');
@@ -185,15 +186,16 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
                   className="w-full glass-input rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono placeholder:text-slate-500"
                 />
               </div>
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={handleGenerateFlashcards}
-                disabled={busy}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                isLoading={busy}
+                loadingText="Synthesizing Deck..."
+                className="w-full sm:w-auto px-6 font-mono text-xs font-bold"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{busy ? 'Synthesizing...' : 'Build Flashcards'}</span>
-              </button>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                Build 10 Flashcards
+              </Button>
             </div>
           </div>
 

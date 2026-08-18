@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Lock,
 } from 'lucide-react';
+import Button from './ui/Button.jsx';
 
 export default function ReferralSection({ userId = 'RoniDev' }) {
   const [stats, setStats] = useState(null);
@@ -129,15 +130,17 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
               </div>
             ) : null}
 
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={handleGenerateCode}
-              disabled={generating || !isSubscribed}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-blue-600/20"
+              disabled={!isSubscribed}
+              isLoading={generating}
+              loadingText="Generating 40-Digit Code…"
+              className="w-full sm:w-auto"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
-              <span>{generating ? 'Generating 40-Digit Code…' : 'Issue Fresh 40-Digit Code'}</span>
-            </button>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Issue Fresh 40-Digit Code
+            </Button>
           </div>
         </div>
 
@@ -203,13 +206,16 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             onChange={(e) => setRedeemCodeInput(e.target.value)}
             className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white font-mono text-xs placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
           />
-          <button
+          <Button
             type="submit"
-            disabled={redeeming || !redeemCodeInput.trim()}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition cursor-pointer shrink-0"
+            variant="emerald"
+            disabled={!redeemCodeInput.trim()}
+            isLoading={redeeming}
+            loadingText="Verifying…"
+            className="shrink-0"
           >
-            {redeeming ? 'Verifying…' : 'Redeem +10 Credits'}
-          </button>
+            Redeem +10 Credits
+          </Button>
         </form>
 
         {redeemMsg && (
