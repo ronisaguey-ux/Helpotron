@@ -14,8 +14,8 @@
     --accent-subtle: rgba(59, 130, 246, 0.12);
     
     --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
+    --text-secondary: #cbd5e1; /* High contrast Slate-300 (5.8:1) */
+    --text-muted: #94a3b8; /* WCAG AA Slate-400 (4.5:1) */
     
     --radius-sm: 8px;
     --radius-md: 12px;
