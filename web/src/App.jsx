@@ -11,7 +11,6 @@ import AuthModal from './components/AuthModal.jsx';
 import Navbar from './components/Navbar.jsx';
 import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
-import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
@@ -142,7 +141,6 @@ export default function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
-  const [selectedStudyAssignment, setSelectedStudyAssignment] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Privacy Policy state (must be accepted, else guest read-only)
@@ -154,7 +152,7 @@ export default function App() {
     }
   });
 
-  // Feature Visibility Toggles with safe try/catch deserialization
+  // Clean Visibility Toggles
   const [visibleSections, setVisibleSections] = useState(() => {
     try {
       const saved = localStorage.getItem('helpotron_visible_sections');
@@ -164,9 +162,8 @@ export default function App() {
     } catch (e) {}
     return {
       assignments: true,
-      'study-tools': true,
-      analytics: true,
       overview: true,
+      analytics: true,
       groups: true,
       referral: true,
       billing: true,
@@ -271,17 +268,11 @@ export default function App() {
     setUserIdState('Guest');
   };
 
-  const handleGenerateStudyToolForAssignment = (toolKind, assignment) => {
-    setSelectedStudyAssignment(assignment);
-    setOpenAssignment(null);
-    setTab('study-tools');
-  };
-
+  // Cleaned allTabs: Study tools are now housed inside the maximized assignment view
   const allTabs = [
-    { key: 'assignments', label: '📋 Assignments Hub', icon: ClipboardList, desc: 'Grading rubric tracking and source file maps' },
-    { key: 'study-tools', label: '⚡ Study Tools & Quizzes', icon: Sparkles, desc: 'Active recall models, flashcards and interactive tests' },
-    { key: 'analytics', label: '📊 Data Lake & Telemetry', icon: TrendingUp, desc: 'Real-time pipeline metrics and study time telemetry' },
+    { key: 'assignments', label: '📋 Assignments Hub', icon: ClipboardList, desc: 'Grading rubric tracking, source maps & maximized study tools' },
     { key: 'overview', label: '🧭 Activity Dashboard', icon: Eye, desc: 'High-level course progress and study streak' },
+    { key: 'analytics', label: '📊 Data Lake & Telemetry', icon: TrendingUp, desc: 'Real-time pipeline metrics and study time telemetry' },
     { key: 'groups', label: '👥 Collaborative Groups', icon: Users, desc: 'Shared synchronization peer pools' },
     { key: 'referral', label: '🎁 Referral Program', icon: Award, desc: 'Earn compute credits via invitation nodes' },
     { key: 'billing', label: '💳 Compute Ledger & Top-Up', icon: CreditCard, desc: 'Hardware tier scaling and credit transactions' },
@@ -427,34 +418,24 @@ export default function App() {
                     openAssignment ? (
                       <AssignmentDetailView
                         assignment={openAssignment}
+                        userId={userId}
                         onBack={() => setOpenAssignment(null)}
-                        onGenerateStudyTool={handleGenerateStudyToolForAssignment}
                       />
                     ) : (
                       <AssignmentCardDashboard
                         userId={userId}
                         isGuest={isGuest}
+                        onSelectAssignment={(a) => setOpenAssignment(a)}
                       />
                     )
-                  )}
-
-                  {section.key === 'study-tools' && (
-                    <StudyToolsHub
-                      userId={userId}
-                      initialAssignment={selectedStudyAssignment}
-                    />
-                  )}
-
-                  {section.key === 'analytics' && (
-                    <AnalyticsDashboard userId={userId} />
                   )}
 
                   {section.key === 'overview' && (
                     openAssignment ? (
                       <AssignmentDetailView
                         assignment={openAssignment}
+                        userId={userId}
                         onBack={() => setOpenAssignment(null)}
-                        onGenerateStudyTool={handleGenerateStudyToolForAssignment}
                       />
                     ) : (
                       <Overview
@@ -463,6 +444,10 @@ export default function App() {
                         onSelectAssignment={(a) => setOpenAssignment(a)}
                       />
                     )
+                  )}
+
+                  {section.key === 'analytics' && (
+                    <AnalyticsDashboard userId={userId} />
                   )}
 
                   {section.key === 'groups' && (
@@ -513,7 +498,7 @@ export default function App() {
               open={buddyOpen}
               setOpen={setBuddyOpen}
               onGenerateAction={(kind, query) => {
-                setTab('study-tools');
+                setTab('assignments');
               }}
             />
           </div>
@@ -585,12 +570,8 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
               <ClipboardList className="w-4 h-4 text-cyan-400" />
               Active Course Assignments ({data.assignments?.length || 0})
             </h2>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">Click any assignment card to view grading rubrics & notes</p>
+            <p className="text-xs text-slate-400 font-mono mt-0.5">Click any assignment card to view rubrics & study tools</p>
           </div>
-          <Button variant="outline" onClick={() => onGoTo('study-tools')}>
-            <Sparkles className="w-3.5 h-3.5 mr-1" />
-            Study Tools
-          </Button>
         </div>
 
         {!data.assignments || data.assignments.length === 0 ? (
@@ -618,7 +599,7 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
                     <Progress value={(done / 5) * 100} className="max-w-64 mt-2" />
                   </div>
                   <div className="flex items-center gap-2 font-mono text-xs text-cyan-400 shrink-0">
-                    <span>View Rubric</span>
+                    <span>Inspect Assignment</span>
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
@@ -627,27 +608,6 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
           </div>
         )}
       </div>
-
-      {/* Latest Synthesized Study Materials */}
-      {data.materials && data.materials.length > 0 && (
-        <div className="pt-2">
-          <h2 className="mb-3 font-bold text-sm text-white font-mono flex items-center gap-2">
-            <Layers className="w-4 h-4 text-indigo-400" />
-            Recently Synthesized Study Materials
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {data.materials.slice(0, 8).map((m) => (
-              <span
-                key={m.id}
-                onClick={() => onGoTo('study-tools')}
-                className="px-3 py-1.5 rounded-lg bg-black/40 border border-white/10 hover:border-cyan-500/30 text-xs font-mono text-cyan-300 transition cursor-pointer"
-              >
-                {m.kind}: <strong className="text-white font-semibold">{m.topic || `Material #${m.id}`}</strong>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

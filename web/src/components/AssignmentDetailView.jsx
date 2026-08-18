@@ -13,9 +13,12 @@ import {
   Circle,
   Calendar,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+import StudyToolsHub from './StudyToolsHub.jsx';
 
-export default function AssignmentDetailView({ assignment, onBack, onGenerateStudyTool }) {
+export default function AssignmentDetailView({ assignment, onBack, userId }) {
   const [rubricState, setRubricState] = useState(() => {
     const initial = {};
     const items = assignment.rubric || [
@@ -26,15 +29,20 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
       'Originality & humanized cadence verified',
     ];
     items.forEach((_, idx) => {
-      initial[idx] = idx === 0 || idx === 1; // sample default checked
+      initial[idx] = idx === 0 || idx === 1;
     });
     return initial;
   });
 
   const [notes, setNotes] = useState(() => {
-    return localStorage.getItem(`assignment_notes_${assignment.id}`) || '';
+    try {
+      return localStorage.getItem(`assignment_notes_${assignment.id}`) || '';
+    } catch (e) {
+      return '';
+    }
   });
   const [notesSaved, setNotesSaved] = useState(false);
+  const [showStudyHub, setShowStudyHub] = useState(true);
 
   const rubricItems = assignment.rubric || [
     'Hypothesis & research question clearly stated',
@@ -49,7 +57,9 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
   };
 
   const handleSaveNotes = () => {
-    localStorage.setItem(`assignment_notes_${assignment.id}`, notes);
+    try {
+      localStorage.setItem(`assignment_notes_${assignment.id}`, notes);
+    } catch (e) {}
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);
   };
@@ -58,18 +68,19 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
   const progressPct = Math.round((completedCount / rubricItems.length) * 100);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Back Breadcrumb */}
       <button
+        type="button"
         onClick={onBack}
         className="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
       >
         <ChevronLeft className="w-4 h-4" />
-        <span>Back to Assignments Matrix</span>
+        <span>Back to Assignments Overview</span>
       </button>
 
       {/* Assignment Header Card */}
-      <div className="glass-panel rounded-2xl p-6 border border-cyan-500/20 relative overflow-hidden">
+      <div className="glass-panel rounded-2xl p-6 border border-cyan-500/20 relative overflow-hidden bg-slate-950/40">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -108,8 +119,38 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
         </div>
       </div>
 
+      {/* Embedded Contextual Study Tools & Quizzes */}
+      <div className="glass-panel rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/20 via-slate-900/40 to-cyan-950/20 overflow-hidden">
+        <div
+          onClick={() => setShowStudyHub(!showStudyHub)}
+          className="flex items-center justify-between px-6 py-4 cursor-pointer select-none bg-slate-950/30 hover:bg-slate-950/50 transition-colors border-b border-white/5"
+        >
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div>
+              <h3 className="font-mono text-sm font-bold text-white">⚡ AI Study Tools, Flashcards & Practice Quizzes</h3>
+              <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                Targeted active recall models, lecture summaries and formative tests calibrated for {assignment.title}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="p-1 rounded-lg text-slate-400 hover:text-white transition"
+          >
+            {showStudyHub ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {showStudyHub && (
+          <div className="p-6">
+            <StudyToolsHub userId={userId} initialAssignment={assignment} />
+          </div>
+        )}
+      </div>
+
       {/* Rubric Checklist Section */}
-      <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4">
+      <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-4 bg-slate-950/30">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold font-mono text-white flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-cyan-400" />
@@ -151,60 +192,12 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
         </div>
       </div>
 
-      {/* Contextual Study Tools Integration */}
-      <div className="glass-panel rounded-2xl p-6 border border-indigo-500/20 bg-gradient-to-r from-indigo-950/20 to-cyan-950/20 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold font-mono text-white flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            Contextual Study Synthesizer
-          </h3>
-          <p className="text-xs text-slate-400 font-mono mt-1">
-            Instantly dispatch DeepSeek V4 to generate personalized study materials tailored to this assignment.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button
-            onClick={() => onGenerateStudyTool && onGenerateStudyTool('study_guide', assignment)}
-            className="flex items-center gap-2 p-3 rounded-xl bg-black/40 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/40 text-left transition cursor-pointer text-xs font-mono"
-          >
-            <BookOpen className="w-4 h-4 text-cyan-400 shrink-0" />
-            <div>
-              <div className="text-white font-bold">Generate Study Guide</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Structured outline & key concepts</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onGenerateStudyTool && onGenerateStudyTool('flashcards', assignment)}
-            className="flex items-center gap-2 p-3 rounded-xl bg-black/40 hover:bg-indigo-500/10 border border-white/10 hover:border-indigo-500/40 text-left transition cursor-pointer text-xs font-mono"
-          >
-            <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
-            <div>
-              <div className="text-white font-bold">Generate Flashcards</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Active recall Q/A pairs</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onGenerateStudyTool && onGenerateStudyTool('practice_test', assignment)}
-            className="flex items-center gap-2 p-3 rounded-xl bg-black/40 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/40 text-left transition cursor-pointer text-xs font-mono"
-          >
-            <GraduationCap className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <div className="text-white font-bold">Practice Quiz</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">5 auto-graded MCQs</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
       {/* Personal Notes Section */}
-      <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-3">
+      <div className="glass-panel rounded-2xl p-6 border border-white/10 space-y-3 bg-slate-950/30">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold font-mono text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-slate-400" />
-            My Assignment Notes & Outline
+            My Assignment Notes & Scratchpad
           </h3>
           {notesSaved && (
             <span className="text-xs font-mono text-emerald-400">✅ Saved to Local Storage</span>
@@ -217,6 +210,7 @@ export default function AssignmentDetailView({ assignment, onBack, onGenerateStu
           className="w-full min-h-32 glass-input rounded-xl p-3 text-xs font-mono placeholder:text-slate-600"
         />
         <button
+          type="button"
           onClick={handleSaveNotes}
           className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-mono text-xs transition cursor-pointer"
         >

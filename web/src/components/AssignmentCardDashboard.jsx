@@ -10,7 +10,7 @@ function getHeaders(userId) {
   };
 }
 
-export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false }) {
+export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
@@ -436,7 +436,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
                 <AssignmentCard
                   key={c.id}
                   id={c.id}
-                  title={c.name}
+                  title={c.name || c.title}
                   course={c.class_code || c.subject}
                   dueDate={c.due_date}
                   status={c.status}
@@ -445,7 +445,13 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
                   estimatedTime={c.estimated_time}
                   scoreAI={c.score_ai}
                   teacherName={c.teacher_name}
-                  onSelect={openFullView}
+                  onSelect={(cardId) => {
+                    if (onSelectAssignment) {
+                      onSelectAssignment(c);
+                    } else {
+                      openFullView(cardId);
+                    }
+                  }}
                 />
               ))}
             </div>
