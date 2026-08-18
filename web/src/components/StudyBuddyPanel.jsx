@@ -241,10 +241,10 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
         </div>
         <button
           onClick={() => setOpen(false)}
-          aria-label="Collapse Overlord Panel"
-          className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition cursor-pointer"
+          aria-label="Collapse Overlord panel"
+          className="text-slate-400 hover:text-white p-2 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
         >
-          <PanelRightClose className="w-4 h-4" />
+          <PanelRightClose className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -261,14 +261,17 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
             return (
               <button
                 key={m.key}
+                type="button"
                 onClick={() => handleModeChange(m.key)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono transition cursor-pointer ${
+                aria-label={`Switch operation mode to ${m.label}`}
+                aria-pressed={isSel}
+                className={`min-h-[32px] sm:min-h-[36px] flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-mono transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
                   isSel
                     ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/10 border border-transparent'
                 }`}
               >
-                <Icon className="w-3 h-3" />
+                <Icon className="w-3 h-3" aria-hidden="true" />
                 <span>{m.label}</span>
               </button>
             );
@@ -277,17 +280,23 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
 
         <div className="flex items-center gap-1 font-mono text-[10px]">
           <button
+            type="button"
             onClick={() => setActiveTab('chat')}
-            className={`px-2 py-1 rounded-md ${
-              activeTab === 'chat' ? 'bg-white/10 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+            aria-label="View Overlord chat tab"
+            aria-selected={activeTab === 'chat'}
+            className={`min-h-[32px] px-2.5 py-1 rounded-md transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+              activeTab === 'chat' ? 'bg-white/15 text-white font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
             Chat
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('sandboxes')}
-            className={`px-2 py-1 rounded-md flex items-center gap-1 ${
-              activeTab === 'sandboxes' ? 'bg-white/10 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+            aria-label={`View virtual sandboxes tab, ${sandboxes.length} active`}
+            aria-selected={activeTab === 'sandboxes'}
+            className={`min-h-[32px] px-2.5 py-1 rounded-md flex items-center gap-1 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+              activeTab === 'sandboxes' ? 'bg-white/15 text-white font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
             <span>Sandboxes</span>
@@ -483,13 +492,15 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
       {attachedFiles.length > 0 && (
         <div className="px-3 py-1.5 bg-cyan-950/40 border-t border-cyan-500/20 flex flex-wrap gap-1.5">
           {attachedFiles.map((f, idx) => (
-            <div key={idx} className="flex items-center gap-1 text-[10px] font-mono bg-black/60 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">
+            <div key={idx} className="flex items-center gap-1 text-[10px] font-mono bg-black/60 text-cyan-300 px-2 py-1 rounded border border-cyan-500/30">
               <span className="truncate max-w-32">{f.name}</span>
               <button
+                type="button"
                 onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                className="text-slate-400 hover:text-rose-400 ml-1 cursor-pointer"
+                aria-label={`Remove attached file ${f.name}`}
+                className="text-slate-400 hover:text-rose-400 ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center rounded hover:bg-white/10 cursor-pointer focus-visible:ring-1 focus-visible:ring-rose-400"
               >
-                ×
+                <span aria-hidden="true">×</span>
               </button>
             </div>
           ))}
@@ -511,28 +522,31 @@ export default function StudyBuddyPanel({ open, setOpen, onGenerateAction }) {
             onChange={handleFileUpload}
             multiple
             className="hidden"
+            aria-label="Upload file attachment"
           />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            title="Attach Files (.txt, .pdf, .docx, .mp3, .mp4, .zip, .csv)"
-            className="p-2 text-slate-400 hover:text-cyan-400 transition cursor-pointer rounded-xl hover:bg-white/5"
+            aria-label="Attach files (.txt, .pdf, .docx, .mp3, .mp4, .zip, .csv)"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/30 focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-xl transition cursor-pointer"
           >
-            <Paperclip className="w-4 h-4" />
+            <Paperclip className="w-4 h-4" aria-hidden="true" />
           </button>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Command Overlord (e.g. 'Add 50 credits', 'Run sandbox')..."
-            className="flex-1 glass-input rounded-xl px-3 py-2 text-xs font-mono placeholder:text-slate-500"
+            aria-label="Directive or prompt for Overlord agent"
+            className="flex-1 glass-input rounded-xl px-3 py-2 text-xs font-mono placeholder:text-slate-500 min-h-[44px] focus-visible:ring-2 focus-visible:ring-cyan-400"
           />
           <button
             type="submit"
+            aria-label="Send directive to Overlord agent"
             disabled={(!input.trim() && attachedFiles.length === 0) || busy}
-            className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-40 transition cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-cyan-300 transition cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </form>
       </div>

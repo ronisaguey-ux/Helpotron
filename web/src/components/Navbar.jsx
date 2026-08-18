@@ -178,9 +178,12 @@ export default function Navbar({
           <div className="relative">
             <button
               onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-white/10 transition cursor-pointer"
+              aria-label={`Visibility settings, ${activeTabs.length} of ${allTabs.length} modules visible`}
+              aria-expanded={showVisibilityMenu}
+              aria-haspopup="true"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-white/10 hover:border-cyan-500/40 focus-visible:ring-2 focus-visible:ring-cyan-400 transition cursor-pointer"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" />
               <span className="hidden sm:inline">Visibility ({activeTabs.length}/{allTabs.length})</span>
             </button>
 
@@ -193,7 +196,7 @@ export default function Navbar({
                   {allTabs.map((t) => (
                     <label
                       key={t.key}
-                      className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-slate-200"
+                      className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-cyan-500/10 cursor-pointer text-slate-200 transition"
                     >
                       <span className="font-mono text-xs">{t.label}</span>
                       <input
@@ -212,26 +215,29 @@ export default function Navbar({
           {/* Preferences Button */}
           <button
             onClick={onOpenSettings}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition cursor-pointer"
+            aria-label="Account preferences and persona settings"
+            className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/60 focus-visible:ring-2 focus-visible:ring-indigo-400 transition cursor-pointer"
           >
-            ⚙️ <span className="hidden sm:inline">Preferences</span>
+            <span aria-hidden="true">⚙️</span> <span className="hidden sm:inline">Preferences</span>
           </button>
 
           {/* Auth Button */}
           {isLoggedIn ? (
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition cursor-pointer"
+              aria-label="Sign out of account"
+              className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/60 focus-visible:ring-2 focus-visible:ring-rose-400 transition cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Logout</span>
             </button>
           ) : (
             <button
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/20 transition cursor-pointer"
+              aria-label="Sign in or create account"
+              className="min-h-[36px] flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-300 transition cursor-pointer"
             >
-              <User className="w-3.5 h-3.5" />
+              <User className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Sign In</span>
             </button>
           )}

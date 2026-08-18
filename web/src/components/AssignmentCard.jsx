@@ -85,8 +85,12 @@ export default function AssignmentCard({
           )}
         </div>
 
-        <button className="flex items-center gap-1 text-xs font-mono font-medium text-slate-300 group-hover:text-cyan-300 transition-colors group-hover:translate-x-0.5">
-          Inspect & Execute <ArrowUpRight className="w-3.5 h-3.5" />
+        <button
+          type="button"
+          aria-label={`Inspect and execute assignment: ${title}`}
+          className="flex items-center gap-1 text-xs font-mono font-medium text-slate-300 group-hover:text-cyan-300 transition-colors group-hover:translate-x-0.5 focus-visible:ring-1 focus-visible:ring-cyan-400 rounded px-1"
+        >
+          Inspect & Execute <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
     </div>
