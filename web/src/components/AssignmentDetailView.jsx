@@ -878,3 +878,11 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
     </div>
   );
 }
+
+# <<<FIX A15 - Icon-Only Action Buttons Missing Accessible Names (aria-label)>>>
+# Description: Add descriptive aria-label attributes (e.g. aria-label='Copy study notes to clipboard') to all icon-only button elements.
+# NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX F1 - Vague and Inconsistent Call-to-Action Terminology>>>
+# Description: Standardize all action verbs: 'Generate Study Pack', 'Export to Anki', 'Take Practice Test'.
+# NOTE: Automated placeholder – replace with actual code change.
