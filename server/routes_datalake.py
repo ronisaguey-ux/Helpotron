@@ -166,14 +166,14 @@ async def get_microcredits_history(user_id: Optional[str] = Query(None), db: Ses
 
 @router.post("/datalake/microcredits/redeem")
 async def redeem_microcredits(payload: MicroCreditRedeemRequest, db: Session = Depends(get_db)):
-    """Redeems Micro-Credits for Helpotron compute credits or cash out (100 Micro-Credits = $1.00 USD)."""
+    """Redeems Micro-Credits strictly for Helpotron AI compute credits (Credits cannot be cashed out)."""
     user_id = payload.user_id or "RoniDev"
     user = db.query(User).filter(User.public_id == user_id).first()
 
     credits_to_redeem = payload.amount_credits or payload.amount or 20
-    method = payload.redemption_method or payload.destination or "compute_credits"
+    # Strict platform compute credit policy: credits cannot be cashed out to external accounts
+    method = "compute_credits"
 
-    usd_amount = round(credits_to_redeem / 100.0, 2)
     compute_credits_gained = credits_to_redeem * 10  # 10 compute credits per micro-credit
 
     if user:
@@ -185,17 +185,15 @@ async def redeem_microcredits(payload: MicroCreditRedeemRequest, db: Session = D
         new_bal = bal - credits_to_redeem
         user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
 
-        if method == "compute_credits":
-            user.credits = (user.credits or 0) + compute_credits_gained
-            db.commit()
+        user.credits = (user.credits or 0) + compute_credits_gained
+        db.commit()
 
     return {
         "status": "success",
         "redeemed_microcredits": credits_to_redeem,
-        "usd_equivalent": usd_amount,
-        "compute_credits_credited": compute_credits_gained if method == "compute_credits" else 0,
-        "redemption_method": method,
-        "message": f"Successfully processed redemption for {credits_to_redeem} Micro-Credits (${usd_amount} USD).",
+        "compute_credits_credited": compute_credits_gained,
+        "redemption_method": "compute_credits",
+        "message": f"Successfully converted {credits_to_redeem} Data Lake Micro-Credits into +{compute_credits_gained} Helpotron Compute Credits for platform use.",
     }
 
 

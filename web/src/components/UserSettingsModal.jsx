@@ -2137,25 +2137,18 @@ export default function UserSettingsModal({
                       <div className="text-2xl font-black text-emerald-400 font-mono">
                         {settings.micro_credits_balance || 0} Micro-Credits
                       </div>
-                      <p className="text-[11px] text-slate-400">100 Micro-Credits = $1.00 USD value</p>
+                      <p className="text-[11px] text-slate-400">100 Micro-Credits = 1,000 Helpotron Compute Credits (Platform purchases & generations only)</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <select
-                        value={redeemMethod}
-                        onChange={(e) => setRedeemMethod(e.target.value)}
-                        className="bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
-                      >
-                        <option value="compute_credits">Redeem for Compute Credits</option>
-                        <option value="stripe">Cash Out via Stripe</option>
-                        <option value="cashapp">Cash Out via Cash App</option>
-                        <option value="paypal">Cash Out via PayPal</option>
-                      </select>
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium hidden sm:inline-block">
+                        Helpotron Purchases & Compute Only
+                      </span>
                       <button
                         type="button"
                         onClick={handleRedeemMicrocredits}
                         className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
                       >
-                        Redeem 20 cr ($0.20)
+                        Convert 20 cr (+200 Credits)
                       </button>
                     </div>
                   </div>

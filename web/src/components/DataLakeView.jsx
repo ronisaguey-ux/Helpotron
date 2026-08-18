@@ -143,7 +143,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             <div className="text-xl font-black text-emerald-400 font-mono">
               {microCreditsBalance} cr
             </div>
-            <span className="text-[10px] text-slate-400">100 cr = $1.00 USD</span>
+            <span className="text-[10px] text-slate-400">100 cr = 1,000 Compute Credits (Helpotron only)</span>
           </div>
           <button
             type="button"
@@ -151,7 +151,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             disabled={microCreditsBalance < 20}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition cursor-pointer shrink-0"
           >
-            Redeem 20 cr
+            Convert 20 cr (+200 Credits)
           </button>
         </div>
       </div>
