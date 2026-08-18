@@ -13,5 +13,16 @@ RestartSec=3
 EnvironmentFile=/home/helpotron/helpotron/.env
 LimitNOFILE=65535
 
+# Systemd Security Sandboxing Flags (SEC-INF-002)
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/helpotron/helpotron
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+
 [Install]
 WantedBy=multi-user.target

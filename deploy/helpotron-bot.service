@@ -1,13 +1,23 @@
 [Unit]
-Description=Helpotron Telegram bot
+Description=Helpotron Telegram Bot Daemon
 After=network.target helpotron-api.service
 
 [Service]
-WorkingDirectory=/home/roni/Roni_Workspace/helpotron
-ExecStart=/home/roni/Roni_Workspace/helpotron/.venv/bin/python -m server.telegram_bot
+Type=simple
+User=helpotron
+Group=helpotron
+WorkingDirectory=/home/helpotron/helpotron
+ExecStart=/home/helpotron/helpotron/.venv/bin/python -m server.telegram_bot
 Restart=always
 RestartSec=5
-EnvironmentFile=/home/roni/Roni_Workspace/helpotron/.env
+EnvironmentFile=/home/helpotron/helpotron/.env
+
+# Systemd Security Sandboxing Flags
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/helpotron/helpotron
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
