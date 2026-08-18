@@ -923,8 +923,9 @@ export default function UserSettingsModal({
     }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     try {
+      await api.deleteAccount().catch(() => {});
       localStorage.clear();
     } catch (e) {}
     window.location.reload();
