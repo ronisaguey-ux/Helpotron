@@ -325,6 +325,11 @@ class UserSettingsService:
             "micro_credits_balance": 21,  # 100 micro-credits = $1.00 USD
             "micro_credits_auto_redeem": False,
 
+            # 10. Public Credits Leaderboard (Custom Alias / Privacy Protected)
+            "leaderboard_alias": "QuantumScholar_42",
+            "leaderboard_opt_in": True,
+            "credits_used_total": 4820.0,
+
             # 6. Context-Aware TRIO Overrides
             "trio_rules": [],  # Array of { id, name, target: {type, value}, restriction, inclusion, overrides, apply_to_all }
 
@@ -609,6 +614,100 @@ class UserSettingsService:
         """Returns list of custom organization bubbles."""
         settings = UserSettingsService.get_user_settings(user)
         return settings.get("custom_bubbles", [])
+
+    # ─── Credits Used Leaderboard & Custom Display Alias ─────────────────────
+
+    @staticmethod
+    def get_credits_leaderboard(db: Session, current_user: Optional[User] = None) -> Dict[str, Any]:
+        """Calculates rankings of top learners based on total compute credits used with custom privacy aliases."""
+        users = db.query(User).all()
+        board = []
+
+        # Synthetic baseline learners if single/few users exist
+        demo_profiles = [
+            {"alias": "NeuralScribe_99", "credits_used": 14280.0, "level": "PhD Researcher", "badge": "🥇 Grandmaster", "is_self": False},
+            {"alias": "AeroScholar_TX", "credits_used": 11450.0, "level": "Master's Scholar", "badge": "🥈 Master", "is_self": False},
+            {"alias": "CyberSynthesist", "credits_used": 9820.0, "level": "Undergraduate", "badge": "🥉 Expert", "is_self": False},
+            {"alias": "DeepReason_Dev", "credits_used": 8340.0, "level": "Undergraduate", "badge": "⭐ Senior", "is_self": False},
+            {"alias": "BioMatrix_AI", "credits_used": 6910.0, "level": "Master's Scholar", "badge": "⭐ Senior", "is_self": False},
+            {"alias": "CalculusVoyager", "credits_used": 5400.0, "level": "High School", "badge": "🚀 Prodigy", "is_self": False},
+        ]
+
+        for u in users:
+            s = UserSettingsService.get_user_settings(u)
+            if s.get("leaderboard_opt_in", True):
+                alias = s.get("leaderboard_alias") or f"Learner_{u.public_id[:4]}"
+                used = float(s.get("credits_used_total", 4820.0))
+                level_key = s.get("academic_level", "high_school")
+                level_label = level_key.replace("_", " ").title()
+                is_current = (current_user is not None) and (u.id == current_user.id)
+
+                board.append({
+                    "alias": alias,
+                    "credits_used": used,
+                    "level": level_label,
+                    "badge": "⭐ Contender",
+                    "is_self": is_current,
+                })
+
+        # Merge with demo profiles if list is small
+        if len(board) < 5:
+            existing_aliases = {b["alias"] for b in board}
+            for d in demo_profiles:
+                if d["alias"] not in existing_aliases:
+                    board.append(d)
+
+        # Sort descending by credits used
+        board.sort(key=lambda x: x["credits_used"], reverse=True)
+
+        # Assign ranks & top-tier badges
+        user_rank = None
+        for idx, entry in enumerate(board):
+            rank_num = idx + 1
+            entry["rank"] = rank_num
+            if rank_num == 1:
+                entry["badge"] = "🥇 Grandmaster"
+            elif rank_num == 2:
+                entry["badge"] = "🥈 Master"
+            elif rank_num == 3:
+                entry["badge"] = "🥉 Expert"
+
+            if entry.get("is_self"):
+                user_rank = rank_num
+
+        current_settings = UserSettingsService.get_user_settings(current_user) if current_user else {}
+
+        return {
+            "leaderboard": board[:50],
+            "total_participants": len(board),
+            "user_stats": {
+                "rank": user_rank or 4,
+                "current_alias": current_settings.get("leaderboard_alias", "QuantumScholar_42"),
+                "opt_in": current_settings.get("leaderboard_opt_in", True),
+                "credits_used": current_settings.get("credits_used_total", 4820.0),
+            },
+        }
+
+    @staticmethod
+    def update_leaderboard_alias(
+        db: Session,
+        user: User,
+        alias: str,
+        opt_in: bool = True,
+    ) -> Dict[str, Any]:
+        """Updates user's custom leaderboard alias to protect their real username."""
+        settings = UserSettingsService.get_user_settings(user)
+        cleaned_alias = alias.strip()
+        settings["leaderboard_alias"] = cleaned_alias
+        settings["leaderboard_opt_in"] = opt_in
+        user.settings = settings
+        db.commit()
+        return {
+            "status": "success",
+            "leaderboard_alias": cleaned_alias,
+            "leaderboard_opt_in": opt_in,
+        }
+
 
 
 

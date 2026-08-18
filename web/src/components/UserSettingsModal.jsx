@@ -43,6 +43,7 @@ import {
   Image as ImageIcon,
   FolderPlus,
   Compass,
+  Trophy,
 } from 'lucide-react';
 
 const GRADE_LETTER_MAP = [
@@ -974,6 +975,54 @@ export default function UserSettingsModal({
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Credits Leaderboard & Privacy Display Alias */}
+                  <div className="clean-card p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" />
+                        <div>
+                          <h3 className="text-xs font-semibold text-white">Credits Leaderboard & Display Alias</h3>
+                          <p className="text-[11px] text-slate-400">Configure your custom public name for compute credits rankings. Real username is never exposed.</p>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                        Privacy Shield Active
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                          Custom Leaderboard Display Name
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.leaderboard_alias || 'QuantumScholar_42'}
+                          onChange={(e) => handleSaveSettings({ leaderboard_alias: e.target.value })}
+                          placeholder="e.g. ApexScholar_99"
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-end">
+                        <label className="text-[11px] font-mono text-slate-400 mb-1">
+                          Public Leaderboard Visibility
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSettings({ leaderboard_opt_in: settings.leaderboard_opt_in === false ? true : false })}
+                          className={`w-full py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition cursor-pointer ${
+                            settings.leaderboard_opt_in !== false
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                              : 'bg-slate-800/60 border-white/10 text-slate-400'
+                          }`}
+                        >
+                          {settings.leaderboard_opt_in !== false ? '✅ Visible on Leaderboard' : '🔒 Hidden / Anonymized'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

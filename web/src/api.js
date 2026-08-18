@@ -158,6 +158,8 @@ export const api = {
   softResetData: () => request('/api/user/data/soft-reset', { method: 'POST' }),
   permanentDeleteRequest: (data) => request('/api/user/data/permanent-delete-request', { method: 'POST', body: JSON.stringify(data) }),
   getAssignmentHistory: (subject) => request(`/api/user/assignment-history${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`, { method: 'GET' }),
+  getLeaderboard: () => request('/api/user/leaderboard', { method: 'GET' }),
+  updateLeaderboardAlias: (data) => request('/api/user/leaderboard/alias', { method: 'POST', body: JSON.stringify(data) }),
   addStyleSample: (data) => request('/api/user/styles', { method: 'POST', body: JSON.stringify(data) }),
   deleteStyleSample: (id) => request(`/api/user/styles/${id}`, { method: 'DELETE' }),
   saveTrioRule: (data) => request('/api/user/trio', { method: 'POST', body: JSON.stringify(data) }),

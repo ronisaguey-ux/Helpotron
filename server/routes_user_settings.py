@@ -95,6 +95,11 @@ class PermanentDataDeleteRequest(BaseModel):
     confirmation_text: str = Field(..., description="Must equal 'DELETE PERMANENTLY'")
 
 
+class LeaderboardAliasRequest(BaseModel):
+    alias: str = Field(..., min_length=2, max_length=50)
+    opt_in: bool = True
+
+
 class TrioRuleRequest(BaseModel):
     id: Optional[str] = None
     name: str = Field("Custom Context Rule", min_length=2, max_length=100)
@@ -243,6 +248,29 @@ async def delete_custom_bubble_route(bubble_id: str, request: Request, db: Sessi
     user = _get_current_user(request, db)
     user_settings_service.delete_custom_bubble(db, user, bubble_id)
     return {"status": "success", "message": f"Bubble {bubble_id} deleted."}
+
+
+# ─── Credits Used Leaderboard & Privacy Alias ────────────────────────────────
+
+@router.get("/leaderboard")
+async def get_leaderboard_route(request: Request, db: Session = Depends(get_db)):
+    """Returns top learners ranked by compute credits used with custom anonymized aliases."""
+    user = _get_current_user(request, db)
+    data = user_settings_service.get_credits_leaderboard(db, user)
+    return {"status": "success", **data}
+
+
+@router.post("/leaderboard/alias")
+async def update_leaderboard_alias_route(payload: LeaderboardAliasRequest, request: Request, db: Session = Depends(get_db)):
+    """Updates user's custom leaderboard display alias to prevent username exposure."""
+    user = _get_current_user(request, db)
+    res = user_settings_service.update_leaderboard_alias(
+        db=db,
+        user=user,
+        alias=payload.alias,
+        opt_in=payload.opt_in,
+    )
+    return res
 
 
 # ─── Context-Aware TRIO (Target, Restriction, Inclusion, Override) Rules ─────

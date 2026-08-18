@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
 import ReferralSection from './components/ReferralSection.jsx';
-import StudyGroups from './components/StudyGroups.jsx';
+import CreditLeaderboard from './components/CreditLeaderboard.jsx';
 import UserSettingsModal from './components/UserSettingsModal.jsx';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import AdminAdvancedDashboard from './components/AdminAdvancedDashboard.jsx';
@@ -37,6 +37,7 @@ import {
   ShieldAlert,
   PanelLeftClose,
   PanelLeftOpen,
+  Trophy,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
@@ -249,7 +250,7 @@ export default function App() {
     { key: 'study_tools', label: 'Study Tools & Flashcards', icon: Sparkles, badge: null },
     { key: 'overview', label: 'Overview', icon: Eye, badge: null },
     { key: 'analytics', label: 'Study Analytics', icon: TrendingUp, badge: null },
-    { key: 'groups', label: 'Study Groups', icon: Users, badge: null },
+    { key: 'leaderboard', label: 'Credits Leaderboard', icon: Trophy, badge: 'TOP' },
     { key: 'referral', label: 'Referrals', icon: Award, badge: '+50 cr' },
     { key: 'billing', label: 'Plans & Credits', icon: CreditCard, badge: null },
     { key: 'settings', label: 'Settings', icon: SettingsIcon, badge: null },
@@ -496,8 +497,8 @@ export default function App() {
                 <AnalyticsDashboard userId={userId} />
               )}
 
-              {activeView === 'groups' && (
-                <StudyGroups userId={userId} />
+              {activeView === 'leaderboard' && (
+                <CreditLeaderboard userId={userId} userCredits={credits} />
               )}
 
               {activeView === 'referral' && (

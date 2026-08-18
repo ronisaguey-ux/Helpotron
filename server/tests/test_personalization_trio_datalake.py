@@ -314,4 +314,40 @@ def test_custom_bubbles_crud_and_data_export_purge():
     assert "history" in h_resp.json()
 
 
+def test_credits_leaderboard_and_custom_alias():
+    """Verify credits used leaderboard ranking, anonymity, and custom alias updates."""
+    from fastapi.testclient import TestClient
+    from server.main import app
+
+    client = TestClient(app)
+
+    # 1. Fetch default leaderboard
+    l_resp = client.get("/api/user/leaderboard")
+    assert l_resp.status_code == 200
+    data = l_resp.json()
+    assert "leaderboard" in data
+    assert len(data["leaderboard"]) >= 3
+    # Check that entries have alias and credits_used
+    first = data["leaderboard"][0]
+    assert "alias" in first
+    assert "credits_used" in first
+    assert "rank" in first
+    assert first["rank"] == 1
+
+    # 2. Update custom leaderboard alias
+    update_resp = client.post(
+        "/api/user/leaderboard/alias",
+        json={"alias": "ApexScholar_777", "opt_in": True},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["leaderboard_alias"] == "ApexScholar_777"
+    assert update_resp.json()["leaderboard_opt_in"] is True
+
+    # 3. Verify updated alias reflects in leaderboard
+    l_resp2 = client.get("/api/user/leaderboard")
+    assert l_resp2.status_code == 200
+    assert l_resp2.json()["user_stats"]["current_alias"] == "ApexScholar_777"
+
+
+
 
