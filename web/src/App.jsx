@@ -392,7 +392,7 @@ export default function App() {
                         key={item.key}
                         type="button"
                         onClick={() => handleSelectView(item.key)}
-                        aria-label={`Navigate to ${item.label}`}
+                        aria-label={item.label}
                         aria-pressed={isSelected}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition cursor-pointer select-none ${
                           isSelected

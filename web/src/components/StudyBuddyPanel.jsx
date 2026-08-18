@@ -304,7 +304,7 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
                   </div>
                 )}
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 px-1">{m.time}</span>
+              <span className="text-[10px] text-slate-400 mt-1 px-1">{m.time}</span>
             </div>
           );
         })}
@@ -327,6 +327,7 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
                 type="button"
                 onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))}
                 className="hover:text-white"
+                aria-label={`Remove file ${file.name}`}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -354,8 +355,8 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            title="Attach assignment documents or lecture audio"
-            className="text-slate-400 hover:text-blue-400 transition"
+            aria-label="Attach assignment documents or lecture audio"
+            className="text-slate-400 hover:text-blue-400 transition cursor-pointer p-1"
           >
             <Paperclip className="w-4 h-4" />
           </button>
@@ -364,12 +365,14 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Instruct Overlord Agent or ask questions..."
-            className="flex-1 bg-transparent border-none text-xs text-slate-100 placeholder-slate-500 focus:outline-none"
+            aria-label="Overlord Agent prompt input"
+            className="flex-1 bg-transparent border-none text-xs text-slate-100 placeholder-slate-400 focus:outline-none"
           />
           <button
             type="submit"
             disabled={!input.trim() && attachedFiles.length === 0}
-            className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 transition"
+            aria-label="Send message to Overlord Agent"
+            className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 transition cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
           </button>
