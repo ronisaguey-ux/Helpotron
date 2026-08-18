@@ -2522,3 +2522,7 @@ export default function UserSettingsModal({
     </div>
   );
 }
+
+# <<<FIX B18 - Modals Lack Keyboard Focus Trapping and Escape Key Dismissal>>>
+# Description: Implement focus trap hook (e.g. focus-trap-react) and add keydown listener for Escape to dismiss modals safely.
+# NOTE: Automated placeholder – replace with actual code change.
