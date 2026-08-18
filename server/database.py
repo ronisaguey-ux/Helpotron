@@ -60,6 +60,11 @@ class User(Base):
     preferred_model: Mapped[str] = mapped_column(String(64), default="deepseek-flash")
     organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(32), default="member")  # admin, moderator, member
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    subscription_status: Mapped[str] = mapped_column(String(32), default="none")  # none, trialing, active, past_due, canceled
+    is_student_verified: Mapped[bool] = mapped_column(default=False)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="user", cascade="all, delete-orphan")
@@ -71,6 +76,21 @@ class User(Base):
     referred = relationship("Referral", foreign_keys="Referral.referee_id", back_populates="referee", cascade="all, delete-orphan")
     study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
     organization = relationship("Organization", foreign_keys="User.organization_id", back_populates="members")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserSession(Base):
+    """Persistent user session for authentication."""
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    public_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+    user = relationship("User", back_populates="sessions")
 
 
 class Organization(Base):
@@ -303,6 +323,16 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at DATETIME"))
                 if "preferred_model" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN preferred_model VARCHAR(64) DEFAULT 'deepseek-flash'"))
+                if "stripe_customer_id" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128)"))
+                if "stripe_subscription_id" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN stripe_subscription_id VARCHAR(128)"))
+                if "subscription_status" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN subscription_status VARCHAR(32) DEFAULT 'none'"))
+                if "is_student_verified" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_student_verified BOOLEAN DEFAULT 0"))
+                if "last_active_at" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
 
                 columns_materials = [row[1] for row in conn.execute(text("PRAGMA table_info(study_materials)")).fetchall()]
                 if "shared_with" not in columns_materials:

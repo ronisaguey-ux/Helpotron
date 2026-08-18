@@ -1,5 +1,9 @@
-"""Payments — provider registry with honest stubs and credit application."""
+"""Payments — Stripe Checkout subscriptions with manual fallback providers."""
 from __future__ import annotations
+
+import logging
+import os
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -7,7 +11,142 @@ from .database import Payment, User, CreditTransaction
 from .config import config
 from .credits import compute_applicable_discount, apply_discount
 
+logger = logging.getLogger("helpotron.payments")
+
 SUPPORTED_PROVIDERS = {"stripe", "cashapp", "zelle", "venmo", "paypal"}
+
+# Stripe price IDs (set these in .env)
+STRIPE_PRICE_IDS = {
+    "basic": os.getenv("STRIPE_PRICE_BASIC", ""),
+    "pro": os.getenv("STRIPE_PRICE_PRO", ""),
+    "elite": os.getenv("STRIPE_PRICE_ELITE", ""),
+}
+
+TIER_CREDITS = {"basic": 300, "pro": 600, "elite": 1500}
+TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
+
+
+def _stripe_enabled() -> bool:
+    return bool(config.stripe_secret_key and config.stripe_webhook_secret)
+
+
+def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool = False) -> dict:
+    """Create a Stripe Checkout session for a subscription."""
+    if not _stripe_enabled():
+        return {
+            "status": "stripe_not_configured",
+            "message": "Stripe is not configured. Please contact support to subscribe.",
+        }
+
+    import stripe
+    stripe.api_key = config.stripe_secret_key
+
+    price_id = STRIPE_PRICE_IDS.get(plan, "")
+    if not price_id:
+        raise ValueError(f"No Stripe price configured for plan '{plan}'")
+
+    # Create or retrieve customer
+    customer_id = user.stripe_customer_id
+    if not customer_id:
+        customer = stripe.Customer.create(
+            email=user.public_id,
+            metadata={"public_id": user.public_id},
+        )
+        customer_id = customer.id
+        user.stripe_customer_id = customer_id
+        db.commit()
+
+    # Create checkout session
+    session = stripe.checkout.Session.create(
+        customer=customer_id,
+        mode="subscription",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?checkout=success",
+        cancel_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?checkout=cancel",
+        subscription_data={
+            "trial_period_days": 7 if not is_annual else 0,
+            "metadata": {"plan": plan, "is_annual": str(is_annual)},
+        },
+        metadata={"plan": plan, "is_annual": str(is_annual)},
+    )
+
+    return {"status": "checkout_created", "checkout_url": session.url, "session_id": session.id}
+
+
+def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
+    """Handle Stripe webhook events."""
+    import stripe
+    stripe.api_key = config.stripe_secret_key
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, config.stripe_webhook_secret
+        )
+    except ValueError as e:
+        raise ValueError(f"Invalid payload: {e}")
+    except stripe.error.SignatureVerificationError as e:
+        raise ValueError(f"Invalid signature: {e}")
+
+    from .database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            customer_id = session.get("customer")
+            subscription_id = session.get("subscription")
+            plan = session.get("metadata", {}).get("plan", "basic")
+            user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
+            if user:
+                user.stripe_subscription_id = subscription_id
+                user.subscription_status = "active"
+                user.plan = plan
+                user.credits += TIER_CREDITS.get(plan, 0)
+                db.add(CreditTransaction(
+                    user_id=user.id,
+                    delta=TIER_CREDITS.get(plan, 0),
+                    reason=f"subscription:{plan}:checkout",
+                ))
+                db.commit()
+                logger.info("Subscription activated for user %s (plan: %s)", user.public_id, plan)
+
+        elif event["type"] == "invoice.payment_succeeded":
+            invoice = event["data"]["object"]
+            subscription_id = invoice.get("subscription")
+            user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
+            if user:
+                user.subscription_status = "active"
+                user.credits += TIER_CREDITS.get(user.plan, 0)
+                db.add(CreditTransaction(
+                    user_id=user.id,
+                    delta=TIER_CREDITS.get(user.plan, 0),
+                    reason=f"subscription:{user.plan}:renewal",
+                ))
+                db.commit()
+                logger.info("Subscription renewed for user %s", user.public_id)
+
+        elif event["type"] == "invoice.payment_failed":
+            event = event["data"]["object"]
+            subscription_id = event.get("subscription")
+            user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
+            if user:
+                user.subscription_status = "past_due"
+                db.commit()
+                logger.warning("Payment failed for user %s", user.public_id)
+
+        elif event["type"] == "customer.subscription.deleted":
+            event = event["data"]["object"]
+            subscription_id = event.get("id")
+            user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
+            if user:
+                user.subscription_status = "canceled"
+                user.plan = "basic"
+                db.commit()
+                logger.info("Subscription canceled for user %s", user.public_id)
+
+        return {"status": "received"}
+    finally:
+        db.close()
 
 
 def process_payment(db: Session, user: User, provider: str, amount_cents: int) -> dict:

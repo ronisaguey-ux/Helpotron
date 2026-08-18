@@ -30,3 +30,6 @@ pipeline/state/*.json
 # OS
 .DS_Store
 
+server.log
+helpotron.db
+.env

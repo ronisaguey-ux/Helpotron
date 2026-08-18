@@ -132,53 +132,108 @@ def validate_password_strength(password: str) -> bool:
 SESSION_COOKIE_NAME = "helpotron_session"
 
 class SessionStore:
-    _sessions: Dict[str, dict] = {}
+    """Persistent session store backed by the database.
+
+    Sessions survive server restarts and can be revoked per-user.
+    """
     _session_expiry: int = 7 * 24 * 60 * 60
 
     @classmethod
     def create_session(cls, user_id: int, public_id: str) -> str:
+        from .database import SessionLocal, UserSession
         token = secrets.token_urlsafe(48)
-        cls._sessions[token] = {
-            'user_id': user_id,
-            'public_id': public_id,
-            'created_at': datetime.now(timezone.utc).isoformat(),
-            'expires_at': (datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)).isoformat(),
-        }
+        db = SessionLocal()
+        try:
+            session = UserSession(
+                token=token,
+                user_id=user_id,
+                public_id=public_id,
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry),
+            )
+            db.add(session)
+            db.commit()
+        finally:
+            db.close()
         return token
 
     @classmethod
     def get_session(cls, token: str) -> dict | None:
-        session = cls._sessions.get(token)
-        if not session:
-            return None
-        expires_at = datetime.fromisoformat(session['expires_at'])
-        if expires_at < datetime.now(timezone.utc):
-            cls.delete_session(token)
-            return None
-        return session
+        from .database import SessionLocal, UserSession
+        db = SessionLocal()
+        try:
+            session = db.query(UserSession).filter(UserSession.token == token).first()
+            if not session:
+                return None
+            if session.expires_at < datetime.now(timezone.utc):
+                db.delete(session)
+                db.commit()
+                return None
+            return {
+                'user_id': session.user_id,
+                'public_id': session.public_id,
+                'created_at': session.created_at.isoformat(),
+                'expires_at': session.expires_at.isoformat(),
+            }
+        finally:
+            db.close()
 
     @classmethod
     def delete_session(cls, token: str) -> None:
-        cls._sessions.pop(token, None)
+        from .database import SessionLocal, UserSession
+        db = SessionLocal()
+        try:
+            session = db.query(UserSession).filter(UserSession.token == token).first()
+            if session:
+                db.delete(session)
+                db.commit()
+        finally:
+            db.close()
 
     @classmethod
     def refresh_session(cls, token: str) -> bool:
-        session = cls._sessions.get(token)
-        if not session:
-            return False
-        session['expires_at'] = (datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)).isoformat()
-        return True
+        from .database import SessionLocal, UserSession
+        db = SessionLocal()
+        try:
+            session = db.query(UserSession).filter(UserSession.token == token).first()
+            if not session:
+                return False
+            session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)
+            db.commit()
+            return True
+        finally:
+            db.close()
 
     @classmethod
     def get_all_sessions(cls) -> dict:
-        return cls._sessions.copy()
+        from .database import SessionLocal, UserSession
+        db = SessionLocal()
+        try:
+            sessions = db.query(UserSession).all()
+            return {
+                s.token: {
+                    'user_id': s.user_id,
+                    'public_id': s.public_id,
+                    'created_at': s.created_at.isoformat(),
+                    'expires_at': s.expires_at.isoformat(),
+                }
+                for s in sessions
+            }
+        finally:
+            db.close()
 
     @classmethod
     def revoke_all_sessions(cls, user_id: int) -> int:
-        tokens_to_delete = [t for t, s in cls._sessions.items() if s.get('user_id') == user_id]
-        for token in tokens_to_delete:
-            cls.delete_session(token)
-        return len(tokens_to_delete)
+        from .database import SessionLocal, UserSession
+        db = SessionLocal()
+        try:
+            sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
+            count = len(sessions)
+            for s in sessions:
+                db.delete(s)
+            db.commit()
+            return count
+        finally:
+            db.close()
 
 # ─── security headers middleware ─────────────────────────────────────────
 
@@ -201,6 +256,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ─── user authentication ──────────────────────────────────────────────────
 
 async def get_current_user(request: Request):
+    """Authenticate via session cookie only.
+
+    The X-Public-ID header fallback has been removed for security.
+    All endpoints must use a valid session cookie.
+    """
     from .database import get_db, User
     token = request.cookies.get(SESSION_COOKIE_NAME)
     db = next(get_db())
@@ -211,17 +271,6 @@ async def get_current_user(request: Request):
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
                 return user
-
-    # Public ID Header or Query Fallback for Dev/Simulation/Demo Users
-    pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if pub_id:
-        user = db.query(User).filter(User.public_id == pub_id).first()
-        if not user:
-            user = User(public_id=pub_id, plan="pro")
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        return user
 
     raise HTTPException(401, "Not authenticated")
 
@@ -234,15 +283,17 @@ async def get_current_user_optional(request: Request):
 
 
 def require_admin(request: Request) -> None:
+    """Require an authenticated admin session.
+
+    The X-Public-ID header is no longer trusted for admin access.
+    """
     admin_ids = ["RoniDev", "admin"]
-    public_id = request.headers.get("X-Public-ID")
-    if public_id not in admin_ids:
-        token = request.cookies.get(SESSION_COOKIE_NAME)
-        if token:
-            session = SessionStore.get_session(token)
-            if session and session.get('public_id') in admin_ids:
-                return
-        raise HTTPException(403, "Admin access required")
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        session = SessionStore.get_session(token)
+        if session and session.get('public_id') in admin_ids:
+            return
+    raise HTTPException(403, "Admin access required")
 
 
 def is_admin_user(user) -> bool:

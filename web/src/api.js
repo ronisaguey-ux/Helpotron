@@ -121,12 +121,12 @@ export const api = {
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),
   dashboard: (userId) => request(`/api/dashboard?public_id=${userId || 'RoniDev'}`, { method: 'GET' }),
-  studyGuide: (body) => request('/api/study_guide', { method: 'POST', body: JSON.stringify(body) }),
+  studyGuide: (body) => request('/api/study-guide', { method: 'POST', body: JSON.stringify(body) }),
   flashcards: (body) => request('/api/flashcards', { method: 'POST', body: JSON.stringify(body) }),
-  practiceTest: (body) => request('/api/practice_test', { method: 'POST', body: JSON.stringify(body) }),
+  practiceTest: (body) => request('/api/practice-test', { method: 'POST', body: JSON.stringify(body) }),
   summary: (body) => request('/api/summary', { method: 'POST', body: JSON.stringify(body) }),
-  updateSettings: (settings) => request('/api/settings', { method: 'POST', body: JSON.stringify(settings) }),
-  pay: (body) => request('/api/credits/topup', { method: 'POST', body: JSON.stringify(body) }),
+  updateSettings: (settings) => request('/api/user/settings', { method: 'PATCH', body: JSON.stringify(settings) }),
+  pay: (body) => request('/api/payments', { method: 'POST', body: JSON.stringify(body) }),
   discount: (body) => request('/api/discount', { method: 'POST', body: JSON.stringify(body) }),
   
   // Admin endpoints

@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r server/requirements.txt
+      - run: pytest server/tests/ -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to VPS
+        run: |
+          echo "Deploying to production server..."
+          # Replace with your actual deployment command
+          # e.g., ssh ${{ secrets.SSH_HOST }} "cd /home/roni/Roni_Workspace/helpotron && git pull && systemctl restart helpotron-api helpotron-bot"

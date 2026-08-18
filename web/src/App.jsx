@@ -305,6 +305,49 @@ export default function App() {
           </div>
         )}
 
+        {/* ─── Low Credit Warning Banner ─────────────────────────────── */}
+        {isLoggedIn && credits > 0 && (() => {
+          const planLimit = { basic: 300, pro: 600, elite: 1500 }[userPlan] || 300;
+          const pct = (credits / planLimit) * 100;
+          if (pct < 10) {
+            return (
+              <div className="bg-rose-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-rose-400/40">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚠️</span>
+                  <span>
+                    LOW CREDIT WARNING: You have {Math.floor(credits)} credits left ({pct.toFixed(0)}% of monthly allocation). Top up or upgrade to keep your study tools running.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setTab('billing')}
+                  className="px-3 py-1 bg-slate-950 text-rose-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-rose-400/30 transition cursor-pointer"
+                >
+                  Upgrade / Top Up →
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        {/* ─── Out of Credits Banner ─────────────────────────────────── */}
+        {isLoggedIn && credits <= 0 && (
+          <div className="bg-rose-600/95 backdrop-blur-md text-white px-6 py-3 text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-rose-400/40">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⛔</span>
+              <span>You're out of credits. Upgrade to Pro or Elite to continue using Helpotron.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTab('billing')}
+                className="px-3 py-1.5 bg-cyan-500 text-black rounded-lg text-xs font-semibold hover:bg-cyan-400 transition cursor-pointer"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ─── Futuristic HUD Navbar ─────────────────────────────────── */}
         <Navbar
           activeAgent="Overlord Orchestrator"
@@ -722,9 +765,13 @@ function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
 function Billing({ userId }) {
   const [balance, setBalance] = useState(10029);
   const [msg, setMsg] = useState('');
+  const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
-    api.dashboard(userId).then((d) => setBalance(d.credits || 10029)).catch(() => {});
+    api.dashboard(userId).then((d) => {
+      setBalance(d.credits || 10029);
+      setTransactions(d.recent_transactions || []);
+    }).catch(() => {});
   }, [userId]);
 
   async function handleTopUp(amountCents) {
@@ -732,6 +779,8 @@ function Billing({ userId }) {
       const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
       setBalance(r.credits);
       setMsg(`✅ $${amountCents / 100} allocated — New balance: ${r.credits} credits`);
+      // Refresh transactions after top-up
+      api.dashboard(userId).then((d) => setTransactions(d.recent_transactions || [])).catch(() => {});
     } catch (e) {
       setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
     }
@@ -744,7 +793,36 @@ function Billing({ userId }) {
           {msg}
         </div>
       )}
-      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} />
+      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
+
+      {/* Credit Transaction History */}
+      <div className="glass-panel rounded-2xl p-6 border border-white/10">
+        <h3 className="font-semibold mb-4 font-mono text-sm text-white flex items-center gap-2">
+          🧾 Credit Transaction History
+        </h3>
+        {transactions.length === 0 ? (
+          <p className="text-xs text-slate-500 font-mono py-4">No credit transactions yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {transactions.map((tx, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 text-xs font-mono"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {tx.delta >= 0 ? '+' : ''}{tx.delta.toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 truncate">{tx.reason}</span>
+                </div>
+                <span className="shrink-0 text-slate-500 text-[10px]">
+                  {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

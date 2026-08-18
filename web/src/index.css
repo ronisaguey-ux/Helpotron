@@ -1,89 +1,59 @@
-@import "tailwindcss";
+/* Global CSS with accessibility improvements */
+:root {
+  --color-bg: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-fg: #e8e8f0;
+  --color-muted: #6b6b80;
+  --color-accent: #06b6d4;
+  --color-accent-hover: #0891b2;
+  --color-warning: #f87171;
+  --color-success: #38bdf8;
+  --radius: 12px;
+  --transition: all 0.2s ease;
+}
 
-@layer base {
-  :root {
-    --bg-base: #07090e;
-    --card-surface: rgba(13, 17, 26, 0.75);
-    --border-glow: rgba(0, 240, 255, 0.15);
-    --neon-cyan: #00f0ff;
-    --neon-violet: #a855f7;
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
   }
-
-  body {
-    background-color: var(--bg-base);
-    color: #f1f5f9;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-  }
 }
 
-/* Ambient Static Mesh Background (No CPU/RAM Cost) */
-.ambient-grid {
-  background-color: #07090e;
-  background-image: 
-    radial-gradient(at 15% 15%, rgba(0, 240, 255, 0.07) 0px, transparent 45%),
-    radial-gradient(at 85% 85%, rgba(168, 85, 247, 0.07) 0px, transparent 45%),
-    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+/* Focus visible - essential for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
-/* Hardware-Accelerated Glass Surface */
-.glass-panel {
-  background: var(--card-surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transform: translateZ(0);
-}
-
-.glass-panel:hover {
-  border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 25px -5px rgba(0, 240, 255, 0.12);
-}
-
-.glass-input {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #f1f5f9;
-}
-.glass-input:focus {
-  border-color: #00f0ff;
-  outline: none;
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
-}
-
-/* Low-Overhead Shimmer Effect */
-@keyframes neon-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.shimmer-active::after {
-  content: '';
+/* Skip link for screen readers */
+.skip-link {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
-  animation: neon-shimmer 2.5s infinite;
-  transform: translateZ(0);
+  top: -100px;
+  left: 0;
+  background: var(--color-accent);
+  color: #0a0a0f;
+  padding: 8px;
+  z-index: 100;
+  transition: top 0.2s;
 }
 
-/* Custom Scrollbar for HUD panels */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.skip-link:focus {
+  top: 0;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(7, 9, 14, 0.8);
+/* Mobile first responsive */
+@media (max-width: 640px) {
+  .mobile-full-width {
+    width: 100% !important;
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 240, 255, 0.4);
+/* High contrast mode support */
+@media (forced-colors: active) {
+  :root {
+    --color-fg: CanvasText;
+    --color-bg: Canvas;
+    --color-accent: ButtonText;
+  }
 }

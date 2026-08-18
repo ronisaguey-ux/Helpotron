@@ -11,7 +11,9 @@ import json
 import logging
 import math
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Union
+from sqlalchemy import text
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,10 +25,10 @@ from starlette.responses import JSONResponse, Response
 from . import agent_session, credits, ratelimit, study_tools, transcription
 from .agent_session import manager as agent_manager
 from .config import config
-from .database import Assignment, StudyMaterial, Transcript, User, get_db, init_db
-from .payments import process_payment, refund_unused
+from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
+from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, require_admin
 from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 
 # Import route modules
@@ -156,7 +158,26 @@ app.include_router(simulation_router)
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "app": "Helpotron Automator", "version": "1.0.0", "env": config.ENVIRONMENT}
+    """Health check with DB connectivity and service status."""
+    from .database import SessionLocal
+    db_status = "ok"
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        db_status = f"error: {e}"
+
+    return {
+        "status": "ok",
+        "app": "Helpotron Automator",
+        "version": "1.0.0",
+        "env": config.ENVIRONMENT,
+        "database": db_status,
+        "llm_configured": bool(config.omniroute_api_key),
+        "stripe_configured": bool(config.stripe_secret_key),
+        "telegram_configured": bool(config.telegram_bot_token),
+    }
 
 
 
@@ -335,7 +356,7 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
+        secure=config.production_mode,  # Secure in production with HTTPS
         samesite="lax",
         max_age=7 * 24 * 60 * 60,
         path="/",
@@ -348,7 +369,7 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
 
 @app.post("/api/signup")
 def signup(body: SignupIn, db: Session = Depends(get_db)):
-    """Create a new user account."""
+    """Create a new user account with a 7-day free trial."""
     if not validate_public_id(body.public_id):
         raise HTTPException(400, "Invalid public_id (3-64 chars, alphanumeric, underscore, hyphen)")
     if not validate_password_strength(body.password):
@@ -357,10 +378,21 @@ def signup(body: SignupIn, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Public ID already taken")
     hash_hex, salt = hash_password(body.password)
-    user = User(public_id=body.public_id, plan="basic", password_hash=hash_hex, password_salt=salt, settings={"reading_level": "college-freshman"}, credits=10)
+    # Start 7-day free trial with Pro plan
+    trial_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    user = User(
+        public_id=body.public_id,
+        plan="pro",
+        password_hash=hash_hex,
+        password_salt=salt,
+        settings={"reading_level": "college-freshman"},
+        credits=600,
+        trial_expires_at=trial_expires,
+        subscription_status="trialing",
+    )
     db.add(user)
     db.commit()
-    return {"message": "User created", "public_id": user.public_id, "plan": user.plan}
+    return {"message": "User created with 7-day free trial", "public_id": user.public_id, "plan": user.plan, "trial_expires_at": trial_expires.isoformat()}
 
 
 @app.post("/api/logout")
@@ -414,6 +446,7 @@ def admin_check(request: Request, db: Session = Depends(get_db)):
 @app.get("/api/admin/users")
 def get_admin_users(request: Request, db: Session = Depends(get_db)):
     """List all registered users for admin dashboard."""
+    require_admin(request)
     users = db.query(User).all()
     return [
         {
@@ -432,6 +465,7 @@ def get_admin_users(request: Request, db: Session = Depends(get_db)):
 @app.get("/api/admin/analytics")
 def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
     """Summary metrics for admin dashboard."""
+    require_admin(request)
     total_users = db.query(User).count()
     total_assignments = db.query(Assignment).count()
     total_materials = db.query(StudyMaterial).count()
@@ -699,6 +733,35 @@ def pay(body: PaymentIn, db: Session = Depends(get_db)):
         raise HTTPException(400, str(e))
     db.commit()
     return {"payment_id": payment["id"], "status": payment["status"], "credits": credits.get_balance(user)}
+
+
+class CheckoutIn(BaseModel):
+    public_id: str = Field(..., max_length=100)
+    plan: str = Field(..., max_length=20)
+    is_annual: bool = False
+
+
+@app.post("/api/checkout")
+def checkout(body: CheckoutIn, db: Session = Depends(get_db)):
+    """Create a Stripe Checkout session for a subscription."""
+    user = get_or_create_user(db, body.public_id)
+    try:
+        result = create_checkout_session(db, user, body.plan, body.is_annual)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return result
+
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    try:
+        result = handle_stripe_webhook(payload, sig_header)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return result
 
 
 @app.post("/api/refund")
