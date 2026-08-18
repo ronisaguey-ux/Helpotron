@@ -252,136 +252,35 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap font-mono">
-          <button
-            onClick={toggleSimulator}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              simEnabled
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
-                : 'glass-panel text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {simEnabled ? 'Disable Simulator' : 'Enable Simulator'}
-          </button>
-
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={seedDemoData}
             disabled={simSeeding}
-            className="px-3 py-1.5 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+            className="px-3.5 py-1.5 bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
           >
             {simSeeding ? 'Seeding…' : '🔄 Seed Sample Courses'}
           </button>
 
           <button
             onClick={clearDemoData}
-            className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors font-mono cursor-pointer"
+            className="px-3 py-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
           >
             Clear Data
           </button>
         </div>
       </div>
 
-      {/* ─── Control Header: Modes & Rules ─────────────────────────── */}
-      <div className="glass-panel rounded-2xl p-5 border border-white/10 space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-sm">
-                🤖
-              </div>
-              <h2 className="text-base font-bold text-slate-100 font-mono tracking-wide">Main Agent (Overlord) Hub</h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
-                Online & Coordinating
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1 font-mono">
-              Autonomous orchestration of sub-agent teams, rubric decomposition, and AI humanization.
-            </p>
-          </div>
-
-          {/* Mode Selector Buttons */}
-          <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 font-mono">
-            <button
-              onClick={() => switchMode('manual')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                mode === 'manual'
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🛡️ Manual
-            </button>
-            <button
-              onClick={() => switchMode('auto')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                mode === 'auto'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              ⚡ Auto
-            </button>
-            <button
-              onClick={() => switchMode('yolo')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                mode === 'yolo'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
-                  : 'text-rose-400 hover:bg-rose-500/10'
-              }`}
-            >
-              🔥 YOLO
-            </button>
-          </div>
+      {/* ─── ASSIGNMENT CARDS GRID ───────────────────────────── */}
+      {loading ? (
+        <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading assignment cards…</div>
+      ) : cards.length === 0 ? (
+        <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+          <span className="text-4xl">📚</span>
+          <h3 className="text-base font-semibold text-slate-200 mt-2">No active assignments</h3>
+          <p className="text-xs text-slate-400 mt-1">Assignments imported or synced from Canvas/LMS will appear here as cards.</p>
         </div>
-
-        {/* YOLO Warning Banner */}
-        {mode === 'yolo' && (
-          <div className="glass-panel border-rose-500/50 bg-rose-950/40 rounded-xl p-3.5 flex items-start gap-3 text-xs font-mono">
-            <span className="text-xl">⚠️</span>
-            <div className="text-rose-200 leading-relaxed">
-              <span className="font-bold text-rose-400">YOLO MODE ACTIVE:</span> All sub-agent actions, drafts, external requests, and submissions execute immediately with zero confirmation prompts. Use at your own risk.
-            </div>
-          </div>
-        )}
-
-        {/* Tab switcher */}
-        <div className="flex gap-4 border-t border-white/5 pt-3 font-mono text-xs">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`pb-1 border-b-2 transition-all cursor-pointer ${
-              activeTab === 'dashboard'
-                ? 'border-cyan-400 text-cyan-300 font-bold'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            📋 Assignment Cards ({cards.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('rules')}
-            className={`pb-1 border-b-2 transition-all cursor-pointer ${
-              activeTab === 'rules'
-                ? 'border-cyan-400 text-cyan-300 font-bold'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            ⚙️ Auto-Approved Rules ({autoRules.length})
-          </button>
-        </div>
-      </div>
-
-      {/* ─── TAB 1: ASSIGNMENT CARDS GRID ───────────────────────────── */}
-      {activeTab === 'dashboard' && (
-        <>
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs font-mono">Loading telemetry & assignment cards…</div>
-          ) : cards.length === 0 ? (
-            <div className="glass-panel rounded-2xl p-12 text-center border-dashed border-white/10 font-mono">
-              <span className="text-4xl">📚</span>
-              <h3 className="text-base font-semibold text-slate-200 mt-2">No active assignments</h3>
-              <p className="text-xs text-slate-400 mt-1">Assignments imported or synced from Canvas/LMS will appear here as cards.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {cards.map((c) => (
                 <AssignmentCard
                   key={c.id}
@@ -406,53 +305,6 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
               ))}
             </div>
           )}
-        </>
-      )}
-
-      {/* ─── TAB 2: AUTO-APPROVED RULES MANAGER ─────────────────────── */}
-      {activeTab === 'rules' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Auto-Approved Actions Manager</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Actions matching any rule in this list bypass confirmation prompts in Manual and Auto modes.
-            </p>
-          </div>
-
-          <div className="flex gap-2 max-w-md">
-            <input
-              type="text"
-              placeholder="e.g. humanize, check_citations, draft_intro"
-              value={newRule}
-              onChange={(e) => setNewRule(e.target.value)}
-              className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              onClick={addAutoRule}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              + Add Rule
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {autoRules.map((rule) => (
-              <div
-                key={rule}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 max-w-md"
-              >
-                <span className="font-mono text-xs font-semibold text-slate-800">✅ {rule}</span>
-                <button
-                  onClick={() => deleteAutoRule(rule)}
-                  className="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2 py-1"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ─── FULL-PAGE / EXPANDED ASSIGNMENT MODAL ───────────────────── */}
       {selectedCardId && fullViewData && (
