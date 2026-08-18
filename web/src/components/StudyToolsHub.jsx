@@ -407,3 +407,15 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
     </div>
   );
 }
+
+# <<<FIX A1 - Inconsistent Typography Scale and Heading Hierarchy>>>
+# Description: Standardize typography tokens in index.css with strict modular classes (H1: 2rem/700, H2: 1.5rem/600, H3: 1.25rem/600, body: 1rem/400).
+# NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX B3 - Missing Progress Indicators on Long-Running AI Generation Tasks>>>
+# Description: Implement WebSocket or Server-Sent Events (SSE) progress streaming with a 4-step progress bar (Parsing syllabus -> Extracting key concepts -> Generating quiz -> Verifying accuracy).
+# NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX F1 - Vague and Inconsistent Call-to-Action Terminology>>>
+# Description: Standardize all action verbs: 'Generate Study Pack', 'Export to Anki', 'Take Practice Test'.
+# NOTE: Automated placeholder – replace with actual code change.
