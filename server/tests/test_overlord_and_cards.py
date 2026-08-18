@@ -235,3 +235,70 @@ def test_operation_mode_toggle_and_yolo_warning():
     )
     assert set_resp.status_code == 200
     assert set_resp.json()["operation_mode"] == "yolo"
+
+
+def test_overlord_omnipresent_actions_and_permissions():
+    """Verify Overlord can change settings, create assignments, message teams, and respect permission controls."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "test_overlord_user").first()
+        user.settings = {"operation_mode": "auto", "auto_approved_actions": ["create_assignment", "change_settings"]}
+        db.commit()
+
+        import asyncio
+
+        # 1. Overlord changes effort score
+        res1 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, "set effort score to 875"
+        ))
+        assert res1["status"] == "success"
+        assert res1["effort_score"] == 875
+        assert user.settings["effort_score"] == 875
+
+        # 2. Overlord enables auto-start
+        res2 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, "enable auto-start"
+        ))
+        assert res2["status"] == "success"
+        assert res2["auto_start"] is True
+
+        # 3. Overlord updates target grade
+        res3 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, "set target grade to A+ with score 98"
+        ))
+        assert res3["status"] == "success"
+        assert res3["grade"] == "A+"
+        assert res3["score"] == 98
+
+        # 4. Overlord creates assignment (auto-approved via rule)
+        res4 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, "create assignment 'Quantum Computing Algorithms' for course Physics"
+        ))
+        assert res4["status"] == "success"
+        assert "Quantum Computing Algorithms" in res4["title"]
+        assign_id = res4["assignment_id"]
+
+        # 5. Overlord messages specific assignment team
+        res5 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, f"message team for assignment {assign_id}: calibrate thesis and citation style to IEEE"
+        ))
+        assert res5["status"] == "success"
+        assert res5["assignment_id"] == assign_id
+
+        # Verify chat message reached assignment team feed
+        chat = overlord_agent.get_chat_history(assign_id)
+        assert any("IEEE" in m["text"] for m in chat)
+
+        # 6. Manual mode without rule requires permission
+        user.settings = {"operation_mode": "manual", "auto_approved_actions": []}
+        db.commit()
+
+        res6 = asyncio.run(overlord_agent.parse_and_execute_command(
+            db, user, "create assignment 'Astrophysics Simulation'"
+        ))
+        assert res6["status"] == "pending_permission"
+        assert "permission_id" in res6
+
+    finally:
+        db.close()
+
