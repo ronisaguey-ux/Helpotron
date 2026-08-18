@@ -181,16 +181,6 @@ export default function Navbar({
             </div>
           )}
 
-          {/* Settings */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title="Settings"
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/5 transition cursor-pointer"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-
           {/* Auth Trigger */}
           {isLoggedIn ? (
             <button

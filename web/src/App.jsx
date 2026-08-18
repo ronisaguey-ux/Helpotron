@@ -144,7 +144,6 @@ export default function App() {
   const [adminAnalytics, setAdminAnalytics] = useState(null);
   const [credits, setCredits] = useState(10029);
   const [userPlan, setUserPlan] = useState('elite');
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -510,12 +509,11 @@ export default function App() {
               )}
 
               {activeView === 'settings' && (
-                <Settings
+                <UserSettingsModal
+                  isOpen={true}
+                  isModal={false}
                   userId={userId}
-                  onOpenModal={() => setSettingsModalOpen(true)}
                   onOpenPrivacy={() => setShowPrivacyModal(true)}
-                  onUserId={(id) => { setUserId(id); setUserIdState(id); }}
-                  onServer={(url) => { setServer(url); setServerUrlState(url); }}
                 />
               )}
 
@@ -539,12 +537,6 @@ export default function App() {
             />
           </div>
         </div>
-
-        <UserSettingsModal
-          isOpen={settingsModalOpen}
-          onClose={() => setSettingsModalOpen(false)}
-          userId={userId}
-        />
       </div>
     </ErrorBoundary>
   );
@@ -643,177 +635,6 @@ function Overview({ userId, onGoTo, onSelectAssignment }) {
             })}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function Settings({ userId, onOpenModal, onOpenPrivacy, onUserId, onServer }) {
-  const [localUser, setLocalUser] = useState(userId);
-  const [localServer, setLocalServer] = useState(getServer());
-  const [readingLevel, setReadingLevel] = useState('college-freshman');
-  const [tone, setTone] = useState('formal');
-  const [saved, setSaved] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [exportNotice, setExportNotice] = useState('');
-
-  useEffect(() => {
-    api.dashboard(userId).then((d) => {
-      setReadingLevel(d.settings?.reading_level || 'college-freshman');
-      setTone(d.settings?.tone || 'formal');
-    }).catch(() => {});
-  }, [userId]);
-
-  async function save() {
-    await api.updateSettings({ reading_level: readingLevel, tone: 'formal' });
-    onUserId(localUser.trim());
-    onServer(localServer.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  const handleExportData = async () => {
-    try {
-      const data = await api.dashboard(userId);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `helpotron_data_export_${userId || 'student'}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setExportNotice('✅ Data archive exported successfully');
-      setTimeout(() => setExportNotice(''), 3000);
-    } catch (e) {
-      setExportNotice('❌ Failed to export data');
-    }
-  };
-
-  const handleDeleteAccount = () => {
-    try {
-      localStorage.clear();
-    } catch (e) {}
-    window.location.reload();
-  };
-
-  return (
-    <div className="max-w-3xl space-y-6">
-      {/* Extended User Preferences Card */}
-      <div className="clean-card p-5 border border-blue-500/20 bg-gradient-to-r from-blue-950/20 to-indigo-950/20">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="font-semibold text-sm text-blue-300">Writing Personas & Academic Calibrations</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Custom writing styles, citation formatting, and anti-detector settings.
-            </p>
-          </div>
-          <Button variant="primary" onClick={onOpenModal}>
-            Configure
-          </Button>
-        </div>
-      </div>
-
-      {/* Study Preferences */}
-      <div className="clean-card p-5 space-y-3">
-        <h2 className="font-semibold text-white text-sm">Study Preferences</h2>
-        <div>
-          <label className="text-xs text-slate-400">Target Academic Level</label>
-          <select
-            className="mt-1 w-full clean-input px-3 py-2 text-xs"
-            value={readingLevel}
-            onChange={(e) => setReadingLevel(e.target.value)}
-          >
-            {['9th', '10th', '11th', '12th', 'college-freshman', 'sophomore', 'junior/senior', 'graduate'].map((l) => (
-              <option key={l} className="bg-slate-900 text-slate-300">{l}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Server & User ID */}
-      <div className="clean-card p-5 space-y-3">
-        <h2 className="font-semibold text-white text-sm">Account Connection</h2>
-        <div>
-          <label className="text-xs text-slate-400">Server Endpoint</label>
-          <input
-            className="mt-1 w-full clean-input px-3 py-2 text-xs font-mono"
-            value={localServer}
-            onChange={(e) => setLocalServer(e.target.value)}
-            placeholder="Auto-detected origin"
-          />
-        </div>
-        <div>
-          <label className="mt-2 block text-xs text-slate-400">User Account ID</label>
-          <input
-            className="mt-1 w-full clean-input px-3 py-2 text-xs font-mono"
-            value={localUser}
-            onChange={(e) => setLocalUser(e.target.value)}
-          />
-        </div>
-        <Button className="mt-2 w-full" onClick={save}>
-          {saved ? 'Settings Saved' : 'Save Changes'}
-        </Button>
-      </div>
-
-      {/* Privacy, GDPR & Data Management */}
-      <div className="clean-card p-5 space-y-3">
-        <h2 className="font-semibold text-white text-sm flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-blue-400" />
-          Privacy & Data Compliance
-        </h2>
-
-        <div className="space-y-2 text-xs">
-          <button
-            type="button"
-            onClick={onOpenPrivacy}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/40 hover:bg-white/5 border border-white/5 text-slate-300 transition cursor-pointer"
-          >
-            <span>Read Complete Privacy & Compliance Policy</span>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExportData}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/40 hover:bg-white/5 border border-white/5 text-blue-300 transition cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export Study Data (.json archive)
-            </span>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </button>
-
-          {exportNotice && (
-            <div className="text-emerald-400 text-xs px-2 py-1">{exportNotice}</div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(!confirmDelete)}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-300 transition cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <Trash2 className="w-4 h-4" /> Delete Account & Wipe Cache
-            </span>
-            <ChevronRight className="w-4 h-4 text-rose-400" />
-          </button>
-
-          {confirmDelete && (
-            <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-3">
-              <p className="text-xs text-rose-200">
-                Are you sure? This will purge all cached study sessions and reset settings.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="danger" onClick={handleDeleteAccount}>
-                  Confirm & Wipe
-                </Button>
-                <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
