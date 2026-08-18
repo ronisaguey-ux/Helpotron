@@ -173,6 +173,47 @@ export default function CreditLeaderboard({ userId, userCredits }) {
         </div>
       </div>
 
+      {/* ─── Student Milestones & Study Streaks (DES-PSY-002) ────────── */}
+      <div className="clean-card p-4 rounded-2xl bg-gradient-to-r from-blue-950/30 via-slate-900 to-indigo-950/30 border border-blue-500/20">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Flame className="w-4 h-4 text-amber-400" />
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider">Your Academic Study Milestones</h2>
+          </div>
+          <span className="text-[11px] text-blue-400 font-mono">Level 4 Scholar</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/20 flex items-center gap-2.5">
+            <span className="text-lg">🔥</span>
+            <div>
+              <div className="text-xs font-semibold text-amber-300">7-Day Streak</div>
+              <div className="text-[10px] text-slate-400">Active Study Streak</div>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-indigo-500/20 flex items-center gap-2.5">
+            <span className="text-lg">🎓</span>
+            <div>
+              <div className="text-xs font-semibold text-indigo-300">Quiz Master</div>
+              <div className="text-[10px] text-slate-400">95% Practice Accuracy</div>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-blue-500/20 flex items-center gap-2.5">
+            <span className="text-lg">⚡</span>
+            <div>
+              <div className="text-xs font-semibold text-blue-300">Fast Synthesist</div>
+              <div className="text-[10px] text-slate-400">12 Study Packs Built</div>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-emerald-500/20 flex items-center gap-2.5">
+            <span className="text-lg">🛡️</span>
+            <div>
+              <div className="text-xs font-semibold text-emerald-300">Data Contributor</div>
+              <div className="text-[10px] text-slate-400">+150 Micro-Credits</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ─── Custom Alias & Privacy Customizer ────────────────────────── */}
       <div className="clean-card p-5 rounded-2xl bg-slate-900/80 border border-blue-500/20 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
