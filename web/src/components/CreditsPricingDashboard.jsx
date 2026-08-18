@@ -76,24 +76,33 @@ export default function CreditsPricingDashboard({
     return () => clearTimeout(timer);
   }, [sendCooldown]);
 
+  const ALL_PLATFORM_FEATURES = [
+    'Universal Assignment Dump (PDF, DOCX, Audio, Video, Image OCR)',
+    'Gemini 3.1 Flash-Lite Audio Transcription (Timestamps & Speaker Labels)',
+    'Gemini 3.7 Flash Cognitive Vision & Reasoning Passes',
+    'Overlord Multi-Agent Autonomous Routing & Sandbox Execution',
+    'AI Detector Multi-Engine Integrity Suite (Pangram, Sapling, Originality, Copyleaks, Winston)',
+    'Data Lake Empirical Rubric Ingestion & Micro-Credits Earning (+25 cr)',
+    'Study Tools (Active Recall Flashcards, Practice Tests, Study Guides, Summaries)',
+    '40-Digit Single-Use Referral Code Generation (+50 cr / referral)',
+    'Canvas & Universal LMS Synchronization',
+    'Direct Encrypted Admin Messaging Channel',
+    'Mandatory 2FA Purchase Protection & Session Security',
+    'Google Docs, Markdown, PDF & CSV Full Data Exports',
+  ];
+
   const tiers = [
     {
       name: 'Basic',
       basePrice: 10,
       annualBasePrice: 100,
       maxDiscount: 5, // 50% of $10
-      credits: '30 Tokens / mo',
-      creditsAward: 30,
-      capacity: '30 Complete Assignment & Lab Workflows',
+      credits: '500 Task Tokens / mo',
+      creditsAward: 500,
+      standardTokens: '~3,000,000 LLM Tokens',
+      capacity: '500 Complete Assignment, Lecture & Study Workflows',
       popular: false,
-      features: [
-        '30 Full Assignment Task Tokens / month',
-        'Assignment Rubric & Syllabus Analysis',
-        'Active Recall Flashcard Generator',
-        'Interactive Practice Quizzes',
-        'Canvas & Universal LMS Sync',
-        'Use Earned Credits for Up to 50% Discount',
-      ],
+      features: ALL_PLATFORM_FEATURES,
       plan: 'basic',
     },
     {
@@ -101,18 +110,12 @@ export default function CreditsPricingDashboard({
       basePrice: 20,
       annualBasePrice: 200,
       maxDiscount: 10, // 50% of $20
-      credits: '100 Tokens / mo',
-      creditsAward: 100,
-      capacity: '100 Complete Assignment & Multimodal Workflows',
+      credits: '2,000 Task Tokens / mo',
+      creditsAward: 2000,
+      standardTokens: '~12,000,000 LLM Tokens',
+      capacity: '2,000 Multimodal Workflows, Audio Transcriptions & Evasion Passes',
       popular: true,
-      features: [
-        '100 Full Assignment Task Tokens / month',
-        'Everything in Basic Plan',
-        'Lecture Audio & Video Transcriber',
-        'AI Plagiarism & Humanized Writing Passes',
-        'Virtual Sub-Agent Sandboxes',
-        'Issue 40-Digit Single-Use Referral Codes',
-      ],
+      features: ALL_PLATFORM_FEATURES,
       plan: 'pro',
     },
     {
@@ -120,18 +123,12 @@ export default function CreditsPricingDashboard({
       basePrice: 40,
       annualBasePrice: 400,
       maxDiscount: 20, // 50% of $40
-      credits: '300 Tokens / mo',
-      creditsAward: 300,
-      capacity: '300 Heavy Multi-Agent & Deep Research Workflows',
+      credits: '6,000 Task Tokens / mo',
+      creditsAward: 6000,
+      standardTokens: '~40,000,000 LLM Tokens',
+      capacity: '6,000 Heavy Multi-Agent, Full Audio Lectures & Deep Research Passes',
       popular: false,
-      features: [
-        '300 Full Assignment Task Tokens / month',
-        'Everything in Pro Plan',
-        'Full Multi-Agent Overlord Orchestration',
-        'Unlimited Sandbox Execution Instances',
-        'Dedicated High-Throughput Node Allocation',
-        'Issue Unlimited 40-Digit Referral Codes',
-      ],
+      features: ALL_PLATFORM_FEATURES,
       plan: 'elite',
     },
   ];
@@ -329,6 +326,22 @@ export default function CreditsPricingDashboard({
         </div>
       )}
 
+      {/* All-Features-Unlocked Disclaimer Banner */}
+      <div className="clean-card rounded-2xl p-4 bg-gradient-to-r from-blue-950/40 via-purple-950/40 to-slate-950/40 border border-blue-500/30 flex items-center gap-3.5">
+        <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+          <Sparkles className="w-5 h-5" />
+        </div>
+        <div>
+          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+            <span>All Platform Features & Tools Are 100% Unlocked on Every Plan</span>
+            <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-mono font-semibold">NO FEATURE GATING</span>
+          </div>
+          <p className="text-xs text-slate-300 mt-0.5">
+            Every plan includes full access to Universal Assignment Dump, Gemini 3.1 Flash-Lite Audio Transcription, Gemini 3.7 Flash Cognitive Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines your monthly compute capacity.
+          </p>
+        </div>
+      </div>
+
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {tiers.map((tier) => {
@@ -373,8 +386,14 @@ export default function CreditsPricingDashboard({
                   )}
                 </div>
 
-                <div className="text-xs font-semibold text-blue-400 font-mono bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-xl">
-                  ⚡ {tier.credits}
+                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
+                  <div className="text-xs font-bold text-blue-300 font-mono flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{tier.credits}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Equivalent to {tier.standardTokens}
+                  </div>
                 </div>
 
                 {/* Features List */}

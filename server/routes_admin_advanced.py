@@ -246,8 +246,7 @@ async def get_admin_users_costs(request: Request, db: Session = Depends(get_db))
     for u in users:
         total_cost = db.query(func.sum(ApiUsageLog.base_cost_usd)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0.0
         total_charged = db.query(func.sum(ApiUsageLog.charged_cost_usd)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0.0
-        call_count = db.query(func.count(ApiUsageLog.id)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0
-        plan_rev = 39.99 if u.plan == "elite" else (19.99 if u.plan == "pro" else 9.99)
+        plan_rev = 40.00 if u.plan == "elite" else (20.00 if u.plan == "pro" else 10.00)
         profit = round(plan_rev - total_cost, 2)
         margin = round((profit / plan_rev) * 100, 1) if plan_rev > 0 else 0
 

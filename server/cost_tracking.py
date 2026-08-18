@@ -181,9 +181,8 @@ class CostEngine:
         for row in top_users_raw:
             user = db.query(User).filter(User.public_id == row.public_id).first()
             multiplier = user.token_cost_multiplier if user else 1.0
-            plan = user.plan if user else "basic"
-            # Estimate revenue from plan: basic=$9.99, pro=$19.99, elite=$39.99
-            plan_revenue = 39.99 if plan == "elite" else (19.99 if plan == "pro" else 9.99)
+            # Revenue from plan: basic=$10.00, pro=$20.00, elite=$40.00
+            plan_revenue = 40.00 if plan == "elite" else (20.00 if plan == "pro" else 10.00)
             user_cost = float(row.total_cost or 0)
             profit = round(plan_revenue - user_cost, 2)
             margin_pct = round((profit / plan_revenue) * 100, 1) if plan_revenue > 0 else 0

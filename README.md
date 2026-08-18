@@ -1,177 +1,271 @@
-# 🤖 Helpotron Automator
+# Helpotron — Autonomous Multi-Agent Academic Orchestration Platform
 
-AI-powered **academic companion & assignment automation platform**. Built from lecture transcripts, Canvas assignment prompts, and student writing styles with continuous multi-engine AI detection evasion.
+![Helpotron Platform](https://img.shields.io/badge/Helpotron-v1.0.0-blue?style=for-the-badge)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi)
+![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
+![Tests](https://img.shields.io/badge/Tests-87%20Passed-emerald?style=for-the-badge)
+
+---
+
+## 🌟 Executive Overview
+
+**Helpotron** is an advanced academic orchestration suite and multi-agent pair-programming platform designed to bridge classroom materials, empirical grading rubrics, lecture recordings, and high-fidelity coursework execution.
+
+Helpotron eliminates repetitive busywork and optimizes study efficiency through:
+- **Universal Material Ingestion (Assignment Dump)**: Drag-and-drop ingestion of documents, audio lectures, whiteboard photos, and videos with autonomous AI assignment routing.
+- **Gemini 3.1 Flash-Lite Audio Transcription**: Direct lecture audio conversion into structured Markdown with timestamps `[MM:SS]`, speaker diarization labels, section headers, and core takeaways.
+- **Model Tiering & Effort Levels (1–10)**: Cost-aware routing between Gemini 3.1 Flash-Lite ($0.50/1M tokens) and Gemini 3.7 Flash ($2.50/1M tokens).
+- **Overlord Multi-Agent Engine**: Autonomous rubric analysis, grading criteria alignment, simulated professor scoring, and multi-pass anti-detection synthesis.
+- **Multi-Engine AI Integrity Suite**: Cross-verification against 5 commercial AI detectors (Pangram, Sapling, Originality.ai, Copyleaks, Winston AI).
+- **Empirical Data Lake & Micro-Credits**: Anonymized peer rubric contributions rewarded with spendable platform credits (0–25 cr).
+- **Single-Use 40-Digit Referral Engine**: Cryptographically secure referral codes for active subscribers (+50 cr / referral).
+- **Mandatory 2FA Purchase Protection**: Two-factor authenticated checkout for subscriptions and top-ups.
+- **Admin Cost Controls & Token Multipliers**: Granular per-user token multipliers, real-time profit margin analytics, and API cost monitoring.
+
+---
+
+## 🏛️ System Architecture
 
 ```
-┌────────────────────────── USER LAYER ──────────────────────────┐
-│  Stealth Extension   Telegram Bot   Web Dashboard   Recorder  │
-└──────────────┬──────────────┬──────────────┬──────────────────┘
-               └──────────────┼──────────────┘
-                              ▼
-┌───────────────────── CLOUD ORCHESTRATION ─────────────────────┐
-│                     FastAPI backend                           │
-│  ┌───────────┐  ┌──────────────┐  ┌──────────────────────┐    │
-│  │ Assignment│  │ Transcription│  │ Study-material        │    │
-│  │ Tracker   │──▶ (Whisper)    │──▶ generators           │    │
-│  └─────┬─────┘  └──────────────┘  │  guide / flashcards / │    │
-│        │                          │  practice test /      │    │
-│        ▼                          │  2-min summary        │    │
-│  ┌──────────────────────┐         └──────────────────────┘    │
-│  │ Sub-Agent Pipeline   │──▶ Multi-Engine AI Humanizer        │
-│  │ Decomposition Engine │    (Perplexity & Burstiness Loop)   │
-│  └──────────────────────┘    Pangram · Sapling · Originality  │
-│                              Copyleaks · Winston AI           │
-│  Credits · atomic rollback · Telegram direct document push    │
-└───────────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────── SELF-IMPROVEMENT PIPELINE ──────────────────┐
-│        audit → cross-eval → execution (pipeline/run.py)       │
-└────────────────────────────────────────────────────────────────┘
+                                  ┌─────────────────────────────────────────┐
+                                  │           React 19 Frontend             │
+                                  │      (Vite + Tailwind + Lucide)         │
+                                  └────────────────────┬────────────────────┘
+                                                       │  REST / JSON
+                                                       ▼
+                                  ┌─────────────────────────────────────────┐
+                                  │          FastAPI Server Core            │
+                                  │          (Python 3.11+ / ASGI)          │
+                                  └──────┬─────────────┬─────────────┬──────┘
+                                         │             │             │
+                    ┌────────────────────┴─────┐       │       ┌─────┴───────────────────┐
+                    ▼                          ▼       │       ▼                         ▼
+         ┌─────────────────────┐    ┌────────────────┐ │ ┌──────────────┐     ┌──────────────────┐
+         │ Universal Dump Eng. │    │ Overlord Agent │ │ │ Cost Engine  │     │ Data Lake Agent  │
+         │ - Gemini 3.1 Audio  │    │ - Rubric Match │ │ │ - User Mult. │     │ - Auto Appraisal │
+         │ - Gemini 3.7 Vision │    │ - Sub-Sandboxes│ │ │ - Margins    │     │ - Micro-Credits  │
+         └─────────────────────┘    └────────────────┘ │ └──────────────┘     └──────────────────┘
+                                                       ▼
+                                  ┌─────────────────────────────────────────┐
+                                  │     SQLAlchemy ORM + SQLite/Postgres    │
+                                  └─────────────────────────────────────────┘
 ```
 
 ---
 
-## 🌟 Core Features
+## 💳 Subscription Plans, Pricing & Business Economics
 
-### 1. 🛡️ Multi-Engine AI Detection Evasion & Perplexity Humanizer
-- **8-Engine Detector Registry**: Evaluates submissions across **Pangram, Sapling, Originality.ai, Copyleaks, Winston AI**, Perplexity Cadence, and Statistical Burstiness.
-- **Burstiness & Lexical Diversity Optimizer**: Synthesizes natural sentence length variance and vocabulary diversity to guarantee human classification thresholds.
-- **Iterative Refinement Loop**: `/api/assignment/humanize` continuously mutates text cadence until passing stealth requirements.
+### Feature Equality Guarantee
+> 💡 **All features, multi-agent tools, audio transcription engines, vision OCR, and AI detectors are 100% unlocked on all plans.**
+> Subscription tiers differ exclusively by **monthly token compute capacity**, giving every student access to the complete suite.
 
-### 2. 🤖 Overlord Main Agent & Sub-Agent Orchestration Hub
-- **Single Central Overlord**: Oversees all user operations, coordinates specialized sub-agent clusters (thesis synthesis, citations, cadence humanizer), and offers direct conversational chat.
-- **Three Operation Modes**:
-  - 🛡️ **Manual Mode**: Requires explicit user approval for every action before execution.
-  - ⚡ **Auto Mode**: Auto-approves routine actions (drafting, analyzing rubrics, citing) while prompting permission for critical actions (submitting, data deletion, large credit deductions).
-  - 🔥 **YOLO Mode**: Auto-approves and executes all actions with zero prompts.
-    > ⚠️ **CAUTION**: YOLO mode executes all actions without confirmation. Use at your own risk. The system will not ask for permission.
-- **Permission Request System & Auto-Approved Rules**:
-  - Options: **Approve (Execute Once)**, **Write Something Else (Cancel & Reframe)**, **Always Approve This Action Type**.
-  - Persistent rule engine: Rules saved to user profile (e.g. `humanize`, `analyze_rubric`) to bypass confirmations permanently in any mode.
+### Plan Matrix & Profit Margins (Internal Specification)
 
-### 3. 📋 Assignment Card Dashboard & Full-Page Workspace
-- **Collapsed Cards**: Essential information at a glance (Name, Subject, Course Code, Professor Name, Estimated Time, Status Badge, AI Score).
-- **Full-Page View**: Complete prompt, rubric breakdown, attached materials, live sub-agent progress stepper, interactive chat, and 1-click task presets.
+| Subscription Tier | Monthly Price | Annual Price | Monthly Task Tokens | Standard LLM Tokens | Target Profit Margin | Provider API Budget | Target Use Profile |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Basic** | **$10 / mo** | $100 / yr | **500 Tokens** | **~3,000,000 Tokens** | **70% Margin** ($7.00 profit) | **$3.00 / month** | Standard homework, 5 hrs audio transcription, flashcards & rubric extraction |
+| **Pro** (Most Popular)| **$20 / mo** | $200 / yr | **2,000 Tokens** | **~12,000,000 Tokens** | **50% Margin** ($10.00 profit) | **$10.00 / month** | Heavy multimodal labs, 25 hrs audio transcription, multi-pass detector evasion |
+| **Elite** | **$40 / mo** | $400 / yr | **6,000 Tokens** | **~40,000,000 Tokens** | **30% Margin** ($12.00 profit) | **$28.00 / month** | Power researchers, 80 hrs audio transcription, unlimited Gemini 3.7 Flash deep passes |
 
-### 4. 🕵️ Canvas DOM Stealth Scraper & Anti-Telemetry Guard
-- **MutationObserver Integration**: Observes Canvas DOM changes asynchronously without triggering aggressive polling or LMS telemetry flags.
-- **Multi-LMS Domain Support**: Matches `*.instructure.com` and `canvas.*.edu` portals for assignment prompts, rubrics, and downloadable assets.
-
-### 5. 📱 Telegram One-Click Direct Delivery & Document Push
-- **Instant File Streaming**: Delivers completed deliverables (`.docx`, `.pdf`, `.zip`) directly to the student's linked Telegram chat upon clearing AI evasion checks.
-- **Interactive Bot Commands**: `/status`, `/ready`, `/summary`, `/credits`, `/pause`, `/resume`, `/admin`.
-
-### 6. 💳 Fail-Safe Credit Deduction & Atomic Transaction Rollback
-- **Atomic Credit Safety**: Quotas are preserved with rollback closures—if an LLM call or evasion pass fails, credits are automatically refunded to the user's account.
-- **Pricing Tiers**: Basic ($10/mo), Pro ($20/mo), Elite ($40/mo).
-
-### 7. 📚 Comprehensive Study Generators & Analytics
-- **Lecture Transcription**: Whisper API / local faster-whisper transcription.
-- **Study Guides, Flashcards, Practice Tests & 2-Min Summaries**.
-- **Analytics Dashboard, Study Groups & Referral Rewards**.
+*Note: Profit margin percentages are maintained strictly for platform operations and administrative cost analytics; they are not displayed on user-facing pricing cards.*
 
 ---
 
-### 8. 🎯 Context-Aware Personalization Engine & TRIO Scopes
-- **Target Grade & Academic Levels**:
-  - Full span from **3rd Grade Elementary** to **PhD Professor / Principal Investigator**.
-  - Dual Input: Letter grade selection (F to A+) and 0–100 numeric slider with automatic bi-directional mapping.
-  - **Grade Scheduling Engine**: Incremental improvement trajectory over time (e.g. +3 points every 7 days from C+ to A) to mimic natural academic progression.
-- **Writing Customization & Multi-Sample Ingestion**:
-  - Private per-user custom writing sample uploaders (scoped to Subject / Teacher).
-  - Automated stylistic trait analysis: Sentence length variance, Type-Token lexical diversity, and cadence classification.
-  - Tone, Vocabulary Level, Sentence Length, Creativity, Burstiness & Perplexity customization.
-- **AI Detector Toggles**: Individual on/off evasion gates for **Pangram, Sapling, Originality.ai, Copyleaks, Winston AI, Perplexity Cadence, and Statistical Burstiness**.
-- **Model Tiers**: Flash (fast drafting) and Pro (deep humanization) model selection.
-- **TRIO Cascading Hierarchy**: `Global → Subject → Class → Teacher → Assignment` with universal "Apply to All" overrides.
-- **Training Data Lake & Micro-Credits (100 cr = $1.00 USD)**:
-  - Students submit empirical grading data, teacher quirks, lecture notes, and rubric feedback.
-  - Dedicated **Valuation Sub-Agent** ranks submissions on **Relevance (1-10)**, **Uniqueness (1-10)**, and **Actionability (1-10)** to award 1–25 Micro-Credits.
-  - Instant redemption toward Helpotron compute credits or cash-out.
+## 🧠 Model Tiering & Effort Level Matrix
+
+Helpotron dynamically routes tasks based on the user's configured **Effort Level (1–10)** in Settings:
+
+```
++-----------------------------------------------------------------------------------------------+
+| Effort Level | Selected Model         | Target Capabilities                       | Base Cost |
+|--------------|------------------------|-------------------------------------------|-----------|
+| 1 – 4 (Low)  | Gemini 3.1 Flash-Lite  | Audio transcription, OCR, rapid drafting  | $0.50/1M  |
+| 5 – 7 (Med)  | Balanced (Lite + 3.7)  | Lite for ingestion, 3.7 for humanization  | Blended   |
+| 8 – 10 (High)| Gemini 3.7 Flash       | Deep cognitive reasoning & 5-detector pass| $2.50/1M  |
++-----------------------------------------------------------------------------------------------+
+```
 
 ---
 
-## 🚀 Quickstart
+## 🛡️ Core Capabilities & Modules
+
+### 1. 📤 Universal Assignment Dump & Overlord AI Routing
+- Accepts any file format: PDF, DOCX, TXT, MD, MP3, WAV, M4A, FLAC, JPG, PNG, TIFF, MP4, MOV.
+- Integrated Web Audio API direct in-browser lecture recorder.
+- **Overlord Semantic NLP Matching**: Analyzes extracted text and matches against active assignments with confidence scoring ($\ge 60\%$ auto-linked, with 1-click manual override).
+
+### 2. 🎙️ Gemini 3.1 Flash-Lite Audio Transcription
+- Converts raw classroom audio/video lectures into clean, formatted Markdown.
+- Automatically inserts timestamps `[MM:SS]`, detects speaker changes, builds section headers (`## Key Concepts`), and compiles bulleted `### Core Takeaways`.
+
+### 3. 🔍 AI Detector Multi-Engine Integrity Suite
+- Simultaneously checks coursework across 5 commercial AI detectors:
+  1. **Pangram Cadence** ($0.0020/call)
+  2. **Sapling Academic** ($0.0015/call)
+  3. **Originality.ai 3.0** ($0.0030/call)
+  4. **Copyleaks Enterprise** ($0.0040/call)
+  5. **Winston AI** ($0.0020/call)
+- Generates evasion heatmaps and automated sentence-level humanization rewrites.
+
+### 4. 🗄️ Empirical Data Lake & Micro-Credits
+- Anonymous pool for teacher quirks, grading rubrics, exam guidelines, and feedback.
+- Autonomous subagent appraises submissions with an **Estimated Score (0–25 cr)** without premature balance inflation.
+- Credits are awarded as spendable balance upon official verification and pipeline ingestion.
+
+### 5. 🎟️ 40-Digit Single-Use Referral Engine
+- Cryptographically random 40-digit single-use codes (e.g., `HLP-4A9B...`).
+- Issuing restricted to active subscribers to protect against abuse.
+- Single-use validation awards $+50\text{ cr}$ discount credit to the issuing account upon redemption.
+
+### 6. 🔐 Mandatory 2FA Purchase Protection
+- Requires verification (Email or SMS TOTP code + password) for all plan purchases and credit top-ups.
+- Prevents accidental charges and unauthorized account modifications.
+
+### 7. 💰 Admin Cost Controls & Per-User Token Multipliers
+- Admin "Cost & Usage" panel displaying total API costs, model breakdown, 7-day trends, top-cost users, and profit margins.
+- Ability to set custom per-user token multipliers ($0.5\times$ for testers, $1.0\times$ default, $1.5\times$ premium, $2.0\times$ heavy usage).
+
+---
+
+## 🔑 Environment Variables & API Key Directory
+
+Create a `.env` file in the root directory (see [`.env.example`](file:///.env.example)):
 
 ```bash
-# 1. Backend Setup
+# Server & Origin
+PORT=8000
+WEB_ORIGIN=http://localhost:5173
+PRODUCTION_MODE=false
+ADMIN_PUBLIC_ID=RoniDev
+
+# Google Gemini & LLMs
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_FLASH_LITE_MODEL=gemini-3.1-flash-lite
+GEMINI_FLASH_MODEL=gemini-3.7-flash
+PRIMARY_MODEL=deepseek-v4-flash
+OPENAI_API_KEY=your_openai_api_key_here
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+
+# Audio Transcription
+WHISPER_API_KEY=your_whisper_api_key_here
+
+# AI Detectors
+PANGRAM_API_KEY=your_pangram_api_key_here
+SAPLING_API_KEY=your_sapling_api_key_here
+ORIGINALITY_API_KEY=your_originality_api_key_here
+COPYLEAKS_API_KEY=your_copyleaks_api_key_here
+COPYLEAKS_EMAIL=your_copyleaks_email_here
+WINSTON_API_KEY=your_winston_api_key_here
+
+# Payments (Stripe & PayPal)
+STRIPE_API_KEY=pk_test_...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_SECRET=your_paypal_secret
+
+# Security & 2FA
+SESSION_SECRET=helpotron_super_secret_session_key_min_32_chars
+JWT_SECRET=helpotron_super_secret_jwt_signing_key_min_32_chars
+TOTP_SECRET=JBSWY3DPEHPK3PXP
+
+# Telegram Notifications
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_ADMIN_CHAT_ID=your_telegram_chat_id
+```
+
+---
+
+## 🗃️ Database Schema Overview
+
+The database uses SQLite (or PostgreSQL in production) via SQLAlchemy ORM:
+- **`users`**: User identity, plan tier (`basic`, `pro`, `elite`), credit balance, `token_cost_multiplier`, `monthly_budget_usd`, `default_effort_level`, and TOTP secrets.
+- **`assignments`**: Coursework items, titles, prompts, teacher quirks, due dates, statuses, and multi-agent progress states.
+- **`study_materials`**: Flashcards, practice tests, study guides, and summaries generated from coursework.
+- **`api_usage_logs`**: Ledger recording every LLM call, audio transcription, vision OCR, and detector run with token counts, base cost, user multiplier, and charged cost.
+- **`universal_dump_items`**: Uploaded dump files, extracted markdown transcripts, OCR text, and Overlord auto-routing links.
+- **`data_lake_entries`**: Empirical rubrics, submission notes, subagent classifications, and estimated vs awarded micro-credits.
+- **`referral_codes`**: 40-digit randomized single-use referral codes, owner IDs, redemption statuses, and referee links.
+- **`admin_messages`**: Encrypted user inquiries and admin direct replies.
+- **`purchase_2fa_challenges`**: Short-lived OTP codes for checkout validation.
+
+---
+
+## 🚀 Installation & Quickstart
+
+### 1. Prerequisites
+- Python 3.11+
+- Node.js 18+ and npm
+- FFmpeg (for local audio processing)
+
+### 2. Backend Setup
+```bash
+# Clone the repository
+git clone https://github.com/ronisaguey-ux/Helpotron.git
+cd Helpotron
+
+# Create and activate Python virtual environment
 python3 -m venv .venv
-.venv/bin/pip install -r server/requirements.txt
-cp .env.example .env             # configure keys (Telegram, OpenAI/Whisper, AI Detectors...)
-.venv/bin/uvicorn server.main:app --port 8000 --reload
+source .venv/bin/activate
 
-# 2. Telegram Bot (Separate Worker)
-.venv/bin/python -m server.telegram_bot
+# Install dependencies
+pip install -r server/requirements.txt
 
-# 3. Web Dashboard
-cd web && npm install && npm run dev     # http://localhost:5173
+# Configure environment
+cp .env.example .env
 
-# 4. Run Test Suite (70+ Tests Passing)
-.venv/bin/python -m pytest server/tests/
+# Launch FastAPI backend server
+.venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**Browser Extension**: Open `chrome://extensions` → Developer mode → **Load unpacked** → Select `extension/`.
+### 3. Frontend Setup
+```bash
+# Navigate to web directory
+cd web
+
+# Install frontend dependencies
+npm install
+
+# Start Vite development server
+npm run dev
+
+# Or build production bundle
+npm run build
+```
 
 ---
 
-## 📡 API Endpoints
+## 🧪 Testing Suite
 
-### Personalization & TRIO Settings
-- `GET /api/user/settings`: Full user profile, academic levels, personas, detector toggles, and TRIO rules.
-- `PATCH /api/user/settings`: Update settings preferences.
-- `GET /api/user/academic-levels`: List supported levels from 3rd Grade to PhD Professor with reference snippets.
-- `POST /api/user/styles`: Add private custom writing style sample.
-- `DELETE /api/user/styles/{id}`: Delete custom writing sample.
-- `POST /api/user/trio`: Save a context-aware TRIO rule.
-- `DELETE /api/user/trio/{id}`: Delete a TRIO rule.
-- `POST /api/user/trio/resolve`: Resolve cascading effective settings for a given subject/teacher/assignment context.
-
-### Training Data Lake & Micro-Credits
-- `POST /api/datalake/microcredits/submit`: Submit empirical data for sub-agent valuation & award (1-25 cr).
-- `GET /api/datalake/microcredits/history`: List user data submissions and sub-agent valuation scores.
-- `POST /api/datalake/microcredits/redeem`: Convert Micro-Credits (100 cr = $1 USD) to compute credits or cash-out.
-- `GET /api/datalake/insights`: Synthesized telemetry and feedback insights from the intelligence agent.
-
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/assignments` | Upsert scraped assignment & rubric |
-| `POST` | `/api/assignment/humanize` | Multi-engine humanizer & evasion loop |
-| `POST` | `/api/agent/start` | Launch Canvas browser collection agent |
-| `WS` | `/ws/agent/{session_id}` | Extension ↔ agent WebSocket bridge |
-| `POST` | `/api/transcribe` | Audio file / lecture recording → transcript |
-| `POST` | `/api/study-guide` | Generate reading-level tuned study guide |
-| `POST` | `/api/flashcards` | Generate active recall flashcards |
-| `POST` | `/api/practice-test` | Generate MCQ & short answer practice exam |
-| `POST` | `/api/summary` | 2-minute "read before class" summary |
-| `POST` | `/api/draft/generate` | Generate initial assignment draft |
-| `POST` | `/api/draft/{id}/retry` | Regenerate draft with style tuning |
-| `GET` | `/api/credits/{user}` | Check real-time credit balance |
-| `POST` | `/api/payments` | Credit top-up (Stripe, Cash App, Zelle, PayPal) |
-| `POST` | `/api/refund` | Pro-rata refund calculation |
-| `GET` | `/api/analytics/dashboard` | User engagement & assignment stats |
-
----
-
-## 🔑 AI Detector API Keys
-
-Refer to [`docs/ai_detectors_api_requirements.md`](docs/ai_detectors_api_requirements.md) for full configuration details.
+Run the comprehensive pytest suite covering all 87 tests:
 
 ```bash
-# Add to .env:
-PANGRAM_API_KEY=your_key
-SAPLING_API_KEY=your_key
-ORIGINALITY_API_KEY=your_key
-COPYLEAKS_API_KEY=your_key
-COPYLEAKS_EMAIL=your_email
-WINSTON_API_KEY=your_key
+# Run all unit tests
+.venv/bin/pytest server/tests/
+
+# Run specific test modules
+.venv/bin/pytest server/tests/test_cost_dump_transcription.py
+.venv/bin/pytest server/tests/test_referrals_and_admin_portal.py
+.venv/bin/pytest server/tests/test_datalake.py
 ```
 
 ---
 
-## 🔗 Companion Repositories & Toolchain
+## 🛰️ Multi-Agent Coordination & Communication Rules
 
-1. **[`drift-clean`](https://github.com/ronisaguey-ux/drift-clean.git)** — AI session sanitizer and drift interceptor.
-2. **[`Insane-Custum-Claude-Settings`](https://github.com/ronisaguey-ux/Insane-Custum-Claude-Settings.git)** — Claude Code settings and security hooks.
-3. **[`webchat-to-api-harness`](https://github.com/ronisaguey-ux/webchat-to-api-harness.git)** — Multi-provider webchat gateway with token interception.
+Helpotron integrates multiple autonomous agents with enforced communication standards:
+- **Telegram Outbound Aliases**:
+  - `agy: ` — Antigravity Agent
+  - `main: ` — Claude Code Orchestrator
+  - `webchat: ` — DeepSeek Webchat Gateway
+- **Drift Self-Healing**:
+  - `/clean` — Refusal scrubbing & session restoration
+  - `/autoclean` — Continuous background drift daemon
+  - `/cleanreframe` — Dynamic context rotation and prompt refinement
+
+---
+
+## 📄 License & Compliance
+
+Helpotron is distributed under the MIT License. All student data ingested into the Data Lake is anonymized prior to indexing. Full privacy disclosures are accessible via the in-app Privacy Policy view.
