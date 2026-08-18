@@ -45,6 +45,8 @@ from .routes_admin_advanced import router as admin_advanced_router
 from .routes_overlord import router as overlord_router
 from .routes_simulation import router as simulation_router
 from .routes_dump import router as dump_router
+from .admin import router as admin_router
+from .routes_features import router as features_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -158,6 +160,8 @@ app.include_router(datalake_router)
 app.include_router(auth_2fa_router)
 app.include_router(user_settings_router)
 app.include_router(admin_advanced_router)
+app.include_router(admin_router)
+app.include_router(features_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)

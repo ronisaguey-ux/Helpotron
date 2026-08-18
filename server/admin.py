@@ -21,25 +21,20 @@ ADMIN_IDS = ["RoniDev", "admin"]
 
 
 def is_admin(request: Request) -> bool:
-    public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if public_id and str(public_id).strip() in ADMIN_IDS:
-        return True
+    from .security import SESSION_COOKIE_NAME, SessionStore
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        sess = SessionStore.get_session(token)
+        if sess and sess.get("public_id") in ADMIN_IDS:
+            return True
 
-    session_token = request.cookies.get("session_token")
-    if session_token:
-        from .database import SessionLocal, UserSession
-        db = SessionLocal()
-        try:
-            sess = db.query(UserSession).filter(UserSession.token == session_token).first()
-            if sess and sess.public_id in ADMIN_IDS:
-                return True
-        except Exception:
-            pass
-        finally:
-            db.close()
-
-    if request.client and request.client.host in ("127.0.0.1", "localhost", "testclient"):
-        return True
+    # Allow header or local fallback strictly in non-production development mode
+    if not config.production_mode:
+        public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
+        if public_id and str(public_id).strip() in ADMIN_IDS:
+            return True
+        if request.client and request.client.host in ("127.0.0.1", "localhost", "testclient"):
+            return True
 
     return False
 

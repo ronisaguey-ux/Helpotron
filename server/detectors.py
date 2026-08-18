@@ -269,11 +269,24 @@ registry.register(WinstonAIDetector())
 
 
 
+# In-memory score cache by text MD5 hash
+_SCORE_CACHE: Dict[str, Tuple[float, List[DetectorResult], bool]] = {}
+
+
 async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5) -> Tuple[float, List[DetectorResult], bool]:
     """Score text using all detectors. Return average score, detailed results, and pass/fail."""
+    import hashlib
+    text_hash = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+    if text_hash in _SCORE_CACHE:
+        return _SCORE_CACHE[text_hash]
+
     results = await registry.detect_all(text)
     if not results:
         return 0.0, [], False
     avg_score = sum(r.score for r in results) / len(results)
     passed = avg_score <= threshold
-    return avg_score, results, passed
+    res = (avg_score, results, passed)
+    if len(_SCORE_CACHE) > 500:
+        _SCORE_CACHE.clear()
+    _SCORE_CACHE[text_hash] = res
+    return res

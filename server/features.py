@@ -15,14 +15,35 @@ from .llm import generate_with_deepseek
 # ─── 1. AUTO-DETECT ASSIGNMENT TYPE ────────────────────────────────────────
 
 def detect_assignment_type(prompt: str, title: str = "") -> str:
-    """Classify assignment type: essay, quiz, discussion, coding, lab, presentation, other."""
-    system = "Classify the assignment into one of: essay, quiz, discussion, coding, lab, presentation, other. Reply with only the category name."
-    user_msg = f"Title: {title}\nPrompt: {prompt[:1000]}"
-    result = generate_with_deepseek(prompt=user_msg, system=system, max_tokens=20)
-    types = ["essay", "quiz", "discussion", "coding", "lab", "presentation", "other"]
-    for t in types:
-        if t in result.lower():
-            return t
+    """Classify assignment type with zero-latency local heuristics: essay, quiz, discussion, coding, lab, presentation, other."""
+    text = f"{title} {prompt}".lower()
+    
+    # 1. Zero-cost instant rule-based heuristic matching
+    if any(k in text for k in ["presentation", "powerpoint", "slides", "deck", ".pptx", ".ppt", ".key", "pitch deck"]):
+        return "presentation"
+    if any(k in text for k in ["essay", "paper", "thesis", "argumentative", "rhetorical", "analysis paper", "write a 5-paragraph"]):
+        return "essay"
+    if any(k in text for k in ["quiz", "exam", "multiple choice", "test", "midterm", "final exam", "question set"]):
+        return "quiz"
+    if any(k in text for k in ["code", "coding", "python", "java", "javascript", "c++", "algorithm", "function", "github", "programming"]):
+        return "coding"
+    if any(k in text for k in ["lab report", "experiment", "hypothesis", "laboratory", "biology lab", "chemistry lab", "physics lab"]):
+        return "lab"
+    if any(k in text for k in ["discussion", "reply to 2 classmates", "forum post", "peer response", "weekly discussion"]):
+        return "discussion"
+
+    # 2. Secondary fallback via lightweight model if ambiguous
+    try:
+        system = "Classify into exactly one: essay, quiz, discussion, coding, lab, presentation, other. Reply with only the category name."
+        user_msg = f"Title: {title}\nPrompt: {prompt[:400]}"
+        result = generate_with_deepseek(prompt=user_msg, system=system, max_tokens=10)
+        types = ["presentation", "essay", "quiz", "coding", "lab", "discussion", "other"]
+        for t in types:
+            if t in result.lower():
+                return t
+    except Exception:
+        pass
+
     return "other"
 
 

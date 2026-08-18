@@ -269,22 +269,23 @@ async def get_current_user(request: Request):
                 return user
 
     # Support X-Public-ID header or public_id query param for client SPA & dev sessions
-    pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if pub_id:
-        user = db.query(User).filter(User.public_id == pub_id).first()
-        if not user:
-            user = User(public_id=pub_id, plan="elite", credits=1000.0)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        return user
+    if not config.production_mode:
+        pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
+        if pub_id:
+            user = db.query(User).filter(User.public_id == pub_id).first()
+            if not user:
+                user = User(public_id=pub_id, plan="elite", credits=1000.0)
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            return user
 
-    # Default fallback to first active user if in development mode
-    user = db.query(User).first()
-    if user:
-        return user
+        # Default fallback to first active user if in development mode
+        user = db.query(User).first()
+        if user:
+            return user
 
-    raise HTTPException(401, "Not authenticated")
+    raise HTTPException(401, "Not authenticated: valid session token required")
 
 
 async def get_current_user_optional(request: Request):
@@ -295,7 +296,7 @@ async def get_current_user_optional(request: Request):
 
 
 def require_admin(request: Request) -> None:
-    """Require an authenticated admin session or valid admin public_id."""
+    """Require an authenticated admin session or valid admin public_id in dev."""
     admin_ids = ["RoniDev", "admin"]
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
@@ -303,12 +304,13 @@ def require_admin(request: Request) -> None:
         if session and session.get('public_id') in admin_ids:
             return
 
-    # Check X-Public-ID header or public_id query parameter
-    pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if pub_id in admin_ids:
-        return
+    # Check X-Public-ID header or public_id query parameter only in dev
+    if not config.production_mode:
+        pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
+        if pub_id in admin_ids:
+            return
 
-    raise HTTPException(403, "Admin access required")
+    raise HTTPException(403, "Admin access required: valid session token needed")
 
 
 def is_admin_user(user) -> bool:

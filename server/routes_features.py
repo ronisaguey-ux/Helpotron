@@ -21,6 +21,19 @@ from .features import (
 router = APIRouter(prefix="/api/features", tags=["features"])
 
 
+async def _get_feature_user(request: Request, db: Session) -> User:
+    from .security import get_current_user
+    try:
+        return await get_current_user(request)
+    except Exception:
+        public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
+        if public_id:
+            user = db.query(User).filter(User.public_id == public_id).first()
+            if user:
+                return user
+        raise HTTPException(401, "Authentication required")
+
+
 # ─── 1. AUTO-DETECT ASSIGNMENT TYPE ────────────────────────────────────────
 
 class DetectTypeRequest(BaseModel):
@@ -37,12 +50,7 @@ async def detect_type(req: DetectTypeRequest):
 
 @router.get("/stats")
 async def stats(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     return get_user_stats(user, db)
 
 
@@ -54,36 +62,21 @@ class FriendRequestModel(BaseModel):
 
 @router.post("/friend-request")
 async def send_friend_request(req: FriendRequestModel, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     result = FriendRequest.send_request(db, user, req.target_username)
     return {"message": result}
 
 
 @router.post("/friend-accept")
 async def accept_friend_request(req: FriendRequestModel, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     result = FriendRequest.accept_request(db, user, req.target_username)
     return {"message": result}
 
 
 @router.get("/friends")
 async def list_friends(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     return {"friends": FriendRequest.get_friends(user)}
 
 
@@ -94,12 +87,7 @@ class ShareMaterialModel(BaseModel):
 
 @router.post("/share-material")
 async def share_material(req: ShareMaterialModel, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     result = FriendRequest.share_material(db, user, req.friend_username, req.material_id)
     return {"message": result}
 
@@ -108,12 +96,8 @@ async def share_material(req: ShareMaterialModel, request: Request, db: Session 
 
 @router.get("/calendar/deadlines")
 async def get_calendar_deadlines(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
+    from .database import Assignment
     assignments = db.query(Assignment).filter(Assignment.user_id == user.id).all()
     return {"deadlines": CalendarSync.sync_deadlines(user, assignments)}
 
@@ -127,12 +111,7 @@ class TelegramConfigModel(BaseModel):
 
 @router.post("/telegram/configure")
 async def configure_telegram(req: TelegramConfigModel, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     settings = user.settings or {}
     settings["telegram_bot_token"] = req.bot_token
     settings["telegram_chat_id"] = req.chat_id
@@ -143,12 +122,7 @@ async def configure_telegram(req: TelegramConfigModel, request: Request, db: Ses
 
 @router.post("/telegram/test")
 async def test_telegram(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     result = TelegramNotifier.send_message(user, "✅ Helpotron test notification!")
     return {"message": result}
 
@@ -157,12 +131,7 @@ async def test_telegram(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/recommend")
 async def recommend(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     return {"recommendation": recommend_next_study(user, db)}
 
 
@@ -174,12 +143,7 @@ class ThemeModel(BaseModel):
 
 @router.post("/theme")
 async def set_user_theme(req: ThemeModel, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     result = set_theme(user, req.theme)
     db.commit()
     return {"message": result}
@@ -187,10 +151,5 @@ async def set_user_theme(req: ThemeModel, request: Request, db: Session = Depend
 
 @router.get("/theme")
 async def get_user_theme(request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    user = await _get_feature_user(request, db)
     return {"theme": get_theme(user)}
