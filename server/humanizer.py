@@ -1,5 +1,6 @@
-"""Multi-engine AI detection evasion, Kimhons Humanize 38-pattern scrubbing,
-statistical burstiness modulation, and style/book voice calibration pipeline.
+"""Multi-engine AI detection evasion, Kimhons 38-pattern scrubbing,
+Jalaalrd Anti-AI-Slop structural discipline (anti-parataxis, opener bans, punctuation budgets),
+voice/book calibration, and deterministic Python math execution pipeline.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .default_styles import DEFAULT_STYLES, SELECTED_BOOK_STYLES, get_default_style
 from .detectors import DetectorRegistry, DetectorResult, score_text
+from .math_executor import sanitize_math_hallucinations_in_text, solve_deterministic_math
 
 logger = logging.getLogger("helpotron.humanizer")
 
@@ -29,7 +31,21 @@ FUNCTION_WORDS: Set[str] = frozenset([
 ])
 
 
-# ─── 38 Kimhons / Blader AI Writing Patterns ──────────────────────────────────
+# ─── Jalaalrd Banned Openers & Structural Slop Rules ──────────────────────────
+BANNED_OPENERS = [
+    re.compile(r"^\s*(In today's (rapidly|fast-paced|evolving|modern|digital)?\s+[a-z]+)", re.I),
+    re.compile(r"^\s*(When it comes to|It's worth noting that|It's important to note that)", re.I),
+    re.compile(r"^\s*(Whether you're a|From [a-zA-Z\s]+ to [a-zA-Z\s]+,)", re.I),
+    re.compile(r"^\s*(At the end of the day|The bottom line is|Here's the thing|Here's the deal)", re.I),
+    re.compile(r"^\s*(Without further ado|In a nutshell|Buckle up|Take it to the next level)", re.I),
+    re.compile(r"^\s*(In conclusion,?|Overall,?|Firstly,?|Secondly,?|Thirdly,?)", re.I),
+    re.compile(r"^\s*(Certainly,|Absolutely,|Sure,|Great question!|That's a great point!)", re.I),
+    re.compile(r"^\s*(Moreover,|Furthermore,|Additionally,|Interestingly,|Notably,|Importantly,|Indeed,)", re.I),
+    re.compile(r"^\s*(As an AI|As a language model|As per my last)", re.I),
+]
+
+
+# ─── 38 Kimhons / Blader / Jalaalrd AI Writing Patterns (Non-Overlapping) ────
 @dataclass
 class HumanizePattern:
     pid: int
@@ -40,7 +56,7 @@ class HumanizePattern:
     replacement_hint: str = ""
 
 
-PATTERNS_38: List[HumanizePattern] = [
+PATTERNS_UNIFIED: List[HumanizePattern] = [
     # 1. Significance inflation
     HumanizePattern(
         1, "significance_inflation",
@@ -59,10 +75,10 @@ PATTERNS_38: List[HumanizePattern] = [
         re.compile(r"\b(highlighting|underscoring|emphasizing|symbolizing|reflecting|contributing to|cultivating|fostering|encompassing|showcasing)\s+", re.I),
         weight=1.2, category="language", replacement_hint="Use direct active verbs instead of dangling participial clauses."
     ),
-    # 4. Promotional buzzwords
+    # 4. Promotional buzzwords & Corporate Pep Talk
     HumanizePattern(
         4, "promotional_language",
-        re.compile(r"\b(nestled|breathtaking|stunning|vibrant|boasts?|in the heart of|renowned for|must[- ]visit|profound|groundbreaking|exemplifies|a commitment to)\b", re.I),
+        re.compile(r"\b(nestled|breathtaking|stunning|vibrant|boasts?|in the heart of|renowned for|must[- ]visit|profound|groundbreaking|exemplifies|a commitment to|game[- ]changing|transformative|seamlessly?|cutting[- ]edge)\b", re.I),
         weight=1.5, category="content", replacement_hint="Replace flowery marketing adjectives with concrete factual descriptions."
     ),
     # 5. Vague attribution
@@ -77,10 +93,10 @@ PATTERNS_38: List[HumanizePattern] = [
         re.compile(r"\b(despite (these|the) challenges|faced with numerous obstacles|nevertheless continues to thrive|navigating complex)\b", re.I),
         weight=1.3, category="content", replacement_hint="Present real nuanced friction without Hollywood obstacle framing."
     ),
-    # 7. Overused AI vocabulary
+    # 7. Overused AI vocabulary (Combined Kimhons + Jalaalrd Banned List)
     HumanizePattern(
         7, "overused_ai_vocabulary",
-        re.compile(r"\b(testament|landscape|tapestry|delve|delving|intricate|intricacies|pivotal|beacon|interplay|myriad|multifaceted|cornerstone|paradigm shift)\b", re.I),
+        re.compile(r"\b(testament|tapestry|delve|delving|intricate|intricacies|pivotal|beacon|interplay|myriad|multifaceted|cornerstone|paradigm shift|bolster|bolstered|garner|garnered|harnessing|spearheading|unprecedented|aforementioned)\b", re.I),
         weight=1.8, category="language", replacement_hint="Replace dead AI buzzwords with natural colloquial or standard academic nouns."
     ),
     # 8. Copula avoidance
@@ -119,11 +135,11 @@ PATTERNS_38: List[HumanizePattern] = [
         re.compile(r"\b(no (prior )?knowledge required|easily accessible to all|designed with the user in mind)\b", re.I),
         weight=1.0, category="grammar", replacement_hint="Clarify the agent or actor."
     ),
-    # 14. Em-dash overuse
+    # 14. Em-dash overuse (Jalaalrd limit: max 1 per 500 words)
     HumanizePattern(
         14, "em_dash_overuse",
         re.compile(r"(\s*—\s*|\s*--\s*)", re.I),
-        weight=0.8, category="style", replacement_hint="Replace excessive dashes with standard commas, periods, or parentheses."
+        weight=0.8, category="style", replacement_hint="Replace excessive dashes with standard commas, periods, or semicolons."
     ),
     # 15. Boldface overuse
     HumanizePattern(
@@ -146,7 +162,7 @@ PATTERNS_38: List[HumanizePattern] = [
     # 18. Emojis as bullets / decorations
     HumanizePattern(
         18, "emoji_decorations",
-        re.compile(r"[🚀💡✅🔥✨🎯📌🧠⚡🎉]", re.I),
+        re.compile(r"[🚀💡✅🔥✨🎯📌🧠⚡🎉🧵]", re.I),
         weight=1.5, category="formatting", replacement_hint="Strip decorative emojis from academic and formal text."
     ),
     # 19. Curly quote conversions
@@ -158,7 +174,7 @@ PATTERNS_38: List[HumanizePattern] = [
     # 20. Chatbot conversational artifacts
     HumanizePattern(
         20, "chatbot_artifacts",
-        re.compile(r"\b(great question|i hope this helps|let me know if you|in this essay, i will|as an ai language model|certainly!)\b", re.I),
+        re.compile(r"\b(great question|i hope this helps|let me know if you|in this essay, i will|as an ai language model|certainly!|i hope this finds you well)\b", re.I),
         weight=2.5, category="communication", replacement_hint="Completely purge conversational AI metadata."
     ),
     # 21. Knowledge-cutoff disclaimers
@@ -176,37 +192,37 @@ PATTERNS_38: List[HumanizePattern] = [
     # 23. Bureaucratic filler phrases
     HumanizePattern(
         23, "filler_phrases",
-        re.compile(r"\b(in order to|due to the fact that|at this point in time|it is important to note that|it goes without saying that)\b", re.I),
+        re.compile(r"\b(in order to|due to the fact that|at this point in time|it is important to note that|it goes without saying that|moving forward|rest assured)\b", re.I),
         weight=1.2, category="filler", replacement_hint="Trim to 'to', 'because', 'now', or delete entirely."
     ),
-    # 24. Excessive hedging
+    # 24. Excessive hedging seesaw
     HumanizePattern(
         24, "excessive_hedging",
-        re.compile(r"\b(could (potentially|possibly)|might (seem to )?suggest that|it may be argued that perhaps)\b", re.I),
+        re.compile(r"\b(could (potentially|possibly)|might (seem to )?suggest that|it may be argued that perhaps|on the one hand.*on the other hand)\b", re.I),
         weight=1.3, category="hedging", replacement_hint="State claims with measured, direct confidence."
     ),
     # 25. Generic positive conclusions
     HumanizePattern(
         25, "generic_conclusions",
-        re.compile(r"\b(the future (looks|remains) bright|only time will tell|a step in the right direction|poised for (further )?growth)\b", re.I),
+        re.compile(r"\b(the future (looks|remains) bright|only time will tell|a step in the right direction|poised for (further )?growth|at the end of the day)\b", re.I),
         weight=1.4, category="content", replacement_hint="Conclude with substantive synthesis of primary arguments."
     ),
     # 26. Hyphenated buzzword overuse
     HumanizePattern(
         26, "hyphenated_buzzwords",
-        re.compile(r"\b(data-driven|cross-functional|user-centric|value-added|cutting-edge|next-generation)\b", re.I),
+        re.compile(r"\b(data-driven|cross-functional|user-centric|value-added|cutting-edge|next-generation|thought-leadership)\b", re.I),
         weight=1.1, category="style", replacement_hint="Use clear, unhyphenated descriptive language."
     ),
     # 27. Persuasive authority tropes
     HumanizePattern(
         27, "persuasive_authority",
-        re.compile(r"\b(at its core, what really matters|the key takeaway here is|simply put,)\b", re.I),
+        re.compile(r"\b(at its core, what really matters|the key takeaway here is|simply put,|bridge the gap|move the needle)\b", re.I),
         weight=1.2, category="style", replacement_hint="Present the insight without preaching to the reader."
     ),
     # 28. Signposting announcements
     HumanizePattern(
         28, "signposting_announcements",
-        re.compile(r"\b(let's dive (in|deeper)|here's what you need to know|without further ado)\b", re.I),
+        re.compile(r"\b(let's dive (in|deeper)|here's what you need to know|without further ado|unlock the power of|supercharge your)\b", re.I),
         weight=1.6, category="style", replacement_hint="Remove oral presentation signposts."
     ),
     # 29. Header restatements
@@ -245,10 +261,10 @@ PATTERNS_38: List[HumanizePattern] = [
         re.compile(r"\b(it is beyond the scope of this (paper|study) to|further research is needed to fully understand)\b", re.I),
         weight=1.1, category="academic", replacement_hint="Focus on what was demonstrated; specify concrete future experiments."
     ),
-    # 35. Over-structured transition adverbs
+    # 35. Over-structured transition adverbs (Jalaalrd Starter Rule)
     HumanizePattern(
         35, "overstructured_transitions",
-        re.compile(r"(^|\.\s+)(Furthermore|Moreover|Additionally|In conclusion|Consequently|Henceforth),\s+", re.I),
+        re.compile(r"(^|\.\s+)(Furthermore|Moreover|Additionally|In conclusion|Consequently|Henceforth|Interestingly|Importantly|Notably),\s+", re.I),
         weight=1.2, category="style", replacement_hint="Vary transition positions or connect thoughts through causal clauses."
     ),
     # 36. Rule-of-Thumb clichés
@@ -273,7 +289,7 @@ PATTERNS_38: List[HumanizePattern] = [
 
 
 class KimhonsHumanizeEngine:
-    """Statistical and heuristic pattern humanizer based on kimhons/humanize."""
+    """Unified statistical and heuristic anti-slop engine combining Kimhons and Jalaalrd directives."""
 
     @staticmethod
     def split_sentences(text: str) -> List[str]:
@@ -282,8 +298,35 @@ class KimhonsHumanizeEngine:
         return [s.strip() for s in raw_sentences if len(s.strip()) > 3]
 
     @staticmethod
+    def check_parataxis_and_uniformity(sentences: List[str]) -> Dict[str, Any]:
+        """Detects robotic parataxis (chain of short sentences) and consecutive uniform sentence lengths."""
+        if len(sentences) < 3:
+            return {"has_parataxis": False, "has_consecutive_uniformity": False, "parataxis_count": 0}
+
+        lens = [len(s.split()) for s in sentences]
+        
+        # 1. Parataxis check (3+ short sentences in a row under 8 words)
+        parataxis_count = 0
+        for i in range(len(lens) - 2):
+            if lens[i] <= 8 and lens[i+1] <= 8 and lens[i+2] <= 8:
+                parataxis_count += 1
+
+        # 2. Consecutive uniformity check (3+ sentences with near-identical lengths +/- 1 word)
+        uniformity_count = 0
+        for i in range(len(lens) - 2):
+            if abs(lens[i] - lens[i+1]) <= 1 and abs(lens[i+1] - lens[i+2]) <= 1:
+                uniformity_count += 1
+
+        return {
+            "has_parataxis": parataxis_count > 0,
+            "has_consecutive_uniformity": uniformity_count > 0,
+            "parataxis_count": parataxis_count,
+            "uniformity_count": uniformity_count,
+        }
+
+    @staticmethod
     def calculate_burstiness_metrics(text: str) -> Dict[str, Any]:
-        """Calculates burstiness CV, lexical diversity (TTR), function word ratio, and paragraph variation."""
+        """Calculates burstiness CV, lexical diversity (TTR), function word ratio, parataxis, and paragraph variation."""
         sentences = KimhonsHumanizeEngine.split_sentences(text)
         paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 10]
         
@@ -320,8 +363,11 @@ class KimhonsHumanizeEngine:
         subordinate_count = len(re.findall(r"[,;:]", text))
         subordinate_density = round(subordinate_count / max(1, total_words), 3)
         
-        # Human burstiness signature check (Target: sentence_cv >= 0.55, ttr in [0.40, 0.65])
-        is_bursty = sentence_cv >= 0.50 and (0.35 <= ttr <= 0.70)
+        # 6. Anti-parataxis & uniformity check
+        para_meta = KimhonsHumanizeEngine.check_parataxis_and_uniformity(sentences)
+
+        # Human burstiness signature check
+        is_bursty = sentence_cv >= 0.50 and (0.35 <= ttr <= 0.70) and not para_meta["has_consecutive_uniformity"]
         
         return {
             "sentence_cv": sentence_cv,
@@ -332,11 +378,13 @@ class KimhonsHumanizeEngine:
             "is_human_bursty": is_bursty,
             "total_words": total_words,
             "sentence_count": len(sentences),
+            "parataxis_detected": para_meta["has_parataxis"],
+            "uniformity_detected": para_meta["has_consecutive_uniformity"],
         }
 
     @staticmethod
     def audit_38_patterns(text: str) -> Dict[str, Any]:
-        """Runs the 38 Kimhons pattern regex checks and scores the text (0-100, lower is more human)."""
+        """Runs the unified pattern regex checks and scores the text (0-100, lower is more human)."""
         words = len(text.split())
         if words < 10:
             return {"cliche_score": 0.0, "total_hits": 0, "findings": []}
@@ -344,7 +392,7 @@ class KimhonsHumanizeEngine:
         total_weighted_hits = 0.0
         findings = []
 
-        for p in PATTERNS_38:
+        for p in PATTERNS_UNIFIED:
             matches = list(p.regex.finditer(text))
             count = len(matches)
             if count > 0:
@@ -358,7 +406,6 @@ class KimhonsHumanizeEngine:
                     "hint": p.replacement_hint,
                 })
 
-        # Calculate 0-100 scale score (hits per 500 words normalized)
         norm_factor = max(1.0, words / 500.0)
         raw_score = (total_weighted_hits / norm_factor) * 12.0
         cliche_score = min(100.0, round(raw_score, 1))
@@ -372,19 +419,23 @@ class KimhonsHumanizeEngine:
 
     @staticmethod
     def sanitize_obvious_slop(text: str) -> str:
-        """Deterministic pass 1: Cleans em-dashes, bold words in prose, decorative emojis, and obvious buzzwords."""
+        """Deterministic pass 1: Cleans banned openers, em-dashes, bold words in prose, decorative emojis, and AI markers."""
         # Replace em-dashes with natural commas or periods
         cleaned = re.sub(r"\s*—\s*", ", ", text)
         cleaned = re.sub(r"\s*--\s*", ", ", cleaned)
         
-        # Remove decorative emojis
-        cleaned = re.sub(r"[🚀💡✅🔥✨🎯📌🧠⚡🎉]", "", cleaned)
+        # Remove decorative emojis & thread markers
+        cleaned = re.sub(r"[🚀💡✅🔥✨🎯📌🧠⚡🎉🧵]", "", cleaned)
         
         # Remove bolding on non-header text
         cleaned = re.sub(r"(?<!^#)\*\*([a-zA-Z0-9\s]{2,30})\*\*", r"\1", cleaned)
         
-        # Clean obvious chatbot conversational artifacts
-        cleaned = re.sub(r"(?i)\b(in this essay,?\s+i will\s+explore|certainly!|as an ai language model|without further ado,?)\b", "", cleaned)
+        # Strip banned starter clichés
+        for b_re in BANNED_OPENERS:
+            cleaned = b_re.sub("", cleaned)
+
+        # Clean conversational AI artifacts
+        cleaned = re.sub(r"(?i)\b(in this essay,?\s+i will\s+explore|certainly!|as an ai language model|without further ado,?|i hope this finds you well)\b", "", cleaned)
         
         # Replace copula avoidance
         cleaned = re.sub(r"(?i)\bstands as an? testament to\b", "shows", cleaned)
@@ -399,7 +450,7 @@ class KimhonsHumanizeEngine:
 
 
 class AIHumanizerPipeline:
-    """Comprehensive Helpotron Humanizer Stack: Voice/Book Calibration -> 38-Pattern Scrubbing -> Burstiness -> Multi-Detector Verification."""
+    """Comprehensive Helpotron Humanizer Stack: Voice/Book Calibration -> Deterministic Math -> Slop Scrubbing -> Multi-Detector Verification."""
 
     def __init__(self, human_score_threshold: float = 85.0, max_passes: int = 4):
         self.threshold = human_score_threshold
@@ -418,7 +469,7 @@ class AIHumanizerPipeline:
         }
 
     async def evaluate_multi_checkers(self, text: str) -> Dict[str, Any]:
-        """Evaluates text against multi-detector suite and Kimhons 38-pattern audit."""
+        """Evaluates text against multi-detector suite and unified anti-slop pattern audit."""
         avg_ai_score, results, passed = await score_text(text, threshold=100.0 - self.threshold)
         metrics = await self.calculate_burstiness_perplexity(text)
         pattern_audit = KimhonsHumanizeEngine.audit_38_patterns(text)
@@ -462,7 +513,7 @@ class AIHumanizerPipeline:
         reading_level: Optional[str] = None,
         effort_level: int = 500,
     ) -> Tuple[str, Dict[str, Any]]:
-        """Executes full humanization loop with Kimhons 38-pattern scrubbing, burstiness injection, and multi-detector scoring."""
+        """Executes full humanization loop with deterministic math verification, slop scrubbing, burstiness injection, and multi-detector scoring."""
         target_ref_text, target_ref_source = self.resolve_style_reference(
             style_sample=style_sample,
             book_style_id=book_style_id,
@@ -471,7 +522,10 @@ class AIHumanizerPipeline:
 
         current_text = draft_text
 
-        # Pass 1: Deterministic pattern scrubbing (Kimhons 38 patterns)
+        # Pass 0: Deterministic Math Execution (Never let LLMs hallucinate calculations)
+        current_text = sanitize_math_hallucinations_in_text(current_text)
+
+        # Pass 1: Deterministic anti-slop pattern scrubbing (Kimhons 38 + Jalaalrd Openers)
         current_text = KimhonsHumanizeEngine.sanitize_obvious_slop(current_text)
 
         # Audit initial burstiness & cliché metrics
@@ -483,21 +537,24 @@ class AIHumanizerPipeline:
             try:
                 from .llm import call_llm
                 system_instruction = f"""You are the Helpotron Master Humanizer Engine.
-Transform the student's assignment draft to eliminate all statistical AI markers, robotic cadence, and uniform sentence lengths.
+Transform the student's assignment draft to eliminate all statistical AI markers, robotic cadence, uniform sentence lengths, and banned slop.
 
 Target Voice Reference:
 \"\"\"{target_ref_text[:1800]}\"\"\"
 
-Strict Editorial Constraints:
-1. Sentence Length Variance (Burstiness): Alternate short punchy sentences (4-9 words) with rich, complex compound sentences (25-38 words). Target a sentence CV >= 0.55.
-2. Kimhons 38-Pattern Rules: Eliminate significance inflation ('stands as a testament'), superficial -ing clauses ('underscoring/highlighting'), robotic transitions ('Furthermore/Moreover'), and rule-of-three list tropes.
-3. Authentic Human Cadence: Preserve the student's core arguments, evidence, and citations, but write in the distinct style and natural human rhythm of the target reference.
-4. Output ONLY the rewritten assignment prose. No conversational preamble or meta-commentary."""
+Strict Anti-AI-Slop Directives:
+1. Sentence Length Variance (Burstiness): Alternate short punchy sentences (4-9 words) with rich, complex compound sentences (25-38 words). Target sentence CV >= 0.55. Never write three consecutive sentences of the same length.
+2. Anti-Parataxis: Avoid chaining short blunt declarations. Connect related thoughts using conjunctions, subordinate clauses, and semicolons.
+3. Zero Banned Vocabulary: Never use 'delve', 'tapestry', 'testament to', 'landscape', 'pivotal', 'intricate', 'bolster', 'underscores', 'fostering', 'seamless', 'game-changer', or 'significance'.
+4. No Banned Openers: Never open paragraphs with 'In today's...', 'When it comes to...', 'Certainly,', 'Moreover,', 'Furthermore,', or 'In conclusion,'.
+5. Deterministic Precision: If mathematical calculations occur, preserve exact computed values without altering the numerical logic.
+6. Output ONLY the rewritten assignment prose. No conversational preamble or meta-commentary."""
 
                 user_instruction = f"Rewrite and humanize this draft now:\n\n{current_text}"
                 rewritten_text, _ = await call_llm(system_instruction, user_instruction)
                 if rewritten_text and len(rewritten_text.split()) >= len(current_text.split()) * 0.7:
                     current_text = KimhonsHumanizeEngine.sanitize_obvious_slop(rewritten_text)
+                    current_text = sanitize_math_hallucinations_in_text(current_text)
             except Exception as e:
                 logger.warning("Humanizer LLM rewrite pass failed, using heuristic cleaned text: %s", e)
 
@@ -520,6 +577,7 @@ Strict Editorial Constraints:
             "detector_details": [r.to_dict() for r in results],
             "is_stealth_ready": is_stealth_ready,
             "patterns_flagged_count": final_pattern_audit["total_hits"],
+            "parataxis_detected": final_burstiness["parataxis_detected"],
         }
 
         # Log event to Research Data Lake if opted in
