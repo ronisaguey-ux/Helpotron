@@ -149,14 +149,8 @@ export default function App() {
   const [openAssignment, setOpenAssignment] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Privacy Policy state
-  const [showPrivacyModal, setShowPrivacyModal] = useState(() => {
-    try {
-      return localStorage.getItem('helpotron_privacy_accepted') !== 'true';
-    } catch (e) {
-      return false;
-    }
-  });
+  // Privacy Policy modal state (opened on demand via Navbar or Settings)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const checkSession = async () => {
     try {
