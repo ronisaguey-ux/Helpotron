@@ -14,6 +14,7 @@ import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import MessageAdminView from './components/MessageAdminView.jsx';
+import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
 import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
@@ -512,14 +513,7 @@ export default function App() {
               )}
 
               {activeView === 'privacy' && (
-                <UserSettingsModal
-                  isOpen={true}
-                  isModal={false}
-                  userId={userId}
-                  onLogout={handleLogout}
-                  onOpenPrivacy={() => setShowPrivacyModal(true)}
-                  initialTab="privacy_policy"
-                />
+                <PrivacyPolicyView />
               )}
 
               {activeView === 'settings' && (
@@ -533,12 +527,9 @@ export default function App() {
                 />
               )}
 
-              {activeView === 'admin' && effectiveIsAdmin && (
+              {activeView === 'admin' && (
                 <AdminPanel
-                  userId={userId}
-                  adminUsers={adminUsers}
-                  adminAnalytics={adminAnalytics}
-                  refreshAdmin={fetchAdminData}
+                  userId={userId || 'RoniDev'}
                 />
               )}
             </div>
