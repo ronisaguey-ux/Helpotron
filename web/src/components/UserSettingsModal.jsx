@@ -77,6 +77,129 @@ const ACADEMIC_LEVELS = [
   { key: 'phd_professor', label: 'PhD Professor / Principal Investigator' },
 ];
 
+/**
+ * Reusable Scope Control Component
+ * Allows every setting to have a collapsible menu where users choose where
+ * that setting applies (Subject, Teacher, Class, Assignment) with "Apply to All" and "Remove All".
+ */
+function SettingScopeControl({
+  settingKey,
+  settingLabel,
+  scopes = [],
+  onApplyToAll,
+  onRemoveAll,
+  onAddScope,
+  onDeleteScope,
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [targetType, setTargetType] = useState('subject');
+  const [targetValue, setTargetValue] = useState('');
+
+  const isGlobal = scopes.some((s) => s.apply_to_all) || scopes.length === 0;
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!targetValue.trim()) return;
+    onAddScope(settingKey, targetType, targetValue.trim());
+    setTargetValue('');
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-white/5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+        >
+          <Layers className="w-3.5 h-3.5 text-blue-400" />
+          <span>Scope:</span>
+          {isGlobal ? (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
+              🌐 Applied to All (Universal)
+            </span>
+          ) : (
+            <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono">
+              🎯 Scoped to {scopes.length} Target{scopes.length > 1 ? 's' : ''}
+            </span>
+          )}
+          {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+        </button>
+
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => onApplyToAll(settingKey)}
+            className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+          >
+            Apply to All
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemoveAll(settingKey)}
+            className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+          >
+            Remove All
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="mt-3 p-3 rounded-xl bg-slate-950/60 border border-white/10 space-y-2.5 animate-fadeIn text-xs">
+          <form onSubmit={handleAdd} className="flex flex-wrap sm:flex-nowrap gap-2">
+            <select
+              value={targetType}
+              onChange={(e) => setTargetType(e.target.value)}
+              className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs"
+            >
+              <option value="subject">Subject</option>
+              <option value="teacher">Teacher</option>
+              <option value="class">Class / Course Code</option>
+              <option value="assignment">Specific Assignment</option>
+            </select>
+            <input
+              type="text"
+              placeholder={`Enter ${targetType} name (e.g. History 101, Dr. Miller)...`}
+              value={targetValue}
+              onChange={(e) => setTargetValue(e.target.value)}
+              className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-slate-600"
+            />
+            <button
+              type="submit"
+              disabled={!targetValue.trim()}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-lg text-xs font-semibold shrink-0 cursor-pointer"
+            >
+              + Add Target Scope
+            </button>
+          </form>
+
+          {/* Active Target Scope Badges */}
+          {scopes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {scopes.map((s, idx) => (
+                <span
+                  key={s.id || idx}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px]"
+                >
+                  <span className="font-semibold capitalize text-slate-300">{s.type}:</span>
+                  <span className="font-mono text-white">{s.value}</span>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteScope(settingKey, s.id || idx)}
+                    className="text-slate-400 hover:text-rose-400 ml-1 transition"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' }) {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(null);
@@ -110,7 +233,6 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
   const [trioRestriction, setTrioRestriction] = useState('');
   const [trioInclusion, setTrioInclusion] = useState('');
   const [trioApplyAll, setTrioApplyAll] = useState(false);
-  const [trioOverrideTone, setTrioOverrideTone] = useState('formal');
   const [trioOverrideGrade, setTrioOverrideGrade] = useState('A');
   const [addingTrio, setAddingTrio] = useState(false);
 
@@ -166,6 +288,37 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
       setTimeout(() => setSaveStatus(''), 2500);
     }
   }
+
+  // Handle Scope Actions for any setting
+  const getSettingScopes = (settingKey) => {
+    return settings?.setting_scopes?.[settingKey] || [];
+  };
+
+  const handleApplyToAll = (settingKey) => {
+    const currentScopes = { ...(settings?.setting_scopes || {}) };
+    currentScopes[settingKey] = [{ id: 'global', type: 'global', value: 'All Scopes', apply_to_all: true }];
+    handleSaveSettings({ setting_scopes: currentScopes });
+  };
+
+  const handleRemoveAll = (settingKey) => {
+    const currentScopes = { ...(settings?.setting_scopes || {}) };
+    currentScopes[settingKey] = [];
+    handleSaveSettings({ setting_scopes: currentScopes });
+  };
+
+  const handleAddScope = (settingKey, type, value) => {
+    const currentScopes = { ...(settings?.setting_scopes || {}) };
+    const list = (currentScopes[settingKey] || []).filter((s) => !s.apply_to_all);
+    list.push({ id: `scope_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`, type, value, apply_to_all: false });
+    currentScopes[settingKey] = list;
+    handleSaveSettings({ setting_scopes: currentScopes });
+  };
+
+  const handleDeleteScope = (settingKey, scopeId) => {
+    const currentScopes = { ...(settings?.setting_scopes || {}) };
+    currentScopes[settingKey] = (currentScopes[settingKey] || []).filter((s, idx) => s.id !== scopeId && idx !== scopeId);
+    handleSaveSettings({ setting_scopes: currentScopes });
+  };
 
   // Handle Target Grade & Score Mapping
   const handleScoreSliderChange = (num) => {
@@ -289,7 +442,6 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
         inclusion: trioInclusion.trim() || null,
         apply_to_all: trioApplyAll,
         overrides: {
-          tone: trioOverrideTone,
           target_score_letter: trioOverrideGrade,
           target_score_numeric: letterToScore(trioOverrideGrade),
         },
@@ -355,8 +507,8 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Context-Aware Personalization Engine</h2>
-              <p className="text-xs text-slate-400">Granular academic levels, styles, detector toggles, and TRIO scopes</p>
+              <h2 className="text-base font-bold text-white">Personalization & Personal Settings Engine</h2>
+              <p className="text-xs text-slate-400">Granular academic levels, custom writing styles, detector toggles, and universal scopes</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -378,7 +530,7 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
           <nav className="w-full md:w-64 border-r border-white/10 bg-slate-950/40 p-3 space-y-1 overflow-y-auto shrink-0 text-xs">
             {[
               { key: 'general', label: 'General & Target Grade', icon: GraduationCap },
-              { key: 'writing', label: 'Writing & Humanization', icon: FileText },
+              { key: 'writing', label: 'Custom Writing Styles', icon: FileText },
               { key: 'detectors', label: 'AI Detector Toggles', icon: Shield },
               { key: 'models', label: 'Model Selection', icon: Cpu },
               { key: 'datalake', label: 'Data Lake & Micro-Credits', icon: Tag, badge: `${settings?.micro_credits_balance || 0} cr` },
@@ -449,6 +601,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                       <p className="text-[11px] text-slate-400">
                         The AI adapts writing style, vocabulary, sentence depth, and argument rigor to the selected academic level.
                       </p>
+
+                      <SettingScopeControl
+                        settingKey="academic_level"
+                        settingLabel="Academic Level"
+                        scopes={getSettingScopes('academic_level')}
+                        onApplyToAll={handleApplyToAll}
+                        onRemoveAll={handleRemoveAll}
+                        onAddScope={handleAddScope}
+                        onDeleteScope={handleDeleteScope}
+                      />
                     </div>
 
                     {/* Dual Input Target Score System */}
@@ -501,6 +663,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                           className="w-full accent-blue-500 cursor-pointer"
                         />
                       </div>
+
+                      <SettingScopeControl
+                        settingKey="target_score"
+                        settingLabel="Target Grade & Score"
+                        scopes={getSettingScopes('target_score')}
+                        onApplyToAll={handleApplyToAll}
+                        onRemoveAll={handleRemoveAll}
+                        onAddScope={handleAddScope}
+                        onDeleteScope={handleDeleteScope}
+                      />
                     </div>
 
                     {/* Grade Scheduling Engine */}
@@ -589,14 +761,23 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                           </div>
                         </div>
                       )}
+
+                      <SettingScopeControl
+                        settingKey="grade_scheduling"
+                        settingLabel="Grade Scheduling"
+                        scopes={getSettingScopes('grade_scheduling')}
+                        onApplyToAll={handleApplyToAll}
+                        onRemoveAll={handleRemoveAll}
+                        onAddScope={handleAddScope}
+                        onDeleteScope={handleDeleteScope}
+                      />
                     </div>
                   </div>
                 )}
 
-                {/* ─── 2. WRITING CUSTOMIZATION & HUMANIZATION ─── */}
+                {/* ─── 2. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
                 {activeTab === 'writing' && (
                   <div className="space-y-6">
-                    {/* Custom Writing Style Multi-Sample Dropzone */}
                     <div className="clean-card p-5 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -605,7 +786,7 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                             Custom Writing Style Samples (Private Per User)
                           </h3>
                           <p className="text-[11px] text-slate-400">
-                            Upload your past essays or writing samples to emulate your exact tone and sentence rhythm.
+                            Upload your past essays or writing samples. The AI emulates your exact authentic tone and rhythm.
                           </p>
                         </div>
                       </div>
@@ -674,7 +855,7 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                               <button
                                 type="button"
                                 onClick={() => handleDeleteStyleSample(sample.id)}
-                                className="text-slate-500 hover:text-rose-400 transition self-start sm:self-center"
+                                className="text-slate-500 hover:text-rose-400 transition self-start sm:self-center cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -682,100 +863,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                           ))}
                         </div>
                       )}
-                    </div>
 
-                    {/* Tone, Vocab, Sentence Length, Creativity Sliders */}
-                    <div className="clean-card p-5 space-y-4">
-                      <h3 className="text-xs font-semibold text-white">Writing Style Nuances & Dialect</h3>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div>
-                          <label className="text-slate-400 block mb-1">Tone</label>
-                          <select
-                            value={settings.tone || 'formal'}
-                            onChange={(e) => handleSaveSettings({ tone: e.target.value })}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white"
-                          >
-                            <option value="formal">Formal Academic</option>
-                            <option value="semi_formal">Semi-Formal Analytical</option>
-                            <option value="conversational">Conversational & Engaging</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-slate-400 block mb-1">Vocabulary Level</label>
-                          <select
-                            value={settings.vocabulary_level || 'advanced'}
-                            onChange={(e) => handleSaveSettings({ vocabulary_level: e.target.value })}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white"
-                          >
-                            <option value="basic">Basic & Direct</option>
-                            <option value="intermediate">Intermediate Collegiate</option>
-                            <option value="advanced">Advanced Academic</option>
-                            <option value="expert">Expert Scholarly</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-slate-400 block mb-1">Sentence Length Preference</label>
-                          <select
-                            value={settings.sentence_length || 'mixed'}
-                            onChange={(e) => handleSaveSettings({ sentence_length: e.target.value })}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white"
-                          >
-                            <option value="short">Short & Concise</option>
-                            <option value="medium">Medium Balanced</option>
-                            <option value="long">Long & Complex</option>
-                            <option value="mixed">Mixed Humanized (Recommended)</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-slate-400 block mb-1">Creativity Level</label>
-                          <select
-                            value={settings.creativity_level || 'balanced'}
-                            onChange={(e) => handleSaveSettings({ creativity_level: e.target.value })}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white"
-                          >
-                            <option value="conservative">Conservative (Safe & Strict)</option>
-                            <option value="balanced">Balanced</option>
-                            <option value="creative">Creative (Unconventional)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Burstiness & Perplexity Sliders */}
-                      <div className="pt-2 border-t border-white/5 space-y-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="font-semibold text-slate-300">Burstiness Variance ({settings.burstiness || 88}%)</span>
-                            <span className="text-slate-500 text-[11px]">Human sentence length fluctuation</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="40"
-                            max="100"
-                            value={settings.burstiness || 88}
-                            onChange={(e) => handleSaveSettings({ burstiness: Number(e.target.value) })}
-                            className="w-full accent-blue-500 cursor-pointer"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="font-semibold text-slate-300">Perplexity Depth ({settings.perplexity || 92}%)</span>
-                            <span className="text-slate-500 text-[11px]">Cognitive lexical unpredictability</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="40"
-                            max="100"
-                            value={settings.perplexity || 92}
-                            onChange={(e) => handleSaveSettings({ perplexity: Number(e.target.value) })}
-                            className="w-full accent-blue-500 cursor-pointer"
-                          />
-                        </div>
-                      </div>
+                      <SettingScopeControl
+                        settingKey="custom_styles"
+                        settingLabel="Custom Writing Styles"
+                        scopes={getSettingScopes('custom_styles')}
+                        onApplyToAll={handleApplyToAll}
+                        onRemoveAll={handleRemoveAll}
+                        onAddScope={handleAddScope}
+                        onDeleteScope={handleDeleteScope}
+                      />
                     </div>
                   </div>
                 )}
@@ -834,6 +931,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                         );
                       })}
                     </div>
+
+                    <SettingScopeControl
+                      settingKey="ai_detectors"
+                      settingLabel="AI Detector Defense Gates"
+                      scopes={getSettingScopes('ai_detectors')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
                   </div>
                 )}
 
@@ -893,6 +1000,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                         </select>
                       </div>
                     </div>
+
+                    <SettingScopeControl
+                      settingKey="model_selection"
+                      settingLabel="Model Tier Selection"
+                      scopes={getSettingScopes('model_selection')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
                   </div>
                 )}
 
@@ -1001,6 +1118,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                           </div>
                         </div>
                       )}
+
+                      <SettingScopeControl
+                        settingKey="data_lake"
+                        settingLabel="Data Lake Contribution"
+                        scopes={getSettingScopes('data_lake')}
+                        onApplyToAll={handleApplyToAll}
+                        onRemoveAll={handleRemoveAll}
+                        onAddScope={handleAddScope}
+                        onDeleteScope={handleDeleteScope}
+                      />
                     </div>
 
                     {/* Submission History */}
@@ -1177,6 +1304,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                         </div>
                       ))}
                     </div>
+
+                    <SettingScopeControl
+                      settingKey="auto_approved_rules"
+                      settingLabel="Auto-Approved Rules"
+                      scopes={getSettingScopes('auto_approved_rules')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
                   </div>
                 )}
 
@@ -1215,6 +1352,16 @@ export default function UserSettingsModal({ isOpen, onClose, userId = 'RoniDev' 
                         );
                       })}
                     </div>
+
+                    <SettingScopeControl
+                      settingKey="notifications"
+                      settingLabel="Notifications"
+                      scopes={getSettingScopes('notifications')}
+                      onApplyToAll={handleApplyToAll}
+                      onRemoveAll={handleRemoveAll}
+                      onAddScope={handleAddScope}
+                      onDeleteScope={handleDeleteScope}
+                    />
                   </div>
                 )}
               </>
