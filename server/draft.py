@@ -205,7 +205,20 @@ async def _draft_workflow_async(draft_id: int) -> None:
                     reading_level,
                     target_grade
                 )
-                draft.draft_text = draft_text
+                # Humanizer Pass: Voice calibration (User custom style / Selected book style) + Kimhons 38-pattern scrubbing + Burstiness modulation
+                from .humanizer import AIHumanizerPipeline
+                humanizer = AIHumanizerPipeline(human_score_threshold=draft.threshold)
+                book_style_id = user.settings.get("selected_book_style") if user and user.settings else None
+                effort_level = user.settings.get("default_effort_level", 500) if user and user.settings else 500
+
+                humanized_text, humanize_meta = await humanizer.humanize_loop(
+                    draft_text=draft_text,
+                    style_sample=style_text,
+                    book_style_id=book_style_id,
+                    reading_level=reading_level,
+                    effort_level=effort_level,
+                )
+                draft.draft_text = humanized_text
                 draft.model_used = model_used
             except Exception as e:
                 logger.error("Generation error: %s", e)
@@ -213,8 +226,8 @@ async def _draft_workflow_async(draft_id: int) -> None:
                 db.commit()
                 continue
 
-            # Score with detectors
-            avg_score, results, passed = await score_draft(draft_text, draft.threshold)
+            # Score humanized draft with final multi-detector suite
+            avg_score, results, passed = await score_draft(draft.draft_text, draft.threshold)
             draft.detector_results = [r.to_dict() for r in results]
             draft.average_score = avg_score
             db.commit()

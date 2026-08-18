@@ -12,7 +12,8 @@ from .database import User, StudyMaterial, Assignment, StudySession, Draft, get_
 from .datalake import datalake_manager
 from .user_settings_service import user_settings_service, AVAILABLE_MODELS, resolve_effort_tier
 from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES
-from .humanizer import AIHumanizerPipeline
+from .default_styles import ACADEMIC_LEVELS, SELECTED_BOOK_STYLES, get_default_style
+from .humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
 
 router = APIRouter(prefix="/api/user", tags=["user_settings"])
 
@@ -30,6 +31,18 @@ async def resolve_effort_score_route(score: int = 500):
     """Resolves effort score (1-1000) to its model distribution tier and workload routing description."""
     resolved = resolve_effort_tier(score)
     return {"status": "success", "effort_routing": resolved}
+
+
+@router.get("/literature-books")
+async def get_literature_book_styles_route():
+    """Returns curated classic literature style samples for voice mimicry in humanizer pipeline."""
+    return {"status": "success", "books": SELECTED_BOOK_STYLES}
+
+
+@router.get("/academic-levels")
+async def get_academic_levels_route():
+    """Returns granular academic levels from 3rd Grade through PhD Professor."""
+    return {"status": "success", "levels": ACADEMIC_LEVELS}
 
 
 

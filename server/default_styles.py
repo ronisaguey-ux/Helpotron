@@ -91,6 +91,74 @@ ACADEMIC_LEVELS = [
 ]
 
 
+SELECTED_BOOK_STYLES = [
+    {
+        "id": "book_great_gatsby",
+        "title": "The Great Gatsby",
+        "author": "F. Scott Fitzgerald",
+        "era": "1920s Modernism",
+        "tone": "Lyrical, introspective, evocative with rich cadence",
+        "sample": "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since. 'Whenever you feel like criticizing any one,' he told me, 'just remember that all the people in this world haven't had the advantages that you've had.' He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that."
+    },
+    {
+        "id": "book_pride_and_prejudice",
+        "title": "Pride and Prejudice",
+        "author": "Jane Austen",
+        "era": "Regency Era / Realism",
+        "tone": "Witty, structured, ironic, polished formal prose",
+        "sample": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of some one or other of their daughters."
+    },
+    {
+        "id": "book_1984",
+        "title": "1984",
+        "author": "George Orwell",
+        "era": "Mid-Century Dystopian Realism",
+        "tone": "Direct, punchy, sparse, unembellished clarity",
+        "sample": "It was a bright cold day in April, and the clocks were striking thirteen. Winston Smith, his chin nuzzled into his breast in an effort to escape the vile wind, slipped quickly through the glass doors of Victory Mansions, though not quickly enough to prevent a swirl of gritty dust from entering along with him."
+    },
+    {
+        "id": "book_moby_dick",
+        "title": "Moby Dick",
+        "author": "Herman Melville",
+        "era": "19th Century Romanticism",
+        "tone": "Philosophical, expansive, rhythmic, grand cadence",
+        "sample": "Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world. It is a way I have of driving off the spleen and regulating the circulation."
+    },
+    {
+        "id": "book_walden",
+        "title": "Walden",
+        "author": "Henry David Thoreau",
+        "era": "Transcendentalism",
+        "tone": "Reflective, grounded, deliberate, aphoristic",
+        "sample": "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived. I did not wish to live what was not life, living is so dear; nor did I wish to practise resignation, unless it was quite necessary."
+    },
+    {
+        "id": "book_frankenstein",
+        "title": "Frankenstein",
+        "author": "Mary Shelley",
+        "era": "Gothic Romanticism",
+        "tone": "Passionate, intellectual, emotional gravity, complex syntax",
+        "sample": "I was benevolent and good; misery made me a fiend. Make me happy, and I shall again be virtuous. But I am solitary and abhorred; yet I do not want to destroy that which is noble. You, my creator, would tear me to pieces and triumph; remember that, and tell me why I should pity man more than he pities me?"
+    },
+    {
+        "id": "book_dorian_gray",
+        "title": "The Picture of Dorian Gray",
+        "author": "Oscar Wilde",
+        "era": "Aestheticism / Late Victorian",
+        "tone": "Epigrammatic, polished, decadent, sharp observational wit",
+        "sample": "The studio was filled with the rich odour of roses, and when the light summer wind stirred amidst the trees of the garden, there came through the open door the heavy scent of the lilac, or the more delicate perfume of the pink-flowering thorn."
+    },
+    {
+        "id": "book_brave_new_world",
+        "title": "Brave New World",
+        "author": "Aldous Huxley",
+        "era": "20th Century Satirical Dystopia",
+        "tone": "Clinical, satirical, precise, intellectual irony",
+        "sample": "A squat grey building of only thirty-four stories. Over the main entrance the words, CENTRAL LONDON HATCHERY AND CONDITIONING CENTRE, and, in a shield, the World State's motto, COMMUNITY, IDENTITY, STABILITY."
+    },
+]
+
+
 def get_default_style(reading_level: str, target_grade: str = "default") -> str:
     """Return a default writing style sample for the given reading level."""
     level = reading_level or "10th_grade"

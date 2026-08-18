@@ -100,6 +100,81 @@ const ACADEMIC_LEVELS = [
   { key: 'phd_professor', label: 'PhD Professor / Principal Investigator' },
 ];
 
+const LITERATURE_BOOK_STYLES = [
+  {
+    id: 'none',
+    title: 'Default / User Uploaded Samples',
+    author: 'Standard Student Style',
+    era: 'Custom',
+    tone: 'Emulates your uploaded custom essays and reading level',
+    sample: '',
+  },
+  {
+    id: 'book_great_gatsby',
+    title: 'The Great Gatsby',
+    author: 'F. Scott Fitzgerald',
+    era: '1920s Modernism',
+    tone: 'Lyrical, introspective, evocative with rich cadence',
+    sample: "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since. 'Whenever you feel like criticizing any one,' he told me, 'just remember that all the people in this world haven't had the advantages that you've had.'",
+  },
+  {
+    id: 'book_pride_and_prejudice',
+    title: 'Pride and Prejudice',
+    author: 'Jane Austen',
+    era: 'Regency Era / Realism',
+    tone: 'Witty, structured, ironic, polished formal prose',
+    sample: "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families.",
+  },
+  {
+    id: 'book_1984',
+    title: '1984',
+    author: 'George Orwell',
+    era: 'Mid-Century Dystopian Realism',
+    tone: 'Direct, punchy, sparse, unembellished clarity',
+    sample: "It was a bright cold day in April, and the clocks were striking thirteen. Winston Smith, his chin nuzzled into his breast in an effort to escape the vile wind, slipped quickly through the glass doors of Victory Mansions.",
+  },
+  {
+    id: 'book_moby_dick',
+    title: 'Moby Dick',
+    author: 'Herman Melville',
+    era: '19th Century Romanticism',
+    tone: 'Philosophical, expansive, rhythmic, grand cadence',
+    sample: "Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.",
+  },
+  {
+    id: 'book_walden',
+    title: 'Walden',
+    author: 'Henry David Thoreau',
+    era: 'Transcendentalism',
+    tone: 'Reflective, grounded, deliberate, aphoristic',
+    sample: "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived.",
+  },
+  {
+    id: 'book_frankenstein',
+    title: 'Frankenstein',
+    author: 'Mary Shelley',
+    era: 'Gothic Romanticism',
+    tone: 'Passionate, intellectual, emotional gravity, complex syntax',
+    sample: "I was benevolent and good; misery made me a fiend. Make me happy, and I shall again be virtuous. But I am solitary and abhorred; yet I do not want to destroy that which is noble.",
+  },
+  {
+    id: 'book_dorian_gray',
+    title: 'The Picture of Dorian Gray',
+    author: 'Oscar Wilde',
+    era: 'Aestheticism / Late Victorian',
+    tone: 'Epigrammatic, polished, decadent, sharp observational wit',
+    sample: "The studio was filled with the rich odour of roses, and when the light summer wind stirred amidst the trees of the garden, there came through the open door the heavy scent of the lilac.",
+  },
+  {
+    id: 'book_brave_new_world',
+    title: 'Brave New World',
+    author: 'Aldous Huxley',
+    era: '20th Century Satirical Dystopia',
+    tone: 'Clinical, satirical, precise, intellectual irony',
+    sample: "A squat grey building of only thirty-four stories. Over the main entrance the words, CENTRAL LONDON HATCHERY AND CONDITIONING CENTRE, and, in a shield, the World State's motto, COMMUNITY, IDENTITY, STABILITY.",
+  },
+];
+
 const DEFAULT_SUBJECTS = [
   { id: 'subj_math', name: 'Mathematics', description: 'Calculus, linear algebra, statistics, discrete mathematics, and formal proofs', color: 'blue' },
   { id: 'subj_english', name: 'English & Literature', description: 'Literary analysis, rhetorical essays, creative writing, and close textual reading', color: 'purple' },
@@ -1678,6 +1753,54 @@ export default function UserSettingsModal({
               {/* ─── 5. CUSTOM WRITING STYLES (MULTI-SAMPLE DROPZONE) ─── */}
               {activeTab === 'writing' && (
                 <div className="space-y-6">
+                  {/* Classic Literature Voice Mimicry Engine */}
+                  <div className="clean-card p-5 space-y-4 border border-purple-500/20 bg-purple-950/10">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-mono font-semibold mb-1">
+                        📚 Literature Voice Mimicry & Style Engine
+                      </div>
+                      <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                        Classic Literature & Book Writing Styles
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Choose a world-renowned literary voice or keep your uploaded custom essay style. The AI matches sentence cadence, lexical richness, and tone.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {LITERATURE_BOOK_STYLES.map((book) => {
+                        const isSelected = (settings.selected_book_style || 'none') === book.id;
+                        return (
+                          <div
+                            key={book.id}
+                            onClick={() => {
+                              setSettings((prev) => ({ ...prev, selected_book_style: book.id }));
+                              setSaveStatus(`✅ Writing style calibrated to: ${book.title}`);
+                            }}
+                            className={`p-3 rounded-xl border transition cursor-pointer text-xs ${
+                              isSelected
+                                ? 'bg-purple-600/20 border-purple-500 text-white shadow-lg shadow-purple-500/10'
+                                : 'bg-slate-950/40 border-white/5 text-slate-300 hover:border-purple-500/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{book.title}</span>
+                              <span className="text-[10px] font-mono text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                                {book.era}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 mt-1">{book.author} — {book.tone}</div>
+                            {book.sample && (
+                              <p className="text-[10px] text-slate-500 italic mt-2 line-clamp-2 border-t border-white/5 pt-1.5">
+                                "{book.sample}"
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="clean-card p-5 space-y-4">
                     <div>
                       <h3 className="text-xs font-semibold text-white flex items-center gap-2">
