@@ -368,7 +368,7 @@ def test_datalake_microcredits_pending_policy():
     data = resp.json()
     assert data["status"] == "success"
     submission = data["submission"]
-    assert submission["status"] == "pending_utilization"
+    assert submission["status"] in ("pending_review", "pending_utilization")
     assert "2+ business days" in submission["utilization_notice"]
     assert submission["credits_awarded"] >= 5
 

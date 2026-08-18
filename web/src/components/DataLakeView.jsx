@@ -129,7 +129,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight">Academic Data Lake</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Submit text or files. Our dedicated AI subagent interprets, classifies, and values entries (0–25 micro-credits).
+              Submit empirical notes or files. Subagent evaluates an estimated score (0–25 cr); actual credits are awarded once reviewed and implemented.
             </p>
           </div>
         </div>
@@ -137,7 +137,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
         {/* Balance Card */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/20 flex items-center justify-between gap-4 shrink-0">
           <div>
-            <span className="text-[10px] text-slate-400 font-mono uppercase block">Data Lake Balance</span>
+            <span className="text-[10px] text-slate-400 font-mono uppercase block">Active Data Lake Balance</span>
             <div className="text-xl font-black text-emerald-400 font-mono">
               {microCreditsBalance} cr
             </div>
@@ -160,11 +160,11 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
         </div>
       )}
 
-      {/* Honest 2+ Business Days Crediting Notice */}
+      {/* Crediting & Implementation Policy Notice */}
       <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-3">
         <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
         <div className="leading-relaxed">
-          <strong>Micro-Credits Policy:</strong> Micro-credits are credited to your balance once submitted data is verified and utilized in synthesis. Processing may take <strong>2+ business days</strong> for credits to arrive.
+          <strong>Review & Implementation Policy:</strong> The score shown upon submission is an <strong>Estimated Score</strong>. Actual micro-credits are only awarded and added to your spendable balance once the entry is reviewed and successfully implemented into Helpotron (processing may take <strong>2+ business days</strong>).
         </div>
       </div>
 
@@ -253,7 +253,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-emerald-600/20"
           >
             <Send className="w-4 h-4" />
-            <span>{submitting ? 'Subagent Interpreting & Classifying…' : 'Submit to Data Lake (Score: 0–25 cr)'}</span>
+            <span>{submitting ? 'Subagent Interpreting & Classifying…' : 'Submit to Data Lake (Est. Score: 0–25 cr)'}</span>
           </button>
         </form>
 
@@ -262,11 +262,11 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
           <div className="p-5 rounded-2xl bg-slate-900 border border-emerald-500/40 text-xs space-y-3 animate-fadeIn">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span className="font-bold text-white text-sm">Subagent Classification Result</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="font-bold text-white text-sm">Subagent Classification & Estimated Score</span>
               </div>
-              <span className="font-mono text-xs px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
-                +{valuationResult.credits_awarded} / 25 Micro-Credits
+              <span className="font-mono text-xs px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+                Est. ~{valuationResult.estimated_credits || valuationResult.credits_awarded || 0} / 25 Micro-Credits
               </span>
             </div>
 
@@ -288,7 +288,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
 
             <div className="text-[11px] text-amber-300/90 font-mono flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 shrink-0" />
-              <span>Status: Pending Utilization (2+ Business Days for live crediting)</span>
+              <span>Status: Pending Review & Implementation (Actual credits awarded upon integration)</span>
             </div>
           </div>
         )}
@@ -299,7 +299,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
-            Your Contributed Entries & Subagent Valuations
+            Your Contributed Entries
           </h3>
           <span className="text-[11px] text-slate-400 font-mono">
             {dataLakeHistory.length} Submissions
@@ -316,36 +316,50 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
               <thead>
                 <tr className="border-b border-white/10 text-slate-400 text-[11px]">
                   <th className="pb-3 font-semibold">Classified Entry</th>
-                  <th className="pb-3 font-semibold">Subagent Category</th>
+                  <th className="pb-3 font-semibold">Category</th>
                   <th className="pb-3 font-semibold">Status</th>
-                  <th className="pb-3 font-semibold">Score</th>
+                  <th className="pb-3 font-semibold">Est. Score</th>
+                  <th className="pb-3 font-semibold">Actual Award</th>
                   <th className="pb-3 font-semibold">Submitted</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 font-mono">
-                {dataLakeHistory.map((sub, i) => (
-                  <tr key={i} className="hover:bg-white/[0.02]">
-                    <td className="py-3 font-semibold text-white">{sub.title}</td>
-                    <td className="py-3 text-[11px] text-slate-400 capitalize">
-                      {sub.data_type?.replace('_', ' ')}
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                          sub.status === 'credited'
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                        }`}
-                      >
-                        {sub.status === 'credited' ? '✅ Credited' : '⏳ Pending (2+ days)'}
-                      </span>
-                    </td>
-                    <td className="py-3 text-emerald-400 font-bold">+{sub.credits_awarded} cr</td>
-                    <td className="py-3 text-[11px] text-slate-500">
-                      {sub.created_at ? sub.created_at.slice(0, 10) : 'Recent'}
-                    </td>
-                  </tr>
-                ))}
+                {dataLakeHistory.map((sub, i) => {
+                  const isImplemented = sub.status === 'implemented' || sub.status === 'credited';
+                  const estScore = sub.estimated_credits || sub.credits_awarded || 0;
+                  const actualScore = isImplemented ? (sub.actual_credits || sub.credits_awarded || estScore) : 0;
+
+                  return (
+                    <tr key={i} className="hover:bg-white/[0.02]">
+                      <td className="py-3 font-semibold text-white max-w-[200px] truncate">{sub.title}</td>
+                      <td className="py-3 text-[11px] text-slate-400 capitalize">
+                        {sub.data_type?.replace('_', ' ')}
+                      </td>
+                      <td className="py-3">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                            isImplemented
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                              : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                          }`}
+                        >
+                          {isImplemented ? '✅ Implemented' : '⏳ Pending Review'}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-300 font-bold">~{estScore} cr</td>
+                      <td className="py-3">
+                        {isImplemented ? (
+                          <span className="text-emerald-400 font-bold">+{actualScore} cr</span>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">Pending (0 cr)</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-[11px] text-slate-500">
+                        {sub.timestamp ? sub.timestamp.slice(0, 10) : sub.created_at ? sub.created_at.slice(0, 10) : 'Recent'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

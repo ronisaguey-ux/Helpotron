@@ -83,12 +83,16 @@ async def update_feedback_status_route(feedback_id: str, payload: FeedbackStatus
 
 # ─── Micro-Credits Data Lake Submissions & Valuation Sub-Agent ───────────────
 
+class ImplementDataLakePayload(BaseModel):
+    actual_credits: Optional[int] = None
+
+
 @router.post("/datalake/microcredits/submit")
 async def submit_data_for_microcredits(payload: MicroCreditSubmission, db: Session = Depends(get_db)):
     """Submits structured empirical data to the Data Lake.
 
-    Evaluated by the Data Quality Valuation Sub-Agent on Relevance, Uniqueness,
-    and Actionability to award 1-25 Micro-Credits.
+    Evaluated by the Data Quality Valuation Sub-Agent to produce an ESTIMATED score (0-25 cr).
+    Actual credits are only awarded once reviewed and implemented into Helpotron.
     """
     user_id = payload.user_id or "RoniDev"
     result = datalake_manager.evaluate_and_record_microcredit_submission(
@@ -99,16 +103,13 @@ async def submit_data_for_microcredits(payload: MicroCreditSubmission, db: Sessi
         metadata=payload.metadata,
     )
 
-    # Increment user settings micro_credits_balance
+    # Balance is NOT incremented yet (only estimated pending review)
     user = db.query(User).filter(User.public_id == user_id).first()
+    current_bal = 0
     if user:
         settings = user_settings_service.get_user_settings(user)
         current_bal = settings.get("micro_credits_balance", 0)
-        new_bal = current_bal + result["credits_awarded"]
-        user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
-        result["new_total_balance"] = new_bal
-    else:
-        result["new_total_balance"] = 21 + result["credits_awarded"]
+    result["current_balance"] = current_bal
 
     return {
         "status": "success",
@@ -116,14 +117,48 @@ async def submit_data_for_microcredits(payload: MicroCreditSubmission, db: Sessi
     }
 
 
+@router.post("/datalake/microcredits/{submission_id}/implement")
+async def implement_datalake_submission(submission_id: str, payload: ImplementDataLakePayload, db: Session = Depends(get_db)):
+    """Reviews and implements a Data Lake entry, officially awarding actual micro-credits to the author."""
+    entry = datalake_manager.approve_and_implement_submission(submission_id, payload.actual_credits)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Data Lake submission not found")
+
+    author_id = entry.get("raw_user_id", "RoniDev")
+    awarded_amount = entry.get("actual_credits", 0)
+
+    user = db.query(User).filter(User.public_id == author_id).first()
+    new_bal = awarded_amount
+    if user:
+        settings = user_settings_service.get_user_settings(user)
+        current_bal = settings.get("micro_credits_balance", 0)
+        new_bal = current_bal + awarded_amount
+        user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
+
+    return {
+        "status": "success",
+        "message": f"Submission {submission_id} reviewed and implemented into Helpotron.",
+        "actual_credits_awarded": awarded_amount,
+        "new_balance": new_bal,
+        "submission": entry,
+    }
+
+
 @router.get("/datalake/microcredits/history")
-async def get_microcredits_history(user_id: Optional[str] = Query(None)):
-    """Fetches user's previous data submissions and sub-agent valuation scores."""
+async def get_microcredits_history(user_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Fetches user's previous data submissions with estimated vs actual scores."""
     uid = user_id or "RoniDev"
     history = datalake_manager.list_microcredit_submissions(user_id=uid)
+    user = db.query(User).filter(User.public_id == uid).first()
+    balance = 0
+    if user:
+        settings = user_settings_service.get_user_settings(user)
+        balance = settings.get("micro_credits_balance", 0)
+
     return {
         "status": "success",
         "count": len(history),
+        "balance": balance,
         "history": history,
     }
 

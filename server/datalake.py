@@ -369,10 +369,12 @@ class DataLakeManager:
             "snippet": clean_text[:200] + ("..." if len(clean_text) > 200 else ""),
             "has_file": has_file,
             "file_name": file_name if has_file else None,
+            "estimated_credits": credit_award,
+            "actual_credits": 0,
             "credits_awarded": credit_award,
             "usd_value": round(credit_award / 100.0, 2),
-            "status": "pending_utilization",  # Credited once verified/utilized in synthesis
-            "utilization_notice": "⏳ Micro-credits from Data Lake entries are credited once your submitted data is verified and utilized in synthesis. Processing may take 2+ business days for credits to arrive in your balance.",
+            "status": "pending_review",  # Pending review and implementation into Helpotron
+            "utilization_notice": "⏳ Estimated score: Once this entry is reviewed and implemented into Helpotron, actual micro-credits will be awarded to your balance (may take 2+ business days).",
             "valuation": {
                 "category": classified_category,
                 "relevance": relevance,
@@ -390,6 +392,34 @@ class DataLakeManager:
             logger.error("Failed recording microcredit submission: %s", e)
 
         return record
+
+    def approve_and_implement_submission(self, submission_id: str, actual_credits: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Reviews, approves, and implements a Data Lake entry, awarding actual micro-credits."""
+        if not self.microcredits_file.exists():
+            return None
+        all_records = []
+        target = None
+        try:
+            with open(self.microcredits_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    rec = json.loads(line)
+                    if rec.get("submission_id") == submission_id:
+                        final_awarded = actual_credits if actual_credits is not None else rec.get("estimated_credits", rec.get("credits_awarded", 10))
+                        rec["status"] = "implemented"
+                        rec["actual_credits"] = final_awarded
+                        rec["credits_awarded"] = final_awarded
+                        rec["implemented_at"] = datetime.now(timezone.utc).isoformat()
+                        target = rec
+                    all_records.append(rec)
+            if target:
+                with open(self.microcredits_file, "w", encoding="utf-8") as f:
+                    for r in all_records:
+                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.error("Failed to approve & implement submission: %s", e)
+        return target
 
     def list_microcredit_submissions(self, user_id: Optional[Any] = None, limit: int = 50) -> List[Dict[str, Any]]:
         """Lists user's microcredit submissions."""
