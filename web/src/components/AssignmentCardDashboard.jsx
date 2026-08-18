@@ -31,7 +31,7 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   useEffect(() => {
     fetchDashboardData();
     fetchSimulationStatus();
-    const interval = setInterval(fetchPendingPermissions, 4000);
+    const interval = setInterval(fetchPendingPermissions, 12000);
     return () => clearInterval(interval);
   }, [userId]);
 

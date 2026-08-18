@@ -91,14 +91,18 @@ app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
 # ─── rate limiting (dependency-free, in-memory) ────────────────────────────
 # Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
 # LLM-costing paths, 30/min elsewhere. 429 with Retry-After when exceeded.
-IP_LIMIT = 120
-USER_STRICT_LIMIT = 10
-USER_GENERAL_LIMIT = 30
+IP_LIMIT = 600
+USER_STRICT_LIMIT = 20
+USER_GENERAL_LIMIT = 60
 STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Never rate-limit frontend static assets or HTML
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
         client = request.client.host if request.client else "unknown"
         if not ratelimit.limiter.allow(f"ip:{client}", IP_LIMIT):
             return JSONResponse({"detail": "rate limited"}, status_code=429,
