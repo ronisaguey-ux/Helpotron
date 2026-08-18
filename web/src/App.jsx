@@ -12,13 +12,14 @@ import Navbar from './components/Navbar.jsx';
 import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
-import { CollapsibleSection } from './components/ui/CollapsibleSection.jsx';
 
 import {
+  Menu,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Trash2,
   ShieldCheck,
-  ChevronRight,
   Flame,
   Clock,
   TrendingUp,
@@ -32,12 +33,14 @@ import {
   Award,
   CreditCard,
   ShieldAlert,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 const Button = ({ variant = 'primary', className = '', ...props }) => {
   const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-mono font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
   const variants = {
-    primary: 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-md shadow-cyan-500/20',
+    primary: 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-md shadow-cyan-500/20 font-bold',
     outline: 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20',
     ghost: 'text-slate-400 hover:text-white hover:bg-white/5',
     danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20',
@@ -130,7 +133,8 @@ export default function App() {
   });
   const [serverUrl, setServerUrlState] = useState(getServer);
   const [connected, setConnected] = useState(true);
-  const [tab, setTab] = useState('assignments');
+  const [activeView, setActiveView] = useState('assignments'); // single-view mode
+  const [sidebarOpen, setSidebarOpen] = useState(true); // collapsible side menu
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -143,7 +147,7 @@ export default function App() {
   const [openAssignment, setOpenAssignment] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Privacy Policy state (must be accepted, else guest read-only)
+  // Privacy Policy state
   const [showPrivacyModal, setShowPrivacyModal] = useState(() => {
     try {
       return localStorage.getItem('helpotron_privacy_accepted') !== 'true';
@@ -151,35 +155,6 @@ export default function App() {
       return false;
     }
   });
-
-  // Clean Visibility Toggles
-  const [visibleSections, setVisibleSections] = useState(() => {
-    try {
-      const saved = localStorage.getItem('helpotron_visible_sections');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {}
-    return {
-      assignments: true,
-      overview: true,
-      analytics: true,
-      groups: true,
-      referral: true,
-      billing: true,
-      settings: true,
-    };
-  });
-
-  const toggleSection = (sectionKey) => {
-    setVisibleSections((prev) => {
-      const updated = { ...prev, [sectionKey]: !prev[sectionKey] };
-      try {
-        localStorage.setItem('helpotron_visible_sections', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-  };
 
   const checkSession = async () => {
     try {
@@ -268,18 +243,27 @@ export default function App() {
     setUserIdState('Guest');
   };
 
-  // Cleaned allTabs: Study tools are now housed inside the maximized assignment view
-  const allTabs = [
-    { key: 'assignments', label: '📋 Assignments Hub', icon: ClipboardList, desc: 'Grading rubric tracking, source maps & maximized study tools' },
-    { key: 'overview', label: '🧭 Activity Dashboard', icon: Eye, desc: 'High-level course progress and study streak' },
-    { key: 'analytics', label: '📊 Data Lake & Telemetry', icon: TrendingUp, desc: 'Real-time pipeline metrics and study time telemetry' },
-    { key: 'groups', label: '👥 Collaborative Groups', icon: Users, desc: 'Shared synchronization peer pools' },
-    { key: 'referral', label: '🎁 Referral Program', icon: Award, desc: 'Earn compute credits via invitation nodes' },
-    { key: 'billing', label: '💳 Compute Ledger & Top-Up', icon: CreditCard, desc: 'Hardware tier scaling and credit transactions' },
-    { key: 'settings', label: '⚙️ Workspace Profiling', icon: SettingsIcon, desc: 'LLM constraints, writing personas and data exports' },
+  const handleSelectView = (viewKey) => {
+    setActiveView(viewKey);
+    setOpenAssignment(null);
+  };
+
+  // Nav Items for Collapsible Side Menu
+  const menuItems = [
+    { key: 'assignments', label: 'Assignments Hub', icon: ClipboardList, badge: null },
+    { key: 'overview', label: 'Activity Overview', icon: Eye, badge: null },
+    { key: 'analytics', label: 'Data Lake & Telemetry', icon: TrendingUp, badge: null },
+    { key: 'groups', label: 'Study Groups', icon: Users, badge: null },
+    { key: 'referral', label: 'Referral Program', icon: Award, badge: '+50 cr' },
+    { key: 'billing', label: 'Pricing & Compute', icon: CreditCard, badge: null },
+    { key: 'settings', label: 'Workspace Settings', icon: SettingsIcon, badge: null },
   ];
 
-  const activeTabs = allTabs.filter((t) => visibleSections[t.key] !== false);
+  if (isAdmin) {
+    menuItems.push({ key: 'admin', label: 'Admin Infrastructure', icon: ShieldAlert, badge: 'ADMIN' });
+  }
+
+  const currentItem = menuItems.find((m) => m.key === activeView) || menuItems[0];
 
   return (
     <ErrorBoundary>
@@ -292,7 +276,7 @@ export default function App() {
           onDecline={handleDeclinePrivacy}
         />
 
-        {/* 3-Option Auth Modal Overlay */}
+        {/* Auth Modal Overlay */}
         <AuthModal
           isOpen={authModalOpen}
           onClose={() => setAuthModalOpen(false)}
@@ -306,13 +290,13 @@ export default function App() {
           }}
         />
 
-        {/* ─── Guest Mode Warning Banner ─────────────────────────────── */}
+        {/* Guest Warning Banner */}
         {isGuest && (
           <div className="bg-amber-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-amber-400/40">
             <div className="flex items-center gap-2">
               <span className="text-base">👁️</span>
               <span>
-                GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows. Action execution is restricted.
+                GUEST (READ-ONLY) MODE: You are exploring simulated courses and workflows.
               </span>
             </div>
             <button
@@ -325,22 +309,22 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── Low Credit Warning Banner ─────────────────────────────── */}
+        {/* Low Credit Warning Banner */}
         {isLoggedIn && credits > 0 && (() => {
-          const planLimit = { basic: 300, pro: 600, elite: 1500 }[userPlan] || 300;
+          const planLimit = { basic: 30, pro: 100, elite: 280 }[userPlan] || 30;
           const pct = (credits / planLimit) * 100;
-          if (pct < 10) {
+          if (pct < 15) {
             return (
               <div className="bg-rose-500/90 backdrop-blur-md text-slate-950 px-6 py-2 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-rose-400/40">
                 <div className="flex items-center gap-2">
                   <span className="text-base">⚠️</span>
                   <span>
-                    LOW CREDIT WARNING: You have {Math.floor(credits)} credits left ({pct.toFixed(0)}% of monthly allocation). Top up or upgrade to keep your study tools running.
+                    LOW CREDIT WARNING: You have {Math.floor(credits)} credits remaining.
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setTab('billing')}
+                  onClick={() => handleSelectView('billing')}
                   className="px-3 py-1 bg-slate-950 text-rose-300 rounded-lg text-xs font-semibold hover:bg-slate-900 border border-rose-400/30 transition cursor-pointer"
                 >
                   Upgrade / Top Up →
@@ -351,26 +335,7 @@ export default function App() {
           return null;
         })()}
 
-        {/* ─── Out of Credits Banner ─────────────────────────────────── */}
-        {isLoggedIn && credits <= 0 && (
-          <div className="bg-rose-600/95 backdrop-blur-md text-white px-6 py-3 text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg border-b border-rose-400/40">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">⛔</span>
-              <span>You're out of credits. Upgrade to Pro or Elite to continue using Helpotron.</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTab('billing')}
-                className="px-3 py-1.5 bg-cyan-500 text-black rounded-lg text-xs font-semibold hover:bg-cyan-400 transition cursor-pointer"
-              >
-                Upgrade Now
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Futuristic HUD Navbar ─────────────────────────────────── */}
+        {/* Futuristic HUD Navbar */}
         <Navbar
           activeAgent="Overlord Orchestrator"
           systemHealth={connected ? "Nominal (100%)" : "Degraded"}
@@ -382,10 +347,6 @@ export default function App() {
           onOpenAuth={() => setAuthModalOpen(true)}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
           onLogout={handleLogout}
-          allTabs={allTabs}
-          visibleSections={visibleSections}
-          onToggleSection={toggleSection}
-          activeTabs={activeTabs}
         />
 
         {!connected && (
@@ -396,109 +357,187 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── Main Workspace & Persistent Study Buddy Sidebar ────────── */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 flex flex-col lg:flex-row gap-8 items-start relative">
+        {/* ─── Main Workspace: Collapsible Side Menu + Dynamic Full-Page View + Overlord Side-dock ────────── */}
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pb-16 flex gap-6 items-start relative">
           
-          {/* Main Dashboard Section Container */}
-          <main className="flex-1 min-w-0 w-full space-y-6">
-            
-            {/* Highly Sectionized Hub Architecture */}
-            {allTabs.map((section) => {
-              if (!visibleSections[section.key]) return null;
+          {/* ─── SLEEK 3-LINE VERTICAL COLLAPSIBLE SIDE MENU ─── */}
+          <aside className={`shrink-0 transition-all duration-300 sticky top-24 z-30 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
+            <div className="glass-panel rounded-2xl border border-white/10 bg-slate-950/70 backdrop-blur-xl p-3 flex flex-col justify-between min-h-[560px] shadow-2xl">
               
-              return (
-                <CollapsibleSection
-                  key={section.key}
-                  title={section.label}
-                  subtitle={section.desc}
-                  icon={section.icon}
-                  defaultOpen={tab === section.key || (tab === 'assignments' && section.key === 'assignments')}
-                >
-                  {section.key === 'assignments' && (
-                    openAssignment ? (
-                      <AssignmentDetailView
-                        assignment={openAssignment}
-                        userId={userId}
-                        onBack={() => setOpenAssignment(null)}
-                      />
-                    ) : (
-                      <AssignmentCardDashboard
-                        userId={userId}
-                        isGuest={isGuest}
-                        onSelectAssignment={(a) => setOpenAssignment(a)}
-                      />
-                    )
+              {/* Top Header with 3-Line Vertical Icon Button */}
+              <div>
+                <div className="flex items-center justify-between px-2 py-2 mb-3 border-b border-white/5">
+                  {sidebarOpen && (
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                      Navigation
+                    </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    aria-label="Toggle Side Menu"
+                    className="p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/5 transition flex items-center justify-center cursor-pointer min-w-[36px] min-h-[36px]"
+                  >
+                    {/* Clean 3-Line Vertical Design */}
+                    <div className="flex flex-col gap-1 items-center justify-center w-4 h-4">
+                      <span className="w-3.5 h-0.5 bg-current rounded-full transition-all" />
+                      <span className="w-3.5 h-0.5 bg-current rounded-full transition-all" />
+                      <span className="w-3.5 h-0.5 bg-current rounded-full transition-all" />
+                    </div>
+                  </button>
+                </div>
 
-                  {section.key === 'overview' && (
-                    openAssignment ? (
-                      <AssignmentDetailView
-                        assignment={openAssignment}
-                        userId={userId}
-                        onBack={() => setOpenAssignment(null)}
-                      />
-                    ) : (
-                      <Overview
-                        userId={userId}
-                        onGoTo={(t) => setTab(t)}
-                        onSelectAssignment={(a) => setOpenAssignment(a)}
-                      />
-                    )
-                  )}
+                {/* Vertical Menu Navigation Options */}
+                <nav className="space-y-1 font-mono text-xs">
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isSelected = activeView === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => handleSelectView(item.key)}
+                        aria-label={`Navigate to ${item.label}`}
+                        aria-pressed={isSelected}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition cursor-pointer select-none ${
+                          isSelected
+                            ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 font-bold shadow-sm shadow-cyan-500/10'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                        } ${!sidebarOpen ? 'justify-center px-2' : ''}`}
+                      >
+                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                        {sidebarOpen && (
+                          <div className="flex-1 flex items-center justify-between truncate text-left">
+                            <span className="truncate">{item.label}</span>
+                            {item.badge && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
 
-                  {section.key === 'analytics' && (
-                    <AnalyticsDashboard userId={userId} />
-                  )}
+              {/* Bottom Quick Status in Side Menu */}
+              {sidebarOpen && (
+                <div className="p-3 rounded-xl bg-black/40 border border-white/5 font-mono text-[11px] space-y-1">
+                  <div className="text-slate-500 uppercase text-[9px]">Active Engine</div>
+                  <div className="text-slate-200 font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Overlord Autonomous
+                  </div>
+                  <div className="text-cyan-400 text-[10px] mt-1">{Number(credits).toLocaleString()} Compute Credits</div>
+                </div>
+              )}
+            </div>
+          </aside>
 
-                  {section.key === 'groups' && (
-                    <StudyGroups userId={userId} />
-                  )}
+          {/* ─── DYNAMIC FULL-PAGE VIEW CONTAINER ─── */}
+          <main className="flex-1 min-w-0 w-full">
+            {/* View Header Title Banner */}
+            <div className="mb-6 glass-panel rounded-2xl px-6 py-4 border border-white/10 flex items-center justify-between bg-slate-950/40">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  <currentItem.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="text-base font-bold font-mono text-white tracking-wide">{currentItem.label}</h1>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {activeView === 'assignments' && 'Manage course assignments, rubrics, and launch targeted study tools'}
+                    {activeView === 'overview' && 'High-level course progress, study streak telemetry, and recent synthesis'}
+                    {activeView === 'analytics' && 'Real-time telemetry, model performance metrics, and study time logs'}
+                    {activeView === 'groups' && 'Collaborative study pools and synchronized peer course material'}
+                    {activeView === 'referral' && 'Invite classmates to earn task-based compute credits'}
+                    {activeView === 'billing' && 'Transparent task-based credit packages and ledger history'}
+                    {activeView === 'settings' && 'Writing persona matrices, anti-detector configurations, and GDPR data export'}
+                    {activeView === 'admin' && 'Infrastructure cluster health, telemetry ledger, and user management'}
+                  </p>
+                </div>
+              </div>
+            </div>
 
-                  {section.key === 'referral' && (
-                    <ReferralSection userId={userId} />
-                  )}
+            {/* Render ONLY the Active View */}
+            <div className="transition-opacity duration-200">
+              {activeView === 'assignments' && (
+                openAssignment ? (
+                  <AssignmentDetailView
+                    assignment={openAssignment}
+                    userId={userId}
+                    onBack={() => setOpenAssignment(null)}
+                  />
+                ) : (
+                  <AssignmentCardDashboard
+                    userId={userId}
+                    isGuest={isGuest}
+                    onSelectAssignment={(a) => setOpenAssignment(a)}
+                  />
+                )
+              )}
 
-                  {section.key === 'billing' && (
-                    <Billing userId={userId} />
-                  )}
+              {activeView === 'overview' && (
+                openAssignment ? (
+                  <AssignmentDetailView
+                    assignment={openAssignment}
+                    userId={userId}
+                    onBack={() => setOpenAssignment(null)}
+                  />
+                ) : (
+                  <Overview
+                    userId={userId}
+                    onGoTo={(t) => handleSelectView(t)}
+                    onSelectAssignment={(a) => setOpenAssignment(a)}
+                  />
+                )
+              )}
 
-                  {section.key === 'settings' && (
-                    <Settings
-                      userId={userId}
-                      onOpenModal={() => setSettingsModalOpen(true)}
-                      onOpenPrivacy={() => setShowPrivacyModal(true)}
-                      onUserId={(id) => { setUserId(id); setUserIdState(id); }}
-                      onServer={(url) => { setServer(url); setServerUrlState(url); }}
-                    />
-                  )}
-                </CollapsibleSection>
-              );
-            })}
+              {activeView === 'analytics' && (
+                <AnalyticsDashboard userId={userId} />
+              )}
 
-            {isAdmin && (
-              <CollapsibleSection
-                title="🛡️ Core Infrastructure Management"
-                subtitle="Financial ledgers and sandbox runtime clusters"
-                icon={ShieldAlert}
-                defaultOpen={true}
-              >
+              {activeView === 'groups' && (
+                <StudyGroups userId={userId} />
+              )}
+
+              {activeView === 'referral' && (
+                <ReferralSection userId={userId} />
+              )}
+
+              {activeView === 'billing' && (
+                <Billing userId={userId} />
+              )}
+
+              {activeView === 'settings' && (
+                <Settings
+                  userId={userId}
+                  onOpenModal={() => setSettingsModalOpen(true)}
+                  onOpenPrivacy={() => setShowPrivacyModal(true)}
+                  onUserId={(id) => { setUserId(id); setUserIdState(id); }}
+                  onServer={(url) => { setServer(url); setServerUrlState(url); }}
+                />
+              )}
+
+              {activeView === 'admin' && isAdmin && (
                 <AdminPanel
                   userId={userId}
                   adminUsers={adminUsers}
                   adminAnalytics={adminAnalytics}
                   refreshAdmin={fetchAdminData}
                 />
-              </CollapsibleSection>
-            )}
+              )}
+            </div>
           </main>
 
-          {/* Persistent Side-dock Overlord Agent Panel */}
+          {/* ─── PERSISTENT OVERLORD SIDE-DOCK PANEL ─── */}
           <div className={`transition-all duration-300 shrink-0 sticky top-24 ${buddyOpen ? 'w-full lg:w-96' : 'w-12'}`}>
             <StudyBuddyPanel
               open={buddyOpen}
               setOpen={setBuddyOpen}
               onGenerateAction={(kind, query) => {
-                setTab('assignments');
+                handleSelectView('assignments');
               }}
             />
           </div>
@@ -800,7 +839,7 @@ function Billing({ userId }) {
     try {
       const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
       setBalance(r.credits);
-      setMsg(`✅ $${amountCents / 100} allocated — New balance: ${r.credits} credits`);
+      setMsg(`✅ Allocation updated — Current balance: ${r.credits} credits`);
       api.dashboard(userId).then((d) => setTransactions(d.recent_transactions || [])).catch(() => {});
     } catch (e) {
       setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
