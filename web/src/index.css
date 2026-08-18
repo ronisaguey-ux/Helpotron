@@ -30,6 +30,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Accessible focus rings across all interactive elements (WCAG 2.4.7) */
+  :focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
 }
 
 /* Clean, non-distracting background */

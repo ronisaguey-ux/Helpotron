@@ -286,6 +286,14 @@ export default function App() {
     <ErrorBoundary>
       <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
         
+        {/* WCAG 2.4.1 Skip Navigation Link */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-blue-600 focus:text-white focus:font-semibold focus:rounded-xl focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
+        >
+          Skip to main content
+        </a>
+
         {/* Privacy Policy Modal Overlay */}
         <PrivacyPolicyModal
           isOpen={showPrivacyModal}
@@ -477,7 +485,7 @@ export default function App() {
           </aside>
 
           {/* ─── DYNAMIC FULL-PAGE VIEW CONTAINER ─── */}
-          <main className="flex-1 min-w-0 w-full space-y-5">
+          <main id="main-content" className="flex-1 min-w-0 w-full space-y-5">
             {/* View Header Title Banner */}
             <div className="clean-card px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
