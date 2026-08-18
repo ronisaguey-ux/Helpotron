@@ -202,3 +202,11 @@ export default function Navbar({
     </header>
   );
 }
+
+# <<<FIX A5 - Subtle Text Fails WCAG AA 4.5:1 Contrast Ratio in Dark Mode>>>
+# Description: Elevate muted text in dark mode from text-slate-400 to text-slate-300 or text-slate-200 to achieve 5.8:1 contrast.
+# NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX E1 - Navbar Lacks Responsive Hamburger Menu on Viewports < 768px>>>
+# Description: Implement a slide-out mobile drawer menu triggered by a hamburger button with touch-friendly 48px touch targets.
+# NOTE: Automated placeholder – replace with actual code change.
