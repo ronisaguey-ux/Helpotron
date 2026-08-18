@@ -11,11 +11,16 @@ from typing import Any, Generator
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
 
 from .config import config
 
 _connect_args = {"check_same_thread": False} if config.database_url.startswith("sqlite") else {}
-engine = create_engine(config.database_url, connect_args=_connect_args)
+engine = create_engine(
+    config.database_url,
+    connect_args=_connect_args,
+    poolclass=NullPool if config.database_url.startswith("sqlite") else QueuePool,
+)
 
 # Enable SQLite Write-Ahead Logging (WAL) mode for concurrency
 if config.database_url.startswith("sqlite"):
