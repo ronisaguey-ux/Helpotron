@@ -24,6 +24,16 @@ export default function Navbar({
 
         {/* Minimalist Top Indicator */}
         <div className="flex items-center gap-3">
+          <a
+            href="/api/extension/download"
+            download="helpotron-extension.zip"
+            title="Download Chrome & Canvas Companion Extension"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-blue-500/30 text-slate-300 hover:text-white transition font-medium cursor-pointer"
+          >
+            <span className="text-blue-400 font-bold">🧩</span>
+            <span>Extension</span>
+          </a>
+
           {user && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs text-slate-300 font-mono">
               <Zap className="w-3.5 h-3.5 text-blue-400" />

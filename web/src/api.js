@@ -211,11 +211,17 @@ export const api = {
 
   // Universal Assignment Dump & Overlord Routing
   uploadDumpFile: async (formData) => {
+    const headers = {
+      'X-Public-ID': getUserId() || 'RoniDev',
+    };
+    const csrf = getCsrfToken();
+    if (csrf) {
+      headers['X-CSRF-Token'] = csrf;
+    }
     const res = await fetch(`${getServer()}/api/dump/upload`, {
       method: 'POST',
-      headers: {
-        'X-Public-ID': getUserId() || 'RoniDev',
-      },
+      credentials: 'include',
+      headers,
       body: formData,
     });
     if (!res.ok) {

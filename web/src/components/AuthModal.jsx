@@ -56,24 +56,20 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
           ? '/api/auth/send-email-verification'
           : '/api/auth/2fa/send-challenge';
 
-      const res = await fetch(endpoint, {
+      const payload =
+        verifyChannel === 'email'
+          ? { email: verifyTarget.trim(), username: signupUser.trim() }
+          : { phone_number: verifyTarget.trim(), username: signupUser.trim() };
+
+      const data = await api.request(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          verifyChannel === 'email'
-            ? { email: verifyTarget.trim(), username: signupUser.trim() }
-            : { phone_number: verifyTarget.trim(), username: signupUser.trim() }
-        ),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setCodeSent(true);
-        setSignupSuccessMsg(`✅ 6-digit verification code sent to ${verifyTarget}!`);
-      } else {
-        setLoginError(data.detail || 'Failed to send verification code.');
-      }
+
+      setCodeSent(true);
+      setSignupSuccessMsg(`✅ 6-digit verification code sent to ${verifyTarget}!`);
     } catch (err) {
-      setLoginError('Network error while sending verification code.');
+      setLoginError(err.message || 'Failed to send verification code.');
     } finally {
       setLoading(false);
     }
@@ -94,20 +90,15 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
           ? '/api/auth/verify-email'
           : '/api/auth/2fa/verify-challenge';
 
-      const verifyRes = await fetch(verifyEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          verifyChannel === 'email'
-            ? { email: verifyTarget.trim(), code: verifyCode.trim() }
-            : { phone_number: verifyTarget.trim(), code: verifyCode.trim() }
-        ),
-      });
+      const verifyPayload =
+        verifyChannel === 'email'
+          ? { email: verifyTarget.trim(), code: verifyCode.trim() }
+          : { phone_number: verifyTarget.trim(), code: verifyCode.trim() };
 
-      if (!verifyRes.ok) {
-        const errData = await verifyRes.json();
-        throw new Error(errData.detail || 'Invalid or expired verification code.');
-      }
+      await api.request(verifyEndpoint, {
+        method: 'POST',
+        body: JSON.stringify(verifyPayload),
+      });
 
       // 2. Create user account
       const signupRes = await api.signup(signupUser.trim(), signupPass);

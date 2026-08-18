@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Union
@@ -816,34 +817,42 @@ async def agent_start(body: AgentStartIn, db: Session = Depends(get_db)):
 async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
     """Run the agent; on success persist collected pages as a transcript, on
     failure with nothing collected refund the session credit."""
-    await agent_manager.run(session)
+    try:
+        await agent_manager.run(session)
+    except Exception as e:
+        logger.error("agent %s execution error: %s", session.session_id, e)
+
     from .database import SessionLocal
 
     with SessionLocal() as db:
-        user = db.query(User).filter(User.public_id == session.public_id).first()
-        if session.status == "done" and session.result_text and user:
-            t = Transcript(user_id=user.id, assignment_id=session.assignment_id,
-                           source="agent", text=session.result_text)
-            db.add(t)
-            db.flush()
-            if session.assignment_id is not None:
-                a = db.get(Assignment, session.assignment_id)
-                if a is not None:
-                    a.progress = {**a.progress, "collected": True}
-                    a.status = "transcribed"
-            db.commit()
-            logger.info("agent %s collected %d chars -> transcript %d",
-                        session.session_id, len(session.result_text), t.id)
-        elif (session.status == "failed" or
-              (session.status == "disconnected" and session.steps < 3)) \
-                and not session.result_text and user:
-            # Refund only when nothing was collected AND the session barely
-            # started (crash, never-connected, or an immediate disconnect) —
-            # a session that ran steps and then disconnected pays the credit.
-            credits.top_up(db, user, credits.TASK_COSTS["agent_session"],
-                           reason="refund:agent:failed")
-            db.commit()
-            logger.info("agent %s failed with nothing collected; credit refunded", session.session_id)
+        try:
+            user = db.query(User).filter(User.public_id == session.public_id).first()
+            if session.status == "done" and session.result_text and user:
+                t = Transcript(user_id=user.id, assignment_id=session.assignment_id,
+                               source="agent", text=session.result_text)
+                db.add(t)
+                db.flush()
+                if session.assignment_id is not None:
+                    a = db.get(Assignment, session.assignment_id)
+                    if a is not None:
+                        a.progress = {**a.progress, "collected": True}
+                        a.status = "transcribed"
+                db.commit()
+                logger.info("agent %s collected %d chars -> transcript %d",
+                            session.session_id, len(session.result_text), t.id)
+            elif (session.status == "failed" or
+                  (session.status == "disconnected" and session.steps < 3)) \
+                    and not session.result_text and user:
+                # Refund only when nothing was collected AND the session barely
+                # started (crash, never-connected, or an immediate disconnect) —
+                # a session that ran steps and then disconnected pays the credit.
+                credits.top_up(db, user, credits.TASK_COSTS["agent_session"],
+                               reason="refund:agent:failed")
+                db.commit()
+                logger.info("agent %s failed with nothing collected; credit refunded", session.session_id)
+        except Exception as error:
+            db.rollback()
+            logger.error("Transaction execution failed in _run_agent_and_persist: %s", error)
 
 
 @app.get("/api/agent/{session_id}")
@@ -1032,13 +1041,41 @@ async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = De
         raise HTTPException(500, f"Google Docs export failed: {e}")
 
 
-# ─── Unified Single Localhost Host Mount & SPA Route ──────────────────────────
+@app.get("/api/extension/download")
+async def download_extension_archive():
+    """Generates and serves downloadable zip package for Chrome/Canvas companion extension."""
+    import io
+    import os
+    import zipfile
+    from fastapi.responses import Response
+
+    ext_dir = Path(__file__).resolve().parent.parent / "extension"
+    if not ext_dir.exists():
+        raise HTTPException(404, "Extension directory not found")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(str(ext_dir)):
+            for file in files:
+                full_path = Path(root) / file
+                rel_path = full_path.relative_to(ext_dir)
+                zf.write(str(full_path), arcname=str(rel_path))
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="helpotron-extension.zip"'},
+    )
+
+
+# ─── Unified Safe Localhost / Production SPA Mount ───────────────────────────
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
-if _WEB_DIST.exists():
+
+if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
     if (_WEB_DIST / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(_WEB_DIST / "assets")), name="static_assets")
 
@@ -1051,6 +1088,18 @@ if _WEB_DIST.exists():
         if full_path and target.is_file():
             return FileResponse(target)
         return FileResponse(_WEB_DIST / "index.html")
+else:
+    logger.warning("Vite distribution directory web/dist not found. Serving API fallback mode.")
+
+    @app.get("/")
+    async def serve_fallback_index():
+        return JSONResponse({
+            "status": "ok",
+            "message": "Helpotron Engine running in API mode. Static web application assets are not built. Execute 'npm run build' inside /web for full SPA UI.",
+            "docs": "/docs",
+            "health": "/api/health",
+        })
+
 
 
 
