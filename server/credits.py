@@ -18,8 +18,8 @@ from .database import CreditTransaction, User
 logger = logging.getLogger("helpotron.credits")
 
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
-TIER_MONTHLY_CREDITS = {"basic": 300, "pro": 600, "elite": 1500}
-TIER_OVERAGE_PER_CREDIT_CENTS = {"basic": 10, "pro": 8, "elite": 5}
+TIER_MONTHLY_CREDITS = {"basic": 500, "pro": 2000, "elite": 6000}
+TIER_OVERAGE_PER_CREDIT_CENTS = {"basic": 5, "pro": 3, "elite": 2}
 
 TOKENS_PER_CREDIT = 10000
 

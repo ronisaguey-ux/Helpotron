@@ -656,7 +656,7 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
     materials = db.query(StudyMaterial).filter_by(user_id=user.id).order_by(StudyMaterial.id.desc()).offset(offset).limit(limit).all()
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
         credits.CreditTransaction.id.desc()).limit(20).all()
-    monthly = credits.TIER_MONTHLY_CREDITS[user.plan]
+    monthly = credits.TIER_MONTHLY_CREDITS.get(user.plan, 2000)
     bal = credits.get_balance(user)
     
     return {
