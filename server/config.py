@@ -142,3 +142,6 @@ class Settings(BaseSettings):
 Config = Settings
 settings = Settings()
 config = settings
+# Export JWT constants for legacy imports
+JWT_SECRET = settings.secret_key
+JWT_ALGORITHM = settings.algorithm

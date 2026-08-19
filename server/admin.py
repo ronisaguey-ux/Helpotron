@@ -6,14 +6,15 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .config import config
 from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, get_db
-from .security import hash_password
+from .security import hash_password, verify_jwt_token
+router = APIRouter()
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
     auth_header = request.headers.get('Authorization')

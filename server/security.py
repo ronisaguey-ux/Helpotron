@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import jwt
 import re
 import secrets
 import time
@@ -12,7 +13,7 @@ from fastapi import HTTPException, Request, Response, Depends
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from .config import config
+from .config import config, JWT_SECRET, JWT_ALGORITHM
 
 # ─── password hashing ──────────────────────────────────────────────────────
 
@@ -28,10 +29,36 @@ def verify_password(password: str, hash_hex: str, salt: str) -> bool:
     key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
     return key.hex() == hash_hex
 
+# ─── JWT helpers ──────────────────────────────────────────────────────────
+
+def verify_jwt_token(token: str) -> dict | None:
+    """Decode and validate a JWT token. Returns payload dict or None on failure."""
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM or 'HS256'],
+            options={'verify_exp': True, 'verify_signature': True}
+        )
+        return payload
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
+def create_jwt_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    """Create a signed JWT token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    to_encode.update({'exp': expire})
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM or 'HS256')
+
 # ─── rate limiting ────────────────────────────────────────────────────────
 
 class RateLimiter:
-    """Basic rate limiter for general endpoints."""
+    """Basic in-memory sliding window rate limiter."""
     def __init__(self, max_requests: int, window_seconds: int):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
@@ -47,23 +74,14 @@ class RateLimiter:
             return False
         requests.append(now)
         self._requests[key] = requests
-import jwt
-from datetime import datetime, timezone
-from server.config import JWT_SECRET, JWT_ALGORITHM
-
-def verify_jwt_token(token: str) -> dict:
-    try:
-        payload = jwt.decode(
-            token,
-            JWT_SECRET,
-            algorithms=[JWT_ALGORITHM or 'HS256'],
-            options={'verify_exp': True, 'verify_signature': True}
-        )
-        return payload
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
-        self._requests[key] = requests
         return True
+
+
+class AdaptiveRateLimiter(RateLimiter):
+    """Adaptive rate limiter with exponential backoff on repeated failures."""
+    def __init__(self, max_requests: int, window_seconds: int):
+        super().__init__(max_requests, window_seconds)
+        self._failures: Dict[str, list[float]] = {}
 
     def check_auth(self, key: str) -> tuple[bool, int]:
         now = time.time()
@@ -116,7 +134,17 @@ def validate_password_strength(password: str) -> bool:
         return False
     return True
 
+def is_admin_user(user_id: str) -> bool:
+    """Check if user is admin by public_id."""
+    from .config import config
+    admin_ids = getattr(config, 'admin_ids', [])
+    if isinstance(admin_ids, str):
+        admin_ids = [x.strip() for x in admin_ids.split(',') if x.strip()]
+    return user_id in admin_ids
+
 # ─── session store ────────────────────────────────────────────────────────
+
+SESSION_COOKIE_NAME = "helpotron_session"
 
 SESSION_COOKIE_NAME = "helpotron_session"
 
