@@ -290,3 +290,25 @@ async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5) -
         _SCORE_CACHE.clear()
     _SCORE_CACHE[text_hash] = res
     return res
+
+import hashlib as _hashlib
+from functools import lru_cache
+
+_DETECTOR_CACHE: dict[str, dict] = {}
+
+def _cache_key(text: str, detector_name: str) -> str:
+    """Generate a deterministic cache key for detector results."""
+    return _hashlib.sha256(f"{detector_name}:{text}".encode()).hexdigest()
+
+def run_detector_cached(detector_fn, text: str, detector_name: str) -> dict:
+    """Run a detector function with result caching to avoid redundant LLM calls."""
+    key = _cache_key(text, detector_name)
+    if key in _DETECTOR_CACHE:
+        return _DETECTOR_CACHE[key]
+    result = detector_fn(text)
+    _DETECTOR_CACHE[key] = result
+    return result
+
+def clear_detector_cache() -> None:
+    """Clear all cached detector results (e.g., after model update)."""
+    _DETECTOR_CACHE.clear()
