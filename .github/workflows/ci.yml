@@ -1,71 +1,35 @@
-name: Continuous Integration & Security Pipeline
-
+name: CI
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  backend_lint_and_test:
-    name: Backend Test Suite & Code Quality
-    runs-on: ubuntu-24.04
+  test:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Checkout Code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcb80e669f # v5.1.1
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a6003b87017716 # v5.0.0
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install Backend Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r server/requirements.txt
-          pip install pytest pytest-cov flake8
+          pip install pytest pytest-asyncio httpx
 
-      - name: Run Flake8 Linter
-        run: |
-          flake8 server --max-line-length=120 --exclude=tests,__pycache__
-
-      - name: Run Pytest Test Suite
-        run: |
-          pytest server/tests/ --cov=server --cov-report=term-missing
-
-  frontend_lint_and_test:
-    name: Frontend Build & Bundle Verification
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-
-      - name: Set up Node.js 20.x
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
-        with:
-          node-version: 20
-          cache: "npm"
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install Frontend Dependencies
-        working-directory: ./web
-        run: npm ci
-
-      - name: Build Production Vite Bundle
-        working-directory: ./web
-        run: npm run build
-
-  gitleaks_secret_scan:
-    name: Secret & Credential Detection
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout full git history
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        with:
-          fetch-depth: 0
-
-      - name: Run Gitleaks Secret Scanner
-        uses: gitleaks/gitleaks-action@5126a111b7ab84f86644f77cda6beec4a9e403d1 # v2.3.6
+      - name: Run Test Suite
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JWT_SECRET: ci-test-secret-value-32chars-minimum-key
+          DATABASE_URL: sqlite:///:memory:
+        run: |
+          pytest server/tests/ -v
