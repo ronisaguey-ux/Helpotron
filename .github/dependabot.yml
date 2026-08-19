@@ -1,37 +1,21 @@
-# Helpotron Automator — Dependabot Configuration
-# Daily automated dependency and security updates across backend, frontend, and GitHub Actions.
-
 version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/server"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     open-pull-requests-limit: 10
-    reviewers:
-      - "ronisaguey-ux"
-    labels:
-      - "dependencies"
-      - "backend"
-      - "security"
+    rebase-strategy: "auto"
 
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     open-pull-requests-limit: 10
-    reviewers:
-      - "ronisaguey-ux"
-    labels:
-      - "dependencies"
-      - "frontend"
-      - "security"
+    rebase-strategy: "auto"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "ci/cd"
-      - "security"
+    open-pull-requests-limit: 10
