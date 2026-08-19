@@ -385,3 +385,7 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
 # <<<FIX A15 - Icon-Only Action Buttons Missing Accessible Names (aria-label)>>>
 # Description: Add descriptive aria-label attributes (e.g. aria-label='Copy study notes to clipboard') to all icon-only button elements.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX A5 - Color contrast failure on secondary slate text>>>
+# Description: Replace text-slate-400 on light backgrounds with text-slate-600 (#475569) achieving 5.8:1 contrast.
+# NOTE: Automated placeholder – replace with actual code change.
