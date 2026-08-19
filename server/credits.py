@@ -198,3 +198,41 @@ def record_data_submission(db: Session, user: User, payload: Any = None) -> dict
         "next_purchase_discount": compute_applicable_discount(user),
         "status": "recorded",
     }
+
+from sqlalchemy import update
+import uuid as _uuid
+
+def deduct_credits_atomic(user_id: str, amount: int, description: str, db, idempotency_key: str = None) -> bool:
+    """Atomically deduct credits using database-level UPDATE to prevent double-spending."""
+    if amount <= 0:
+        return True
+
+    from .database import CreditTransaction, User
+    if idempotency_key:
+        existing = db.query(CreditTransaction).filter(
+            CreditTransaction.idempotency_key == idempotency_key
+        ).first()
+        if existing:
+            return True
+
+    # Atomic conditional update prevents concurrent double-spending
+    stmt = (
+        update(User)
+        .where((User.id == user_id) & (User.credits >= amount))
+        .values(credits=User.credits - amount)
+        .execution_options(synchronize_session="fetch")
+    )
+    result = db.execute(stmt)
+    if result.rowcount == 0:
+        db.rollback()
+        return False
+
+    tx = CreditTransaction(
+        user_id=user_id,
+        delta=-amount,
+        reason=description,
+        idempotency_key=idempotency_key,
+    )
+    db.add(tx)
+    db.commit()
+    return True
