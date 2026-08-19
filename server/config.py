@@ -145,3 +145,7 @@ config = settings
 # Export JWT constants for legacy imports
 JWT_SECRET = settings.secret_key
 JWT_ALGORITHM = settings.algorithm
+
+# LLM config aliases
+OPENROUTER_API_KEY = settings.openrouter_api_key if hasattr(settings, 'openrouter_api_key') else getattr(settings, 'omniroute_api_key', '')
+DEFAULT_MODEL = getattr(settings, 'primary_model', 'deepseek/deepseek-chat')
