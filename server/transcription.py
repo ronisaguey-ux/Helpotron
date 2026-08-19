@@ -196,3 +196,33 @@ async def _transcribe_openai(path: str, task: str) -> Tuple[str, float | None]:
     if not text.strip():
         raise RuntimeError("Whisper returned empty text")
     return text, float(duration) if duration else None
+
+import subprocess
+from pathlib import Path as _Path
+
+def convert_audio_to_wav(input_path: str, output_path: str) -> str:
+    """Convert audio file to WAV using ffmpeg with shell injection protection."""
+    inp = _Path(input_path).resolve()
+    outp = _Path(output_path).resolve()
+
+    # Strict whitelist validation for file extensions
+    allowed_exts = {'.mp3', '.m4a', '.wav', '.ogg', '.webm', '.aac', '.mp4'}
+    if inp.suffix.lower() not in allowed_exts or outp.suffix.lower() != '.wav':
+        raise ValueError('Invalid audio format extension')
+
+    if not inp.exists() or not inp.is_file():
+        raise FileNotFoundError(f'Input audio file does not exist: {inp}')
+
+    args = [
+        'ffmpeg', '-y', '-nostdin',
+        '-i', str(inp),
+        '-ar', '16000',
+        '-ac', '1',
+        '-c:a', 'pcm_s16le',
+        str(outp)
+    ]
+
+    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+    if result.returncode != 0:
+        raise RuntimeError(f'ffmpeg conversion failed: {result.stderr[:300]}')
+    return str(outp)
