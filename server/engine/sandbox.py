@@ -308,3 +308,32 @@ class SandboxManager:
 
 # Global Sandbox Manager Singleton
 sandbox_manager = SandboxManager()
+
+
+from pathlib import Path
+
+SANDBOX_BASE_DIR = Path('./exports/sandboxes').resolve()
+
+def get_sanitized_sandbox_path(sandbox_id: str, filename: str) -> Path:
+    """Return a safe resolved path inside the sandbox boundary."""
+    safe_sandbox_id = ''.join(c for c in sandbox_id if c.isalnum() or c in ('_', '-'))
+    safe_filename = Path(filename).name
+
+    target_dir = (SANDBOX_BASE_DIR / safe_sandbox_id).resolve()
+    target_file = (target_dir / safe_filename).resolve()
+
+    if not str(target_file).startswith(str(SANDBOX_BASE_DIR)):
+        raise PermissionError('Sandbox path traversal violation detected')
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_file
+
+
+def write_sandbox_file(sandbox_id: str, filename: str, content: str) -> str:
+    """Write a file to the sandbox, blocking path traversal and executable extensions."""
+    path = get_sanitized_sandbox_path(sandbox_id, filename)
+    if path.suffix.lower() in ('.sh', '.bash', '.exe', '.bat', '.py'):
+        raise ValueError('Executable file extensions forbidden in standard sandbox export')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    return str(path)
