@@ -121,3 +121,7 @@ export default function AssignmentCard({
 # <<<FIX E2 - Touch Targets Less Than 44px on Assignment Action Badges>>>
 # Description: Increase minimum padding and touch bounding box to min-h-[44px] min-w-[44px] on all mobile interactive elements.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX A13 - Emoji used as interface icons instead of standard SVG set>>>
+# Description: Import and render Lucide React SVG icons (<BookOpen />, <Zap />, <FileText />, <Target />) with consistent 20px sizing.
+# NOTE: Automated placeholder – replace with actual code change.
