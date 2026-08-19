@@ -210,3 +210,7 @@ export default function Navbar({
 # <<<FIX E1 - Navbar Lacks Responsive Hamburger Menu on Viewports < 768px>>>
 # Description: Implement a slide-out mobile drawer menu triggered by a hamburger button with touch-friendly 48px touch targets.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX A15 - Missing aria-label on icon-only buttons>>>
+# Description: Add aria-label="Close modal", aria-label="Refresh assignments", and aria-label="Attach file" to all icon buttons.
+# NOTE: Automated placeholder – replace with actual code change.
