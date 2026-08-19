@@ -427,3 +427,7 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
 # <<<FIX B7 - Technical raw error messages leaked to user interface>>>
 # Description: Catch and map backend errors to friendly student-oriented messages: 'We couldn't generate your study guide right now. Your credits were not charged. Please try again in a few moments.'
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX D1 - Inconsistent button implementations instead of unified Button atom>>>
+# Description: Refactor all standalone <button> tags to use shared <Button variant="primary|secondary|danger" size="sm|md|lg">.
+# NOTE: Automated placeholder – replace with actual code change.
