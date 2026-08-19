@@ -47,32 +47,21 @@ class RateLimiter:
             return False
         requests.append(now)
         self._requests[key] = requests
-        return True
+import jwt
+from datetime import datetime, timezone
+from server.config import JWT_SECRET, JWT_ALGORITHM
 
-    def remaining(self, key: str) -> int:
-        now = time.time()
-        window_start = now - self.window_seconds
-        requests = [t for t in self._requests.get(key, []) if t > window_start]
-        return max(0, self.max_requests - len(requests))
-
-
-class AdaptiveRateLimiter:
-    """Rate limiter with exponential backoff for auth endpoints."""
-    def __init__(self, max_requests: int, window_seconds: int):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self._requests: Dict[str, list[float]] = {}
-        self._failures: Dict[str, list[float]] = {}
-
-    def allow(self, key: str) -> bool:
-        now = time.time()
-        window_start = now - self.window_seconds
-        if key not in self._requests:
-            self._requests[key] = []
-        requests = [t for t in self._requests[key] if t > window_start]
-        if len(requests) >= self.max_requests:
-            return False
-        requests.append(now)
+def verify_jwt_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM or 'HS256'],
+            options={'verify_exp': True, 'verify_signature': True}
+        )
+        return payload
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
         self._requests[key] = requests
         return True
 
