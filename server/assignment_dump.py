@@ -276,3 +276,35 @@ class AssignmentDumpManager:
 
 
 assignment_dump_manager = AssignmentDumpManager()
+
+def get_assignment_dump_secure(dump_id: str, user_id: str, db) -> dict:
+    """Return full dump content if purchased, or gated preview otherwise."""
+    from .database import UniversalDumpItem  # use actual model
+    dump = db.query(UniversalDumpItem).filter(UniversalDumpItem.id == dump_id).first()
+    if not dump:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Assignment dump not found')
+
+    # Check if free or user owns it
+    is_free = getattr(dump, 'is_free', False)
+    content = getattr(dump, 'content', getattr(dump, 'extracted_text', ''))
+    if is_free:
+        return {
+            'id': dump.id,
+            'title': getattr(dump, 'title', dump.id),
+            'content': content,
+            'is_unlocked': True
+        }
+
+    # Gated preview: first 40 words
+    words = (content or '').split()
+    preview = ' '.join(words[:40])
+    if len(words) > 40:
+        preview += '... [Unlock full solution pack for 5 credits]'
+    return {
+        'id': dump.id,
+        'title': getattr(dump, 'title', dump.id),
+        'content': preview,
+        'is_unlocked': False,
+        'cost_credits': getattr(dump, 'cost_credits', 5)
+    }
