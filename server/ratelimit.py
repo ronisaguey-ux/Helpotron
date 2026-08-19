@@ -1,15 +1,16 @@
-"""Tiny dependency-free rate limiter (sliding window, in-memory with bounded cache).
+"""Rate limiting utilities for Helpotron API endpoints.
 
-Kept dependency-free on purpose: sliding-window counters with auto-pruning
-and bounded maximum cache size (10,000 max keys) to prevent memory exhaustion.
+Provides both a class-based RateLimiter and a FastAPI dependency factory.
 """
 from __future__ import annotations
 
 import time
-from collections import deque
+from collections import defaultdict, deque
+from fastapi import HTTPException, Request, status
 
 
 class RateLimiter:
+    """Sliding window rate limiter (in-memory, bounded cache)."""
     MAX_KEYS = 10_000
 
     def __init__(self, max_keys: int = 10_000) -> None:
@@ -19,30 +20,48 @@ class RateLimiter:
     def allow(self, key: str, limit: int, window: float = 60.0) -> bool:
         """True if `key` is under `limit` requests per `window` seconds."""
         now = time.time()
-        
-        # Guard against memory exhaustion
         if len(self._hits) >= self.max_keys and key not in self._hits:
             self.prune(max_age=window * 2)
             if len(self._hits) >= self.max_keys:
-                # Evict oldest entry
                 oldest_key = next(iter(self._hits))
                 del self._hits[oldest_key]
-
-        hits = self._hits.setdefault(key, deque())
-        # prune entries older than the window
-        while hits and hits[0] < now - window:
-            hits.popleft()
-        if len(hits) >= limit:
+        q = self._hits.setdefault(key, deque())
+        cutoff = now - window
+        while q and q[0] < cutoff:
+            q.popleft()
+        if len(q) >= limit:
             return False
-        hits.append(now)
+        q.append(now)
         return True
 
-    def prune(self, max_age: float = 3600.0) -> None:
-        """Drop stale keys so the table can't grow unboundedly."""
+    def prune(self, max_age: float = 120.0) -> None:
         cutoff = time.time() - max_age
-        stale = [k for k, hits in self._hits.items() if not hits or hits[-1] < cutoff]
+        stale = [k for k, q in self._hits.items() if not q or q[-1] < cutoff]
         for k in stale:
             del self._hits[k]
 
 
-limiter = RateLimiter()
+# ─── FastAPI dependency factory ───────────────────────────────────────────
+
+RATE_LIMITS: dict[str, list[float]] = defaultdict(list)
+
+
+def rate_limit(max_requests: int = 10, window_seconds: int = 60):
+    """FastAPI dependency factory for route-level rate limiting."""
+    def dependency(request: Request):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        key = f"{client_ip}:{request.url.path}"
+
+        timestamps = [t for t in RATE_LIMITS[key] if now - t < window_seconds]
+        if len(timestamps) >= max_requests:
+            retry_after = int(window_seconds - (now - timestamps[0]))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. Maximum {max_requests} requests per {window_seconds}s. Try again in {retry_after}s.",
+                headers={"Retry-After": str(max(1, retry_after))}
+            )
+        timestamps.append(now)
+        RATE_LIMITS[key] = timestamps
+        return True
+    return dependency
