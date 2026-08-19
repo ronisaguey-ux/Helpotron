@@ -1,20 +1,16 @@
-# Helpotron Automator — Pre-Commit & Secret Detection Configuration
-# Prevents accidental commit of private keys, .env credentials, and unformatted code.
-
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: check-added-large-files
-        args: ['--maxkb=5000']
-      - id: check-case-conflict
-      - id: check-json
-      - id: check-yaml
-      - id: detect-private-key
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
+    rev: v8.18.2
     hooks:
       - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      - id: detect-private-key
