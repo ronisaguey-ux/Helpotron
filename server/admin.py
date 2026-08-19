@@ -15,31 +15,28 @@ from .config import config
 from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, get_db
 from .security import hash_password
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-ADMIN_IDS = ["RoniDev", "admin"]
-
-
-def is_admin(request: Request) -> bool:
-    from .security import SESSION_COOKIE_NAME, SessionStore
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        sess = SessionStore.get_session(token)
-        if sess and sess.get("public_id") in ADMIN_IDS:
-            return True
-
-    # Allow header or local fallback strictly in non-production development mode
-    if not config.production_mode:
-        public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-        if public_id and str(public_id).strip() in ADMIN_IDS:
-            return True
-        if request.client and request.client.host in ("127.0.0.1", "localhost", "testclient"):
-            return True
-
-    return False
-
-
-def require_admin(request: Request) -> None:
+def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        session_token = request.cookies.get('helpotron_session')
+        if not session_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication required')
+        token = session_token
+    else:
+        token = auth_header.split(' ', 1)[1]
+    
+    payload = verify_jwt_token(token)
+    if not payload or 'sub' not in payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired authentication token')
+    
+    user = db.query(User).filter(User.id == payload['sub']).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User account no longer exists')
+    
+    if not getattr(user, 'is_admin', False) and user.role != 'admin':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrative privileges required')
+    
+    return user
     if not is_admin(request):
         raise HTTPException(403, "Admin access required")
 
