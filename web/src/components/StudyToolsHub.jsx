@@ -419,3 +419,7 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
 # <<<FIX F1 - Vague and Inconsistent Call-to-Action Terminology>>>
 # Description: Standardize all action verbs: 'Generate Study Pack', 'Export to Anki', 'Take Practice Test'.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX A13 - Emoji used as interface icons instead of standard SVG set>>>
+# Description: Import and render Lucide React SVG icons (<BookOpen />, <Zap />, <FileText />, <Target />) with consistent 20px sizing.
+# NOTE: Automated placeholder – replace with actual code change.
