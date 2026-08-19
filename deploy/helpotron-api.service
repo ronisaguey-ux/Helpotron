@@ -1,28 +1,27 @@
 [Unit]
-Description=Helpotron Automator Core API Server
+Description=Helpotron Automator FastAPI Daemon
 After=network.target
 
 [Service]
 Type=simple
 User=helpotron
 Group=helpotron
-WorkingDirectory=/home/helpotron/helpotron
-ExecStart=/home/helpotron/helpotron/.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 4 --proxy-headers
+WorkingDirectory=/opt/helpotron
+EnvironmentFile=/opt/helpotron/.env
+ExecStart=/opt/helpotron/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 4 --proxy-headers
 Restart=always
-RestartSec=3
-EnvironmentFile=/home/helpotron/helpotron/.env
-LimitNOFILE=65535
+RestartSec=5s
 
-# Systemd Security Sandboxing Flags (SEC-INF-002)
+NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/helpotron/helpotron
-NoNewPrivileges=yes
-ProtectKernelModules=yes
+ReadWritePaths=/opt/helpotron/data /opt/helpotron/exports /opt/helpotron/logs
+PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
-RestrictRealtime=yes
+RestrictNamespaces=yes
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
