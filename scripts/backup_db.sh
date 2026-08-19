@@ -1,29 +1,27 @@
 #!/bin/bash
-# Daily SQLite backup script for Helpotron
-# Usage: crontab -e  →  0 2 * * * /home/roni/Roni_Workspace/helpotron/scripts/backup_db.sh
-
+# Helpotron — Automated SQLite database backup with 30-day retention pruning.
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-/home/roni/helpotron-backups}"
-DB_PATH="${DB_PATH:-/home/roni/Roni_Workspace/helpotron/helpotron.db}"
-RETENTION_DAYS="${RETENTION_DAYS:-14}"
+DB_PATH="${DB_PATH:-/opt/helpotron/data/helpotron.db}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/helpotron/backups}"
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+BACKUP_FILE="${BACKUP_DIR}/helpotron_${TIMESTAMP}.db.gz"
 
-mkdir -p "$BACKUP_DIR"
+mkdir -p "${BACKUP_DIR}"
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/helpotron_$TIMESTAMP.db"
-
-# Use sqlite3 online backup if available, else copy
-if command -v sqlite3 >/dev/null 2>&1; then
-  sqlite3 "$DB_PATH" ".backup '$BACKUP_FILE'"
-else
-  cp "$DB_PATH" "$BACKUP_FILE"
+if [ ! -f "${DB_PATH}" ]; then
+  echo "[ERROR] Database not found: ${DB_PATH}" >&2
+  exit 1
 fi
 
-# Compress
-gzip -f "$BACKUP_FILE"
+# Create compressed backup
+sqlite3 "${DB_PATH}" ".backup /tmp/helpotron_tmp_backup.db"
+gzip -c /tmp/helpotron_tmp_backup.db > "${BACKUP_FILE}"
+rm -f /tmp/helpotron_tmp_backup.db
 
-# Prune old backups
-find "$BACKUP_DIR" -name "helpotron_*.db.gz" -mtime +"$RETENTION_DAYS" -delete
+echo "[OK] Backup created: ${BACKUP_FILE} ($(du -sh "${BACKUP_FILE}" | cut -f1))"
 
-echo "Backup created: $BACKUP_FILE.gz"
+# Prune backups older than RETENTION_DAYS
+find "${BACKUP_DIR}" -name 'helpotron_*.db.gz' -mtime "+${RETENTION_DAYS}" -delete
+echo "[OK] Pruned backups older than ${RETENTION_DAYS} days."
