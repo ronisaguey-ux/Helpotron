@@ -423,3 +423,7 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
 # <<<FIX A13 - Emoji used as interface icons instead of standard SVG set>>>
 # Description: Import and render Lucide React SVG icons (<BookOpen />, <Zap />, <FileText />, <Target />) with consistent 20px sizing.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX B7 - Technical raw error messages leaked to user interface>>>
+# Description: Catch and map backend errors to friendly student-oriented messages: 'We couldn't generate your study guide right now. Your credits were not charged. Please try again in a few moments.'
+# NOTE: Automated placeholder – replace with actual code change.
