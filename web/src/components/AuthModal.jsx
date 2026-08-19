@@ -380,3 +380,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
 # <<<FIX B18 - Modals Lack Keyboard Focus Trapping and Escape Key Dismissal>>>
 # Description: Implement focus trap hook (e.g. focus-trap-react) and add keydown listener for Escape to dismiss modals safely.
 # NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX B4 - Buttons not disabled during asynchronous submission>>>
+# Description: Add disabled={loading} and opacity-50 cursor-not-allowed classes to submit buttons during request execution.
+# NOTE: Automated placeholder – replace with actual code change.
