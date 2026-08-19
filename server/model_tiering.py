@@ -222,3 +222,23 @@ class ModelTieringEngine:
 
 model_tiering_engine = ModelTieringEngine()
 
+
+MONTHLY_BUDGET_USD = {
+    'basic': 3.00,
+    'pro': 6.00,
+    'elite': 15.00,
+}
+
+def check_budget_guardrail(user_plan: str, current_spend_usd: float) -> bool:
+    """Return True if user is within their monthly LLM budget, False if over limit."""
+    limit = MONTHLY_BUDGET_USD.get(user_plan, 1.00)
+    return current_spend_usd < limit
+
+def get_model_for_tier(user_plan: str, task_type: str = 'general') -> str:
+    """Return the appropriate model name based on user plan and task type."""
+    if user_plan == 'elite':
+        return 'google/gemini-2.5-flash'
+    elif user_plan == 'pro':
+        return 'deepseek/deepseek-chat'
+    else:
+        return 'deepseek/deepseek-chat-v3-0324:free'
