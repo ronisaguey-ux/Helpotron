@@ -41,6 +41,9 @@ class RateLimiter:
             del self._hits[k]
 
 
+# Module-level singleton (used by main.py routes and conftest.py cleanup)
+limiter = RateLimiter()
+
 # ─── FastAPI dependency factory ───────────────────────────────────────────
 
 RATE_LIMITS: dict[str, list[float]] = defaultdict(list)

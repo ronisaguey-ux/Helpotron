@@ -103,7 +103,8 @@ def extract_json(text: str) -> dict | None:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
-    for pattern in (r"\s*\n?(.*?)\n?", r"\s*\n?(.*?)\n?"):
+    # Handle ```json ... ``` and ``` ... ``` fenced blocks
+    for pattern in (r"```json\s*\n?([\s\S]*?)\n?\s*```", r"```\s*\n?([\s\S]*?)\n?\s*```"):
         m = re.search(pattern, text, re.DOTALL)
         if m:
             try:
