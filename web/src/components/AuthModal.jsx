@@ -27,32 +27,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    
-  useEffect(() => {
-    if (!isOpen) return;
-    const el = document.querySelector('[data-modal-container]');
-    const focusable = el ? el.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    ) : [];
-    if (focusable.length) focusable[0].focus();
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'Tab' && focusable.length) {
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault(); last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault(); first.focus();
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
   const handleLogin = async (e) => {
@@ -176,8 +151,15 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
   }, [isOpen, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto"
+      onClick={(e) => { if (onClose && e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true"
+    >
+      <div
+        className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {onClose && (
           <button
             onClick={onClose}
