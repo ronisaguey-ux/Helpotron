@@ -205,3 +205,50 @@ def usage_percent(user: User) -> float:
     current_credits = getattr(user, "credits", 0.0) or 0.0
     used = max(0.0, limit - current_credits)
     return min(100.0, (used / max(1.0, limit)) * 100.0)
+
+def verify_stripe_signature(payload: bytes, sig_header: str) -> bool:
+    import stripe
+    try:
+        stripe.Webhook.construct_event(payload, sig_header, config.stripe_webhook_secret)
+        return True
+    except Exception:
+        return False
+
+
+def process_successful_payment(transaction_id: str, public_id: str, amount_cents: int, credits_amount: float) -> bool:
+    from .database import SessionLocal, User, CreditTransaction, Payment
+    db = SessionLocal()
+    try:
+        existing = db.query(Payment).filter(Payment.provider_ref == transaction_id).first()
+        if existing:
+            return True
+
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if not user:
+            user = User(public_id=public_id, credits=0.0)
+            db.add(user)
+            db.flush()
+
+        payment = Payment(
+            user_id=user.id,
+            provider="stripe",
+            amount_cents=amount_cents,
+            status="captured",
+            provider_ref=transaction_id,
+        )
+        db.add(payment)
+
+        user.credits += credits_amount
+        tx = CreditTransaction(
+            user_id=user.id,
+            delta=credits_amount,
+            reason=f"payment:stripe:tx_{transaction_id}"
+        )
+        db.add(tx)
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        return False
+    finally:
+        db.close()
