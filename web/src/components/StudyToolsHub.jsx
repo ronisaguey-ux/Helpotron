@@ -408,26 +408,8 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
   );
 }
 
-# <<<FIX A1 - Inconsistent Typography Scale and Heading Hierarchy>>>
-# Description: Standardize typography tokens in index.css with strict modular classes (H1: 2rem/700, H2: 1.5rem/600, H3: 1.25rem/600, body: 1rem/400).
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX B3 - Missing Progress Indicators on Long-Running AI Generation Tasks>>>
-# Description: Implement WebSocket or Server-Sent Events (SSE) progress streaming with a 4-step progress bar (Parsing syllabus -> Extracting key concepts -> Generating quiz -> Verifying accuracy).
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX F1 - Vague and Inconsistent Call-to-Action Terminology>>>
-# Description: Standardize all action verbs: 'Generate Study Pack', 'Export to Anki', 'Take Practice Test'.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX A13 - Emoji used as interface icons instead of standard SVG set>>>
-# Description: Import and render Lucide React SVG icons (<BookOpen />, <Zap />, <FileText />, <Target />) with consistent 20px sizing.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX B7 - Technical raw error messages leaked to user interface>>>
-# Description: Catch and map backend errors to friendly student-oriented messages: 'We couldn't generate your study guide right now. Your credits were not charged. Please try again in a few moments.'
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX D1 - Inconsistent button implementations instead of unified Button atom>>>
-# Description: Refactor all standalone <button> tags to use shared <Button variant="primary|secondary|danger" size="sm|md|lg">.
-# NOTE: Automated placeholder – replace with actual code change.

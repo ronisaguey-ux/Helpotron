@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_flash_lite_model: str = os.getenv("GEMINI_FLASH_LITE_MODEL", "gemini-3.1-flash-lite")
     gemini_flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.7-flash")
-    primary_model: str = os.getenv("PRIMARY_MODEL", "deepseek-v4-flash")
+    primary_model: str = os.getenv("PRIMARY_MODEL", "openrouter/mistral-nemo")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")

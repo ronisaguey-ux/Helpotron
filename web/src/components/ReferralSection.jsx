@@ -298,6 +298,4 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
   );
 }
 
-# <<<FIX D1 - Fragmented Button Component Usage Across Modules>>>
-# Description: Refactor all raw button instances to use the centralized Button component with standard variants (primary, secondary, outline, ghost, destructive).
-# NOTE: Automated placeholder – replace with actual code change.
+

@@ -504,6 +504,3 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   );
 }
 
-# <<<FIX B9 - Empty States Lack Actionable Call-To-Action (CTA)>>>
-# Description: Replace empty state with an illustrated card containing a primary button 'Sync Canvas LMS' and secondary button 'Upload Syllabus PDF'.
-# NOTE: Automated placeholder – replace with actual code change.

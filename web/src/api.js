@@ -244,6 +244,3 @@ export const api = {
 
 export default api;
 
-# <<<FIX B7 - Technical raw error messages leaked to user interface>>>
-# Description: Catch and map backend errors to friendly student-oriented messages: 'We couldn't generate your study guide right now. Your credits were not charged. Please try again in a few moments.'
-# NOTE: Automated placeholder – replace with actual code change.

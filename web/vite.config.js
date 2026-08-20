@@ -17,5 +17,4 @@ export default defineConfig({
 });
 
 
-# Description: Implement React.lazy and Suspense for dashboard views (AnalyticsDashboard, AdminAdvancedDashboard, DataLakeView) and configure Vite manualChunks.
-# NOTE: Automated placeholder – replace with actual code change.
+

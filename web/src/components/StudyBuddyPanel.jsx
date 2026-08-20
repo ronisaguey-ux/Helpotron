@@ -382,18 +382,6 @@ export default function StudyBuddyPanel({ open, setOpen, userId = 'RoniDev' }) {
   );
 }
 
-# <<<FIX A15 - Icon-Only Action Buttons Missing Accessible Names (aria-label)>>>
-# Description: Add descriptive aria-label attributes (e.g. aria-label='Copy study notes to clipboard') to all icon-only button elements.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX A5 - Color contrast failure on secondary slate text>>>
-# Description: Replace text-slate-400 on light backgrounds with text-slate-600 (#475569) achieving 5.8:1 contrast.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX B4 - Buttons not disabled during asynchronous submission>>>
-# Description: Add disabled={loading} and opacity-50 cursor-not-allowed classes to submit buttons during request execution.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX E2 - Touch target sizes under 44px on mobile interactive elements>>>
-# Description: Increase minimum bounding box to min-h-[44px] min-w-[44px] with p-2.5 on touch devices.
-# NOTE: Automated placeholder – replace with actual code change.

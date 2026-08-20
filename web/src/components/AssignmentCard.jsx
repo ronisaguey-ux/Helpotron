@@ -106,22 +106,7 @@ export default function AssignmentCard({
   );
 }
 
-# <<<FIX A1 - Inconsistent Typography Scale and Heading Hierarchy>>>
-# Description: Standardize typography tokens in index.css with strict modular classes (H1: 2rem/700, H2: 1.5rem/600, H3: 1.25rem/600, body: 1rem/400).
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX A5 - Subtle Text Fails WCAG AA 4.5:1 Contrast Ratio in Dark Mode>>>
-# Description: Elevate muted text in dark mode from text-slate-400 to text-slate-300 or text-slate-200 to achieve 5.8:1 contrast.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX D1 - Fragmented Button Component Usage Across Modules>>>
-# Description: Refactor all raw button instances to use the centralized Button component with standard variants (primary, secondary, outline, ghost, destructive).
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX E2 - Touch Targets Less Than 44px on Assignment Action Badges>>>
-# Description: Increase minimum padding and touch bounding box to min-h-[44px] min-w-[44px] on all mobile interactive elements.
-# NOTE: Automated placeholder – replace with actual code change.
 
-# <<<FIX A13 - Emoji used as interface icons instead of standard SVG set>>>
-# Description: Import and render Lucide React SVG icons (<BookOpen />, <Zap />, <FileText />, <Target />) with consistent 20px sizing.
-# NOTE: Automated placeholder – replace with actual code change.
