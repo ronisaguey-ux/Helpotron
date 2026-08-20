@@ -29,6 +29,7 @@ import {
   FileCheck,
   Flame,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 import StudyToolsHub from './StudyToolsHub.jsx';
 import api from '../api';
@@ -147,6 +148,7 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
   };
 
   const handleSaveNotes = () => {
+    if (notesSaved) return; // double-submit guard: single save per edit burst
     try {
       localStorage.setItem(`assignment_notes_${assignment.id}`, notes);
     } catch (e) {}
@@ -203,6 +205,7 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
   const progressPct = Math.round((completedCount / rubricItems.length) * 100);
 
   const handleStartVerification = () => {
+    if (verifying || submitted) return; // double-submit guard: no re-entry mid-verification
     setVerifyModalOpen(true);
     setVerifying(true);
     setTimeout(() => {
@@ -211,6 +214,7 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
   };
 
   const handleFinalSubmit = async () => {
+    if (submitted || verifying) return; // double-submit guard: one submission only
     setSubmitted(true);
     setVerifyModalOpen(false);
     try {
@@ -238,14 +242,27 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
         <button
           type="button"
           onClick={handleStartVerification}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg ${
+          disabled={verifying || submitted}
+          aria-busy={verifying}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg disabled:opacity-60 disabled:cursor-not-allowed ${
             submitted
               ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
-              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25'
+              : verifying
+                ? 'bg-blue-700 text-white shadow-blue-600/25'
+                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25'
           }`}
         >
-          <ShieldCheck className="w-4 h-4" />
-          <span>{submitted ? '✅ Verified & Submitted' : '🛡️ Pre-Submission Verification & Submit'}</span>
+          {verifying ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Verifying...</span>
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-4 h-4" />
+              <span>{submitted ? '✅ Verified & Submitted' : '🛡️ Pre-Submission Verification & Submit'}</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -438,10 +455,16 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
               <button
                 type="button"
                 onClick={handleStartVerification}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-600/20"
+                disabled={verifying || submitted}
+                aria-busy={verifying}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-600/20 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Verify & Submit</span>
+                {verifying ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                )}
+                <span>{verifying ? 'Verifying...' : 'Verify & Submit'}</span>
               </button>
             </div>
           </div>
@@ -864,10 +887,12 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
                   <button
                     type="button"
                     onClick={handleFinalSubmit}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer"
+                    disabled={submitted || verifying}
+                    aria-busy={submitted}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Confirm & Submit to Canvas LMS</span>
+                    <span>{submitted ? 'Submitted ✅' : 'Confirm & Submit to Canvas LMS'}</span>
                   </button>
                 </div>
               </div>

@@ -14,6 +14,7 @@ import {
   RotateCcw,
   FileAudio,
   Search,
+  Loader2,
 } from 'lucide-react';
 import api from '../api';
 import Button from './ui/Button.jsx';
@@ -22,6 +23,7 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
   const [activeTool, setActiveTool] = useState('flashcards');
   const [topic, setTopic] = useState(initialAssignment?.title || '');
   const [busy, setBusy] = useState(false);
+  const isGenerating = busy;
   const [error, setError] = useState('');
 
   // Flashcards state with robust initial deck
@@ -88,6 +90,7 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
   ]);
 
   const handleGenerateFlashcards = async () => {
+    if (isGenerating) return; // double-submit guard: ignore re-entry while generating
     setBusy(true);
     setError('');
     const targetTopic = topic.trim() || 'General Science & Academic Foundations';
@@ -153,7 +156,8 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
             <button
               key={tool.key}
               type="button"
-              onClick={() => setActiveTool(tool.key)}
+              onClick={() => !isGenerating && setActiveTool(tool.key)}
+              disabled={isGenerating}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-mono font-semibold transition-all cursor-pointer ${
                 isActive
                   ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/20 font-bold'
@@ -189,12 +193,21 @@ export default function StudyToolsHub({ userId, initialAssignment = null }) {
               <Button
                 variant="primary"
                 onClick={handleGenerateFlashcards}
-                isLoading={busy}
-                loadingText="Synthesizing Deck..."
+                disabled={isGenerating || !topic.trim()}
+                aria-busy={isGenerating}
                 className="w-full sm:w-auto px-6 font-mono text-xs font-bold"
               >
-                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Build 10 Flashcards
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                    Synthesizing Deck...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                    Build 10 Flashcards
+                  </>
+                )}
               </Button>
             </div>
           </div>
