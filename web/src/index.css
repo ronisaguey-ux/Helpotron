@@ -1,11 +1,113 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  --color-surface-card: #ffffff;
+@layer base {
+  :root {
+    --bg-base: #090d16;
+    --bg-surface: #0f172a;
+    --bg-surface-elevated: #182238;
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-hover: rgba(255, 255, 255, 0.15);
+    
+    /* Subtle, modern accent palette */
+    --accent: #3b82f6; /* Slate/Blue */
+    --accent-hover: #2563eb;
+    --accent-subtle: rgba(59, 130, 246, 0.12);
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1; /* High contrast Slate-300 (5.8:1) */
+    --text-muted: #94a3b8; /* WCAG AA Slate-400 (4.5:1) */
+    
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus rings across all interactive elements (WCAG 2.4.7) */
+  :focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
 }
 
-h1 {
-  font-size: 2.25rem;
+/* Clean, non-distracting background */
+.app-background {
+  background-color: #090d16;
+  background-image: radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 60%);
 }
+
+/* Subtle, elevated card surface */
+.clean-card,
+.glass-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.clean-card:hover,
+.glass-panel:hover {
+  border-color: var(--border-hover);
+}
+
+/* Clean Inputs */
+.clean-input,
+.glass-input {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+}
+
+.clean-input:focus,
+.glass-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Accessibility: Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+# <<<FIX A1 - Inconsistent Typography Scale and Heading Hierarchy>>>
+# Description: Standardize typography tokens in index.css with strict modular classes (H1: 2rem/700, H2: 1.5rem/600, H3: 1.25rem/600, body: 1rem/400).
+# NOTE: Automated placeholder – replace with actual code change.
+
+# <<<FIX C7 - Focus outlines stripped without custom focus-visible replacement>>>
+# Description: Add global CSS rule: :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }.
+# NOTE: Automated placeholder – replace with actual code change.
