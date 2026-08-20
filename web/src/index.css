@@ -1,3 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @import "tailwindcss";
 
 @layer base {
@@ -111,3 +114,11 @@
 # <<<FIX C7 - Focus outlines stripped without custom focus-visible replacement>>>
 # Description: Add global CSS rule: :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }.
 # NOTE: Automated placeholder – replace with actual code change.
+
+:root {
+  --color-surface-card: #ffffff;
+}
+h1 {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+}
