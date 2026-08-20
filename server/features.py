@@ -193,3 +193,16 @@ def set_theme(user: User, theme: str) -> str:
 
 def get_theme(user: User) -> str:
     return (user.settings or {}).get("theme", "light")
+
+
+def extract_assignment_metadata_local(text: str) -> dict:
+    import re
+    points = 0
+    match = re.search(r'Points:\s*(\d+)', text, re.IGNORECASE)
+    if match:
+        points = int(match.group(1))
+    has_rubric = 'rubric' in text.lower()
+    return {
+        "points": points,
+        "has_rubric": has_rubric
+    }
