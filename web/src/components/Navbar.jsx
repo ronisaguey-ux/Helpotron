@@ -74,8 +74,8 @@ export default function Navbar({
             <button
               type="button"
               onClick={onOpenSettings}
-              aria-label="Open Settings"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+              aria-label="Open User Settings"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer focus:ring-2 focus:ring-slate-400"
             >
               <Settings className="w-4 h-4" />
             </button>
