@@ -440,6 +440,51 @@ class DataLakeManager:
             logger.error("Error reading microcredits file: %s", e)
         return items[::-1][:limit]
 
+    def anonymize_user(self, user_id: Any, gdpr_tag: str) -> int:
+        """GDPR Article 17: rewrites every lake file, replacing the user's id
+        (top-level or nested under 'data') with the supplied anonymization tag.
+
+        Returns the number of records rewritten.
+        """
+        target = str(user_id)
+        rewritten = 0
+
+        def _replace(obj: Any) -> Any:
+            nonlocal rewritten
+            if isinstance(obj, dict):
+                out = {}
+                for k, v in obj.items():
+                    if k in ("user_id", "public_id", "raw_user_id") and v is not None and str(v) == target:
+                        out[k] = gdpr_tag
+                        rewritten += 1
+                    else:
+                        out[k] = _replace(v)
+                return out
+            if isinstance(obj, list):
+                return [_replace(v) for v in obj]
+            return obj
+
+        for path in (self.telemetry_file, self.feedback_file, self.corpus_file, self.microcredits_file):
+            if not path.exists():
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = [ln for ln in f if ln.strip()]
+                if not lines:
+                    continue
+                out_lines = []
+                for ln in lines:
+                    rec = json.loads(ln)
+                    new_rec = _replace(rec)
+                    out_lines.append(json.dumps(new_rec, ensure_ascii=False))
+                tmp = path.with_suffix(path.suffix + ".anonymizing")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write("\n".join(out_lines) + "\n")
+                tmp.replace(path)
+            except Exception as e:
+                logger.error("Error anonymizing %s: %s", path, e)
+        return rewritten
+
 
 class DataLakeIntelligenceAgent:
     """Autonomous agent that analyzes telemetry and feedback to produce system insights."""

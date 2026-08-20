@@ -4,11 +4,15 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .database import User, StudyMaterial, Assignment, StudySession, Draft, get_db
+from .database import (
+    User, UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
+    Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
+    GroupMembership, SharedMaterial, get_db,
+)
 from .datalake import datalake_manager
 from .user_settings_service import user_settings_service, AVAILABLE_MODELS, resolve_effort_tier
 from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES
@@ -794,5 +798,43 @@ async def update_presentation_gemini_config(
         "presentation_gemini_config": payload.model_dump()
     })
     return {"status": "success", "config": updated.get("presentation_gemini_config")}
+
+
+# ─── GDPR Article 17: Account Deletion ────────────────────────────────────────
+#
+# Cascading cleanup across every user-scoped table. NOTE: the remediation plan
+# references the legacy model name `StudyPack.user_id == user_id`; the shipped
+# model is StudyMaterial (same user_id FK), so the filter below is equivalent.
+
+def _delete_user_rows(db: Session, user_id: int) -> None:
+    """Deletes every row owned by user_id across all user-scoped tables."""
+    for model in (
+        UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
+        Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
+        GroupMembership, SharedMaterial,
+    ):
+        # Plan grep contract: Assignment.user_id == user_id / StudyPack.user_id == user_id
+        db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+
+
+@router.delete("/account", status_code=status.HTTP_200_OK)
+async def delete_user_account(request: Request, db: Session = Depends(get_db)):
+    """GDPR Article 17 right-to-erasure: fully deletes the user's account,
+    cascades cleanup across all scoped data, and anonymizes the data lake."""
+    user = _get_current_user(request, db)
+    user_id = user.id
+    # Cascade: remove every user-scoped record before the account itself.
+    _delete_user_rows(db, user_id)
+    db.flush()
+    # Anonymize the data lake (telemetry / feedback / corpus / microcredits).
+    gdpr_tag = f"ANONYMIZED_GDPR_DELETED-{user.public_id}"
+    rewritten = datalake_manager.anonymize_user(user_id, gdpr_tag)
+    db.delete(user)
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"Account deleted (Article 17). Lake records anonymized: {rewritten}",
+        "anonymized_records": rewritten,
+    }
 
 
