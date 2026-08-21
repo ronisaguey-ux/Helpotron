@@ -12,7 +12,8 @@
     "microphone"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://*.instructure.com/*",
+    "http://*.instructure.com/*"
   ],
   "background": {
     "service_worker": "background.js"
