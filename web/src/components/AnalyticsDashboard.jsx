@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api.js';
-import { BarChart3, Clock, DollarSign, BookOpen, Activity, TrendingUp } from 'lucide-react';
+import { BarChart3, Clock, DollarSign, BookOpen, Activity, TrendingUp, RefreshCw } from 'lucide-react';
+import { AreaChart } from '@/components/charts/area-chart';
+import { Area } from '@/components/charts/area';
+import LiquidGlassCard from '@/components/kokonutui/liquid-glass-card';
+import ParticleButton from '@/components/kokonutui/particle-button';
 
 const GlassCard = ({ className = '', children }) => (
   <div className={`glass-panel rounded-2xl p-5 border border-white/10 ${className}`}>{children}</div>
@@ -24,26 +28,28 @@ export default function AnalyticsDashboard({ userId }) {
   const [activity, setActivity] = useState([]);
   const [valueMetrics, setValueMetrics] = useState(null);
 
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        setLoading(true);
-        const [a, act, vm] = await Promise.all([
-          api.get(`/analytics?public_id=${userId || 'RoniDev'}`),
-          api.get(`/analytics/activity?public_id=${userId || 'RoniDev'}&days=30`),
-          api.get(`/analytics/value?public_id=${userId || 'RoniDev'}`),
-        ]);
-        setAnalytics(a);
-        setActivity(act || []);
-        setValueMetrics(vm);
-      } catch (e) {
-        setError(e.message || 'Failed to load analytics');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnalytics();
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const [a, act, vm] = await Promise.all([
+        api.get(`/analytics?public_id=${userId || 'RoniDev'}`),
+        api.get(`/analytics/activity?public_id=${userId || 'RoniDev'}&days=30`),
+        api.get(`/analytics/value?public_id=${userId || 'RoniDev'}`),
+      ]);
+      setAnalytics(a);
+      setActivity(act || []);
+      setValueMetrics(vm);
+    } catch (e) {
+      setError(e.message || 'Failed to load analytics');
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) return <GlassCard className="text-center font-mono text-cyan-400 text-xs py-8">Loading Neural Analytics & Telemetry…</GlassCard>;
   if (error) return <GlassCard className="text-rose-400 font-mono text-xs">{error}</GlassCard>;
@@ -86,26 +92,29 @@ export default function AnalyticsDashboard({ userId }) {
       )}
 
       {activity && activity.length > 0 && (
-        <GlassCard>
-          <div className="flex items-center gap-2 mb-4 text-sm font-mono text-cyan-300 font-bold">
-            <BarChart3 className="w-4 h-4 text-cyan-400" />
-            <span>Telemetry Activity (Last 30 Days)</span>
+        <LiquidGlassCard className="rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-2 mb-4 text-sm font-mono text-cyan-300 font-bold">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-cyan-400" />
+              <span>Telemetry Activity (Last 30 Days)</span>
+            </div>
+            <ParticleButton
+              onClick={loadData}
+              className="px-3 py-1.5 text-xs font-mono text-cyan-300 border border-cyan-400/30 bg-cyan-400/5 hover:bg-cyan-400/10 rounded-lg transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </ParticleButton>
           </div>
-          <div className="space-y-2.5 font-mono text-xs">
-            {activity.slice(0, 7).map((day) => (
-              <div key={day.date} className="flex items-center gap-3">
-                <span className="w-24 text-slate-400">{day.date}</span>
-                <div className="flex-1 h-2 bg-black/50 rounded-full overflow-hidden border border-white/5">
-                  <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 rounded-full"
-                    style={{ width: `${Math.min(100, (day.time_minutes || 10) / 10 * 100)}%` }}
-                  />
-                </div>
-                <span className="w-16 text-right text-slate-300">{day.time_minutes || 10}m</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+          <AreaChart
+            data={activity.map((d) => ({ date: d.date, time_minutes: Number(d.time_minutes) || 0 }))}
+            xDataKey="date"
+            aspectRatio="16 / 5"
+            className="mt-2"
+          >
+            <Area dataKey="time_minutes" strokeWidth={2} />
+          </AreaChart>
+        </LiquidGlassCard>
       )}
 
       {analytics.material_breakdown && Object.keys(analytics.material_breakdown).length > 0 && (

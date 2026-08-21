@@ -4,7 +4,7 @@ import {
   useMotionValue,
   useReducedMotion,
   useTransform,
-} from "motion/react";
+} from "motion";
 import { useEffect } from "react";
 import {
   LINE_LOADING_LOOP_PAUSE_MS,

@@ -1,5 +1,5 @@
 "use client";;
-import { motion } from "motion/react";
+import { motion } from "motion";
 import { memo } from "react";
 import { DEFAULT_CHART_ENTER_TRANSITION } from "./animation";
 

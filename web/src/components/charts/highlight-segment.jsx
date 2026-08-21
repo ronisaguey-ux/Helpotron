@@ -1,5 +1,5 @@
 "use client";;
-import { motion } from "motion/react";
+import { motion } from "motion";
 import { useId } from "react";
 
 export function HighlightSegment({

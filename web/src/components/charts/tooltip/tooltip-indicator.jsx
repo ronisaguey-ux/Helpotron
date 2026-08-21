@@ -1,5 +1,5 @@
 "use client";;
-import { motion, useSpring } from "motion/react";
+import { motion, useSpring } from "motion";
 import { useEffect } from "react";
 import { useChartConfig } from "../chart-config-context";
 import { chartCssVars } from "../chart-context";

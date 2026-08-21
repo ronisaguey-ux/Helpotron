@@ -1,5 +1,5 @@
 "use client";;
-import { animate, useReducedMotion } from "motion/react";
+import { animate, useReducedMotion } from "motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LINE_LOADING_PULSE_EASE } from "./line-loading-timing";
 import {

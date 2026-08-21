@@ -1,5 +1,5 @@
 "use client";;
-import { motion, useSpring } from "motion/react";
+import { motion, useSpring } from "motion";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
