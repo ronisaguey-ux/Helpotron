@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -206,3 +207,21 @@ def extract_assignment_metadata_local(text: str) -> dict:
         "points": points,
         "has_rubric": has_rubric
     }
+
+
+# ── Remediation BATCH-06: regex assignment classification (cost capping) ─────
+ASSIGNMENT_PATTERNS = [
+    (re.compile(r"(quiz|exam|test|assessment)", re.I), "QUIZ"),
+    (re.compile(r"(essay|paper|write|reflection|dissertation)", re.I), "ESSAY"),
+    (re.compile(r"(discussion|reply|post|thread)", re.I), "DISCUSSION"),
+    (re.compile(r"(problem set|homework|math|calc|physics|pset)", re.I), "PROBLEM_SET"),
+    (re.compile(r"(lab|experiment|report)", re.I), "LAB_REPORT"),
+]
+
+
+def classify_assignment_type(title: str, description: str = "") -> str:
+    combined = f"{title} {description}"
+    for pattern, cat in ASSIGNMENT_PATTERNS:
+        if pattern.search(combined):
+            return cat
+    return "GENERAL_ASSIGNMENT"

@@ -30,6 +30,9 @@ DRAFT_COST = 2.0
 # Max retries for detector threshold
 MAX_RETRIES = 5
 
+# Strict retry ceiling (max 3 iterations) to prevent runaway billing
+MAX_HUMANIZER_RETRIES = 3
+
 # Default detector threshold if user doesn't specify
 DEFAULT_THRESHOLD = 80.0
 
