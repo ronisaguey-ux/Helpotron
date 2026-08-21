@@ -32,7 +32,7 @@ export default function Navbar({
         
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 via-indigo-500 to-emerald-400 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/30">
             H
           </div>
           <div>
@@ -42,12 +42,12 @@ export default function Navbar({
         </div>
 
         {/* Desktop Navigation & Actions */}
-        <div className="hidden sm:flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5 backdrop-blur-xl shadow-lg shadow-black/20">
           <button
             type="button"
             onClick={onOpenExtensionGuide}
             title="Setup & Download Chrome Extension"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 hover:text-white transition font-medium cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 hover:border-emerald-500/50 text-emerald-300 hover:text-white transition font-medium cursor-pointer"
           >
             <Puzzle className="w-3.5 h-3.5 text-emerald-400" />
             <span>Extension Guide</span>
@@ -65,7 +65,7 @@ export default function Navbar({
             <button
               type="button"
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition cursor-pointer shadow-sm shadow-blue-500/20"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition cursor-pointer shadow-lg shadow-indigo-500/30"
             >
               <User className="w-3.5 h-3.5" />
               <span>Sign In</span>
@@ -180,7 +180,7 @@ export default function Navbar({
                   setMobileMenuOpen(false);
                   onOpenAuth();
                 }}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
               >
                 <User className="w-4 h-4" /> Sign In / Register
               </button>

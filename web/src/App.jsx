@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
+import LiquidGlassCard from './components/kokonutui/liquid-glass-card.jsx';
 import ReferralSection from './components/ReferralSection.jsx';
 import CreditLeaderboard from './components/CreditLeaderboard.jsx';
 import UserSettingsModal from './components/UserSettingsModal.jsx';
@@ -680,14 +681,15 @@ function Overview({ userId, isGuest, onGoTo, onSelectAssignment }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: i * 0.08, ease: 'easeOut' }}
                 whileHover={{ y: -3 }}
-                className="clean-card p-5 cursor-default"
               >
-                <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-                  <span>{stat.label}</span>
-                  <StatIcon className={`w-4 h-4 ${stat.iconColor}`} />
-                </div>
-                <div className={`text-2xl font-bold ${stat.valueColor}`}>{stat.value}</div>
-                <div className={`text-[11px] mt-1 ${stat.subColor}`}>{stat.sub}</div>
+                <LiquidGlassCard className="p-5 cursor-default h-full" glassSize="30px">
+                  <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+                    <span>{stat.label}</span>
+                    <StatIcon className={`w-4 h-4 ${stat.iconColor}`} />
+                  </div>
+                  <div className={`text-2xl font-bold ${stat.valueColor}`}>{stat.value}</div>
+                  <div className={`text-[11px] mt-1 ${stat.subColor}`}>{stat.sub}</div>
+                </LiquidGlassCard>
               </motion.div>
             );
           })}

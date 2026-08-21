@@ -157,13 +157,13 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
       role="dialog" aria-modal="true"
     >
       <div
-        className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative"
+        className="bg-[#0d1424]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_100px_rgba(99,102,241,0.15),0_30px_60px_rgba(0,0,0,0.55)] border border-white/10 space-y-6 relative"
         onClick={(e) => e.stopPropagation()}
       >
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-lg font-bold p-2"
+            className="absolute top-4 right-4 text-slate-400 hover:text-white text-lg font-bold p-2"
           >
             ✕
           </button>
@@ -171,21 +171,21 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
 
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white text-3xl font-bold flex items-center justify-center mx-auto shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white text-3xl font-bold flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/40">
             🤖
           </div>
-          <h1 className="text-2xl font-black text-slate-900">Helpotron Automator</h1>
-          <p className="text-xs text-slate-500">
+          <h1 className="text-2xl font-black text-white">Helpotron Automator</h1>
+          <p className="text-xs text-slate-400">
             Autonomous academic workflow, rubric synthesis, and evasion system.
           </p>
         </div>
 
         {/* 3 Main Auth Choice Tabs */}
-        <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+        <div className="grid grid-cols-3 gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 text-xs font-bold backdrop-blur-xl">
           <button
             onClick={() => { setTab('login'); setLoginError(''); }}
             className={`py-2 rounded-xl transition-all ${
-              tab === 'login' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              tab === 'login' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
             }`}
           >
             🔑 Log In
@@ -193,7 +193,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
           <button
             onClick={() => { setTab('signup'); setLoginError(''); }}
             className={`py-2 rounded-xl transition-all ${
-              tab === 'signup' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              tab === 'signup' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
             }`}
           >
             ✨ Sign Up
@@ -201,7 +201,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
           <button
             onClick={() => { setTab('guest'); setLoginError(''); }}
             className={`py-2 rounded-xl transition-all ${
-              tab === 'guest' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              tab === 'guest' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
             }`}
           >
             👁️ Guest
@@ -210,12 +210,12 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
 
         {/* ERROR / SUCCESS ALERTS */}
         {loginError && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl">
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl">
             {loginError}
           </div>
         )}
         {signupSuccessMsg && (
-          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs p-3 rounded-xl">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl">
             {signupSuccessMsg}
           </div>
         )}
@@ -224,31 +224,31 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
         {tab === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             <div className="space-y-1">
-              <label className="text-slate-600 font-semibold block">Username or Public ID</label>
+              <label className="text-slate-300 font-semibold block">Username or Public ID</label>
               <input
                 type="text"
                 placeholder="e.g. RoniDev or student_demo"
                 value={loginUser}
                 onChange={(e) => setLoginUser(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-slate-600 font-semibold block">Password</label>
+              <label className="text-slate-300 font-semibold block">Password</label>
               <input
                 type="password"
                 placeholder="••••••••"
                 value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 text-xs"
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 text-xs"
             >
               {loading ? 'Authenticating…' : 'Sign In to Account'}
             </button>
@@ -261,38 +261,38 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
             {!codeSent ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Choose Username</label>
+                  <label className="text-slate-300 font-semibold block mb-1">Choose Username</label>
                   <input
                     type="text"
                     placeholder="e.g. Alex_Student"
                     value={signupUser}
                     onChange={(e) => setSignupUser(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Create Password</label>
+                  <label className="text-slate-300 font-semibold block mb-1">Create Password</label>
                   <input
                     type="password"
                     placeholder="At least 6 characters"
                     value={signupPass}
                     onChange={(e) => setSignupPass(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 {/* Verification Channel Selector */}
                 <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Verification Method</label>
+                  <label className="text-slate-300 font-semibold block mb-1">Verification Method</label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setVerifyChannel('email')}
                       className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${
                         verifyChannel === 'email'
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-300 text-slate-600'
+                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                          : 'border-white/10 text-slate-400'
                       }`}
                     >
                       📧 Email
@@ -302,8 +302,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                       onClick={() => setVerifyChannel('sms')}
                       className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${
                         verifyChannel === 'sms'
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-300 text-slate-600'
+                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                          : 'border-white/10 text-slate-400'
                       }`}
                     >
                       📱 SMS (Phone)
@@ -312,7 +312,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                 </div>
 
                 <div>
-                  <label className="text-slate-600 font-semibold block mb-1">
+                  <label className="text-slate-300 font-semibold block mb-1">
                     {verifyChannel === 'email' ? 'Email Address' : 'Phone Number (+1...)'}
                   </label>
                   <input
@@ -320,12 +320,12 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                     placeholder={verifyChannel === 'email' ? 'student@university.edu' : '+1 (555) 019-2834'}
                     value={verifyTarget}
                     onChange={(e) => setVerifyTarget(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 {/* AI Processing & Terms Consent Checkbox */}
-                <label className="flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer pt-1">
+                <label className="flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer pt-1">
                   <input
                     type="checkbox"
                     required
@@ -342,14 +342,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                   type="button"
                   disabled={loading || !consentAgreed}
                   onClick={handleSendVerificationCode}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl font-bold shadow-md transition-all cursor-pointer"
+                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
                 >
                   {loading ? 'Sending Code…' : 'Send 6-Digit Verification Code'}
                 </button>
               </div>
             ) : (
               <form onSubmit={handleCompleteSignup} className="space-y-3">
-                <p className="text-slate-600">
+                <p className="text-slate-400">
                   Enter the 6-digit verification code sent to <strong>{verifyTarget}</strong>:
                 </p>
 
@@ -359,13 +359,13 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                   placeholder="123456"
                   value={verifyCode}
                   onChange={(e) => setVerifyCode(e.target.value)}
-                  className="w-full text-center tracking-widest font-mono text-lg rounded-xl border border-indigo-300 px-3 py-2 text-indigo-900 focus:ring-2 focus:ring-indigo-500 font-bold bg-indigo-50"
+                  className="w-full text-center tracking-widest font-mono text-lg rounded-xl border border-indigo-500/40 px-3 py-2 text-indigo-200 focus:ring-2 focus:ring-indigo-500 font-bold bg-indigo-500/10"
                 />
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {loading ? 'Verifying…' : 'Verify Code & Activate Account'}
                 </button>
@@ -373,7 +373,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
                 <button
                   type="button"
                   onClick={() => setCodeSent(false)}
-                  className="w-full text-center text-slate-400 hover:text-slate-600 py-1 cursor-pointer"
+                  className="w-full text-center text-slate-500 hover:text-slate-300 py-1 cursor-pointer"
                 >
                   ← Change Email/Phone
                 </button>
@@ -385,12 +385,12 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
         {/* ─── OPTION 3: CONTINUE AS GUEST ──────────────────────────── */}
         {tab === 'guest' && (
           <div className="space-y-4 text-xs text-center">
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-amber-900 leading-relaxed text-left space-y-2">
+            <div className="bg-amber-500/10 border border-amber-500/25 p-4 rounded-2xl text-amber-300 leading-relaxed text-left space-y-2">
               <span className="font-bold block">👁️ Guest (Read-Only) Mode:</span>
               <p>
                 You can explore the entire interface, inspect simulated assignments, review grading rubrics, and view sub-agent workflows.
               </p>
-              <p className="text-amber-800 text-[11px]">
+              <p className="text-amber-400/90 text-[11px]">
                 ⚠️ Action execution (creating assignments, generating text, dispatching sub-agents) will be disabled until you create an account.
               </p>
             </div>
@@ -398,7 +398,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onCo
             <button
               type="button"
               onClick={onContinueGuest}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-md transition-all text-xs flex items-center justify-center gap-2"
+              className="w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 text-white rounded-xl font-bold shadow-md transition-all text-xs flex items-center justify-center gap-2"
             >
               Explore as Guest (Read-Only) →
             </button>
