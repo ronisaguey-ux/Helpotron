@@ -464,6 +464,9 @@ def logout(request: Request, response: Response):
 
 @app.get("/api/me")
 def me(request: Request, db: Session = Depends(get_db)):
+    """Current user (remediation BATCH-11): identity comes only from the
+    session cookie — the X-Public-ID header is never an identity and no user
+    is ever auto-created from a header."""
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         session = SessionStore.get_session(token)
@@ -472,32 +475,20 @@ def me(request: Request, db: Session = Depends(get_db)):
             if user:
                 return {"public_id": user.public_id, "plan": user.plan, "credits": user.credits, "authenticated": True}
 
-    pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if pub_id:
-        user = get_or_create_user(db, pub_id)
-        db.commit()
-        return {"public_id": user.public_id, "plan": user.plan, "credits": user.credits, "authenticated": False}
-
     raise HTTPException(401, "Not authenticated")
 
 
 @app.get("/api/admin/check")
 def admin_check(request: Request, db: Session = Depends(get_db)):
-    """Check if current user is admin."""
-    admin_ids = ["RoniDev", "admin"]
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        session = SessionStore.get_session(token)
-        if session:
-            user = db.query(User).filter(User.id == session['user_id']).first()
-            if user:
-                return {"is_admin": is_admin_user(user) or user.public_id in admin_ids, "public_id": user.public_id}
-
-    pub_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if pub_id:
-        return {"is_admin": pub_id in admin_ids, "public_id": pub_id}
-
-    return {"is_admin": False, "public_id": "anon"}
+    """Check if current user is admin (remediation BATCH-11): identity comes
+    only from a valid session cookie or Bearer token — the X-Public-ID header
+    is never an identity and no username is admin by name."""
+    from .routes_features import get_current_authenticated_user
+    try:
+        user = get_current_authenticated_user(request, db)
+    except HTTPException:
+        return {"is_admin": False, "public_id": "anon"}
+    return {"is_admin": is_admin_user(user), "public_id": user.public_id}
 
 
 @app.get("/api/admin/users")
@@ -765,7 +756,11 @@ def dashboard_query(
     x_public_id: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-    target_id = public_id or x_public_id or request.headers.get("X-Public-ID") or "RoniDev"
+    # Remediation BATCH-11: identity must be explicit — the X-Public-ID
+    # header/query fallback and the RoniDev default are never trusted.
+    if not public_id:
+        raise HTTPException(401, "public_id required")
+    target_id = public_id
     user = get_or_create_user(db, target_id)
     db.commit()
     return _build_dashboard_payload(user, db, limit=limit, offset=offset)

@@ -83,7 +83,7 @@ def test_permission_engine_modes():
 
 
 def test_assignment_cards_and_full_view():
-    headers = {"X-Public-ID": "test_overlord_user"}
+    headers = _auth_headers("test_overlord_user")
     # 1. Get Cards
     cards_resp = client.get("/api/assignments/cards", headers=headers)
     assert cards_resp.status_code == 200
@@ -109,7 +109,7 @@ def test_assignment_cards_and_full_view():
 
 
 def test_overlord_chat_and_permissions_workflow():
-    headers = {"X-Public-ID": "test_overlord_user"}
+    headers = _auth_headers("test_overlord_user")
     # Get user assignment
     cards_resp = client.get("/api/assignments/cards", headers=headers)
     assign_id = cards_resp.json()["cards"][0]["id"]
@@ -156,7 +156,7 @@ def test_overlord_chat_and_permissions_workflow():
 
 
 def test_permission_rejection_and_write_something_else():
-    headers = {"X-Public-ID": "test_overlord_user"}
+    headers = _auth_headers("test_overlord_user")
     cards_resp = client.get("/api/assignments/cards", headers=headers)
     assign_id = cards_resp.json()["cards"][0]["id"]
 
@@ -199,7 +199,7 @@ def test_permission_rejection_and_write_something_else():
 
 
 def test_auto_approved_rules_management():
-    headers = {"X-Public-ID": "test_overlord_user"}
+    headers = _auth_headers("test_overlord_user")
     # 1. Add custom rule
     add_resp = client.post(
         "/api/agent/permissions/rules",
@@ -221,7 +221,7 @@ def test_auto_approved_rules_management():
 
 
 def test_operation_mode_toggle_and_yolo_warning():
-    headers = {"X-Public-ID": "test_overlord_user"}
+    headers = _auth_headers("test_overlord_user")
     # 1. Get mode
     m_resp = client.get("/api/agent/mode", headers=headers)
     assert m_resp.status_code == 200
@@ -302,3 +302,22 @@ def test_overlord_omnipresent_actions_and_permissions():
     finally:
         db.close()
 
+
+
+def _auth_headers(public_id: str) -> dict:
+    """Real auth for the hardened overlord/simulation surface (BATCH-11): a
+    valid Bearer token for an existing user — X-Public-ID is never identity."""
+    from server.security import create_jwt_token
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if user is None:
+            user = User(public_id=public_id, plan="basic", credits=50.0, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_jwt_token(user_id=user.id, role="user")
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {token}"}

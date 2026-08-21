@@ -108,7 +108,7 @@ def test_materials_pagination(client, monkeypatch):
     from server import study_tools
 
     async def fake_llm(system, user):
-        return "A summary of the lecture transcript.", "deepseek-v4-flash-free"
+        return "A summary of the lecture transcript."
 
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
     uid = f"page-user-{uuid.uuid4().hex[:8]}"

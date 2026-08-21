@@ -225,7 +225,7 @@ def test_custom_subjects_crud_and_gemini_multimodal():
     from fastapi.testclient import TestClient
     from server.main import app
 
-    client = TestClient(app)
+    client = _authed_client(app)
 
     # 1. Fetch default subjects
     s_resp = client.get("/api/user/custom-subjects")
@@ -251,7 +251,7 @@ def test_custom_bubbles_crud_and_data_export_purge():
     from fastapi.testclient import TestClient
     from server.main import app
 
-    client = TestClient(app)
+    client = _authed_client(app)
 
     # 1. Custom Bubbles CRUD
     b_resp = client.get("/api/user/custom-bubbles")
@@ -319,7 +319,7 @@ def test_credits_leaderboard_and_custom_alias():
     from fastapi.testclient import TestClient
     from server.main import app
 
-    client = TestClient(app)
+    client = _authed_client(app)
 
     # 1. Fetch default leaderboard
     l_resp = client.get("/api/user/leaderboard")
@@ -378,7 +378,7 @@ def test_message_admin_workflow():
     from fastapi.testclient import TestClient
     from server.main import app
 
-    client = TestClient(app)
+    client = _authed_client(app)
 
     # 1. Student sends message to Admin
     msg_payload = {
@@ -424,3 +424,46 @@ def test_message_admin_workflow():
 
 
 
+
+
+# ── Remediation BATCH-11: /api/user/* now requires real auth — the trio HTTP
+# tests previously rode the first-user fallback (dead since BATCH-09). ──────
+def _authed_client(app):
+    from fastapi.testclient import TestClient
+    from server.security import create_jwt_token
+    from server.database import SessionLocal, User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "trio_test_user").first()
+        if user is None:
+            user = User(public_id="trio_test_user", plan="basic", credits=50.0, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_jwt_token(user_id=user.id, role="user")
+    finally:
+        db.close()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    class _AuthedClient(TestClient):
+        def _h(self, kw):
+            kw.setdefault("headers", headers)
+            return kw
+
+        def get(self, url, **kw):
+            return super().get(url, **self._h(kw))
+
+        def post(self, url, **kw):
+            return super().post(url, **self._h(kw))
+
+        def patch(self, url, **kw):
+            return super().patch(url, **self._h(kw))
+
+        def put(self, url, **kw):
+            return super().put(url, **self._h(kw))
+
+        def delete(self, url, **kw):
+            return super().delete(url, **self._h(kw))
+
+    return _AuthedClient(app)

@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
-from server.database import CreditTransaction, User
+from server.database import CreditTransaction, DataSubmission, User
 
 logger = logging.getLogger('helpotron.credits')
 
@@ -11,6 +11,8 @@ TASK_COSTS: Dict[str, int] = {
     'study_guide': 2,
     'practice_quiz': 2,
     'summary_2min': 1,
+    'summary': 1,  # generate-route kind key (refund path indexes directly)
+    'agent_session': 1,  # agent_start charge/refund key
     'lecture_transcribe': 5,
     'humanizer_draft': 3,
     'subagent_browser': 10
@@ -26,6 +28,12 @@ def charge(user: User, task_name: str, db: Session) -> bool:
     
     # Re-query with row lock to prevent race conditions
     locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    if getattr(locked_user, "plan", "") == "elite":
+        # Elite plan: generation is included — no deduction (mirrors safe_deduct_with_rollback)
+        return True
+    if getattr(locked_user, "plan", "") == "elite":
+        # Elite plan: generation is included — no deduction (mirrors safe_deduct_with_rollback)
+        return True
     if not locked_user or locked_user.credits < cost:
         db.rollback()
         logger.warning(f'User {user.id} has insufficient credits ({getattr(locked_user, "credits", 0)}) for {task_name} (cost {cost})')
@@ -116,3 +124,25 @@ def safe_deduct_with_rollback(
         logger.info("Rolled back %s credits for user %s (%s)", amount, user.id, operation_desc)
 
     return True, rollback
+
+
+# ── Remediation BATCH-11: refund top-up + discount data-submission API ───────
+def top_up(db: Session, user: User, amount: float, reason: str = "topup") -> None:
+    """Credit a user back after a failed charge. The generate routes call
+    top_up(db, user, cost, reason=...) on generation failure (refund path)."""
+    locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    if locked_user:
+        locked_user.credits += amount
+        db.commit()
+        logger.info('Topped up user %s +%s credits (%s)', user.id, amount, reason)
+
+
+def record_data_submission(db: Session, user: User, payload: dict) -> dict:
+    """Record an anonymized data submission and grant the standard 1.0%
+    discount (DataSubmission.discount_earned). /api/discount contract."""
+    submission = DataSubmission(user_id=user.id, payload=payload, discount_earned=1.0)
+    db.add(submission)
+    user.discount_balance = 1.0
+    db.commit()
+    logger.info('Recorded data submission for user %s (discount 1.0%%)', user.id)
+    return {"discount_balance": 1.0, "next_purchase_discount": 1.0}

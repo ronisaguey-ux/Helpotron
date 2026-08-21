@@ -28,7 +28,7 @@ def setup_sim_user():
 
 
 def test_simulation_toggle_and_status():
-    headers = {"X-Public-ID": "test_sim_user"}
+    headers = _auth_headers("test_sim_user")
 
     # 1. Get status
     stat_resp = client.get("/api/simulation/status", headers=headers)
@@ -47,7 +47,7 @@ def test_simulation_toggle_and_status():
 
 
 def test_simulation_seed_and_clear():
-    headers = {"X-Public-ID": "test_sim_user"}
+    headers = _auth_headers("test_sim_user")
 
     # 1. Seed mock courses & materials
     seed_resp = client.post("/api/simulation/seed", headers=headers)
@@ -69,3 +69,22 @@ def test_simulation_seed_and_clear():
     clear_resp = client.post("/api/simulation/clear", headers=headers)
     assert clear_resp.status_code == 200
     assert clear_resp.json()["result"]["status"] == "cleared"
+
+
+def _auth_headers(public_id: str) -> dict:
+    """Real auth for the hardened overlord/simulation surface (BATCH-11): a
+    valid Bearer token for an existing user — X-Public-ID is never identity."""
+    from server.security import create_jwt_token
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if user is None:
+            user = User(public_id=public_id, plan="basic", credits=50.0, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_jwt_token(user_id=user.id, role="user")
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {token}"}

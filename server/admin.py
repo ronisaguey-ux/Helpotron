@@ -314,11 +314,7 @@ async def deactivate_token(token: str, request: Request, db: Session = Depends(g
 
 @router.post("/tokens/redeem")
 async def redeem_token_endpoint(req: TokenRedeemRequest, request: Request, db: Session = Depends(get_db)):
-    public_id = request.headers.get("X-Public-ID")
-    if not public_id:
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
+    from .routes_features import get_current_authenticated_user
+    user = get_current_authenticated_user(request, db)
     result = TokenManager.redeem_token(db, user, req.token)
     return {"message": result}

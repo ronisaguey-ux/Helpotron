@@ -23,8 +23,8 @@ def test_agent_session_collects_then_finishes(monkeypatch):
     async def fake_llm(system, user):
         calls["n"] += 1
         if calls["n"] == 1:
-            return json.dumps({"tool": "read_page"}), "deepseek-v4-flash-free"
-        return json.dumps({"tool": "finish", "args": {"summary": "collected the Hamlet prompt"}}), "deepseek-v4-flash-free"
+            return json.dumps({"tool": "read_page"})
+        return json.dumps({"tool": "finish", "args": {"summary": "collected the Hamlet prompt"}})
 
     monkeypatch.setattr("server.agent_session.llm.call_llm", fake_llm)
 
@@ -58,7 +58,7 @@ def test_agent_session_collects_then_finishes(monkeypatch):
 
 def test_agent_session_times_out_command(monkeypatch):
     async def fake_llm(system, user):
-        return json.dumps({"tool": "scroll", "args": {"direction": "down"}}), "deepseek-v4-flash-free"
+        return json.dumps({"tool": "scroll", "args": {"direction": "down"}})
 
     monkeypatch.setattr("server.agent_session.llm.call_llm", fake_llm)
     monkeypatch.setattr("server.agent_session.COMMAND_TIMEOUT", 0.01)
@@ -106,8 +106,8 @@ def test_agent_session_invalid_json_retries(monkeypatch):
     async def fake_llm(system, user):
         calls["n"] += 1
         if calls["n"] == 1:
-            return "I think I'll read the page now.", "deepseek-v4-flash-free"  # not JSON
-        return json.dumps({"tool": "finish", "args": {"summary": "nothing found"}}), "deepseek-v4-flash-free"
+            return "I think I'll read the page now."  # not JSON
+        return json.dumps({"tool": "finish", "args": {"summary": "nothing found"}})
 
     monkeypatch.setattr("server.agent_session.llm.call_llm", fake_llm)
 

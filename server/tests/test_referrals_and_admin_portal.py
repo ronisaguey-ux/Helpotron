@@ -108,8 +108,27 @@ def test_admin_endpoints_and_messages_inbox():
     from server.main import app
     client = TestClient(app)
 
-    # Test admin check
-    res = client.get("/api/admin/check", headers={"X-Public-ID": "RoniDev"})
+    # Test admin check (BATCH-11: X-Public-ID is never identity — real token)
+    from server.security import create_jwt_token
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.public_id == "RoniDev").first()
+        if admin is None:
+            admin = User(public_id="RoniDev", plan="elite", credits=100.0)
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+        admin_token = create_jwt_token(user_id=admin.id, role="admin")
+        student = db.query(User).filter(User.public_id == "Student_Alice").first()
+        if student is None:
+            student = User(public_id="Student_Alice", plan="basic", credits=5.0)
+            db.add(student)
+            db.commit()
+            db.refresh(student)
+        student_token = create_jwt_token(user_id=student.id, role="user")
+    finally:
+        db.close()
+    res = client.get("/api/admin/check", headers={"Authorization": f"Bearer {admin_token}"})
     assert res.status_code == 200
     assert res.json()["is_admin"] is True
 
@@ -117,13 +136,13 @@ def test_admin_endpoints_and_messages_inbox():
     msg_res = client.post(
         "/api/user/message-admin",
         json={"subject": "Question on tokens", "category": "billing", "message": "How many assignment tokens do I get?"},
-        headers={"X-Public-ID": "Student_Alice"},
+        headers={"Authorization": f"Bearer {student_token}"},
     )
     assert msg_res.status_code == 200
     msg_id = msg_res.json()["message_id"]
 
     # Test admin fetches inquiries
-    admin_inbox = client.get("/api/admin/messages", headers={"X-Public-ID": "RoniDev"})
+    admin_inbox = client.get("/api/admin/messages", headers={"Authorization": f"Bearer {admin_token}"})
     assert admin_inbox.status_code == 200
     msgs = admin_inbox.json()["messages"]
     assert any(m["id"] == msg_id for m in msgs)
@@ -132,7 +151,7 @@ def test_admin_endpoints_and_messages_inbox():
     reply_res = client.post(
         f"/api/admin/messages/{msg_id}/reply",
         json={"reply": "The Basic plan grants 30 full task tokens per month."},
-        headers={"X-Public-ID": "RoniDev"},
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert reply_res.status_code == 200
     assert reply_res.json()["status"] == "replied"

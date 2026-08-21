@@ -99,7 +99,7 @@ def test_api_overlord_nlp_settings_update():
     # 1. Update reading level via NLP
     res = client.post(
         "/api/agent/command",
-        headers={"X-Public-ID": "test_overlord_user"},
+        headers=_auth_headers("test_overlord_user"),
         json={"text": "Please change my reading level to sophomore"},
     )
     assert res.status_code == 200
@@ -110,7 +110,7 @@ def test_api_overlord_nlp_settings_update():
     # 2. Update operation mode via NLP
     res2 = client.post(
         "/api/agent/command",
-        headers={"X-Public-ID": "test_overlord_user"},
+        headers=_auth_headers("test_overlord_user"),
         json={"text": "Switch operation mode to YOLO"},
     )
     assert res2.status_code == 200
@@ -123,7 +123,7 @@ def test_api_sandbox_execution_and_listing():
     """Test the /api/agent/sandbox/execute and /api/agent/sandbox/active endpoints."""
     res = client.post(
         "/api/agent/sandbox/execute",
-        headers={"X-Public-ID": "test_overlord_user"},
+        headers=_auth_headers("test_overlord_user"),
         json={
             "script_code": "import os\nprint('Sandbox Python test success')",
             "language": "python",
@@ -138,7 +138,27 @@ def test_api_sandbox_execution_and_listing():
     # Active sandboxes endpoint
     res_active = client.get(
         "/api/agent/sandbox/active",
-        headers={"X-Public-ID": "test_overlord_user"},
+        headers=_auth_headers("test_overlord_user"),
     )
     assert res_active.status_code == 200
     assert "sandboxes" in res_active.json()
+
+
+def _auth_headers(public_id: str) -> dict:
+    """Real auth for the hardened overlord/simulation surface (BATCH-11): a
+    valid Bearer token for an existing user — X-Public-ID is never identity."""
+    from server.security import create_jwt_token
+    from server.database import SessionLocal, User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if user is None:
+            user = User(public_id=public_id, plan="basic", credits=50.0, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_jwt_token(user_id=user.id, role="user")
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {token}"}

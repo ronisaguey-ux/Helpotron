@@ -32,7 +32,7 @@ def test_upsert_assignment_and_status(client, unique_user):
 
 def test_material_requires_credits_then_succeeds(client, unique_user, monkeypatch):
     async def fake_llm(system, user):
-        return "A study guide about Hamlet.", "deepseek-v4-flash-free"
+        return "A study guide about Hamlet."
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
 
     body = {"public_id": unique_user, "transcript_text": "Hamlet delays. The ghost speaks."}
@@ -48,10 +48,10 @@ def test_material_requires_credits_then_succeeds(client, unique_user, monkeypatc
     r = client.post("/api/study-guide", json=body)
     assert r.status_code == 200
     assert "Hamlet" in r.json()["content"]
-    assert r.json()["model_used"] == "deepseek-v4-flash-free"
+    assert r.json()["model_used"] is None  # call_llm returns str (BATCH-02)
 
-    # cost ledger: 0.5 credit spent
-    assert client.get(f"/api/credits/{unique_user}").json()["credits"] == 4.5
+    # cost ledger: study_guide costs 2 credits (TASK_COSTS)
+    assert client.get(f"/api/credits/{unique_user}").json()["credits"] == 3.0
 
 
 def test_flashcards_json_retry_then_parse(client, unique_user, monkeypatch):
@@ -60,8 +60,8 @@ def test_flashcards_json_retry_then_parse(client, unique_user, monkeypatch):
     async def flaky_llm(system, user):
         calls["n"] += 1
         if calls["n"] == 1:
-            return "Sure! ```json\nnot valid json\n```", "mimo-v2.5-free"
-        return '[{"q": "Who delays?", "a": "Hamlet"}]', "deepseek-v4-flash-free"
+            return "Sure! ```json\nnot valid json\n```"
+        return '[{"q": "Who delays?", "a": "Hamlet"}]'
 
     monkeypatch.setattr(study_tools.llm, "call_llm", flaky_llm)
     client.post("/api/payments", json={"public_id": unique_user, "provider": "zelle", "amount_cents": 200})

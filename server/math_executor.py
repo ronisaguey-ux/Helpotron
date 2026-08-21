@@ -19,6 +19,12 @@ import os
 import re
 import subprocess
 import sys
+
+# Legacy bash runner target (deterministic math legacy path)
+PYTHON_BIN = sys.executable
+
+# Legacy bash runner target (deterministic math legacy path)
+PYTHON_BIN = sys.executable
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger("helpotron.math_executor")

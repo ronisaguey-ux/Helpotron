@@ -29,7 +29,7 @@ def setup_test_users():
 
 
 def test_user_settings_defaults_and_update():
-    headers = {"X-Public-ID": "test_student_user"}
+    headers = _auth_headers("test_student_user")
     resp = client.get("/api/user/settings", headers=headers)
     assert resp.status_code == 200
     settings = resp.json()["settings"]
@@ -53,7 +53,7 @@ def test_user_settings_defaults_and_update():
 
 
 def test_writing_personas_lifecycle():
-    headers = {"X-Public-ID": "test_student_user"}
+    headers = _auth_headers("test_student_user")
     # Create new persona
     p_resp = client.post(
         "/api/user/personas",
@@ -81,7 +81,7 @@ def test_writing_personas_lifecycle():
 
 
 def test_ai_citation_generator_and_library():
-    headers = {"X-Public-ID": "test_student_user"}
+    headers = _auth_headers("test_student_user")
     # Generate APA citation
     resp = client.post(
         "/api/user/citations/generate",
@@ -112,7 +112,7 @@ def test_ai_citation_generator_and_library():
 
 
 def test_originality_checker():
-    headers = {"X-Public-ID": "test_student_user"}
+    headers = _auth_headers("test_student_user")
     resp = client.post(
         "/api/user/originality/check",
         json={
@@ -129,7 +129,7 @@ def test_originality_checker():
 
 
 def test_goals_and_data_export():
-    headers = {"X-Public-ID": "test_student_user"}
+    headers = _auth_headers("test_student_user")
     # Update goal
     g_resp = client.post("/api/user/goals/target", json={"weekly_target": 7}, headers=headers)
     assert g_resp.status_code == 200
@@ -181,3 +181,23 @@ def test_admin_advanced_endpoints():
     )
     assert override_resp.status_code == 200
     assert override_resp.json()["overrides"]["essay"] == "deepseek-v4-flash"
+
+
+def _auth_headers(public_id: str) -> dict:
+    """Real auth for the hardened /api/user surface (BATCH-09+): a valid
+    Bearer token for an existing user — X-Public-ID is never an identity."""
+    from server.security import create_jwt_token
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if user is None:
+            user = User(public_id=public_id, plan="basic", credits=20.0, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        role = "admin" if public_id in ("RoniDev", "admin") else "user"
+        token = create_jwt_token(user_id=user.id, role=role)
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {token}"}

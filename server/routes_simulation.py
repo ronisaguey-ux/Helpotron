@@ -17,18 +17,11 @@ class ToggleRequest(BaseModel):
 
 
 def _get_current_user(request: Request, db: Session) -> User:
-    public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if not public_id:
-        user = db.query(User).first()
-        if user:
-            return user
-        raise HTTPException(400, "Missing X-Public-ID header")
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        raise HTTPException(404, "User not found")
-    return user
-
-
+    """Authenticated user lookup (remediation BATCH-11): identity comes only
+    from a valid Bearer token or session cookie — the X-Public-ID header is
+    never an identity and no user is auto-selected from the DB."""
+    from .routes_features import get_current_authenticated_user
+    return get_current_authenticated_user(request, db)
 @router.get("/status")
 async def get_simulation_status(request: Request, db: Session = Depends(get_db)):
     """Returns the current state of the mock activity simulator and seeded item count."""
