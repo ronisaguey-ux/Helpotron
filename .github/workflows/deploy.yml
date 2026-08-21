@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Deploy to VPS via Secure SSH Action
-        uses: appleboy/ssh-action@7eaf76671a0d7e35d6892e5ba0d7d237f97c773c # v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         if: env.SSH_HOST != ''
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}

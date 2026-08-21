@@ -6,11 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+# gitleaks-action v2 queries the PR API on pull_request events
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -25,7 +32,11 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
+      # full history required: gitleaks-action scans the range base^..head
+      # and a depth-1 checkout makes the parent revisions unresolvable
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Gitleaks Secrets Detection
         uses: gitleaks/gitleaks-action@v2
         env:
