@@ -154,7 +154,7 @@ def test_admin_advanced_endpoints():
     db = SessionLocal()
     roni = db.query(User).filter(User.public_id == "RoniDev").first()
     assert roni is not None
-    admin_headers = {"Authorization": f"Bearer {create_jwt_token({'sub': str(roni.id)})}"}
+    admin_headers = {"Authorization": f"Bearer {create_jwt_token(user_id=roni.id, role='admin')}"}
     db.close()
 
     # 1. System health

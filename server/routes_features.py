@@ -7,6 +7,44 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .database import User, get_db
+from .security import verify_jwt_token
+from fastapi import status
+
+
+def get_current_authenticated_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """Feature-route auth dependency (remediation BATCH-01): a request is only
+    trusted if it carries a valid Bearer token (or session cookie) whose sub
+    matches a real user — the X-Public-ID header is never an identity."""
+    auth_header = request.headers.get('Authorization')
+    session_token = request.cookies.get('helpotron_session')
+    token = None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1]
+    elif session_token:
+        token = session_token
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Authentication required to access feature'
+        )
+
+    payload = verify_jwt_token(token)
+    if not payload or 'sub' not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired session'
+        )
+
+    user = db.query(User).filter(User.id == payload['sub']).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='User account not found'
+        )
+    return user
+
+
 from .features import (
     detect_assignment_type,
     get_user_stats,

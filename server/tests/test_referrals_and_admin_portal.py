@@ -142,7 +142,7 @@ def test_admin_endpoints_and_messages_inbox():
     s = SessionLocal()
     roni = s.query(User).filter(User.public_id == "RoniDev").first()
     assert roni is not None
-    admin_headers = {"Authorization": f"Bearer {create_jwt_token({'sub': str(roni.id)})}"}
+    admin_headers = {"Authorization": f"Bearer {create_jwt_token(user_id=roni.id, role='admin')}"}
     s.close()
 
     # Test admin token generation
