@@ -13,7 +13,26 @@ async function getPublicId() {
   return public_id || 'RoniDev';
 }
 
+async function syncAssignments(assignment) {
+  const server = await getServer();
+  const public_id = await getPublicId();
+  const res = await fetch(`${server}/api/assignments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_id, ...assignment }),
+  });
+  return { ok: res.ok, status: res.status };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) {
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return;
+  }
+  if (message.action === 'SYNC_ASSIGNMENTS') {
+    syncAssignments(message.assignment).then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
   if (message.action === 'getTabs') {
     chrome.tabs.query({}, (tabs) => {
       sendResponse({
