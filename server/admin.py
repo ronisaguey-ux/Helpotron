@@ -12,11 +12,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .config import config
-from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, get_db
-from .security import hash_password, verify_jwt_token
+from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
+from .security import hash_password, is_admin_user, verify_jwt_token
 router = APIRouter()
 
-def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
+def require_admin(request: Request) -> User:
+    # NOTE: called as a plain function everywhere (require_admin(request)), never via
+    # FastAPI Depends — so it opens its own session instead of taking an injected db.
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         session_token = request.cookies.get('helpotron_session')
@@ -25,21 +27,23 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         token = session_token
     else:
         token = auth_header.split(' ', 1)[1]
-    
+
     payload = verify_jwt_token(token)
     if not payload or 'sub' not in payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired authentication token')
-    
-    user = db.query(User).filter(User.id == payload['sub']).first()
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == payload['sub']).first()
+    finally:
+        db.close()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User account no longer exists')
-    
-    if not getattr(user, 'is_admin', False) and user.role != 'admin':
+
+    if not getattr(user, 'is_admin', False) and user.role != 'admin' and not is_admin_user(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrative privileges required')
-    
+
     return user
-    if not is_admin(request):
-        raise HTTPException(403, "Admin access required")
 
 
 class TokenRequest(BaseModel):
@@ -318,14 +322,3 @@ async def redeem_token_endpoint(req: TokenRedeemRequest, request: Request, db: S
         raise HTTPException(404, "User not found")
     result = TokenManager.redeem_token(db, user, req.token)
     return {"message": result}
-
-
-@router.get("/health")
-async def admin_health(request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
-    try:
-        db.execute("SELECT 1")
-        db_status = "ok"
-    except Exception as e:
-        db_status = f"error: {e}"
-    return {"status": "ok", "database": db_status, "timestamp": datetime.now(timezone.utc).isoformat()}

@@ -149,7 +149,13 @@ def test_goals_and_data_export():
 
 
 def test_admin_advanced_endpoints():
-    admin_headers = {"X-Public-ID": "RoniDev"}
+    # Admin routes require JWT auth (hardened require_admin), so mint a token
+    from server.security import create_jwt_token
+    db = SessionLocal()
+    roni = db.query(User).filter(User.public_id == "RoniDev").first()
+    assert roni is not None
+    admin_headers = {"Authorization": f"Bearer {create_jwt_token({'sub': str(roni.id)})}"}
+    db.close()
 
     # 1. System health
     health_resp = client.get("/api/admin/system-health", headers=admin_headers)

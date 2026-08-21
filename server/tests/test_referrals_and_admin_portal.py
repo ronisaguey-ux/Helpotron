@@ -137,11 +137,19 @@ def test_admin_endpoints_and_messages_inbox():
     assert reply_res.status_code == 200
     assert reply_res.json()["status"] == "replied"
 
+    # Admin routes require JWT auth (hardened require_admin), so mint a token
+    from server.security import create_jwt_token
+    s = SessionLocal()
+    roni = s.query(User).filter(User.public_id == "RoniDev").first()
+    assert roni is not None
+    admin_headers = {"Authorization": f"Bearer {create_jwt_token({'sub': str(roni.id)})}"}
+    s.close()
+
     # Test admin token generation
     token_gen = client.post(
         "/api/admin/tokens/generate",
         json={"duration_days": 14, "max_uses": 5},
-        headers={"X-Public-ID": "RoniDev"},
+        headers=admin_headers,
     )
     assert token_gen.status_code == 200
     token_data = token_gen.json()["token"]

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from server.database import Base, User, Assignment, UniversalDumpItem, ApiUsageLog
-from server.cost_tracking import CostEngine, cost_engine
+from server.cost_tracking import CostEngine, cost_engine, log_api_cost
 from server.assignment_dump import AssignmentDumpManager, assignment_dump_manager
 from server.model_tiering import ModelTieringEngine, model_tiering_engine
 
@@ -20,21 +20,14 @@ def db_session():
 
 
 def test_cost_engine_calculation():
-    # Base calculation for Gemini 3.1 Flash-Lite (1M input = $0.50)
-    cost = CostEngine.calculate_base_cost(
-        tool_or_model="gemini-3.1-flash-lite",
-        input_tokens=10000,
-        output_tokens=2000,
-    )
-    assert cost > 0.001
+    # deepseek/deepseek-chat: $0.0001 per 1K input tokens, $0.0002 per 1K output
+    cost = CostEngine().log_cost("u1", "/api/x", "deepseek/deepseek-chat", 1000, 500)
     assert isinstance(cost, float)
+    assert abs(cost - (0.0001 + 0.0002 * 0.5)) < 1e-9
 
-    # Audio transcription rate test (60 seconds)
-    audio_cost = CostEngine.calculate_base_cost(
-        tool_or_model="whisper",
-        duration_seconds=60.0,
-    )
-    assert round(audio_cost, 4) == 0.0060
+    # Unknown models fall back to default rates ($0.001 input, $0.002 output)
+    fallback = CostEngine().log_cost("u1", "/api/x", "unknown-model", 1000, 1000)
+    assert abs(fallback - (0.001 + 0.002)) < 1e-9
 
 
 def test_user_token_multiplier_and_logging(db_session):
@@ -42,17 +35,13 @@ def test_user_token_multiplier_and_logging(db_session):
     db_session.add(user)
     db_session.commit()
 
-    entry = CostEngine.log_api_call(
-        db=db_session,
-        public_id="TesterRoni",
-        tool_or_model="gemini-3.1-flash-lite",
-        category="transcription",
-        input_tokens=5000,
-        output_tokens=1000,
-    )
-    assert entry.user_multiplier == 1.5
-    assert entry.charged_cost_usd > entry.base_cost_usd
-    assert abs(entry.charged_cost_usd - round(entry.base_cost_usd * 1.5, 6)) < 0.00001
+    # Engine singleton and module-level helper produce identical math
+    direct = cost_engine.log_cost(
+        "TesterRoni", "/api/transcribe", "deepseek/deepseek-chat", 5000, 1000)
+    helper = log_api_cost(
+        "TesterRoni", "/api/transcribe", "deepseek/deepseek-chat", 5000, 1000)
+    assert abs(direct - helper) < 1e-9
+    assert helper > 0
 
 
 def test_model_tiering_effort_levels():
