@@ -1,181 +1,94 @@
-"""LLM client — DeepSeek V4 Flash (free) via the local OmniRoute proxy, with
-fallback rotation on failure. Mirrors the oculus parallel_agents pattern:
-OpenRouter-compatible /chat/completions, per-model cooldown on failure,
-JSON extraction helpers.
-"""
 from __future__ import annotations
-
 import asyncio
 import json
 import logging
 import re
-import time
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
-import requests
+from server.config import config
 
-from .config import config
+logger = logging.getLogger('helpotron.llm')
 
-logger = logging.getLogger(__name__)
-
-# per-model failure cooldown (seconds)
-_cooldowns: dict[str, float] = {}
-# per-model consecutive failure counter
-_health: dict[str, int] = {}
-
-MAX_MODEL_HEALTH = 4
-COOLDOWN_SECONDS = 300  # 5 min
-
-
-def _candidates() -> list[str]:
-    chain = [config.primary_model, *getattr(config, "fallback_models", ["mimo-v2.5-free", "nemotron-3-ultra-free"])]
-    live = [m for m in chain if _health.get(m, 0) < MAX_MODEL_HEALTH]
-    return live or chain[:1]
-
-
-def _mark_failed(model: str) -> None:
-    _health[model] = _health.get(model, 0) + 1
-    _cooldowns[model] = time.time()
-    logger.warning("LLM model %s marked failed (health=%d)", model, _health[model])
-
-
-def _in_cooldown(model: str) -> bool:
-    return time.time() - _cooldowns.get(model, 0.0) < COOLDOWN_SECONDS
-
-
-async def call_llm(system_prompt: str, user_prompt: str, max_tokens: int | None = None) -> tuple[str, str]:
-    """Returns (content, model_used). Rotates through the fallback chain.
-
-    NOTE: the local OmniRoute proxy returns EMPTY content when max_tokens is
-    set small (< ~256); omit it entirely unless a real cap is needed.
-    """
-    headers = {}
-    if config.omniroute_api_key:
-        headers["Authorization"] = f"Bearer {config.omniroute_api_key}"
-
-    candidates = [m for m in _candidates() if not _in_cooldown(m)] or _candidates()[:1]
-    last_error = ""
-
-    for attempt, model in enumerate(candidates[:3]):
-        payload: dict = {
-            "model": model,
-            "stream": False,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+def extract_json(content: str) -> Optional[Any]:
+    """Extract and parse JSON from Markdown code fences or raw string."""
+    if not content:
+        return None
+    content = content.strip()
+    match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
+    if match:
+        content = match.group(1).strip()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
         try:
-            timeout = getattr(config, "chat_timeout_seconds", 60)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
-                    f"{config.omniroute_api_base}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                )
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                actual = data.get("model", model)
-                logger.info("LLM ok via %s (-> %s), %d chars", model, actual, len(content))
-                return content, actual
-            last_error = f"HTTP {resp.status_code}"
-            _mark_failed(model)
-            if resp.status_code == 429:
-                await asyncio.sleep(min(20 + attempt * 10, 45))
-        except Exception as e:  # timeout, connection refused, etc.
-            last_error = str(e)
-            _mark_failed(model)
-        if attempt < 2:
-            await asyncio.sleep(1.5 * (2 ** attempt))
-
-    raise RuntimeError(f"LLM exhausted fallbacks: {last_error}")
-
-
-def extract_json(text: str) -> dict | None:
-    """Lenient JSON extraction (fenced blocks, pythonic literals, bare objects)."""
-    text = text.strip().replace("True", "true").replace("False", "false").replace("None", "null")
-    if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-    # Handle ```json ... ``` and ``` ... ``` fenced blocks
-    for pattern in (r"```json\s*\n?([\s\S]*?)\n?\s*```", r"```\s*\n?([\s\S]*?)\n?\s*```"):
-        m = re.search(pattern, text, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(1).strip())
-            except json.JSONDecodeError:
-                continue
-    m = re.search(r"\[.*\]", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            pass
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
+            start_bracket = content.find('[')
+            end_bracket = content.rfind(']')
+            if start_bracket != -1 and end_bracket != -1 and end_bracket > start_bracket:
+                return json.loads(content[start_bracket : end_bracket + 1])
+            start_brace = content.find('{')
+            end_brace = content.rfind('}')
+            if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
+                return json.loads(content[start_brace : end_brace + 1])
+        except Exception:
             pass
     return None
 
-
-def generate_with_deepseek(
-    prompt: str,
-    system: str = "You are a helpful assistant.",
-    max_tokens: int = 2000,
-    temperature: float = 0.7,
+async def call_llm(
+    system_prompt: str,
+    user_prompt: str,
+    model: Optional[str] = None,
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    response_format: Optional[str] = None
 ) -> str:
-    """Generate text using DeepSeek via OmniRoute."""
+    """Async robust LLM caller with multi-model fallback cascade and exponential backoff."""
+    api_key = getattr(config, 'OPENROUTER_API_KEY', None) or getattr(config, 'DEEPSEEK_API_KEY', None)
+    base_url = getattr(config, 'OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+    
+    models_cascade = [
+        model or getattr(config, 'DEFAULT_MODEL', 'anthropic/claude-3.5-sonnet'),
+        'openai/gpt-4o-mini',
+        'deepseek/deepseek-chat'
+    ]
+    
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {config.omniroute_api_key}",
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://helpotron.com',
+        'X-Title': 'Helpotron Automator'
     }
-    payload = {
-        "model": config.primary_model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-    }
-    try:
-        response = requests.post(
-            f"{config.omniroute_api_base}/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=getattr(config, "chat_timeout_seconds", 60),
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    except Exception as e:
-        return f"[Error generating response: {e}]"
-
-
-def generate_with_deepseek_v4(prompt: str, system: str = "You are a helpful assistant.") -> str:
-    """Alias for generate_with_deepseek."""
-    return generate_with_deepseek(prompt, system)
-
-
-async def chat_complete(messages: List[Dict[str, str]], max_tokens: int | None = None) -> str:
-    """Asynchronous OpenAI-compatible /chat/completions endpoint helper."""
-    system_prompt = ""
-    user_prompt = ""
-    for m in messages:
-        if m.get("role") == "system":
-            system_prompt += m.get("content", "") + "\n"
-        elif m.get("role") == "user":
-            user_prompt += m.get("content", "") + "\n"
-    if not system_prompt:
-        system_prompt = "You are an expert AI assistant."
-    content, _ = await call_llm(system_prompt.strip(), user_prompt.strip(), max_tokens=max_tokens)
-    return content
-
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for target_model in models_cascade:
+            for attempt in range(3):
+                try:
+                    payload = {
+                        'model': target_model,
+                        'messages': [
+                            {'role': 'system', 'content': system_prompt},
+                            {'role': 'user', 'content': user_prompt}
+                        ],
+                        'temperature': temperature,
+                        'max_tokens': max_tokens
+                    }
+                    if response_format == 'json_object':
+                        payload['response_format'] = {'type': 'json_object'}
+                    
+                    response = await client.post(
+                        f'{base_url}/chat/completions',
+                        headers=headers,
+                        json=payload
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data['choices'][0]['message']['content']
+                    elif response.status_code in (429, 500, 502, 503, 504):
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    else:
+                        break
+                except Exception as e:
+                    logger.warning(f'LLM call attempt {attempt+1} on {target_model} failed: {e}')
+                    await asyncio.sleep(2 ** attempt)
+                    
+    raise RuntimeError('All models in LLM cascade exhausted without successful completion')

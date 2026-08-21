@@ -29,7 +29,8 @@ from .config import config
 from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
 from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, require_admin
+from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+from .admin import require_admin
 from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 
 # Import route modules
@@ -272,7 +273,7 @@ async def _generate(db: Session, user: User, kind: str, transcript_text: str,
                     assignment_prompt: str, reading_level: str | None,
                     assignment_id: int | None, transcript_id: int | None) -> StudyMaterial:
     # charge on success only — pre-charge then credit back on failure
-    if not credits.charge(db, user, kind):
+    if not credits.charge(user, kind, db):
         raise HTTPException(402, "insufficient credits — top up at /api/payments")
 
     try:
@@ -856,7 +857,7 @@ class AgentStartIn(BaseModel):
 async def agent_start(body: AgentStartIn, db: Session = Depends(get_db)):
     user = get_or_create_user(db, body.public_id)
     db.commit()
-    if not credits.charge(db, user, "agent_session"):
+    if not credits.charge(user, "agent_session", db):
         raise HTTPException(402, "insufficient credits — agent sessions cost 1 credit")
     db.commit()
     session = agent_manager.create(user.public_id, body.assignment_id, body.instruction)

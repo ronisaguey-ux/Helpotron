@@ -60,16 +60,10 @@ router = APIRouter(prefix="/api/features", tags=["features"])
 
 
 async def _get_feature_user(request: Request, db: Session) -> User:
+    # Remediation BATCH-01: strict auth only — session cookie or Bearer JWT.
+    # The X-Public-ID header / public_id query fallback is gone (spoofing).
     from .security import get_current_user
-    try:
-        return await get_current_user(request)
-    except Exception:
-        public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-        if public_id:
-            user = db.query(User).filter(User.public_id == public_id).first()
-            if user:
-                return user
-        raise HTTPException(401, "Authentication required")
+    return await get_current_user(request)
 
 
 # ─── 1. AUTO-DETECT ASSIGNMENT TYPE ────────────────────────────────────────
