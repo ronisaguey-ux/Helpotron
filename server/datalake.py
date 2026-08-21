@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -42,6 +43,28 @@ def _anonymize_id(raw_id: Any) -> str:
         return "anon_" + uuid.uuid4().hex[:8]
     val = f"helpotron_salt_{raw_id}"
     return "usr_" + hashlib.sha256(val.encode("utf-8")).hexdigest()[:12]
+
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_STUDENT_ID_RE = re.compile(r"Student\s+ID[:#]?\s*[A-Za-z0-9_-]+", re.IGNORECASE)
+_PHONE_RE = re.compile(
+    r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b"
+)
+_NAME_RE = re.compile(
+    r"(\b(?:Submitted by|by|from)\s+)[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2}"
+)
+
+
+def anonymize_student_submission(text: str) -> str:
+    """Strips PII (university emails, student IDs, phone numbers, names) from
+    shared assignment summaries before they are stored in the data lake."""
+    if not text:
+        return ""
+    redacted = _EMAIL_RE.sub("[EMAIL_REDACTED]", text)
+    redacted = _STUDENT_ID_RE.sub("Student ID: [ID_REDACTED]", redacted)
+    redacted = _PHONE_RE.sub("[PHONE_REDACTED]", redacted)
+    redacted = _NAME_RE.sub(r"\1[NAME_REDACTED]", redacted)
+    return redacted
 
 
 class DataLakeManager:
