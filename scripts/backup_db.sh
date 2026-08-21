@@ -1,27 +1,17 @@
-#!/bin/bash
-# Helpotron — Automated SQLite database backup with 30-day retention pruning.
+#!/usr/bin/env bash
 set -euo pipefail
 
-DB_PATH="${DB_PATH:-/opt/helpotron/data/helpotron.db}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/helpotron/backups}"
-RETENTION_DAYS="${RETENTION_DAYS:-30}"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="${BACKUP_DIR}/helpotron_${TIMESTAMP}.db.gz"
+BACKUP_DIR="/var/backups/helpotron"
+DATE_TAG=$(date +"%Y%m%d_%H%M%S")
+DB_PATH="/var/www/helpotron/data/helpotron.db"
 
-mkdir -p "${BACKUP_DIR}"
+mkdir -p "$BACKUP_DIR"
 
-if [ ! -f "${DB_PATH}" ]; then
-  echo "[ERROR] Database not found: ${DB_PATH}" >&2
-  exit 1
+if [ -f "$DB_PATH" ]; then
+    # Perform atomic SQLite online backup using sqlite3 CLI or python
+    python3 -c "import sqlite3; con = sqlite3.connect('$DB_PATH'); bck = sqlite3.connect('$BACKUP_DIR/helpotron_$DATE_TAG.db'); con.backup(bck); bck.close(); con.close()"
+    gzip -9 "$BACKUP_DIR/helpotron_$DATE_TAG.db"
+    echo "[$(date)] Backup completed successfully: $BACKUP_DIR/helpotron_$DATE_TAG.db.gz"
+    # Retain backups for 14 days
+    find "$BACKUP_DIR" -type f -name "helpotron_*.db.gz" -mtime +14 -delete
 fi
-
-# Create compressed backup
-sqlite3 "${DB_PATH}" ".backup /tmp/helpotron_tmp_backup.db"
-gzip -c /tmp/helpotron_tmp_backup.db > "${BACKUP_FILE}"
-rm -f /tmp/helpotron_tmp_backup.db
-
-echo "[OK] Backup created: ${BACKUP_FILE} ($(du -sh "${BACKUP_FILE}" | cut -f1))"
-
-# Prune backups older than RETENTION_DAYS
-find "${BACKUP_DIR}" -name 'helpotron_*.db.gz' -mtime "+${RETENTION_DAYS}" -delete
-echo "[OK] Pruned backups older than ${RETENTION_DAYS} days."
