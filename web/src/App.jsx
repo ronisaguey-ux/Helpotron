@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
 import ReferralSection from './components/ReferralSection.jsx';
@@ -161,6 +162,9 @@ export default function App() {
   const [userPlan, setUserPlan] = useState('elite');
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
+  // Design pass (08-21): distinct key per rendered view so AnimatePresence
+  // can cross-fade between them (assignment detail counts as its own view).
+  const viewKey = activeView === 'overview' && openAssignment ? 'assignment' : activeView;
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [extensionGuideOpen, setExtensionGuideOpen] = useState(false);
 
@@ -434,15 +438,22 @@ export default function App() {
                         onClick={() => handleSelectView(item.key)}
                         aria-label={item.label}
                         aria-pressed={isSelected}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition cursor-pointer select-none ${
+                        className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition cursor-pointer select-none ${
                           isSelected
-                            ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30 font-medium'
+                            ? 'text-blue-300 font-medium'
                             : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
                         } ${!sidebarOpen ? 'justify-center px-2' : ''}`}
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-blue-400' : 'text-slate-400'}`} />
+                        {isSelected && (
+                          <motion.span
+                            layoutId="nav-active-pill"
+                            className="absolute inset-0 rounded-xl bg-blue-600/15 border border-blue-500/30"
+                            transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                          />
+                        )}
+                        <Icon className={`relative w-4 h-4 shrink-0 z-10 ${isSelected ? 'text-blue-400' : 'text-slate-400'}`} />
                         {sidebarOpen && (
-                          <div className="flex-1 flex items-center justify-between truncate text-left">
+                          <div className="relative flex-1 flex items-center justify-between truncate text-left z-10">
                             <span className="truncate">{item.label}</span>
                             {item.badge && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/20 font-mono">
@@ -511,8 +522,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* Render Active Full-Page View */}
-            <div>
+            {/* Render Active Full-Page View (design pass: cross-fade between views) */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={viewKey}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
               {activeView === 'overview' && (
                 openAssignment ? (
                   <AssignmentDetailView
@@ -592,7 +610,8 @@ export default function App() {
                   userId={userId || 'RoniDev'}
                 />
               )}
-            </div>
+              </motion.div>
+            </AnimatePresence>
           </main>
 
           {/* ─── PERSISTENT OVERLORD AGENT CONTROLLER SIDEBAR ─── */}
@@ -621,37 +640,57 @@ function Overview({ userId, isGuest, onGoTo, onSelectAssignment }) {
 
   return (
     <div className="space-y-6">
-      {/* Top Quick Stats */}
+      {/* Top Quick Stats (design pass: staggered entrance + hover lift) */}
       {data && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="clean-card p-5">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-              <span>Due Assignments</span>
-              <ClipboardList className="w-4 h-4 text-blue-400" />
-            </div>
-            <div className="text-2xl font-bold text-white">
-              {data.assignments ? data.assignments.filter((a) => a.status !== 'completed').length : 0}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1">Pending coursework tasks</div>
-          </div>
-
-          <div className="clean-card p-5">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-              <span>Study Streak</span>
-              <Flame className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="text-2xl font-bold text-amber-300">12 Days</div>
-            <div className="text-[11px] text-emerald-400 mt-1">Top 5% of active learners</div>
-          </div>
-
-          <div className="clean-card p-5">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-              <span>Active Plan</span>
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-            </div>
-            <div className="text-2xl font-bold text-indigo-300 capitalize">{data.plan || 'Elite'}</div>
-            <div className="text-[11px] text-blue-300 mt-1 font-mono">{Number(data.credits ?? 10029).toLocaleString()} credits available</div>
-          </div>
+          {[
+            {
+              label: 'Due Assignments',
+              icon: ClipboardList,
+              iconColor: 'text-blue-400',
+              value: data.assignments ? data.assignments.filter((a) => a.status !== 'completed').length : 0,
+              sub: 'Pending coursework tasks',
+              valueColor: 'text-white',
+              subColor: 'text-slate-400',
+            },
+            {
+              label: 'Study Streak',
+              icon: Flame,
+              iconColor: 'text-amber-400',
+              value: '12 Days',
+              sub: 'Top 5% of active learners',
+              valueColor: 'text-amber-300',
+              subColor: 'text-emerald-400',
+            },
+            {
+              label: 'Active Plan',
+              icon: Sparkles,
+              iconColor: 'text-indigo-400',
+              value: data.plan || 'Elite',
+              sub: `${Number(data.credits ?? 10029).toLocaleString()} credits available`,
+              valueColor: 'text-indigo-300 capitalize',
+              subColor: 'text-blue-300 font-mono',
+            },
+          ].map((stat, i) => {
+            const StatIcon = stat.icon;
+            return (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.08, ease: 'easeOut' }}
+                whileHover={{ y: -3 }}
+                className="clean-card p-5 cursor-default"
+              >
+                <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+                  <span>{stat.label}</span>
+                  <StatIcon className={`w-4 h-4 ${stat.iconColor}`} />
+                </div>
+                <div className={`text-2xl font-bold ${stat.valueColor}`}>{stat.value}</div>
+                <div className={`text-[11px] mt-1 ${stat.subColor}`}>{stat.sub}</div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
