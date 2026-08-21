@@ -1,18 +1,21 @@
 """FastAPI routes for expanded User Settings, Writing Customization, Citations, TRIO Scopes, and Academic Levels."""
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .database import (
     User, UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
     Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
-    GroupMembership, SharedMaterial, get_db,
+    GroupMembership, SharedMaterial, UniversalDumpItem, get_db,
 )
+from .routes_features import get_current_authenticated_user
 from .datalake import datalake_manager
 from .user_settings_service import user_settings_service, AVAILABLE_MODELS, resolve_effort_tier
 from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES
@@ -138,19 +141,10 @@ class TrioResolveRequest(BaseModel):
 # ─── Helper to extract user ───────────────────────────────────────────────────
 
 def _get_current_user(request: Request, db: Session) -> User:
-    public_id = request.headers.get("X-Public-ID") or request.query_params.get("public_id")
-    if not public_id:
-        user = db.query(User).first()
-        if user:
-            return user
-        public_id = "RoniDev"
-    user = db.query(User).filter(User.public_id == public_id).first()
-    if not user:
-        user = User(public_id=public_id, plan="basic", credits=100.0)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+    """Authenticated user lookup (remediation BATCH-09): identity comes only
+    from a valid Bearer token or session cookie — the X-Public-ID header is
+    never an identity and no user is ever auto-created from a header."""
+    return get_current_authenticated_user(request, db)
 
 
 # ─── Settings Endpoints ───────────────────────────────────────────────────────
@@ -838,3 +832,41 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     }
 
 
+
+
+# ── Remediation BATCH-09: GDPR Article 17 / FERPA data-scrub endpoint ────────
+logger = logging.getLogger("helpotron.user_settings")
+
+
+@router.delete("/delete-account")
+def delete_user_account_gdpr_rtbf(
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """GDPR Article 17 Right to Erasure & FERPA Data Scrubbing Endpoint."""
+    user_id = current_user.id
+
+    # ORM-cascade-safe: groups created by the user (cascade removes
+    # memberships + shared materials), then remaining FK rows, user last.
+    for group in db.query(StudyGroup).filter(StudyGroup.created_by_id == user_id).all():
+        db.delete(group)
+    db.query(GroupMembership).filter(GroupMembership.user_id == user_id).delete()
+    db.query(SharedMaterial).filter(SharedMaterial.shared_by_id == user_id).delete()
+    db.query(Referral).filter(
+        or_(Referral.referrer_id == user_id, Referral.referee_id == user_id)
+    ).delete()
+
+    for model in (
+        UniversalDumpItem, DataSubmission, Draft, StudyMaterial, Transcript,
+        Assignment, CreditTransaction, Payment, StudySession, UserSession,
+    ):
+        db.query(model).filter(model.user_id == user_id).delete()
+
+    db.delete(current_user)
+    db.commit()
+
+    logger.info(
+        "Permanently deleted user account %s and all associated records under GDPR Article 17.",
+        user_id,
+    )
+    return {"success": True, "message": "Account and all associated academic records permanently deleted"}

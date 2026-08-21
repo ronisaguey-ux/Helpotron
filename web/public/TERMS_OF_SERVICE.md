@@ -60,3 +60,10 @@ The Service is provided on an "AS IS" and "AS AVAILABLE" basis. Helpotron Automa
 For inquiries regarding these Terms of Service:
 - **Email:** support@helpotron.com / legal@helpotron.com
 - **Telegram Bot:** @helpotron_bot
+
+
+---
+
+## 10. Acceptable Use Policy
+
+Helpotron is designed to assist students in mastering course content through automated study guides, practice tests, and flashcards. Users agree not to use the platform to violate institutional honor codes or submit unedited AI-generated text as original work. Accounts found to be in violation may be suspended or terminated.
