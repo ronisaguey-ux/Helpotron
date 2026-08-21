@@ -16,7 +16,7 @@ from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Tra
 from .security import hash_password, is_admin_user, verify_jwt_token
 router = APIRouter()
 
-def require_admin(request: Request) -> User:
+def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
     # NOTE: called as a plain function everywhere (require_admin(request)), never via
     # FastAPI Depends — so it opens its own session instead of taking an injected db.
     auth_header = request.headers.get('Authorization')

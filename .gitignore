@@ -3,33 +3,19 @@ __pycache__/
 *.py[cod]
 .venv/
 *.egg-info/
-.pytest_cache/
-.mypy_cache/
 
-# Node
-node_modules/
-dist/
-web/dist/
+# remediation scratch files (gemini verification scripts)
+_*.py
+verify_*.py
 
-# Env + secrets
+# secrets + local runtime state — MUST never be committed
+# (executor commits via `git add -A`, which sweeps untracked files)
 .env
-*.key
-*.pem
-
-# Data
 *.db
-*.db-wal
-*.db-shm
-uploads/
-audio/
-data_lake/**/*.jsonl
-data_lake/**/*.json
-pipeline/state/*.json
-!pipeline/state/.gitkeep
-
-# OS
-.DS_Store
-
 server.log
-helpotron.db
-.env
+*.log
+data_lake/
+web/dist/
+web/node_modules/
+.claude/skills/
+pipeline/state/
