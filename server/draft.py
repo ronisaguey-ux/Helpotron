@@ -108,7 +108,8 @@ async def generate_draft(
         system_prompt = build_default_style_prompt(reading_level or "college-freshman", target_grade or "B", assignment_prompt, transcript_text)
     user_prompt = "Generate the assignment draft now."
     # Use the same LLM call as other generators
-    content, model = await llm.call_llm(system_prompt, user_prompt)
+    content = await llm.call_llm(system_prompt, user_prompt)  # remediation: call_llm returns str now
+    model = None
     return content, model
 
 

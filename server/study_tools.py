@@ -59,7 +59,8 @@ async def generate_study_guide(
         f"TRANSCRIPT:\n{_transcript_block(transcript)}"
         + _reading_level_clause(reading_level)
     )
-    return await llm.call_llm(_SYSTEM, user)
+    content = await llm.call_llm(_SYSTEM, user)  # remediation: call_llm returns str now
+    return content, None
 
 
 async def generate_flashcards(
@@ -75,7 +76,8 @@ async def generate_flashcards(
         + _reading_level_clause(reading_level)
     )
     for attempt in range(2):
-        content, model = await llm.call_llm(_SYSTEM, user)
+        content = await llm.call_llm(_SYSTEM, user)  # remediation: call_llm returns str now
+        model = None
         parsed = llm.extract_json(content)
         if parsed is not None:
             items = parsed.get("flashcards") if isinstance(parsed, dict) and "flashcards" in parsed else (
@@ -108,7 +110,8 @@ async def generate_practice_test(
         + _reading_level_clause(reading_level)
     )
     for attempt in range(2):
-        content, model = await llm.call_llm(_SYSTEM, user)
+        content = await llm.call_llm(_SYSTEM, user)  # remediation: call_llm returns str now
+        model = None
         parsed = llm.extract_json(content)
         if parsed is not None and isinstance(parsed, dict):
             if "multiple_choice" in parsed or "short_answer" in parsed:
@@ -125,7 +128,8 @@ async def generate_summary(transcript: str) -> tuple[str, str]:
         "and 2 questions you should be ready to answer.\n\n"
         f"TRANSCRIPT:\n{_transcript_block(transcript)}"
     )
-    return await llm.call_llm(_SYSTEM, user)
+    content = await llm.call_llm(_SYSTEM, user)  # remediation: call_llm returns str now
+    return content, None
 
 
 GENERATORS: dict[str, Any] = {

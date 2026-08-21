@@ -154,7 +154,7 @@ class AgentManager:
                     session.log.append({"step": session.steps, "event": "extension disconnected"})
                     return
                 try:
-                    content, _model = await llm.call_llm(AGENT_SYSTEM + "\n\n" + TOOL_DOC, _agent_prompt(messages))
+                    content = await llm.call_llm(AGENT_SYSTEM + "\n\n" + TOOL_DOC, _agent_prompt(messages))
                 except Exception as e:
                     session.log.append({"step": session.steps, "event": f"llm error: {e}"})
                     return

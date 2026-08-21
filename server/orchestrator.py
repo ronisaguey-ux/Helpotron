@@ -212,7 +212,7 @@ async def plan_tasks(prompt: str, transcript: str) -> List[Dict]:
     system = "You are a task planner. Break down the given assignment into 3-5 logical sub-tasks. Return a JSON list of tasks, each with 'name', 'description', and 'estimated_seconds' (int)."
     user = f"Assignment prompt: {prompt}\nTranscript: {transcript[:2000]}"
     try:
-        content, model = await llm.call_llm(system, user)
+        content = await llm.call_llm(system, user)  # remediation: call_llm returns str now
         parsed = llm.extract_json(content)
         if isinstance(parsed, list):
             return parsed

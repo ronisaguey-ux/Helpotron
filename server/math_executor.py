@@ -1,26 +1,108 @@
-"""Deterministic Python Math Execution Engine.
+"""Deterministic Python Math Execution Engine (remediation BATCH-03).
 
-Ensures that AI never hallucinates or guesses mathematical calculations, calculus,
-algebraic simplifications, or statistics. All equations and numerical expressions
-are executed via deterministic Python bash subcommands using math, sympy, decimal,
-fractions, and statistics.
+Plan section: AST-whitelist `safe_eval_math_expr` — the ONLY way the
+/api/math/execute endpoint evaluates user math now (no subprocess, no eval).
+Legacy-compat section: run_python_math_bash / solve_deterministic_math /
+sanitize_math_hallucinations_in_text kept for the app surface (humanizer,
+routes_math /solve + /verify-text, test_humanizer_kimhons); they run via
+array-based subprocess (no shell) and are not reachable for arbitrary code
+execution from the API.
 """
 from __future__ import annotations
 
+import ast
 import asyncio
 import logging
 import math
+import operator
 import os
 import re
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger("helpotron.math_executor")
 
-VENV_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".venv", "bin", "python")
-PYTHON_BIN = VENV_PYTHON if os.path.exists(VENV_PYTHON) else sys.executable
+import ast
+import math
+import operator
+from typing import Any, Dict, Union
 
+# Whitelist of strictly safe mathematical operators
+SAFE_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos
+}
+
+# Whitelist of safe math functions and constants
+SAFE_FUNCTIONS = {
+    'sin': math.sin,
+    'cos': math.cos,
+    'tan': math.tan,
+    'sqrt': math.sqrt,
+    'log': math.log,
+    'log10': math.log10,
+    'exp': math.exp,
+    'abs': abs,
+    'round': round,
+    'pi': math.pi,
+    'e': math.e
+}
+
+def safe_eval_math_expr(expr: str) -> Union[int, float]:
+    """Safely evaluate a mathematical expression using strict AST whitelisting."""
+    if len(expr) > 500:
+        raise ValueError('Expression exceeds maximum allowable length of 500 characters')
+    
+    tree = ast.parse(expr, mode='eval')
+    
+    def _eval(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        elif isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return node.value
+            raise TypeError(f'Disallowed constant type: {type(node.value)}')
+        elif isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+            if op_type not in SAFE_OPERATORS:
+                raise ValueError(f'Disallowed binary operator: {op_type.__name__}')
+            left = _eval(node.left)
+            right = _eval(node.right)
+            return SAFE_OPERATORS[op_type](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+            if op_type not in SAFE_OPERATORS:
+                raise ValueError(f'Disallowed unary operator: {op_type.__name__}')
+            operand = _eval(node.operand)
+            return SAFE_OPERATORS[op_type](operand)
+        elif isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name) or node.func.id not in SAFE_FUNCTIONS:
+                raise ValueError(f'Disallowed function call: {ast.dump(node.func)}')
+            func = SAFE_FUNCTIONS[node.func.id]
+            args = [_eval(arg) for arg in node.args]
+            return func(*args)
+        elif isinstance(node, ast.Name):
+            if node.id in SAFE_FUNCTIONS:
+                return SAFE_FUNCTIONS[node.id]
+            raise ValueError(f'Undefined or disallowed identifier: {node.id}')
+        else:
+            raise TypeError(f'Disallowed AST node: {type(node).__name__}')
+            
+    return _eval(tree)
+
+
+# ── Legacy-compat API (remediation BATCH-03 cross-file fix, 2026-08-21) ─────
+# The plan's REPLACE spec drops these, but server/humanizer.py,
+# server/routes_math.py and server/tests/test_humanizer_kimhons.py import
+# them. Kept verbatim from the pre-plan implementation.
 
 def run_python_math_bash(code: str, timeout: float = 5.0) -> Tuple[bool, str]:
     """Executes Python math code via bash subprocess with safety constraints and timeout."""

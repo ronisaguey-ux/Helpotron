@@ -337,3 +337,40 @@ def write_sandbox_file(sandbox_id: str, filename: str, content: str) -> str:
     with open(path, 'w', encoding='utf-8') as f:
         f.write(content)
     return str(path)
+
+
+# ── Remediation BATCH-03 additions (2026-08-21) ───────────────────────────
+# Path-traversal-safe sandbox path resolution + shell-free command runner,
+# per the plan spec. The existing SandboxManager / VirtualSubagentSandbox
+# API is unchanged; these are additive.
+
+ALLOWED_SANDBOX_DIR = Path('/tmp/helpotron_sandboxes').resolve()
+ALLOWED_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def sanitize_sandbox_path(sandbox_id: str, relative_file: str) -> Path:
+    """Prevent path traversal by verifying destination is strictly inside sandbox root."""
+    target_root = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
+    target_root.mkdir(parents=True, exist_ok=True)
+
+    # Resolve target file path
+    target_file = (target_root / relative_file).resolve()
+    if not str(target_file).startswith(str(target_root)):
+        raise PermissionError(f'Path traversal attempt detected: {relative_file}')
+    return target_file
+
+
+def run_isolated_command(sandbox_id: str, command_args: list[str], timeout: int = 15) -> tuple[int, str, str]:
+    """Execute command in isolated subprocess without shell=True."""
+    sandbox_dir = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
+    sandbox_dir.mkdir(parents=True, exist_ok=True)
+
+    res = subprocess.run(
+        command_args,
+        cwd=str(sandbox_dir),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        shell=False
+    )
+    return res.returncode, res.stdout, res.stderr

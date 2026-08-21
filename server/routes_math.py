@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .math_executor import run_python_math_bash, solve_deterministic_math, sanitize_math_hallucinations_in_text
+from .math_executor import run_python_math_bash, solve_deterministic_math, sanitize_math_hallucinations_in_text, safe_eval_math_expr
 
 router = APIRouter(prefix="/api/math", tags=["math_execution"])
 
@@ -47,8 +47,12 @@ async def verify_text_math_endpoint(req: MathVerifyTextRequest):
 
 @router.post("/execute")
 async def execute_python_math_endpoint(req: PythonCodeExecuteRequest):
-    """Executes arbitrary safe Python math calculations via subprocess with standard math libraries."""
-    ok, output = run_python_math_bash(req.code, timeout=req.timeout)
-    if not ok:
-        raise HTTPException(status_code=400, detail=output)
-    return {"status": "success", "output": output}
+    """Evaluate a math expression through the AST whitelist only (remediation
+    BATCH-03: the previous implementation ran arbitrary code via subprocess —
+    a remote code-execution surface. `safe_eval_math_expr` never executes
+    code; unknown nodes fail closed."""
+    try:
+        result = safe_eval_math_expr(req.code)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unsupported or unsafe expression: {e}")
+    return {"status": "success", "output": str(result)}

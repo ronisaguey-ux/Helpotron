@@ -92,3 +92,68 @@ async def call_llm(
                     await asyncio.sleep(2 ** attempt)
                     
     raise RuntimeError('All models in LLM cascade exhausted without successful completion')
+
+
+# ── Legacy-compat API (remediation BATCH-02 cross-file fix, 2026-08-21) ────
+# The plan's llm.py REPLACE drops `chat_complete`, but server/subagents.py
+# (not in any batch's file list) imports it for rubric decomposition. Kept
+# verbatim from the pre-plan implementation; delegates to the new call_llm.
+
+async def chat_complete(messages: List[Dict[str, str]], max_tokens: int | None = None) -> str:
+    """Asynchronous OpenAI-compatible /chat/completions endpoint helper."""
+    system_prompt = ""
+    user_prompt = ""
+    for m in messages:
+        if m.get("role") == "system":
+            system_prompt += m.get("content", "") + "\n"
+        elif m.get("role") == "user":
+            user_prompt += m.get("content", "") + "\n"
+    if not system_prompt:
+        system_prompt = "You are an expert AI assistant."
+    # NOTE: remediation call_llm returns bare str (old contract returned (content, model)).
+    content = await call_llm(system_prompt.strip(), user_prompt.strip(), max_tokens=max_tokens)
+    return content
+
+
+# ── Legacy-compat API (remediation BATCH-02 cross-file fix, 2026-08-21) ────
+# `generate_with_deepseek` / `generate_with_deepseek_v4` are imported by
+# server/features.py (recommendations). Self-contained sync callers.
+
+def generate_with_deepseek(
+    prompt: str,
+    system: str = "You are a helpful assistant.",
+    max_tokens: int = 2000,
+    temperature: float = 0.7,
+) -> str:
+    """Generate text using DeepSeek via OmniRoute."""
+    import requests
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {config.omniroute_api_key}",
+    }
+    payload = {
+        "model": config.primary_model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    try:
+        response = requests.post(
+            f"{config.omniroute_api_base}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=getattr(config, "chat_timeout_seconds", 60),
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        return f"[Error generating response: {e}]"
+
+
+def generate_with_deepseek_v4(prompt: str, system: str = "You are a helpful assistant.") -> str:
+    """Alias for generate_with_deepseek."""
+    return generate_with_deepseek(prompt, system)

@@ -226,3 +226,14 @@ def convert_audio_to_wav(input_path: str, output_path: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f'ffmpeg conversion failed: {result.stderr[:300]}')
     return str(outp)
+
+
+# ── Remediation BATCH-03 addition (2026-08-21) ────────────────────────────
+# Array-based ffmpeg conversion helper (no shell), per the plan spec.
+import subprocess
+
+
+def extract_audio_wav(input_path: str, output_path: str) -> bool:
+    cmd = ['ffmpeg', '-y', '-i', str(input_path), '-vn', '-ar', '16000', '-ac', '1', str(output_path)]
+    res = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+    return res.returncode == 0
