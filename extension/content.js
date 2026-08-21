@@ -215,3 +215,21 @@ window.__helpotron_extract_rubric = function (selector) {
   const rubricData = tables.map((t) => t.innerText.trim()).filter(Boolean);
   return { rubrics: rubricData };
 };
+
+
+// ── Remediation BATCH-08: runtime message channel (MV3) ─────────────────────
+// Complements the window.__helpotron_* globals above — the popup/background
+// can now drive scraping over chrome.runtime messaging.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request && request.action === 'SCRAPE_CURRENT_ASSIGNMENT') {
+    const data = (typeof scrapeAssignmentUniversal === 'function')
+      ? scrapeAssignmentUniversal()
+      : null;
+    sendResponse({ success: !!data, assignment: data || null });
+  } else if (request && request.action) {
+    sendResponse({ success: false, error: 'unknown action' });
+  } else {
+    sendResponse({ success: false, error: 'no action' });
+  }
+  return true; // keep the channel open for the (sync) response
+});
