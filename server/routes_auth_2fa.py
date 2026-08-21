@@ -10,6 +10,7 @@ from .config import config
 from .database import User, Payment, get_db
 from .security import verify_password, hash_password
 from .auth_2fa import code_store, email_service, sms_service, totp_service
+from .routes_features import get_current_authenticated_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth_2fa"])
 
@@ -353,3 +354,20 @@ async def verify_purchase_challenge(payload: PurchaseVerifyRequest, db: Session 
         "payment_id": payment_rec.id,
         "message": f"✅ 2FA Verification successful! Plan upgraded to {user.plan.upper()} with +{credits_to_add} Credits.",
     }
+
+
+# ── Remediation BATCH-04: TOTP verify for the authenticated user ────────────
+@router.post("/2fa/verify-totp")
+def verify_totp_code(
+    code: str,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Verifies an authenticator-app TOTP code against the signed-in user's secret."""
+    settings = dict(current_user.settings or {})
+    secret = settings.get("2fa_totp_secret")
+    if not secret:
+        raise HTTPException(status_code=400, detail="TOTP is not set up for this account.")
+    if not totp_service.verify_code(secret, code):
+        raise HTTPException(status_code=400, detail="Invalid TOTP code.")
+    return {"status": "success", "message": "TOTP code verified."}

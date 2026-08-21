@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .database import User, get_db
+from .database import DataSubmission, User, get_db
+from .routes_features import get_current_authenticated_user
 from .datalake import datalake_manager, datalake_agent
 from .user_settings_service import user_settings_service
 
@@ -230,3 +231,21 @@ async def get_datalake_stats():
             "custom": sum(1 for e in telemetry if e.get("event_type") not in ("assignment_evasion", "gdocs_export")),
         },
     }
+
+
+# ── Remediation BATCH-04: IDOR-guarded data-lake entry deletion ─────────────
+@router.delete("/datalake/{entry_id}")
+def delete_datalake_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Deletes one data-lake submission with a strict ownership check."""
+    entry = db.query(DataSubmission).filter(DataSubmission.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Data lake entry not found")
+    if entry.user_id != current_user.id and not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Cannot delete resources uploaded by another user")
+    db.delete(entry)
+    db.commit()
+    return {"status": "success", "message": f"Data lake entry {entry_id} deleted."}

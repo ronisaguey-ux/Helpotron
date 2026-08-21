@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .assignment_dump import assignment_dump_manager
 from .database import Assignment, UniversalDumpItem, User, get_db
+from .routes_features import get_current_authenticated_user
 
 router = APIRouter(prefix="/api/dump", tags=["assignment_dump"])
 
@@ -159,11 +160,44 @@ async def manual_route_dump_item(
 
 
 @router.delete("/{dump_id}")
-async def delete_dump_item(dump_id: int, db: Session = Depends(get_db)):
-    """Deletes a dump item."""
+async def delete_dump_item(
+    dump_id: int,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Deletes a dump item (auth + ownership enforced — remediation BATCH-04 IDOR)."""
     item = db.query(UniversalDumpItem).filter(UniversalDumpItem.id == dump_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Dump item not found.")
+    if item.user_id != current_user.id and not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Cannot delete dump items owned by another user")
     db.delete(item)
     db.commit()
     return {"status": "success", "message": f"Dump item {dump_id} deleted."}
+
+
+# ── Remediation BATCH-04: IDOR-guarded single-item dump access ──────────────
+@router.get("/{dump_id}")
+def get_assignment_dump(
+    dump_id: int,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Returns one dump item with a strict IDOR ownership check."""
+    dump = db.query(UniversalDumpItem).filter(UniversalDumpItem.id == dump_id).first()
+    if not dump:
+        raise HTTPException(status_code=404, detail="Dump record not found")
+    if dump.user_id != current_user.id and not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Cannot access dump items owned by another user")
+    return {
+        "id": dump.id,
+        "file_name": dump.file_name,
+        "file_type": dump.file_type,
+        "file_size_bytes": dump.file_size_bytes,
+        "status": dump.status,
+        "extracted_text": dump.extracted_text,
+        "matched_assignment_id": dump.matched_assignment_id,
+        "auto_match_confidence": dump.auto_match_confidence,
+        "overlord_notes": dump.overlord_notes,
+        "created_at": dump.created_at.isoformat() if dump.created_at else None,
+    }

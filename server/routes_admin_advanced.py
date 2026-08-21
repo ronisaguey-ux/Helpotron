@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .admin import require_admin
 from .admin_advanced import admin_advanced_service
-from .database import get_db
+from .database import UniversalDumpItem, User, get_db
 
 router = APIRouter(prefix="/api/admin", tags=["admin_advanced"])
 
@@ -365,3 +365,19 @@ async def estimate_cost_endpoint(payload: CostEstimatePayload, user_id: Optional
 
 
 
+
+
+# ── Remediation BATCH-04: admin-dependency-guarded aggregate metrics ────────
+@router.get("/advanced-metrics")
+def get_advanced_metrics(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Aggregate admin metrics — gated by the require_admin dependency."""
+    total_users = db.query(User).count()
+    active_dumps = db.query(UniversalDumpItem).count()
+    return {
+        "total_registered_users": total_users,
+        "total_assignment_dumps": active_dumps,
+        "system_status": "HEALTHY",
+    }
