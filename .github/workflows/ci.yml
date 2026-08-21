@@ -1,35 +1,32 @@
-name: CI
+name: Helpotron CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-
 jobs:
-  test:
+  backend-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      - name: Set up Python
-        uses: actions/setup-python@0a5c61591373683505ea898e09a6003b87017716 # v5.0.0
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r server/requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install -r server/requirements.txt pytest httpx flake8
+      - name: Run Backend Pytest Suite
+        run: pytest server/tests -v
 
-      - name: Run Test Suite
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gitleaks Secrets Detection
+        uses: gitleaks/gitleaks-action@v2
         env:
-          JWT_SECRET: ci-test-secret-value-32chars-minimum-key
-          DATABASE_URL: sqlite:///:memory:
-        run: |
-          pytest server/tests/ -v
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

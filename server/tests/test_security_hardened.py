@@ -145,7 +145,25 @@ def test_verify_jwt_token_invalid_returns_none():
 def test_verify_jwt_token_valid_roundtrip():
     """A token created by create_jwt_token must verify successfully."""
     from server.security import create_jwt_token, verify_jwt_token
-    token = create_jwt_token({'sub': 'test_user_1', 'role': 'student'})
+    token = create_jwt_token(user_id=42, role='user')
     payload = verify_jwt_token(token)
     assert payload is not None
-    assert payload['sub'] == 'test_user_1'
+    assert payload['sub'] == 42
+    assert payload['role'] == 'user'
+
+
+# ── Remediation BATCH-10: plan-contract tests ────────────────────────────────
+
+def test_jwt_token_validation():
+    token = create_jwt_token(user_id=42, role='user')
+    payload = verify_jwt_token(token)
+    assert payload is not None
+    assert payload['sub'] == 42
+    assert payload['role'] == 'user'
+
+
+def test_safe_math_eval():
+    from server.math_executor import safe_eval_math_expr
+    assert safe_eval_math_expr('10 + 20 * 2') == 50
+    with pytest.raises(TypeError):
+        safe_eval_math_expr('__import__("os").system("id")')

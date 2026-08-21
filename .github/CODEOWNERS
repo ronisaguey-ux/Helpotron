@@ -1,10 +1,7 @@
-# Helpotron Automator — Code Owners & Security Review Policy
-# Automatically assigns pull request reviewers and gates modifications to sensitive security, credits, and deployment subsystems.
-
-*                   @ronisaguey-ux
-/server/admin*.py   @ronisaguey-ux
-/server/credits.py  @ronisaguey-ux
+# Helpotron Codeowners Specification
+* @ronisaguey-ux
+/server/admin*.py @ronisaguey-ux
 /server/security.py @ronisaguey-ux
-/server/engine/*    @ronisaguey-ux
-/deploy/*           @ronisaguey-ux
+/server/credits.py @ronisaguey-ux
+/deploy/* @ronisaguey-ux
 /.github/workflows/* @ronisaguey-ux
