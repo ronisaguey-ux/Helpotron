@@ -105,3 +105,11 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* WCAG 2.1 AA: minimum 44x44px touch targets on coarse pointers (2.5.8) */
+@media (pointer: coarse) {
+  button, a, input, select, textarea, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
