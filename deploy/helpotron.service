@@ -1,0 +1,41 @@
+[Unit]
+Description=Helpotron Automator Backend (systemd-sandboxed)
+After=network.target postgresql.service
+
+[Service]
+User=spark
+Group=spark
+WorkingDirectory=/var/www/helpotron
+Environment="PATH=/var/www/helpotron/venv/bin"
+EnvironmentFile=/var/www/helpotron/.env
+ExecStart=/var/www/helpotron/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 4
+Restart=always
+RestartSec=5
+
+# ── Systemd Security Sandboxing (remediation BATCH-05) ──────────────────
+# Filesystem: whole OS read-only except the two runtime write dirs.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/www/helpotron/data /tmp/helpotron_sandboxes
+PrivateTmp=true
+# Kernel: deny raw ptrace (anti-SECCOMP bypass), mount/cgroup/sysctl tampering.
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+# Network: process-local loopback only; no host IP visibility.
+PrivateNetwork=true
+IPAddressAllow=127.0.0.1
+IPAddressDeny=any
+# Process isolation: no lingering children, private devpts, caps dropped.
+KillMode=mixed
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

@@ -74,7 +74,7 @@ class StudyGroupManager:
 
     @staticmethod
     def get_group_materials(db: Session, group_id: int, user: User) -> list:
-        from .database import StudyGroup, SharedMaterial, StudyMaterial
+        from .database import GroupMembership, StudyGroup, SharedMaterial, StudyMaterial
         group = db.query(StudyGroup).filter(StudyGroup.id == group_id).first()
         if not group:
             raise HTTPException(404, "Group not found")

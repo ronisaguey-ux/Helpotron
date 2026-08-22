@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { NOTIFICATIONS, demoEnabled, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
+import Button from './Button.jsx';
 
 const EFFORT_LABELS = { low: 'Low', balanced: 'Balanced', high: 'High' };
 
@@ -151,13 +152,15 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
         </Badge>
       </div>
 
-      <button
+      <Button
         type="button"
         onClick={onOpenFull}
-        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+        variant="primary"
+        size="md"
+        className="w-full"
       >
         <Settings className="w-3.5 h-3.5" /> Full Settings
-      </button>
+      </Button>
     </div>
   );
 }
