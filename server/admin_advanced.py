@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .database import Assignment, CreditTransaction, StudyMaterial, User
 
@@ -93,7 +94,7 @@ class AdminAdvancedService:
         uptime_pct = 99.98  # high-availability SLA
         db_alive = True
         try:
-            db.execute(text("SELECT 1") if "text" in globals() else None or "SELECT 1")
+            db.execute(text("SELECT 1"))
         except Exception:
             pass
 

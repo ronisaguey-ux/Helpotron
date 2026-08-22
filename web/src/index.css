@@ -117,6 +117,18 @@
 }
 
 :root {
+  /* Design system tokens (WCAG 2.1 AA — BATCH-07). Primary action color
+     with accessible hover/active states and on-primary contrast pair. */
+  --color-primary: oklch(0.62 0.16 230);
+  --color-primary-hover: oklch(0.56 0.17 230);
+  --color-primary-active: oklch(0.5 0.17 230);
+  --color-primary-foreground: oklch(0.99 0.005 240);
+  --color-focus-ring: oklch(0.7 0.19 235);
+  --color-surface: oklch(0.16 0.02 260);
+  --color-surface-raised: oklch(0.21 0.025 260);
+  --color-border-soft: oklch(0.32 0.03 255);
+  --color-text-primary: oklch(0.92 0.02 210);
+  --color-text-muted: oklch(0.65 0.03 250);
   /* Neon chart tokens matching the app's cyan/indigo glass theme
      (Bklit registry charts render against these). */
   --chart-1: oklch(0.72 0.16 210);
