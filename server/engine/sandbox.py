@@ -361,7 +361,7 @@ def sanitize_sandbox_path(sandbox_id: str, relative_file: str) -> Path:
 
 
 def run_isolated_command(sandbox_id: str, command_args: list[str], timeout: int = 15) -> tuple[int, str, str]:
-    """Execute command in isolated subprocess without shell=True."""
+    """Execute command in isolated subprocess with the shell disabled."""
     sandbox_dir = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
     sandbox_dir.mkdir(parents=True, exist_ok=True)
 
