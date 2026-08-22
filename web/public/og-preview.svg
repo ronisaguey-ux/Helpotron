@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="50%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle grid & glow -->
+  <circle cx="950" cy="150" r="300" fill="#10b981" opacity="0.08" filter="blur(80px)"/>
+  <circle cx="250" cy="450" r="300" fill="#3b82f6" opacity="0.08" filter="blur(80px)"/>
+
+  <!-- Logo Icon -->
+  <rect x="100" y="90" width="80" height="80" rx="20" fill="#3b82f6" fill-opacity="0.2" stroke="#3b82f6" stroke-width="2"/>
+  <text x="140" y="145" font-family="-apple-system, sans-serif" font-size="44" font-weight="bold" fill="#60a5fa" text-anchor="middle">H</text>
+
+  <!-- Product Title -->
+  <text x="200" y="148" font-family="-apple-system, sans-serif" font-size="42" font-weight="800" fill="#ffffff" letter-spacing="-0.5">Helpotron Automator</text>
+  <rect x="660" y="112" width="110" height="34" rx="17" fill="#10b981" fill-opacity="0.2" stroke="#10b981" stroke-width="1.5"/>
+  <text x="715" y="134" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#34d399" text-anchor="middle">v2.0 PROD</text>
+
+  <!-- Main Headline -->
+  <text x="100" y="270" font-family="-apple-system, sans-serif" font-size="56" font-weight="800" fill="#ffffff" letter-spacing="-1.5">
+    Autonomous Academic Copilot
+  </text>
+  <text x="100" y="340" font-family="-apple-system, sans-serif" font-size="56" font-weight="800" fill="url(#brand)" letter-spacing="-1.5">
+    Canvas LMS & Study Automation
+  </text>
+
+  <!-- Feature Bullet Badges -->
+  <rect x="100" y="420" width="310" height="50" rx="14" fill="#1e293b" stroke="rgba(255,255,255,0.1)"/>
+  <text x="125" y="452" font-family="-apple-system, sans-serif" font-size="18" font-weight="600" fill="#93c5fd">🧩 1-Click Canvas Scraping</text>
+
+  <rect x="430" y="420" width="310" height="50" rx="14" fill="#1e293b" stroke="rgba(255,255,255,0.1)"/>
+  <text x="455" y="452" font-family="-apple-system, sans-serif" font-size="18" font-weight="600" fill="#6ee7b7">🎙️ Lecture Audio Transcripts</text>
+
+  <rect x="760" y="420" width="340" height="50" rx="14" fill="#1e293b" stroke="rgba(255,255,255,0.1)"/>
+  <text x="785" y="452" font-family="-apple-system, sans-serif" font-size="18" font-weight="600" fill="#fbcfe8">⚡ Flashcards & Practice Tests</text>
+
+  <!-- Footer domain -->
+  <text x="100" y="555" font-family="-apple-system, sans-serif" font-size="20" font-weight="500" fill="#64748b">https://helpotron.com</text>
+  <text x="1100" y="555" font-family="-apple-system, sans-serif" font-size="18" font-weight="500" fill="#64748b" text-anchor="end">FERPA & GDPR Compliant</text>
+</svg>
