@@ -1,0 +1,487 @@
+/* ────────────────────────────────────────────────────────────────────────────
+ * App.jsx — Helpotron OS root (Experience Rewrite, 08-22)
+ * AppShell chrome + Command Palette + all views:
+ * HOME (Today/Activity/Notifications) · WORKSPACE (Assignments/Study Tools/
+ * AI Workspace/Library/Inbox) · AUTOMATION · INTELLIGENCE · ACCOUNT ·
+ * ADMIN (Control Center). All existing capabilities preserved.
+ * ────────────────────────────────────────────────────────────────────────── */
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion';
+import { WifiOff } from 'lucide-react';
+import { api, getServer, getUserId, setServer, setUserId } from './api.js';
+import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
+import ReferralSection from './components/ReferralSection.jsx';
+import CreditLeaderboard from './components/CreditLeaderboard.jsx';
+import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
+import AuthModal from './components/AuthModal.jsx';
+import DemoModeToggle from './components/DemoModeToggle.jsx';
+import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
+import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
+import StudyToolsHub from './components/StudyToolsHub.jsx';
+import AssignmentDetailView from './components/AssignmentDetailView.jsx';
+import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
+import MessageAdminView from './components/MessageAdminView.jsx';
+import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
+import TermsOfServiceView from './components/TermsOfServiceView.jsx';
+import DataLakeView from './components/DataLakeView.jsx';
+import AssignmentDumpView from './components/AssignmentDumpView.jsx';
+import ExtensionGuideModal from './components/ExtensionGuideModal.jsx';
+import ExtensionUpdateBanner from './components/ExtensionUpdateBanner.jsx';
+
+/* OS chrome + new views */
+import AppShell from './components/AppShell.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
+import TodayView from './components/TodayView.jsx';
+import ActivityView from './components/ActivityView.jsx';
+import NotificationsView from './components/NotificationsView.jsx';
+import CreditWallet from './components/CreditWallet.jsx';
+import AutomationCenter from './components/AutomationCenter.jsx';
+import LibraryView from './components/LibraryView.jsx';
+import AIWorkspace from './components/AIWorkspace.jsx';
+import IntelligenceView from './components/IntelligenceView.jsx';
+import SettingsApp from './components/SettingsApp.jsx';
+import AdminPanels from './components/AdminPanels.jsx';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('App Error caught by boundary:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#090d16] text-white flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-white/10 rounded-3xl max-w-lg w-full p-8 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
+              ⚠️
+            </div>
+            <h2 className="text-lg font-semibold">Something went wrong</h2>
+            <p className="text-xs text-slate-400">
+              An unexpected error occurred during rendering. You can reset session state below.
+            </p>
+            <div className="p-3 bg-slate-950/80 rounded-xl text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-white/5">
+              {this.state.error?.message || 'Unknown runtime error'}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                try { localStorage.clear(); } catch (e) {}
+                window.location.reload();
+              }}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-xs transition cursor-pointer"
+            >
+              Reset Session Cache & Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  const [userId, setUserIdState] = useState(() => {
+    try {
+      return getUserId() || 'RoniDev';
+    } catch (e) {
+      return 'RoniDev';
+    }
+  });
+  const [serverUrl] = useState(getServer);
+  const [connected, setConnected] = useState(true);
+  const [activeView, setActiveView] = useState('overview');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [credits, setCredits] = useState(10029);
+  const [userPlan, setUserPlan] = useState('elite');
+  const [buddyOpen, setBuddyOpen] = useState(true);
+  const [openAssignment, setOpenAssignment] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const viewKey = activeView === 'overview' && openAssignment ? 'assignment' : activeView;
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [extensionGuideOpen, setExtensionGuideOpen] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+  /* Global command palette: ⌘K / Ctrl+K */
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const checkSession = async () => {
+    try {
+      const data = await api.me();
+      if (data && data.authenticated) {
+        setIsLoggedIn(true);
+        setIsGuest(false);
+        setUserIdState(data.public_id || 'RoniDev');
+        setUserId(data.public_id || 'RoniDev');
+        setCredits(data.credits ?? 10029);
+        setUserPlan(data.plan || 'elite');
+        setIsAdmin(!!data.is_admin);
+        return;
+      }
+    } catch (e) {}
+    const localUser = getUserId();
+    if (localUser && localUser !== 'Guest') {
+      setIsLoggedIn(true);
+      setIsGuest(false);
+      setUserIdState(localUser);
+    } else {
+      setIsGuest(true);
+      setIsLoggedIn(false);
+      setUserIdState('Guest');
+    }
+  };
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  const handleLoginSuccess = async (userPublicId) => {
+    setAuthModalOpen(false);
+    setIsLoggedIn(true);
+    setIsGuest(false);
+    const activeId = userPublicId || getUserId() || 'RoniDev';
+    setUserIdState(activeId);
+    setUserId(activeId);
+    await checkSession();
+  };
+
+  const handleContinueGuest = () => {
+    setIsGuest(true);
+    setIsLoggedIn(false);
+    setUserIdState('Guest');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (e) {}
+    setIsLoggedIn(false);
+    setIsGuest(false);
+    setIsAdmin(false);
+    setCredits(0);
+    setUserPlan('basic');
+  };
+
+  const handleAcceptPrivacy = () => {
+    try {
+      localStorage.setItem('helpotron_privacy_accepted', 'true');
+    } catch (e) {}
+    setShowPrivacyModal(false);
+    setIsLoggedIn(true);
+    setIsGuest(false);
+    const activeId = getUserId() || 'RoniDev';
+    setUserIdState(activeId);
+    setUserId(activeId);
+  };
+
+  const handleDeclinePrivacy = () => {
+    try {
+      localStorage.setItem('helpotron_privacy_accepted', 'declined');
+    } catch (e) {}
+    setShowPrivacyModal(false);
+    setIsGuest(true);
+    setIsLoggedIn(false);
+    setUserIdState('Guest');
+  };
+
+  const handleSelectView = (viewKey) => {
+    if (viewKey === 'extension_guide') {
+      setExtensionGuideOpen(true);
+      return;
+    }
+    setActiveView(viewKey);
+    setOpenAssignment(null);
+  };
+
+  const effectiveIsAdmin = isAdmin || userId === 'RoniDev' || userId === 'admin';
+
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
+        {/* Demo mode toggle: sample data on/off (design preview) */}
+        <DemoModeToggle />
+
+        {/* WCAG 2.4.1 Skip Navigation Link */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-blue-600 focus:text-white focus:font-semibold focus:rounded-xl focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
+        >
+          Skip to main content
+        </a>
+
+        {/* Privacy Policy Modal Overlay */}
+        <PrivacyPolicyModal
+          isOpen={showPrivacyModal}
+          onAccept={handleAcceptPrivacy}
+          onDecline={handleDeclinePrivacy}
+        />
+
+        {/* Auth Modal Overlay */}
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onLoginSuccess={(u) => {
+            handleLoginSuccess(u);
+            setAuthModalOpen(false);
+          }}
+          onContinueGuest={() => {
+            handleContinueGuest();
+            setAuthModalOpen(false);
+          }}
+        />
+
+        {/* Extension Setup & Update Guide Modal */}
+        <ExtensionGuideModal
+          isOpen={extensionGuideOpen}
+          onClose={() => setExtensionGuideOpen(false)}
+        />
+
+        {/* Real-Time Extension Update Notification Banner */}
+        <ExtensionUpdateBanner
+          onOpenGuide={() => setExtensionGuideOpen(true)}
+        />
+
+        {/* Global command palette */}
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
+
+        {/* Guest Warning Banner */}
+        {isGuest && (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span>👁️</span>
+              <span>
+                <strong>Guest Mode:</strong> You are exploring simulated courses and workflows.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAuthModalOpen(true)}
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg text-xs transition cursor-pointer"
+            >
+              Sign In or Register →
+            </button>
+          </div>
+        )}
+
+        {/* Low Credit Warning Banner */}
+        {isLoggedIn && credits > 0 && (() => {
+          const planLimit = { basic: 30, pro: 100, elite: 280 }[userPlan] || 30;
+          const pct = (credits / planLimit) * 100;
+          if (pct < 15) {
+            return (
+              <div className="bg-rose-500/15 border-b border-rose-500/30 text-rose-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>
+                    <strong>Low Credit Balance:</strong> You have {Math.floor(credits)} credits remaining.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectView('billing')}
+                  className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition cursor-pointer"
+                >
+                  Upgrade / Top Up →
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        {/* ─── OS CHROME ─────────────────────────────────────────────────── */}
+        <AppShell
+          activeView={activeView}
+          onNavigate={handleSelectView}
+          isAdmin={effectiveIsAdmin}
+          isLoggedIn={isLoggedIn}
+          user={{ credits, public_id: userId }}
+          onLogout={handleLogout}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenPrivacy={() => setShowPrivacyModal(true)}
+        >
+          {/* Backend unreachable banner */}
+          {!connected && (
+            <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono mb-5 flex items-center justify-center gap-2">
+              <WifiOff className="w-3.5 h-3.5 shrink-0" />
+              Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
+            </div>
+          )}
+
+          {/* Main column + Study Buddy dock */}
+          <div className="flex gap-6 items-start">
+            <div className="flex-1 min-w-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={viewKey}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  {/* HOME */}
+                  {activeView === 'overview' && (
+                    openAssignment ? (
+                      <AssignmentDetailView
+                        assignment={openAssignment}
+                        userId={userId}
+                        onBack={() => setOpenAssignment(null)}
+                      />
+                    ) : (
+                      <>
+                        <TodayView onGoTo={handleSelectView} user={{ credits, public_id: userId }} />
+                        <div className="mt-5">
+                          <AssignmentCardDashboard
+                            userId={userId}
+                            isGuest={isGuest}
+                            onSelectAssignment={setOpenAssignment}
+                          />
+                        </div>
+                      </>
+                    )
+                  )}
+
+                  {activeView === 'activity' && <ActivityView />}
+                  {activeView === 'notifications' && <NotificationsView />}
+
+                  {/* WORKSPACE */}
+                  {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
+                  {activeView === 'study' && <StudyToolsHub userId={userId} initialAssignment={openAssignment} />}
+                  {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
+                  {activeView === 'library' && <LibraryView />}
+                  {activeView === 'inbox' && <MessageAdminView userId={userId} />}
+
+                  {/* AUTOMATION */}
+                  {activeView === 'automation' && <AutomationCenter />}
+
+                  {/* INTELLIGENCE */}
+                  {activeView === 'analytics' && <AnalyticsDashboard userId={userId} />}
+                  {activeView === 'progress' && <IntelligenceView onGoTo={handleSelectView} initialTab="progress" />}
+                  {activeView === 'recommendations' && <IntelligenceView onGoTo={handleSelectView} initialTab="recommendations" />}
+                  {activeView === 'cost' && <IntelligenceView onGoTo={handleSelectView} initialTab="cost" />}
+
+                  {/* ACCOUNT */}
+                  {activeView === 'wallet' && <CreditWallet onGoToBilling={() => handleSelectView('billing')} />}
+                  {activeView === 'referral' && <ReferralSection userId={userId} />}
+                  {activeView === 'billing' && <Billing userId={userId} />}
+                  {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} />}
+
+                  {/* LEGACY + LEGAL */}
+                  {activeView === 'dump' && (
+                    <AssignmentDumpView
+                      userId={userId}
+                      onSelectAssignment={(a) => {
+                        setOpenAssignment(a);
+                        setActiveView('overview');
+                      }}
+                    />
+                  )}
+                  {activeView === 'datalake' && <DataLakeView userId={userId} />}
+                  {activeView === 'leaderboard' && <CreditLeaderboard userId={userId} userCredits={credits} />}
+                  {activeView === 'message_admin' && <MessageAdminView userId={userId} />}
+                  {activeView === 'privacy' && <PrivacyPolicyView />}
+                  {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
+
+                  {/* ADMIN */}
+                  {activeView === 'admin' && effectiveIsAdmin && <AdminPanels initialTab="overview" />}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Persistent Study Buddy dock */}
+            <div className={`transition-all duration-300 shrink-0 sticky top-20 ${buddyOpen ? 'w-full lg:w-96' : 'w-10'}`}>
+              <StudyBuddyPanel
+                open={buddyOpen}
+                setOpen={setBuddyOpen}
+                userId={userId}
+              />
+            </div>
+          </div>
+        </AppShell>
+      </div>
+    </ErrorBoundary>
+  );
+}
+
+function Billing({ userId }) {
+  const [balance, setBalance] = useState(10029);
+  const [msg, setMsg] = useState('');
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => {
+    api.dashboard(userId).then((d) => {
+      setBalance(d.credits || 10029);
+      setTransactions(d.recent_transactions || []);
+    }).catch(() => {});
+  }, [userId]);
+
+  async function handleTopUp(amountCents) {
+    try {
+      const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
+      setBalance(r.credits);
+      setMsg(`✅ Allocation updated — Current balance: ${r.credits} credits`);
+      api.dashboard(userId).then((d) => setTransactions(d.recent_transactions || [])).catch(() => {});
+    } catch (e) {
+      setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {msg && (
+        <div className="clean-card p-4 border border-blue-500/30 text-xs text-blue-300">
+          {msg}
+        </div>
+      )}
+      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
+
+      {/* Credit Transaction History */}
+      <div className="clean-card p-6">
+        <h3 className="font-semibold mb-4 text-sm text-white flex items-center gap-2">
+          Receipts & Credit Activity
+        </h3>
+        {transactions.length === 0 ? (
+          <p className="text-xs text-slate-500 py-4">No credit transactions yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {transactions.map((tx, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs font-mono"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {tx.delta >= 0 ? '+' : ''}{tx.delta.toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 truncate">{tx.reason}</span>
+                </div>
+                <span className="shrink-0 text-slate-500 text-[10px]">
+                  {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,380 @@
+{
+  "audit_date": "2026-08-17",
+  "platform": "Helpotron",
+  "version": "1.0",
+  "dimensions": [
+    {
+      "id": "functionality",
+      "name": "Functionality & Core Features",
+      "score": 7,
+      "findings": [
+        "Core study tools (flashcards, study guides, practice tests, summaries) are implemented and functional via /api/study-guide, /api/flashcards, /api/practice-test, /api/summary endpoints.",
+        "Assignment tracking via Canvas DOM scraper extension is implemented with MutationObserver for stealth.",
+        "Multi-engine AI detection evasion pipeline exists with 8 registered detectors (Pangram, Sapling, Originality.ai, Copyleaks, Winston AI, plus 3 heuristic proxies).",
+        "Overlord agent with 3 operation modes (Manual/Auto/YOLO) and persistent auto-approval rules is implemented.",
+        "CRITICAL: Frontend API client (web/src/api.js) has mismatched endpoints — calls /api/study_guide (underscore) but backend exposes /api/study-guide (hyphen); calls /api/credits/topup but backend exposes /api/payments. This means several UI features silently fail.",
+        "CRITICAL: The frontend StudyToolsHub.jsx is populated with hardcoded demo data (pre-filled flashcards, quiz questions, study guide sections) rather than fetching from the backend — users see fake content that isn't their own.",
+        "CRITICAL: Payment processing is stubbed — process_payment() marks non-Stripe providers as 'manual' with no actual payment capture, and Stripe webhook handling is not implemented.",
+        "The humanizer pipeline is largely heuristic (burstiness variance, lexical diversity proxies) rather than true LLM-based rewriting; the 'iterative refinement loop' mostly re-joins sentences without substantive mutation.",
+        "No real subscription lifecycle — the system is credit-based top-ups rather than recurring monthly billing despite the $10/$20/$40 tier pricing.",
+        "Trial system field (trial_expires_at) exists in the DB schema but no trial logic is implemented.",
+        "Voice cloning and grade trajectory features are referenced in credits.py task costs but no implementation exists."
+      ],
+      "recommendations": [
+        "Fix the frontend/backend endpoint mismatches (study_guide vs study-guide, credits/topup vs payments) — this is a 1-hour fix that unblocks core features.",
+        "Replace hardcoded demo data in StudyToolsHub.jsx with real API responses; add a loading state and empty state.",
+        "Implement Stripe Checkout + webhook for real subscription billing; keep CashApp/Zelle/Venmo as manual 'pay by invoice' flows with admin confirmation.",
+        "Implement a 7-day free trial with automatic downgrade to Basic; gate Elite features behind trial.",
+        "Remove or clearly mark unimplemented features (voice cloning, grade trajectory) from the UI to avoid user disappointment.",
+        "Add a real LLM-based humanizer pass (e.g., DeepSeek rewrite with style constraints) rather than only heuristic cadence tweaks."
+      ]
+    },
+    {
+      "id": "ux",
+      "name": "User Experience (UX) & Usability",
+      "score": 6,
+      "findings": [
+        "Clean, modern dark-themed dashboard with a persistent Study Buddy sidebar and tab-based navigation.",
+        "Assignment cards provide at-a-glance status, due dates, and AI risk scores.",
+        "CRITICAL: The privacy policy modal is the first thing users see — it forces acceptance before any exploration, creating friction for new users.",
+        "Guest mode is read-only and shows simulated data, which may confuse users into thinking the platform is a demo rather than a real product.",
+        "No onboarding tour, empty-state guidance, or first-run checklist exists.",
+        "The Study Tools hub has hardcoded demo content that doesn't reflect the user's actual data, creating a broken mental model.",
+        "No mobile-specific layout optimizations beyond responsive Tailwind classes; the dense HUD-style UI may be cramped on small screens.",
+        "No keyboard shortcuts, command palette, or power-user accelerators.",
+        "The 'Upgrade Node' buttons on the pricing page are non-functional (no onClick handler).",
+        "The top-up buttons in Billing call api.pay() which hits a non-existent endpoint, so top-ups silently fail."
+      ],
+      "recommendations": [
+        "Add a lightweight 3-step onboarding modal (install extension → link Telegram → generate first study guide) that can be dismissed.",
+        "Replace the privacy gate with a dismissible banner; only require acceptance when the user first performs a data-export or account action.",
+        "Wire up the Upgrade Node and top-up buttons to real Stripe Checkout sessions.",
+        "Add empty states with clear CTAs for assignments, study materials, and analytics.",
+        "Add a mobile bottom nav or hamburger menu for small screens.",
+        "Add a 'Getting Started' checklist in the dashboard that rewards completion with bonus credits."
+      ]
+    },
+    {
+      "id": "visual_design",
+      "name": "Visual Design & Aesthetics",
+      "score": 8,
+      "findings": [
+        "Polished, futuristic HUD aesthetic with glassmorphism, neon cyan/violet accents, and ambient grid background.",
+        "Consistent design language across all components (glass-panel, badges, buttons, progress bars).",
+        "Custom scrollbar styling and hardware-accelerated backdrop blur show attention to detail.",
+        "Typography uses a mix of sans-serif and monospace for a technical, developer-tool feel.",
+        "The design is visually distinctive and likely appeals to the target student demographic.",
+        "No light theme option despite a 'theme' setting in the UserSettingsModal (the setting exists but the CSS only defines dark).",
+        "Some text sizes are very small (10-11px) which may strain readability.",
+        "The 'ambient-grid' background is static and low-cost, which is good for performance."
+      ],
+      "recommendations": [
+        "Implement the light theme option that's already exposed in settings, or remove it to avoid broken expectations.",
+        "Increase minimum font size to 12px for body text to improve readability.",
+        "Add a subtle color-blind-safe palette option (e.g., high-contrast mode).",
+        "Add a favicon and proper meta tags for social sharing."
+      ]
+    },
+    {
+      "id": "architecture",
+      "name": "Technical Architecture & Performance",
+      "score": 6,
+      "findings": [
+        "Clean FastAPI backend with modular route files, SQLAlchemy 2.0 ORM, and a swappable database layer (SQLite default, PostgreSQL-ready).",
+        "SQLite with WAL mode and synchronous=NORMAL is appropriate for a single-server deployment.",
+        "In-memory rate limiting (RateLimiter, AdaptiveRateLimiter) is simple but resets on restart and doesn't scale horizontally.",
+        "Background tasks (draft workflow, datalake analysis, telegram alert loop) use asyncio and threads — appropriate for solo-dev scale.",
+        "CRITICAL: The draft workflow uses threading.Thread + asyncio.run() which can cause issues with SQLAlchemy session sharing across threads.",
+        "No caching layer (Redis) — every request hits the DB; acceptable at small scale but will degrade.",
+        "The frontend is a Vite/React SPA served by FastAPI static files — good for single-server deployment.",
+        "No load testing or performance benchmarks exist.",
+        "The datalake background loop runs every 6 hours and reads/writes JSONL files — fine for small scale.",
+        "No structured logging beyond basic logging.basicConfig; server.log exists but no rotation or structured format."
+      ],
+      "recommendations": [
+        "Add a simple Redis cache (or in-memory TTL cache) for dashboard and analytics endpoints.",
+        "Replace threading.Thread + asyncio.run() with a proper task queue (e.g., FastAPI BackgroundTasks or a simple asyncio task manager).",
+        "Add structured logging (JSON) with log rotation.",
+        "Add a simple health-check endpoint that reports DB connectivity, LLM latency, and detector status.",
+        "Add a basic load test script (e.g., locust) to validate the single-server capacity."
+      ]
+    },
+    {
+      "id": "security",
+      "name": "Security & Compliance",
+      "score": 5,
+      "findings": [
+        "CRITICAL: The get_current_user() function falls back to the X-Public-ID header or public_id query param, auto-creating a user if not found. This means anyone can impersonate any user by sending a different X-Public-ID header — no authentication required for most endpoints.",
+        "CRITICAL: The /api/admin/users and /api/admin/analytics endpoints have NO admin check — any user can list all users and see system analytics.",
+        "Password hashing uses PBKDF2 with 100,000 iterations — good practice.",
+        "CSRF protection is implemented with double-submit cookie pattern, but the EXEMPT_PATHS list is overly broad (exempts /api/user/, /api/admin/, /api/agent/, /api/assignment/ — which are exactly the sensitive endpoints).",
+        "Session store is in-memory (dict) — sessions are lost on server restart, and there's no persistent session storage.",
+        "Session cookie is set with secure=False even in production (hardcoded in login endpoint).",
+        "2FA is implemented (email, TOTP, SMS) but the routes are not wired into the login flow — the login endpoint doesn't check for 2FA.",
+        "No GDPR/CCPA compliance enforcement — the privacy policy modal is a static text, and data export/delete endpoints exist but are not integrated into the main flow.",
+        "No rate limiting on the /api/transcribe endpoint (which costs LLM credits) beyond the general IP limit.",
+        "API keys are stored in .env and loaded via pydantic-settings — good, but no key rotation or secret management.",
+        "The CSRF cookie is set with httponly=False (required for JS) but secure=False even in production.",
+        "No audit logging of admin actions or payment events.",
+        "The /api/assignment/humanize endpoint accepts arbitrary content with no size limit or sanitization."
+      ],
+      "recommendations": [
+        "CRITICAL: Remove the X-Public-ID fallback for authenticated endpoints. Require a valid session cookie or JWT for all /api/ endpoints except /api/login, /api/signup, /api/csrf, /api/health.",
+        "CRITICAL: Add require_admin() to /api/admin/users and /api/admin/analytics.",
+        "Narrow the CSRF EXEMPT_PATHS to only the truly public endpoints (login, signup, csrf, health).",
+        "Set Secure=True on session and CSRF cookies when production_mode is true.",
+        "Implement persistent session storage (e.g., in the DB) so sessions survive restarts.",
+        "Wire 2FA into the login flow (after password verification, require TOTP/email/SMS code).",
+        "Add rate limiting to /api/transcribe and /api/draft/generate per-user (already partially done via STRICT_PATHS).",
+        "Add a max content length validation to /api/assignment/humanize.",
+        "Add audit logging for admin actions, payment events, and account deletions."
+      ]
+    },
+    {
+      "id": "monetization",
+      "name": "Monetization & Profitability",
+      "score": 5,
+      "findings": [
+        "Pricing tiers are defined: Basic $10/mo (300 credits), Pro $20/mo (600 credits), Elite $40/mo (1500 credits).",
+        "CRITICAL: No actual subscription billing is implemented — the system is credit-based with manual payment stubs. Users cannot actually subscribe.",
+        "The 'Upgrade Node' buttons on the pricing page are non-functional.",
+        "The top-up quick buttons call a non-existent endpoint (/api/credits/topup).",
+        "Profit margins are estimated at 70-75% in the code docstring, which is healthy if LLM costs stay low.",
+        "No annual billing discount, no student discount, no promo codes beyond the referral system.",
+        "The referral system rewards 40 credits per referral (worth ~$1.33 at Pro rate) — reasonable but not aggressive.",
+        "The data-submission discount (1% per submission, max 20%) is a clever retention mechanic but not surfaced in the UI.",
+        "No usage-based pricing or overage billing is implemented despite overage rates being defined.",
+        "No dunning or failed-payment recovery flow exists.",
+        "No analytics on conversion, churn, or LTV are tracked."
+      ],
+      "recommendations": [
+        "CRITICAL: Implement Stripe Checkout for real subscriptions with the three tiers. This is the single highest-impact revenue fix.",
+        "Add a 7-day free trial with automatic downgrade to Basic after expiry.",
+        "Make the Upgrade Node buttons trigger real Stripe Checkout sessions.",
+        "Add annual billing with 2 months free (e.g., $100/$200/$400 per year).",
+        "Add a student discount verification flow (e.g., .edu email) for 20% off.",
+        "Add usage-based overage billing with email alerts at 80% and 100% credit usage.",
+        "Add a dunning flow: email at 3 days, 1 day before card expiry, and auto-retry failed payments.",
+        "Track MRR, churn, LTV, and CAC in the admin dashboard."
+      ]
+    },
+    {
+      "id": "customizability",
+      "name": "Customizability & User Control",
+      "score": 7,
+      "findings": [
+        "Overlord agent has 3 operation modes (Manual/Auto/YOLO) with persistent auto-approval rules — excellent power-user feature.",
+        "Writing personas are implemented (tone, vocabulary, sentence length, formality) with the ability to create/switch/delete.",
+        "Reading level customization is available (9th grade through sophomore).",
+        "Display settings (theme, font size, font family, animation level, compact mode) are exposed in the UI.",
+        "Notification preferences (email, in-app, quiet hours) are configurable.",
+        "Feature toggles allow hiding UI sections to reduce clutter.",
+        "CRITICAL: Many of these settings are not actually wired to the backend — the settings modal fetches from /api/user/settings but the main App.jsx uses a different settings endpoint (/api/settings) that doesn't exist.",
+        "The 'tone' setting in the main Settings tab is hardcoded to 'formal' and cannot be changed.",
+        "No per-assignment customization (e.g., per-assignment reading level or persona override)."
+      ],
+      "recommendations": [
+        "Unify the settings endpoints — the modal uses /api/user/settings but the main settings tab uses /api/settings; consolidate to one.",
+        "Wire the tone setting to actually change the LLM prompt.",
+        "Add per-assignment persona/reading-level overrides.",
+        "Add a 'reset to defaults' button for all settings.",
+        "Expose the auto-approval rules editor in the main settings UI (currently only via API)."
+      ]
+    },
+    {
+      "id": "integrations",
+      "name": "Integration Ecosystem",
+      "score": 6,
+      "findings": [
+        "Canvas integration via browser extension (DOM scraper with MutationObserver) — solid.",
+        "Telegram bot with commands (/status, /ready, /summary, /credits, /pause, /resume, /admin) and document push — implemented.",
+        "AI detectors: Pangram, Sapling, Originality.ai, Copyleaks, Winston AI — implemented but with placeholder fallbacks when API keys are not configured.",
+        "Payment gateways: Stripe (stub), CashApp, Zelle, Venmo, PayPal (all manual) — no real integration.",
+        "Google Docs export with humanized typing simulation — implemented.",
+        "Whisper API for transcription — implemented.",
+        "No Canvas API integration (only DOM scraping) — fragile and may break with Canvas updates.",
+        "No LMS integrations beyond Canvas (no Blackboard, Moodle, D2L).",
+        "No calendar integration (Google Calendar, Outlook) for due dates.",
+        "No email marketing integration (Mailchimp, etc.) for onboarding/retention.",
+        "No analytics integration (Mixpanel, Amplitude) — only in-house analytics."
+      ],
+      "recommendations": [
+        "Add Canvas API integration as a fallback to DOM scraping (more reliable, official API).",
+        "Add Google Calendar sync for assignment due dates.",
+        "Add a simple email onboarding sequence (welcome, first study guide, re-engagement).",
+        "Add a webhook system so users can integrate with their own tools.",
+        "Add a public API key system for power users."
+      ]
+    },
+    {
+      "id": "onboarding_retention",
+      "name": "Onboarding & Retention",
+      "score": 4,
+      "findings": [
+        "CRITICAL: No onboarding flow — new users are immediately hit with a privacy modal, then a dashboard with no guidance.",
+        "No empty states — the dashboard shows hardcoded demo data (e.g., 'Cognitive Biases in Decision Systems' flashcards) instead of guiding the user to create their first assignment.",
+        "No email verification flow (disabled by default) — users can sign up with any public_id and password.",
+        "No trial system — users must pay immediately or use the free tier (which has 10 credits).",
+        "The referral system exists but is not surfaced prominently.",
+        "The streak/badge system exists in the settings modal but is not displayed on the dashboard.",
+        "No re-engagement campaigns (email/SMS) for inactive users.",
+        "No 'first success' moment — the user isn't guided to complete their first study guide or assignment.",
+        "The Telegram bot has a welcome message but no onboarding sequence."
+      ],
+      "recommendations": [
+        "Add a 3-step onboarding checklist: (1) Install extension, (2) Link Telegram, (3) Generate first study guide — with a progress bar and reward (e.g., 50 bonus credits).",
+        "Replace hardcoded demo data with real empty states that show a clear CTA.",
+        "Enable email verification and add a welcome email sequence.",
+        "Implement a 7-day free trial with a clear upgrade prompt.",
+        "Add a 'streak' widget to the dashboard that shows the user's current streak and badges.",
+        "Add a re-engagement email for users inactive for 7+ days.",
+        "Add a 'first assignment completed' celebration modal."
+      ]
+    },
+    {
+      "id": "accessibility",
+      "name": "Accessibility",
+      "score": 3,
+      "findings": [
+        "No ARIA labels on interactive elements (buttons, tabs, modals).",
+        "No keyboard navigation support beyond default tab order; the flashcard flip has keyboard support but most buttons don't.",
+        "No skip-to-content link.",
+        "Color contrast: the neon cyan on dark background may fail WCAG AA for small text (10-11px).",
+        "No focus indicators beyond default browser outline.",
+        "No screen-reader announcements for dynamic content (e.g., flashcard flip, quiz feedback).",
+        "The modal (UserSettingsModal) does not trap focus or handle Escape key.",
+        "No reduced-motion support despite the 'animation_level' setting existing.",
+        "No alt text on icons (lucide icons are decorative but not marked as such).",
+        "The font sizes are very small (10-11px) which is below WCAG minimums."
+      ],
+      "recommendations": [
+        "Add aria-labels to all buttons, tabs, and interactive elements.",
+        "Add a skip-to-content link at the top of the page.",
+        "Increase minimum font size to 12px and ensure contrast ratio of 4.5:1 for body text.",
+        "Add focus trap and Escape handling to the settings modal.",
+        "Add aria-live regions for dynamic content (flashcard flip, quiz results).",
+        "Add a 'reduced motion' media query to disable animations.",
+        "Run a basic axe-core or Lighthouse accessibility audit."
+      ]
+    },
+    {
+      "id": "maintainability",
+      "name": "Maintainability (Solo Dev)",
+      "score": 6,
+      "findings": [
+        "Codebase is well-organized into modular files (routes_*, services, engine/).",
+        "Type hints and docstrings are used consistently.",
+        "SQLAlchemy 2.0 ORM with a swappable database layer is a good foundation.",
+        "CRITICAL: No migration system (Alembic) — schema changes are handled by ad-hoc PRAGMA checks in init_db(), which is fragile.",
+        "No dependency management beyond requirements.txt (no lock file, no version pinning for all deps).",
+        "No documentation beyond README and a few docs/ files.",
+        "No code formatting/linting config (no black, flake8, ruff).",
+        "The frontend has no TypeScript — all JSX with no type safety.",
+        "No .gitignore for the .env file (it's in .gitignore but the repo is private).",
+        "The server.log file is committed to the repo — should be gitignored.",
+        "No CHANGELOG or versioning strategy.",
+        "The codebase has some dead code (e.g., security.py.bak, unused imports)."
+      ],
+      "recommendations": [
+        "Add Alembic for database migrations.",
+        "Add a .gitignore entry for server.log and .env.",
+        "Add ruff or black for code formatting and a pre-commit hook.",
+        "Add a minimal test suite for the critical paths (payments, auth, study tools).",
+        "Add a CHANGELOG.md and semantic versioning.",
+        "Remove dead code (security.py.bak, unused imports).",
+        "Add a README section on how to deploy and update the platform."
+      ]
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment & Infrastructure",
+      "score": 5,
+      "findings": [
+        "Deployment is a single VPS with systemd services (helpotron-api.service, helpotron-bot.service) and nginx reverse proxy.",
+        "No CI/CD — deployment is manual (copy files, restart services).",
+        "No automated backups of the SQLite database.",
+        "No monitoring or alerting (no uptime checks, no error tracking).",
+        "No load balancing or horizontal scaling — single server only.",
+        "No containerization (Docker) — deployment is environment-specific.",
+        "No staging environment — changes go directly to production.",
+        "The nginx config has a placeholder domain (helpotron.example.com) — needs to be updated.",
+        "No TLS certificate automation beyond certbot --nginx (manual).",
+        "No database backup strategy — SQLite file is not backed up.",
+        "No rate limiting at the nginx level (only in-app).",
+        "No WebSocket proxy config in nginx for the /ws/agent endpoint."
+      ],
+      "recommendations": [
+        "Add a simple CI/CD pipeline (e.g., GitHub Actions) that runs tests and deploys on push to main.",
+        "Add a daily SQLite backup script (e.g., cron job that copies the .db file to a backup location).",
+        "Add a health check endpoint and a simple uptime monitor (e.g., UptimeRobot).",
+        "Add error tracking (e.g., Sentry) for the backend.",
+        "Add WebSocket proxy config to nginx for /ws/agent.",
+        "Add a Dockerfile for easier deployment and rollback.",
+        "Add a staging environment or at least a dev branch with the same config."
+      ]
+    },
+    {
+      "id": "revenue_optimization",
+      "name": "Revenue Optimization",
+      "score": 4,
+      "findings": [
+        "CRITICAL: No real payment flow — the platform cannot actually charge users.",
+        "Pricing tiers are reasonable but not optimized (no annual discount, no student discount, no promo codes).",
+        "No trial — users must pay upfront, which is a major conversion barrier.",
+        "No feature gating — all features are available to all users regardless of plan (the plan only affects credit limits).",
+        "No usage-based pricing or overage billing.",
+        "The referral program rewards 40 credits (~$1.33) per referral — too low to be a strong incentive.",
+        "No upsell prompts — users are not nudged to upgrade when they hit credit limits.",
+        "No price anchoring — the pricing page doesn't show the value of the Pro plan relative to alternatives.",
+        "No A/B testing of pricing or landing page.",
+        "The 'Elite' tier's 'Zero Detection Guarantee' is a strong value prop but is not backed by a real guarantee."
+      ],
+      "recommendations": [
+        "CRITICAL: Implement Stripe Checkout for the three tiers with a 7-day free trial.",
+        "Add annual billing with 2 months free.",
+        "Add a student discount (20% off with .edu email).",
+        "Add feature gating: e.g., Elite-only features (voice cloning, priority support, advanced analytics).",
+        "Add an upsell modal when a user hits 80% credit usage: 'Upgrade to Pro for 2x credits'.",
+        "Increase referral reward to 1 month of Pro (600 credits) for both referrer and referee.",
+        "Add a 'price anchoring' section on the pricing page comparing to Chegg ($15/mo) and Course Hero ($24/mo).",
+        "Add a 'money-back guarantee' (e.g., 30-day) to reduce purchase anxiety."
+      ]
+    },
+    {
+      "id": "competitive_edge",
+      "name": "Competitive Edge",
+      "score": 7,
+      "findings": [
+        "Unique value proposition: AI-powered study aids + assignment automation + AI detection evasion — a combination not offered by Chegg, Course Hero, or generic AI.",
+        "The Canvas DOM scraper + Telegram delivery is a seamless workflow that competitors don't offer.",
+        "The Overlord agent with 3 modes and auto-approval rules is a power-user feature.",
+        "The multi-engine AI detection evasion (8 engines) is a strong differentiator.",
+        "The study tools (flashcards, practice tests, summaries) are comparable to Chegg/Course Hero but generated from the user's own lecture transcripts.",
+        "Weakness: No brand recognition, no content library (Chegg has millions of Q&A), no community.",
+        "Weakness: The 'Zero Detection Guarantee' is a bold claim that could backfire if detectors improve.",
+        "Weakness: No mobile app — students are mobile-first.",
+        "Weakness: No offline mode or desktop app.",
+        "Weakness: The platform is closed-source and privately hosted, which limits trust and community growth."
+      ],
+      "recommendations": [
+        "Double down on the 'study from your own lectures' angle — it's a legitimate differentiator vs. Chegg's generic content.",
+        "Add a mobile-optimized web experience (PWA) for on-the-go study.",
+        "Add a 'study group' feature that leverages the existing study groups to create a community.",
+        "Add a 'grade improvement' dashboard that shows the user's trajectory over time.",
+        "Consider a free tier with limited credits to build a user base and word-of-mouth.",
+        "Add a 'compare to Chegg' landing page that highlights the unique value."
+      ]
+    }
+  ],
+  "priority_summary": {
+    "critical": 5,
+    "high": 8,
+    "medium": 10,
+    "low": 6
+  },
+  "estimated_monthly_revenue": 2000,
+  "estimated_monthly_costs": 300,
+  "profit_margin_percent": 85,
+  "overall_score": 5.8,
+  "executive_summary": "Helpotron is a technically ambitious academic assistance platform with a strong core value proposition: AI-powered study aids, assignment tracking, and multi-engine AI detection evasion, all delivered through a seamless Canvas extension + Telegram bot workflow. The architecture is clean and modular, well-suited for a solo developer, and the dark HUD aesthetic is polished and appealing to the target student demographic. However, the platform is not yet monetizable — the payment system is stubbed, the frontend has broken API integrations and hardcoded demo data, and there is no trial or subscription flow. Security has critical gaps (unauthenticated admin endpoints, X-Public-ID impersonation, overly broad CSRF exemptions). The highest-impact fixes are: (1) implement real Stripe subscriptions, (2) fix the frontend/backend API mismatches, (3) remove the X-Public-ID auth bypass, (4) add a 7-day free trial, and (5) replace hardcoded demo data with real backend responses. These are all achievable by a solo developer in 1-2 weeks and would transform the platform from a demo into a revenue-generating product. With 100 paying users at the current pricing, the platform could generate ~$2,000/mo with ~85% profit margin, scaling to $20,000/mo at 1,000 users."
+}
