@@ -1,0 +1,11 @@
+[importlinter]
+root_package = oculus
+
+[importlinter:contract:1]
+name = Forbid legacy imports
+type = forbidden
+source_modules =
+    oculus
+forbidden_modules =
+    oculus.legacy
+    legacy
