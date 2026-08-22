@@ -1,0 +1,42 @@
+{
+  "mcpServers": {
+    "websearch-deepseek": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "websearch-deepseek"
+      ],
+      "env": {
+        "DEEPSEEK_API_KEY": "<REDACTED-DEEPSEEK-KEY>",
+        "WEBSEARCH_MODEL": "deepseek-v4-flash",
+        "WEBSEARCH_THINKING": "enabled"
+      }
+    },
+    "telegram": {
+      "command": "bun",
+      "args": [
+        "/home/roni/.claude/plugins/cache/claude-plugins-official/telegram/0.0.6/server.ts"
+      ],
+      "env": {
+        "TELEGRAM_BOT_TOKEN": "<REDACTED-TELEGRAM-TOKEN>",
+        "TELEGRAM_STATE_DIR": "/home/roni/.claude/channels/telegram"
+      }
+    },
+    "antigravity-bridge": {
+      "command": "python3",
+      "args": [
+        "/home/roni/Roni_workspace/LLM-Drift-Detector/src/inbox_mcp/server.py"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<REDACTED-GITHUB-PAT>"
+      }
+    }
+  }
+}

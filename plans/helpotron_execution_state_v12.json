@@ -1,0 +1,17 @@
+{
+  "completed_batches": [
+    "BATCH-01",
+    "BATCH-02",
+    "BATCH-03",
+    "BATCH-04",
+    "BATCH-05",
+    "BATCH-06",
+    "BATCH-07",
+    "BATCH-08",
+    "BATCH-09",
+    "BATCH-10"
+  ],
+  "failed_batches": [
+    "BATCH-01"
+  ]
+}
