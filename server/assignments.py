@@ -1,0 +1,125 @@
+"""Assignment routes with strict ownership checks (remediation BATCH-04).
+
+Plan section: IDOR elimination — every assignment-scoped endpoint filters
+on ``Assignment.user_id == current_user.id`` and returns 404 (not 403) for
+foreign resources, so a user can never read or delete another user's
+assignment even with a valid token.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from .database import Assignment, User, get_db
+from .security import get_current_user
+
+router = APIRouter(tags=["assignments"])
+
+
+class AssignmentIn(BaseModel):
+    canvas_id: Optional[str] = None
+    title: str
+    due_date: Optional[str] = None
+    prompt: str = ""
+    file_urls: Optional[List[str]] = None
+
+
+def _assignment_out(a: Assignment) -> Dict[str, Any]:
+    return {
+        "id": a.id,
+        "canvas_id": a.canvas_id,
+        "title": a.title,
+        "due_date": a.due_date,
+        "prompt": a.prompt,
+        "file_urls": a.file_urls or [],
+        "status": a.status,
+        "progress": a.progress or {},
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+def _get_owned_assignment(assignment_id: int, user_id: int, db: Session) -> Assignment:
+    """Fetch an assignment that belongs to the caller, or 404."""
+    assignment = (
+        db.query(Assignment)
+        .filter(Assignment.id == assignment_id, Assignment.user_id == user_id)
+        .first()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found or unauthorized")
+    return assignment
+
+
+@router.get("/assignments")
+async def list_assignments(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List the authenticated user's own assignments."""
+    rows = (
+        db.query(Assignment)
+        .filter(Assignment.user_id == current_user.id)
+        .order_by(Assignment.id.desc())
+        .limit(200)
+        .all()
+    )
+    return {"assignments": [_assignment_out(a) for a in rows]}
+
+
+@router.post("/assignments")
+async def create_assignment(
+    body: AssignmentIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create an assignment owned by the authenticated user."""
+    assignment = Assignment(user_id=current_user.id)
+    if body.canvas_id:
+        existing = (
+            db.query(Assignment)
+            .filter(Assignment.user_id == current_user.id, Assignment.canvas_id == body.canvas_id)
+            .first()
+        )
+        if existing:
+            assignment = existing
+    assignment.canvas_id = body.canvas_id
+    assignment.title = body.title
+    assignment.due_date = body.due_date
+    assignment.prompt = body.prompt
+    assignment.file_urls = body.file_urls or []
+    if assignment.id is None:
+        db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return {"assignment_id": assignment.id, "status": assignment.status}
+
+
+@router.get("/assignments/{assignment_id}")
+async def get_assignment(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Fetch one of the caller's own assignments (IDOR-safe)."""
+    return _assignment_out(_get_owned_assignment(assignment_id, current_user.id, db))
+
+
+@router.delete("/assignments/{assignment_id}")
+async def delete_assignment(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an assignment only if it belongs to the authenticated user.
+
+    The ownership filter runs in the same query as the fetch: a foreign
+    assignment is indistinguishable from a missing one (404), so the
+    response never leaks another user's resource state.
+    """
+    assignment = _get_owned_assignment(assignment_id, current_user.id, db)
+    db.delete(assignment)
+    db.commit()
+    return {"status": "success", "deleted_id": assignment_id}

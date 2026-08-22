@@ -330,6 +330,9 @@ def clear_detector_cache() -> None:
 DETECTOR_CACHE: Dict[str, tuple[float, float]] = {}
 CACHE_TTL_SECONDS = 86400  # 24 hours
 
+# Lowercase export (plan contract) — the subsystem is the same object.
+detector_cache = DETECTOR_CACHE
+
 
 def get_text_hash(text: str) -> str:
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()

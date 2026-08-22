@@ -31,6 +31,7 @@ import ExtensionUpdateBanner from './components/ExtensionUpdateBanner.jsx';
 
 /* OS chrome + new views */
 import AppShell from './components/AppShell.jsx';
+import CookieBanner from './components/CookieBanner.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import TodayView from './components/TodayView.jsx';
 import ActivityView from './components/ActivityView.jsx';
@@ -417,6 +418,7 @@ export default function App() {
             </div>
           </div>
         </AppShell>
+        <CookieBanner />
       </div>
     </ErrorBoundary>
   );

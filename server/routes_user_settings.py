@@ -542,23 +542,15 @@ async def permanent_delete_request_route(payload: PermanentDataDeleteRequest, re
 @router.delete("/account")
 async def delete_account_route(request: Request, db: Session = Depends(get_db)):
     """GDPR Article 17 Right to Erasure: Instantly cascades and permanently deletes user account, assignments, materials, sessions, and logs."""
-    from .database import Material, Transcript, DataSubmission, UserSession
+    # Legacy alias for the canonical erasure (server/privacy.py). The old
+    # inline cascade imported a renamed model (`Material`) that no longer
+    # exists and 500'd on every call — delegate so there is ONE erasure path.
+    from .privacy import delete_user_account_and_data
     user = _get_current_user(request, db)
-    uid = user.id
-    public_id = user.public_id
-
-    # Cascade deletes
-    db.query(Material).filter(Material.user_id == uid).delete(synchronize_session=False)
-    db.query(Assignment).filter(Assignment.user_id == uid).delete(synchronize_session=False)
-    db.query(Transcript).filter(Transcript.user_id == uid).delete(synchronize_session=False)
-    db.query(DataSubmission).filter(DataSubmission.user_id == uid).delete(synchronize_session=False)
-    db.query(UserSession).filter(UserSession.user_id == uid).delete(synchronize_session=False)
-    db.delete(user)
-    db.commit()
-
+    result = delete_user_account_and_data(user, db)
     return {
         "status": "success",
-        "message": f"Account '{public_id}' and all associated academic records, study artifacts, and sessions have been permanently erased pursuant to GDPR Article 17.",
+        "message": f"Account '{result['public_id']}' and all associated academic records, study artifacts, and sessions have been permanently erased pursuant to GDPR Article 17.",
     }
 
 
