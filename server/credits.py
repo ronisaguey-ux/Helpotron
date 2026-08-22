@@ -29,6 +29,55 @@ def get_balance(user: User) -> int:
     """Retrieve available credit balance for user."""
     return getattr(user, 'credits', 0)
 
+
+def charge_credits(
+    db: Session,
+    user: User,
+    task_name: str,
+    description: Optional[str] = None
+) -> Tuple[bool, Optional[Callable[[], None]]]:
+    """Charge a task's credit cost under a database row lock and return a
+    rollback closure for the caller to invoke if the downstream workflow
+    fails (BATCH-02: credit transaction locking).
+
+    Mirrors charge() (row-locked, elite-exempt) but returns an undo hook
+    like safe_deduct_with_rollback, so async LLM workflows can charge and
+    refund atomically around a long-running provider cascade.
+    """
+    cost = TASK_COSTS.get(task_name, 1)
+    locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    if locked_user is None:
+        return False, None
+    if getattr(locked_user, "plan", "") == "elite":
+        # Elite plan: generation is included — no deduction (mirrors charge())
+        return True, None
+    if locked_user.credits < cost:
+        db.rollback()
+        logger.warning(f'User {user.id} has insufficient credits ({locked_user.credits}) for {task_name} (cost {cost})')
+        return False, None
+
+    locked_user.credits -= cost
+    db.add(CreditTransaction(
+        user_id=user.id,
+        delta=-cost,
+        reason=description or f"charge:{task_name}",
+    ))
+    db.commit()
+    db.refresh(locked_user)
+    logger.info(f'Charged user {user.id} {cost} credits for {task_name}. New balance: {locked_user.credits}')
+
+    def rollback() -> None:
+        locked_user.credits += cost
+        db.add(CreditTransaction(
+            user_id=user.id,
+            delta=cost,
+            reason=f"refund:{task_name}",
+        ))
+        db.commit()
+        logger.info(f'Refunded user {user.id} {cost} credits for failed {task_name}')
+
+    return True, rollback
+
 def charge(user: User, task_name: str, db: Session) -> bool:
     """Deduct credits atomically using database row locking."""
     cost = TASK_COSTS.get(task_name, 1)
