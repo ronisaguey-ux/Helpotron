@@ -1,0 +1,7 @@
+# Helpotron Codeowners Specification
+* @ronisaguey-ux
+/server/admin*.py @ronisaguey-ux
+/server/security.py @ronisaguey-ux
+/server/credits.py @ronisaguey-ux
+/deploy/* @ronisaguey-ux
+/.github/workflows/* @ronisaguey-ux

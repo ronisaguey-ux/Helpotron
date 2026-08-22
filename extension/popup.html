@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Helpotron Universal Automator</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      background: #0f172a;
+      color: #f8fafc;
+      box-sizing: border-box;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #60a5fa;
+    }
+    label {
+      font-size: 11px;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 4px;
+    }
+    select, input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 10px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      background: #1e293b;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+    }
+    select:focus, input:focus {
+      border-color: #3b82f6;
+    }
+    button.btn-primary {
+      width: 100%;
+      padding: 9px;
+      margin: 4px 0;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    button.btn-primary:hover {
+      background: #1d4ed8;
+    }
+    button.btn-secondary {
+      width: 100%;
+      padding: 8px;
+      margin: 4px 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    button.btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 11px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #1e293b;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #94a3b8;
+      min-height: 16px;
+      line-height: 1.4;
+      font-family: monospace;
+    }
+    .unparseable-card {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: 8px;
+      font-size: 11px;
+      color: #fecdd3;
+    }
+    .unparseable-card button {
+      width: 100%;
+      margin-top: 8px;
+      padding: 7px;
+      border-radius: 6px;
+      background: #e11d48;
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    details {
+      margin-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 8px;
+    }
+    summary {
+      font-size: 11px;
+      color: #64748b;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>⚡ Helpotron Automator</h2>
+  
+  <label for="tabSelect">Select Target Tab to Scrape:</label>
+  <select id="tabSelect">
+    <option value="">Loading open tabs…</option>
+  </select>
+
+  <button id="activateAgent" class="btn-primary">🤖 Spawn AI Subagent (Methodical Scrape)</button>
+  <button id="startScrape" class="btn-secondary">📄 Quick Scrape Selected Tab</button>
+  <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
+
+  <!-- Extension Update Alert Banner -->
+  <div id="updateBanner" style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-weight: 700; font-size: 11px; color: #6ee7b7;">✨ New Version Available!</span>
+      <span id="updateVersionBadge" style="font-size: 10px; background: #059669; padding: 2px 6px; border-radius: 4px; color: white;">v2.0.0</span>
+    </div>
+    <p style="margin: 4px 0 6px 0; font-size: 10px; color: #a7f3d0; line-height: 1.3;">
+      A newer version of the Helpotron Extension is ready. Download to keep all features running smoothly.
+    </p>
+    <button id="btnDownloadUpdate" style="width: 100%; padding: 6px; background: #10b981; border: none; border-radius: 6px; color: #022c22; font-weight: 700; font-size: 11px; cursor: pointer;">
+      📥 Download Latest Extension Zip
+    </button>
+  </div>
+
+  <div id="status">Ready. Select a tab above to begin.</div>
+
+  <!-- Honest Unparseable Warning Box with Direct Data Lake Prompt -->
+  <div id="unparseableBox" class="unparseable-card">
+    <div id="unparseableReason">⚠️ Helpotron was unable to parse structured assignment data from this website.</div>
+    <p style="margin: 4px 0 0 0; color: #fda4af; font-size: 10px;">
+      Submit this page format to the Data Lake to earn micro-credits and help train our platform!
+    </p>
+    <button id="btnOpenDataLake">📥 Submit Feedback to Data Lake</button>
+  </div>
+
+  <details>
+    <summary>Connection Settings</summary>
+    <div style="margin-top: 6px;">
+      <label>Server URL</label>
+      <input id="server" placeholder="http://localhost:8000">
+      <label>User ID</label>
+      <input id="public_id" placeholder="RoniDev">
+      <button id="saveSettings" class="btn-secondary" style="padding: 5px;">Save Settings</button>
+    </div>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>

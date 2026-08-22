@@ -1,0 +1,13 @@
+[Unit]
+Description=Helpotron API smoke benchmark (p95 SLA gate)
+After=helpotron-api.service
+
+[Service]
+Type=oneshot
+User=spark
+Group=spark
+WorkingDirectory=/var/www/helpotron
+Environment="PATH=/var/www/helpotron/venv/bin"
+ExecStart=/var/www/helpotron/venv/bin/python server/tests/benchmark_smoke.py
+# SLA breach (p95 >= 150ms) exits 1 -> systemd marks the timer unit failed,
+# visible to monitoring. Same 15-minute cadence as the health-check timers.

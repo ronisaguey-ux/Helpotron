@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# remediation scratch files (gemini verification scripts)
+_*.py
+verify_*.py
+
+# secrets + local runtime state — MUST never be committed
+# (executor commits via `git add -A`, which sweeps untracked files)
+.env
+*.db
+server.log
+*.log
+data_lake/
+web/dist/
+web/node_modules/
+.claude/skills/
+pipeline/state/
