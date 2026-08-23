@@ -1,7 +1,7 @@
 /* ────────────────────────────────────────────────────────────────────────────
  * App.jsx — Helpotron OS root (Experience Rewrite, 08-22)
  * AppShell chrome + Command Palette + all views:
- * HOME (Today/Activity) · WORKSPACE (My Agent/Assignments/Study Tools/
+ * HOME (Dashboard/Activity) · WORKSPACE (My Agent/Assignments/Study Tools/
  * Library) · INTELLIGENCE (Insights) · ACCOUNT (Credits/Settings) ·
  * ADMIN (Control Center). Legacy views map onto merged destinations
  * (see LEGACY_VIEWS). All existing capabilities preserved.
