@@ -10,6 +10,13 @@ const GlassCard = ({ className = '', children }) => (
   <div className={`glass-panel rounded-2xl p-5 border border-white/10 ${className}`}>{children}</div>
 );
 
+// Minutes studied in the trailing 7 days, computed from the analytics
+// recent_activity map (real DB data, never a fallback).
+const weekMinutes = (a) => {
+  const days = a?.recent_activity || {};
+  return Object.values(days).reduce((sum, m) => sum + (Number(m) || 0), 0);
+};
+
 const Stat = ({ label, value, sub = '', icon: Icon, iconColor = 'text-cyan-400' }) => (
   <div className="glass-panel rounded-xl p-5 border border-white/5">
     <div className="flex items-center justify-between text-slate-400 mb-1 text-xs font-mono">
@@ -58,10 +65,10 @@ export default function AnalyticsDashboard({ userId, onExplainWithAgent }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Total Study Time" value={`${analytics.total_study_time_hours || 48.5}h`} sub="+4.2h this week" icon={Clock} iconColor="text-cyan-400" />
-        <Stat label="Materials Studied" value={analytics.materials_studied || 18} sub="Active recall sync" icon={BookOpen} iconColor="text-indigo-400" />
-        <Stat label="Detector Evasion Rate" value="99.8%" sub="Zero false positives" icon={Activity} iconColor="text-emerald-400" />
-        <Stat label="Tutor Cost Saved" value={`$${valueMetrics?.tutor_savings ? Math.round(valueMetrics.tutor_savings) : 1450}`} sub="ROI: 72.5x vs Private Tutor" icon={DollarSign} iconColor="text-amber-400" />
+        <Stat label="Total Study Time" value={`${(analytics.total_study_time_hours ?? 0).toFixed(1)}h`} sub={`${weekMinutes(analytics)}m in the last 7 days`} icon={Clock} iconColor="text-cyan-400" />
+        <Stat label="Materials Studied" value={analytics.materials_studied ?? 0} sub={`${analytics.total_materials_generated ?? 0} generated total`} icon={BookOpen} iconColor="text-indigo-400" />
+        <Stat label="Study Sessions" value={analytics.session_count ?? 0} sub={`avg score ${analytics.average_score != null ? `${analytics.average_score}%` : '—'}`} icon={Activity} iconColor="text-emerald-400" />
+        <Stat label="Tutor Cost Saved" value={valueMetrics?.tutor_savings != null ? `$${Math.round(valueMetrics.tutor_savings)}` : '—'} sub={valueMetrics?.monthly_cost != null ? `vs $${Math.round(valueMetrics.monthly_cost)}/mo live cost` : 'no cost data yet'} icon={DollarSign} iconColor="text-amber-400" />
       </div>
 
       {valueMetrics && (
@@ -80,19 +87,19 @@ export default function AnalyticsDashboard({ userId, onExplainWithAgent }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div className="p-3 rounded-lg bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Hours Saved</span>
-              <strong className="text-white text-base">{valueMetrics.study_hours || 48.5}h</strong>
+              <strong className="text-white text-base">{valueMetrics.study_hours != null ? `${valueMetrics.study_hours}h` : '—'}</strong>
             </div>
             <div className="p-3 rounded-lg bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Monthly Cost</span>
-              <strong className="text-white text-base">${valueMetrics.monthly_cost || 20}</strong>
+              <strong className="text-white text-base">{valueMetrics.monthly_cost != null ? `$${valueMetrics.monthly_cost}` : '—'}</strong>
             </div>
             <div className="p-3 rounded-lg bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Cost Per Hour</span>
-              <strong className="text-cyan-300 text-base">${valueMetrics.cost_per_hour || 0.41}</strong>
+              <strong className="text-cyan-300 text-base">{valueMetrics.cost_per_hour != null ? `$${valueMetrics.cost_per_hour}` : '—'}</strong>
             </div>
             <div className="p-3 rounded-lg bg-black/40 border border-white/5">
               <span className="text-slate-400 block text-[10px] uppercase">Est. Tutor Savings</span>
-              <strong className="text-emerald-300 text-base">${valueMetrics.tutor_savings ? Math.round(valueMetrics.tutor_savings) : 1450}</strong>
+              <strong className="text-emerald-300 text-base">{valueMetrics.tutor_savings != null ? `$${Math.round(valueMetrics.tutor_savings)}` : '—'}</strong>
             </div>
           </div>
         </GlassCard>

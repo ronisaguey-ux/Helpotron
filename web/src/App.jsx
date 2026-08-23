@@ -381,7 +381,7 @@ export default function App() {
                   {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
 
                   {/* WORKSPACE */}
-                  {activeView === 'agent' && <MyAgentView userId={userId} isAdmin={effectiveIsAdmin} />}
+                  {activeView === 'agent' && <MyAgentView userId={userId} />}
                   {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
                   {activeView === 'study' && <StudyToolsHub userId={userId} initialAssignment={openAssignment} />}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
