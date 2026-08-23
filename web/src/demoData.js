@@ -5,9 +5,11 @@
  * timeline, notifications, automation center, library, calendar, admin
  * control center, cost intelligence, system map and the settings store.
  *
- * Everything is gated on the demo flag (localStorage helpotron_demo_mode,
- * default ON when absent — same convention as mock.js). When demo mode is
- * off the views render graceful empty states instead of fake data.
+ * Everything is gated on the demo flag (localStorage helpotron_demo_mode).
+ * Demo is an explicit opt-in ('true'/'on'): when absent or 'off' the views
+ * render real backend data / graceful empty states instead of fake data.
+ * NOTE: demo must NEVER default ON — a fresh visitor seeing the canned shell
+ * masquerading as the app was a phantom-pass incident (see GATES.md).
  * ────────────────────────────────────────────────────────────────────────── */
 
 const HOUR = 3600_000;
@@ -20,9 +22,9 @@ const inFuture = (ms) => iso(now() + ms);
 export function demoEnabled() {
   try {
     const v = localStorage.getItem('helpotron_demo_mode');
-    return v === null || v === 'true';
+    return v === 'true' || v === 'on';
   } catch (e) {
-    return true;
+    return false;
   }
 }
 
