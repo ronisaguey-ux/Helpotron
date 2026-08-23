@@ -3,8 +3,10 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 /* ── SectionCard: every panel on the site is collapsible ───────────────────
  * Wraps any clean-card block with a header row that carries a minimize /
- * maximize toggle. State persists per id in localStorage, so a section the
- * user collapsed stays collapsed across navigation and reloads.
+ * maximize toggle. When collapsed the card shrinks to a slim one-line bar
+ * (title + chevron only — no dead space). State persists per id in
+ * localStorage, so a section the user collapsed stays collapsed across
+ * navigation and reloads.
  *
  *   <SectionCard id="today-overview" title="Overview" subtitle="…">
  *     …children…
@@ -58,9 +60,11 @@ export default function SectionCard({
   const hasHeader = !!(header || title || icon || headerRight);
 
   return (
-    <section className={`clean-card ${padding} relative ${className}`}>
+    /* Collapsed = a slim one-line bar (no big padding, no empty box);
+     * open = the normal padded card with content. */
+    <section className={`clean-card ${open ? padding : 'p-2'} relative ${className}`}>
       {hasHeader && (
-        <div className={`flex items-start gap-2 ${title || header ? 'mb-3' : ''}`}>
+        <div className={`flex gap-2 ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-3' : '') : ''}`}>
           {icon && <span className="text-blue-400 shrink-0">{icon}</span>}
           {title && (
             <h3 className="text-[13px] font-bold tracking-wide text-slate-200 flex-1 truncate">
