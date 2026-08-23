@@ -1,8 +1,11 @@
 """FastAPI routes for Overlord Main Agent, Assignment Cards, 3 Operation Modes, and Permission System."""
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -50,6 +53,65 @@ class ModeUpdateRequest(BaseModel):
 
 class AutoApprovedRuleRequest(BaseModel):
     rule: str
+
+
+# ─── Claude Code bridge (My Agent → Claude Code) ────────────────────────────
+# When HELPOTRON_CLAUDE_BRIDGE=1, agent-chat messages from the site are
+# forwarded to a headless `claude -p` session that IS the My Agent: it can
+# use the helpotron-admin MCP server (mcp/server.js) to look up users, adjust
+# credits, check health and run platform operations. Its reply is stored in
+# the normal chat history and returned to the site. Admin-only by default
+# (HELPOTRON_CLAUDE_BRIDGE_ADMIN_ONLY=1). Any failure falls back to the
+# local intent pipeline — the bridge never breaks the chat.
+
+def _claude_bridge_enabled() -> bool:
+    return os.environ.get("HELPOTRON_CLAUDE_BRIDGE") == "1"
+
+
+def _claude_bridge_allowed(is_admin: bool) -> bool:
+    if not _claude_bridge_enabled():
+        return False
+    admin_only = os.environ.get("HELPOTRON_CLAUDE_BRIDGE_ADMIN_ONLY", "1") != "0"
+    return (not admin_only) or is_admin
+
+
+def _claude_bridge_call(public_id: str, user_text: str) -> Optional[str]:
+    """Forward one agent-chat message to headless Claude Code. Returns the
+    reply text, or None on any failure (caller falls back to the local
+    pipeline). Never shells out — argv array only."""
+    try:
+        mcp_cfg = Path(__file__).resolve().parent.parent / "mcp" / "claude_bridge_config.json"
+        if not mcp_cfg.exists():
+            return None
+        prompt = (
+            "You are Helpotron's My Agent, responding to a user on the helpotron "
+            f"website (public_id: {public_id}). The user sent this message:\n\n"
+            f"{user_text}\n\n"
+            "If the user asks to do anything on the platform — look up a user, "
+            "adjust credits, check system health, platform operations — use the "
+            "helpotron-admin MCP tools to resolve it. Reply to the user directly "
+            "and concisely (a few sentences max), reporting what you actually did."
+        )
+        proc = subprocess.run(
+            [
+                "claude", "-p", prompt,
+                "--mcp-config", str(mcp_cfg),
+                "--dangerously-skip-permissions",
+                "--output-format", "json",
+                "--model", "sonnet",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            return None
+        out = json.loads(proc.stdout)
+        if out.get("type") != "result" or not out.get("result"):
+            return None
+        return str(out["result"]).strip() or None
+    except Exception:
+        return None
 
 
 # ─── Helper to extract user ───────────────────────────────────────────────────
@@ -574,6 +636,30 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
 
     # Record user message
     user_msg = overlord_agent.add_chat_message(payload.assignment_id, sender="user", text=payload.text)
+
+    # 0b. Claude Code bridge: when enabled, this message goes to Claude Code,
+    # which answers (and can act) as the My Agent. Fallback to the local
+    # pipeline if the bridge is unavailable. Requests that already come FROM
+    # the bridge (X-Helpotron-MCP marker, set by mcp/server.js) are exempt —
+    # otherwise claude -p -> MCP admin_chat -> bridge would recurse.
+    if _claude_bridge_allowed(is_admin) and not request.headers.get("X-Helpotron-MCP"):
+        # Run in a thread: subprocess.run blocks the event loop, and the
+        # spawned claude's MCP server calls back into THIS server — a blocking
+        # call would deadlock the event loop until the 120s timeout.
+        reply = await asyncio.to_thread(_claude_bridge_call, user.public_id, payload.text)
+        if reply:
+            agent_reply = overlord_agent.add_chat_message(
+                payload.assignment_id,
+                sender="overlord",
+                text=reply,
+            )
+            await overlord_agent.compact_chat_history(user=user, target_key=str(payload.assignment_id))
+            return {
+                "status": "success",
+                "message": agent_reply,
+                "execution": {"action": "claude_bridge", "status": "completed", "bridge": True},
+                "reply": reply,
+            }
 
     # 1. LLM decides the intent (strict JSON contract, regex fallback)
     intent = await _resolve_agent_intent(user, settings, payload.text, is_admin)

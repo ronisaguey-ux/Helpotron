@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "helpotron-admin": {
+      "command": "node",
+      "args": ["/home/roni/Roni_Workspace/helpotron/mcp/server.js"],
+      "env": {
+        "HELPOTRON_BASE_URL": "http://localhost:8000",
+        "HELPOTRON_ADMIN_PUBLIC_ID": "RoniDev"
+      }
+    }
+  }
+}
