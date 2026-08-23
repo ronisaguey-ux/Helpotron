@@ -10,7 +10,8 @@ import {
   Search, Settings, Bell, LogOut, GraduationCap,
   ChevronDown, ShieldCheck,
 } from 'lucide-react';
-import { NOTIFICATIONS, demoEnabled, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
+import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
+import DemoModeToggle from './DemoModeToggle.jsx';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
 import Button from './Button.jsx';
 
@@ -274,12 +275,8 @@ export default function AppShell({
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {/* Demo badge */}
-            {demoEnabled() && (
-              <span className="hidden md:inline-block px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] font-semibold text-amber-300">
-                DEMO DATA
-              </span>
-            )}
+            {/* Mock data toggle (explicit opt-in; absent key = live mode) */}
+            <DemoModeToggle />
 
             {/* Credits chip */}
             <button
