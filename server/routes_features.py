@@ -7,42 +7,43 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .database import User, get_db
-from .security import verify_jwt_token
+from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
 from fastapi import status
 
 
 def get_current_authenticated_user(request: Request, db: Session = Depends(get_db)) -> User:
     """Feature-route auth dependency (remediation BATCH-01): a request is only
-    trusted if it carries a valid Bearer token (or session cookie) whose sub
-    matches a real user — the X-Public-ID header is never an identity."""
-    auth_header = request.headers.get('Authorization')
-    session_token = request.cookies.get('helpotron_session')
-    token = None
-    if auth_header and auth_header.startswith('Bearer '):
-        token = auth_header.split(' ', 1)[1]
-    elif session_token:
-        token = session_token
+    trusted if it carries a valid session cookie OR Bearer token — the
+    X-Public-ID header is never an identity.
 
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Authentication required to access feature'
-        )
-
-    payload = verify_jwt_token(token)
-    if not payload or 'sub' not in payload:
+    The login flow issues an opaque session token (SessionStore / UserSession
+    table), so the cookie path is resolved through the session store first;
+    the Bearer JWT path is kept for API clients."""
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if session_token:
+        session = SessionStore.get_session(session_token)
+        if session:
+            SessionStore.refresh_session(session_token)
+            user = db.query(User).filter(User.id == session['user_id']).first()
+            if user:
+                return user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired session'
         )
 
-    user = db.query(User).filter(User.id == payload['sub']).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User account not found'
-        )
-    return user
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        payload = verify_jwt_token(auth_header.split(' ', 1)[1])
+        if payload and 'sub' in payload:
+            user = db.query(User).filter(User.id == payload['sub']).first()
+            if user:
+                return user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail='Authentication required to access feature'
+    )
 
 
 from .features import (
