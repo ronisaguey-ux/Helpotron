@@ -209,6 +209,7 @@ export const api = {
   deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
   agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
   updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+  getSubagentTeam: (id) => request(`/api/assignments/${id}/subagent-team`, { method: 'GET' }),
 
   // ── My Agent: permanent memory, files, compaction (Experience Rewrite, 08-22)
   getAgentMemory: () => request('/api/agent/memory', { method: 'GET' }),
@@ -310,6 +311,7 @@ export const api = {
   adminResetPassword: (userId, newPassword) => request(`/api/admin/user/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }),
   adminBanUser: (userId) => request(`/api/admin/user/${userId}/ban`, { method: 'POST' }),
   adminUnbanUser: (userId) => request(`/api/admin/user/${userId}/unban`, { method: 'POST' }),
+  adminSearch: (q) => request(`/api/admin/search?q=${encodeURIComponent(q)}`, { method: 'GET' }),
   adminGenerateToken: (durationDays, maxUses) => request('/api/admin/tokens/generate', { method: 'POST', body: JSON.stringify({ duration_days: durationDays, max_uses: maxUses }) }),
   adminDeactivateToken: (token) => request(`/api/admin/tokens/deactivate?token=${token}`, { method: 'POST' }),
   adminListTokens: () => request('/api/admin/tokens', { method: 'GET' }),
@@ -321,6 +323,7 @@ export const api = {
 
   // User Budget, Effort Level & Pre-Flight Cost Estimator
   getUserBudget: (userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  getCostIntelligence: () => request('/api/features/costs/intelligence', { method: 'GET' }),
   updateUserBudget: (data, userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
   estimateTaskCost: (data, userId) => request(`/api/admin/costs/estimate?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
 

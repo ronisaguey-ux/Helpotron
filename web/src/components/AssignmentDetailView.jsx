@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   ClipboardList,
@@ -60,14 +60,35 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
   // Current Active Task in Mini-Menu
   const [activeTaskTab, setActiveTaskTab] = useState('complete_assignment'); // 'complete_assignment' | 'step_by_step' | 'practice_quiz' | 'quick_summary' | 'study_guide' | 'flash_cards' | 'subagent_team'
 
-  // Sub-Agent Team State
-  const [teamMembers] = useState([
+  // Sub-Agent Team State — LIVE from /api/assignments/{id}/subagent-team
+  // (db-backed status derived from Assignment.status/progress). The demo
+  // roster below is only the offline fallback when the fetch fails.
+  const [teamLive, setTeamLive] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([
     { id: 'researcher', name: 'ResearcherAgent', role: 'Context Retrieval & Peer-Reviewed Sources', icon: '🔍', status: 'Active' },
     { id: 'drafter', name: 'DraftingAgent', role: 'Academic Prose & Structure Synthesis', icon: '✍️', status: 'Active' },
     { id: 'humanizer', name: 'HumanizerAgent', role: 'Burstiness & Perplexity Calibration', icon: '🛡️', status: 'Active' },
     { id: 'auditor', name: 'RubricAuditorAgent', role: 'Milestone & Grade Metric Compliance', icon: '⚖️', status: 'Active' },
     { id: 'citation', name: 'CitationFormatterAgent', role: 'DOI Validation & APA/MLA Formatting', icon: '📚', status: 'Active' },
   ]);
+  const TEAM_ICONS = { researcher: '🔍', source_analyst: '🧠', writer: '✍️', reviewer: '⚖️' };
+  useEffect(() => {
+    if (!assignment?.id) return;
+    api.getSubagentTeam(assignment.id)
+      .then((data) => {
+        const team = (data?.team || []).map((r) => ({
+          id: r.role,
+          name: (r.name || r.role).replace(/\s+/g, '') + 'Agent',
+          role: r.task || r.current_task || 'Team member',
+          icon: TEAM_ICONS[r.role] || '🤖',
+          status: r.status === 'COMPLETE' ? 'Active' : r.status === 'WORKING' ? 'Working' : 'Waiting',
+          progress: r.progress || 0,
+          currentTask: r.current_task,
+        }));
+        if (team.length) { setTeamMembers(team); setTeamLive(true); }
+      })
+      .catch(() => { /* offline/demo — keep the fallback roster */ });
+  }, [assignment?.id]);
 
   const [teamChat, setTeamChat] = useState([
     {

@@ -38,6 +38,16 @@ export default function CreditsPricingDashboard({
   const [userDiscountCredits, setUserDiscountCredits] = useState(21); // $21 in discount credits
   const [useDiscountCredits, setUseDiscountCredits] = useState(true);
 
+  // Cost intelligence — live from the backend (ApiUsageLog-backed), demo-safe
+  const [costData, setCostData] = useState(null);
+  const [costLoading, setCostLoading] = useState(true);
+  useEffect(() => {
+    api.getCostIntelligence()
+      .then((d) => setCostData(d))
+      .catch(() => setCostData(null))
+      .finally(() => setCostLoading(false));
+  }, []);
+
   // 2FA Mandatory Purchase Checkout State
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState(null);
@@ -273,6 +283,11 @@ export default function CreditsPricingDashboard({
             <div className="text-[10px] text-slate-400 mt-1 font-mono">Up to 50% max purchase discount</div>
           </div>
         </div>
+      </div>
+
+      {/* Cost Intelligence & Guardrails — real data from /api/features/costs/intelligence */}
+      <div className="clean-card rounded-2xl p-6">
+        <CostIntelligenceSection costData={costData} loading={costLoading} />
       </div>
 
       {/* Billing Switch & Promo Section */}
@@ -641,3 +656,75 @@ export default function CreditsPricingDashboard({
     </div>
   );
 }
+/* ────────────────────────────────────────────────────────────────────────────
+ * Cost Intelligence & Guardrails Console (under Billing & Insights)
+ * REAL data from /api/features/costs/intelligence — every number is
+ * ApiUsageLog-backed (total spend, per-assignment cost, effort tier,
+ * subject breakdown, wallet limit). No hardcoded figures.
+ * ────────────────────────────────────────────────────────────────────────── */
+export const CostIntelligenceSection = ({ costData, loading, onSetSpendingLimit }) => {
+  if (loading) {
+    return <div className="text-[11px] text-slate-500 py-2">Loading cost intelligence…</div>;
+  }
+  const total = (costData?.total_spent_cents ?? 0) / 100;
+  const perAssignment = (costData?.cost_per_assignment_cents ?? 0) / 100;
+  const limit = (costData?.spending_limit_cents ?? 1000) / 100;
+  const pct = limit > 0 ? Math.min(100, Math.round((total / limit) * 100)) : 0;
+  const subjects = costData?.breakdown_by_subject ? Object.entries(costData.breakdown_by_subject) : [];
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-100">AI Resource Consumption & Cost Intelligence</h3>
+        <span className="text-xs text-slate-500">Scope: Lifetime</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 rounded-xl border border-white/8 bg-white/4 space-y-1">
+          <span className="text-xs text-slate-500">Cost per Completed Assignment</span>
+          <p className="text-xl font-bold text-slate-100">
+            ${perAssignment.toFixed(2)} <span className="text-xs font-normal text-slate-500">/ assignment</span>
+          </p>
+        </div>
+        <div className="p-4 rounded-xl border border-white/8 bg-white/4 space-y-1">
+          <span className="text-xs text-slate-500">Most Used Effort Tier</span>
+          <p className="text-xl font-bold text-blue-400">{costData?.most_used_effort_tier || '—'}</p>
+        </div>
+        <div className="p-4 rounded-xl border border-white/8 bg-white/4 space-y-1">
+          <span className="text-xs text-slate-500">Spent vs Spending Limit</span>
+          <p className="text-xl font-bold text-slate-100">
+            ${total.toFixed(2)} <span className="text-xs font-normal text-slate-500">of ${limit.toFixed(2)}</span>
+          </p>
+          <div className="h-1.5 rounded-full bg-white/10 mt-1.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      </div>
+      {subjects.length > 0 && (
+        <div>
+          <div className="text-xs text-slate-500 mb-1.5">Spend by subject</div>
+          <div className="flex flex-wrap gap-2">
+            {subjects.map(([s, cents]) => (
+              <span key={s} className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/8 text-[11px] text-slate-300">
+                {s}: ${(cents / 100).toFixed(2)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {costData?.auto_refill_enabled && (
+        <div className="text-[11px] text-emerald-300">Auto-refill is on — spending limits recharge automatically.</div>
+      )}
+      {onSetSpendingLimit && (
+        <button
+          type="button"
+          onClick={() => onSetSpendingLimit(limit)}
+          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-slate-300 hover:bg-white/10 transition cursor-pointer"
+        >
+          Adjust spending limit
+        </button>
+      )}
+    </div>
+  );
+};
