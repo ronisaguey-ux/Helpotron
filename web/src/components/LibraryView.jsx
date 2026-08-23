@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Bookmark, FileText } from 'lucide-react';
 import { LIBRARY, SAVED, CALENDAR, demoEnabled } from '../demoData.js';
 import { Badge, Tabs, EmptyState, SectionHeader, timeAgo } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const KIND_ICON = { pdf: '📕', doc: '📘', audio: '🎧', image: '🖼️' };
 
@@ -34,8 +35,8 @@ function CalendarGrid() {
   const monthName = firstDay.toLocaleDateString([], { month: 'long', year: 'numeric' });
 
   return (
-    <div className="clean-card p-5">
-      <div className="flex items-center justify-between mb-4">
+    <SectionCard id="library-calendar" header={
+      <div className="flex items-center justify-between w-full">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <CalendarIcon className="w-4 h-4 text-blue-400" /> {monthName}
         </h3>
@@ -45,6 +46,7 @@ function CalendarGrid() {
           <button type="button" onClick={() => setMonthOffset(monthOffset + 1)} className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/8 text-xs text-slate-300 hover:bg-white/10 transition cursor-pointer" aria-label="Next month">→</button>
         </div>
       </div>
+    }>
       <div className="grid grid-cols-7 gap-1.5 text-[10px] font-semibold text-slate-500 mb-1.5">
         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => <div key={d} className="text-center py-1">{d}</div>)}
       </div>
@@ -84,7 +86,7 @@ function CalendarGrid() {
           );
         })}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -112,11 +114,12 @@ export default function LibraryView() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {files.map((f) => (
-              <div key={f.id} className="clean-card p-5 space-y-3 hover:border-blue-500/25 transition group">
-                <div className="flex items-start justify-between">
+              <SectionCard id={`library-file-${f.id}`} className="space-y-3 hover:border-blue-500/25 transition group" header={
+                <div className="flex items-start justify-between w-full">
                   <span className="text-3xl">{KIND_ICON[f.kind] || '📄'}</span>
                   <Badge color="slate">{f.kind}</Badge>
                 </div>
+              }>
                 <div>
                   <div className="text-xs font-semibold text-white truncate group-hover:text-blue-200 transition">{f.name}</div>
                   <div className="text-[11px] text-slate-500 mt-1">{f.course} · {f.size}{f.pages ? ` · ${f.pages} pages` : ''}{f.duration ? ` · ${f.duration}` : ''}</div>
@@ -125,7 +128,7 @@ export default function LibraryView() {
                 <button type="button" className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 border border-white/8 text-[11px] text-slate-300 hover:bg-blue-600 hover:text-white transition cursor-pointer">
                   <FileText className="w-3 h-3" /> Open in AI Workspace
                 </button>
-              </div>
+              </SectionCard>
             ))}
           </div>
         )
@@ -154,8 +157,7 @@ export default function LibraryView() {
       {tab === 'calendar' && (
         <>
           <CalendarGrid />
-          <div className="clean-card p-5">
-            <SectionHeader title="Upcoming" subtitle="Everything with a date" />
+          <SectionCard id="library-upcoming" header={<SectionHeader title="Upcoming" subtitle="Everything with a date" />}>
             {CALENDAR.filter((c) => c.kind === 'due' && !c.status?.startsWith('completed')).length === 0 ? (
               <EmptyState title="Nothing upcoming" body="No open due dates in range." />
             ) : (
@@ -177,7 +179,7 @@ export default function LibraryView() {
                   ))}
               </div>
             )}
-          </div>
+          </SectionCard>
         </>
       )}
     </div>

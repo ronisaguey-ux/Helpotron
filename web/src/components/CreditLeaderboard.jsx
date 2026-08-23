@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api.js';
+import SectionCard from './SectionCard.jsx';
 import {
   Trophy,
   ShieldCheck,
@@ -142,11 +143,12 @@ export default function CreditLeaderboard({ userId, userCredits }) {
 
       {/* ─── Top Metric Cards ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="clean-card p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-950 border border-amber-500/20">
-          <div className="flex items-center justify-between text-xs text-amber-300/80 mb-1">
+        <SectionCard id="creditleaderboard-rank" padding="p-4" className="rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-950 border border-amber-500/20" header={
+          <div className="flex items-center justify-between w-full text-xs text-amber-300/80">
             <span>Your Current Rank</span>
             <Award className="w-4 h-4 text-amber-400" />
           </div>
+        }>
           <div className="text-2xl font-bold text-white flex items-baseline gap-2">
             <span>#{userStats.rank}</span>
             <span className="text-xs font-normal text-slate-400 font-mono">of {leaderboard.length} Scholars</span>
@@ -154,44 +156,47 @@ export default function CreditLeaderboard({ userId, userCredits }) {
           <div className="text-[11px] text-amber-400/90 mt-1 flex items-center gap-1">
             <Flame className="w-3.5 h-3.5" /> Top 15% Computing Powerhouse
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card p-4 rounded-2xl bg-slate-900/60 border border-white/10">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <SectionCard id="creditleaderboard-used" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+          <div className="flex items-center justify-between w-full text-xs text-slate-400">
             <span>Your Credits Used</span>
             <Zap className="w-4 h-4 text-blue-400" />
           </div>
+        }>
           <div className="text-2xl font-bold text-blue-400 font-mono">
             {Number(userStats.credits_used || 4820).toLocaleString()} <span className="text-xs text-slate-400">cr</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
             Available: {Number(userCredits || 10029).toLocaleString()} cr
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card p-4 rounded-2xl bg-slate-900/60 border border-white/10">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <SectionCard id="creditleaderboard-name" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+          <div className="flex items-center justify-between w-full text-xs text-slate-400">
             <span>Leaderboard Display Name</span>
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
+        }>
           <div className="text-base font-bold text-emerald-300 font-mono truncate">
             {userStats.current_alias || 'QuantumScholar_42'}
           </div>
           <div className="text-[11px] text-emerald-400/80 mt-1 flex items-center gap-1">
             <span>🔒 Real identity hidden</span>
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* ─── Student Milestones & Study Streaks (DES-PSY-002) ────────── */}
-      <div className="clean-card p-4 rounded-2xl bg-gradient-to-r from-blue-950/30 via-slate-900 to-indigo-950/30 border border-blue-500/20">
-        <div className="flex items-center justify-between mb-3">
+      <SectionCard id="creditleaderboard-milestones" padding="p-4" className="rounded-2xl bg-gradient-to-r from-blue-950/30 via-slate-900 to-indigo-950/30 border border-blue-500/20" header={
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
             <Flame className="w-4 h-4 text-amber-400" />
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">Your Academic Study Milestones</h2>
           </div>
           <span className="text-[11px] text-blue-400 font-mono">Level 4 Scholar</span>
         </div>
+      }>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/20 flex items-center gap-2.5">
             <span className="text-lg">🔥</span>
@@ -222,11 +227,11 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ─── Custom Alias & Privacy Customizer ────────────────────────── */}
-      <div className="clean-card p-5 rounded-2xl bg-slate-900/80 border border-blue-500/20 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+      <SectionCard id="creditleaderboard-alias" className="rounded-2xl bg-slate-900/80 border border-blue-500/20 space-y-4" header={
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-2">
           <div className="flex items-center gap-2">
             <Edit3 className="w-4 h-4 text-blue-400" />
             <h2 className="text-sm font-semibold text-white">Customize Your Leaderboard Alias</h2>
@@ -236,6 +241,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             Your account email and real name remain 100% private.
           </span>
         </div>
+      }>
 
         <form onSubmit={handleSaveAlias} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -310,10 +316,10 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             </div>
           </div>
         </form>
-      </div>
+      </SectionCard>
 
       {/* ─── Search & Standings List ─────────────────────────────────── */}
-      <div className="clean-card rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden">
+      <SectionCard id="creditleaderboard-standings" padding="p-0" className="rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden" header={
         <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400" />
@@ -332,6 +338,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             />
           </div>
         </div>
+      }>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -427,7 +434,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -32,6 +32,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import StudyToolsHub from './StudyToolsHub.jsx';
+import SectionCard from './SectionCard.jsx';
 import api from '../api';
 
 const SUBAGENTS = [
@@ -289,7 +290,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
       </div>
 
       {/* Assignment Header Card */}
-      <div className="clean-card rounded-2xl p-6 relative overflow-hidden">
+      <SectionCard id="detail-header" className="rounded-2xl relative overflow-hidden" header={
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -331,6 +332,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             <div className="text-[10px] text-emerald-400">{completedCount} of {rubricItems.length} criteria met</div>
           </div>
         </div>
+      }>
 
         {/* Multi-Select Task Type Customizer Strip */}
         <div className="mt-5 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -360,13 +362,14 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             })}
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ─── SUBAGENT TEAM GRAPH — live per-role status ─── */}
-      <div className="clean-card p-4">
-        <div className="flex items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+      <SectionCard id="detail-subagent-team" padding="p-4" header={
+        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Subagent Team
         </div>
+      }>
         <div className="flex items-center gap-3 overflow-x-auto pb-1">
           {SUBAGENTS.map((s) => (
             <div key={s.id} className="flex items-center gap-3 rounded-xl border border-white/6 bg-slate-950/40 px-3.5 py-2.5 min-w-[210px]">
@@ -386,7 +389,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             </div>
           ))}
         </div>
-      </div>
+      </SectionCard>
 
       {/* ─── MINI-MENU TO BROWSE TASKS WITHIN THE ASSIGNMENT ─── */}
       <div className="clean-card p-1.5 rounded-2xl flex items-center gap-1 overflow-x-auto select-none border border-white/5">
@@ -433,7 +436,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
       {activeTaskTab === 'complete_assignment' && (
         <div className="space-y-6">
           {/* Rubric Checklist Section */}
-          <div className="clean-card rounded-2xl p-6 space-y-4">
+          <SectionCard id="detail-rubric" className="rounded-2xl space-y-4" header={
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-blue-400" />
@@ -441,6 +444,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               </h2>
               <span className="text-xs text-slate-400">Click items to mark complete</span>
             </div>
+          }>
 
             <div className="space-y-2.5">
               {rubricItems.map((item, idx) => {
@@ -473,10 +477,10 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
                 );
               })}
             </div>
-          </div>
+          </SectionCard>
 
           {/* Personal Notes & Scratchpad */}
-          <div className="clean-card rounded-2xl p-6 space-y-3">
+          <SectionCard id="detail-scratchpad" className="rounded-2xl space-y-3" header={
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <FileText className="w-4 h-4 text-slate-400" />
@@ -486,6 +490,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
                 <span className="text-xs text-emerald-400">✅ Saved to Local Storage</span>
               )}
             </div>
+          }>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -515,13 +520,13 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
                 <span>{verifying ? 'Verifying...' : 'Verify & Submit'}</span>
               </button>
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
 
       {/* 2. STEP-BY-STEP LEARNING */}
       {activeTaskTab === 'step_by_step' && (
-        <div className="clean-card rounded-2xl p-6 space-y-5">
+        <SectionCard id="detail-step-by-step" className="rounded-2xl space-y-5" header={
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
               <ListOrdered className="w-4 h-4 text-blue-400" />
@@ -529,6 +534,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             </h2>
             <span className="text-xs text-slate-400">Milestone Breakdown</span>
           </div>
+        }>
 
           <div className="space-y-3">
             {[
@@ -571,12 +577,12 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* 3. PRACTICE QUIZ */}
       {activeTaskTab === 'practice_quiz' && (
-        <div className="clean-card rounded-2xl p-6 space-y-6">
+        <SectionCard id="detail-quiz" className="rounded-2xl space-y-6" header={
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
               <GraduationCap className="w-4 h-4 text-blue-400" />
@@ -584,6 +590,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             </h2>
             <span className="text-xs text-slate-400">4 Formative Questions</span>
           </div>
+        }>
 
           <div className="space-y-4">
             {[
@@ -660,12 +667,12 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               </button>
             )}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* 4. QUICK SUMMARY */}
       {activeTaskTab === 'quick_summary' && (
-        <div className="clean-card rounded-2xl p-6 space-y-4">
+        <SectionCard id="detail-summary" className="rounded-2xl space-y-4" header={
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-400" />
@@ -673,6 +680,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             </h2>
             <span className="text-xs text-slate-400">Synthesized Brief</span>
           </div>
+        }>
           <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 text-xs text-slate-300 leading-relaxed space-y-3">
             <p>
               <strong>Core Objective:</strong> Complete empirical study and analytical drafting for <em>{assignment.title}</em> under syllabus guidelines.
@@ -684,12 +692,12 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               <strong>Deadlines & Deliverables:</strong> Deliver completed draft formatted in standard scholarly typography with verified APA bibliography.
             </p>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* 5. STUDY GUIDE */}
       {activeTaskTab === 'study_guide' && (
-        <div className="clean-card rounded-2xl p-6 space-y-4">
+        <SectionCard id="detail-study-guide" className="rounded-2xl space-y-4" header={
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-blue-400" />
@@ -697,6 +705,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
             </h2>
             <span className="text-xs text-slate-400">Reference Material</span>
           </div>
+        }>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-2">
               <h4 className="font-semibold text-blue-400">Core Terminology</h4>
@@ -709,7 +718,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               <p className="text-slate-400 font-mono">Variance s^2 = Sum((x_i - mean)^2) / (N - 1)</p>
             </div>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* 6. FLASHCARDS */}
@@ -721,7 +730,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
 
       {/* 7. SUB-AGENT TEAM INTERACTIVE CHAT */}
       {activeTaskTab === 'subagent_team' && (
-        <div className="clean-card rounded-2xl p-6 space-y-5">
+        <SectionCard id="detail-team-chat" className="rounded-2xl space-y-5" header={
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
             <div>
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
@@ -762,6 +771,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               ))}
             </div>
           </div>
+        }>
 
           {/* Team Members Status Row */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -822,7 +832,7 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               <span>Send</span>
             </button>
           </form>
-        </div>
+        </SectionCard>
       )}
 
       {/* ─── AUTOMATED PRE-SUBMISSION VERIFICATION MODAL ─── */}

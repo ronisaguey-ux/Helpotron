@@ -16,6 +16,7 @@ import {
   Tag,
   Zap,
 } from 'lucide-react';
+import SectionCard from './SectionCard.jsx';
 
 export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   const [activeTab, setActiveTab] = useState('bulk_users');
@@ -259,7 +260,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   return (
     <div className="space-y-6 text-slate-100 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="clean-card p-6 rounded-3xl bg-slate-950/80 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <SectionCard id="adminadv-header" className="rounded-3xl bg-slate-950/80 border border-purple-500/30" header={
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
             <ShieldAlert className="w-5 h-5" />
@@ -271,10 +272,12 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
             </p>
           </div>
         </div>
+      } headerRight={
         <span className="text-[11px] font-mono font-bold bg-purple-500/15 border border-purple-500/30 text-purple-300 px-3 py-1 rounded-full shrink-0">
           ADMIN: {userId || 'RoniDev'}
         </span>
-      </div>
+      }>
+      </SectionCard>
 
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-800 bg-slate-950/60 rounded-2xl overflow-x-auto text-xs font-semibold p-1.5 gap-1">
@@ -511,29 +514,32 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
           ) : (
             <div className="space-y-3">
               {safeAdminMessages.map((msg) => (
-                <div
+                <SectionCard
                   key={msg.id}
-                  className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 space-y-3 text-xs"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold mr-2">
-                        {msg.category}
-                      </span>
-                      <strong className="text-white text-sm">{msg.subject}</strong>
-                      <span className="text-slate-400 text-xs ml-2 font-mono">from: {msg.user_id}</span>
-                    </div>
+                  id={`adminadv-message-${msg.id}`}
+                  className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3 text-xs"
+                  header={
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold mr-2">
+                          {msg.category}
+                        </span>
+                        <strong className="text-white text-sm">{msg.subject}</strong>
+                        <span className="text-slate-400 text-xs ml-2 font-mono">from: {msg.user_id}</span>
+                      </div>
 
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                        msg.status === 'replied'
-                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                      }`}
-                    >
-                      {msg.status === 'replied' ? '✅ Replied' : '⏳ Pending Reply'}
-                    </span>
-                  </div>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                          msg.status === 'replied'
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                        }`}
+                      >
+                        {msg.status === 'replied' ? '✅ Replied' : '⏳ Pending Reply'}
+                      </span>
+                    </div>
+                  }
+                >
 
                   <div className="p-3.5 rounded-xl bg-slate-900 text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">
                     {msg.message}
@@ -567,7 +573,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                   {replyStatusMap[msg.id] && (
                     <div className="text-[11px] font-mono text-purple-300">{replyStatusMap[msg.id]}</div>
                   )}
-                </div>
+                </SectionCard>
               ))}
             </div>
           )}
@@ -577,11 +583,12 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
       {/* TAB 3: TOKENS & ACCESS KEYS */}
       {activeTab === 'tokens' && (
         <div className="space-y-4">
-          <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+          <SectionCard id="adminadv-token-generate" className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3" header={
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-purple-400" />
               Generate Platform Access Tokens / Coupons
             </h3>
+          }>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div>
                 <label className="text-slate-400 block mb-1">Duration (Days)</label>
@@ -616,7 +623,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                 {tokenMsg}
               </div>
             )}
-          </div>
+          </SectionCard>
 
           {/* Tokens List */}
           <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 overflow-x-auto">
@@ -691,8 +698,9 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
 
       {/* TAB 5: MODERATION */}
       {activeTab === 'moderation' && (
-        <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+        <SectionCard id="adminadv-moderation" className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3" header={
           <h3 className="text-sm font-bold text-white">Content Moderation Queue ({safeModQueue.length})</h3>
+        }>
           {safeModQueue.length === 0 ? (
             <p className="text-xs text-slate-500 py-6 text-center">No flagged content pending review.</p>
           ) : (
@@ -708,7 +716,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {/* TAB: COST & USAGE MONITORING */}
@@ -747,7 +755,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
           )}
 
           {/* Per-User Token Cost Multiplier Adjustment */}
-          <div className="clean-card rounded-3xl p-6 bg-slate-950/60 border border-white/10 space-y-4">
+          <SectionCard id="adminadv-multiplier" padding="p-6" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-4" header={
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -760,6 +768,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
               </div>
               <span className="text-[11px] text-slate-400 font-mono">{usersCosts.length} Users</span>
             </div>
+          }>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -819,16 +828,17 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Model & Tool Breakdown + Usage Trends */}
           {costsSummary && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Tool / Model Cost Breakdown */}
-              <div className="clean-card rounded-3xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+              <SectionCard id="adminadv-tool-breakdown" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-3" header={
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                   Cost Breakdown by Tool / Model
                 </h4>
+              }>
                 <div className="space-y-2 text-xs font-mono">
                   {costsSummary.tool_breakdown?.map((tool, i) => (
                     <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
@@ -843,13 +853,14 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                     </div>
                   ))}
                 </div>
-              </div>
+              </SectionCard>
 
               {/* 7-Day Usage & Cost Trends */}
-              <div className="clean-card rounded-3xl p-5 bg-slate-950/60 border border-white/10 space-y-3">
+              <SectionCard id="adminadv-usage-trends" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-3" header={
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                   Usage Trends (Last 7 Days)
                 </h4>
+              }>
                 <div className="space-y-2 text-xs font-mono">
                   {costsSummary.trends?.map((day, i) => (
                     <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
@@ -861,7 +872,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                     </div>
                   ))}
                 </div>
-              </div>
+              </SectionCard>
             </div>
           )}
         </div>

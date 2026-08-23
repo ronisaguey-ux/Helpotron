@@ -16,6 +16,7 @@ import {
   Bot,
 } from 'lucide-react';
 import api from '../api';
+import SectionCard from './SectionCard.jsx';
 
 export default function DataLakeView({ userId = 'RoniDev' }) {
   const [textContent, setTextContent] = useState('');
@@ -120,7 +121,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
   return (
     <div className="space-y-6 text-slate-100 max-w-4xl mx-auto animate-fadeIn">
       {/* Header Banner */}
-      <div className="clean-card rounded-3xl p-6 bg-slate-950/80 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+      <SectionCard id="datalake-banner" padding="p-6" className="bg-slate-950/80 border border-emerald-500/30" header={
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-2xl font-bold shrink-0">
             <Database className="w-6 h-6" />
@@ -135,6 +136,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             </p>
           </div>
         </div>
+      }>
 
         {/* Balance Card */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/20 flex items-center justify-between gap-4 shrink-0">
@@ -154,7 +156,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             Convert 20 cr (+200 Credits)
           </button>
         </div>
-      </div>
+      </SectionCard>
 
       {redeemMsg && (
         <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-mono">
@@ -171,7 +173,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
       </div>
 
       {/* Simplified Submission Card: Text + File Upload */}
-      <div className="clean-card rounded-3xl p-6 sm:p-8 bg-slate-950/60 border border-white/10 space-y-5">
+      <SectionCard id="datalake-submit" padding="p-6 sm:p-8" className="bg-slate-950/60 border border-white/10 space-y-5" header={
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Coins className="w-4 h-4 text-emerald-400" />
@@ -181,6 +183,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             Just paste text or drop any file (rubric, syllabus, teacher quirks, notes, exam questions). The subagent does the rest.
           </p>
         </div>
+      }>
 
         <form onSubmit={handleSubmitDataLake} className="space-y-4">
           {/* Text Area */}
@@ -294,11 +297,11 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             </div>
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* History Table */}
-      <div className="clean-card rounded-3xl p-6 bg-slate-950/60 border border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+      <SectionCard id="datalake-history" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" header={
+        <div className="flex items-center justify-between w-full">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
             Your Contributed Entries
@@ -307,6 +310,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             {dataLakeHistory.length} Submissions
           </span>
         </div>
+      }>
 
         {dataLakeHistory.length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-500">
@@ -366,7 +370,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             </table>
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api.js';
+import SectionCard from './SectionCard.jsx';
 import {
   History as HistoryIcon,
   Search,
@@ -122,34 +123,37 @@ export default function AssignmentHistoryView({ userId }) {
 
       {/* ─── Metric Summary Cards ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="clean-card p-4 rounded-2xl bg-slate-900/60 border border-white/10">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <SectionCard id="history-total-completed" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+          <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Total Completed Submissions</span>
             <BookOpen className="w-4 h-4 text-blue-400" />
           </div>
+        }>
           <div className="text-2xl font-bold text-white font-mono">{historyList.length}</div>
           <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" /> 100% Delivery Success Rate
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card p-4 rounded-2xl bg-slate-900/60 border border-white/10">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <SectionCard id="history-average-grade" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+          <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Average Grade Performance</span>
             <Award className="w-4 h-4 text-amber-400" />
           </div>
+        }>
           <div className="text-2xl font-bold text-amber-300 font-mono">A <span className="text-sm font-normal text-slate-400">(92.4%)</span></div>
           <div className="text-[11px] text-slate-400 mt-1">Calibrated to Target Score rules</div>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card p-4 rounded-2xl bg-slate-900/60 border border-white/10">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+        <SectionCard id="history-zero-ai-risk" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+          <div className="flex items-center justify-between text-xs text-slate-400">
             <span>Zero-AI Evasion Compliance</span>
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
+        }>
           <div className="text-2xl font-bold text-emerald-300 font-mono">0% AI Risk</div>
           <div className="text-[11px] text-emerald-400/80 mt-1">Originality pipeline validated</div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* ─── Search & Subject Filter Bar ───────────────────────────────── */}
@@ -190,15 +194,14 @@ export default function AssignmentHistoryView({ userId }) {
           Loading assignment history ledger…
         </div>
       ) : filteredHistory.length === 0 ? (
-        <div className="clean-card rounded-3xl p-12 text-center border-dashed border-white/10 space-y-3">
+        <SectionCard id="history-empty" padding="p-12" className="rounded-3xl text-center border-dashed border-white/10 space-y-3" title="No historical assignments found">
           <Archive className="w-10 h-10 text-slate-500 mx-auto" />
           <div>
-            <h3 className="text-sm font-semibold text-slate-200">No historical assignments found</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
               Completed assignments and synthesized coursework will automatically record into this permanent archive.
             </p>
           </div>
-        </div>
+        </SectionCard>
       ) : (
         <div className="clean-card rounded-2xl overflow-hidden border border-white/10">
           <div className="overflow-x-auto">

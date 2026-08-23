@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import CreditsPricingDashboard from './CreditsPricingDashboard.jsx';
+import SectionCard from './SectionCard.jsx';
 
 export default function BillingView({ userId }) {
   const [balance, setBalance] = useState(10029);
@@ -40,10 +41,7 @@ export default function BillingView({ userId }) {
       <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
-      <div className="clean-card p-6">
-        <h3 className="font-semibold mb-4 text-sm text-white flex items-center gap-2">
-          Receipts & Credit Activity
-        </h3>
+      <SectionCard id="billing-transactions" title="Receipts & Credit Activity">
         {transactions.length === 0 ? (
           <p className="text-xs text-slate-500 py-4">No credit transactions yet.</p>
         ) : (
@@ -66,7 +64,7 @@ export default function BillingView({ userId }) {
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

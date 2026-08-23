@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
+import SectionCard from './SectionCard';
 import api from '../api';
 import {
   Layers,
@@ -452,15 +453,12 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
 
               {/* Assignments Inside Active Bubble */}
               {currentBubbleCards.length === 0 ? (
-                <div className="clean-card rounded-2xl p-12 text-center border-dashed border-white/10">
+                <SectionCard id="assignment-empty-bubble" padding="p-12" className="rounded-2xl text-center border-dashed border-white/10" title={`No assignments currently inside "${activeBubble.title}"`}>
                   <span className="text-4xl">🫧</span>
-                  <h3 className="text-base font-semibold text-slate-200 mt-2">
-                    No assignments currently inside &quot;{activeBubble.title}&quot;
-                  </h3>
                   <p className="text-xs text-slate-400 mt-1">
                     Scraped assignments matching this bubble&apos;s description will be automatically organized here.
                   </p>
-                </div>
+                </SectionCard>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {currentBubbleCards.map((card) => {

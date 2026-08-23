@@ -20,6 +20,7 @@ import {
   Search,
 } from 'lucide-react';
 import api from '../api';
+import SectionCard from './SectionCard.jsx';
 
 export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignment }) {
   const [items, setItems] = useState([]);
@@ -150,7 +151,7 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
   return (
     <div className="space-y-6 text-slate-100 max-w-6xl mx-auto animate-fadeIn">
       {/* Header Banner */}
-      <div className="clean-card rounded-3xl p-6 bg-slate-950/80 border border-blue-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <SectionCard id="dump-header" className="rounded-3xl bg-slate-950/80 border border-blue-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6" header={
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-2xl font-bold shrink-0">
             <UploadCloud className="w-6 h-6" />
@@ -165,6 +166,7 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
             </p>
           </div>
         </div>
+      }>
 
         {/* Live Audio Record Button */}
         <div className="flex items-center gap-3 shrink-0">
@@ -188,7 +190,7 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
             </button>
           )}
         </div>
-      </div>
+      </SectionCard>
 
       {/* Universal Upload Dropzone */}
       <div className="clean-card rounded-3xl p-6 sm:p-8 bg-slate-950/60 border border-white/10 space-y-4">
@@ -262,11 +264,10 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
               const confPct = Math.round((item.auto_match_confidence || 0) * 100);
 
               return (
-                <div
-                  key={item.id}
-                  className="clean-card rounded-2xl p-5 bg-slate-950/70 border border-white/10 flex flex-col justify-between gap-4 hover:border-blue-500/30 transition"
-                >
-                  <div className="space-y-3">
+                <SectionCard
+                  id={`dump-item-${item.id}`}
+                  className="rounded-2xl bg-slate-950/70 border border-white/10 flex flex-col justify-between gap-4 hover:border-blue-500/30 transition"
+                  header={
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-xl bg-slate-900 border border-white/10 text-blue-400 shrink-0">
@@ -296,7 +297,9 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
                         {isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
                       </span>
                     </div>
-
+                  }
+                >
+                  <div className="space-y-3">
                     {/* Extracted Preview / Markdown Snippet */}
                     <div className="p-3 bg-slate-900/80 rounded-xl border border-white/5 text-[11px] text-slate-300 font-mono max-h-24 overflow-y-auto leading-relaxed">
                       {item.extracted_text || 'No textual content extracted.'}
@@ -345,7 +348,7 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
                       </button>
                     </div>
                   </div>
-                </div>
+                </SectionCard>
               );
             })}
           </div>

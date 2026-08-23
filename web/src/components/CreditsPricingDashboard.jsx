@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import api from '../api';
+import SectionCard from './SectionCard.jsx';
 
 export default function CreditsPricingDashboard({
   currentCredits = 10029,
@@ -342,20 +343,21 @@ export default function CreditsPricingDashboard({
       )}
 
       {/* All-Features-Unlocked Disclaimer Banner */}
-      <div className="clean-card rounded-2xl p-4 bg-gradient-to-r from-blue-950/40 via-purple-950/40 to-slate-950/40 border border-blue-500/30 flex items-center gap-3.5">
-        <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-          <Sparkles className="w-5 h-5" />
-        </div>
-        <div>
+      <SectionCard id="credits-unlocked-banner" padding="p-4" className="rounded-2xl bg-gradient-to-r from-blue-950/40 via-purple-950/40 to-slate-950/40 border border-blue-500/30" header={
+        <div className="flex items-center gap-3.5">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
           <div className="text-xs font-bold text-white flex items-center gap-1.5">
             <span>All Platform Features & Tools Are 100% Unlocked on Every Plan</span>
             <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-mono font-semibold">NO FEATURE GATING</span>
           </div>
-          <p className="text-xs text-slate-300 mt-0.5">
-            Every plan includes full access to Universal Assignment Dump, AI Audio Transcription, AI Cognitive Vision & Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines your monthly compute capacity.
-          </p>
         </div>
-      </div>
+      }>
+        <p className="text-xs text-slate-300 mt-0.5">
+          Every plan includes full access to Universal Assignment Dump, AI Audio Transcription, AI Cognitive Vision & Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines your monthly compute capacity.
+        </p>
+      </SectionCard>
 
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -367,11 +369,19 @@ export default function CreditsPricingDashboard({
           const finalAmount = Math.max(base - credApplied, base * 0.5);
 
           return (
-            <div
+            <SectionCard
               key={tier.name}
-              className={`clean-card rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 relative ${
+              id={`credits-tier-${tier.name.toLowerCase()}`}
+              padding="p-6"
+              className={`rounded-3xl flex flex-col justify-between transition-all duration-300 relative ${
                 tier.popular ? 'border-blue-500/50 shadow-xl shadow-blue-500/10' : 'border-white/10'
               }`}
+              header={
+                <div>
+                  <h3 className="text-lg font-bold text-white">{tier.name}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{tier.capacity}</p>
+                </div>
+              }
             >
               {tier.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-lg">
@@ -380,10 +390,6 @@ export default function CreditsPricingDashboard({
               )}
 
               <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{tier.name}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{tier.capacity}</p>
-                </div>
 
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-1">
                   <div className="flex items-baseline gap-1.5">
@@ -442,7 +448,7 @@ export default function CreditsPricingDashboard({
                   <span>Mandatory 2FA Purchase Protection Active</span>
                 </div>
               </div>
-            </div>
+            </SectionCard>
           );
         })}
       </div>

@@ -15,6 +15,7 @@ import {
 import api from '../api.js';
 import { loadSettings, saveSettings, AGENT_PERSONALITIES, EFFORT_SCORES } from '../demoData.js';
 import { Badge, timeAgo } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const FILE_KINDS = [
   { key: 'skill', label: 'Skill', icon: '🧩', hint: 'Teach the agent new abilities (.md/.txt)' },
@@ -280,7 +281,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
   return (
     <div className="space-y-5">
       {/* ── Identity header ──────────────────────────────────────────────── */}
-      <div className="clean-card p-5">
+      <SectionCard id="myagent-identity" header={
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="flex items-center gap-4">
             <AvatarUpload
@@ -332,6 +333,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             </label>
           </div>
         </div>
+      }>
 
         {/* Effort scale */}
         <div className="mt-5 pt-4 border-t border-white/8">
@@ -370,28 +372,29 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             The only routing control you need: low effort = cheap engines do mechanical work, high effort = flagship engines handle deep reasoning. The agent picks the right engine per task.
           </p>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ── Pending permission strip ─────────────────────────────────────── */}
       {pending && (
-        <div className="clean-card p-4 border-amber-500/30 bg-amber-500/8 flex flex-col sm:flex-row sm:items-center gap-3">
+        <SectionCard id="myagent-pending-permission" padding="p-4" className="border-amber-500/30 bg-amber-500/8" header={
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
               ⚠️ Action pending approval — {pending.action_type}
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5 truncate">Assignment #{pending.assignment_id} · {pending.description || 'the agent wants to act on your behalf'}</p>
           </div>
+        }>
           <div className="flex gap-2">
             <button type="button" onClick={() => handlePermissionAction(pending.id, 'approve')} className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer">Approve</button>
             <button type="button" onClick={() => handlePermissionAction(pending.id, 'reject')} className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer">Reject</button>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* ── Chat + side panels ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
         {/* Chat */}
-        <div className="clean-card p-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-13rem),720px)]">
+        <SectionCard id="myagent-chat" padding="p-0" className="overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-13rem),720px)]" header={
           <div className="px-5 py-3.5 border-b border-white/8 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-blue-400" />
@@ -407,6 +410,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               {compactMsg || 'Compact history'}
             </button>
           </div>
+        }>
 
           {/* Quick actions */}
           <div className="px-5 py-3 border-b border-white/5 flex flex-wrap gap-1.5 bg-slate-950/20">
@@ -487,17 +491,18 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               </button>
             </form>
           </div>
-        </div>
+        </SectionCard>
 
         {/* Right rail */}
         <div className="space-y-5">
           {/* Identity controls */}
-          <div className="clean-card p-5 space-y-4">
+          <SectionCard id="myagent-identity-controls" header={
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <UserIcon className="w-3 h-3" /> Identity
               </span>
             </div>
+          }>
             <div className="flex items-center gap-3">
               <AvatarUpload
                 url={settings.profile?.avatarUrl}
@@ -539,16 +544,17 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 className="clean-input w-full px-3 py-2 text-[11px] outline-none resize-none"
               />
             </div>
-          </div>
+          </SectionCard>
 
           {/* Permanent memory */}
-          <div className="clean-card p-5">
-            <div className="flex items-center justify-between mb-3">
+          <SectionCard id="myagent-memory" header={
+            <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <Database className="w-3 h-3" /> Permanent memory
               </span>
               <Badge color={memory.length ? 'blue' : 'slate'}>{memory.length} entries</Badge>
             </div>
+          }>
             <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
               The agent always reads this. Add facts about yourself, preferences, deadlines — and it stays forever until you delete it.
             </p>
@@ -589,16 +595,17 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Files */}
-          <div className="clean-card p-5">
-            <div className="flex items-center justify-between mb-3">
+          <SectionCard id="myagent-files" header={
+            <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <FileText className="w-3 h-3" /> Files
               </span>
               <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
             </div>
+          }>
             <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
               Upload skills, rules, automations or personality files — the agent loads them and follows them.
             </p>
@@ -648,7 +655,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 );
               })}
             </div>
-          </div>
+          </SectionCard>
 
         </div>
       </div>
