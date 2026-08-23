@@ -204,7 +204,13 @@ class SessionStore:
             session = db.query(UserSession).filter(UserSession.token == token).first()
             if not session:
                 return None
-            if session.expires_at < datetime.now(timezone.utc):
+            # Some rows store naive UTC, some aware (legacy writes) — normalize
+            # both sides to naive UTC so the comparison never type-errors.
+            expires = session.expires_at
+            if expires is not None and expires.tzinfo is not None:
+                expires = expires.astimezone(timezone.utc).replace(tzinfo=None)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if expires is None or expires < now:
                 db.delete(session)
                 db.commit()
                 return None
