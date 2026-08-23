@@ -247,6 +247,35 @@ async def unban_user(public_id: str, request: Request, db: Session = Depends(get
     return {"message": "User unbanned"}
 
 
+@router.get('/search')
+async def admin_universal_search(q: str, request: Request, db: Session = Depends(get_db)):
+    """Universal admin search across users, assignments, study materials, and
+    credit activity. No email column exists on User — identity fields are
+    public_id / telegram_id. Admin-only (same guard as every other route)."""
+    require_admin(request)
+    term = f"%{q.strip()}%"
+    users = db.query(User).filter(
+        User.public_id.ilike(term) | User.telegram_id.ilike(term)
+    ).limit(10).all()
+    assignments = db.query(Assignment).filter(Assignment.title.ilike(term)).limit(10).all()
+    materials = db.query(StudyMaterial).filter(
+        StudyMaterial.kind.ilike(term) | StudyMaterial.content.ilike(term)
+    ).limit(10).all()
+    txns = db.query(CreditTransaction).filter(CreditTransaction.reason.ilike(term)).limit(10).all()
+    return {
+        'query': q,
+        'users': [{'id': u.id, 'public_id': u.public_id, 'telegram_id': u.telegram_id,
+                   'role': getattr(u, 'role', 'user'), 'plan': u.plan} for u in users],
+        'assignments': [{'id': a.id, 'title': a.title, 'status': a.status,
+                         'user_id': a.user_id} for a in assignments],
+        'materials': [{'id': m.id, 'kind': m.kind, 'assignment_id': m.assignment_id,
+                       'created_at': m.created_at.isoformat() if m.created_at else None} for m in materials],
+        'credit_transactions': [{'id': t.id, 'user_id': t.user_id, 'delta': t.delta,
+                                 'reason': t.reason} for t in txns],
+        'system_status': 'HEALTHY',
+    }
+
+
 @router.get("/analytics")
 async def get_analytics(request: Request, db: Session = Depends(get_db)):
     require_admin(request)

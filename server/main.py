@@ -31,7 +31,7 @@ from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db
 from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
 from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
 from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
-from .admin import require_admin
+from .admin import require_admin, ResetPasswordRequest
 from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 
 # Import route modules
@@ -541,6 +541,52 @@ def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
         "system_status": "operational",
         "simulation_mode": True,
     }
+
+
+# ─── admin user actions (frontend-facing) ─────────────────────────────────
+# The admin dashboard (AdminConsole.jsx) calls these exact /api/admin/user/...
+# paths. Implementations live in server/admin.py; these thin wrappers expose
+# them at the paths the frontend uses, with the same admin guard.
+
+@app.get("/api/admin/search")
+async def admin_search(q: str, request: Request, db: Session = Depends(get_db)):
+    """Universal admin search across users, assignments, materials, credit txns."""
+    from .admin import admin_universal_search
+    return await admin_universal_search(q=q, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/credits")
+async def admin_user_credits(public_id: str, amount: float, reason: str = "admin adjustment",
+                             request: Request = None, db: Session = Depends(get_db)):
+    from .admin import adjust_user_credits
+    return await adjust_user_credits(public_id=public_id, amount=amount, reason=reason,
+                                     request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/plan")
+async def admin_user_plan(public_id: str, plan: str, request: Request,
+                          db: Session = Depends(get_db)):
+    from .admin import set_user_plan
+    return await set_user_plan(public_id=public_id, plan=plan, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/reset-password")
+async def admin_user_reset_password(public_id: str, req: ResetPasswordRequest, request: Request,
+                                    db: Session = Depends(get_db)):
+    from .admin import reset_user_password
+    return await reset_user_password(public_id=public_id, req=req, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/ban")
+async def admin_user_ban(public_id: str, request: Request, db: Session = Depends(get_db)):
+    from .admin import ban_user
+    return await ban_user(public_id=public_id, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/unban")
+async def admin_user_unban(public_id: str, request: Request, db: Session = Depends(get_db)):
+    from .admin import unban_user
+    return await unban_user(public_id=public_id, request=request, db=db)
 
 
 # ─── health ────────────────────────────────────────────────────────────────

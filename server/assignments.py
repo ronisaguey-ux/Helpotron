@@ -120,6 +120,24 @@ async def get_assignment(
     return _assignment_out(_get_owned_assignment(assignment_id, current_user.id, db))
 
 
+@router.get("/assignments/{assignment_id}/subagent-team")
+@router.get("/api/assignments/{assignment_id}/subagent-team")
+async def get_subagent_team_status(
+    assignment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Live sub-agent team snapshot for one of the caller's OWN assignments.
+
+    Delegates to the real db-backed status in server.subagents (derived from
+    Assignment.status/progress — never hardcoded). IDOR-safe: foreign
+    assignments 404 like every other assignment route.
+    """
+    _get_owned_assignment(assignment_id, current_user.id, db)  # 404 for foreign
+    from .subagents import get_assignment_subagent_team_status
+    return get_assignment_subagent_team_status(assignment_id, db)
+
+
 @router.patch("/api/assignments/{assignment_id}")
 @router.patch("/assignments/{assignment_id}")
 async def update_assignment(
