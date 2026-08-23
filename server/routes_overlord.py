@@ -1,6 +1,8 @@
 """FastAPI routes for Overlord Main Agent, Assignment Cards, 3 Operation Modes, and Permission System."""
 from __future__ import annotations
 
+import json
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -416,43 +418,196 @@ async def get_chat(assignment_id: int, request: Request, db: Session = Depends(g
     return {"status": "success", "chat": overlord_agent.get_chat_history(assignment_id)}
 
 
+# ─── 4.5. LLM-first agent intent (one agent, does anything) ──────────────────
+
+_AGENT_ACTIONS = {
+    "create_assignment": {"title": "str", "prompt": "str", "due_date": "str", "course": "str"},
+    "edit_assignment": {"assignment_id": "int", "updates": "dict with optional keys title, due_date (ISO string), prompt, status (one of: tracked, not_started, in_progress, completed, submitted, graded, paused), progress — progress MUST be a JSON object of {section: state} e.g. {\"section 2\": \"done\"}, NEVER a string or list"},
+    "change_settings": {"settings": "dict — valid keys: effort_score (int 1-1000), agent_name (str), personality (str), instructions (str), operation_mode (manual|auto|yolo), auto_approved_actions (list of action names), school_name, major, goal"},
+    "generate_flashcards": {"title": "str", "cards": "list of {front,back}"},
+    "humanize_text": {"text": "str to humanize"},
+    "analyze_rubric": {"prompt": "str", "rubric": "str"},
+    "draft_section": {"section_name": "str"},
+    "submit_assignment": {"assignment_id": "int"},
+    "message_assignment_team": {"assignment_id": "int", "instruction": "str"},
+    "run_sandbox_script": {"script": "str", "language": "python"},
+    "remember": {"text": "str fact/preference to store permanently"},
+    "forget_memory": {"entry_id": "str or text snippet to forget"},
+}
+
+
+def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
+    """Tolerant JSON parse: strips markdown fences, finds the first balanced object."""
+    t = (text or "").strip()
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t).strip()
+    for start in [i for i, ch in enumerate(t) if ch == "{"]:
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(t)):
+            ch = t[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(t[start : i + 1])
+                    except (json.JSONDecodeError, ValueError):
+                        break
+    return None
+
+
+def _regex_fallback_intent(text: str) -> Dict[str, Any]:
+    """Old keyword dispatch — only used when the LLM JSON contract fails."""
+    lower = text.lower()
+    if any(k in lower for k in ("remember", "memorize", "remember that", "note that", "keep in mind")):
+        return {"action": "remember", "payload": {"text": text}, "reply": "Noted — stored in my permanent memory."}
+    if "forget" in lower and any(k in lower for k in ("memory", "remember")):
+        return {"action": "forget_memory", "payload": {"text": text}, "reply": "Working on forgetting that."}
+    if "humanize" in lower or "ai check" in lower:
+        return {"action": "humanize_text", "payload": {"text": text}, "reply": "Humanizing your text…"}
+    if "rubric" in lower:
+        return {"action": "analyze_rubric", "payload": {"prompt": text}, "reply": "Analyzing the rubric…"}
+    if "submit" in lower:
+        return {"action": "submit_assignment", "payload": {"assignment_id": None}, "reply": "Submitting…"}
+    if "flashcard" in lower:
+        return {"action": "generate_flashcards", "payload": {"title": "Flashcards", "cards": []}, "reply": "Generating flashcards…"}
+    if "due date" in lower or "change the due" in lower or "edit" in lower and "assignment" in lower:
+        return {"action": "edit_assignment", "payload": {"updates": {}}, "reply": "Editing the assignment…"}
+    return {"action": "draft_section", "payload": {"section_name": "Synthesis"}, "reply": "On it."}
+
+
+async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool) -> Dict[str, Any]:
+    """LLM decides which action the agent should take — strict JSON contract.
+
+    The model sees the user's identity + personality + instructions, their
+    permanent memory, the files loaded into the agent, and the exact tool
+    catalogue. It must reply with {"action", "payload", "reply"}. Any failure
+    falls back to the keyword dispatcher so chat never breaks.
+    """
+    from .llm import call_llm
+
+    ai = settings.get("ai", {}) or {}
+    agent_name = ai.get("aiName") or "Atlas"
+    personality = ai.get("personality") or "Professional"
+    instructions = (ai.get("instructions") or "").strip()
+
+    from .agent_files import agent_files_summary
+    from .agent_memory import memory_summary
+
+    memory_block = memory_summary(user.public_id) or "(empty — nothing remembered yet)"
+    files_block = agent_files_summary(user.id) or "(none loaded)"
+
+    actions = dict(_AGENT_ACTIONS)
+    if is_admin:
+        actions.update({
+            "admin_lookup_user": {"query": "public_id or name substring"},
+            "admin_adjust_credits": {"public_id": "str", "delta": "float"},
+            "admin_system_status": {},
+        })
+
+    action_spec = "\n".join(f"- {name}: {json.dumps(spec)}" for name, spec in sorted(actions.items()))
+
+    system_prompt = (
+        f"You are '{agent_name}', the user's single personal agent. You do EVERYTHING — "
+        f"you change their settings, edit assignments, generate materials, humanize text, "
+        f"run scripts, manage your own memory and files, and answer questions directly. "
+        f"Personality: {personality}. User instructions: {instructions or '(none)'}\n\n"
+        f"PERMANENT MEMORY (always true, respect it):\n{memory_block}\n\n"
+        f"FILES LOADED INTO YOU:\n{files_block}\n\n"
+        f"AVAILABLE ACTIONS (choose exactly one):\n{action_spec}\n\n"
+        f"Reply STRICTLY as a single JSON object, no markdown, no extra text: "
+        f'{{"action": "<action name>", "payload": {{...}}, "reply": "<one short user-facing sentence>"}}. '
+        f'If the user is just talking or asking a question, use "action": "plain_answer" and put your full answer in "reply".'
+    )
+    user_prompt = f"User said: {text[:4000]}"
+
+    effort = settings.get("effort_score")
+    try:
+        effort = int(effort) if isinstance(effort, (int, float)) else 500
+    except (TypeError, ValueError):
+        effort = 500
+
+    raw = ""
+    try:
+        raw = await call_llm(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.2,
+            max_tokens=900,
+            response_format="json_object",
+            effort_score=effort,
+        )
+    except Exception:
+        raw = ""
+
+    parsed = _safe_json_extract(raw) if raw else None
+    if parsed and isinstance(parsed.get("action"), str) and parsed["action"] in actions:
+        return {
+            "action": parsed["action"],
+            "payload": parsed.get("payload") if isinstance(parsed.get("payload"), dict) else {},
+            "reply": str(parsed.get("reply") or f"Done — {parsed['action'].replace('_', ' ')}."),
+        }
+    if parsed and parsed.get("action") == "plain_answer":
+        return {"action": "plain_answer", "payload": {}, "reply": str(parsed.get("reply") or text)}
+    # LLM failed or chose an unknown action — fall back to keyword dispatch
+    return _regex_fallback_intent(text)
+
+
 @router.post("/agent/chat")
 async def send_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
-    """Sends user message to Overlord / Sub-Agent team and triggers appropriate response/task."""
+    """One agent, any request: the LLM picks the action, the pipeline executes it."""
     user = _get_current_user(request, db)
+    settings = dict(user.settings or {})
+    is_admin = bool(getattr(user, "is_admin", False)) or user.public_id in ("RoniDev", "admin")
+
     # Record user message
     user_msg = overlord_agent.add_chat_message(payload.assignment_id, sender="user", text=payload.text)
 
-    # Process prompt intent via Overlord
-    text_lower = payload.text.lower()
-    action_type = "draft_section"
-    if "humanize" in text_lower or "ai check" in text_lower:
-        action_type = "humanize_text"
-    elif "rubric" in text_lower:
-        action_type = "analyze_rubric"
-    elif "submit" in text_lower:
-        action_type = "submit_assignment"
+    # 1. LLM decides the intent (strict JSON contract, regex fallback)
+    intent = await _resolve_agent_intent(user, settings, payload.text, is_admin)
 
-    # Evaluate permissions based on active mode
+    # 2. Plain conversational answer — no action needed
+    if intent["action"] == "plain_answer":
+        agent_reply = overlord_agent.add_chat_message(
+            payload.assignment_id,
+            sender="overlord",
+            text=intent["reply"],
+        )
+        await overlord_agent.compact_chat_history(user=user, target_key=str(payload.assignment_id))
+        return {"status": "success", "message": agent_reply, "execution": None, "reply": intent["reply"]}
+
+    # 3. Permission gate (manual mode asks; auto approves routine; yolo never asks)
     is_approved, reason = permission_engine.evaluate_action_permission(
-        user_settings=user.settings or {},
-        action_type=action_type,
+        user_settings=settings,
+        action_type=intent["action"],
         session_mode_override=payload.session_mode_override,
     )
 
     if not is_approved:
         perm = overlord_agent.create_pending_permission(
             user_public_id=user.public_id,
-            action_type=action_type,
-            title=f"Permission Required: {action_type.replace('_', ' ').title()}",
-            description=f"Action '{action_type}' requires confirmation in {user.settings.get('operation_mode', 'auto').upper()} mode.",
-            payload={"text": payload.text},
+            action_type=intent["action"],
+            title=f"Permission Required: {intent['action'].replace('_', ' ').title()}",
+            description=f"Action '{intent['action']}' requires confirmation in {settings.get('operation_mode', 'auto').upper()} mode.",
+            payload={"text": payload.text, **intent["payload"]},
             assignment_id=payload.assignment_id,
         )
         agent_reply = overlord_agent.add_chat_message(
             payload.assignment_id,
             sender="overlord",
-            text=f"⚠️ Action '{action_type}' requires your permission before execution.",
+            text=f"⚠️ Action '{intent['action'].replace('_', ' ')}' requires your permission before execution.",
             suggested_actions=["Approve", "Write Something Else", "Always Approve This Action"],
         )
         return {
@@ -461,22 +616,35 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             "message": agent_reply,
         }
 
-    # Execute directly if approved
+    # 4. Execute the chosen action
     exec_res = await overlord_agent.execute_task_action(
         db,
         user=user,
-        action_type=action_type,
-        payload={"text": payload.text},
+        action_type=intent["action"],
+        payload=intent["payload"],
         assignment_id=payload.assignment_id,
     )
-    reply_text = f"✅ Completed '{action_type}': {exec_res.get('message') or exec_res.get('result_text', 'Task completed.')}"
+    if exec_res.get("status") == "failed":
+        reply_text = f"⚠️ {exec_res.get('message', 'Could not do that.')}"
+    else:
+        result_msg = exec_res.get("message") or exec_res.get("result_text") or "Task completed."
+        if intent["action"] == "humanize_text" and exec_res.get("result_text"):
+            reply_text = exec_res["result_text"]
+        else:
+            reply_text = f"✅ {result_msg}"
     agent_reply = overlord_agent.add_chat_message(
         payload.assignment_id,
         sender="overlord",
         text=reply_text,
-        subagent_logs=[f"Sub-Agent [Synthesis] -> Success (Latency: 280ms)", f"Humanizer Confidence: 94.2%"],
+        suggested_actions=[],
+        subagent_logs=[],
+        metadata={"intent_action": intent["action"]},
     )
-    return {"status": "success", "message": agent_reply, "execution": exec_res}
+
+    # 5. Auto-compaction: keep the thread lean (>40 msgs or >12k chars → summarize)
+    await overlord_agent.compact_chat_history(user=user, target_key=str(payload.assignment_id))
+
+    return {"status": "success", "message": agent_reply, "execution": exec_res, "reply": reply_text}
 
 
 @router.post("/agent/task")
