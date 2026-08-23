@@ -14,6 +14,7 @@ import {
 } from '../demoData.js';
 import { Badge, StatusBadge, SectionHeader, Progress, Slider, Toggle, Tabs, EmptyState, Timeline, timeAgo } from './ui/os.jsx';
 import AdminConsole from './AdminConsole.jsx';
+import AdminAgentChat from './AdminAgentChat.jsx';
 
 const inputCls = 'clean-input w-full px-3 py-2 text-xs outline-none';
 
@@ -554,6 +555,7 @@ function AnalystPanel() {
 /* ── SHELL ────────────────────────────────────────────────────────────────── */
 const PANELS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'agent', label: 'Admin Agent' },
   { key: 'flags', label: 'Flags' },
   { key: 'experiments', label: 'Experiments' },
   { key: 'airoom', label: 'AI Room' },
@@ -573,6 +575,7 @@ export default function AdminPanels({ initialTab }) {
     <div className="space-y-5">
       <Tabs tabs={PANELS} active={tab} onChange={setTabSafe} wrap />
       {tab === 'overview' && <AdminConsole onOpenPanel={setTabSafe} />}
+      {tab === 'agent' && <AdminAgentChat />}
       {tab === 'flags' && <FlagsPanel />}
       {tab === 'experiments' && <ExperimentsPanel />}
       {tab === 'airoom' && <AIRoomPanel />}
