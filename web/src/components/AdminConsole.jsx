@@ -10,6 +10,7 @@ import {
   Eye, EyeOff, X, UserPlus, Mail, ShieldAlert, CreditCard, Star, Flag,
   LogOut, KeyRound, Download, Ban, RotateCcw, SlidersHorizontal, Ghost, Trash2, Zap, Megaphone,
 } from 'lucide-react';
+import api from '../api.js';
 import {
   SYSTEM_STATUS, ADMIN_TODAY, ADMIN_ATTENTION, ADMIN_USERS, ADMIN_EVENTS,
   MAINTENANCE, demoEnabled,
