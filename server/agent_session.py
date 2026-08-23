@@ -233,6 +233,23 @@ async def _send(session: AgentSession, payload: dict) -> None:
     await session.websocket.send_json(payload)
 
 
+from .user_settings_service import set_scoped_setting, resolve_scoped_setting
+
+class AgentActionExecutionEngine:
+    """Shared action layer: ensures conversational My Agent and the visual UI
+    execute identical underlying state mutations."""
+
+    @staticmethod
+    async def execute_setting_change(user_id: int, setting_key: str, value, scope_type: str, scope_id: str, db) -> Dict[str, Any]:
+        record = set_scoped_setting(user_id, setting_key, value, scope_type, scope_id, db)
+        return {
+            'action': 'setting_change',
+            'status': 'SUCCESS',
+            'setting_key': setting_key,
+            'new_value': value,
+            'scope': f'{scope_type}:{scope_id}',
+            'reversible': True,
+        }
 manager = AgentManager()
 
 

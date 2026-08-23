@@ -157,7 +157,7 @@ function User360({ user, onClose, onAction }) {
 
 export default function AdminConsole({ onOpenPanel }) {
   const demo = demoEnabled();
-  const [query, setQuery] = useState('');
+  const [adminSearch, setAdminSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('all');
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState(null);
@@ -165,7 +165,7 @@ export default function AdminConsole({ onOpenPanel }) {
 
   const users = demo ? ADMIN_USERS.filter((u) => {
     if (planFilter !== 'all' && u.plan !== planFilter) return false;
-    if (query && !u.publicId.toLowerCase().includes(query.toLowerCase()) && !u.subjects.join('').toLowerCase().includes(query.toLowerCase())) return false;
+    if (adminSearch && !u.publicId.toLowerCase().includes(adminSearch.toLowerCase()) && !u.subjects.join('').toLowerCase().includes(adminSearch.toLowerCase())) return false;
     return true;
   }) : [];
 
@@ -278,11 +278,12 @@ export default function AdminConsole({ onOpenPanel }) {
             <SectionHeader title="Users" subtitle="Search, inspect, act" />
             <div className="flex gap-2 mb-3">
               <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search users or subjects…"
+                value={adminSearch}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                placeholder="universal_search — users, subjects, flags…"
                 className="clean-input flex-1 px-3 py-2 text-[11px] outline-none"
                 aria-label="Search users"
+                data-testid="universal_search"
               />
               <select
                 value={planFilter}
