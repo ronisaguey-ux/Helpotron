@@ -1196,6 +1196,10 @@ from fastapi.responses import FileResponse
 
 _WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
+# User uploads (avatars, agent files) served statically — mounted before the
+# SPA catch-all below so /uploads/* resolves to files, not index.html. (08-22)
+app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
+
 if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
     if (_WEB_DIST / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(_WEB_DIST / "assets")), name="static_assets")

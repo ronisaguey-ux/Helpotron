@@ -208,6 +208,53 @@ export const api = {
   addAgentPermissionRule: (rule) => request('/api/agent/permissions/rules', { method: 'POST', body: JSON.stringify({ rule }) }),
   deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
   agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+
+  // ── My Agent: permanent memory, files, compaction (Experience Rewrite, 08-22)
+  getAgentMemory: () => request('/api/agent/memory', { method: 'GET' }),
+  appendAgentMemory: (text) => request('/api/agent/memory', { method: 'POST', body: JSON.stringify({ text }) }),
+  replaceAgentMemory: (entries) => request('/api/agent/memory', { method: 'PUT', body: JSON.stringify({ entries }) }),
+  deleteAgentMemory: (entryId) => request(`/api/agent/memory/${entryId}`, { method: 'DELETE' }),
+  listAgentFiles: () => request('/api/agent/files', { method: 'GET' }),
+  deleteAgentFile: (fileId) => request(`/api/agent/files/${fileId}`, { method: 'DELETE' }),
+  compactAgentChat: () => request('/api/agent/chat/compact', { method: 'POST' }),
+  uploadAgentFile: async (file, kind) => {
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 350));
+      return { status: 'ok', file: { id: `f_demo_${Date.now()}`, file_name: file.name, kind, size_bytes: file.size, created_at: new Date().toISOString() } };
+    }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    const headers = { 'X-Public-ID': getUserId() || 'RoniDev' };
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    const res = await fetch(`${getServer()}/api/agent/files/upload`, {
+      method: 'POST', credentials: 'include', headers, body: form,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Agent file upload failed');
+    return res.json();
+  },
+
+  // ── Avatar / subject image uploads (PNG/JPG) ──────────────────────────────
+  uploadAvatar: async (file, kind, subject) => {
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 350));
+      return { status: 'ok', url: URL.createObjectURL(file), kind, subject: subject || null };
+    }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    if (subject) form.append('subject', subject);
+    const headers = { 'X-Public-ID': getUserId() || 'RoniDev' };
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    const res = await fetch(`${getServer()}/api/uploads/avatar`, {
+      method: 'POST', credentials: 'include', headers, body: form,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Avatar upload failed');
+    return res.json();
+  },
   simulationStatus: () => request('/api/simulation/status', { method: 'GET' }),
   simulationToggle: (enabled) => request('/api/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
   simulationSeed: () => request('/api/simulation/seed', { method: 'POST' }),
