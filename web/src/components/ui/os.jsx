@@ -62,14 +62,17 @@ export function StatCard({ label, value, sub, icon: Icon, iconColor = 'text-blue
 }
 
 /* ── SectionHeader ────────────────────────────────────────────────────────── */
-export function SectionHeader({ title, subtitle, right }) {
+/* `collapsed` is forwarded by SectionCard when its section is minimized:
+ * only the title stays, subtitle + right actions are hidden so the
+ * collapsed strip is a tight one-line bar. */
+export function SectionHeader({ title, subtitle, right, collapsed }) {
   return (
-    <div className="flex items-end justify-between gap-3 mb-3">
+    <div className={`flex items-end justify-between gap-3 ${collapsed ? '' : 'mb-3'}`}>
       <div>
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+        <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
+        {!collapsed && subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
-      {right}
+      {!collapsed && right}
     </div>
   );
 }
