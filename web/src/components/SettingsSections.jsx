@@ -7,6 +7,10 @@ import React, { useRef, useState } from 'react';
 import { Download, Trash2, KeyRound, ExternalLink, Camera } from 'lucide-react';
 import { Toggle, Slider, Badge, Progress } from './ui/os.jsx';
 import api from '../api.js';
+import ScopedSetting from './ScopedSetting.jsx';
+
+/* Every toggle also accepts hierarchy variants (On/Off per subject/class/…) */
+const ON_OFF = [{ key: true, label: 'On' }, { key: false, label: 'Off' }];
 
 function Field({ label, children, hint }) {
   return (
@@ -156,7 +160,7 @@ function AcademicSection({ s, set }) {
 }
 
 /* ── WRITING & OUTPUT (Writing DNA) ──────────────────────────────────────── */
-function WritingSection({ s, set }) {
+function WritingSection({ s, set, scoped, setVariants, subjectRefs }) {
   return (
     <div className="space-y-7">
       <div>
@@ -171,36 +175,54 @@ function WritingSection({ s, set }) {
         </div>
       </div>
 
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">Saved profiles</div>
-        <p className="text-[11px] text-slate-500 mb-3">Switch per assignment — pick the voice that fits.</p>
-        <div className="flex flex-wrap gap-1.5">
-          {s.writing.profiles.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => set('writing.profile', p)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
-                s.writing.profile === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+      <ScopedSetting
+        path="writing.profile"
+        title="Saved writing profile"
+        variants={scoped['writing.profile']}
+        setVariants={setVariants}
+        values={s.writing.profiles}
+        refs={subjectRefs}
+      >
+        <div>
+          <div className="text-xs font-medium text-slate-300 mb-2">Saved profiles</div>
+          <p className="text-[11px] text-slate-500 mb-3">Switch per assignment — pick the voice that fits.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {s.writing.profiles.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => set('writing.profile', p)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
+                  s.writing.profile === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </ScopedSetting>
 
-      <Field label="Citation style" hint="Applied to generated drafts and study materials.">
-        <select value={s.writing.style} onChange={(e) => set('writing.style', e.target.value)} className={inputCls + ' max-w-xs cursor-pointer'}>
-          {['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE'].map((st) => <option key={st} className="bg-slate-900">{st}</option>)}
-        </select>
-      </Field>
+      <ScopedSetting
+        path="writing.style"
+        title="Citation style"
+        variants={scoped['writing.style']}
+        setVariants={setVariants}
+        values={['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE']}
+        refs={subjectRefs}
+      >
+        <Field label="Citation style" hint="Applied to generated drafts and study materials.">
+          <select value={s.writing.style} onChange={(e) => set('writing.style', e.target.value)} className={inputCls + ' max-w-xs cursor-pointer'}>
+            {['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE'].map((st) => <option key={st} className="bg-slate-900">{st}</option>)}
+          </select>
+        </Field>
+      </ScopedSetting>
     </div>
   );
 }
 
 /* ── AUTOMATION ──────────────────────────────────────────────────────────── */
-function AutomationSection({ s, set }) {
+function AutomationSection({ s, set, scoped, setVariants, subjectRefs }) {
   return (
     <div className="space-y-7 max-w-lg">
       <div>
@@ -215,7 +237,17 @@ function AutomationSection({ s, set }) {
             ['autoNotify', 'Auto-notify', 'Tell you when something happens.'],
             ['autoSubmit', 'Auto-submit', 'Submit completed work directly to your LMS.'],
           ].map(([key, label, desc]) => (
-            <Toggle key={key} checked={s.automation[key]} onChange={(v) => set('automation', { ...s.automation, [key]: v })} label={label} description={desc} />
+            <ScopedSetting
+              key={key}
+              path={`automation.${key}`}
+              title={label}
+              variants={scoped[`automation.${key}`]}
+              setVariants={setVariants}
+              values={ON_OFF}
+              refs={subjectRefs}
+            >
+              <Toggle checked={s.automation[key]} onChange={(v) => set('automation', { ...s.automation, [key]: v })} label={label} description={desc} />
+            </ScopedSetting>
           ))}
         </div>
       </div>
@@ -231,7 +263,17 @@ function AutomationSection({ s, set }) {
             ['premium', 'Using flagship engines'],
             ['modify', 'Modifying saved work'],
           ].map(([key, label]) => (
-            <Toggle key={key} checked={s.automation.requireApproval[key]} onChange={(v) => set('automation', { ...s.automation, requireApproval: { ...s.automation.requireApproval, [key]: v } })} label={label} />
+            <ScopedSetting
+              key={key}
+              path={`automation.requireApproval.${key}`}
+              title={label}
+              variants={scoped[`automation.requireApproval.${key}`]}
+              setVariants={setVariants}
+              values={ON_OFF}
+              refs={subjectRefs}
+            >
+              <Toggle checked={s.automation.requireApproval[key]} onChange={(v) => set('automation', { ...s.automation, requireApproval: { ...s.automation.requireApproval, [key]: v } })} label={label} />
+            </ScopedSetting>
           ))}
         </div>
       </div>
@@ -240,7 +282,7 @@ function AutomationSection({ s, set }) {
 }
 
 /* ── NOTIFICATIONS ───────────────────────────────────────────────────────── */
-function NotificationsSection({ s, set }) {
+function NotificationsSection({ s, set, scoped, setVariants, subjectRefs }) {
   const groups = [
     ['assignments', 'Assignments', [['assignment.completed', 'Assignment completed'], ['draft.ready', 'Draft ready'], ['materials.missing', 'Materials missing'], ['deadline.approaching', 'Deadline approaching']]],
     ['automation', 'Automation', [['run.started', 'Run started'], ['run.completed', 'Run completed'], ['run.failed', 'Run failed']]],
@@ -257,7 +299,17 @@ function NotificationsSection({ s, set }) {
           <div className="text-xs font-medium text-slate-300 mb-3">{label}</div>
           <div className="space-y-3">
             {toggles.map(([key, tlabel]) => (
-              <Toggle key={key} checked={s.notifications[gkey]?.[key]} onChange={(v) => setGroup(gkey, key, v)} label={tlabel} />
+              <ScopedSetting
+                key={key}
+                path={`notifications.${gkey}.${key}`}
+                title={tlabel}
+                variants={scoped[`notifications.${gkey}.${key}`]}
+                setVariants={setVariants}
+                values={ON_OFF}
+                refs={subjectRefs}
+              >
+                <Toggle checked={s.notifications[gkey]?.[key]} onChange={(v) => setGroup(gkey, key, v)} label={tlabel} />
+              </ScopedSetting>
             ))}
           </div>
         </div>
@@ -275,7 +327,7 @@ function NotificationsSection({ s, set }) {
 }
 
 /* ── PRIVACY & SECURITY ──────────────────────────────────────────────────── */
-function PrivacySection({ s, set, onGoTo }) {
+function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
   const [deleting, setDeleting] = useState(false);
   return (
     <div className="space-y-7 max-w-lg">
@@ -283,7 +335,16 @@ function PrivacySection({ s, set, onGoTo }) {
         <div className="text-xs font-medium text-slate-300 mb-3">Data usage</div>
         <div className="space-y-3">
           <Toggle checked={s.privacy.analytics} onChange={(v) => set('privacy', { ...s.privacy, analytics: v })} label="Usage analytics" description="Help us improve Helpotron with anonymized usage patterns." />
-          <Toggle checked={s.privacy.dataLake} onChange={(v) => set('privacy', { ...s.privacy, dataLake: v })} label="Contribute to the Data Lake" description="Anonymized materials that power the free training pool (you earn micro-credits)." />
+          <ScopedSetting
+            path="privacy.dataLake"
+            title="Contribute to the Data Lake"
+            variants={scoped['privacy.dataLake']}
+            setVariants={setVariants}
+            values={ON_OFF}
+            refs={subjectRefs}
+          >
+            <Toggle checked={s.privacy.dataLake} onChange={(v) => set('privacy', { ...s.privacy, dataLake: v })} label="Contribute to the Data Lake" description="Anonymized materials that power the free training pool (you earn micro-credits)." />
+          </ScopedSetting>
           <Toggle checked={s.privacy.anonymous} onChange={(v) => set('privacy', { ...s.privacy, anonymous: v })} label="Strict anonymity" description="Never attach your profile to contributed materials." />
         </div>
       </div>
@@ -419,10 +480,19 @@ function ShortcutsSection({ s, set }) {
 }
 
 /* ── DATA & ANALYTICS ────────────────────────────────────────────────────── */
-function DataSection({ s, set }) {
+function DataSection({ s, set, scoped, setVariants, subjectRefs }) {
   return (
     <div className="space-y-3 max-w-lg">
-      <Toggle checked={s.data.weeklyDigest} onChange={(v) => set('data', { ...s.data, weeklyDigest: v })} label="Weekly digest" description="A Sunday summary of your week, delivered in-app." />
+      <ScopedSetting
+        path="data.weeklyDigest"
+        title="Weekly digest"
+        variants={scoped['data.weeklyDigest']}
+        setVariants={setVariants}
+        values={ON_OFF}
+        refs={subjectRefs}
+      >
+        <Toggle checked={s.data.weeklyDigest} onChange={(v) => set('data', { ...s.data, weeklyDigest: v })} label="Weekly digest" description="A Sunday summary of your week, delivered in-app." />
+      </ScopedSetting>
       <Toggle checked={s.data.streakReminders} onChange={(v) => set('data', { ...s.data, streakReminders: v })} label="Streak reminders" description="A nudge when you haven't studied in a few days." />
       <Toggle checked={s.data.accuracyTracking} onChange={(v) => set('data', { ...s.data, accuracyTracking: v })} label="Accuracy tracking" description="Score practice results to tune recommendations." />
     </div>
@@ -516,19 +586,20 @@ function AdvancedSection({ s, set, onGoTo }) {
 }
 
 /* ── Dispatcher ──────────────────────────────────────────────────────────── */
-export function SettingsSections({ section, s, set, userId, onGoTo }) {
+export function SettingsSections({ section, s, set, scoped, setVariants, subjectRefs, userId, onGoTo }) {
+  const scopeProps = { scoped, setVariants, subjectRefs };
   switch (section) {
     case 'account': return <AccountSection s={s} set={set} userId={userId} />;
     case 'academic': return <AcademicSection s={s} set={set} />;
-    case 'writing': return <WritingSection s={s} set={set} />;
-    case 'automation': return <AutomationSection s={s} set={set} />;
-    case 'notifications': return <NotificationsSection s={s} set={set} />;
-    case 'privacy': return <PrivacySection s={s} set={set} onGoTo={onGoTo} />;
+    case 'writing': return <WritingSection s={s} set={set} {...scopeProps} />;
+    case 'automation': return <AutomationSection s={s} set={set} {...scopeProps} />;
+    case 'notifications': return <NotificationsSection s={s} set={set} {...scopeProps} />;
+    case 'privacy': return <PrivacySection s={s} set={set} {...scopeProps} onGoTo={onGoTo} />;
     case 'billing': return <BillingSection onGoTo={onGoTo} />;
     case 'integrations': return <IntegrationsSection s={s} set={set} />;
     case 'extension': return <ExtensionSection s={s} set={set} />;
     case 'shortcuts': return <ShortcutsSection s={s} set={set} />;
-    case 'data': return <DataSection s={s} set={set} />;
+    case 'data': return <DataSection s={s} set={set} {...scopeProps} />;
     case 'experimental': return <ExperimentalSection s={s} set={set} />;
     case 'accessibility': return <AccessibilitySection s={s} set={set} />;
     case 'language': return <LanguageSection s={s} set={set} />;

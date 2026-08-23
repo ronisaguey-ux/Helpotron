@@ -11,6 +11,7 @@ import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
 import SectionCard from './SectionCard.jsx';
+import ScopedSetting, { SCOPE_LEVELS } from './ScopedSetting.jsx';
 
 const SECTIONS = [
   { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan' },
@@ -150,44 +151,64 @@ const INTELLIGENCE = [
 
 const PERSONALITIES = ['Professional', 'Friendly', 'Strict', 'Socratic', 'Coach', 'Researcher', 'Tutor', 'Minimalist'];
 
-function AISection({ s, set }) {
+function AISection({ s, set, scoped, setVariants, subjectRefs }) {
   const ai = s.ai;
   return (
     <div className="space-y-7">
       {/* Effort — the one control that matters */}
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">AI Effort</div>
-        <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-          The only routing control you need. Low effort = cheap engines do mechanical work. High effort = flagship engines handle complex reasoning. Helpotron picks the right engine for each task automatically.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {Object.entries({ low: 'Low', balanced: 'Balanced', high: 'High' }).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => set('ai.effort', k)}
-              className={`p-4 rounded-xl border text-left transition cursor-pointer ${
-                ai.effort === k ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/8 bg-slate-950/40 hover:border-white/15'
-              }`}
-            >
-              <div className="text-xs font-bold text-white">{label}</div>
-              <div className="text-[10px] text-slate-500 mt-1">
-                {k === 'low' && 'Mechanical tasks → fast engine. Best value.'}
-                {k === 'balanced' && 'Routine work balanced, complex escalates.'}
-                {k === 'high' && 'Research & reasoning → flagship engine.'}
-              </div>
-              <div className="text-[10px] font-mono text-slate-600 mt-2">effort {EFFORT_SCORES[k]}</div>
-            </button>
-          ))}
+      <ScopedSetting
+        path="ai.effort"
+        title="AI effort"
+        variants={scoped['ai.effort']}
+        setVariants={setVariants}
+        values={[{ key: 'low', label: 'Low' }, { key: 'balanced', label: 'Balanced' }, { key: 'high', label: 'High' }]}
+        refs={subjectRefs}
+        refPlaceholder="e.g. Biology"
+      >
+        <div>
+          <div className="text-xs font-medium text-slate-300 mb-2">AI Effort</div>
+          <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+            The only routing control you need. Low effort = cheap engines do mechanical work. High effort = flagship engines handle complex reasoning. Helpotron picks the right engine for each task automatically.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {Object.entries({ low: 'Low', balanced: 'Balanced', high: 'High' }).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => set('ai.effort', k)}
+                className={`p-4 rounded-xl border text-left transition cursor-pointer ${
+                  ai.effort === k ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/8 bg-slate-950/40 hover:border-white/15'
+                }`}
+              >
+                <div className="text-xs font-bold text-white">{label}</div>
+                <div className="text-[10px] text-slate-500 mt-1">
+                  {k === 'low' && 'Mechanical tasks → fast engine. Best value.'}
+                  {k === 'balanced' && 'Routine work balanced, complex escalates.'}
+                  {k === 'high' && 'Research & reasoning → flagship engine.'}
+                </div>
+                <div className="text-[10px] font-mono text-slate-600 mt-2">effort {EFFORT_SCORES[k]}</div>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-3 flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/6">
+      </ScopedSetting>
+
+      <ScopedSetting
+        path="ai.autoRouting"
+        title="Auto routing"
+        variants={scoped['ai.autoRouting']}
+        setVariants={setVariants}
+        values={[{ key: true, label: 'On' }, { key: false, label: 'Off' }]}
+        refs={subjectRefs}
+      >
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/6">
           <div>
             <div className="text-xs text-slate-200 font-medium">Auto routing</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Let Helpotron select the optimal engine based on task complexity.</div>
           </div>
           <Toggle checked={ai.autoRouting} onChange={(v) => set('ai.autoRouting', v)} label="Auto routing" />
         </div>
-      </div>
+      </ScopedSetting>
 
       {/* Intelligence profile */}
       <div>
@@ -222,41 +243,50 @@ function AISection({ s, set }) {
       </div>
 
       {/* AI personality */}
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">My AI</div>
-        <div className="flex items-center gap-3 mb-3">
-          <input
-            value={ai.aiName}
-            onChange={(e) => set('ai.aiName', e.target.value)}
-            className="clean-input px-3 py-2 text-xs w-32 outline-none"
-            aria-label="AI name"
+      <ScopedSetting
+        path="ai.personality"
+        title="AI personality"
+        variants={scoped['ai.personality']}
+        setVariants={setVariants}
+        values={PERSONALITIES}
+        refs={subjectRefs}
+      >
+        <div>
+          <div className="text-xs font-medium text-slate-300 mb-2">My AI</div>
+          <div className="flex items-center gap-3 mb-3">
+            <input
+              value={ai.aiName}
+              onChange={(e) => set('ai.aiName', e.target.value)}
+              className="clean-input px-3 py-2 text-xs w-32 outline-none"
+              aria-label="AI name"
+            />
+            <span className="text-[11px] text-slate-500">is your personal AI.</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {PERSONALITIES.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => set('ai.personality', p)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
+                  ai.personality === p ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <label className="block text-[11px] text-slate-500 mb-1.5">How should {ai.aiName} interact with you?</label>
+          <textarea
+            value={ai.instructions}
+            onChange={(e) => set('ai.instructions', e.target.value)}
+            rows={3}
+            className="clean-input w-full px-3 py-2 text-xs outline-none resize-none"
+            placeholder="Describe how your AI should behave…"
+            aria-label="AI interaction instructions"
           />
-          <span className="text-[11px] text-slate-500">is your personal AI.</span>
         </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {PERSONALITIES.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => set('ai.personality', p)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
-                ai.personality === p ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-        <label className="block text-[11px] text-slate-500 mb-1.5">How should {ai.aiName} interact with you?</label>
-        <textarea
-          value={ai.instructions}
-          onChange={(e) => set('ai.instructions', e.target.value)}
-          rows={3}
-          className="clean-input w-full px-3 py-2 text-xs outline-none resize-none"
-          placeholder="Describe how your AI should behave…"
-          aria-label="AI interaction instructions"
-        />
-      </div>
+      </ScopedSetting>
     </div>
   );
 }
@@ -273,7 +303,9 @@ export default function SettingsApp({ userId, onGoTo }) {
     const keys = path.split('.');
     let obj = next;
     while (keys.length > 1) {
-      obj = obj[keys.shift()];
+      const k = keys.shift();
+      if (obj[k] == null || typeof obj[k] !== 'object') obj[k] = {}; // create missing containers (e.g. scoped.*)
+      obj = obj[k];
     }
     obj[keys[0]] = value;
     setSettingsState(next);
@@ -282,6 +314,23 @@ export default function SettingsApp({ userId, onGoTo }) {
     clearTimeout(settingsApp._t);
     settingsApp._t = setTimeout(() => setSavedFlash(false), 1200);
   };
+
+  /* Hierarchical variants: settings.scoped[path] = [{id, scope, value}].
+   * Stored as a FLAT map keyed by full dot-path — the dot-walking set()
+   * would nest 'ai.effort' into {ai:{effort}} and break scoped[path] reads,
+   * so variants get their own writer that writes the key verbatim. */
+  const scoped = settings.scoped || {};
+  const setVariants = (path, variants) => {
+    const next = JSON.parse(JSON.stringify(settings));
+    next.scoped = next.scoped || {};
+    next.scoped[path] = variants;
+    setSettingsState(next);
+    saveSettings(next);
+    setSavedFlash(true);
+    clearTimeout(settingsApp._t);
+    settingsApp._t = setTimeout(() => setSavedFlash(false), 1200);
+  };
+  const subjectRefs = Object.keys(settings.subjects || {});
 
   const current = SECTIONS.find((s) => s.key === section);
   const isSimple = settings.displayMode === 'simple';
@@ -391,9 +440,9 @@ export default function SettingsApp({ userId, onGoTo }) {
             transition={{ duration: 0.15 }}
           >
             {section === 'appearance' && <AppearanceSection s={settings} set={set} />}
-            {section === 'ai' && <AISection s={settings} set={set} />}
+            {section === 'ai' && <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />}
             {section !== 'appearance' && section !== 'ai' && (
-              <SettingsSections section={section} s={settings} set={set} userId={userId} onGoTo={onGoTo} />
+              <SettingsSections section={section} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} />
             )}
           </motion.div>
         </AnimatePresence>
