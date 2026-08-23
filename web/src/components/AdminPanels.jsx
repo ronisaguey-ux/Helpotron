@@ -380,9 +380,10 @@ function MaintenancePanel() {
 }
 
 /* ── SYSTEM MAP ───────────────────────────────────────────────────────────── */
-function SystemMapPanel() {
+function LiveSystemMap() {
   const demo = demoEnabled();
   const [active, setActive] = useState(null);
+  const [mode, setMode] = useState('architecture'); // architecture | live | traffic | dependencies | errors | ai | data
   const [running, setRunning] = useState(demo ? ADMIN_EVENTS.filter((e) => e.status === 'running').length : 0);
   const statusColor = { operational: 'bg-emerald-400', warning: 'bg-amber-400', down: 'bg-rose-500', degraded: 'bg-amber-400' };
   const nodeTone = { operational: 'border-emerald-500/40 shadow-emerald-500/20', warning: 'border-amber-500/50 shadow-amber-500/25', down: 'border-rose-500/60 shadow-rose-500/30' };
@@ -391,6 +392,29 @@ function SystemMapPanel() {
     <div className="space-y-5">
       <div className="clean-card p-5">
         <SectionHeader title="Live system map" subtitle="The platform, one hop at a time. Click a node." />
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/40 p-1 rounded-lg border border-white/6 w-fit mb-4">
+          {['architecture', 'live', 'traffic', 'dependencies', 'errors', 'ai', 'data'].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`text-[10px] px-2.5 py-1 rounded-md capitalize transition-colors cursor-pointer ${
+                mode === m ? 'bg-blue-600 text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <div className="mb-4 px-3 py-2 rounded-lg bg-blue-500/8 border border-blue-500/20 text-[10px] text-slate-400">
+          {mode === 'architecture' && '7 operational layers — client, gateway, auth, orchestration, AI routing, data & storage, delivery. Click a node to inspect telemetry.'}
+          {mode === 'traffic' && 'Request flow: SPA → gateway → auth → orchestrator → router → engine → storage. Traffic flows through the router to a tier, then to the queue.'}
+          {mode === 'dependencies' && 'Runtime dependencies: SQLite (WAL), FSRS v5 engine, encrypted secret store. No external hard failures in the last 24h.'}
+          {mode === 'errors' && 'Error surface: 0 5xx in the last hour, 2 failed automations, 1 flagged session awaiting review.'}
+          {mode === 'ai' && 'AI routing: 5 effort tiers, policy-allowlisted engines only — deepseek-v4 flash/pro, gemini flash, NVIDIA cheap tier.'}
+          {mode === 'data' && 'Data layer: 1,284 users, 18.2k assignments, 4.1k study materials, WAL checkpoint every 5 min.'}
+          {mode === 'live' && 'Live telemetry refreshes each navigation — statuses below are the current snapshot.'}
+        </div>
         {!demo ? <EmptyState title="Map unavailable" /> : (
           <div className="space-y-6">
             {levels.map((lv) => (
@@ -557,7 +581,7 @@ export default function AdminPanels({ initialTab }) {
       {tab === 'audit' && <AuditPanel />}
       {tab === 'broadcast' && <BroadcastPanel />}
       {tab === 'maintenance' && <MaintenancePanel />}
-      {tab === 'map' && <SystemMapPanel />}
+      {tab === 'map' && <LiveSystemMap />}
       {tab === 'analyst' && <AnalystPanel />}
       <div className="flex items-center gap-2 text-[9px] text-slate-600 px-1">
         <AlertTriangle className="w-3 h-3 text-amber-500/60" /> Admin mode is fully audited — every action lands in the audit log. Demo data only.

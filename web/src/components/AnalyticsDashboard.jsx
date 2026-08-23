@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api.js';
-import { BarChart3, Clock, DollarSign, BookOpen, Activity, TrendingUp, RefreshCw } from 'lucide-react';
+import { BarChart3, Clock, DollarSign, BookOpen, Activity, TrendingUp, RefreshCw, Sparkles } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
 import { Area } from '@/components/charts/area';
 import LiquidGlassCard from '@/components/kokonutui/liquid-glass-card';
@@ -21,7 +21,7 @@ const Stat = ({ label, value, sub = '', icon: Icon, iconColor = 'text-cyan-400' 
   </div>
 );
 
-export default function AnalyticsDashboard({ userId }) {
+export default function AnalyticsDashboard({ userId, onExplainWithAgent }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -69,6 +69,13 @@ export default function AnalyticsDashboard({ userId }) {
           <div className="flex items-center gap-2 mb-3 text-sm font-mono text-cyan-300 font-bold">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
             <span>Autonomous ROI & Cost Metrics</span>
+            <button
+              type="button"
+              onClick={() => onExplainWithAgent?.('academic_progress_summary')}
+              className="ml-auto flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-200 font-sans transition cursor-pointer"
+            >
+              <Sparkles className="w-3 h-3" /> Explain My Progress with Agent
+            </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div className="p-3 rounded-lg bg-black/40 border border-white/5">
