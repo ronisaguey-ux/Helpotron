@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Generator
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, create_engine, event
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
@@ -171,6 +171,28 @@ class Transcript(Base):
     user = relationship("User", back_populates="transcripts")
     assignment = relationship("Assignment", back_populates="transcripts")
     materials = relationship("StudyMaterial", back_populates="transcript")
+
+
+class UserSettingsScope(Base):
+    """Per-scope user settings override (BATCH-04).
+
+    Settings resolve through the inheritance chain
+    task → assignment → teacher → class → subject → academic → global;
+    each scope target stores its own settings_json override. One row per
+    (user, scope_type, scope_id) target.
+    """
+
+    __tablename__ = "user_settings_scopes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    scope_type: Mapped[str] = mapped_column(String(32), default="global", index=True)
+    scope_id: Mapped[str] = mapped_column(String(64), default="default", index=True)
+    settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "scope_type", "scope_id", name="uq_user_scope_target"),)
 
 
 class StudyMaterial(Base):
