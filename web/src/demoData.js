@@ -355,6 +355,18 @@ function deepMerge(base, patch) {
 /* Map effort label -> score used by the backend routing cascade */
 export const EFFORT_SCORES = { low: 100, balanced: 500, high: 900 };
 
+/* ── My Agent (Experience Rewrite, 08-22) ───────────────────────────────── */
+export const AGENT_PERSONALITIES = [
+  { key: 'Professional', desc: 'Clear, direct, deadline-focused' },
+  { key: 'Friendly', desc: 'Warm, encouraging, casual' },
+  { key: 'Strict', desc: 'Tough love, no excuses' },
+  { key: 'Socratic', desc: 'Answers with guiding questions' },
+  { key: 'Coach', desc: 'Motivational, plan-and-execute' },
+  { key: 'Researcher', desc: 'Deep citations, rigorous evidence' },
+  { key: 'Tutor', desc: 'Step-by-step explanations, checks understanding' },
+  { key: 'Minimalist', desc: 'Short answers, zero fluff' },
+];
+
 /* ── Command palette / global search index ───────────────────────────────── */
 export function searchIndex() {
   const items = [];
@@ -364,30 +376,25 @@ export function searchIndex() {
   for (const t of TEMPLATES) push('template', t.name, t.description, 'automation', {});
   for (const f of LIBRARY) push('file', f.name, `${f.course} · ${f.size}`, 'library', {});
   for (const s of SAVED) push('saved', s.title, s.course, 'library', {});
-  for (const n of NOTIFICATIONS) push('notification', n.title, n.body, 'notifications', {});
+  for (const n of NOTIFICATIONS) push('notification', n.title, n.body, 'activity', {});
   for (const e of EVENTS) if (e.metadata?.title) push('activity', e.metadata.title, e.type, 'activity', {});
   for (const r of RECOMMENDATIONS) push('recommendation', r.title, r.body, 'overview', {});
   for (const u of ADMIN_USERS) push('user', u.publicId, `${u.plan} · ${u.credits} credits`, 'admin', {});
   push('view', 'Today', 'Your command center', 'overview', {});
+  push('view', 'My Agent', 'Chat, memory, files and effort', 'agent', {});
   push('view', 'Assignments', 'All coursework', 'history', {});
   push('view', 'Study Tools', 'Guides, flashcards, tests, summaries', 'study', {});
   push('view', 'Automation Center', 'Automations, runs, schedules, templates', 'automation', {});
   push('view', 'AI Workspace', 'Materials → conversation → context', 'ai-workspace', {});
   push('view', 'Library', 'Files, saved materials, calendar', 'library', {});
   push('view', 'Activity', 'Everything that happened', 'activity', {});
-  push('view', 'Notifications', 'Inbox of events', 'notifications', {});
-  push('view', 'Credit Wallet', 'Balance, usage, cost breakdowns', 'wallet', {});
-  push('view', 'Analytics', 'Study analytics', 'analytics', {});
-  push('view', 'Academic Progress', 'Subjects, scores, trends', 'progress', {});
-  push('view', 'Recommendations', 'What you should do next', 'recommendations', {});
-  push('view', 'Cost Intelligence', 'What your effort level costs', 'cost', {});
+  push('view', 'Insights', 'Analytics, progress, recommendations, cost', 'insights', {});
+  push('view', 'Credit Wallet', 'Balance, plans, earnings', 'credits', {});
   push('view', 'Settings', 'Full settings workspace', 'settings', {});
   push('view', 'Privacy Policy', 'How your data is handled', 'privacy', {});
   push('view', 'Terms of Service', 'Terms of use', 'terms', {});
   push('view', 'Message Admin', 'Direct encrypted channel', 'message_admin', {});
   push('view', 'Data Lake', 'Anonymized training pool', 'datalake', {});
-  push('view', 'Referrals', 'Invite and earn credits', 'referral', {});
-  push('view', 'Plans & Credits', 'Billing', 'billing', {});
   push('view', 'Admin Control Center', 'System-wide operations', 'admin', {});
   return items;
 }
@@ -398,7 +405,7 @@ export const SLASH_COMMANDS = [
   { cmd: '/run', label: 'Run an automation', target: 'automation' },
   { cmd: '/settings', label: 'Open settings', target: 'settings' },
   { cmd: '/admin', label: 'Admin control center', target: 'admin' },
-  { cmd: '/analytics', label: 'Study analytics', target: 'analytics' },
-  { cmd: '/wallet', label: 'Credit wallet', target: 'wallet' },
-  { cmd: '/ai', label: 'AI workspace', target: 'ai-workspace' },
+  { cmd: '/agent', label: 'Open My Agent', target: 'agent' },
+  { cmd: '/insights', label: 'Open insights', target: 'insights' },
+  { cmd: '/credits', label: 'Credit wallet & plans', target: 'credits' },
 ];

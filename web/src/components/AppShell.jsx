@@ -2,7 +2,7 @@
  * AppShell.jsx — Helpotron OS chrome (Experience Rewrite, 08-22)
  * Topbar: brand, global search trigger, credits chip, notification bell,
  * avatar quick-settings menu. Sidebar: grouped, collapsible navigation
- * (HOME / WORKSPACE / AUTOMATION / INTELLIGENCE / ACCOUNT / ADMIN).
+ * (HOME / WORKSPACE / INTELLIGENCE / ACCOUNT / ADMIN).
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
@@ -23,39 +23,27 @@ const NAV_TREE = (isAdmin) => [
     items: [
       { key: 'overview', label: 'Today', icon: '🏠' },
       { key: 'activity', label: 'Activity', icon: '⚡' },
-      { key: 'notifications', label: 'Notifications', icon: '🔔' },
     ],
   },
   {
     group: 'WORKSPACE',
     items: [
+      { key: 'agent', label: 'My Agent', icon: '🧠' },
       { key: 'history', label: 'Assignments', icon: '📝' },
       { key: 'study', label: 'Study Tools', icon: '🎯' },
-      { key: 'ai-workspace', label: 'AI Workspace', icon: '🧠' },
       { key: 'library', label: 'Library', icon: '🗂️' },
-      { key: 'inbox', label: 'Inbox', icon: '✉️' },
-    ],
-  },
-  {
-    group: 'AUTOMATION',
-    items: [
-      { key: 'automation', label: 'Automations', icon: '⚙️' },
     ],
   },
   {
     group: 'INTELLIGENCE',
     items: [
-      { key: 'analytics', label: 'Analytics', icon: '📊' },
-      { key: 'progress', label: 'Academic Progress', icon: '📈' },
-      { key: 'recommendations', label: 'Recommendations', icon: '💡' },
-      { key: 'cost', label: 'Cost Intelligence', icon: '🪙' },
+      { key: 'insights', label: 'Insights', icon: '📊' },
     ],
   },
   {
     group: 'ACCOUNT',
     items: [
-      { key: 'wallet', label: 'Credits', icon: '💳' },
-      { key: 'referral', label: 'Referrals', icon: '🎁' },
+      { key: 'credits', label: 'Credits', icon: '💳' },
       { key: 'settings', label: 'Settings', icon: '⚙' },
     ],
   },
@@ -85,8 +73,10 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
   return (
     <div className="w-64 p-4 space-y-3">
       <div className="flex items-center gap-3 pb-3 border-b border-white/8">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-bold text-white">
-          {settings.profile.displayName?.[0] || 'R'}
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-bold text-white overflow-hidden">
+          {settings.profile.avatarUrl
+            ? <img src={settings.profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+            : (settings.profile.displayName?.[0] || 'R')}
         </div>
         <div className="min-w-0">
           <div className="text-xs font-semibold text-white truncate">{settings.profile.displayName || user.public_id}</div>
@@ -294,7 +284,7 @@ export default function AppShell({
             {/* Credits chip */}
             <button
               type="button"
-              onClick={() => onNavigate('wallet')}
+              onClick={() => onNavigate('credits')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300 hover:bg-blue-500/20 transition cursor-pointer text-xs font-semibold font-mono"
               aria-label="Open credit wallet"
             >
@@ -303,7 +293,7 @@ export default function AppShell({
             </button>
 
             {/* Notification bell */}
-            <NotificationBell onOpenAll={() => onNavigate('notifications')} />
+            <NotificationBell onOpenAll={() => onNavigate('activity')} />
 
             {/* Avatar / quick settings */}
             {isLoggedIn ? (
@@ -428,55 +418,6 @@ export default function AppShell({
               );
             })}
 
-            {/* Bottom utility */}
-            <div className="mt-2 pt-2 border-t border-white/8 space-y-0.5">
-              <button
-                type="button"
-                aria-label="Plans & Credits"
-                onClick={() => onNavigate('billing')}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer ${!sidebarOpen ? 'justify-center px-1' : ''}`}
-              >
-                <span className="text-sm leading-none">💳</span>
-                {sidebarOpen && <span>Plans & Credits</span>}
-              </button>
-              <button
-                type="button"
-                aria-label="Data Lake"
-                onClick={() => onNavigate('datalake')}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer ${!sidebarOpen ? 'justify-center px-1' : ''}`}
-              >
-                <span className="text-sm leading-none">🧊</span>
-                {sidebarOpen && <span>Data Lake</span>}
-              </button>
-              <button
-                type="button"
-                aria-label="Credits Leaderboard"
-                onClick={() => onNavigate('leaderboard')}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer ${!sidebarOpen ? 'justify-center px-1' : ''}`}
-              >
-                <span className="text-sm leading-none">🏆</span>
-                {sidebarOpen && <span>Credits Leaderboard</span>}
-              </button>
-              <button
-                type="button"
-                aria-label="Assignment Dump"
-                onClick={() => onNavigate('dump')}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer ${!sidebarOpen ? 'justify-center px-1' : ''}`}
-              >
-                <span className="text-sm leading-none">📤</span>
-                {sidebarOpen && <span>Assignment Dump</span>}
-              </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => onNavigate('admin')}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer ${!sidebarOpen ? 'justify-center px-1' : ''}`}
-                >
-                  <span className="text-sm leading-none">🛡️</span>
-                  {sidebarOpen && <span>Admin</span>}
-                </button>
-              )}
-            </div>
           </div>
         </aside>
 
@@ -493,15 +434,12 @@ export default function AppShell({
                 <p className="text-xs text-slate-500 truncate">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
-                  {activeView === 'notifications' && 'Everything that asked for your attention'}
+                  {activeView === 'agent' && 'Your AI agent — chat, memory, files and effort'}
+                  {activeView === 'history' && 'All your assignments, in one place'}
                   {activeView === 'study' && 'Guides, flashcards, practice tests and summaries'}
-                  {activeView === 'ai-workspace' && 'Materials · conversation · context'}
                   {activeView === 'library' && 'Files, saved materials and your calendar'}
-                  {activeView === 'automation' && 'Automations, runs, schedules, templates and recipes'}
-                  {activeView === 'progress' && 'Subject scores, trends and focus areas'}
-                  {activeView === 'recommendations' && 'What to do next, decided for you'}
-                  {activeView === 'cost' && 'What your effort level actually costs'}
-                  {activeView === 'wallet' && 'Your credits, usage and cost breakdowns'}
+                  {activeView === 'insights' && 'Analytics, progress, recommendations and cost'}
+                  {activeView === 'credits' && 'Balance, plans, top-ups and earnings'}
                   {activeView === 'settings' && 'Your complete configuration workspace'}
                   {activeView === 'admin' && 'Helpotron Control Center'}
                 </p>

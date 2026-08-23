@@ -3,9 +3,10 @@
  * Appearance and AI, which live in SettingsApp.jsx). Each section is a real
  * form bound to the OS settings store.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useState } from 'react';
-import { Download, Trash2, KeyRound, ExternalLink } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Download, Trash2, KeyRound, ExternalLink, Camera } from 'lucide-react';
 import { Toggle, Slider, Badge, Progress } from './ui/os.jsx';
+import api from '../api.js';
 
 function Field({ label, children, hint }) {
   return (
@@ -24,8 +25,10 @@ function AccountSection({ s, set, userId }) {
   return (
     <div className="space-y-5 max-w-md">
       <div className="flex items-center gap-4 pb-4 border-b border-white/8">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xl font-black text-white">
-          {s.profile.displayName?.[0] || 'R'}
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xl font-black text-white overflow-hidden">
+          {s.profile.avatarUrl
+            ? <img src={s.profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+            : (s.profile.displayName?.[0] || 'R')}
         </div>
         <div>
           <div className="text-sm font-semibold text-white">{s.profile.displayName || userId}</div>
@@ -55,6 +58,15 @@ function AcademicSection({ s, set }) {
     next[subject] = level;
     set('subjects', next);
   };
+  /* Per-subject cover image (PNG/JPG → api.uploadAvatar kind='subject') */
+  const subjectImgRefs = useRef({});
+  const uploadSubjectImage = async (subject, file) => {
+    const res = await api.uploadAvatar(file, 'subject', subject).catch(() => null);
+    const url = res?.url || (file ? URL.createObjectURL(file) : '');
+    if (!url) return;
+    const next = { ...(s.subjectImages || {}), [subject]: url };
+    set('subjectImages', next);
+  };
   return (
     <div className="space-y-7">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg">
@@ -78,6 +90,31 @@ function AcademicSection({ s, set }) {
         <div className="space-y-2 max-w-lg">
           {Object.entries(s.subjects).map(([subject, level]) => (
             <div key={subject} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-950/40 border border-white/6">
+              <button
+                type="button"
+                onClick={() => subjectImgRefs.current[subject]?.click()}
+                title="Upload a subject image (PNG/JPG)"
+                aria-label={`Upload image for ${subject}`}
+                className="w-9 h-9 shrink-0 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center text-base cursor-pointer hover:border-blue-500/50 transition group relative"
+              >
+                {s.subjectImages?.[subject]
+                  ? <img src={s.subjectImages[subject]} alt="" className="w-full h-full object-cover" />
+                  : <span>📚</span>}
+                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/50 flex items-center justify-center transition opacity-0 group-hover:opacity-100">
+                  <Camera className="w-3.5 h-3.5 text-white" />
+                </span>
+              </button>
+              <input
+                ref={(el) => { subjectImgRefs.current[subject] = el; }}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadSubjectImage(subject, f);
+                  e.target.value = '';
+                }}
+              />
               <span className="text-xs text-slate-200 flex-1">{subject}</span>
               <select
                 value={level}
@@ -438,7 +475,7 @@ function LanguageSection({ s, set }) {
 }
 
 /* ── ADVANCED ────────────────────────────────────────────────────────────── */
-function AdvancedSection({ s, set }) {
+function AdvancedSection({ s, set, onGoTo }) {
   const [showJson, setShowJson] = useState(false);
   return (
     <div className="space-y-4 max-w-lg">
@@ -461,6 +498,19 @@ function AdvancedSection({ s, set }) {
       <button type="button" className="px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-300 hover:bg-rose-500/20 transition cursor-pointer">
         Reset all settings to defaults
       </button>
+      <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/40 border border-white/6">
+        <div>
+          <div className="text-xs text-slate-200 font-medium">Data Lake</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">Anonymized training pool — the dataset that improves every future agent.</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onGoTo && onGoTo('datalake')}
+          className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+        >
+          Open →
+        </button>
+      </div>
     </div>
   );
 }
@@ -482,7 +532,7 @@ export function SettingsSections({ section, s, set, userId, onGoTo }) {
     case 'experimental': return <ExperimentalSection s={s} set={set} />;
     case 'accessibility': return <AccessibilitySection s={s} set={set} />;
     case 'language': return <LanguageSection s={s} set={set} />;
-    case 'advanced': return <AdvancedSection s={s} set={set} />;
+    case 'advanced': return <AdvancedSection s={s} set={set} onGoTo={onGoTo} />;
     default: return null;
   }
 }

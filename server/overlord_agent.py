@@ -142,6 +142,75 @@ class OverlordAgent:
         self._chat_histories[k].append(msg)
         return msg
 
+    async def compact_chat_history(
+        self,
+        user: Any,
+        target_key: str | int = "0",
+        max_messages: int = 40,
+        max_chars: int = 12_000,
+    ) -> str:
+        """Summarize + trim a chat thread so it never bloats.
+
+        Thresholds: more than ``max_messages`` messages OR more than
+        ``max_chars`` of text. The oldest messages are summarized with a
+        low-effort LLM call (cheap engines — compaction never needs flagship
+        reasoning), the newest 10 stay verbatim, and the summary is injected
+        as an overlord message. If the LLM is unreachable we fall back to
+        keeping the newest 15 messages unsummarized.
+        """
+        from .llm import call_llm
+
+        k = str(target_key)
+        history = self._chat_histories.get(k, [])
+        total_chars = sum(len(m.get("text", "")) for m in history)
+        if len(history) <= max_messages and total_chars <= max_chars:
+            return None  # nothing to compact
+
+        if history and history[0].get("id") == "init_msg":
+            history = history[1:]
+        oldest = history[:-10]
+        newest = history[-10:]
+        transcript = "\n".join(
+            f"[{m.get('sender', '?')}] {m.get('text', '')}" for m in oldest
+        )
+        summary = None
+        if transcript.strip():
+            try:
+                effort = 200
+                settings = (user.settings or {}) if user else {}
+                raw_effort = settings.get("effort_score")
+                if isinstance(raw_effort, (int, float)):
+                    effort = max(100, min(400, int(raw_effort) // 2))
+                summary = await call_llm(
+                    system_prompt=(
+                        "You are a context compactor for a personal study agent. "
+                        "Compress the chat transcript into a dense but complete "
+                        "summary of decisions, facts, deadlines and user preferences. "
+                        "Keep it under 250 words."
+                    ),
+                    user_prompt=f"Compress this agent chat transcript:\n\n{transcript[:12000]}",
+                    temperature=0.2,
+                    max_tokens=400,
+                    effort_score=effort,
+                )
+                summary = summary.strip() or None
+            except Exception:
+                summary = None
+
+        if summary:
+            self._chat_histories[k] = newest + [{
+                "id": f"summary_{uuid.uuid4().hex[:8]}",
+                "sender": "overlord",
+                "text": f"🧹 Earlier context compacted: {summary}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "suggested_actions": [],
+                "subagent_logs": [],
+                "metadata": {"compacted": True},
+            }]
+            return f"Compacted {len(oldest)} messages into a summary."
+        self._chat_histories[k] = newest[-15:]
+        return f"LLM summary unavailable — trimmed to the newest {len(newest[-15:])} messages."
+
     def create_pending_permission(
         self,
         user_public_id: str,
