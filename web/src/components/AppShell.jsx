@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import {
-  Search, Settings, Bell, LogOut, GraduationCap,
+  Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
@@ -223,6 +223,7 @@ function NotificationBell({ onOpenAll }) {
 export default function AppShell({
   activeView, onNavigate, isAdmin, isLoggedIn, user, onLogout,
   onOpenSearch, onOpenAuth, onOpenPrivacy, children,
+  canGoBack = false, canGoForward = false, onGoBack, onGoForward,
 }) {
   const [collapsed, setCollapsed] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -261,6 +262,30 @@ export default function AppShell({
           </button>
 
           <span className="w-px h-6 bg-white/8 mx-1 hidden sm:block" />
+
+          {/* Back / forward navigation */}
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onGoBack}
+              disabled={!canGoBack}
+              aria-label="Back"
+              title="Back"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 enabled:hover:text-white enabled:hover:bg-white/6 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              <ChevronLeft width={18} height={18} />
+            </button>
+            <button
+              type="button"
+              onClick={onGoForward}
+              disabled={!canGoForward}
+              aria-label="Forward"
+              title="Forward"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 enabled:hover:text-white enabled:hover:bg-white/6 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              <ChevronRight width={18} height={18} />
+            </button>
+          </div>
 
           {/* Global search trigger */}
           <button

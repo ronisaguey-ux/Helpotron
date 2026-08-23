@@ -10,6 +10,7 @@ import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, S
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const SECTIONS = [
   { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan' },
@@ -291,9 +292,8 @@ export default function SettingsApp({ userId, onGoTo }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
       {/* Section list */}
-      <div className="clean-card p-3 h-fit sticky top-20">
-        {/* Progressive disclosure */}
-        <div className="px-2 pb-3 mb-2 border-b border-white/8">
+      <SectionCard id="settings-nav" padding="p-3" className="h-fit sticky top-20" header={
+        <div className="px-2 pb-3 border-b border-white/8">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Display mode</div>
           <div className="grid grid-cols-3 gap-1">
             {[['simple', 'Simple'], ['advanced', 'Advanced'], ['expert', 'Expert']].map(([k, label]) => (
@@ -315,6 +315,7 @@ export default function SettingsApp({ userId, onGoTo }) {
             {isExpert && 'Expert: raw configuration and experimental features.'}
           </p>
         </div>
+      }>
 
         <div className="px-2 pt-2 pb-2">
           <input
@@ -354,11 +355,11 @@ export default function SettingsApp({ userId, onGoTo }) {
             <div className="px-3 py-6 text-center text-[10px] text-slate-600">No settings match “{search}”</div>
           )}
         </nav>
-      </div>
+      </SectionCard>
 
       {/* Section page */}
-      <div className="clean-card p-6 min-w-0">
-        <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/8">
+      <SectionCard id="settings-section" padding="p-6" className="min-w-0" header={
+        <div className="flex items-center justify-between w-full border-b border-white/8">
           <div>
             <div className="flex items-center gap-2">
               <current.icon className="w-4 h-4 text-blue-400" />
@@ -379,6 +380,7 @@ export default function SettingsApp({ userId, onGoTo }) {
             )}
           </AnimatePresence>
         </div>
+      }>
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -395,7 +397,7 @@ export default function SettingsApp({ userId, onGoTo }) {
             )}
           </motion.div>
         </AnimatePresence>
-      </div>
+      </SectionCard>
     </div>
   );
 }

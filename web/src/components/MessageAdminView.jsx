@@ -14,6 +14,7 @@ import {
   Shield,
   MessageCircle,
 } from 'lucide-react';
+import SectionCard from './SectionCard.jsx';
 
 export default function MessageAdminView({ userId }) {
   const [messages, setMessages] = useState([]);
@@ -95,8 +96,8 @@ export default function MessageAdminView({ userId }) {
       </div>
 
       {/* ─── Compose Message Form ────────────────────────────────────────── */}
-      <div className="clean-card p-6 rounded-3xl bg-slate-950/60 border border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+      <SectionCard id="msgadmin-compose" padding="p-6" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-4" header={
+        <div className="flex items-center justify-between w-full">
           <h2 className="text-sm font-semibold text-white flex items-center gap-2">
             <Send className="w-4 h-4 text-blue-400" />
             Compose Message to Admin
@@ -105,6 +106,7 @@ export default function MessageAdminView({ userId }) {
             <ShieldCheck className="w-3.5 h-3.5" /> Direct Encrypted Dispatch
           </span>
         </div>
+      }>
 
         <form onSubmit={handleSendMessage} className="space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -166,7 +168,7 @@ export default function MessageAdminView({ userId }) {
             {statusNotice}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* ─── Conversation History Feed ──────────────────────────────────── */}
       <div className="space-y-4">
@@ -183,38 +185,40 @@ export default function MessageAdminView({ userId }) {
             Loading messages with Admin…
           </div>
         ) : messages.length === 0 ? (
-          <div className="clean-card rounded-3xl p-12 text-center border-dashed border-white/10 space-y-2">
+          <SectionCard id="msgadmin-empty" padding="p-12" className="rounded-3xl text-center border-dashed border-white/10 space-y-2" title="No previous messages">
             <MessageSquare className="w-8 h-8 text-slate-500 mx-auto" />
-            <h3 className="text-sm font-semibold text-slate-300">No previous messages</h3>
             <p className="text-xs text-slate-500">
               When you send a message to Admin, conversation logs and replies will appear here.
             </p>
-          </div>
+          </SectionCard>
         ) : (
           <div className="space-y-3">
             {messages.map((m) => (
-              <div
+              <SectionCard
                 key={m.id}
-                className="clean-card p-5 rounded-2xl bg-slate-950/60 border border-white/10 space-y-3 text-xs"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold mr-2">
-                      {m.category}
-                    </span>
-                    <span className="font-semibold text-white text-sm">{m.subject}</span>
-                  </div>
+                id={`msgadmin-message-${m.id}`}
+                className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3 text-xs"
+                header={
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold mr-2">
+                        {m.category}
+                      </span>
+                      <span className="font-semibold text-white text-sm">{m.subject}</span>
+                    </div>
 
-                  <span
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      m.status === 'replied'
-                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                        : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                    }`}
-                  >
-                    {m.status === 'replied' ? '💬 Replied by Admin' : '📨 Queued for Review'}
-                  </span>
-                </div>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        m.status === 'replied'
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      }`}
+                    >
+                      {m.status === 'replied' ? '💬 Replied by Admin' : '📨 Queued for Review'}
+                    </span>
+                  </div>
+                }
+              >
 
                 {/* User Message */}
                 <div className="p-3.5 rounded-xl bg-slate-900 border border-white/5 text-slate-200 leading-relaxed whitespace-pre-wrap">
@@ -239,7 +243,7 @@ export default function MessageAdminView({ userId }) {
                     <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{m.admin_reply}</p>
                   </div>
                 )}
-              </div>
+              </SectionCard>
             ))}
           </div>
         )}

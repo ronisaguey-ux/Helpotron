@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion';
 import { TrendingUp, TrendingDown, ChevronDown, Info } from 'lucide-react';
 import { WALLET, demoEnabled } from '../demoData.js';
 import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 export default function CreditWallet({ onGoToBilling }) {
   const [expanded, setExpanded] = useState(null);
@@ -33,12 +34,11 @@ export default function CreditWallet({ onGoToBilling }) {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="clean-card p-6 relative overflow-hidden"
       >
+        <SectionCard id="creditwallet-balance" padding="p-6" className="overflow-hidden" header={<div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Credit wallet</div>}>
         <div className="absolute -top-20 -right-10 w-56 h-56 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
         <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Credit wallet</div>
             <div className="text-5xl font-black text-white mt-2 tabular-nums">
               {wallet.balance.toLocaleString()}
             </div>
@@ -55,6 +55,7 @@ export default function CreditWallet({ onGoToBilling }) {
             </div>
           </div>
         </div>
+        </SectionCard>
       </motion.div>
 
       {/* Monthly flow */}
@@ -82,14 +83,15 @@ export default function CreditWallet({ onGoToBilling }) {
       </div>
 
       {/* Usage ledger with cost breakdown */}
-      <div className="clean-card p-5">
-        <div className="flex items-center justify-between mb-4">
+      <SectionCard id="creditwallet-usage" header={
+        <div className="flex items-center justify-between w-full">
           <div>
             <h3 className="text-sm font-semibold text-white">Recent usage</h3>
             <p className="text-xs text-slate-500 mt-0.5">Tap any row to see why it cost that much.</p>
           </div>
           <Badge color="blue">Fully transparent</Badge>
         </div>
+      }>
 
         <div className="space-y-2">
           {wallet.usage.map((u) => (
@@ -139,7 +141,7 @@ export default function CreditWallet({ onGoToBilling }) {
             </div>
           ))}
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

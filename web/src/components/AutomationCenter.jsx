@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { Play, Clock, Copy, Zap } from 'lucide-react';
 import { AUTOMATIONS, RUNS, SCHEDULES, TEMPLATES, RECIPES, demoEnabled } from '../demoData.js';
 import { Badge, StatusBadge, Tabs, Toggle, EmptyState, timeAgo, SectionHeader } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const AUTOS_KEY = 'helpotron_automations_state';
 
@@ -77,7 +78,7 @@ export default function AutomationCenter() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {automations.map((a) => (
-              <div key={a.id} className="clean-card p-5 space-y-3">
+              <SectionCard id={`automation-item-${a.id}`} className="space-y-3" header={
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -88,12 +89,13 @@ export default function AutomationCenter() {
                   </div>
                   <Toggle checked={a.enabled} onChange={(v) => toggle(a.id, v)} label={`${a.enabled ? 'On' : 'Off'}`} />
                 </div>
+              }>
                 <div className="flex items-center gap-2 text-[10px] text-slate-500">
                   <Badge color="slate">trigger: {a.trigger}</Badge>
                   <span>· {a.runs} runs</span>
                   <span className="ml-auto">{a.lastRun ? `last ${timeAgo(a.lastRun)}` : 'never run'}</span>
                 </div>
-              </div>
+              </SectionCard>
             ))}
           </div>
         )
@@ -101,8 +103,7 @@ export default function AutomationCenter() {
 
       {/* ── RUNS ────────────────────────────────────────────────────────── */}
       {tab === 'runs' && (
-        <div className="clean-card p-5">
-          <SectionHeader title="Run history" subtitle="Every execution of every automation" />
+        <SectionCard id="automation-run-history" header={<SectionHeader title="Run history" subtitle="Every execution of every automation" />}>
           {!demo || RUNS.length === 0 ? (
             <EmptyState title="No runs yet" body="Runs appear here as soon as an automation executes." />
           ) : (
@@ -119,14 +120,14 @@ export default function AutomationCenter() {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {/* ── SCHEDULES ───────────────────────────────────────────────────── */}
       {tab === 'schedules' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {demo && SCHEDULES.map((s) => (
-            <div key={s.id} className="clean-card p-5 flex items-start justify-between gap-3">
+            <SectionCard id={`automation-schedule-${s.id}`} className="flex items-start justify-between gap-3" header={
               <div className="flex items-start gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center shrink-0">
                   <Clock className="w-4 h-4 text-purple-300" />
@@ -137,8 +138,8 @@ export default function AutomationCenter() {
                   <div className="text-[10px] text-slate-600 mt-1">next: {new Date(s.next).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
               </div>
-              <Toggle checked={s.enabled} onChange={() => { /* demo: schedules toggle live in settings */ }} label={s.enabled ? 'On' : 'Off'} />
-            </div>
+            } headerRight={<Toggle checked={s.enabled} onChange={() => { /* demo: schedules toggle live in settings */ }} label={s.enabled ? 'On' : 'Off'} />}>
+            </SectionCard>
           ))}
           {(!demo || SCHEDULES.length === 0) && <EmptyState title="No schedules" body="Schedule automations to run on a cadence." />}
         </div>
@@ -148,11 +149,12 @@ export default function AutomationCenter() {
       {tab === 'templates' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {demo && TEMPLATES.map((t) => (
-            <div key={t.id} className="clean-card p-5 flex flex-col space-y-3">
-              <div className="flex items-center justify-between">
+            <SectionCard id={`automation-template-${t.id}`} className="flex flex-col space-y-3" header={
+              <div className="flex items-center justify-between w-full">
                 <span className="text-lg">📋</span>
                 <Badge color="slate">{t.steps} steps</Badge>
               </div>
+            }>
               <div>
                 <div className="text-xs font-semibold text-white">{t.name}</div>
                 <p className="text-[11px] text-slate-500 mt-1">{t.description}</p>
@@ -164,7 +166,7 @@ export default function AutomationCenter() {
                 <Copy className="w-3 h-3" /> Use template
               </button>
               <div className="text-[10px] text-slate-600 text-center">used {t.uses}× by the community</div>
-            </div>
+            </SectionCard>
           ))}
           {(!demo || TEMPLATES.length === 0) && <EmptyState title="No templates" body="Templates turn multi-step workflows into one click." />}
         </div>
@@ -174,11 +176,12 @@ export default function AutomationCenter() {
       {tab === 'recipes' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {demo && RECIPES.map((r) => (
-            <div key={r.id} className="clean-card p-5 space-y-3">
+            <SectionCard id={`automation-recipe-${r.id}`} className="space-y-3" header={
               <div className="flex items-center gap-2">
                 <span className="text-base">🍲</span>
                 <h3 className="text-sm font-semibold text-white">{r.name}</h3>
               </div>
+            }>
               <p className="text-[11px] text-slate-500">{r.description}</p>
               <div className="flex flex-wrap gap-1.5">
                 {r.automations.map((id) => {
@@ -190,7 +193,7 @@ export default function AutomationCenter() {
                 <span className="text-[10px] text-slate-600">{r.popularity} cooks using this</span>
                 <button type="button" className="text-[11px] font-semibold text-blue-300 hover:text-blue-200 transition cursor-pointer">Apply recipe →</button>
               </div>
-            </div>
+            </SectionCard>
           ))}
           {(!demo || RECIPES.length === 0) && <EmptyState title="No recipes yet" body="Recipes bundle automations into proven workflows." />}
         </div>
