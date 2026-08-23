@@ -4,7 +4,7 @@
  * user management with User 360 (14 admin actions + impersonation),
  * and quick actions. Deep panels live in AdminPanels.jsx.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import {
   Eye, EyeOff, X, UserPlus, Mail, ShieldAlert, CreditCard, Star, Flag,
@@ -162,21 +162,109 @@ export default function AdminConsole({ onOpenPanel }) {
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState(null);
   const [maintenance, setMaintenance] = useState(MAINTENANCE.mode !== 'normal');
+  // LIVE mode: real users from /api/admin/users, universal search from
+  // /api/admin/search, bulk selection. The demo path is unchanged.
+  const [liveUsers, setLiveUsers] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
+  const [bulkSel, setBulkSel] = useState(new Set());
+
+  useEffect(() => {
+    if (demo) return;
+    api.adminUsers()
+      .then((list) => setLiveUsers(Array.isArray(list) ? list : []))
+      .catch(() => setLiveUsers([]));
+  }, [demo]);
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  const toLive = (u) => ({
+    ...u,
+    publicId: u.public_id || u.publicId,
+    plan: u.plan ? u.plan.charAt(0).toUpperCase() + u.plan.slice(1) : 'Basic',
+    status: u.is_banned ? 'banned' : (u.status || 'active'),
+    credits: u.credits ?? 0,
+    assignments: u.assignment_count ?? u.assignments ?? 0,
+    aiRuns: u.aiRuns ?? 0,
+    spend: u.spend ?? 0,
+    subjects: u.subjects || [],
+    tags: u.tags || [],
+    flags: u.flags || [],
+    joinedDaysAgo: u.joinedDaysAgo ?? '—',
+  });
 
   const users = demo ? ADMIN_USERS.filter((u) => {
     if (planFilter !== 'all' && u.plan !== planFilter) return false;
-    if (adminSearch && !u.publicId.toLowerCase().includes(adminSearch.toLowerCase()) && !u.subjects.join('').toLowerCase().includes(adminSearch.toLowerCase())) return false;
+    if (adminSearch && !u.publicId.toLowerCase().includes(adminSearch.toLowerCase()) && !(u.subjects || []).join('').toLowerCase().includes(adminSearch.toLowerCase())) return false;
     return true;
-  }) : [];
+  }) : (searchResults ? (searchResults.users || []).map(toLive) : liveUsers.map(toLive));
+
+  const runSearch = (q) => {
+    setAdminSearch(q);
+    if (demo || q.trim().length < 2) { setSearchResults(null); return; }
+    api.adminSearch(q.trim())
+      .then((data) => { if (data && typeof data === 'object') setSearchResults(data); })
+      .catch(() => { setSearchResults(null); showToast('Universal search failed — backend unreachable'); });
+  };
 
   const onAction = (user, key) => {
-    setToast(`${user.publicId} → ${ADMIN_ACTIONS.find((a) => a.key === key)?.label || key} (demo)`);
-    setTimeout(() => setToast(null), 2400);
+    const pid = user.publicId || user.public_id;
+    const label = ADMIN_ACTIONS.find((a) => a.key === key)?.label || key;
+    // Actions with no backend endpoint stay honest: demo toast or explicit
+    // "no endpoint" note — never a fake success.
+    if (demo || ['impersonate', 'forceLogout', 'email', 'export', 'flagOverride', 'restrict', 'shadowBan', 'quota'].includes(key)) {
+      showToast(`${pid} → ${label}${demo ? ' (demo)' : ' — endpoint not built yet'}`);
+      return;
+    }
+    if (key === 'grant') {
+      api.adminAdjustCredits(pid, 50, 'admin console grant')
+        .then((r) => showToast(`+50 credits → ${pid} (new balance ${r?.new_balance ?? '?'})`))
+        .catch(() => showToast(`Grant failed for ${pid}`));
+    } else if (key === 'plan') {
+      api.adminSetPlan(pid, 'pro')
+        .then(() => showToast(`Plan set to Pro → ${pid}`))
+        .catch(() => showToast(`Plan change failed for ${pid}`));
+    } else if (key === 'resetPassword') {
+      const pw = Math.random().toString(36).slice(2, 10);
+      api.adminResetPassword(pid, pw)
+        .then(() => showToast(`Password reset for ${pid} (random — user must use Forgot Password)`))
+        .catch(() => showToast(`Password reset failed for ${pid}`));
+    } else if (key === 'suspend') {
+      api.adminBanUser(pid)
+        .then(() => showToast(`Account suspended → ${pid}`))
+        .catch(() => showToast(`Suspend failed for ${pid}`));
+    } else if (key === 'restore') {
+      api.adminUnbanUser(pid)
+        .then(() => showToast(`Account restored → ${pid}`))
+        .catch(() => showToast(`Restore failed for ${pid}`));
+    } else if (key === 'delete') {
+      showToast(`${pid} → Delete account has no backend endpoint yet — flag for manual review`);
+    }
+  };
+
+  const toggleBulk = (id) => {
+    setBulkSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const runBulk = (kind) => {
+    const ids = [...bulkSel];
+    if (!ids.length) { showToast('Select at least one user first'); return; }
+    const ops = ids.map((pid) =>
+      kind === 'grant' ? api.adminAdjustCredits(pid, 50, 'bulk grant') :
+      kind === 'plan' ? api.adminSetPlan(pid, 'pro') :
+      api.adminBanUser(pid));
+    Promise.allSettled(ops).then(() => {
+      showToast(`Bulk ${kind} applied to ${ids.length} user${ids.length > 1 ? 's' : ''}`);
+      setBulkSel(new Set());
+      if (!demo) api.adminUsers().then((list) => setLiveUsers(Array.isArray(list) ? list : [])).catch(() => {});
+    });
   };
 
   const onQuickAction = (label) => {
-    setToast(`${label} — demo run`);
-    setTimeout(() => setToast(null), 2400);
+    showToast(`${label}${demo ? ' — demo run' : ''}`);
   };
 
   const QUICK_ACTIONS = [
@@ -279,7 +367,7 @@ export default function AdminConsole({ onOpenPanel }) {
             <div className="flex gap-2 mb-3">
               <input
                 value={adminSearch}
-                onChange={(e) => setAdminSearch(e.target.value)}
+                onChange={(e) => runSearch(e.target.value)}
                 placeholder="universal_search — users, subjects, flags…"
                 className="clean-input flex-1 px-3 py-2 text-[11px] outline-none"
                 aria-label="Search users"
@@ -295,26 +383,83 @@ export default function AdminConsole({ onOpenPanel }) {
               </select>
             </div>
             <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-              {users.length === 0 ? <EmptyState title="No users match" /> : users.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => setSelected(selected?.id === u.id ? null : u)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition cursor-pointer ${
-                    selected?.id === u.id ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/6 bg-slate-950/40 hover:border-white/15'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                    {u.publicId[0]}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-semibold text-white truncate">{u.publicId}</div>
-                    <div className="text-[9px] text-slate-500 font-mono">{u.credits.toLocaleString()} cr · ${u.spend.toFixed(2)}</div>
-                  </div>
-                  <StatusBadge status={u.status} />
-                </button>
+              {users.length === 0 && !searchResults ? <EmptyState title="No users match" /> : users.map((u) => (
+                <div key={u.id} className={`flex items-center gap-2 rounded-xl border transition ${
+                  selected?.id === u.id ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/6 bg-slate-950/40 hover:border-white/15'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={bulkSel.has(u.publicId)}
+                    onChange={() => toggleBulk(u.publicId)}
+                    aria-label={`Select ${u.publicId} for bulk action`}
+                    className="ml-3 w-3.5 h-3.5 accent-blue-500 cursor-pointer shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSelected(selected?.id === u.id ? null : u)}
+                    className="w-full flex items-center gap-3 px-2 py-2.5 text-left cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                      {(u.publicId || '?')[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold text-white truncate">{u.publicId}</div>
+                      <div className="text-[9px] text-slate-500 font-mono">{u.credits.toLocaleString()} cr · ${(u.spend || 0).toFixed(2)}</div>
+                    </div>
+                    <StatusBadge status={u.status} />
+                  </button>
+                </div>
               ))}
             </div>
+
+            {/* Bulk action bar — real endpoints, applied to every selection */}
+            {bulkSel.size > 0 && (
+              <div className="mt-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-blue-200 font-semibold mr-1">{bulkSel.size} selected</span>
+                <button type="button" onClick={() => runBulk('grant')} className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-[10px] font-semibold text-white transition cursor-pointer">Grant +50 cr</button>
+                <button type="button" onClick={() => runBulk('plan')} className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-[10px] font-semibold text-white transition cursor-pointer">Set Pro</button>
+                <button type="button" onClick={() => runBulk('ban')} className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-[10px] font-semibold text-white transition cursor-pointer">Suspend</button>
+                <button type="button" onClick={() => setBulkSel(new Set())} className="ml-auto px-2 py-1 rounded-lg text-[10px] text-slate-300 hover:text-white transition cursor-pointer">Clear</button>
+              </div>
+            )}
+
+            {/* Universal search results (live mode): users + assignments + materials + credit activity */}
+            {searchResults && !demo && (
+              <div className="mt-3 space-y-3">
+                {(searchResults.assignments || []).length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assignments</div>
+                    {searchResults.assignments.map((a) => (
+                      <div key={`a${a.id}`} className="px-3 py-2 rounded-xl bg-slate-950/40 border border-white/6 text-[10px] text-slate-300 flex gap-2">
+                        <span className="truncate flex-1">{a.title}</span>
+                        <Badge color="slate">{a.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(searchResults.materials || []).length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Study materials</div>
+                    {searchResults.materials.map((m) => (
+                      <div key={`m${m.id}`} className="px-3 py-2 rounded-xl bg-slate-950/40 border border-white/6 text-[10px] text-slate-300 truncate">
+                        {m.kind} · {m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(searchResults.credit_transactions || []).length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Credit activity</div>
+                    {searchResults.credit_transactions.map((t) => (
+                      <div key={`t${t.id}`} className="px-3 py-2 rounded-xl bg-slate-950/40 border border-white/6 text-[10px] text-slate-300 flex gap-2">
+                        <span className={`font-mono ${t.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{t.delta >= 0 ? '+' : ''}{t.delta}</span>
+                        <span className="truncate flex-1">{t.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="clean-card p-5">

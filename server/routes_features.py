@@ -66,6 +66,16 @@ async def _get_feature_user(request: Request, db: Session) -> User:
     return await get_current_user(request)
 
 
+@router.get("/costs/intelligence")
+async def my_cost_intelligence(request: Request, db: Session = Depends(get_db)):
+    """User-facing cost intelligence — real breakdown from ApiUsageLog:
+    per-tier and per-subject spend, monthly total, spending limit + buffer.
+    Feeds the CostIntelligenceSection in the Credits & Billing view."""
+    user = get_current_authenticated_user(request, db)
+    from .cost_tracking import get_user_cost_intelligence
+    return get_user_cost_intelligence(user.id, db)
+
+
 # ─── 1. AUTO-DETECT ASSIGNMENT TYPE ────────────────────────────────────────
 
 class DetectTypeRequest(BaseModel):
