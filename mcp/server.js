@@ -80,6 +80,10 @@ async function login() {
 async function chat(text) {
   const headers = {
     'Content-Type': 'application/json',
+    // Marker: tells the backend this request came from the MCP bridge, so the
+    // bridge does NOT re-trigger (prevents claude -p -> MCP -> chat -> bridge
+    // recursion). The local intent pipeline handles it instead.
+    'X-Helpotron-MCP': '1',
     ...(session.cookies ? { Cookie: session.cookies } : {}),
     ...(session.csrf ? { 'X-CSRF-Token': session.csrf } : {}),
     ...(session.bearer ? { Authorization: `Bearer ${session.bearer}` } : {}),
