@@ -19,3 +19,6 @@ web/dist/
 web/node_modules/
 .claude/skills/
 pipeline/state/
+
+# runtime uploads (avatars, agent memory, agent files) — never commit user data
+uploads/
