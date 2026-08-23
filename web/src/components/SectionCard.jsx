@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 /* ── SectionCard: every panel on the site is collapsible ───────────────────
@@ -59,6 +59,13 @@ export default function SectionCard({
 
   const hasHeader = !!(header || title || icon || headerRight);
 
+  /* Collapsed headers get `collapsed` forwarded so shared headers like
+   * SectionHeader can drop their subtitle/right content — a minimized
+   * section is always a tight one-line bar, never a tall strip. */
+  const headerEl = !open && React.isValidElement(header)
+    ? React.cloneElement(header, { collapsed: true })
+    : header;
+
   return (
     /* Collapsed = a slim one-line bar (no big padding, no empty box);
      * open = the normal padded card with content. */
@@ -71,11 +78,11 @@ export default function SectionCard({
               {title}
             </h3>
           )}
-          {header && <div className="flex-1 min-w-0">{header}</div>}
-          {subtitle && !title && !header && (
+          {headerEl && <div className="flex-1 min-w-0">{headerEl}</div>}
+          {open && subtitle && !title && !header && (
             <span className="text-[11px] font-mono text-slate-500 flex-1 truncate">{subtitle}</span>
           )}
-          {headerRight}
+          {open && headerRight}
           <button
             type="button"
             onClick={toggle}
