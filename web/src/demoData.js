@@ -321,6 +321,10 @@ export const DEFAULT_SETTINGS = {
   accessibility: { reducedMotion: false, highContrast: false, largeText: false, dyslexiaFriendly: false, screenReader: true },
   language: { locale: 'en-US', timezone: 'auto', measurement: 'imperial' },
   advanced: { debugMode: false, apiLogging: false, configJson: '{}' },
+  /* scoped: hierarchical setting variants. Key = setting path (e.g. 'ai.effort'),
+   * value = array of { id, scope: {level: 'subject'|'class'|'assignment'|'task', ref}, value }.
+   * Most-specific scope wins when resolving (task > assignment > class > subject). */
+  scoped: {},
   displayMode: 'simple', // simple | advanced | expert (progressive disclosure)
 };
 
