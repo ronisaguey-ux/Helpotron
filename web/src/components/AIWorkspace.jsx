@@ -5,7 +5,7 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion';
-import { Send, Paperclip, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
+import { Send, Paperclip, Loader2, Sparkles, ShieldCheck, Bot, Undo2, History, FileText } from 'lucide-react';
 import { LIBRARY, demoEnabled, loadSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Progress, EmptyState } from './ui/os.jsx';
 
@@ -32,7 +32,7 @@ const ASK_ANSWERS = {
   'how many credits does this cost': 'This workspace session is charged per operation. The current draft generation cost 84 credits — open your Credit Wallet and tap the row to see the exact breakdown (engine, tokens, rate).',
 };
 
-export default function AIWorkspace({ userId }) {
+export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction }) {
   const demo = demoEnabled();
   const settings = loadSettings();
   const [messages, setMessages] = useState(INITIAL_EXCHANGE);
@@ -41,7 +41,18 @@ export default function AIWorkspace({ userId }) {
   const [progress, setProgress] = useState(87);
   const [selectedFile, setSelectedFile] = useState(demo ? LIBRARY[0]?.id : null);
   const [askOpen, setAskOpen] = useState(false);
+  // Autonomy spectrum: suggestion → ask → routine (trusted) → autonomous
+  const [autonomyLevel, setAutonomyLevel] = useState('routine');
+  // Action Ledger: every executed agent action lands here for undo.
+  const [actionLedger, setActionLedger] = useState([]);
+  const [activeArtifacts, setActiveArtifacts] = useState([]);
   const scrollRef = useRef(null);
+
+  const rollbackAction = (id) => {
+    if (onRollbackAction) { onRollbackAction(id); return; }
+    setActionLedger((l) => l.filter((a) => a.id !== id));
+    setMessages((m) => [...m, { role: 'ai', text: 'Action rolled back — the previous state has been restored.' }]);
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -77,6 +88,12 @@ export default function AIWorkspace({ userId }) {
       }
       setMessages((m) => [...m, { role: 'ai', text: reply }]);
       setProgress(100);
+      // Every executed action is recorded in the Action Ledger (undoable).
+      setActionLedger((l) => [
+        { id: Date.now(), description: `Updated ${ACTIVE_ASSIGNMENT.title} — ${text.slice(0, 42)}`, role: 'agent' },
+        ...l,
+      ].slice(0, 8));
+      setActiveArtifacts((a) => [{ name: 'draft_section_2.1.md', kind: 'document' }, ...a].slice(0, 6));
       setTimeout(() => setProgress(ACTIVE_ASSIGNMENT.progress), 600);
       setBusy(false);
     }, 2000);
@@ -136,6 +153,27 @@ export default function AIWorkspace({ userId }) {
           </div>
         </div>
 
+        {/* Autonomy Level Spectrum */}
+        <div className="px-5 py-2.5 border-b border-white/8 flex items-center gap-2 bg-slate-950/40">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500/80" />
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Autonomy:</span>
+          {['suggestion', 'ask', 'routine', 'autonomous'].map((level) => (
+            <button
+              key={level}
+              type="button"
+              onClick={() => setAutonomyLevel(level)}
+              className={`text-[10px] px-2.5 py-1 rounded-md capitalize transition-colors cursor-pointer ${
+                autonomyLevel === level
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              {level === 'routine' ? 'Trusted' : level}
+            </button>
+          ))}
+          <span className="ml-auto text-[9px] text-slate-600">{autonomyLevel === 'autonomous' ? 'Agent executes without asking' : autonomyLevel === 'routine' ? 'Trusted routine actions run automatically' : `Agent ${autonomyLevel}s before acting`}</span>
+        </div>
+
         {/* AI status bar */}
         <div className="px-5 py-3 bg-slate-950/40 border-b border-white/6">
           <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-1.5">
@@ -150,6 +188,35 @@ export default function AIWorkspace({ userId }) {
             <span>{CONTEXT.drafts} draft generated</span>
           </div>
         </div>
+
+        {/* Action Ledger & Undo Ribbon */}
+        {actionLedger.length > 0 && (
+          <div className="border-b border-white/8">
+            <div className="px-5 py-2.5 bg-slate-950/40 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[10px] min-w-0">
+                <History className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="font-semibold text-slate-300 whitespace-nowrap">Action Ledger</span>
+                <span className="text-slate-500 truncate">{actionLedger[0].description}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => rollbackAction(actionLedger[0].id)}
+                className="flex items-center gap-1 text-[10px] font-medium text-rose-400 hover:text-rose-300 hover:underline whitespace-nowrap cursor-pointer"
+              >
+                <Undo2 className="w-3 h-3" /> Undo Action
+              </button>
+            </div>
+            {activeArtifacts.length > 0 && (
+              <div className="px-5 py-1.5 flex items-center gap-3 overflow-x-auto">
+                {activeArtifacts.map((a, i) => (
+                  <span key={i} className="flex items-center gap-1 text-[9px] text-slate-500 whitespace-nowrap">
+                    <FileText className="w-2.5 h-2.5 text-emerald-400/70" /> {a.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4" style={{ maxHeight: 420 }}>
