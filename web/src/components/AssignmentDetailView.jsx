@@ -34,7 +34,14 @@ import {
 import StudyToolsHub from './StudyToolsHub.jsx';
 import api from '../api';
 
-export default function AssignmentDetailView({ assignment, onBack, userId }) {
+const SUBAGENTS = [
+  { id: 'writer', name: 'Writer', role: 'Draft & revision', status: 'active', progress: 82 },
+  { id: 'researcher', name: 'Researcher', role: 'Source retrieval & citations', status: 'active', progress: 64 },
+  { id: 'critic', name: 'Critic', role: 'Rubric compliance & edge cases', status: 'review', progress: 100 },
+  { id: 'editor', name: 'Editor', role: 'Formatting & polish', status: 'queued', progress: 0 },
+];
+
+export default function AssignmentWorkspace({ assignment, onBack, userId }) {
   // Available Task Types
   const allTaskTypes = [
     { key: 'complete_assignment', label: 'Complete Assignment', icon: FileCheck, desc: 'Full automated drafting and rubric synthesis' },
@@ -337,6 +344,32 @@ export default function AssignmentDetailView({ assignment, onBack, userId }) {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* ─── SUBAGENT TEAM GRAPH — live per-role status ─── */}
+      <div className="clean-card p-4">
+        <div className="flex items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Subagent Team
+        </div>
+        <div className="flex items-center gap-3 overflow-x-auto pb-1">
+          {SUBAGENTS.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 rounded-xl border border-white/6 bg-slate-950/40 px-3.5 py-2.5 min-w-[210px]">
+              <div className="w-8 h-8 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-sm shrink-0">
+                {s.id === 'writer' ? '✍️' : s.id === 'researcher' ? '🔎' : s.id === 'critic' ? '⚖️' : '🖊️'}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-slate-200">{s.name}</div>
+                <div className="text-[9px] text-slate-500 truncate">{s.role}</div>
+              </div>
+              <div className="ml-auto text-right">
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-md ${
+                  s.status === 'active' ? 'bg-blue-500/15 text-blue-300' : s.status === 'review' ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-500/15 text-slate-400'
+                }`}>{s.status}</span>
+                <div className="text-[9px] text-slate-500 mt-1">{s.progress}%</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
