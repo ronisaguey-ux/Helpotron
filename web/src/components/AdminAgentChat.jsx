@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../api.js';
+import SectionCard from './SectionCard.jsx';
 
 const SUGGESTIONS = [
   'Look up a user',
@@ -66,21 +67,22 @@ export default function AdminAgentChat() {
   }
 
   return (
-    <div className="clean-card p-5 flex flex-col" style={{ height: 'clamp(480px, calc(100vh - 13rem), 720px)' }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-white/8">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
-          <Bot className="w-4 h-4 text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold text-white flex items-center gap-2">
-            Admin Agent
-            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold text-emerald-300 uppercase tracking-wider">Auto-approve</span>
+    <div style={{ height: 'clamp(480px, calc(100vh - 13rem), 720px)' }}>
+      <SectionCard id="adminagent-chat" className="flex flex-col overflow-hidden h-full" header={
+        <div className="flex items-center gap-3 border-b border-white/8">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-white" />
           </div>
-          <div className="text-[10px] text-slate-500">Full platform control in plain language — every action is audited.</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              Admin Agent
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold text-emerald-300 uppercase tracking-wider">Auto-approve</span>
+            </div>
+            <div className="text-[10px] text-slate-500">Full platform control in plain language — every action is audited.</div>
+          </div>
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
         </div>
-        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-      </div>
+      }>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto space-y-3 py-4">
@@ -173,6 +175,7 @@ export default function AdminAgentChat() {
           <Send className="w-4 h-4" />
         </button>
       </div>
+      </SectionCard>
     </div>
   );
 }

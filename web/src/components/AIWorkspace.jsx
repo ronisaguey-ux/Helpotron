@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion';
 import { Send, Paperclip, Loader2, Sparkles, ShieldCheck, Bot, Undo2, History, FileText } from 'lucide-react';
 import { LIBRARY, demoEnabled, loadSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Progress, EmptyState } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const ACTIVE_ASSIGNMENT = { title: 'Biology Lab Report', course: 'BIO 201', status: 'draft_ready', progress: 87 };
 
@@ -116,8 +117,7 @@ export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_260px] gap-4" style={{ minHeight: 560 }}>
       {/* ── Left: Materials ─────────────────────────────────────────────── */}
-      <div className="clean-card p-4 flex flex-col space-y-3">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Materials</div>
+      <SectionCard id="ai-materials" padding="p-4" className="flex flex-col space-y-3" header={<div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Materials</div>}>
         {files.map((f) => (
           <button
             key={f.id}
@@ -137,11 +137,10 @@ export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction 
         <button type="button" className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/15 text-[11px] text-slate-400 hover:text-slate-200 hover:border-blue-500/40 transition cursor-pointer mt-auto">
           <Paperclip className="w-3.5 h-3.5" /> Add files
         </button>
-      </div>
+      </SectionCard>
 
       {/* ── Center: Conversation ────────────────────────────────────────── */}
-      <div className="clean-card p-0 flex flex-col overflow-hidden">
-        {/* Header */}
+      <SectionCard id="ai-conversation" padding="p-0" className="flex flex-col overflow-hidden" header={
         <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-white">{ACTIVE_ASSIGNMENT.title}</div>
@@ -152,6 +151,7 @@ export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction 
             <Badge color="slate">✨ {settings.ai.aiName || 'Atlas'}</Badge>
           </div>
         </div>
+      }>
 
         {/* Autonomy Level Spectrum */}
         <div className="px-5 py-2.5 border-b border-white/8 flex items-center gap-2 bg-slate-950/40">
@@ -276,7 +276,7 @@ export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction 
             <span className="hidden sm:block">Enter to send</span>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ── Right: Context ──────────────────────────────────────────────── */}
       <div className="clean-card p-4 flex flex-col space-y-4">
