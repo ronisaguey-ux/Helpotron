@@ -391,7 +391,7 @@ export default function MyAgentView({ userId = 'RoniDev', isAdmin = false, userC
       {/* ── Chat + side panels ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
         {/* Chat */}
-        <div className="clean-card p-0 overflow-hidden flex flex-col min-h-[480px]">
+        <div className="clean-card p-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-13rem),720px)]">
           <div className="px-5 py-3.5 border-b border-white/8 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-blue-400" />
@@ -423,7 +423,7 @@ export default function MyAgentView({ userId = 'RoniDev', isAdmin = false, userC
           </div>
 
           {/* Messages */}
-          <div ref={listRef} className="flex-1 p-5 overflow-y-auto space-y-3">
+          <div ref={listRef} className="flex-1 min-h-0 p-5 overflow-y-auto space-y-3">
             {messages.map((m) => {
               const isUser = m.sender === 'user';
               return (
