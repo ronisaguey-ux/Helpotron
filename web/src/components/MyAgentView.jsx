@@ -9,12 +9,13 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Send, Paperclip, Bot, ShieldCheck, Shield, Flame, RefreshCw,
+  Send, Paperclip, ShieldCheck, Shield, Flame, RefreshCw,
   Trash2, Plus, Cpu, Database, FileText, Upload, Camera, User as UserIcon,
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings, AGENT_PERSONALITIES, EFFORT_SCORES } from '../demoData.js';
 import { Badge, timeAgo } from './ui/os.jsx';
+import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
 
 const FILE_KINDS = [
@@ -285,7 +286,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="flex items-center gap-4">
             <AvatarUpload
-              url={ai.avatarUrl}
+              url={ai.avatarUrl || '/My_Agent_logo.jpeg'}
               initial="🧠"
               label="agent avatar"
               onUpload={(f) => handleAvatarUpload(f, 'agent')}
@@ -396,8 +397,12 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
         {/* Chat */}
         <SectionCard id="myagent-chat" padding="p-0" className="overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-13rem),720px)]" header={
           <div className="px-5 py-3.5 border-b border-white/8 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-blue-400" />
+            <div className="flex items-center gap-2.5">
+              <AgentAvatar
+                size="sm"
+                status={busy ? 'working' : 'ready'}
+                src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
+              />
               <span className="text-xs font-semibold text-white">Chat with {agentName}</span>
             </div>
             <button
