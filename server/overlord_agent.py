@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from .database import Assignment, CreditTransaction, StudyMaterial, User
+from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, User
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
 from .engine.sandbox import sandbox_manager
@@ -599,13 +599,44 @@ print(f"Active files: {os.listdir('.')}")
 
         elif action_type == "change_settings":
             settings = dict(user.settings or {})
-            settings.update(payload.get("settings", {}))
+            updates = payload.get("settings", {})
+            if not isinstance(updates, dict):
+                return {"action": action_type, "status": "failed", "message": "No settings provided."}
+            ai = dict(settings.get("ai") or {})
+            applied = []
+            # chat-level keys → the ai sub-dict the UI + resolver read
+            for k, v in updates.items():
+                if k in ("agent_name", "name"):
+                    ai["aiName"] = str(v)
+                    applied.append("agent name")
+                elif k in ("personality", "instructions"):
+                    ai[k] = str(v)
+                    applied.append(k)
+                elif k == "effort_score":
+                    try:
+                        settings["effort_score"] = max(1, min(1000, int(v)))
+                    except (TypeError, ValueError):
+                        continue
+                    applied.append("effort score")
+                elif k == "operation_mode" and str(v).lower() in ("manual", "auto", "yolo"):
+                    settings["operation_mode"] = str(v).lower()
+                    applied.append("mode")
+                elif k == "auto_approved_actions" and isinstance(v, list):
+                    settings["auto_approved_actions"] = v
+                    applied.append("auto-approved actions")
+                elif k in ("school_name", "major", "goal", "timezone", "theme"):
+                    settings[k] = v
+                    applied.append(k.replace("_", " "))
+            if ai:
+                settings["ai"] = ai
+            if not applied:
+                return {"action": action_type, "status": "failed", "message": "No recognized settings in that request."}
             user.settings = settings
             db.commit()
             return {
                 "action": action_type,
                 "status": "completed",
-                "message": "User settings updated successfully.",
+                "message": f"Settings updated: {', '.join(applied)}.",
                 "settings": settings,
             }
 
@@ -670,6 +701,113 @@ print(f"Active files: {os.listdir('.')}")
                 "status": "completed",
                 "message": f"Assignment #{assignment_id} officially marked completed and submitted.",
             }
+
+        elif action_type == "remember":
+            from .agent_memory import append_memory
+            text = payload.get("text", "")
+            if not text.strip():
+                return {"action": action_type, "status": "failed", "message": "No text provided to remember."}
+            entry = append_memory(user.public_id, text)
+            return {
+                "action": action_type,
+                "status": "completed",
+                "message": f"Remembered: {text[:80]}{'…' if len(text) > 80 else ''}",
+                "entry": entry,
+            }
+
+        elif action_type == "forget_memory":
+            from .agent_memory import delete_memory, load_memory
+            target = str(payload.get("entry_id") or payload.get("text") or "").strip()
+            if not target:
+                return {"action": action_type, "status": "failed", "message": "Specify which memory entry to forget."}
+            # Match by exact id first, then by text substring
+            for e in load_memory(user.public_id):
+                if e.get("id") == target or target in e.get("text", ""):
+                    delete_memory(user.public_id, e["id"])
+                    return {"action": action_type, "status": "completed", "message": f"Forgot memory: {e['text'][:80]}"}
+            return {"action": action_type, "status": "failed", "message": "No memory entry matched that."}
+
+        elif action_type == "edit_assignment":
+            from .assignments import _get_owned_assignment
+            aid = payload.get("assignment_id") or assignment_id
+            if not aid:
+                return {"action": action_type, "status": "failed", "message": "No assignment_id provided."}
+            assignment = _get_owned_assignment(int(aid), user.id, db)
+            changes = payload.get("updates", {})
+            if not changes:
+                return {"action": action_type, "status": "failed", "message": "Nothing to change."}
+            applied = []
+            allowed_status = {"tracked", "not_started", "in_progress", "completed", "submitted", "graded", "paused"}
+            if "status" in changes and changes["status"] in allowed_status:
+                assignment.status = changes["status"]
+                applied.append("status")
+            if isinstance(changes.get("progress"), dict):
+                merged = dict(assignment.progress or {})
+                merged.update(changes["progress"])
+                assignment.progress = merged
+                applied.append("progress")
+            for key in ("title", "due_date", "prompt", "file_urls"):
+                if key in changes:
+                    setattr(assignment, key, changes[key])
+                    applied.append(key)
+            db.commit()
+            if not applied:
+                return {"action": action_type, "status": "failed", "message": "Nothing usable in the update payload."}
+            return {
+                "action": action_type,
+                "status": "completed",
+                "message": f"Assignment #{assignment.id} updated: {', '.join(applied)}.",
+            }
+
+        elif action_type == "admin_lookup_user":
+            if not getattr(user, "is_admin", False) and user.public_id not in ("RoniDev", "admin"):
+                return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
+            from .database import SessionLocal as _SL
+            _db = _SL()
+            try:
+                q = payload.get("query", "")
+                matches = []
+                for u in _db.query(User).filter(User.public_id.like(f"%{q}%")).limit(5).all():
+                    matches.append({
+                        "public_id": u.public_id, "plan": u.plan, "credits": u.credits,
+                        "is_admin": bool(getattr(u, "is_admin", False)),
+                    })
+                return {"action": action_type, "status": "completed", "message": f"Found {len(matches)} user(s).", "users": matches}
+            finally:
+                _db.close()
+
+        elif action_type == "admin_adjust_credits":
+            if not getattr(user, "is_admin", False) and user.public_id not in ("RoniDev", "admin"):
+                return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
+            from .database import SessionLocal as _SL
+            _db = _SL()
+            try:
+                target = _db.query(User).filter(User.public_id == payload.get("public_id", "")).first()
+                if not target:
+                    return {"action": action_type, "status": "failed", "message": "User not found."}
+                delta = float(payload.get("delta", 0))
+                target.credits = max(0.0, (target.credits or 0.0) + delta)
+                _db.commit()
+                return {"action": action_type, "status": "completed", "message": f"{target.public_id} credits now {target.credits:.0f}."}
+            finally:
+                _db.close()
+
+        elif action_type == "admin_system_status":
+            if not getattr(user, "is_admin", False) and user.public_id not in ("RoniDev", "admin"):
+                return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
+            from .database import SessionLocal as _SL
+            _db = _SL()
+            try:
+                from sqlalchemy import func
+                stats = {
+                    "users": _db.query(func.count(User.id)).scalar() or 0,
+                    "assignments": _db.query(func.count(Assignment.id)).scalar() or 0,
+                    "agent_files": _db.query(func.count(AgentFile.id)).scalar() or 0,
+                    "status": "ok",
+                }
+                return {"action": action_type, "status": "completed", "message": f"Platform healthy: {stats['users']} users, {stats['assignments']} assignments.", "stats": stats}
+            finally:
+                _db.close()
 
         elif action_type == "run_sandbox_script":
             script = payload.get("script", "print('Sandbox run successful')")
