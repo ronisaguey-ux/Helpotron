@@ -77,6 +77,7 @@ class User(Base):
     default_effort_level: Mapped[int] = mapped_column(Integer, default=5)
 
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
+    agent_files = relationship("AgentFile", back_populates="user", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="user", cascade="all, delete-orphan")
     materials = relationship("StudyMaterial", back_populates="user", cascade="all, delete-orphan")
     credit_transactions = relationship("CreditTransaction", back_populates="user", cascade="all, delete-orphan")
@@ -136,6 +137,24 @@ class Assignment(Base):
     transcripts = relationship("Transcript", back_populates="assignment")
     materials = relationship("StudyMaterial", back_populates="assignment")
     drafts = relationship("Draft", back_populates="assignment")
+
+
+class AgentFile(Base):
+    """A file uploaded into a user's personal agent (skill / rule / automation /
+    personality). Content is stored on disk under uploads/agent_files/ with a
+    random hex name; the DB row is the index. (My Agent experience, 08-22.)"""
+
+    __tablename__ = "agent_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    file_name: Mapped[str] = mapped_column(String(512))
+    kind: Mapped[str] = mapped_column(String(32), default="skill")
+    disk_name: Mapped[str] = mapped_column(String(128))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="agent_files")
 
 
 class Transcript(Base):

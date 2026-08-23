@@ -1,22 +1,19 @@
 /* ────────────────────────────────────────────────────────────────────────────
  * App.jsx — Helpotron OS root (Experience Rewrite, 08-22)
  * AppShell chrome + Command Palette + all views:
- * HOME (Today/Activity/Notifications) · WORKSPACE (Assignments/Study Tools/
- * AI Workspace/Library/Inbox) · AUTOMATION · INTELLIGENCE · ACCOUNT ·
- * ADMIN (Control Center). All existing capabilities preserved.
+ * HOME (Today/Activity) · WORKSPACE (My Agent/Assignments/Study Tools/
+ * Library) · INTELLIGENCE (Insights) · ACCOUNT (Credits/Settings) ·
+ * ADMIN (Control Center). Legacy views map onto merged destinations
+ * (see LEGACY_VIEWS). All existing capabilities preserved.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import { WifiOff } from 'lucide-react';
 import { api, getServer, getUserId, setServer, setUserId } from './api.js';
-import AnalyticsDashboard from './components/AnalyticsDashboard.jsx';
-import ReferralSection from './components/ReferralSection.jsx';
-import CreditLeaderboard from './components/CreditLeaderboard.jsx';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import DemoModeToggle from './components/DemoModeToggle.jsx';
-import CreditsPricingDashboard from './components/CreditsPricingDashboard.jsx';
 import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
@@ -35,14 +32,14 @@ import CookieBanner from './components/CookieBanner.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import TodayView from './components/TodayView.jsx';
 import ActivityView from './components/ActivityView.jsx';
-import NotificationsView from './components/NotificationsView.jsx';
-import CreditWallet from './components/CreditWallet.jsx';
 import AutomationCenter from './components/AutomationCenter.jsx';
 import LibraryView from './components/LibraryView.jsx';
 import AIWorkspace from './components/AIWorkspace.jsx';
-import IntelligenceView from './components/IntelligenceView.jsx';
 import SettingsApp from './components/SettingsApp.jsx';
 import AdminPanels from './components/AdminPanels.jsx';
+import InsightsView from './components/InsightsView.jsx';
+import CreditsView from './components/CreditsView.jsx';
+import MyAgentView from './components/MyAgentView.jsx';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -107,7 +104,26 @@ export default function App() {
   const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const viewKey = activeView === 'overview' && openAssignment ? 'assignment' : activeView;
+  /* Legacy view → merged view/tab mapping (Experience Rewrite, 08-22).
+   * Old standalone destinations fold into the merged views:
+   * analytics/progress/recommendations/cost → insights:<tab>,
+   * wallet/billing/referral/leaderboard → credits:<tab>,
+   * notifications → activity:notifications. */
+  const LEGACY_VIEWS = {
+    analytics: ['insights', 'overview'],
+    progress: ['insights', 'progress'],
+    recommendations: ['insights', 'recommendations'],
+    cost: ['insights', 'cost'],
+    wallet: ['credits', 'balance'],
+    billing: ['credits', 'plans'],
+    referral: ['credits', 'earn'],
+    leaderboard: ['credits', 'earn'],
+    notifications: ['activity', 'notifications'],
+  };
+  const [viewTab, setViewTab] = useState(null);
+  const viewKey = activeView === 'overview' && openAssignment
+    ? 'assignment'
+    : `${activeView}:${viewTab ?? ''}`;
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [extensionGuideOpen, setExtensionGuideOpen] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -208,7 +224,14 @@ export default function App() {
       setExtensionGuideOpen(true);
       return;
     }
-    setActiveView(viewKey);
+    const mapped = LEGACY_VIEWS[viewKey];
+    if (mapped) {
+      setActiveView(mapped[0]);
+      setViewTab(mapped[1]);
+    } else {
+      setActiveView(viewKey);
+      setViewTab(null);
+    }
     setOpenAssignment(null);
   };
 
@@ -361,10 +384,10 @@ export default function App() {
                     )
                   )}
 
-                  {activeView === 'activity' && <ActivityView />}
-                  {activeView === 'notifications' && <NotificationsView />}
+                  {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
 
                   {/* WORKSPACE */}
+                  {activeView === 'agent' && <MyAgentView userId={userId} isAdmin={effectiveIsAdmin} />}
                   {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
                   {activeView === 'study' && <StudyToolsHub userId={userId} initialAssignment={openAssignment} />}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
@@ -375,15 +398,10 @@ export default function App() {
                   {activeView === 'automation' && <AutomationCenter />}
 
                   {/* INTELLIGENCE */}
-                  {activeView === 'analytics' && <AnalyticsDashboard userId={userId} />}
-                  {activeView === 'progress' && <IntelligenceView onGoTo={handleSelectView} initialTab="progress" />}
-                  {activeView === 'recommendations' && <IntelligenceView onGoTo={handleSelectView} initialTab="recommendations" />}
-                  {activeView === 'cost' && <IntelligenceView onGoTo={handleSelectView} initialTab="cost" />}
+                  {activeView === 'insights' && <InsightsView userId={userId} onGoTo={handleSelectView} initialTab={viewTab} />}
 
                   {/* ACCOUNT */}
-                  {activeView === 'wallet' && <CreditWallet onGoToBilling={() => handleSelectView('billing')} />}
-                  {activeView === 'referral' && <ReferralSection userId={userId} />}
-                  {activeView === 'billing' && <Billing userId={userId} />}
+                  {activeView === 'credits' && <CreditsView userId={userId} initialTab={viewTab} userCredits={credits} />}
                   {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} />}
 
                   {/* LEGACY + LEGAL */}
@@ -397,7 +415,6 @@ export default function App() {
                     />
                   )}
                   {activeView === 'datalake' && <DataLakeView userId={userId} />}
-                  {activeView === 'leaderboard' && <CreditLeaderboard userId={userId} userCredits={credits} />}
                   {activeView === 'message_admin' && <MessageAdminView userId={userId} />}
                   {activeView === 'privacy' && <PrivacyPolicyView />}
                   {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
@@ -424,66 +441,3 @@ export default function App() {
   );
 }
 
-function Billing({ userId }) {
-  const [balance, setBalance] = useState(10029);
-  const [msg, setMsg] = useState('');
-  const [transactions, setTransactions] = useState([]);
-
-  useEffect(() => {
-    api.dashboard(userId).then((d) => {
-      setBalance(d.credits || 10029);
-      setTransactions(d.recent_transactions || []);
-    }).catch(() => {});
-  }, [userId]);
-
-  async function handleTopUp(amountCents) {
-    try {
-      const r = await api.pay({ public_id: userId, provider: 'cashapp', amount_cents: amountCents });
-      setBalance(r.credits);
-      setMsg(`✅ Allocation updated — Current balance: ${r.credits} credits`);
-      api.dashboard(userId).then((d) => setTransactions(d.recent_transactions || [])).catch(() => {});
-    } catch (e) {
-      setMsg(`⚡ Top-up initiated: +${amountCents / 10} compute credits queued`);
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      {msg && (
-        <div className="clean-card p-4 border border-blue-500/30 text-xs text-blue-300">
-          {msg}
-        </div>
-      )}
-      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
-
-      {/* Credit Transaction History */}
-      <div className="clean-card p-6">
-        <h3 className="font-semibold mb-4 text-sm text-white flex items-center gap-2">
-          Receipts & Credit Activity
-        </h3>
-        {transactions.length === 0 ? (
-          <p className="text-xs text-slate-500 py-4">No credit transactions yet.</p>
-        ) : (
-          <div className="space-y-2 max-h-80 overflow-y-auto">
-            {transactions.map((tx, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs font-mono"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {tx.delta >= 0 ? '+' : ''}{tx.delta.toFixed(2)}
-                  </span>
-                  <span className="text-slate-400 truncate">{tx.reason}</span>
-                </div>
-                <span className="shrink-0 text-slate-500 text-[10px]">
-                  {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}

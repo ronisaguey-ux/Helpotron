@@ -1,11 +1,15 @@
 """FastAPI routes for Overlord Main Agent, Assignment Cards, 3 Operation Modes, and Permission System."""
 from __future__ import annotations
 
+import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from .agent_files import delete_agent_file, list_agent_files, save_agent_file
+from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .database import Assignment, User, get_db
 from .overlord_agent import overlord_agent, permission_engine
 
@@ -277,6 +281,131 @@ async def remove_auto_approved_rule(rule: str, request: Request, db: Session = D
     user.settings = settings
     db.commit()
     return {"status": "success", "rules": rules}
+
+
+# ─── 3.5. Personal Agent: permanent memory, files, compaction, avatars ────────
+
+class MemoryAppendRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+
+
+class MemoryReplaceRequest(BaseModel):
+    entries: List[Dict[str, Any]]
+
+
+@router.get("/agent/memory")
+async def get_agent_memory(request: Request, db: Session = Depends(get_db)):
+    """The user's permanent memory — the agent always reads this."""
+    user = _get_current_user(request, db)
+    return {"status": "success", "entries": load_memory(user.public_id)}
+
+
+@router.post("/agent/memory")
+async def post_agent_memory(payload: MemoryAppendRequest, request: Request, db: Session = Depends(get_db)):
+    """Append one memory entry."""
+    user = _get_current_user(request, db)
+    entry = append_memory(user.public_id, payload.text)
+    return {"status": "success", "entry": entry, "entries": load_memory(user.public_id)}
+
+
+@router.put("/agent/memory")
+async def put_agent_memory(payload: MemoryReplaceRequest, request: Request, db: Session = Depends(get_db)):
+    """Replace the full memory (used when the agent edits it itself)."""
+    user = _get_current_user(request, db)
+    entries = replace_memory(user.public_id, payload.entries)
+    return {"status": "success", "entries": entries}
+
+
+@router.delete("/agent/memory/{entry_id}")
+async def delete_agent_memory(entry_id: str, request: Request, db: Session = Depends(get_db)):
+    """Delete one memory entry."""
+    user = _get_current_user(request, db)
+    removed = delete_memory(user.public_id, entry_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    return {"status": "success", "entries": load_memory(user.public_id)}
+
+
+@router.get("/agent/files")
+async def get_agent_files(request: Request, db: Session = Depends(get_db)):
+    """Files loaded into the user's personal agent (skill/rule/automation/personality)."""
+    user = _get_current_user(request, db)
+    return {"status": "success", "files": list_agent_files(user.id)}
+
+
+@router.post("/agent/files/upload")
+async def upload_agent_file(
+    file: UploadFile = File(...),
+    kind: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Upload a skill / rule / automation / personality file into the agent.
+
+    Follows the existing dump-upload convention: a user may identify via the
+    multipart field when no Bearer token is present (demo/extension flows).
+    """
+    uid = user_id or "RoniDev"
+    user = db.query(User).filter(User.public_id == uid).first()
+    if not user:
+        user = User(public_id=uid, plan="basic", credits=50.0)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    try:
+        saved = await save_agent_file(user, file.filename or "upload.bin", kind or "skill", content, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "success", "file": saved, "files": list_agent_files(user.id)}
+
+
+@router.delete("/agent/files/{file_id}")
+async def delete_agent_file_route(file_id: int, request: Request, db: Session = Depends(get_db)):
+    """Delete one agent file (DB row + disk)."""
+    user = _get_current_user(request, db)
+    if not delete_agent_file(user.id, file_id):
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"status": "success", "files": list_agent_files(user.id)}
+
+
+@router.post("/agent/chat/compact")
+async def compact_agent_chat(request: Request, db: Session = Depends(get_db)):
+    """Summarize + trim the agent's chat history (auto-compaction trigger)."""
+    user = _get_current_user(request, db)
+    result = await overlord_agent.compact_chat_history(user=user)
+    return {"status": "ok", "message": result or "Chat history compacted."}
+
+
+@router.post("/uploads/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    kind: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+):
+    """Avatar upload for the user, the agent, or a subject (PNG/JPG only)."""
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Avatar too large (max 5 MB).")
+    content_type = (file.content_type or "").lower()
+    ext = "png" if content_type == "image/png" else "jpg" if content_type in ("image/jpeg", "image/jpg") else None
+    if ext is None:
+        raise HTTPException(status_code=400, detail="Only PNG or JPG images are accepted.")
+    _AVATAR_DIR = Path("./uploads/avatars")
+    _AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    disk_name = f"{uuid.uuid4().hex}.{ext}"
+    (_AVATAR_DIR / disk_name).write_bytes(content)
+    return {
+        "status": "ok",
+        "url": f"/uploads/avatars/{disk_name}",
+        "kind": kind or "user",
+        "subject": subject,
+    }
 
 
 # ─── 4. Overlord Chat & Sub-Agent Task Dispatch ────────────────────────────────

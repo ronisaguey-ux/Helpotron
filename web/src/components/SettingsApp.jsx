@@ -265,6 +265,7 @@ export default function SettingsApp({ userId, onGoTo }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [section, setSection] = useState('appearance');
   const [savedFlash, setSavedFlash] = useState(false);
+  const [search, setSearch] = useState('');
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
@@ -284,6 +285,8 @@ export default function SettingsApp({ userId, onGoTo }) {
   const current = SECTIONS.find((s) => s.key === section);
   const isSimple = settings.displayMode === 'simple';
   const isExpert = settings.displayMode === 'expert';
+  const q = search.trim().toLowerCase();
+  const visibleSections = SECTIONS.filter((sec) => !q || `${sec.label} ${sec.desc}`.toLowerCase().includes(q));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
@@ -313,8 +316,18 @@ export default function SettingsApp({ userId, onGoTo }) {
           </p>
         </div>
 
+        <div className="px-2 pt-2 pb-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search settings…"
+            aria-label="Search settings"
+            className="clean-input w-full px-3 py-2 text-[11px] outline-none"
+          />
+        </div>
+
         <nav className="space-y-0.5 max-h-[60vh] overflow-y-auto pr-1">
-          {SECTIONS.map((sec) => {
+          {visibleSections.map((sec) => {
             if (isSimple && ['data', 'experimental', 'advanced', 'shortcuts', 'language'].includes(sec.key)) return null;
             if (isExpert && ['data', 'experimental', 'advanced'].includes(sec.key)) return null;
             const Icon = sec.icon;
@@ -337,6 +350,9 @@ export default function SettingsApp({ userId, onGoTo }) {
               </button>
             );
           })}
+          {visibleSections.length === 0 && (
+            <div className="px-3 py-6 text-center text-[10px] text-slate-600">No settings match “{search}”</div>
+          )}
         </nav>
       </div>
 

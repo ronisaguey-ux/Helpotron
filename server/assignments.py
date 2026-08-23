@@ -27,6 +27,19 @@ class AssignmentIn(BaseModel):
     file_urls: Optional[List[str]] = None
 
 
+class AssignmentUpdate(BaseModel):
+    """Partial update (My Agent edit-assignment flow, 08-22) — every field
+    optional; only provided fields change. progress dicts deep-merge into the
+    existing progress map so a status flip never wipes section state."""
+
+    title: Optional[str] = None
+    due_date: Optional[str] = None
+    prompt: Optional[str] = None
+    file_urls: Optional[List[str]] = None
+    status: Optional[str] = None
+    progress: Optional[Dict[str, Any]] = None
+
+
 def _assignment_out(a: Assignment) -> Dict[str, Any]:
     return {
         "id": a.id,
@@ -105,6 +118,40 @@ async def get_assignment(
 ):
     """Fetch one of the caller's own assignments (IDOR-safe)."""
     return _assignment_out(_get_owned_assignment(assignment_id, current_user.id, db))
+
+
+@router.patch("/api/assignments/{assignment_id}")
+@router.patch("/assignments/{assignment_id}")
+async def update_assignment(
+    assignment_id: int,
+    payload: AssignmentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Partially update one of the caller's own assignments (IDOR-safe, 404 for foreign).
+
+    Used by the personal agent when it edits an assignment on the user's
+    behalf ("change the due date", "mark section 2 done", ...).
+    """
+    assignment = _get_owned_assignment(assignment_id, current_user.id, db)
+    fields = payload.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update.")
+    if "status" in fields:
+        allowed = {"tracked", "not_started", "in_progress", "completed", "submitted", "graded", "paused"}
+        if fields["status"] not in allowed:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {fields['status']}")
+        assignment.status = fields["status"]
+    if "progress" in fields and isinstance(fields["progress"], dict):
+        merged = dict(assignment.progress or {})
+        merged.update(fields["progress"])
+        assignment.progress = merged
+    for key in ("title", "due_date", "prompt", "file_urls"):
+        if key in fields:
+            setattr(assignment, key, fields[key])
+    db.commit()
+    db.refresh(assignment)
+    return {"status": "success", "assignment": _assignment_out(assignment)}
 
 
 @router.delete("/assignments/{assignment_id}")

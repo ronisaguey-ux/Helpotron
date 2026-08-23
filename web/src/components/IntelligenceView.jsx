@@ -8,7 +8,7 @@ import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { SUBJECT_PROGRESS, RECOMMENDATIONS, WEEK_STATS, COST_FORECAST, demoEnabled, loadSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Progress, Tabs, EmptyState, SectionHeader, StatCard } from './ui/os.jsx';
 
-export default function IntelligenceView({ onGoTo, initialTab }) {
+export default function IntelligenceView({ onGoTo, initialTab, embedded }) {
   const [tab, setTab] = useState(initialTab || 'progress');
   const demo = demoEnabled();
   const settings = loadSettings();
@@ -29,15 +29,17 @@ export default function IntelligenceView({ onGoTo, initialTab }) {
 
   return (
     <div className="space-y-5">
-      <Tabs
-        tabs={[
-          { key: 'progress', label: 'Academic Progress' },
-          { key: 'recommendations', label: 'Recommendations' },
-          { key: 'cost', label: 'Cost Intelligence' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+      {!embedded && (
+        <Tabs
+          tabs={[
+            { key: 'progress', label: 'Academic Progress' },
+            { key: 'recommendations', label: 'Recommendations' },
+            { key: 'cost', label: 'Cost Intelligence' },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      )}
 
       {/* ── ACADEMIC PROGRESS ────────────────────────────────────────────── */}
       {tab === 'progress' && (
