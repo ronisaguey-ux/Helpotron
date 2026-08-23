@@ -435,7 +435,7 @@ export default function AppShell({
                   {activeView === 'history' && 'All your assignments, in one place'}
                   {activeView === 'study' && 'Guides, flashcards, practice tests and summaries'}
                   {activeView === 'library' && 'Files, saved materials and your calendar'}
-                  {activeView === 'insights' && 'Analytics, progress, recommendations and cost'}
+                  {activeView === 'insights' && 'Analytics, progress and recommendations'}
                   {activeView === 'credits' && 'Balance, plans, top-ups and earnings'}
                   {activeView === 'settings' && 'Your complete configuration workspace'}
                   {activeView === 'admin' && 'Helpotron Control Center'}

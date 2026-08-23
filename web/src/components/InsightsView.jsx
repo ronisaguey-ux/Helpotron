@@ -19,14 +19,13 @@ export default function InsightsView({ userId, onGoTo, initialTab }) {
           { key: 'overview', label: 'Overview' },
           { key: 'progress', label: 'Academic Progress' },
           { key: 'recommendations', label: 'Recommendations' },
-          { key: 'cost', label: 'Cost Intelligence' },
         ]}
         active={tab}
         onChange={setTab}
       />
       {tab === 'overview'
         ? <AnalyticsDashboard userId={userId} onExplainWithAgent={() => onGoTo('agent')} />
-        : <IntelligenceView onGoTo={onGoTo} initialTab={tab} embedded onApplyRecommendation={(r) => onGoTo(r.target)} />}
+        : <IntelligenceView userId={userId} onGoTo={onGoTo} initialTab={tab} embedded onApplyRecommendation={(r) => onGoTo(r.target)} />}
     </div>
   );
 }

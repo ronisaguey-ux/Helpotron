@@ -69,7 +69,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   );
 }
 
-export default function MyAgentView({ userId = 'RoniDev', isAdmin = false, userCredits }) {
+export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [messages, setMessages] = useState([
     {
@@ -650,29 +650,6 @@ export default function MyAgentView({ userId = 'RoniDev', isAdmin = false, userC
             </div>
           </div>
 
-          {/* Admin tools — same agent, wider reach */}
-          {isAdmin && (
-            <div className="clean-card p-5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 mb-3">
-                <Shield className="w-3 h-3 text-blue-400" /> Admin reach
-              </span>
-              <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">
-                You're an admin — the agent can also look up users, adjust credits, check system health and run platform operations. Just ask it.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {['Look up a user', 'Check system health', 'Adjust someone\'s credits', 'Show platform stats'].map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => sendMessage(q)}
-                    className="px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/8 transition cursor-pointer"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
