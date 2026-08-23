@@ -265,3 +265,40 @@
 
 /* Scrollable panels inside clean-card keep the 5px theme */
 .os-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Helpotron cyber animation keyframes (logo + agent avatar)
+ * ──────────────────────────────────────────────────────────────────────────── */
+@keyframes cyber-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes visor-scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes aperture-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.4));
+  }
+  50% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.8));
+  }
+}
+
+.animate-cyber-spin {
+  animation: cyber-spin-slow 8s linear infinite;
+}
+
+.animate-visor-scan {
+  animation: visor-scanline 2.5s ease-in-out infinite;
+}
+
+.animate-aperture-pulse {
+  animation: aperture-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
