@@ -23,37 +23,37 @@ const NAV_TREE = (isAdmin) => [
   {
     group: 'HOME',
     items: [
-      { key: 'overview', label: 'Dashboard', icon: '🏠' },
-      { key: 'activity', label: 'Activity', icon: '⚡' },
+      { key: 'overview', label: 'Dashboard', icon: '🏠', logo: '/dashboard_logo.jpeg' },
+      { key: 'activity', label: 'Activity', icon: '⚡', logo: '/activity_logo.jpeg' },
     ],
   },
   {
     group: 'WORKSPACE',
     items: [
-      { key: 'agent', label: 'My Agent', icon: '🧠' },
-      { key: 'history', label: 'Assignments', icon: '📝' },
+      { key: 'agent', label: 'My Agent', icon: '🧠', logo: '/My_Agent_logo.jpeg' },
+      { key: 'history', label: 'Assignments', icon: '📝', logo: '/assignments_logo.jpeg' },
       { key: 'study', label: 'Study Tools', icon: '🎯' },
-      { key: 'library', label: 'Library', icon: '🗂️' },
+      { key: 'library', label: 'Library', icon: '🗂️', logo: '/library_logo.jpeg' },
     ],
   },
   {
     group: 'INTELLIGENCE',
     items: [
-      { key: 'insights', label: 'Insights', icon: '📊' },
+      { key: 'insights', label: 'Insights', icon: '📊', logo: '/insights_logo.jpeg' },
     ],
   },
   {
     group: 'ACCOUNT',
     items: [
-      { key: 'credits', label: 'Credits', icon: '💳' },
-      { key: 'settings', label: 'Settings', icon: '⚙' },
+      { key: 'credits', label: 'Credits', icon: '💳', logo: '/credits_logo.jpeg' },
+      { key: 'settings', label: 'Settings', icon: '⚙', logo: '/settings_logo.jpeg' },
     ],
   },
   ...(isAdmin
     ? [{
         group: 'ADMIN',
         items: [
-          { key: 'admin', label: 'Control Center', icon: '🛡️' },
+          { key: 'admin', label: 'Control Center', icon: '🛡️', logo: '/control_center_logo.jpeg' },
         ],
       }]
     : []),
@@ -428,7 +428,9 @@ export default function AppShell({
                             aria-label={item.label}
                             aria-current={selected ? 'page' : undefined}
                           >
-                            <span className="text-sm leading-none shrink-0">{item.icon}</span>
+                            {item.logo
+                              ? <img src={item.logo} alt="" className="w-4 h-4 rounded object-cover shrink-0" loading="lazy" />
+                              : <span className="text-sm leading-none shrink-0">{item.icon}</span>}
                             {sidebarOpen && <span className="truncate">{item.label}</span>}
                           </button>
                         );
@@ -447,8 +449,10 @@ export default function AppShell({
           {/* View header */}
           <div className="clean-card px-6 py-4 mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-lg leading-none">
-                {current?.icon ?? '✦'}
+              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                {current?.logo
+                  ? <img src={current.logo} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
               </div>
               <div className="min-w-0">
                 <h1 className="text-base font-semibold text-white truncate">{current?.label ?? 'Helpotron'}</h1>
