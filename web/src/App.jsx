@@ -13,8 +13,6 @@ import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
-import DemoModeToggle from './components/DemoModeToggle.jsx';
-import StudyBuddyPanel from './components/StudyBuddyPanel.jsx';
 import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
@@ -101,7 +99,6 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [credits, setCredits] = useState(10029);
   const [userPlan, setUserPlan] = useState('elite');
-  const [buddyOpen, setBuddyOpen] = useState(true);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* Legacy view → merged view/tab mapping (Experience Rewrite, 08-22).
@@ -240,9 +237,6 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
-        {/* Demo mode toggle: sample data on/off (design preview) */}
-        <DemoModeToggle />
-
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
@@ -425,14 +419,6 @@ export default function App() {
               </AnimatePresence>
             </div>
 
-            {/* Persistent Study Buddy dock */}
-            <div className={`transition-all duration-300 shrink-0 sticky top-20 ${buddyOpen ? 'w-full lg:w-96' : 'w-10'}`}>
-              <StudyBuddyPanel
-                open={buddyOpen}
-                setOpen={setBuddyOpen}
-                userId={userId}
-              />
-            </div>
           </div>
         </AppShell>
         <CookieBanner />
