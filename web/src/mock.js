@@ -10,13 +10,14 @@ const DEMO_KEY = 'helpotron_demo_mode';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function isDemoMode() {
-  // Demo mode is the default experience (absent key = on): a fresh visitor
-  // sees the fully populated design preview immediately. Only an explicit
-  // 'off' (via the toggle) routes everything to the live backend.
+  // Demo is an explicit opt-in ('on'/'true'). Absent key = LIVE mode: a fresh
+  // visitor hits the real backend. Never default demo ON — the canned shell
+  // masquerading as the app was a phantom-pass incident (see GATES.md).
   try {
-    return localStorage.getItem(DEMO_KEY) !== 'off';
+    const v = localStorage.getItem(DEMO_KEY);
+    return v === 'on' || v === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 
