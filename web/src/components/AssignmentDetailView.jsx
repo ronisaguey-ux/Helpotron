@@ -61,16 +61,10 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
   const [activeTaskTab, setActiveTaskTab] = useState('complete_assignment'); // 'complete_assignment' | 'step_by_step' | 'practice_quiz' | 'quick_summary' | 'study_guide' | 'flash_cards' | 'subagent_team'
 
   // Sub-Agent Team State — LIVE from /api/assignments/{id}/subagent-team
-  // (db-backed status derived from Assignment.status/progress). The demo
-  // roster below is only the offline fallback when the fetch fails.
+  // (db-backed status derived from Assignment.status/progress). Starts empty;
+  // the fetch is the only source of truth — no hardcoded roster.
   const [teamLive, setTeamLive] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([
-    { id: 'researcher', name: 'ResearcherAgent', role: 'Context Retrieval & Peer-Reviewed Sources', icon: '🔍', status: 'Active' },
-    { id: 'drafter', name: 'DraftingAgent', role: 'Academic Prose & Structure Synthesis', icon: '✍️', status: 'Active' },
-    { id: 'humanizer', name: 'HumanizerAgent', role: 'Burstiness & Perplexity Calibration', icon: '🛡️', status: 'Active' },
-    { id: 'auditor', name: 'RubricAuditorAgent', role: 'Milestone & Grade Metric Compliance', icon: '⚖️', status: 'Active' },
-    { id: 'citation', name: 'CitationFormatterAgent', role: 'DOI Validation & APA/MLA Formatting', icon: '📚', status: 'Active' },
-  ]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const TEAM_ICONS = { researcher: '🔍', source_analyst: '🧠', writer: '✍️', reviewer: '⚖️' };
   useEffect(() => {
     if (!assignment?.id) return;
@@ -771,6 +765,11 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
 
           {/* Team Members Status Row */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {!teamLive && teamMembers.length === 0 && (
+              <div className="col-span-full py-4 text-center text-[11px] font-mono text-slate-500">
+                Loading sub-agent team…
+              </div>
+            )}
             {teamMembers.map((m) => (
               <div key={m.id} className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs space-y-1">
                 <div className="flex items-center justify-between">
