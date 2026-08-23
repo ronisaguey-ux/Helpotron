@@ -177,4 +177,44 @@ class AdminAdvancedService:
         return {"status": "success", "overrides": self._model_routing_overrides}
 
 
+def get_user_360_profile(target_user_id: int, db: Session) -> Dict[str, Any]:
+    """360-degree admin dossier: identity, plan, activity, spend and flags.
+
+    Aggregates the user row with assignment/material counts, recent credit
+    transactions and API spend. Empty dict if the user does not exist.
+    """
+    from .database import ApiUsageLog
+
+    user = db.query(User).filter(User.id == target_user_id).first()
+    if not user:
+        return {}
+
+    assignments = db.query(Assignment).filter(Assignment.user_id == user.id).count()
+    materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).count()
+    txns = (
+        db.query(CreditTransaction)
+        .filter(CreditTransaction.user_id == user.id)
+        .order_by(CreditTransaction.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    spend_rows = db.query(ApiUsageLog).filter(ApiUsageLog.user_id == user.id).all()
+    total_spend_cents = round(sum(r.charged_cost_usd for r in spend_rows) * 100)
+
+    return {
+        'id': user.id,
+        'email': getattr(user, 'email', ''),
+        'role': getattr(user, 'role', 'user'),
+        'is_active': getattr(user, 'is_active', True),
+        'billing_balance': getattr(user, 'credits', 0),
+        'created_at': str(getattr(user, 'created_at', '')),
+        'assignments_count': assignments,
+        'materials_count': materials,
+        'total_api_spend_cents': total_spend_cents,
+        'recent_credit_transactions': [
+            {'delta': t.delta, 'reason': t.reason, 'created_at': str(t.created_at)} for t in txns
+        ],
+    }
+
+
 admin_advanced_service = AdminAdvancedService()

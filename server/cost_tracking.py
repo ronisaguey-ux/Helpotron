@@ -122,3 +122,44 @@ cost_engine = CostEngine()
 
 def log_api_cost(user_id, endpoint, model, prompt_tokens, completion_tokens):
     return cost_engine.log_cost(user_id, endpoint, model, prompt_tokens, completion_tokens)
+
+
+def get_user_cost_intelligence(user_id: int, db) -> Dict[str, Any]:
+    """Per-user cost intelligence: lifetime spend, per-assignment cost,
+    effort-tier distribution and subject breakdown, plus wallet guardrails.
+
+    Effort tier is derived from the policy-allowlisted engine that served the
+    call (low-tier utility engines -> 'Low', mid -> 'Balanced', flagship ->
+    'High'). Subject tags come from call metadata when present.
+    """
+    from .database import Assignment
+
+    rows = db.query(ApiUsageLog).filter(ApiUsageLog.user_id == user_id).all()
+    total_cents = round(sum(r.charged_cost_usd for r in rows) * 100)
+    assignments = db.query(Assignment).filter(Assignment.user_id == user_id).count()
+
+    tier_names = {
+        'deepseek-v4-flash': 'Low', 'qwen-cheap': 'Low', 'mistral-nemo': 'Low',
+        'deepseek-v4-pro': 'High',
+    }
+    tier_totals: Dict[str, float] = {}
+    subject_totals: Dict[str, float] = {}
+    for r in rows:
+        tier = tier_names.get(r.tool_or_model, 'Balanced')
+        tier_totals[tier] = tier_totals.get(tier, 0.0) + r.charged_cost_usd
+        meta = r.metadata_ if isinstance(r.metadata_, dict) else {}
+        subj = meta.get('subject')
+        if subj:
+            subject_totals[subj] = subject_totals.get(subj, 0.0) + r.charged_cost_usd
+
+    most_used_tier = max(tier_totals, key=tier_totals.get) if tier_totals else 'Balanced'
+    user = db.query(User).filter(User.id == user_id).first()
+
+    return {
+        'total_spent_cents': total_cents,
+        'cost_per_assignment_cents': round(total_cents / assignments, 1) if assignments else 0,
+        'most_used_effort_tier': most_used_tier,
+        'breakdown_by_subject': {k: round(v * 100) for k, v in sorted(subject_totals.items(), key=lambda kv: -kv[1])},
+        'spending_limit_cents': int(getattr(user, 'spending_limit_cents', 1000) or 1000) if user else 1000,
+        'auto_refill_enabled': bool(getattr(user, 'auto_refill_enabled', False)) if user else False,
+    }

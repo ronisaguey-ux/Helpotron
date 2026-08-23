@@ -19,7 +19,7 @@ import {
 import api from '../api';
 import Button from './ui/Button.jsx';
 
-export default function StudyToolsHub({ userId, initialAssignment = null }) {
+export default function ContextualStudyTools({ userId, initialAssignment = null, onLaunchTool }) {
   const [activeTool, setActiveTool] = useState('flashcards');
   const [topic, setTopic] = useState(initialAssignment?.title || '');
   const [busy, setBusy] = useState(false);

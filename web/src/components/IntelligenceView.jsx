@@ -8,7 +8,7 @@ import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { SUBJECT_PROGRESS, RECOMMENDATIONS, WEEK_STATS, COST_FORECAST, demoEnabled, loadSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, Progress, Tabs, EmptyState, SectionHeader, StatCard } from './ui/os.jsx';
 
-export default function IntelligenceView({ onGoTo, initialTab, embedded }) {
+export default function IntelligenceView({ onGoTo, initialTab, embedded, onApplyRecommendation }) {
   const [tab, setTab] = useState(initialTab || 'progress');
   const demo = demoEnabled();
   const settings = loadSettings();
@@ -131,7 +131,7 @@ export default function IntelligenceView({ onGoTo, initialTab, embedded }) {
                 <p className="text-[11px] text-slate-500 leading-relaxed">{r.body}</p>
                 <button
                   type="button"
-                  onClick={() => onGoTo(r.target)}
+                  onClick={() => { onApplyRecommendation?.(r); onGoTo(r.target); }}
                   className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
                 >
                   {r.action} →
