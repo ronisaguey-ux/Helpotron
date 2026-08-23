@@ -94,6 +94,20 @@ const DEMO_HISTORY = [
   { id: 204, title: 'Lab Report: Redox Reactions', course: 'CHE 110 — General Chemistry', status: 'submitted', due_date: '2026-07-22', score: 95 },
 ];
 
+const DEMO_MEMORY = [
+  { id: 'm1', text: 'User is an undergraduate psychology major who finds calculus tough but writes strong essays.', created_at: '2026-08-18T09:12:00-04:00' },
+  { id: 'm2', text: 'Prefers study guides over flashcards; reviews best in the evening (after 8pm).', created_at: '2026-08-19T21:30:00-04:00' },
+  { id: 'm3', text: 'MAT 201 Integration exam is on 08-25 — highest priority right now.', created_at: '2026-08-21T14:02:00-04:00' },
+  { id: 'm4', text: 'Wants natural, first-person academic tone in drafts — no overly formal language.', created_at: '2026-08-22T08:47:00-04:00' },
+];
+
+const DEMO_AGENT_FILES = [
+  { id: 'f1', file_name: 'essay-style-rule.md', kind: 'rule', size_bytes: 2140, created_at: '2026-08-20T11:05:00-04:00' },
+  { id: 'f2', file_name: 'flashcard-generator.skill.md', kind: 'skill', size_bytes: 5200, created_at: '2026-08-20T11:06:00-04:00' },
+  { id: 'f3', file_name: 'weekly-review.automation.json', kind: 'automation', size_bytes: 980, created_at: '2026-08-21T09:20:00-04:00' },
+  { id: 'f4', file_name: 'atlas-personality.md', kind: 'personality', size_bytes: 1560, created_at: '2026-08-21T18:44:00-04:00' },
+];
+
 function dashboardPayload(publicId = 'RoniDev') {
   return {
     status: 'success',
@@ -249,6 +263,19 @@ const ROUTES = [
     { id: 2, course: 'BIO 220', name: 'Cell Bio Study Cluster', members: 6 },
     { id: 3, course: 'ECO 101', name: 'Microeconomics Pod', members: 3 },
   ] }) },
+
+  // ── My Agent: memory + files (Experience Rewrite, 08-22) ─────────────────
+  // NOTE: /api/agent/chat/compact MUST precede the bare /api/agent/chat route
+  // (ROUTES is first-match-wins).
+  { match: /^\/api\/agent\/chat\/compact$/, handle: () => ({ status: 'ok', message: 'Chat history compacted (demo)' }) },
+  { match: /^\/api\/agent\/memory$/, handle: (m) => {
+    if (m === 'POST') return { status: 'ok', entry: { id: `m_${Date.now()}`, text: 'Memory entry added (demo)', created_at: new Date().toISOString() }, entries: DEMO_MEMORY };
+    if (m === 'PUT') return { status: 'ok', entries: DEMO_MEMORY };
+    return { entries: DEMO_MEMORY };
+  } },
+  { match: /^\/api\/agent\/memory\/[^/]+$/, handle: () => ({ status: 'ok', entries: DEMO_MEMORY }) },
+  { match: /^\/api\/agent\/files$/, handle: () => ({ files: DEMO_AGENT_FILES }) },
+  { match: /^\/api\/agent\/files\/[^/]+$/, handle: () => ({ status: 'ok' }) },
 
   // ── Overlord / agent chat: canned bot reply ──────────────────────────────
   { match: /^\/api\/agent\/chat/, handle: (m, u, body) => {
