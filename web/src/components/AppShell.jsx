@@ -22,7 +22,7 @@ const NAV_TREE = (isAdmin) => [
   {
     group: 'HOME',
     items: [
-      { key: 'overview', label: 'Today', icon: '🏠' },
+      { key: 'overview', label: 'Dashboard', icon: '🏠' },
       { key: 'activity', label: 'Activity', icon: '⚡' },
     ],
   },
