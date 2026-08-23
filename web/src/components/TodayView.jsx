@@ -10,6 +10,7 @@ import {
   loadSettings, CALENDAR,
 } from '../demoData.js';
 import { StatCard, Badge, Progress, SectionHeader, Timeline, eventIcon, timeAgo, EmptyState } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const LIFECYCLE = ['CAPTURED', 'ANALYZING', 'MATERIALS FOUND', 'DRAFTING', 'REVIEW', 'READY', 'COMPLETED'];
 const LIFECYCLE_STAGE = {
@@ -65,16 +66,22 @@ export default function TodayView({ onGoTo, user }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="clean-card p-6 relative overflow-hidden"
       >
+        <SectionCard
+          id="today-briefing"
+          header={
+            <div>
+              <div className="text-2xl font-bold text-white">
+                {greeting}, {name}.
+              </div>
+              <p className="text-sm text-slate-400 mt-1.5">
+                Here’s what needs your attention.
+              </p>
+            </div>
+          }
+        >
         <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         <div className="relative">
-          <div className="text-2xl font-bold text-white">
-            {greeting}, {name}.
-          </div>
-          <p className="text-sm text-slate-400 mt-1.5">
-            Here’s what needs your attention.
-          </p>
           {demo && (
             <ul className="mt-4 space-y-1.5 text-[13px]">
               <li className="text-slate-300">
@@ -96,6 +103,7 @@ export default function TodayView({ onGoTo, user }) {
             </ul>
           )}
         </div>
+        </SectionCard>
       </motion.div>
 
       {/* ── Stat cards ─────────────────────────────────────────────────────── */}
@@ -107,12 +115,13 @@ export default function TodayView({ onGoTo, user }) {
 
       {/* ── Attention + Recommendations ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 clean-card p-5">
+        <SectionCard id="today-attention" className="xl:col-span-2" header={
           <SectionHeader
             title="Needs your attention"
             subtitle="Things that are waiting on you"
             right={<button type="button" onClick={() => onGoTo('history')} className="flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200 transition cursor-pointer">All assignments <ArrowRight className="w-3 h-3" /></button>}
           />
+        }>
           {attention.length === 0 ? (
             <EmptyState
               title="Your workspace is clear"
@@ -152,15 +161,16 @@ export default function TodayView({ onGoTo, user }) {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
 
         {/* Recommendations */}
-        <div className="clean-card p-5">
+        <SectionCard id="today-recommendations" header={
           <SectionHeader
             title="What should I do?"
             subtitle="Decided for you, based on your progress"
             right={<Sparkles className="w-4 h-4 text-purple-400" />}
           />
+        }>
           {recs.length === 0 ? (
             <EmptyState title="No recommendations yet" body="Complete an assignment to start getting recommendations." />
           ) : (
@@ -190,17 +200,18 @@ export default function TodayView({ onGoTo, user }) {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
       {/* ── Subject snapshot + Recent activity ──────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <div className="clean-card p-5">
+        <SectionCard id="today-subject-snapshot" header={
           <SectionHeader
             title="Subject snapshot"
             subtitle="Strength across your courses"
             right={<button type="button" onClick={() => onGoTo('progress')} className="flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200 transition cursor-pointer">Full progress <ArrowRight className="w-3 h-3" /></button>}
           />
+        }>
           {subjects.length === 0 ? (
             <EmptyState title="No subject data yet" />
           ) : (
@@ -218,14 +229,15 @@ export default function TodayView({ onGoTo, user }) {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="clean-card p-5">
+        <SectionCard id="today-activity" header={
           <SectionHeader
             title="Recent activity"
             subtitle="Latest events across your workspace"
             right={<button type="button" onClick={() => onGoTo('activity')} className="flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200 transition cursor-pointer">All activity <ArrowRight className="w-3 h-3" /></button>}
           />
+        }>
           <Timeline
             items={events}
             renderIcon={(e) => {
@@ -240,7 +252,7 @@ export default function TodayView({ onGoTo, user }) {
             )}
             renderMeta={(e) => <div className="text-[10px] text-slate-500 mt-0.5">{e.type.replace('.', ' · ')}</div>}
           />
-        </div>
+        </SectionCard>
       </div>
     </div>
   );

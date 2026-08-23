@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import SectionCard from './SectionCard.jsx';
 import {
   Gift,
   Copy,
@@ -96,8 +97,8 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
   return (
     <div className="space-y-6 text-slate-100 animate-fadeIn max-w-5xl mx-auto">
       {/* Referral Header Banner */}
-      <div className="clean-card rounded-3xl p-6 relative overflow-hidden bg-slate-950/60 border border-white/10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <SectionCard id="referral-banner" padding="p-6" className="relative overflow-hidden bg-slate-950/60 border border-white/10" header={
+        <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-6">
           <div>
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold mb-3">
               <Gift className="w-3.5 h-3.5" /> 40-Digit Single-Use Referral System
@@ -143,6 +144,7 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             </Button>
           </div>
         </div>
+      }>
 
         {/* Subscription Gating Notice */}
         {!isSubscribed && (
@@ -160,44 +162,43 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             <span>{actionError}</span>
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="clean-card rounded-2xl p-5 space-y-1 bg-slate-950/60 border border-white/10">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
+        <SectionCard id="referral-codes-issued" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+          <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Codes Issued</span>
             <KeyRound className="w-4 h-4 text-blue-400" />
           </div>
+        }>
           <div className="text-2xl font-black text-white font-mono">{stats?.total_issued || 0}</div>
           <p className="text-[11px] text-slate-500">40-digit cryptographic tokens</p>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card rounded-2xl p-5 space-y-1 bg-slate-950/60 border border-white/10">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
+        <SectionCard id="referral-redemptions" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+          <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Successful Redemptions</span>
             <Users className="w-4 h-4 text-emerald-400" />
           </div>
+        }>
           <div className="text-2xl font-black text-emerald-400 font-mono">{stats?.total_completed || 0}</div>
           <p className="text-[11px] text-emerald-400/80">+{ (stats?.total_completed || 0) * 40 } credits earned</p>
-        </div>
+        </SectionCard>
 
-        <div className="clean-card rounded-2xl p-5 space-y-1 bg-slate-950/60 border border-white/10">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
+        <SectionCard id="referral-reward-rule" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+          <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Reward Rule</span>
             <Award className="w-4 h-4 text-purple-400" />
           </div>
+        }>
           <div className="text-sm font-bold text-white mt-1">40 Credits / Invite</div>
           <p className="text-[11px] text-slate-400">Single-use, attributed to your account</p>
-        </div>
+        </SectionCard>
       </div>
 
       {/* Redeem a Referral Code Form */}
-      <div className="clean-card rounded-3xl p-6 bg-slate-950/60 border border-white/10 space-y-4">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <Gift className="w-4 h-4 text-emerald-400" />
-          Have a 40-Digit Referral Code from a Friend?
-        </h3>
+      <SectionCard id="referral-redeem" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" title="Have a 40-Digit Referral Code from a Friend?">
         <form onSubmit={handleRedeem} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -223,11 +224,11 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             {redeemMsg}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* Issued Referral Codes History Table */}
-      <div className="clean-card rounded-3xl p-6 bg-slate-950/60 border border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+      <SectionCard id="referral-history" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" header={
+        <div className="flex items-center justify-between w-full">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-blue-400" />
             Your Issued 40-Digit Single-Use Codes
@@ -236,6 +237,7 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             {stats?.codes?.length || 0} Total Codes
           </span>
         </div>
+      }>
 
         {!stats?.codes || stats.codes.length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-500">
@@ -293,7 +295,7 @@ export default function ReferralSection({ userId = 'RoniDev' }) {
             </table>
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

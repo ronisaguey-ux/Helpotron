@@ -15,6 +15,7 @@ import {
 import { Badge, StatusBadge, SectionHeader, Progress, Slider, Toggle, Tabs, EmptyState, Timeline, timeAgo } from './ui/os.jsx';
 import AdminConsole from './AdminConsole.jsx';
 import AdminAgentChat from './AdminAgentChat.jsx';
+import SectionCard from './SectionCard.jsx';
 
 const inputCls = 'clean-input w-full px-3 py-2 text-xs outline-none';
 
@@ -29,8 +30,7 @@ function FlagsPanel() {
     setTimeout(() => setToast(null), 2200);
   };
   return (
-    <div className="clean-card p-5 space-y-3">
-      <SectionHeader title="Feature flags" subtitle="Ship anything, anywhere, anytime — with a kill switch" />
+    <SectionCard id="admin-flags" header={<SectionHeader title="Feature flags" subtitle="Ship anything, anywhere, anytime — with a kill switch" />}>
       {!demo || flags.length === 0 ? <EmptyState title="No flags" /> : flags.map((f) => (
         <div key={f.id} className="flex items-center gap-4 px-4 py-3 rounded-xl bg-slate-950/40 border border-white/6">
           <div className="min-w-0 flex-1">
@@ -41,7 +41,7 @@ function FlagsPanel() {
         </div>
       ))}
       {toast && <div className="text-[11px] text-emerald-300">✓ {toast}</div>}
-    </div>
+    </SectionCard>
   );
 }
 
@@ -53,12 +53,13 @@ function ExperimentsPanel() {
       {demoEnabled() && EXPERIMENTS.map((ex) => {
         const win = (ex.variantA > ex.control ? 'Variant A' : 'Control');
         return (
-          <div key={ex.id} className="clean-card p-5 space-y-3">
+          <SectionCard id={`admin-experiment-${ex.id}`} header={
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-white">{ex.name}</span>
               <Badge color={ex.status === 'running' ? 'blue' : 'amber'}>{ex.status}</Badge>
               <span className="ml-auto text-[10px] text-slate-500">running {ex.startedDaysAgo} days</span>
             </div>
+          }>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex justify-between text-[10px] text-slate-500 mb-1"><span>Control</span><span className="font-mono">{ex.control}%</span></div>
@@ -77,7 +78,7 @@ function ExperimentsPanel() {
               ))}
             </div>
             <div className="text-[10px] text-slate-500">Current leader: <Badge color={ex.variantA > ex.control ? 'green' : 'slate'}>{win}</Badge> — auto-promote on statistical significance (95%)</div>
-          </div>
+          </SectionCard>
         );
       })}
     </div>
@@ -93,8 +94,7 @@ function AIRoomPanel() {
   const simCost = (row) => Math.round(row.cost * (w[row.tier === 'Fast tier' ? 'fast' : row.tier === 'Balanced tier' ? 'balanced' : 'flagship'] / 100) * (100 / 30));
   return (
     <div className="space-y-5">
-      <div className="clean-card p-5">
-        <SectionHeader title="AI Control Room" subtitle="Watch the engines work, simulate the cost" />
+      <SectionCard id="admin-ai-room" header={<SectionHeader title="AI Control Room" subtitle="Watch the engines work, simulate the cost" />}>
         {!demo ? <EmptyState title="No AI traffic" /> : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="space-y-4">
@@ -142,9 +142,8 @@ function AIRoomPanel() {
             </div>
           </div>
         )}
-      </div>
-      <div className="clean-card p-5">
-        <SectionHeader title="Routing rules" subtitle="Task → tier. Effort score is the only user control." />
+      </SectionCard>
+      <SectionCard id="admin-routing-rules" header={<SectionHeader title="Routing rules" subtitle="Task → tier. Effort score is the only user control." />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {ROUTING_RULES.map((r) => (
             <div key={r.task} className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-950/40 border border-white/6">
@@ -153,7 +152,7 @@ function AIRoomPanel() {
             </div>
           ))}
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -180,8 +179,7 @@ function CostPanel() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="clean-card p-5">
-          <SectionHeader title="Cost per plan" subtitle="Where the money actually goes" />
+        <SectionCard id="admin-cost-per-plan" header={<SectionHeader title="Cost per plan" subtitle="Where the money actually goes" />}>
           <div className="space-y-3">
             {fc.perPlan.map((p) => (
               <div key={p.plan} className="flex items-center gap-4">
@@ -194,9 +192,8 @@ function CostPanel() {
               </div>
             ))}
           </div>
-        </div>
-        <div className="clean-card p-5">
-          <SectionHeader title="Cost per feature" subtitle="Runs × average operation cost" />
+        </SectionCard>
+        <SectionCard id="admin-cost-per-feature" header={<SectionHeader title="Cost per feature" subtitle="Runs × average operation cost" />}>
           <div className="space-y-3">
             {fc.perFeature.map((f) => (
               <div key={f.feature} className="flex items-center gap-4">
@@ -209,7 +206,7 @@ function CostPanel() {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20 text-[11px] text-amber-200">
@@ -236,8 +233,7 @@ function HealthPanel() {
           </div>
         ))}
       </div>
-      <div className="clean-card p-5">
-        <SectionHeader title="Recent incidents & signals" subtitle="From the event engine — admin visibility" />
+      <SectionCard id="admin-incidents" header={<SectionHeader title="Recent incidents & signals" subtitle="From the event engine — admin visibility" />}>
         <Timeline
           items={events.slice(0, 6)}
           renderTitle={(e) => (
@@ -248,7 +244,7 @@ function HealthPanel() {
           )}
           renderMeta={(e) => <span className="flex items-center gap-2"><StatusBadge status={e.status} />{timeAgo(e.timestamp)}</span>}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -257,8 +253,7 @@ function HealthPanel() {
 function AuditPanel() {
   const demo = demoEnabled();
   return (
-    <div className="clean-card p-5">
-      <SectionHeader title="Audit log" subtitle="Every admin action, forever. Append-only." />
+    <SectionCard id="admin-audit-log" header={<SectionHeader title="Audit log" subtitle="Every admin action, forever. Append-only." />}>
       {!demo || AUDIT_LOG.length === 0 ? <EmptyState title="No audit entries" /> : (
         <div className="space-y-1.5">
           {AUDIT_LOG.map((a) => (
@@ -271,7 +266,7 @@ function AuditPanel() {
           ))}
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }
 
@@ -282,8 +277,7 @@ function BroadcastPanel() {
   const [audience, setAudience] = useState('Everyone');
   const [sent, setSent] = useState(false);
   return (
-    <div className="clean-card p-5 max-w-xl space-y-4">
-      <SectionHeader title="Broadcast center" subtitle="One message, everyone who matters" />
+    <SectionCard id="admin-broadcast" header={<SectionHeader title="Broadcast center" subtitle="One message, everyone who matters" />}>
       <div>
         <label className="block text-[10px] font-medium text-slate-400 mb-1.5">Audience</label>
         <div className="flex flex-wrap gap-1.5">
@@ -320,7 +314,7 @@ function BroadcastPanel() {
         {sent && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[11px] text-emerald-300">✓ Queued for {audience} — estimated 1,284 recipients (demo)</motion.span>}
       </div>
       <div className="text-[9px] text-slate-600">Broadcasts are logged in the audit trail and appear in the notification center for every recipient.</div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -336,8 +330,7 @@ function MaintenancePanel() {
   ];
   const [armed, setArmed] = useState(false);
   return (
-    <div className="clean-card p-5 max-w-xl space-y-4">
-      <SectionHeader title="Maintenance mode" subtitle="Control the platform's front door" />
+    <SectionCard id="admin-maintenance" header={<SectionHeader title="Maintenance mode" subtitle="Control the platform's front door" />}>
       <div className="space-y-2">
         {MODES.map(([key, label, desc, tone]) => (
           <button
@@ -376,7 +369,7 @@ function MaintenancePanel() {
           <span className="text-[10px] text-slate-500">All clear — platform in normal mode.</span>
         )}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -391,8 +384,7 @@ function LiveSystemMap() {
   const levels = [0, 1, 2];
   return (
     <div className="space-y-5">
-      <div className="clean-card p-5">
-        <SectionHeader title="Live system map" subtitle="The platform, one hop at a time. Click a node." />
+      <SectionCard id="admin-system-map" header={<SectionHeader title="Live system map" subtitle="The platform, one hop at a time. Click a node." />}>
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/40 p-1 rounded-lg border border-white/6 w-fit mb-4">
           {['architecture', 'live', 'traffic', 'dependencies', 'errors', 'ai', 'data'].map((m) => (
             <button
@@ -458,7 +450,7 @@ function LiveSystemMap() {
             </AnimatePresence>
           </div>
         )}
-      </div>
+      </SectionCard>
       <div className="flex items-center gap-2 text-[10px] text-slate-500 px-2">
         <span className={`w-2 h-2 rounded-full ${running ? 'bg-blue-400 animate-pulse' : 'bg-slate-600'}`} />
         {running} jobs running right now · traffic flows through the router to a tier, then to the queue
@@ -502,12 +494,14 @@ function AnalystPanel() {
   };
 
   return (
-    <div className="clean-card p-0 flex flex-col overflow-hidden" style={{ height: 480 }}>
-      <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-purple-400" />
-        <span className="text-xs font-semibold text-white">AI Admin Analyst</span>
-        <Badge color="purple" className="ml-2">reads everything</Badge>
-      </div>
+    <div style={{ height: 480 }}>
+      <SectionCard id="admin-analyst" padding="p-0" className="flex flex-col overflow-hidden h-full" header={
+        <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <span className="text-xs font-semibold text-white">AI Admin Analyst</span>
+          <Badge color="purple" className="ml-2">reads everything</Badge>
+        </div>
+      }>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -548,6 +542,7 @@ function AnalystPanel() {
           </button>
         </div>
       </div>
+    </SectionCard>
     </div>
   );
 }

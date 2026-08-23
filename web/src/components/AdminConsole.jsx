@@ -15,6 +15,7 @@ import {
   MAINTENANCE, demoEnabled,
 } from '../demoData.js';
 import { Badge, StatusBadge, StatCard, SectionHeader, Timeline, EmptyState, timeAgo } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 /* 14 admin actions from the vision spec (static hover classes — Tailwind JIT
    cannot generate `hover:bg-${tone}-…` from a template literal) */
@@ -318,8 +319,7 @@ export default function AdminConsole({ onOpenPanel }) {
         {/* Left: attention + activity */}
         <div className="xl:col-span-2 space-y-5">
           {/* Attention queue */}
-          <div className="clean-card p-5">
-            <SectionHeader title="Needs attention" subtitle="Things worth looking at before they escalate" />
+          <SectionCard id="admin-attention" header={<SectionHeader title="Needs attention" subtitle="Things worth looking at before they escalate" />}>
             {demo && ADMIN_ATTENTION.length === 0 ? <EmptyState title="All clear" /> : (
               <div className="space-y-2">
                 {ADMIN_ATTENTION.map((a, i) => (
@@ -331,11 +331,10 @@ export default function AdminConsole({ onOpenPanel }) {
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
 
           {/* Live admin activity */}
-          <div className="clean-card p-5">
-            <SectionHeader title="Live activity" subtitle="The event engine, admin side" />
+          <SectionCard id="admin-live-activity" header={<SectionHeader title="Live activity" subtitle="The event engine, admin side" />}>
             {demo ? (
               <Timeline
                 items={ADMIN_EVENTS}
@@ -357,13 +356,12 @@ export default function AdminConsole({ onOpenPanel }) {
             ) : (
               <EmptyState title="No activity" body="Events appear here as the platform runs." />
             )}
-          </div>
+          </SectionCard>
         </div>
 
         {/* Right: users + quick actions */}
         <div className="space-y-5">
-          <div className="clean-card p-5">
-            <SectionHeader title="Users" subtitle="Search, inspect, act" />
+          <SectionCard id="admin-users" header={<SectionHeader title="Users" subtitle="Search, inspect, act" />}>
             <div className="flex gap-2 mb-3">
               <input
                 value={adminSearch}
@@ -460,10 +458,9 @@ export default function AdminConsole({ onOpenPanel }) {
                 )}
               </div>
             )}
-          </div>
+          </SectionCard>
 
-          <div className="clean-card p-5">
-            <SectionHeader title="Quick actions" subtitle="One click, fully audited" />
+          <SectionCard id="admin-quick-actions" header={<SectionHeader title="Quick actions" subtitle="One click, fully audited" />}>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((qa) => (
                 <button
@@ -476,7 +473,7 @@ export default function AdminConsole({ onOpenPanel }) {
                 </button>
               ))}
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
 

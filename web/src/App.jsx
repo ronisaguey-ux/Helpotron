@@ -101,6 +101,10 @@ export default function App() {
   const [userPlan, setUserPlan] = useState('elite');
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /* Back/forward navigation history — stack of {view, tab, assignment}
+   * snapshots so the top-left chevrons can step through the session. */
+  const [navBack, setNavBack] = useState([]);
+  const [navFwd, setNavFwd] = useState([]);
   /* Legacy view → merged view/tab mapping (Experience Rewrite, 08-22).
    * Old standalone destinations fold into the merged views:
    * analytics/progress/recommendations/cost → insights:<tab>,
@@ -216,19 +220,46 @@ export default function App() {
     setUserIdState('Guest');
   };
 
+  /* Push the current view onto the back stack, clear the forward stack —
+   * called before any view change initiated by the user. */
+  const recordNav = () => {
+    setNavBack((b) => [...b, { view: activeView, tab: viewTab, assignment: openAssignment }]);
+    setNavFwd([]);
+  };
+
+  const goBack = () => {
+    if (navBack.length === 0) return;
+    const entry = navBack[navBack.length - 1];
+    setNavFwd((f) => [...f, { view: activeView, tab: viewTab, assignment: openAssignment }]);
+    setNavBack((b) => b.slice(0, -1));
+    setActiveView(entry.view);
+    setViewTab(entry.tab);
+    setOpenAssignment(entry.assignment);
+  };
+
+  const goForward = () => {
+    if (navFwd.length === 0) return;
+    const entry = navFwd[navFwd.length - 1];
+    setNavBack((b) => [...b, { view: activeView, tab: viewTab, assignment: openAssignment }]);
+    setNavFwd((f) => f.slice(0, -1));
+    setActiveView(entry.view);
+    setViewTab(entry.tab);
+    setOpenAssignment(entry.assignment);
+  };
+
   const handleSelectView = (viewKey) => {
     if (viewKey === 'extension_guide') {
       setExtensionGuideOpen(true);
       return;
     }
     const mapped = LEGACY_VIEWS[viewKey];
-    if (mapped) {
-      setActiveView(mapped[0]);
-      setViewTab(mapped[1]);
-    } else {
-      setActiveView(viewKey);
-      setViewTab(null);
-    }
+    const nextView = mapped ? mapped[0] : viewKey;
+    const nextTab = mapped ? mapped[1] : null;
+    /* Same destination (e.g. clicking the current nav item) — no history push. */
+    if (nextView === activeView && nextTab === viewTab && !openAssignment) return;
+    recordNav();
+    setActiveView(nextView);
+    setViewTab(nextTab);
     setOpenAssignment(null);
   };
 
@@ -329,6 +360,10 @@ export default function App() {
         <AppShell
           activeView={activeView}
           onNavigate={handleSelectView}
+          canGoBack={navBack.length > 0}
+          canGoForward={navFwd.length > 0}
+          onGoBack={goBack}
+          onGoForward={goForward}
           isAdmin={effectiveIsAdmin}
           isLoggedIn={isLoggedIn}
           user={{ credits, public_id: userId }}
@@ -362,7 +397,7 @@ export default function App() {
                       <AssignmentDetailView
                         assignment={openAssignment}
                         userId={userId}
-                        onBack={() => setOpenAssignment(null)}
+                        onBack={goBack}
                       />
                     ) : (
                       <>
@@ -371,7 +406,7 @@ export default function App() {
                           <AssignmentCardDashboard
                             userId={userId}
                             isGuest={isGuest}
-                            onSelectAssignment={setOpenAssignment}
+                            onSelectAssignment={(a) => { recordNav(); setOpenAssignment(a); }}
                           />
                         </div>
                       </>
@@ -403,6 +438,7 @@ export default function App() {
                     <AssignmentDumpView
                       userId={userId}
                       onSelectAssignment={(a) => {
+                        recordNav();
                         setOpenAssignment(a);
                         setActiveView('overview');
                       }}

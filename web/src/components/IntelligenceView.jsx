@@ -8,6 +8,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import api from '../api.js';
 import { SUBJECT_PROGRESS, RECOMMENDATIONS, WEEK_STATS, demoEnabled } from '../demoData.js';
 import { Badge, Progress, EmptyState, SectionHeader, StatCard } from './ui/os.jsx';
+import SectionCard from './SectionCard.jsx';
 
 /* Real-data rules engine: recommendations are DERIVED from the analytics
    payload. Nothing is hardcoded — every rule reads actual numbers. */
@@ -149,8 +150,9 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <div className="xl:col-span-2 clean-card p-5">
+            <SectionCard id="intel-subject-scores" className="xl:col-span-2" header={
               <SectionHeader title={demo ? 'Subject scores' : 'Study focus by material'} subtitle={demo ? 'Your current strength per subject' : 'Share of your total study time per material type (real data)'} />
+            }>
               {demo ? (
                 progress.length === 0 ? (
                   <EmptyState title="No progress data yet" />
@@ -193,12 +195,11 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
                   ))}
                 </div>
               )}
-            </div>
+            </SectionCard>
 
             <div className="space-y-4">
               {strongest && (
-                <div className="clean-card p-5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{demo ? 'Strongest subject' : 'Most studied'}</div>
+                <SectionCard id="intel-strongest" header={<div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{demo ? 'Strongest subject' : 'Most studied'}</div>}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
                       <TrendingUp className="w-4 h-4 text-emerald-400" width={18} height={18} />
@@ -208,11 +209,10 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
                       <div className="text-[10px] text-slate-500 font-mono">{demo ? `${strongest.score}% · ${strongest.trend}` : `${Math.round(strongest.share * 100)}% · ${strongest.minutes}m`}</div>
                     </div>
                   </div>
-                </div>
+                </SectionCard>
               )}
               {weakest && (
-                <div className="clean-card p-5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{demo ? 'Needs attention' : 'Least studied'}</div>
+                <SectionCard id="intel-weakest" header={<div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{demo ? 'Needs attention' : 'Least studied'}</div>}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center">
                       <TrendingDown className="w-4 h-4 text-rose-400" width={18} height={18} />
@@ -229,7 +229,7 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
                   >
                     Start a drill session →
                   </button>
-                </div>
+                </SectionCard>
               )}
             </div>
           </div>
@@ -245,12 +245,13 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {recs.map((r) => (
-              <div key={r.id} className="clean-card p-5 space-y-3">
+              <SectionCard id={`intel-rec-${r.id}`} className="space-y-3" header={
                 <div className="flex items-center gap-2">
                   <span className="text-lg">{r.icon}</span>
                   <span className="text-sm font-semibold text-white">{r.title}</span>
                   <Badge color={r.priority === 'high' ? 'red' : 'amber'} className="ml-auto">{r.priority}</Badge>
                 </div>
+              }>
                 <p className="text-[11px] text-slate-500 leading-relaxed">{r.body}</p>
                 <button
                   type="button"
@@ -259,7 +260,7 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
                 >
                   {r.action} →
                 </button>
-              </div>
+              </SectionCard>
             ))}
           </div>
         )
