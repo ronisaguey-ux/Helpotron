@@ -14,6 +14,7 @@ import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../dem
 import DemoModeToggle from './DemoModeToggle.jsx';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
 import Button from './Button.jsx';
+import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
 const EFFORT_LABELS = { low: 'Low', balanced: 'Balanced', high: 'High' };
 
@@ -253,12 +254,10 @@ export default function AppShell({
             className="flex items-center gap-2 cursor-pointer select-none group"
             aria-label="Helpotron home"
           >
-            <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-black text-white shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 transition">
-              ✦
-            </span>
-            <span className="text-sm font-bold tracking-wide text-white hidden sm:block">
-              HELPOTRON
-            </span>
+            <AnimatedLogo
+              size="md"
+              className="[&>div:last-child]:hidden sm:[&>div:last-child]:block"
+            />
           </button>
 
           <span className="w-px h-6 bg-white/8 mx-1 hidden sm:block" />
