@@ -1,3 +1,4 @@
+// export target: web/src/components/AnalyticsDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api.js';
 import { BarChart3, Clock, DollarSign, BookOpen, Activity, TrendingUp, RefreshCw, Sparkles } from 'lucide-react';

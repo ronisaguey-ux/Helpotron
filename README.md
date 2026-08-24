@@ -4,24 +4,27 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi)
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
-![Tests](https://img.shields.io/badge/Tests-87%20Passed-emerald?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-121%20Passed-emerald?style=for-the-badge)
 
 ---
 
 ## 🌟 Executive Overview
 
-**Helpotron** is an advanced academic orchestration suite and multi-agent pair-programming platform designed to bridge classroom materials, empirical grading rubrics, lecture recordings, and high-fidelity coursework execution.
+**Helpotron** is an AI-native academic productivity and study operating system centered around the user's personal, configurable AI agent (**My Agent**).
 
 Helpotron eliminates repetitive busywork and optimizes study efficiency through:
+- **Centralized Capability-Based Model Router**: Intelligent multi-model router in `server/llm.py` dynamically mapping tasks to ultra-cost-efficient workers (`nemotron`, `qwen-2.5-72b`, `mistral-nemo`), vision models (`deepseek-v4-flash-vision`, `deepseek-v4-pro-vision`), and flagship reasoning models (`deepseek-r1`, `gemini-3.7-flash`).
+- **Pure Effort-Based Abstraction**: Zero model pickers in normal UI — users configure Effort (Low, Medium, Advanced, Auto-Routing).
+- **Unified My Agent Control Plane**: Single canonical agent assistant managing settings, assignments, contextual study tools, and memories with an immutable Action Ledger & 1-Click Undo.
+- **Universal Scoped Settings**: Deterministic 6-tier configuration hierarchy (Global → Subject → Class → Teacher → Assignment → Task) with Effective Configuration Inspector.
+- **Signature Assignment Workspace**: Visible subagent team telemetry (`Researcher`, `Analyst`, `Reviewer`), real-time progress bars, interactive task DAGs, and contextual study tools (FSRS v5 Spaced Repetition, Anki 2.1 exporter).
+- **Solo-Developer Mission Control**: Rebuilt Admin Command Center with 6-domain IA, 3-mode System Map (Overview, Live, Investigate), Developer Intelligence, and AI Economics telemetry (`/api/admin/ai-economics`).
 - **Universal Material Ingestion (Assignment Dump)**: Drag-and-drop ingestion of documents, audio lectures, whiteboard photos, and videos with autonomous AI assignment routing.
-- **Gemini 3.1 Flash-Lite Audio Transcription**: Direct lecture audio conversion into structured Markdown with timestamps `[MM:SS]`, speaker diarization labels, section headers, and core takeaways.
-- **Model Tiering & Effort Levels (1–10)**: Cost-aware routing between Gemini 3.1 Flash-Lite ($0.50/1M tokens) and Gemini 3.7 Flash ($2.50/1M tokens).
-- **Overlord Multi-Agent Engine**: Autonomous rubric analysis, grading criteria alignment, simulated professor scoring, and multi-pass anti-detection synthesis.
 - **Multi-Engine AI Integrity Suite**: Cross-verification against 5 commercial AI detectors (Pangram, Sapling, Originality.ai, Copyleaks, Winston AI).
 - **Empirical Data Lake & Micro-Credits**: Anonymized peer rubric contributions rewarded with spendable platform credits (0–25 cr).
 - **Single-Use 40-Digit Referral Engine**: Cryptographically secure referral codes for active subscribers (+50 cr / referral).
-- **Mandatory 2FA Purchase Protection**: Two-factor authenticated checkout for subscriptions and top-ups.
-- **Admin Cost Controls & Token Multipliers**: Granular per-user token multipliers, real-time profit margin analytics, and API cost monitoring.
+- **Mandatory 2FA Purchase Protection & GDPR Erasure**: Two-factor authenticated checkout for subscriptions and top-ups, plus GDPR Article 17 cascading account erasure.
+
 
 ---
 

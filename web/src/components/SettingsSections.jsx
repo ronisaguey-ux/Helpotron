@@ -1,3 +1,4 @@
+// export target: web/src/components/SettingsSections.jsx
 /* ────────────────────────────────────────────────────────────────────────────
  * SettingsSections.jsx — the remaining settings pages (everything except
  * Appearance and AI, which live in SettingsApp.jsx). Each section is a real
