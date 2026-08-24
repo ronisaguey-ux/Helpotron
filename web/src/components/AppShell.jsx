@@ -4,8 +4,10 @@
  * avatar quick-settings menu. Sidebar: grouped, collapsible navigation
  * (HOME / WORKSPACE / INTELLIGENCE / ACCOUNT / ADMIN).
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion';
+import api from '../api.js';
+import { applyFontScale } from './SettingsApp.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck,
@@ -32,7 +34,6 @@ const NAV_TREE = (isAdmin) => [
     items: [
       { key: 'agent', label: 'My Agent', icon: '🧠', logo: '/My_Agent_logo.jpeg' },
       { key: 'history', label: 'Assignments', icon: '📝', logo: '/assignments_logo.jpeg' },
-      { key: 'study', label: 'Study Tools', icon: '🎯' },
       { key: 'library', label: 'Library', icon: '🗂️', logo: '/library_logo.jpeg' },
     ],
   },
@@ -45,7 +46,7 @@ const NAV_TREE = (isAdmin) => [
   {
     group: 'ACCOUNT',
     items: [
-      { key: 'credits', label: 'Credits', icon: '💳', logo: '/credits_logo.jpeg' },
+      { key: 'credits', label: 'Credits', icon: '💳', logo: '/credits_logo.png' },
       { key: 'settings', label: 'Settings', icon: '⚙', logo: '/settings_logo.jpeg' },
     ],
   },
@@ -70,6 +71,33 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
     }
     obj[keys[0]] = value;
     onChange(next);
+  };
+
+  const fileRef = useRef(null);
+  const [phoneDraft, setPhoneDraft] = useState(settings.profile.phone || '');
+
+  const savePhone = () => {
+    const v = phoneDraft.trim();
+    set('profile.phone', v);
+    api.updateSettings({ profile: { ...settings.profile, phone: v } }).catch(() => {});
+  };
+
+  const pickAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const r = await api.uploadAvatar(file, 'user');
+      set('profile.avatarUrl', r.url);
+      api.updateSettings({ profile: { ...settings.profile, avatarUrl: r.url } }).catch(() => {});
+    } catch (err) {
+      console.error('avatar upload failed', err);
+    }
+  };
+
+  const removeAvatar = () => {
+    set('profile.avatarUrl', '');
+    api.updateSettings({ profile: { ...settings.profile, avatarUrl: '' } }).catch(() => {});
   };
 
   return (
@@ -135,6 +163,58 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
             <option key={l} value={l} className="bg-slate-900">{l}</option>
           ))}
         </select>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-slate-400 shrink-0">Phone number</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <input
+            value={phoneDraft}
+            onChange={(e) => setPhoneDraft(e.target.value)}
+            placeholder={settings.profile.phone || 'Add phone…'}
+            className="w-28 bg-white/5 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-200 outline-none placeholder:text-slate-600"
+            aria-label="Phone number"
+          />
+          <button
+            type="button"
+            onClick={savePhone}
+            disabled={!phoneDraft.trim() || phoneDraft.trim() === (settings.profile.phone || '')}
+            className="px-2 py-1 rounded-md text-[10px] font-medium bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 disabled:opacity-30 transition cursor-pointer"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-slate-400 shrink-0">Profile picture</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="px-2 py-1 rounded-md text-[10px] font-medium bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+          >
+            {settings.profile.avatarUrl ? 'Change' : 'Add'}
+          </button>
+          {settings.profile.avatarUrl && (
+            <button
+              type="button"
+              onClick={removeAvatar}
+              className="px-2 py-1 rounded-md text-[10px] text-rose-300/80 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+            >
+              Remove
+            </button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            onChange={pickAvatar}
+            className="hidden"
+            aria-hidden
+            tabIndex={-1}
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -231,6 +311,11 @@ export default function AppShell({
   const [quickOpen, setQuickOpen] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
 
+  /* Font size setting (1–100) applies app-wide: scale the html root. */
+  useEffect(() => {
+    applyFontScale(settings.appearance?.fontScale);
+  }, [settings.appearance?.fontScale]);
+
   const persistSettings = (next) => {
     setSettings(next);
     saveSettings(next);
@@ -252,7 +337,7 @@ export default function AppShell({
             type="button"
             onClick={() => onNavigate('overview')}
             className="flex items-center gap-2 cursor-pointer select-none group"
-            aria-label="Helpotron home"
+            aria-label="helpotron ACADEMIC OS"
           >
             <AnimatedLogo
               size="md"
@@ -291,7 +376,7 @@ export default function AppShell({
             type="button"
             onClick={onOpenSearch}
             className="flex-1 max-w-md flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-slate-500 hover:text-slate-300 hover:border-white/15 transition cursor-pointer text-xs"
-            aria-label="Global search"
+            aria-label="Search anything…"
           >
             <Search width={14} height={14} />
             <span className="flex-1 text-left">Search anything…</span>
@@ -307,7 +392,7 @@ export default function AppShell({
               type="button"
               onClick={() => onNavigate('credits')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300 hover:bg-blue-500/20 transition cursor-pointer text-xs font-semibold font-mono"
-              aria-label="Open credit wallet"
+              aria-label={`${Number(user.credits).toLocaleString()} credits, open credit wallet`}
             >
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
               {Number(user.credits ?? 10029).toLocaleString()} credits
@@ -382,13 +467,13 @@ export default function AppShell({
       {/* ── CONTENT ROW: sidebar + main ───────────────────────────────────── */}
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6 flex gap-6 items-start">
         {/* Sidebar */}
-        <aside className={`shrink-0 transition-all duration-300 sticky top-20 z-30 ${sidebarOpen ? 'w-60' : 'w-14'}`}>
-          <div className="clean-card p-3 flex flex-col gap-1">
+        <aside className={`shrink-0 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[64px]'}`}>
+          <div className={`clean-card flex flex-col gap-1 ${sidebarOpen ? 'p-3' : 'p-2'}`}>
             <button
               type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="flex items-center justify-center gap-2 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer mb-1"
-              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              aria-label={sidebarOpen ? 'Collapse Navigation sidebar' : 'Expand Navigation sidebar'}
             >
               <div className="flex flex-col gap-[3px] items-center w-4">
                 <span className="w-4 h-0.5 bg-current rounded-full" />
@@ -402,15 +487,20 @@ export default function AppShell({
               const isCollapsed = collapsed[group.group];
               return (
                 <div key={group.group}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.group)}
-                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition cursor-pointer"
-                    aria-expanded={!isCollapsed}
-                  >
-                    <span className={sidebarOpen ? '' : 'sr-only'}>{group.group}</span>
-                    {sidebarOpen && <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />}
-                  </button>
+                  <div className="flex items-center gap-2 px-2 pt-2 pb-1">
+                    <span className="flex-1 h-px bg-white/6" />
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.group)}
+                      aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.group} section`}
+                      aria-expanded={!isCollapsed}
+                      className={`w-5 h-5 flex items-center justify-center rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/5 transition cursor-pointer ${
+                        isCollapsed ? '' : 'opacity-0 hover:opacity-100'
+                      }`}
+                    >
+                      <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? 'rotate-90' : ''}`} />
+                    </button>
+                  </div>
                   {!isCollapsed && (
                     <div className="space-y-0.5">
                       {group.items.map((item) => {
@@ -420,17 +510,19 @@ export default function AppShell({
                             key={item.key}
                             type="button"
                             onClick={() => onNavigate(item.key)}
-                            className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
+                            className={`relative w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
+                              sidebarOpen ? 'px-2.5' : 'justify-center px-0'
+                            } ${
                               selected
                                 ? 'text-blue-300 bg-blue-600/15 border border-blue-500/25 font-medium'
                                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                            } ${!sidebarOpen ? 'justify-center px-1' : ''}`}
+                            }`}
                             aria-label={item.label}
                             aria-current={selected ? 'page' : undefined}
                           >
                             {item.logo
-                              ? <img src={item.logo} alt="" className="w-4 h-4 rounded object-cover shrink-0" loading="lazy" />
-                              : <span className="text-sm leading-none shrink-0">{item.icon}</span>}
+                              ? <img src={item.logo} alt="" className={`shrink-0 ${sidebarOpen ? 'w-12 h-12 rounded object-cover' : 'w-11 h-11 rounded object-contain'}`} loading="lazy" />
+                              : <span className="text-[1.6rem] leading-none shrink-0">{item.icon}</span>}
                             {sidebarOpen && <span className="truncate">{item.label}</span>}
                           </button>
                         );
@@ -449,17 +541,18 @@ export default function AppShell({
           {/* View header */}
           <div className="clean-card px-6 py-4 mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                {current?.logo
-                  ? <img src={current.logo} alt="" className="w-7 h-7 rounded-lg object-cover" />
-                  : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
-              </div>
+              {activeView !== 'agent' && (
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                  {current?.logo
+                    ? <img src={current.logo} alt="" className="w-[84px] h-[84px] rounded-lg object-cover" />
+                    : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
+                </div>
+              )}
               <div className="min-w-0">
                 <h1 className="text-base font-semibold text-white truncate">{current?.label ?? 'Helpotron'}</h1>
                 <p className="text-xs text-slate-500 truncate">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
-                  {activeView === 'agent' && 'Your AI agent — chat, memory, files and effort'}
                   {activeView === 'history' && 'All your assignments, in one place'}
                   {activeView === 'study' && 'Guides, flashcards, practice tests and summaries'}
                   {activeView === 'library' && 'Files, saved materials and your calendar'}

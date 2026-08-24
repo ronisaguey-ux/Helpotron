@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Send, Paperclip, ShieldCheck, Shield, Flame, RefreshCw,
-  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, User as UserIcon,
+  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, User as UserIcon, Undo2,
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings, AGENT_PERSONALITIES, EFFORT_SCORES } from '../demoData.js';
@@ -86,11 +86,56 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
   const [autoApprove, setAutoApprove] = useState(true);
   const [busy, setBusy] = useState(false);
   const [effort, setEffort] = useState(500);
+  const [feedbackFor, setFeedbackFor] = useState('');          // '' | 'approve' | 'reject'
+  const [approvalFeedback, setApprovalFeedback] = useState('');
+  const [autoApproveThis, setAutoApproveThis] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [newAction, setNewAction] = useState('');
+  const [autoList, setAutoList] = useState(() =>
+    settings.ai?.autoApprovedActions?.length ? [...settings.ai.autoApprovedActions] : ['humanize', 'analyze_rubric', 'draft_section']
+  );
   const [memory, setMemory] = useState([]);
   const [memoryText, setMemoryText] = useState('');
   const [files, setFiles] = useState([]);
   const [fileKind, setFileKind] = useState('skill');
   const [pendingPermissions, setPendingPermissions] = useState([]);
+  const [ledger, setLedger] = useState([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  /* Recent agent actions (ledger) — rollback surface. */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      // Only fetch when a session exists (localStorage 'token') — otherwise the
+      // auth-gated call 401s and just spams the console.
+      if (!localStorage.getItem('token')) return;
+      setLedgerLoading(true);
+      try {
+        const res = await api.getAgentActions();
+        if (alive) setLedger(res?.actions || []);
+      } catch {
+        /* not authenticated / demo mode — ledger stays empty and hidden */
+      } finally {
+        if (alive) setLedgerLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function undoAction(actionId) {
+    try {
+      const res = await api.undoAgentAction(actionId);
+      pushAssistant(`⏪ ${res?.message || 'Rolled back.'}`);
+    } catch (e) {
+      pushAssistant(`⚠️ Couldn't roll back: ${e.message}`);
+    }
+    try {
+      const res = await api.getAgentActions();
+      setLedger(res?.actions || []);
+    } catch {
+      /* ignore refresh failures */
+    }
+  }
   const [compactMsg, setCompactMsg] = useState('');
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -141,6 +186,14 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
       await api.updateSettings({ operation_mode: next, ai: { ...settings.ai, mode: next } });
     } catch (e) { /* session override already applied client-side */ }
     pushAssistant(`⚙️ Execution mode updated to: ${next.toUpperCase()}`);
+  }
+
+  /* Auto-approved actions list: persisted to settings + backend. */
+  function saveAutoList(next) {
+    setAutoList(next);
+    const updated = { ...settings, ai: { ...settings.ai, autoApprovedActions: next } };
+    persist(updated);
+    api.updateSettings({ ai: updated.ai }).catch(() => {});
   }
 
   async function handleAutoApprove(v) {
@@ -271,8 +324,20 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     }
   }
 
-  async function handlePermissionAction(permId, decision) {
-    try { await api.agentPermissionRespond({ permission_id: permId, decision }); } catch (e) {}
+  async function handlePermissionAction(permId, decision, feedback = '') {
+    try {
+      await api.agentPermissionRespond({
+        permission_id: permId,
+        decision,
+        comment: feedback.trim() || undefined,
+      });
+    } catch (e) {}
+    if (decision === 'always_approve') {
+      const next = [...new Set([...autoList, pending?.action_type].filter(Boolean))];
+      saveAutoList(next);
+    }
+    setFeedbackFor('');
+    setApprovalFeedback('');
     setPendingPermissions((prev) => prev.filter((p) => p.id !== permId));
   }
 
@@ -332,17 +397,83 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               />
               <span className="text-[10px] text-slate-400">Auto-approve routine actions</span>
             </label>
+            <button
+              type="button"
+              onClick={() => setListOpen(!listOpen)}
+              className="px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 transition cursor-pointer"
+              aria-expanded={listOpen}
+            >
+              {listOpen ? 'Done' : `Manage (${autoList.length})`}
+            </button>
           </div>
+          {listOpen && (
+            <div className="mt-3 p-3 rounded-xl bg-slate-950/50 border border-white/8 space-y-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Auto-approved actions — the agent doesn't ask for these
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {autoList.map((a) => (
+                  <span
+                    key={a}
+                    className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300"
+                  >
+                    {a}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a}`}
+                      onClick={() => saveAutoList(autoList.filter((x) => x !== a))}
+                      className="w-4 h-4 flex items-center justify-center rounded-md text-slate-500 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+                {autoList.length === 0 && (
+                  <span className="text-[10px] text-slate-600 italic">Nothing auto-approved — the agent asks before every action.</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  value={newAction}
+                  onChange={(e) => setNewAction(e.target.value)}
+                  placeholder="e.g. draft_section, submit, send_message…"
+                  className="clean-input flex-1 px-3 py-1.5 text-[11px] outline-none"
+                  aria-label="New auto-approved action"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newAction.trim()) {
+                      saveAutoList([...new Set([...autoList, newAction.trim()])]);
+                      setNewAction('');
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newAction.trim()) {
+                      saveAutoList([...new Set([...autoList, newAction.trim()])]);
+                      setNewAction('');
+                    }
+                  }}
+                  disabled={!newAction.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       }>
 
-        {/* Effort scale */}
+        {/* Effort scale — quick override for this agent (wins over main Settings) */}
         <div className="mt-5 pt-4 border-t border-white/8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-blue-400" /> Effort scale
+              <Cpu className="w-3.5 h-3.5 text-blue-400" /> Effort score
             </span>
-            <span className="text-[10px] font-mono text-slate-500">1 – 1000</span>
+            <span className="text-[11px] font-mono font-bold text-blue-300">
+              {effort} <span className="text-[10px] text-slate-500">/ 1000 · {effortBucket(effort)}</span>
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -351,7 +482,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               max={1000}
               value={effort}
               onChange={(e) => handleEffort(e.target.value)}
-              aria-label="Agent effort scale"
+              aria-label="Agent effort score between 1 and 1000"
               className="flex-1 accent-blue-500 cursor-pointer"
             />
             <div className="flex gap-1.5">
@@ -370,7 +501,8 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             </div>
           </div>
           <p className="text-[10px] text-slate-600 mt-2">
-            The only routing control you need: low effort = cheap engines do mechanical work, high effort = flagship engines handle deep reasoning. The agent picks the right engine per task.
+            Quick override — sets your agent's effort here, and it wins over the AI effort in main Settings.
+            Low = cheap engines do mechanical work, high = flagship engines handle deep reasoning.
           </p>
         </div>
       </SectionCard>
@@ -385,9 +517,79 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             <p className="text-[11px] text-slate-400 mt-0.5 truncate">Assignment #{pending.assignment_id} · {pending.description || 'the agent wants to act on your behalf'}</p>
           </div>
         }>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => handlePermissionAction(pending.id, 'approve')} className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer">Approve</button>
-            <button type="button" onClick={() => handlePermissionAction(pending.id, 'reject')} className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer">Reject</button>
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve')}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => { setFeedbackFor(feedbackFor === 'approve' ? '' : 'approve'); setApprovalFeedback(''); }}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/40 text-[11px] font-semibold transition cursor-pointer"
+              >
+                Approve with feedback…
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePermissionAction(pending.id, 'reject')}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => { setFeedbackFor(feedbackFor === 'reject' ? '' : 'reject'); setApprovalFeedback(''); }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600/25 border border-rose-500/40 text-rose-300 hover:bg-rose-600/40 text-[11px] font-semibold transition cursor-pointer"
+              >
+                Reject with feedback…
+              </button>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={autoApproveThis}
+                onChange={(e) => setAutoApproveThis(e.target.checked)}
+                className="accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="text-[10px] text-slate-400">
+                Also auto-approve this action type ({pending.action_type}) from now on
+              </span>
+            </label>
+            {feedbackFor && (
+              <div className="space-y-2">
+                <textarea
+                  value={approvalFeedback}
+                  onChange={(e) => setApprovalFeedback(e.target.value)}
+                  rows={2}
+                  placeholder={feedbackFor === 'approve'
+                    ? 'Optional instructions to run alongside the action…'
+                    : 'Optional note for the agent…'}
+                  className="w-full bg-slate-950/60 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-slate-200 outline-none placeholder:text-slate-600"
+                  aria-label="Feedback to send with your decision"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : feedbackFor, approvalFeedback)}
+                    disabled={!approvalFeedback.trim()}
+                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    Send {feedbackFor === 'approve' ? 'approve' : 'reject'} with feedback
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setFeedbackFor(''); setApprovalFeedback(''); }}
+                    className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </SectionCard>
       )}
@@ -550,6 +752,52 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               />
             </div>
           </SectionCard>
+
+          {/* Recent agent actions — rollback surface */}
+          {ledger.length > 0 && (
+            <SectionCard id="myagent-ledger" padding="p-4" header={
+              <div className="flex items-center justify-between w-full">
+                <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Undo2 className="w-3.5 h-3.5 text-blue-400" /> Recent actions
+                </div>
+                <span className="text-[10px] text-slate-500">{ledger.filter((a) => a.status === 'done').length} active</span>
+              </div>
+            }>
+              <div className="space-y-1.5">
+                {ledger.slice(0, 8).map((a) => (
+                  <div
+                    key={a.id}
+                    className={`flex items-center justify-between gap-2 p-2 rounded-lg border ${
+                      a.status === 'undone' ? 'border-white/5 bg-white/2 opacity-60' : 'border-white/8 bg-slate-950/40'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-slate-200 truncate font-medium">
+                        {a.action_type.replace(/_/g, ' ')}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">
+                        {a.summary || `#${a.id}`}
+                        {a.status === 'undone' && <span className="text-emerald-400"> · rolled back</span>}
+                      </div>
+                    </div>
+                    {a.undoable && (
+                      <button
+                        type="button"
+                        onClick={() => undoAction(a.id)}
+                        className="shrink-0 px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-600 mt-2 leading-relaxed">
+                Every agent action is recorded with an undo snapshot — creations, deletes, settings changes, reads.
+                Undoing a read revokes that content: the agent treats it as unseen.
+              </div>
+            </SectionCard>
+          )}
 
           {/* Permanent memory */}
           <SectionCard id="myagent-memory" header={

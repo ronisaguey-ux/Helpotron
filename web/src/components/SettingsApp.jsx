@@ -4,34 +4,127 @@
  * disclosure (Simple / Advanced / Expert), live persistence to the OS
  * settings store. Appearance ships with a live preview panel.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, Shield, CreditCard, Puzzle, Keyboard, BarChart3, FlaskConical, Accessibility, Globe, Wrench, User } from 'lucide-react';
-import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
+import { loadSettings, saveSettings, EFFORT_SCORES, DEFAULT_SETTINGS } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
 import SectionCard from './SectionCard.jsx';
 import ScopedSetting, { SCOPE_LEVELS } from './ScopedSetting.jsx';
 
 const SECTIONS = [
-  { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan' },
-  { key: 'appearance', label: 'Appearance', icon: Palette, desc: 'Theme, accent, density, background, UI style' },
-  { key: 'ai', label: 'AI & Intelligence', icon: Bot, desc: 'Effort, personality, routing, intelligence profile' },
-  { key: 'academic', label: 'Academic Profile', icon: GraduationCap, desc: 'Education, subjects, learning style, goals' },
-  { key: 'writing', label: 'Writing & Output', icon: PenLine, desc: 'Writing DNA, saved profiles, citation style' },
-  { key: 'automation', label: 'Automation', icon: Zap, desc: 'Permissions, safety controls, approval gates' },
-  { key: 'notifications', label: 'Notifications', icon: Bell, desc: 'What tells you about what' },
-  { key: 'privacy', label: 'Privacy & Security', icon: Shield, desc: 'Data usage, export, delete' },
-  { key: 'billing', label: 'Credits & Billing', icon: CreditCard, desc: 'Balance, plans, invoices' },
-  { key: 'integrations', label: 'Integrations', icon: Puzzle, desc: 'Canvas, Drive, Notion, Telegram' },
-  { key: 'extension', label: 'Browser Extension', icon: Keyboard, desc: 'Recorder, auto-capture, badge' },
-  { key: 'shortcuts', label: 'Shortcuts', icon: Keyboard, desc: 'Palette, search, wallet' },
-  { key: 'data', label: 'Data & Analytics', icon: BarChart3, desc: 'Digest, streaks, accuracy tracking' },
-  { key: 'experimental', label: 'Experimental', icon: FlaskConical, desc: 'Unstable but exciting' },
-  { key: 'accessibility', label: 'Accessibility', icon: Accessibility, desc: 'Motion, contrast, text size' },
-  { key: 'language', label: 'Language & Region', icon: Globe, desc: 'Locale, timezone, units' },
-  { key: 'advanced', label: 'Advanced', icon: Wrench, desc: 'Debug, config, raw JSON' },
+  { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan', tier: 'simple' },
+  { key: 'appearance', label: 'Appearance', icon: Palette, desc: 'Theme, accent, density, background, UI style', tier: 'simple' },
+  { key: 'ai', label: 'AI & Intelligence', icon: Bot, desc: 'Effort, personality, routing, intelligence profile', tier: 'simple' },
+  { key: 'academic', label: 'Academic Profile', icon: GraduationCap, desc: 'Education, subjects, learning style, goals', tier: 'simple' },
+  { key: 'writing', label: 'Writing & Output', icon: PenLine, desc: 'Writing DNA, saved profiles, citation style', tier: 'simple' },
+  { key: 'notifications', label: 'Notifications', icon: Bell, desc: 'What tells you about what', tier: 'simple' },
+  { key: 'privacy', label: 'Privacy & Security', icon: Shield, desc: 'Data usage, export, delete', tier: 'simple' },
+  { key: 'billing', label: 'Credits & Billing', icon: CreditCard, desc: 'Balance, plans, invoices', tier: 'simple' },
+  { key: 'automation', label: 'Automation', icon: Zap, desc: 'Permissions, safety controls, approval gates', tier: 'advanced' },
+  { key: 'integrations', label: 'Integrations', icon: Puzzle, desc: 'Canvas, Drive, Notion, Telegram', tier: 'advanced' },
+  { key: 'extension', label: 'Browser Extension', icon: Keyboard, desc: 'Recorder, auto-capture, badge', tier: 'advanced' },
+  { key: 'shortcuts', label: 'Shortcuts', icon: Keyboard, desc: 'Palette, search, wallet', tier: 'advanced' },
+  { key: 'accessibility', label: 'Accessibility', icon: Accessibility, desc: 'Motion, contrast, text size', tier: 'advanced' },
+  { key: 'data', label: 'Data & Analytics', icon: BarChart3, desc: 'Digest, streaks, accuracy tracking', tier: 'advanced' },
+  { key: 'language', label: 'Language & Region', icon: Globe, desc: 'Locale, timezone, units', tier: 'advanced' },
+  { key: 'experimental', label: 'Experimental', icon: FlaskConical, desc: 'Unstable but exciting', tier: 'expert' },
+  { key: 'advanced', label: 'Advanced', icon: Wrench, desc: 'Debug, config, raw JSON', tier: 'expert' },
 ];
+
+/* Pre-configured behavior profiles. Applying one RESETS everything behavioral
+ * (identity — profile, subjects, learning style, goals — and saved writing
+ * profiles are preserved) and clears all scoped overrides. Users tweak on top. */
+const PROFILE_PRESETS = {
+  budget: {
+    label: 'Budget',
+    tagline: 'Cheapest possible on everything — saves money no matter what.',
+    settings: {
+      appearance: { theme: 'dark', accent: 'blue', density: 'compact', animation: 'none', background: 'flat', uiStyle: 'minimal' },
+      ai: {
+        effortScore: 80, effort: 'low', autoRouting: true, creativity: 20, reasoning: 20,
+        conciseness: 95, rigor: 40, sourceDepth: 20, originality: 20, temperature: 0.3,
+        tokenBudget: 2048, fallbackEnabled: false, subsetting: false,
+        personality: 'Minimalist', aiName: 'Helpotron',
+        instructions: 'Be fast and concise. Use the cheapest engine that can do the task. No extra detail, no elaboration.',
+      },
+      writing: { tone: 40, vocabulary: 35, sentenceComplexity: 35, formality: 50, voice: 40, profile: 'My normal essay', style: 'APA' },
+      automation: {
+        autoRun: false, autoFetch: true, autoTranscribe: true, autoDraft: false, autoOrganize: false,
+        autoNotify: true, autoSubmit: false,
+        requireApproval: { submit: true, messages: true, bigSpend: true, premium: true, modify: true },
+      },
+      privacy: { analytics: false, dataLake: false, anonymous: true, exportAll: false },
+      integrations: { canvas: true, gdrive: false, notion: false, telegram: false, calendar: false },
+      extension: { recorder: true, autoCapture: false, badge: true },
+      shortcuts: { palette: 'mod+k', search: 'mod+shift+f', newAssignment: 'mod+n', wallet: 'mod+shift+c' },
+      data: { weeklyDigest: false, streakReminders: false, accuracyTracking: false },
+      experimental: { ocrBeta: false, edgeEval: false, newUI: true },
+      accessibility: { reducedMotion: false, highContrast: false, largeText: false, dyslexiaFriendly: false, screenReader: true },
+      language: { locale: 'en-US', timezone: 'auto', measurement: 'imperial' },
+      advanced: { debugMode: false, apiLogging: false, configJson: '{}' },
+    },
+  },
+  balanced: {
+    label: 'Balanced',
+    tagline: 'The middle ground — solid performance at a sensible price.',
+    settings: {
+      appearance: { theme: 'dark', accent: 'blue', density: 'comfortable', animation: 'full', background: 'aurora', uiStyle: 'glass' },
+      ai: {
+        effortScore: 480, effort: 'balanced', autoRouting: true, creativity: 72, reasoning: 88,
+        conciseness: 61, rigor: 94, sourceDepth: 91, originality: 78, temperature: 0.7,
+        tokenBudget: 4096, fallbackEnabled: true, subsetting: true,
+        personality: 'Coach', aiName: 'Atlas',
+        instructions: 'Explain like you are a patient coach. Check my understanding before moving on.',
+      },
+      writing: { tone: 50, vocabulary: 60, sentenceComplexity: 55, formality: 70, voice: 65, profile: 'My normal essay', style: 'APA' },
+      automation: {
+        autoRun: true, autoFetch: true, autoTranscribe: true, autoDraft: true, autoOrganize: true,
+        autoNotify: true, autoSubmit: false,
+        requireApproval: { submit: true, messages: true, bigSpend: true, premium: true, modify: false },
+      },
+      privacy: { analytics: true, dataLake: true, anonymous: true, exportAll: false },
+      integrations: { canvas: true, gdrive: false, notion: false, telegram: true, calendar: false },
+      extension: { recorder: true, autoCapture: true, badge: true },
+      shortcuts: { palette: 'mod+k', search: 'mod+shift+f', newAssignment: 'mod+n', wallet: 'mod+shift+c' },
+      data: { weeklyDigest: true, streakReminders: true, accuracyTracking: true },
+      experimental: { ocrBeta: false, edgeEval: false, newUI: true },
+      accessibility: { reducedMotion: false, highContrast: false, largeText: false, dyslexiaFriendly: false, screenReader: true },
+      language: { locale: 'en-US', timezone: 'auto', measurement: 'imperial' },
+      advanced: { debugMode: false, apiLogging: false, configJson: '{}' },
+    },
+  },
+  power: {
+    label: 'Power',
+    tagline: 'Maximum quality everywhere — flagship engine, deepest research, burns tokens faster.',
+    settings: {
+      appearance: { theme: 'graphite', accent: 'emerald', density: 'spacious', animation: 'full', background: 'mesh', uiStyle: 'glass' },
+      ai: {
+        effortScore: 1000, effort: 'high', autoRouting: false, creativity: 95, reasoning: 100,
+        conciseness: 40, rigor: 100, sourceDepth: 100, originality: 95, temperature: 0.9,
+        tokenBudget: 8192, fallbackEnabled: true, subsetting: true,
+        personality: 'Researcher', aiName: 'Atlas',
+        instructions: 'Aim for depth, rigor and originality. Use the flagship model, go deep in research, spare no token.',
+      },
+      writing: { tone: 65, vocabulary: 85, sentenceComplexity: 70, formality: 60, voice: 70, profile: 'My normal essay', style: 'APA' },
+      automation: {
+        autoRun: true, autoFetch: true, autoTranscribe: true, autoDraft: true, autoOrganize: true,
+        autoNotify: true, autoSubmit: true,
+        requireApproval: { submit: false, messages: false, bigSpend: true, premium: true, modify: false },
+      },
+      privacy: { analytics: true, dataLake: true, anonymous: true, exportAll: false },
+      integrations: { canvas: true, gdrive: true, notion: true, telegram: true, calendar: true },
+      extension: { recorder: true, autoCapture: true, badge: true },
+      shortcuts: { palette: 'mod+k', search: 'mod+shift+f', newAssignment: 'mod+n', wallet: 'mod+shift+c' },
+      data: { weeklyDigest: true, streakReminders: true, accuracyTracking: true },
+      experimental: { ocrBeta: true, edgeEval: true, newUI: true },
+      accessibility: { reducedMotion: false, highContrast: false, largeText: false, dyslexiaFriendly: false, screenReader: true },
+      language: { locale: 'en-US', timezone: 'auto', measurement: 'imperial' },
+      advanced: { debugMode: false, apiLogging: true, configJson: '{}' },
+    },
+  },
+};
 
 const THEMES = ['dark', 'light', 'system', 'oled', 'midnight', 'graphite'];
 const ACCENTS = ['blue', 'purple', 'emerald', 'amber', 'rose', 'cyan', 'custom'];
@@ -132,6 +225,32 @@ function AppearanceSection({ s, set }) {
       <ChipRow label="Background" options={BACKGROUNDS} value={a.background} onChange={(v) => set('appearance.background', v)} />
       <ChipRow label="UI style" options={UI_STYLES} value={a.uiStyle} onChange={(v) => set('appearance.uiStyle', v)} />
       <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-xs font-medium text-slate-300">Font size</div>
+          <div className="text-xs font-mono font-bold text-blue-300">
+            {a.fontScale ?? 50} <span className="text-[10px] text-slate-500">/ 100</span>
+          </div>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={100}
+          step={1}
+          value={a.fontScale ?? 50}
+          onChange={(e) => set('appearance.fontScale', Number(e.target.value))}
+          className="w-full accent-blue-500 cursor-pointer"
+          aria-label="Font size score between 1 and 100"
+        />
+        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+          <span>1 — tiny asf</span>
+          <span className="text-slate-400">50 — default</span>
+          <span>100 — massive</span>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+          Scales every text size proportionally — nothing gets flattened to the same size.
+        </p>
+      </div>
+      <div>
         <div className="text-xs font-medium text-slate-300 mb-2">Live preview</div>
         <AppearancePreview a={a} />
       </div>
@@ -151,8 +270,40 @@ const INTELLIGENCE = [
 
 const PERSONALITIES = ['Professional', 'Friendly', 'Strict', 'Socratic', 'Coach', 'Researcher', 'Tutor', 'Minimalist'];
 
+function EffortSlider({ value, onChange }) {
+  const n = Number(value || 500);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-xs font-medium text-slate-300">AI Effort</div>
+        <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 1000</span></div>
+      </div>
+      <input
+        type="range"
+        min={1}
+        max={1000}
+        step={1}
+        value={n}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-blue-500 cursor-pointer"
+        aria-label="AI effort score between 1 and 1000"
+      />
+      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+        <span>1 — cheap & fast</span>
+        <span className="text-slate-400">500 — balanced</span>
+        <span>1000 — flagship research</span>
+      </div>
+    </div>
+  );
+}
+
 function AISection({ s, set, scoped, setVariants, subjectRefs }) {
   const ai = s.ai;
+  const aiEffort = Number(ai.effortScore ?? EFFORT_SCORES[ai.effort] ?? 500);
+  const setEffort = (v) => {
+    set('ai.effortScore', v);
+    set('ai.effort', v <= 250 ? 'low' : v <= 750 ? 'balanced' : 'high');
+  };
   return (
     <div className="space-y-7">
       {/* Effort — the one control that matters */}
@@ -161,36 +312,12 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
         title="AI effort"
         variants={scoped['ai.effort']}
         setVariants={setVariants}
-        values={[{ key: 'low', label: 'Low' }, { key: 'balanced', label: 'Balanced' }, { key: 'high', label: 'High' }]}
+        slider={{ min: 1, max: 1000, step: 1 }}
         refs={subjectRefs}
         refPlaceholder="e.g. Biology"
+        description="Low effort = fast cheap engines on mechanical work. High effort = flagship research engines on hard problems. Best per course, not globally."
       >
-        <div>
-          <div className="text-xs font-medium text-slate-300 mb-2">AI Effort</div>
-          <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-            The only routing control you need. Low effort = cheap engines do mechanical work. High effort = flagship engines handle complex reasoning. Helpotron picks the right engine for each task automatically.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {Object.entries({ low: 'Low', balanced: 'Balanced', high: 'High' }).map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => set('ai.effort', k)}
-                className={`p-4 rounded-xl border text-left transition cursor-pointer ${
-                  ai.effort === k ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/8 bg-slate-950/40 hover:border-white/15'
-                }`}
-              >
-                <div className="text-xs font-bold text-white">{label}</div>
-                <div className="text-[10px] text-slate-500 mt-1">
-                  {k === 'low' && 'Mechanical tasks → fast engine. Best value.'}
-                  {k === 'balanced' && 'Routine work balanced, complex escalates.'}
-                  {k === 'high' && 'Research & reasoning → flagship engine.'}
-                </div>
-                <div className="text-[10px] font-mono text-slate-600 mt-2">effort {EFFORT_SCORES[k]}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <EffortSlider value={aiEffort} onChange={setEffort} />
       </ScopedSetting>
 
       <ScopedSetting
@@ -200,6 +327,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
         setVariants={setVariants}
         values={[{ key: true, label: 'On' }, { key: false, label: 'Off' }]}
         refs={subjectRefs}
+        description="Lets Helpotron route each task to the engine its difficulty deserves. Override per subject if a particular course always needs one."
       >
         <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/6">
           <div>
@@ -292,11 +420,27 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
 }
 
 /* ── Main settings workspace ─────────────────────────────────────────────── */
-export default function SettingsApp({ userId, onGoTo }) {
+/* Font size scaling (1-100). Not a uniform resize: every step multiplies the
+ * base font size, so all text scales proportionally and 50 = default.
+ * Hooked onto the html root font-size so rem-based utilities follow along. */
+const fontScaleMultiplier = (score) => 0.6 + Math.max(0, Math.min(100, Number(score) || 50)) * 0.008; // 1→0.61, 50→1.0, 100→1.4
+export function applyFontScale(score) {
+  const m = fontScaleMultiplier(score);
+  document.documentElement.style.fontSize = `${16 * 1.1 * m}px`;
+  document.documentElement.style.setProperty('--font-scale', String(m));
+}
+
+export function SettingsApp({ userId, onGoTo }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [section, setSection] = useState('appearance');
   const [savedFlash, setSavedFlash] = useState(false);
   const [search, setSearch] = useState('');
+  const [presetConfirm, setPresetConfirm] = useState(null);
+
+  /* Live font scaling as the slider moves. */
+  useEffect(() => {
+    applyFontScale(settings.appearance?.fontScale);
+  }, [settings.appearance?.fontScale]);
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
@@ -332,37 +476,81 @@ export default function SettingsApp({ userId, onGoTo }) {
   };
   const subjectRefs = Object.keys(settings.subjects || {});
 
+  /* One-click preset: resets everything behavioral to a tuned profile.
+   * Identity (profile, subjects, learning style, goals) and saved writing
+   * profiles are preserved; all scoped overrides are cleared. */
+  const applyPreset = (key) => {
+    const p = PROFILE_PRESETS[key];
+    if (!p) return;
+    const savedProfiles = settings.writing?.profiles || DEFAULT_SETTINGS.writing.profiles;
+    const reset = JSON.parse(JSON.stringify({
+      ...DEFAULT_SETTINGS,
+      ...p.settings,
+      profile: settings.profile,
+      subjects: settings.subjects,
+      learningStyle: settings.learningStyle,
+      goals: settings.goals,
+      writing: { ...p.settings.writing, profiles: savedProfiles },
+      scoped: {},
+    }));
+    setSettingsState(reset);
+    saveSettings(reset);
+    setSavedFlash(true);
+    clearTimeout(settingsApp._t);
+    settingsApp._t = setTimeout(() => setSavedFlash(false), 1200);
+    setPresetConfirm(null);
+  };
+
   const current = SECTIONS.find((s) => s.key === section);
-  const isSimple = settings.displayMode === 'simple';
-  const isExpert = settings.displayMode === 'expert';
   const q = search.trim().toLowerCase();
   const visibleSections = SECTIONS.filter((sec) => !q || `${sec.label} ${sec.desc}`.toLowerCase().includes(q));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
       {/* Section list */}
-      <SectionCard id="settings-nav" padding="p-3" className="h-fit sticky top-20" header={
+      <SectionCard id="settings-nav" padding="p-3" className="h-fit" header={
         <div className="px-2 pb-3 border-b border-white/8">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Display mode</div>
-          <div className="grid grid-cols-3 gap-1">
-            {[['simple', 'Simple'], ['advanced', 'Advanced'], ['expert', 'Expert']].map(([k, label]) => (
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Quick preset</div>
+          <div className="grid grid-cols-1 gap-1.5">
+            {Object.entries(PROFILE_PRESETS).map(([k, p]) => (
               <button
                 key={k}
                 type="button"
-                onClick={() => set('displayMode', k)}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition cursor-pointer ${
-                  settings.displayMode === k ? 'bg-blue-600 text-white' : 'bg-white/4 text-slate-400 hover:text-slate-200'
-                }`}
+                onClick={() => setPresetConfirm(k)}
+                title={p.tagline}
+                className="w-full px-2.5 py-2 rounded-lg text-[11px] font-medium transition cursor-pointer bg-white/4 text-slate-300 hover:text-slate-100 hover:bg-white/10"
               >
-                {label}
+                {p.label}
               </button>
             ))}
           </div>
           <p className="text-[9px] text-slate-600 mt-1.5 leading-relaxed">
-            {isSimple && 'Simple: the essentials — quality, style, level, notifications.'}
-            {settings.displayMode === 'advanced' && 'Advanced: routing, temperature, token budgets, fallbacks.'}
-            {isExpert && 'Expert: raw configuration and experimental features.'}
+            Budget = cheapest possible. Balanced = cost & performance middle. Power = max quality, burns tokens.
           </p>
+          {presetConfirm && (
+            <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
+              <div className="text-[10px] text-rose-200 leading-relaxed">
+                Reset ALL settings to <b>{PROFILE_PRESETS[presetConfirm].label}</b>? Every custom value and scoped
+                override gets replaced by the preset. Your name, subjects and saved writing profiles stay.
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => applyPreset(presetConfirm)}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                >
+                  Yes, reset everything
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPresetConfirm(null)}
+                  className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       }>
 
@@ -376,28 +564,38 @@ export default function SettingsApp({ userId, onGoTo }) {
           />
         </div>
 
-        <nav className="space-y-0.5 max-h-[60vh] overflow-y-auto pr-1">
-          {visibleSections.map((sec) => {
-            if (isSimple && ['data', 'experimental', 'advanced', 'shortcuts', 'language'].includes(sec.key)) return null;
-            if (isExpert && ['data', 'experimental', 'advanced'].includes(sec.key)) return null;
-            const Icon = sec.icon;
-            const active = section === sec.key;
+        <nav className="space-y-0.5 pr-1">
+          {['simple', 'advanced', 'expert'].map((tier) => {
+            const items = visibleSections.filter((sec) => sec.tier === tier);
+            if (items.length === 0) return null;
             return (
-              <button
-                key={sec.key}
-                type="button"
-                onClick={() => setSection(sec.key)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
-                  active ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-xs font-medium truncate">{sec.label}</span>
-                  <span className="block text-[9px] text-slate-500 truncate">{sec.desc}</span>
-                </span>
-                {active && <ChevronRight className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-              </button>
+              <div key={tier}>
+                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{tier}</span>
+                  <span className="flex-1 h-px bg-white/6" />
+                </div>
+                {items.map((sec) => {
+                  const Icon = sec.icon;
+                  const active = section === sec.key;
+                  return (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => setSection(sec.key)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                        active ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-medium truncate">{sec.label}</span>
+                        <span className="block text-[9px] text-slate-500 truncate">{sec.desc}</span>
+                      </span>
+                      {active && <ChevronRight className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
           {visibleSections.length === 0 && (
@@ -453,3 +651,5 @@ export default function SettingsApp({ userId, onGoTo }) {
 
 // module-level timer handle so the save flash never leaks
 const settingsApp = { _t: null };
+
+export default SettingsApp;

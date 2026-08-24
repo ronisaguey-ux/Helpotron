@@ -139,6 +139,22 @@ class Assignment(Base):
     drafts = relationship("Draft", back_populates="assignment")
 
 
+class AgentAction(Base):
+    """My Agent action ledger — every executed action with an undo snapshot."""
+    __tablename__ = "agent_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    assignment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    action_type: Mapped[str] = mapped_column(String(64))
+    summary: Mapped[str] = mapped_column(String(1024), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    undo_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="done")  # done | undone
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class AgentFile(Base):
     """A file uploaded into a user's personal agent (skill / rule / automation /
     personality). Content is stored on disk under uploads/agent_files/ with a

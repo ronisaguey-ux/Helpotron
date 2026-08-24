@@ -67,7 +67,7 @@ function deriveRecommendations(a) {
   return recs;
 }
 
-export default function IntelligenceView({ userId, onGoTo, initialTab, embedded, onApplyRecommendation }) {
+export function IntelligenceView({ userId, onGoTo, initialTab, embedded, onApplyRecommendation }) {
   const [tab, setTab] = useState(initialTab || 'progress');
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -268,3 +268,6 @@ export default function IntelligenceView({ userId, onGoTo, initialTab, embedded,
     </div>
   );
 }
+
+export default IntelligenceView;
+
