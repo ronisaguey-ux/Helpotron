@@ -1,3 +1,4 @@
+// export target: web/src/components/AppShell.jsx
 /* ────────────────────────────────────────────────────────────────────────────
  * AppShell.jsx — Helpotron OS chrome (Experience Rewrite, 08-22)
  * Topbar: brand, global search trigger, credits chip, notification bell,
@@ -32,7 +33,7 @@ const NAV_TREE = (isAdmin) => [
   {
     group: 'WORKSPACE',
     items: [
-      { key: 'agent', label: 'My Agent', icon: '🧠', logo: '/My_Agent_logo.jpeg' },
+      { key: 'agent', id: 'my_agent', label: 'My Agent', icon: '🧠', logo: '/My_Agent_logo.jpeg' },
       { key: 'history', label: 'Assignments', icon: '📝', logo: '/assignments_logo.jpeg' },
       { key: 'library', label: 'Library', icon: '🗂️', logo: '/library_logo.jpeg' },
     ],

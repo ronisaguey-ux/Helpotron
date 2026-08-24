@@ -1,3 +1,4 @@
+// export target: web/src/components/AssignmentDetailView.jsx
 import React, { useState, useEffect } from 'react';
 import { effectiveValue } from './ScopedSetting.jsx';
 import { loadSettings } from '../demoData.js';

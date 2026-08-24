@@ -91,14 +91,14 @@ def safe_eval_math_expr(expr: str) -> Union[int, float]:
             return SAFE_OPERATORS[op_type](operand)
         elif isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in SAFE_FUNCTIONS:
-                raise ValueError(f'Disallowed function call: {ast.dump(node.func)}')
+                raise TypeError(f'Disallowed function call: {ast.dump(node.func)}')
             func = SAFE_FUNCTIONS[node.func.id]
             args = [_eval(arg) for arg in node.args]
             return func(*args)
         elif isinstance(node, ast.Name):
             if node.id in SAFE_FUNCTIONS:
                 return SAFE_FUNCTIONS[node.id]
-            raise ValueError(f'Undefined or disallowed identifier: {node.id}')
+            raise TypeError(f'Undefined or disallowed identifier: {node.id}')
         else:
             raise TypeError(f'Disallowed AST node: {type(node).__name__}')
             

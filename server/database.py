@@ -13,7 +13,11 @@ from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text,
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
-from .config import config
+try:
+    from .config import config
+except (ImportError, ValueError):
+    from server.config import config
+
 
 _connect_args = {"check_same_thread": False} if config.database_url.startswith("sqlite") else {}
 engine = create_engine(

@@ -6,8 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .database import User, get_db
-from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
+try:
+    from .database import User, get_db
+    from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
+except (ImportError, ValueError):
+    from server.database import User, get_db
+    from server.security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
+
 from fastapi import status
 
 
@@ -46,16 +51,29 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
     )
 
 
-from .features import (
-    detect_assignment_type,
-    get_user_stats,
-    FriendRequest,
-    CalendarSync,
-    TelegramNotifier,
-    recommend_next_study,
-    set_theme,
-    get_theme,
-)
+try:
+    from .features import (
+        detect_assignment_type,
+        get_user_stats,
+        FriendRequest,
+        CalendarSync,
+        TelegramNotifier,
+        recommend_next_study,
+        set_theme,
+        get_theme,
+    )
+except (ImportError, ValueError):
+    from server.features import (
+        detect_assignment_type,
+        get_user_stats,
+        FriendRequest,
+        CalendarSync,
+        TelegramNotifier,
+        recommend_next_study,
+        set_theme,
+        get_theme,
+    )
+
 
 router = APIRouter(prefix="/api/features", tags=["features"])
 

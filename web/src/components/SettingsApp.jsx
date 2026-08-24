@@ -1,3 +1,4 @@
+// export target: web/src/components/SettingsApp.jsx
 /* ────────────────────────────────────────────────────────────────────────────
  * SettingsApp.jsx — the settings workspace (replaces the 126 KB modal).
  * Shell: two-pane layout (section list → section page), progressive

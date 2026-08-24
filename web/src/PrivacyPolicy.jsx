@@ -1,3 +1,4 @@
+// export target: web/src/PrivacyPolicy.jsx
 import React, { useState } from 'react';
 import {
   Shield,

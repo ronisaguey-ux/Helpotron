@@ -21,8 +21,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from .database import Assignment, StudyMaterial, Transcript, User, UserSettingsScope, get_db
-from .default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+try:
+    from .database import Assignment, StudyMaterial, Transcript, User, UserSettingsScope, get_db
+    from .default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+except (ImportError, ValueError):
+    from server.database import Assignment, StudyMaterial, Transcript, User, UserSettingsScope, get_db
+    from server.default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+
 
 logger = logging.getLogger("helpotron.user_settings")
 
