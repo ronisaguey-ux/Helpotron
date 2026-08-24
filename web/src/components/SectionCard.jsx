@@ -63,7 +63,7 @@ export default function SectionCard({
    * SectionHeader can drop their subtitle/right content — a minimized
    * section is always a tight one-line bar, never a tall strip. */
   const headerEl = !open && React.isValidElement(header)
-    ? React.cloneElement(header, { collapsed: true })
+    ? (typeof header.type === 'string' ? header : React.cloneElement(header, { collapsed: true }))
     : header;
 
   return (

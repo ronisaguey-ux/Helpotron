@@ -563,6 +563,39 @@ print(f"Active files: {os.listdir('.')}")
         """Executes the specific sub-agent, settings mutation, team dispatch, or tool action."""
         logger.info("Executing action: %s for user %s", action_type, user.public_id)
 
+        # ── Action ledger: snapshot + record BEFORE execution so every action
+        # has an undo trail (see agent_actions.py, My Agent → Recent actions).
+        ledger = None
+        undo_payload = None
+        if action_type == "change_settings":
+            undo_payload = {"old_settings": dict(user.settings or {})}
+        elif action_type == "delete_assignment":
+            _aid = payload.get("assignment_id") or assignment_id
+            _row = db.query(Assignment).filter_by(id=_aid, user_id=user.id).first()
+            if _row is not None:
+                undo_payload = {
+                    "restore": {
+                        "canvas_id": _row.canvas_id,
+                        "title": _row.title,
+                        "due_date": _row.due_date,
+                        "prompt": _row.prompt,
+                        "file_urls": _row.file_urls or [],
+                        "status": _row.status,
+                        "progress": _row.progress or {},
+                    }
+                }
+        elif action_type == "message_assignment_team":
+            undo_payload = {"assignment_id": payload.get("assignment_id") or assignment_id}
+        elif action_type in ("read_assignment", "create_assignment"):
+            undo_payload = {}
+        if undo_payload is not None:
+            from .agent_actions import record_agent_action
+            ledger = record_agent_action(
+                db, user, action_type,
+                f"{action_type} — {payload.get('title') or payload.get('instruction') or payload.get('assignment_id') or ''}",
+                assignment_id, payload, undo_payload,
+            )
+
         if action_type == "create_assignment":
             title = payload.get("title", "New Assignment")
             course = payload.get("course", "General Studies")
@@ -577,12 +610,30 @@ print(f"Active files: {os.listdir('.')}")
             db.add(new_a)
             db.commit()
             db.refresh(new_a)
+            if ledger is not None:
+                from .agent_actions import set_undo_payload
+                set_undo_payload(db, ledger, {"delete_assignment_id": new_a.id})
             return {
                 "action": action_type,
                 "status": "completed",
                 "assignment_id": new_a.id,
                 "message": f"Assignment #{new_a.id} '{title}' created successfully.",
             }
+
+        elif action_type == "delete_assignment":
+            _aid = payload.get("assignment_id") or assignment_id
+            _row = db.query(Assignment).filter_by(id=_aid, user_id=user.id).first()
+            if _row is None:
+                return {"action": action_type, "status": "failed", "message": f"No assignment #{_aid} found."}
+            db.delete(_row)
+            db.commit()
+            return {"action": action_type, "status": "completed", "assignment_id": _aid,
+                    "message": f"Assignment #{_aid} deleted. Undo it from My Agent → Recent actions."}
+
+        elif action_type == "read_assignment":
+            _aid = payload.get("assignment_id") or assignment_id
+            return {"action": action_type, "status": "completed", "assignment_id": _aid,
+                    "message": "Read recorded on the action ledger — undo from Recent actions to revoke the read."}
 
         elif action_type == "message_assignment_team":
             aid = payload.get("assignment_id") or assignment_id

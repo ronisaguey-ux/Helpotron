@@ -27,7 +27,7 @@ import {
 import api from '../api';
 import SectionCard from './SectionCard.jsx';
 
-export default function CreditsPricingDashboard({
+export function CreditsPricingDashboard({
   currentCredits = 10029,
   onTopUp = () => {},
   userId = 'RoniDev',
@@ -734,3 +734,6 @@ export const CostIntelligenceSection = ({ costData, loading, onSetSpendingLimit 
     </div>
   );
 };
+
+export default CreditsPricingDashboard;
+

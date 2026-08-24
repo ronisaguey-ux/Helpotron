@@ -607,3 +607,25 @@ export function SettingsSections({ section, s, set, scoped, setVariants, subject
     default: return null;
   }
 }
+
+// Dynamic Auto-Routing & Scope Picker Component
+export const ScopedSettingRow = ({ label, settingKey, scope, onScopeChange, value, onChange, autoRouting, options }) => {
+  const isEffortSetting = settingKey === 'effort_tier';
+  const isDisabled = isEffortSetting && autoRouting;
+
+  return (
+    <div className="py-4 border-b border-border/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm text-foreground">{label}</span>
+          {isDisabled && (
+            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">
+              Auto Routed
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+

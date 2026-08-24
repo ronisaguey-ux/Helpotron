@@ -33,7 +33,7 @@ const ASK_ANSWERS = {
   'how many credits does this cost': 'This workspace session is charged per operation. The current draft generation cost 84 credits — open your Credit Wallet and tap the row to see the exact breakdown (engine, tokens, rate).',
 };
 
-export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction }) {
+export function AIWorkspace({ userId, onExecuteAction, onRollbackAction }) {
   const demo = demoEnabled();
   const settings = loadSettings();
   const [messages, setMessages] = useState(INITIAL_EXCHANGE);
@@ -339,3 +339,6 @@ export default function AIWorkspace({ userId, onExecuteAction, onRollbackAction 
     </div>
   );
 }
+
+export default AIWorkspace;
+

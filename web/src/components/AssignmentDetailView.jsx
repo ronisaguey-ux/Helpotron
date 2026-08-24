@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { effectiveValue } from './ScopedSetting.jsx';
+import { loadSettings } from '../demoData.js';
 import {
   ChevronLeft,
   ClipboardList,
@@ -42,7 +44,23 @@ const SUBAGENTS = [
   { id: 'editor', name: 'Editor', role: 'Formatting & polish', status: 'queued', progress: 0 },
 ];
 
-export default function AssignmentWorkspace({ assignment, onBack, userId }) {
+export function AssignmentWorkspace({ assignment, onBack, userId }) {
+  // Scoped settings enforcement: resolves any subject/class/assignment-level
+  // overrides created via Settings → "Add new setting", so variants actually
+  // apply to the work in these assignment bubbles.
+  const scopedEffort = (() => {
+    try {
+      const settings = loadSettings();
+      return effectiveValue(settings, 'ai.effort', {
+        subject: assignment.subject || assignment.course,
+        class: assignment.class_code,
+        assignment: assignment.title || assignment.name,
+      });
+    } catch {
+      return undefined;
+    }
+  })();
+
   // Available Task Types
   const allTaskTypes = [
     { key: 'complete_assignment', label: 'Complete Assignment', icon: FileCheck, desc: 'Full automated drafting and rubric synthesis' },
@@ -300,6 +318,11 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
               <span className="text-xs text-slate-400">
                 {assignment.class_code || 'CODE-101'}
               </span>
+              {scopedEffort && (
+                <span className="text-[11px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                  Effort: {String(scopedEffort)}
+                </span>
+              )}
               {submitted && (
                 <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
                   SUBMITTED TO LMS
@@ -967,4 +990,4 @@ export default function AssignmentWorkspace({ assignment, onBack, userId }) {
   );
 }
 
-
+export default AssignmentWorkspace;

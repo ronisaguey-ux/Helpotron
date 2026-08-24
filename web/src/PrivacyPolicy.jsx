@@ -43,7 +43,7 @@ const SECTIONS = [
   { id: 'sec-19', number: '19.0', title: 'Final Legal Disclosures and Supremacy', icon: Scale },
 ];
 
-export default function PrivacyPolicy({ onAgree, onClose }) {
+export function PrivacyPolicy({ onAgree, onClose }) {
   const [agreed, setAgreed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('sec-1');
@@ -719,3 +719,6 @@ export default function PrivacyPolicy({ onAgree, onClose }) {
     </div>
   );
 }
+
+export default PrivacyPolicy;
+

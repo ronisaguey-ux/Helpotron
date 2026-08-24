@@ -104,7 +104,16 @@ export async function request(endpoint, options = {}) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `HTTP ${response.status}`);
+    let message = errorText || `HTTP ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed && parsed.detail) {
+        message = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
+      }
+    } catch {
+      // raw body is already a readable message — keep it
+    }
+    throw new Error(message);
   }
 
   const data = await response.json();
@@ -194,6 +203,8 @@ export const api = {
     return result;
   },
   updateSettings: (settings) => request('/api/user/settings', { method: 'PATCH', body: JSON.stringify(settings) }),
+  getAgentActions: () => request('/api/agent/actions'),
+  undoAgentAction: (actionId) => request(`/api/agent/actions/${actionId}/undo`, { method: 'POST' }),
   pay: (body) => request('/api/payments', { method: 'POST', body: JSON.stringify(body) }),
   discount: (body) => request('/api/discount', { method: 'POST', body: JSON.stringify(body) }),
 
