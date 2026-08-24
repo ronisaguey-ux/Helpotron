@@ -484,6 +484,8 @@ async def get_chat(assignment_id: int, request: Request, db: Session = Depends(g
 
 _AGENT_ACTIONS = {
     "create_assignment": {"title": "str", "prompt": "str", "due_date": "str", "course": "str"},
+    "delete_assignment": {"assignment_id": "int"},
+    "read_assignment": {"assignment_id": "int"},
     "edit_assignment": {"assignment_id": "int", "updates": "dict with optional keys title, due_date (ISO string), prompt, status (one of: tracked, not_started, in_progress, completed, submitted, graded, paused), progress — progress MUST be a JSON object of {section: state} e.g. {\"section 2\": \"done\"}, NEVER a string or list"},
     "change_settings": {"settings": "dict — valid keys: effort_score (int 1-1000), agent_name (str), personality (str), instructions (str), operation_mode (manual|auto|yolo), auto_approved_actions (list of action names), school_name, major, goal"},
     "generate_flashcards": {"title": "str", "cards": "list of {front,back}"},
@@ -622,6 +624,9 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
             "reply": str(parsed.get("reply") or f"Done — {parsed['action'].replace('_', ' ')}."),
         }
     if parsed and parsed.get("action") == "plain_answer":
+        lower = text.lower()
+        if "submit" in lower or "delete" in lower or "humanize" in lower or "rubric" in lower:
+            return _regex_fallback_intent(text)
         return {"action": "plain_answer", "payload": {}, "reply": str(parsed.get("reply") or text)}
     # LLM failed or chose an unknown action — fall back to keyword dispatch
     return _regex_fallback_intent(text)

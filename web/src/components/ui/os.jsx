@@ -69,7 +69,7 @@ export function SectionHeader({ title, subtitle, right, collapsed }) {
   return (
     <div className={`flex items-end justify-between gap-3 ${collapsed ? '' : 'mb-3'}`}>
       <div>
-        <h3 className="text-sm font-semibold text-white truncate">{title}</h3>
+        <h2 className="text-sm font-semibold text-white truncate">{title}</h2>
         {!collapsed && subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
       {!collapsed && right}

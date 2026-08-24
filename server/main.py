@@ -43,6 +43,8 @@ from .routes_study_groups import router as study_groups_router
 from .routes_datalake import router as datalake_router
 from .routes_auth_2fa import router as auth_2fa_router
 from .routes_user_settings import router as user_settings_router
+from .routes_hygiene import router as hygiene_router
+from .routes_agent_actions import router as agent_actions_router
 from .routes_admin_advanced import router as admin_advanced_router
 from .routes_overlord import router as overlord_router
 from .routes_simulation import router as simulation_router
@@ -207,6 +209,8 @@ app.include_router(study_groups_router)
 app.include_router(datalake_router)
 app.include_router(auth_2fa_router)
 app.include_router(user_settings_router)
+app.include_router(hygiene_router)
+app.include_router(agent_actions_router)
 app.include_router(admin_advanced_router)
 app.include_router(admin_router)
 app.include_router(features_router)
@@ -594,6 +598,16 @@ async def admin_user_unban(public_id: str, request: Request, db: Session = Depen
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ─── credits ───────────────────────────────────────────────────────────────
+
+@app.get('/api/credits/balance')
+async def get_user_credits(request: Request, db: Session = Depends(get_db)):
+    from .routes_features import get_current_authenticated_user
+    from .credits import TASK_COSTS, get_balance
+    user = get_current_authenticated_user(request, db)
+    return {'credits': get_balance(user), 'costs': TASK_COSTS}
 
 
 # ─── users ─────────────────────────────────────────────────────────────────

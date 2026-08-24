@@ -64,7 +64,7 @@ export default function ExtensionUpdateBanner({ onOpenGuide }) {
           <button
             type="button"
             onClick={handleDownloadZip}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/50"
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/50"
           >
             <Download className="w-3.5 h-3.5" /> Download (.zip)
           </button>

@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const pg = await b.newPage({ viewport: { width: 1280, height: 860 } });
+await pg.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
+await pg.waitForTimeout(1200);
+await pg.click('aside nav button:has-text("Control Center")').catch(() => pg.click('aside button:has-text("Control")'));
+await pg.waitForTimeout(1200);
+await pg.screenshot({ path: '/tmp/helpotron_shots/93_admin_control_center.png' });
+await pg.evaluate(() => window.scrollTo(0, 9999));
+await pg.waitForTimeout(500);
+await pg.screenshot({ path: '/tmp/helpotron_shots/94_admin_scrolled.png' });
+await b.close();
+console.log('admin done');

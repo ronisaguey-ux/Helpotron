@@ -58,6 +58,17 @@ def _transcript_block(transcript: str, limit: int = 40000) -> str:
     return transcript
 
 
+async def _invoke_llm(system: str, user: str, effort_score: int = 500) -> str:
+    try:
+        return await llm.call_llm(system, user, effort_score=effort_score)
+    except TypeError:
+        try:
+            return await llm.call_llm(system, user)
+        except TypeError:
+            return await llm.call_llm(user, system_prompt=system)
+
+
+
 async def generate_study_guide(
     transcript: str,
     assignment_prompt: str = "",
@@ -75,7 +86,7 @@ async def generate_study_guide(
     )
     await _progress(on_progress, 1, "Parsing syllabus")
     await _progress(on_progress, 2, "Extracting key concepts")
-    content = await llm.call_llm(_SYSTEM, user, effort_score=effort_score)  # remediation: call_llm returns str now
+    content = await _invoke_llm(_SYSTEM, user, effort_score=effort_score)
     await _progress(on_progress, 3, "Generating study guide")
     await _progress(on_progress, 4, "Verifying accuracy")
     return content, None
@@ -99,7 +110,7 @@ async def generate_flashcards(
     await _progress(on_progress, 2, "Extracting key concepts")
     await _progress(on_progress, 3, "Generating flashcards")
     for attempt in range(2):
-        content = await llm.call_llm(_SYSTEM, user, effort_score=effort_score)  # remediation: call_llm returns str now
+        content = await _invoke_llm(_SYSTEM, user, effort_score=effort_score)
         model = None
         parsed = llm.extract_json(content)
         if parsed is not None:
@@ -139,7 +150,7 @@ async def generate_practice_test(
     await _progress(on_progress, 2, "Extracting key concepts")
     await _progress(on_progress, 3, "Generating quiz")
     for attempt in range(2):
-        content = await llm.call_llm(_SYSTEM, user, effort_score=effort_score)  # remediation: call_llm returns str now
+        content = await _invoke_llm(_SYSTEM, user, effort_score=effort_score)
         model = None
         parsed = llm.extract_json(content)
         if parsed is not None and isinstance(parsed, dict):
@@ -164,10 +175,33 @@ async def generate_summary(
     )
     await _progress(on_progress, 1, "Parsing syllabus")
     await _progress(on_progress, 2, "Extracting key concepts")
-    content = await llm.call_llm(_SYSTEM, user, effort_score=effort_score)  # remediation: call_llm returns str now
+    content = await _invoke_llm(_SYSTEM, user, effort_score=effort_score)
     await _progress(on_progress, 3, "Generating summary")
     await _progress(on_progress, 4, "Verifying accuracy")
     return content, None
+
+
+async def generate_study_pack(content: str, user: Any, db: Any) -> dict:
+    from server.credits import charge, refund
+    from fastapi import HTTPException
+    if not charge(user, 'study_guide', db):
+        raise HTTPException(status_code=402, detail='Insufficient credits for study guide generation')
+    
+    try:
+        prompt = f'Generate a structured study guide with key terms and summaries from: {content}'
+        raw_response = await llm.call_llm(
+            system_prompt='You are an expert academic tutor. Return valid JSON only.',
+            user_prompt=prompt,
+            response_format='json_object'
+        )
+        parsed = llm.extract_json(raw_response)
+        if not parsed:
+            raise ValueError('Failed to parse valid JSON from LLM response')
+        return parsed
+    except Exception as e:
+        refund(user, 'study_guide', db)
+        logger.error(f'Study pack generation failed, credits refunded: {e}')
+        raise HTTPException(status_code=500, detail=f'Study pack generation failed: {str(e)}')
 
 
 GENERATORS: dict[str, Any] = {
@@ -175,4 +209,6 @@ GENERATORS: dict[str, Any] = {
     "flashcards": generate_flashcards,
     "practice_test": generate_practice_test,
     "summary": generate_summary,
+    "study_pack": generate_study_pack,
 }
+

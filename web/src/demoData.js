@@ -292,7 +292,7 @@ export const DEFAULT_SETTINGS = {
   goals: { gpa: true, writing: true, gradSchool: false, research: false },
   appearance: {
     theme: 'dark', accent: 'blue', density: 'comfortable', animation: 'full',
-    background: 'aurora', uiStyle: 'glass',
+    background: 'aurora', uiStyle: 'glass', fontScale: 50,
   },
   ai: {
     effort: 'balanced', autoRouting: true, creativity: 72, reasoning: 88, conciseness: 61,

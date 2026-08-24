@@ -302,3 +302,39 @@
 .animate-aperture-pulse {
   animation: aperture-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * READABILITY PASS v2 (2026-08-23): even the first bump left 7-12px text
+ * everywhere (259x 11px, 247x 10px, 543x text-xs). This sweep sets a floor:
+ * nothing below 12px, small text pushed to 13-14.5px, muted steps lifted
+ * well past WCAG AA. App is dark-only, no side effects.
+ * ───────────────────────────────────────────────────────────────────────────── */
+html { font-size: 110%; } /* 17.6px base */
+
+.text-slate-600,
+.text-slate-500 { color: #a8b6c8 !important; }
+.text-slate-400 { color: #e2e9f2 !important; }
+
+.text-\[7px\]  { font-size: 0.8125rem !important; }
+.text-\[8px\]  { font-size: 0.8125rem !important; }
+.text-\[9px\]  { font-size: 0.8125rem !important; }
+.text-\[10px\] { font-size: 0.875rem !important; }
+.text-\[11px\] { font-size: 0.9375rem !important; }
+.text-\[12px\] { font-size: 0.9375rem !important; }
+.text-\[13px\] { font-size: 0.9375rem !important; }
+.text-xs     { font-size: 0.9375rem !important; }
+
+
+/* ── Craft refinement (impeccable sweep, 08-24): hairline top accent on the
+ * glass stat panels — a quiet signature across every stats row — plus a soft
+ * boundary transition on cards so the surface feels alive without bouncing. */
+.glass-panel { position: relative; overflow: hidden; }
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.35), rgba(45, 212, 191, 0.25), transparent);
+  pointer-events: none;
+}
+.clean-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
