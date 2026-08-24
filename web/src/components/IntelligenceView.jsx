@@ -1,3 +1,4 @@
+// export target: web/src/components/IntelligenceView.jsx
 /* ────────────────────────────────────────────────────────────────────────────
  * IntelligenceView.jsx — Academic Progress and Recommendations, powered by
  * real /api/analytics data (never hardcoded). Demo mode (explicit opt-in)

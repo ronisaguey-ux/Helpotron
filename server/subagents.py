@@ -8,8 +8,13 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from .database import Assignment
-from .llm import chat_complete
+try:
+    from .database import Assignment
+    from .llm import chat_complete
+except (ImportError, ValueError):
+    from server.database import Assignment
+    from server.llm import chat_complete
+
 
 logger = logging.getLogger("helpotron.subagents")
 

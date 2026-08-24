@@ -12,7 +12,11 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from . import llm
+try:
+    from . import llm
+except (ImportError, ValueError):
+    from server import llm
+
 
 logger = logging.getLogger(__name__)
 

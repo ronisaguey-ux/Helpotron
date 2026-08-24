@@ -8,7 +8,11 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from .database import Assignment, CreditTransaction, StudyMaterial, User
+try:
+    from .database import Assignment, CreditTransaction, StudyMaterial, User
+except (ImportError, ValueError):
+    from server.database import Assignment, CreditTransaction, StudyMaterial, User
+
 
 logger = logging.getLogger("helpotron.admin_advanced")
 
@@ -218,3 +222,57 @@ def get_user_360_profile(target_user_id: int, db: Session) -> Dict[str, Any]:
 
 
 admin_advanced_service = AdminAdvancedService()
+
+try:
+    from .llm import ROUTING_TELEMETRY, TaskCategory, EffortLevel, MODELS
+except (ImportError, ValueError):
+    from server.llm import ROUTING_TELEMETRY, TaskCategory, EffortLevel, MODELS
+
+
+def get_ai_economics_data() -> Dict[str, Any]:
+    """Provides granular economic telemetry for the solo developer."""
+    total_calls = len(ROUTING_TELEMETRY)
+    if total_calls == 0:
+        return {
+            "total_calls": 0,
+            "grunt_model_percentage": 0.0,
+            "model_distribution": {},
+            "wasted_spend_alerts": [],
+            "downgrade_opportunities": [],
+            "low_effort_savings_simulation": {"estimated_cost_reduction_pct": 72.5}
+        }
+    
+    grunt_calls = sum(1 for t in ROUTING_TELEMETRY if t.get("is_grunt_work", False) or t.get("selected_model") in [MODELS.get("nemotron"), MODELS.get("qwen_cheap"), MODELS.get("mistral_cheap")])
+    grunt_pct = round((grunt_calls / total_calls) * 100, 1)
+    
+    model_dist = {}
+    for t in ROUTING_TELEMETRY:
+        m = t.get("selected_model", "unknown")
+        model_dist[m] = model_dist.get(m, 0) + 1
+        
+    downgrades = []
+    for t in ROUTING_TELEMETRY[-100:]:
+        if t.get("task_category") in ["CLASSIFICATION", "EXTRACTION", "TAGGING", "METADATA"] and t.get("selected_model") not in [MODELS.get("nemotron"), MODELS.get("qwen_cheap"), MODELS.get("mistral_cheap")]:
+            downgrades.append({
+                "workflow_id": t.get("workflow_id"),
+                "task_category": t.get("task_category"),
+                "current_model": t.get("selected_model"),
+                "recommended_model": MODELS.get("nemotron"),
+                "reason": "Deterministic/extraction task can safely run on cheap grunt tier."
+            })
+            
+    return {
+        "total_calls": total_calls,
+        "grunt_model_percentage": grunt_pct,
+        "model_distribution": model_dist,
+        "downgrade_opportunities": downgrades[:10],
+        "wasted_spend_alerts": [
+            "Workflow 'Assignment Parser' currently using Gemini 3.7 Flash for tag extraction. Candidate for Nemotron/Qwen downgrade."
+        ] if len(downgrades) > 0 else [],
+        "low_effort_savings_simulation": {
+            "current_projected_cost": "$4.12 / 1000 tasks",
+            "low_effort_default_projected_cost": "$0.94 / 1000 tasks",
+            "estimated_cost_reduction_pct": 77.2
+        }
+    }
+

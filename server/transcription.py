@@ -14,9 +14,15 @@ from typing import Optional, Tuple
 
 import httpx
 
-from .config import BASE_DIR, config
-from .cost_tracking import cost_engine
-from .database import SessionLocal
+try:
+    from .config import BASE_DIR, config
+    from .cost_tracking import cost_engine
+    from .database import SessionLocal
+except (ImportError, ValueError):
+    from server.config import BASE_DIR, config
+    from server.cost_tracking import cost_engine
+    from server.database import SessionLocal
+
 
 logger = logging.getLogger(__name__)
 

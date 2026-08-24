@@ -23,38 +23,74 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
-from . import agent_session, credits, ratelimit, study_tools, transcription
-from .user_settings_service import user_settings_service
-from .agent_session import manager as agent_manager
-from .config import config
-from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
-from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
-from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
-from .admin import require_admin, ResetPasswordRequest
-from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+try:
+    from . import agent_session, credits, ratelimit, study_tools, transcription
+    from .user_settings_service import user_settings_service
+    from .agent_session import manager as agent_manager
+    from .config import config
+    from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
+    from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
+    from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
+    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+    from .admin import require_admin, ResetPasswordRequest
+    from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+except (ImportError, ValueError):
+    from server import agent_session, credits, ratelimit, study_tools, transcription
+    from server.user_settings_service import user_settings_service
+    from server.agent_session import manager as agent_manager
+    from server.config import config
+    from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
+    from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
+    from server.draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
+    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+    from server.admin import require_admin, ResetPasswordRequest
+    from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+
 
 # Import route modules
-from .routes_analytics import router as analytics_router
-from .routes_referral import router as referral_router
-from .routes_organization import router as organization_router
-from .routes_export import router as export_router
-from .routes_study_groups import router as study_groups_router
-from .routes_datalake import router as datalake_router
-from .routes_auth_2fa import router as auth_2fa_router
-from .routes_user_settings import router as user_settings_router
-from .routes_hygiene import router as hygiene_router
-from .routes_agent_actions import router as agent_actions_router
-from .routes_admin_advanced import router as admin_advanced_router
-from .routes_overlord import router as overlord_router
-from .routes_simulation import router as simulation_router
-from .routes_dump import router as dump_router
-from .routes_math import router as math_router
-from .routes_extension import router as extension_router
-from .assignments import router as assignments_router
-from .privacy import router as privacy_router
-from .admin import router as admin_router
-from .routes_features import router as features_router
+try:
+    from .routes_analytics import router as analytics_router
+    from .routes_referral import router as referral_router
+    from .routes_organization import router as organization_router
+    from .routes_export import router as export_router
+    from .routes_study_groups import router as study_groups_router
+    from .routes_datalake import router as datalake_router
+    from .routes_auth_2fa import router as auth_2fa_router
+    from .routes_user_settings import router as user_settings_router
+    from .routes_hygiene import router as hygiene_router
+    from .routes_agent_actions import router as agent_actions_router
+    from .routes_admin_advanced import router as admin_advanced_router
+    from .routes_overlord import router as overlord_router
+    from .routes_simulation import router as simulation_router
+    from .routes_dump import router as dump_router
+    from .routes_math import router as math_router
+    from .routes_extension import router as extension_router
+    from .assignments import router as assignments_router
+    from .privacy import router as privacy_router
+    from .admin import router as admin_router
+    from .routes_features import router as features_router
+except (ImportError, ValueError):
+    from server.routes_analytics import router as analytics_router
+    from server.routes_referral import router as referral_router
+    from server.routes_organization import router as organization_router
+    from server.routes_export import router as export_router
+    from server.routes_study_groups import router as study_groups_router
+    from server.routes_datalake import router as datalake_router
+    from server.routes_auth_2fa import router as auth_2fa_router
+    from server.routes_user_settings import router as user_settings_router
+    from server.routes_hygiene import router as hygiene_router
+    from server.routes_agent_actions import router as agent_actions_router
+    from server.routes_admin_advanced import router as admin_advanced_router
+    from server.routes_overlord import router as overlord_router
+    from server.routes_simulation import router as simulation_router
+    from server.routes_dump import router as dump_router
+    from server.routes_math import router as math_router
+    from server.routes_extension import router as extension_router
+    from server.assignments import router as assignments_router
+    from server.privacy import router as privacy_router
+    from server.admin import router as admin_router
+    from server.routes_features import router as features_router
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
@@ -1169,7 +1205,10 @@ def admin_help(draft_id: int, db: Session = Depends(get_db)):
     return {"status": "admin notified", "message": "The developer has been alerted. They will respond shortly."}
 
 
-from .humanizer import AIHumanizerPipeline
+try:
+    from .humanizer import AIHumanizerPipeline
+except (ImportError, ValueError):
+    from server.humanizer import AIHumanizerPipeline
 
 humanizer_pipeline = AIHumanizerPipeline()
 
@@ -1180,8 +1219,13 @@ async def humanize_assignment_route(payload: dict, db: Session = Depends(get_db)
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
 
-from .export import export_to_google_doc
-from .gdocs_exporter import HumanizedTypingSimulator
+try:
+    from .export import export_to_google_doc
+    from .gdocs_exporter import HumanizedTypingSimulator
+except (ImportError, ValueError):
+    from server.export import export_to_google_doc
+    from server.gdocs_exporter import HumanizedTypingSimulator
+
 
 @app.post("/api/assignment/{assignment_id}/export-gdocs")
 async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = Depends(get_db)):

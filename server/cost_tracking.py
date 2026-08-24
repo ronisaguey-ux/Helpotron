@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from .database import ApiUsageLog, User, SessionLocal
+try:
+    from .database import ApiUsageLog, User, SessionLocal
+except (ImportError, ValueError):
+    from server.database import ApiUsageLog, User, SessionLocal
+
 
 # Per-1K-token rates (USD) for policy-allowlisted models only.
 MODEL_RATES = {
