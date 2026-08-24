@@ -39,7 +39,7 @@ const DEFAULT_SUBJECT_BUBBLES = [
   { id: 'subj_psychology', title: 'Psychology & Cognitive Sciences', description: 'Empirical research, cognitive neuroscience & case studies', color: 'indigo', icon: '🧠' },
 ];
 
-export default function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
+export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
@@ -502,3 +502,4 @@ export default function AssignmentCardDashboard({ userId = 'student_demo', isGue
   );
 }
 
+export default AssignmentCardDashboard;

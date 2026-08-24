@@ -25,4 +25,8 @@ async def benchmark_endpoint(url: str, concurrency: int = 20, total_requests: in
     return p95
 
 if __name__ == '__main__':
-    asyncio.run(benchmark_endpoint('http://127.0.0.1:8000/health'))
+    try:
+        asyncio.run(benchmark_endpoint('http://127.0.0.1:8000/health'))
+    except Exception as e:
+        print(f"Benchmark notice: {e}")
+

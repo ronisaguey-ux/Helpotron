@@ -13,7 +13,6 @@ import { api, getServer, getUserId, setServer, setUserId } from './api.js';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
-import StudyToolsHub from './components/StudyToolsHub.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
 import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
 import MessageAdminView from './components/MessageAdminView.jsx';
@@ -418,7 +417,6 @@ export default function App() {
                   {/* WORKSPACE */}
                   {activeView === 'agent' && <MyAgentView userId={userId} />}
                   {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
-                  {activeView === 'study' && <StudyToolsHub userId={userId} initialAssignment={openAssignment} />}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
                   {activeView === 'library' && <LibraryView />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}

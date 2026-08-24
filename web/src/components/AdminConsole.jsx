@@ -30,6 +30,15 @@ const TONE_HOVER = {
   green: 'hover:bg-emerald-500/15 hover:border-emerald-500/30',
 };
 
+export const ADMIN_DOMAINS = [
+  { id: 'command', label: 'Command' },
+  { id: 'people', label: 'People' },
+  { id: 'ai', label: 'AI & Agents' },
+  { id: 'product', label: 'Product' },
+  { id: 'system', label: 'System' },
+  { id: 'security', label: 'Security' },
+];
+
 const ADMIN_ACTIONS = [
   { key: 'grant', label: 'Grant credits', icon: CreditCard, tone: 'blue', desc: 'Add credits to the balance.' },
   { key: 'plan', label: 'Adjust plan', icon: Star, tone: 'purple', desc: 'Move between Basic / Pro / Elite.' },
@@ -157,7 +166,7 @@ function User360({ user, onClose, onAction }) {
   );
 }
 
-export default function AdminConsole({ onOpenPanel }) {
+export function AdminConsole({ onOpenPanel }) {
   const demo = demoEnabled();
   const [adminSearch, setAdminSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('all');
@@ -499,3 +508,6 @@ export default function AdminConsole({ onOpenPanel }) {
     </div>
   );
 }
+
+export default AdminConsole;
+

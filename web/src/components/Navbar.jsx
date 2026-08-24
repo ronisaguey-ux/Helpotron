@@ -12,7 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-export default function Navbar({
+export function Navbar({
   isLoggedIn = false,
   isGuest = false,
   user = null,
@@ -203,5 +203,4 @@ export default function Navbar({
   );
 }
 
-
-
+export default Navbar;

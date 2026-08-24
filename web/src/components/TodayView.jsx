@@ -70,7 +70,7 @@ export default function TodayView({ onGoTo, user }) {
         <SectionCard
           id="today-briefing"
           header={
-            <div>
+            <div className="relative z-10">
               <div className="text-2xl font-bold text-white">
                 {greeting}, {name}.
               </div>
@@ -80,6 +80,10 @@ export default function TodayView({ onGoTo, user }) {
             </div>
           }
         >
+        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none" aria-hidden>
+          <img src="/assets/hero_aurora.webp" alt="" className="w-full h-full object-cover opacity-35" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#090d16]/90 via-[#090d16]/30 to-transparent" />
+        </div>
         <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         <div className="relative">
           {demo && (
@@ -172,7 +176,12 @@ export default function TodayView({ onGoTo, user }) {
           />
         }>
           {recs.length === 0 ? (
-            <EmptyState title="No recommendations yet" body="Complete an assignment to start getting recommendations." />
+            <EmptyState
+              title="No recommendations yet"
+              body="Complete an assignment to start getting recommendations."
+              actionLabel="Browse library"
+              onAction={() => onGoTo('library')}
+            />
           ) : (
             <div className="space-y-3">
               {recs.map((r, i) => (
