@@ -10,17 +10,29 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from .database import (
-    User, UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
-    Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
-    GroupMembership, SharedMaterial, UniversalDumpItem, get_db,
-)
-from .routes_features import get_current_authenticated_user
-from .datalake import datalake_manager
-from .user_settings_service import user_settings_service, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
-from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES
-from .default_styles import ACADEMIC_LEVELS, SELECTED_BOOK_STYLES, get_default_style
-from .humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
+try:
+    from .database import (
+        User, UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
+        Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
+        GroupMembership, SharedMaterial, UniversalDumpItem, get_db,
+    )
+    from .routes_features import get_current_authenticated_user
+    from .datalake import datalake_manager
+    from .user_settings_service import user_settings_service, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
+    from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES, SELECTED_BOOK_STYLES, get_default_style
+    from .humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
+except (ImportError, ValueError):
+    from server.database import (
+        User, UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
+        Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
+        GroupMembership, SharedMaterial, UniversalDumpItem, get_db,
+    )
+    from server.routes_features import get_current_authenticated_user
+    from server.datalake import datalake_manager
+    from server.user_settings_service import user_settings_service, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
+    from server.default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES, SELECTED_BOOK_STYLES, get_default_style
+    from server.humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
+
 
 router = APIRouter(prefix="/api/user", tags=["user_settings"])
 

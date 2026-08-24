@@ -26,7 +26,11 @@ from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from .config import config
+try:
+    from .config import config
+except (ImportError, ValueError):
+    from server.config import config
+
 
 logger = logging.getLogger('helpotron.security')
 

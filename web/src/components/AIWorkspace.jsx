@@ -1,3 +1,4 @@
+// export target: web/src/components/AIWorkspace.jsx
 /* ────────────────────────────────────────────────────────────────────────────
  * AIWorkspace.jsx — the killer interface: one place where AI work happens.
  * Left: materials. Center: conversation/output. Right: context & controls.

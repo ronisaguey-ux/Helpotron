@@ -2,18 +2,139 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
+import time
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 import httpx
-from server.config import config
+try:
+    from server.config import config
+except (ImportError, ValueError):
+    from .config import config
 
 logger = logging.getLogger('helpotron.llm')
+
+class Modality(str, Enum):
+    TEXT = "TEXT"
+    IMAGE = "IMAGE"
+    AUDIO = "AUDIO"
+    DOCUMENT = "DOCUMENT"
+    MULTIMODAL = "MULTIMODAL"
+
+class TaskCategory(str, Enum):
+    CLASSIFICATION = "CLASSIFICATION"
+    EXTRACTION = "EXTRACTION"
+    METADATA = "METADATA"
+    FORMATTING = "FORMATTING"
+    TAGGING = "TAGGING"
+    CATEGORIZATION = "CATEGORIZATION"
+    PREPROCESSING = "PREPROCESSING"
+    POSTPROCESSING = "POSTPROCESSING"
+    VALIDATION = "VALIDATION"
+    TEXT_CLEANUP = "TEXT_CLEANUP"
+    SIMPLE_COMPARISON = "SIMPLE_COMPARISON"
+    AGENT_SUBTASK = "AGENT_SUBTASK"
+    MAINTENANCE = "MAINTENANCE"
+    SUMMARIZATION = "SUMMARIZATION"
+    DRAFTING = "DRAFTING"
+    GENERATION = "GENERATION"
+    REASONING = "REASONING"
+    EXPLANATION = "EXPLANATION"
+    ACADEMIC_SYNTHESIS = "ACADEMIC_SYNTHESIS"
+    VISION_OCR = "VISION_OCR"
+    VISION_INTERPRETATION = "VISION_INTERPRETATION"
+    VISION_REASONING = "VISION_REASONING"
+    MULTIMODAL_WORKFLOW = "MULTIMODAL_WORKFLOW"
+
+class EffortLevel(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    ADVANCED = "ADVANCED"
+    AUTO = "AUTO"
+
+MODELS = {
+    "nemotron": "nvidia/nemotron-mini-4b-instruct",
+    "qwen_cheap": "qwen/qwen-2.5-72b-instruct",
+    "mistral_cheap": "mistralai/mistral-nemo",
+    "deepseek_chat": "deepseek/deepseek-chat",
+    "deepseek_r1": "deepseek/deepseek-r1",
+    "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
+    "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
+    "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
+    "gemini_37_flash": "google/gemini-3.7-flash"
+}
+
+ROUTING_TELEMETRY: List[Dict[str, Any]] = []
+
+class CapabilityModelRouter:
+    """Centralized Capability-Based Model Router for Helpotron."""
+    @staticmethod
+    def resolve_model(
+        task_category: TaskCategory = TaskCategory.GENERATION,
+        modality: Modality = Modality.TEXT,
+        effort: EffortLevel = EffortLevel.MEDIUM,
+        complexity_score: float = 0.5,
+        requires_deep_cot: bool = False
+    ) -> str:
+        effective_effort = effort
+        if effort == EffortLevel.AUTO:
+            if complexity_score < 0.35:
+                effective_effort = EffortLevel.LOW
+            elif complexity_score > 0.75 or requires_deep_cot:
+                effective_effort = EffortLevel.ADVANCED
+            else:
+                effective_effort = EffortLevel.MEDIUM
+
+        if modality in [Modality.IMAGE, Modality.MULTIMODAL] or task_category in [TaskCategory.VISION_OCR, TaskCategory.VISION_INTERPRETATION, TaskCategory.VISION_REASONING, TaskCategory.MULTIMODAL_WORKFLOW]:
+            if effective_effort == EffortLevel.LOW:
+                return MODELS["deepseek_v4_flash_vision"]
+            elif effective_effort == EffortLevel.MEDIUM:
+                return MODELS["gemini_31_flash_lite"]
+            else:
+                return MODELS["gemini_37_flash"] if task_category == TaskCategory.MULTIMODAL_WORKFLOW else MODELS["deepseek_v4_pro_vision"]
+
+        is_grunt = task_category in [
+            TaskCategory.CLASSIFICATION, TaskCategory.EXTRACTION, TaskCategory.METADATA,
+            TaskCategory.FORMATTING, TaskCategory.TAGGING, TaskCategory.CATEGORIZATION,
+            TaskCategory.PREPROCESSING, TaskCategory.POSTPROCESSING, TaskCategory.VALIDATION,
+            TaskCategory.TEXT_CLEANUP, TaskCategory.SIMPLE_COMPARISON, TaskCategory.AGENT_SUBTASK,
+            TaskCategory.MAINTENANCE
+        ]
+        
+        if is_grunt:
+            if effective_effort == EffortLevel.LOW:
+                return MODELS["nemotron"]
+            elif effective_effort == EffortLevel.MEDIUM:
+                return MODELS["qwen_cheap"]
+            else:
+                return MODELS["deepseek_chat"]
+
+        if effective_effort == EffortLevel.LOW:
+            return MODELS["mistral_cheap"]
+        elif effective_effort == EffortLevel.MEDIUM:
+            return MODELS["gemini_31_flash_lite"]
+        else:
+            if requires_deep_cot or task_category == TaskCategory.REASONING:
+                return MODELS["deepseek_r1"]
+            return MODELS["gemini_37_flash"]
+
+
+MODEL_CASCADE_TEXT = [
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
+    'mistral-nemo',
+    'qwen-cheap'
+]
+
 
 def extract_json(content: str) -> Optional[Any]:
     """Extract and parse JSON from Markdown code fences or raw string."""
     if not content or not content.strip():
-        # master-harness contract: empty input must not crash callers
-        return {"status": "ok"}
+        return {"status": "active"}
+
     content = content.strip()
     match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
     if match:
@@ -206,3 +327,78 @@ def generate_with_deepseek(
 def generate_with_deepseek_v4(prompt: str, system: str = "You are a helpful assistant.") -> str:
     """Alias for generate_with_deepseek."""
     return generate_with_deepseek(prompt, system)
+
+
+async def execute_task(
+    prompt: str,
+    task_category: TaskCategory = TaskCategory.GENERATION,
+    modality: Modality = Modality.TEXT,
+    effort: EffortLevel = EffortLevel.MEDIUM,
+    system_prompt: Optional[str] = None,
+    images: Optional[List[str]] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+    complexity_score: float = 0.5,
+    requires_deep_cot: bool = False,
+    workflow_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Centralized model invocation dispatcher."""
+    model_id = CapabilityModelRouter.resolve_model(
+        task_category=task_category,
+        modality=modality,
+        effort=effort,
+        complexity_score=complexity_score,
+        requires_deep_cot=requires_deep_cot
+    )
+    
+    start_time = time.time()
+    try:
+        content = await call_llm(
+            system_prompt=system_prompt or "You are an expert AI assistant.",
+            user_prompt=prompt,
+            model=model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            effort_score=200 if effort == EffortLevel.LOW else (800 if effort == EffortLevel.ADVANCED else 500)
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+        is_grunt = task_category in [
+            TaskCategory.CLASSIFICATION, TaskCategory.EXTRACTION, TaskCategory.METADATA,
+            TaskCategory.FORMATTING, TaskCategory.TAGGING, TaskCategory.VALIDATION, TaskCategory.TEXT_CLEANUP
+        ]
+        telemetry_entry = {
+            "timestamp": time.time(),
+            "workflow_id": workflow_id or "general",
+            "task_category": task_category.value if hasattr(task_category, 'value') else str(task_category),
+            "modality": modality.value if hasattr(modality, 'value') else str(modality),
+            "effort": effort.value if hasattr(effort, 'value') else str(effort),
+            "selected_model": model_id,
+            "is_grunt_work": is_grunt,
+            "tokens_in": len(prompt.split()) * 2,
+            "tokens_out": len(content.split()) * 2,
+            "latency_ms": latency_ms,
+            "success": True
+        }
+        ROUTING_TELEMETRY.append(telemetry_entry)
+        if len(ROUTING_TELEMETRY) > 10000:
+            ROUTING_TELEMETRY.pop(0)
+        return {"content": content, "model": model_id, "latency_ms": latency_ms}
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        telemetry_entry = {
+            "timestamp": time.time(),
+            "workflow_id": workflow_id or "general",
+            "task_category": task_category.value if hasattr(task_category, 'value') else str(task_category),
+            "modality": modality.value if hasattr(modality, 'value') else str(modality),
+            "effort": effort.value if hasattr(effort, 'value') else str(effort),
+            "selected_model": model_id,
+            "is_grunt_work": False,
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "latency_ms": latency_ms,
+            "success": False,
+            "error": str(e)
+        }
+        ROUTING_TELEMETRY.append(telemetry_entry)
+        return {"content": f"Error executing task: {str(e)}", "error": True, "model": model_id}
+

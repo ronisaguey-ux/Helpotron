@@ -11,9 +11,15 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .config import config
-from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
-from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token
+try:
+    from .config import config
+    from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
+    from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token
+except (ImportError, ValueError):
+    from server.config import config
+    from server.database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
+    from server.security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token
+
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 ADMIN_IDS = [ADMIN_PUBLIC_ID]

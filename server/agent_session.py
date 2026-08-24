@@ -20,7 +20,11 @@ import uuid
 
 from fastapi import WebSocket
 
-from . import llm
+try:
+    from . import llm
+except (ImportError, ValueError):
+    from server import llm
+
 
 logger = logging.getLogger("helpotron.agent")
 
@@ -233,7 +237,11 @@ async def _send(session: AgentSession, payload: dict) -> None:
     await session.websocket.send_json(payload)
 
 
-from .user_settings_service import set_scoped_setting, resolve_scoped_setting
+try:
+    from .user_settings_service import set_scoped_setting, resolve_scoped_setting
+except (ImportError, ValueError):
+    from server.user_settings_service import set_scoped_setting, resolve_scoped_setting
+
 
 class AgentActionExecutionEngine:
     """Shared action layer: ensures conversational My Agent and the visual UI
