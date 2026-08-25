@@ -39,8 +39,10 @@ class Settings(BaseSettings):
     ]
 
     # LLM & Third-Party APIs
-    omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "http://localhost:20128/api/v1")
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    omniroute_api_base: str = os.getenv("OMNIROUTE_API_BASE", "https://openrouter.ai/api/v1")
     omniroute_api_key: str = os.getenv("OMNIROUTE_API_KEY", "")
+
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_flash_lite_model: str = os.getenv("GEMINI_FLASH_LITE_MODEL", "gemini-3.1-flash-lite")
     gemini_flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.7-flash")
