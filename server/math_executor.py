@@ -173,30 +173,35 @@ try:
             print(f"NUMERICAL: {{eval_val}}")
         print(f"LATEX: {{latex(simplified)}}")
 except Exception as e1:
-    # 2. Fallback to standard Python math evaluation
+    # 2. Fallback to standard Python math evaluation via strict AST safe evaluation
     try:
-        safe_dict = {{
-            'math': math,
-            'statistics': statistics,
-            'sqrt': math.sqrt,
-            'sin': math.sin,
-            'cos': math.cos,
-            'tan': math.tan,
-            'pi': math.pi,
-            'e': math.e,
-            'log': math.log,
-            'log10': math.log10,
-            'exp': math.exp,
-            'pow': math.pow,
-            'factorial': math.factorial,
-            'Fraction': Fraction,
-            'comb': math.comb,
-            'perm': math.perm,
+        import ast
+        import operator
+        _SAFE_OPS = {{
+            ast.Add: operator.add, ast.Sub: operator.sub,
+            ast.Mult: operator.mul, ast.Div: operator.truediv,
+            ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
+            ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos
         }}
-        val = eval(expr_str, {{"__builtins__": {{}}}}, safe_dict)
+        _SAFE_FUNCS = {{
+            'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+            'sqrt': math.sqrt, 'log': math.log, 'log10': math.log10,
+            'exp': math.exp, 'abs': abs, 'round': round,
+            'pi': math.pi, 'e': math.e
+        }}
+        def _ast_eval(node):
+            if isinstance(node, ast.Expression): return _ast_eval(node.body)
+            elif isinstance(node, ast.Constant): return node.value
+            elif isinstance(node, ast.BinOp): return _SAFE_OPS[type(node.op)](_ast_eval(node.left), _ast_eval(node.right))
+            elif isinstance(node, ast.UnaryOp): return _SAFE_OPS[type(node.op)](_ast_eval(node.operand))
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _SAFE_FUNCS:
+                return _SAFE_FUNCS[node.func.id](*[_ast_eval(a) for a in node.args])
+            elif isinstance(node, ast.Name) and node.id in _SAFE_FUNCS: return _SAFE_FUNCS[node.id]
+            raise ValueError('Disallowed node')
+        val = _ast_eval(ast.parse(expr_str, mode='eval'))
         print(f"NUMERICAL: {{val}}")
     except Exception as e2:
-        print(f"ERROR: Sympy: {{e1}} | Eval: {{e2}}")
+        print(f"ERROR: Sympy: {{e1}} | SafeEval: {{e2}}")
 """
     success, output = run_python_math_bash(script)
     if not success or "ERROR:" in output:
@@ -256,3 +261,7 @@ def sanitize_math_hallucinations_in_text(text: str) -> str:
         text,
     )
     return cleaned
+
+
+execute_math_expression = solve_deterministic_math
+
