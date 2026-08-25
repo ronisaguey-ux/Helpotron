@@ -139,22 +139,41 @@ class TwilioSMSService:
 
     @staticmethod
     async def send_sms_async(to_phone: str, message: str) -> bool:
-        if not config.twilio_account_sid or not config.twilio_auth_token:
+        account_sid = getattr(config, "twilio_account_sid", "") or os.getenv("TWILIO_ACCOUNT_SID", "")
+        auth_token = getattr(config, "twilio_auth_token", "") or os.getenv("TWILIO_AUTH_TOKEN", "")
+        api_key_sid = getattr(config, "twilio_api_key_sid", "") or os.getenv("TWILIO_API_KEY_SID", "") or os.getenv("TWILIO_SID", "")
+        api_key_secret = getattr(config, "twilio_api_key_secret", "") or os.getenv("TWILIO_API_KEY_SECRET", "") or os.getenv("TWILIO_SECRET", "")
+        msg_svc_sid = getattr(config, "twilio_messaging_service_sid", "") or os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
+        from_phone = getattr(config, "twilio_phone_number", "") or os.getenv("TWILIO_PHONE_NUMBER", "+13187688667")
+
+        auth_tuple = None
+        if api_key_sid and api_key_secret:
+            auth_tuple = (api_key_sid, api_key_secret)
+        elif account_sid and auth_token:
+            auth_tuple = (account_sid, auth_token)
+
+        # Gracefully mock fictitious 555 test numbers or unconfigured auth
+        if to_phone.startswith("+1555") or to_phone.startswith("555") or not auth_tuple:
             logger.info("[Mock SMS] To: %s | Message: %s", to_phone, message)
             return True
 
-        url = f"https://api.twilio.com/2010-04-01/Accounts/{config.twilio_account_sid}/Messages.json"
-        data = {
+        acct_id = account_sid or api_key_sid
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{acct_id}/Messages.json"
+        data: Dict[str, str] = {
             "To": to_phone,
-            "From": config.twilio_phone_number,
             "Body": message,
         }
+        if msg_svc_sid:
+            data["MessagingServiceSid"] = msg_svc_sid
+        elif from_phone:
+            data["From"] = from_phone
+
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
                     url,
                     data=data,
-                    auth=(config.twilio_account_sid, config.twilio_auth_token),
+                    auth=auth_tuple,
                 )
                 if resp.status_code in (200, 201):
                     logger.info("Successfully sent SMS 2FA to %s", to_phone)
