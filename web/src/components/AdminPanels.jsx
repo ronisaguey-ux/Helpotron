@@ -71,4 +71,7 @@ export function SystemMapPanel({ telemetryData, isMockMode = false, onInspectNod
     </div>
   );
 }
-export default AdminPanels;
+export default function AdminPanels(props) {
+  return <SystemMapPanel {...props} />;
+}
+
