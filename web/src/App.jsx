@@ -85,19 +85,19 @@ class ErrorBoundary extends React.Component {
 export default function App() {
   const [userId, setUserIdState] = useState(() => {
     try {
-      return getUserId() || 'RoniDev';
+      return getUserId() || 'Guest';
     } catch (e) {
-      return 'RoniDev';
+      return 'Guest';
     }
   });
   const [serverUrl] = useState(getServer);
   const [connected, setConnected] = useState(true);
   const [activeView, setActiveView] = useState('overview');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isGuest, setIsGuest] = useState(false);
+  const [isGuest, setIsGuest] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [credits, setCredits] = useState(10029);
-  const [userPlan, setUserPlan] = useState('elite');
+  const [credits, setCredits] = useState(0);
+  const [userPlan, setUserPlan] = useState('basic');
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* Back/forward navigation history — stack of {view, tab, assignment}
@@ -146,24 +146,23 @@ export default function App() {
       if (data && data.authenticated) {
         setIsLoggedIn(true);
         setIsGuest(false);
-        setUserIdState(data.public_id || 'RoniDev');
-        setUserId(data.public_id || 'RoniDev');
-        setCredits(data.credits ?? 10029);
-        setUserPlan(data.plan || 'elite');
-        setIsAdmin(!!data.is_admin);
+        setUserIdState(data.public_id || data.user_id || 'Student');
+        setUserId(data.public_id || data.user_id || 'Student');
+        setCredits(data.credits ?? 0);
+        setUserPlan(data.plan || 'basic');
+        setIsAdmin(Boolean(data.is_admin));
         return;
       }
     } catch (e) {}
-    const localUser = getUserId();
-    if (localUser && localUser !== 'Guest') {
-      setIsLoggedIn(true);
-      setIsGuest(false);
-      setUserIdState(localUser);
-    } else {
-      setIsGuest(true);
-      setIsLoggedIn(false);
-      setUserIdState('Guest');
-    }
+
+    // Unauthenticated state
+    setIsLoggedIn(false);
+    setIsGuest(true);
+    setIsAdmin(false);
+    setUserIdState('Guest');
+    setUserId('');
+    setCredits(0);
+    setUserPlan('basic');
   };
 
   useEffect(() => {
@@ -172,11 +171,6 @@ export default function App() {
 
   const handleLoginSuccess = async (userPublicId) => {
     setAuthModalOpen(false);
-    setIsLoggedIn(true);
-    setIsGuest(false);
-    const activeId = userPublicId || getUserId() || 'RoniDev';
-    setUserIdState(activeId);
-    setUserId(activeId);
     await checkSession();
   };
 
@@ -190,9 +184,11 @@ export default function App() {
     try {
       await api.logout();
     } catch (e) {}
+    setUserId('');
     setIsLoggedIn(false);
-    setIsGuest(false);
+    setIsGuest(true);
     setIsAdmin(false);
+    setUserIdState('Guest');
     setCredits(0);
     setUserPlan('basic');
   };
