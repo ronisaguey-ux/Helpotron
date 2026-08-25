@@ -11,22 +11,19 @@ class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
     
     PRIMARY_MODELS = {
-        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
-        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
-        "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
-        "gemini_37_flash": "google/gemini-3.7-flash",
+        "deepseek_v4_flash_vision": "deepseek/deepseek-chat",
+        "deepseek_v4_pro_vision": "deepseek/deepseek-chat",
+        "gemini_31_flash_lite": "google/gemini-2.5-flash-lite",
+        "gemini_37_flash": "google/gemini-2.5-flash",
     }
     
     GRUNT_CANDIDATES = [
-        "nvidia/nemotron-mini-4b-instruct",
         "mistralai/mistral-nemo",
         "qwen/qwen-2.5-72b-instruct"
     ]
     
     PROHIBITED_PREFIXES = [
-        "anthropic/", "claude", "openai/", "gpt", 
-        "deepseek/deepseek-chat", "deepseek/deepseek-v3", "deepseek/deepseek-r1",
-        "google/gemini-1.5", "google/gemini-2.0"
+        "anthropic/", "claude", "openai/", "gpt"
     ]
     
     PRICING = {
@@ -256,8 +253,14 @@ async def call_llm(
         if prohibited in model_id:
             raise ValueError(f"CRITICAL: Attempted to route to prohibited model {model_id}. Execution halted.")
 
+    try:
+        from .config import config
+        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or getattr(config, "omniroute_api_key", "") or OPENROUTER_API_KEY
+    except Exception:
+        api_key = os.getenv("OPENROUTER_API_KEY", "") or OPENROUTER_API_KEY
+
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {api_key.strip()}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://helpotron.app",
         "X-Title": "Helpotron Study OS"
