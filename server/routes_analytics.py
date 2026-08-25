@@ -54,3 +54,22 @@ async def log_study_session(
         db, user.id, material_id, time_spent_minutes, score, completed_flashcards
     )
     return {"status": "logged", "session_id": session.id}
+
+
+@router.get("/snapshot")
+async def get_insights_snapshot(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Consolidated InsightsSnapshot endpoint eliminating request waterfalls."""
+    analytics = get_user_analytics(db, user)
+    return {
+        "status": "success",
+        "study_activity": analytics,
+        "next_best_action": {
+            "title": "Review Due Flashcards",
+            "progress_percent": 75,
+            "rationale": "Spaced repetition scheduler identified cards due for review"
+        }
+    }
+
