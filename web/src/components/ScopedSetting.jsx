@@ -132,7 +132,7 @@ export default function ScopedSetting({
   refs,
   refPlaceholder,
   title,
-  description,
+  currentValue,
   children,
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -141,7 +141,15 @@ export default function ScopedSetting({
   const [deeper, setDeeper] = useState(1); // how many hierarchy rows are visible
   const [refsByLevel, setRefsByLevel] = useState({});
   const [value, setValue] = useState(
-    slider && !values ? slider.min : values && values[0] ? (typeof values[0] === 'object' ? values[0].key : values[0]) : ''
+    currentValue !== undefined
+      ? currentValue
+      : slider && !values
+      ? slider.min
+      : values && values[0]
+      ? typeof values[0] === 'object'
+        ? values[0].key
+        : values[0]
+      : ''
   );
   const [flash, setFlash] = useState(false);
 

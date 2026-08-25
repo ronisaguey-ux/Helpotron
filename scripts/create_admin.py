@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Create admin user with specified credentials.
+"""Create or update admin user securely.
 
-Usage: python scripts/create_admin.py
+Usage: ADMIN_PASSWORD="your-secure-pass" python scripts/create_admin.py
 """
 
 import sys
 import os
+import secrets
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from server.database import SessionLocal, User, init_db
@@ -17,8 +18,11 @@ def create_admin():
     init_db()
     db = SessionLocal()
 
-    admin_public_id = "RoniDev"
-    admin_password = "Mongosdev999"
+    admin_public_id = os.getenv("ADMIN_PUBLIC_ID", "RoniDev")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    if not admin_password:
+        admin_password = secrets.token_urlsafe(16)
+        print(f"⚠️  No ADMIN_PASSWORD provided. Generated random password: {admin_password}")
 
     # Check if admin already exists
     user = db.query(User).filter(User.public_id == admin_public_id).first()
@@ -35,14 +39,10 @@ def create_admin():
     user.password_hash = hashed
     user.password_salt = salt
 
-    # Also set as admin in config
-    print(f"ℹ️  Set ADMIN_PUBLIC_ID={admin_public_id} in your .env file")
-
     db.commit()
     db.close()
-    print(f"✅ Admin password set successfully.")
+    print(f"✅ Admin credentials set successfully.")
     print(f"   Public ID: {admin_public_id}")
-    print(f"   Password: {admin_password}")
 
 if __name__ == "__main__":
     create_admin()

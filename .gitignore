@@ -23,3 +23,9 @@ pipeline/state/
 # runtime uploads (avatars, agent memory, agent files) — never commit user data
 uploads/
 mcp/.env
+.agents/*.json
+.agents/mcp_config.json
+shots/*.zip
+exports/sandboxes/
+datalake_storage/
+*.db.gz

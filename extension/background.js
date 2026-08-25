@@ -58,6 +58,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'startRecording') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('recorder.html') }, (tab) => {
+      sendResponse({ ok: true, tabId: tab?.id });
+    });
+    return true;
+  }
+
   if (message.action === 'openDataLake') {
     getServer().then((srv) => {
       chrome.tabs.create({ url: `${srv}/#datalake` });
