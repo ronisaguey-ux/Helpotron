@@ -16,7 +16,7 @@ export default function PrivacyPolicy() {
       <section className="mb-8">
         <h2 className="text-xl font-bold text-slate-100 mb-3">2. GDPR Article 17: Right to Erasure</h2>
         <p className="leading-relaxed text-slate-300">
-          Users may permanently delete their account and all associated flashcards, study guides, and dumps at any time via Account Settings -> Delete Account.
+          Users may permanently delete their account and all associated flashcards, study guides, and dumps at any time via Account Settings &rarr; Delete Account.
         </p>
       </section>
     </div>
