@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import jwt
 import logging
+import os
 import re
 import secrets
 import time
@@ -33,10 +34,15 @@ except (ImportError, ValueError):
 
 
 logger = logging.getLogger('helpotron.security')
+ADMIN_PUBLIC_ID = getattr(config, 'admin_public_id', 'RoniDev')
 
-JWT_SECRET = getattr(config, 'JWT_SECRET', 'helpotron_production_super_secret_key_change_me_in_env')
-JWT_ALGORITHM = getattr(config, 'JWT_ALGORITHM', 'HS256')
+JWT_SECRET = getattr(config, 'jwt_secret', getattr(config, 'JWT_SECRET', os.getenv('JWT_SECRET', 'helpotron_jwt_secret_dev_key_32chars')))
+JWT_ALGORITHM = getattr(config, 'algorithm', getattr(config, 'JWT_ALGORITHM', 'HS256'))
 JWT_EXPIRATION_HOURS = 24
+
+if getattr(config, 'production_mode', False):
+    if not JWT_SECRET or JWT_SECRET.startswith('dev-insecure') or JWT_SECRET == 'helpotron_jwt_secret_dev_key_32chars':
+        raise RuntimeError("Production mode requires secure non-default JWT_SECRET in environment")
 
 
 def create_jwt_token(user_id: Any, role: str = 'user', expires_delta: Optional[timedelta] = None) -> str:
@@ -315,28 +321,33 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ─── user authentication ──────────────────────────────────────────────────
 
 async def get_current_user(request: Request):
-    """Authenticate via session cookie or Bearer JWT. Hardened (remediation):
-    the X-Public-ID header / public_id query fallback is gone — a forged
-    header must never become an identity."""
-    from .database import get_db, User
+    """Authenticate via session cookie or Bearer JWT. Hardened:
+    the X-Public-ID header is never an identity."""
+    from .database import SessionLocal, User
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         session = SessionStore.get_session(token)
         if session:
             SessionStore.refresh_session(token)
-            db = next(get_db())
-            user = db.query(User).filter(User.id == session['user_id']).first()
-            if user:
-                return user
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == session['user_id']).first()
+                if user:
+                    return user
+            finally:
+                db.close()
 
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         payload = verify_jwt_token(auth_header.split(" ", 1)[1])
         if payload and 'sub' in payload:
-            db = next(get_db())
-            user = db.query(User).filter(User.id == payload['sub']).first()
-            if user:
-                return user
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == payload['sub']).first()
+                if user:
+                    return user
+            finally:
+                db.close()
 
     raise HTTPException(401, "Not authenticated: valid session token required")
 
