@@ -2,7 +2,7 @@
 Permanent Architectural Constraints & Product North Star for Audits, Refactors, Redesigns, and Autonomous Agentic Improvement Cycles.
 
 **Owner:** 16-Year-Old Solo Developer / Operator  
-**Last Updated:** August 23, 2026  
+**Last Updated:** August 24, 2026 (v20 Master Plan Alignment)  
 **Status:** Active / Immutable Invariant  
 
 ---
@@ -19,7 +19,7 @@ The product is built on a dual-layer UX doctrine: simple, focused, and low-cogni
 - **Solo Developer (16yo):** Helpotron is engineered and maintained by a single technical owner/developer.
 - **Operating Principle:** Optimize exclusively for high leverage, automation, maintainability, reusable primitives, and agent-assisted administration.
 - **Zero Enterprise Bureaucracy:** Do not design around multi-tiered approval layers, enterprise administrative ceremony, or bloated corporate workflows. Spend complexity budget on computational capability under the hood rather than UI navigation depth.
-- **North Star Metric:** Maximum capability per unit of cognitive load.
+- **North Star Metric:** Maximum useful intelligence per dollar & maximum capability per unit of cognitive load.
 
 ---
 
@@ -28,23 +28,26 @@ The product is built on a dual-layer UX doctrine: simple, focused, and low-cogni
 ### 2.1 Pure Effort-Based Abstraction (No Model Selection UI)
 - Normal user and admin interfaces never expose model or provider pickers (e.g., no dropdowns selecting Claude, GPT, DeepSeek, Gemini, Llama, Qwen, etc.).
 - The sole user-facing abstraction is **Effort**:
-  - **Low** (fast, concise, budget-conscious)
+  - **Low** (fast, concise, budget-conscious grunt work)
   - **Medium** (balanced reasoning and depth)
   - **Advanced** (deep academic rigor, multi-step calculation, comprehensive citations)
   - **Auto-Routing** (dynamically selects effort based on assignment rubric and complexity)
 - The interface communicates Effort and outcomes, never implementation plumbing.
 
-### 2.2 Strict Model Selection & Cost Efficiency Policy
+### 2.2 Hard AI Economics Engine & Dynamic Grunt-Tier Qualification
 - **Strict Ban on Claude and OpenAI GPT Models:** Due to extreme token inefficiency and high API costs that quickly drain student credit budgets, Claude and GPT models are strictly prohibited from normal routing cascades.
-- **Bulk Text, Reasoning & Code:** Strictly utilize ultra-cost-efficient, high-throughput models:
-  - `deepseek/deepseek-chat` (DeepSeek-V3)
-  - `qwen/qwen-2.5-72b-instruct`
-  - `mistralai/mistral-nemo`
-  - `deepseek/deepseek-r1` (for heavy chain-of-thought math/reasoning)
-- **Multimodal, OCR & Vision:**
-  - `google/gemini-2.0-flash-001`
-  - `google/gemini-1.5-flash-8b` (for Canvas LMS document ingestion, image/diagram recognition, audio/video lecture transcription, and visual OCR)
-- **Margin Invariant:** Internal routing must preserve 75%–85%+ operational gross margins.
+- **Strict Ban on Legacy Models:** Models from previous generations (`deepseek/deepseek-chat`, `deepseek/deepseek-v3`, `deepseek/deepseek-r1`, `google/gemini-1.5-*`, `google/gemini-2.0-*`) are strictly banned from production routing.
+- **Approved Active Catalog:**
+  - **Primary Frontier Reasoning & Text:** `deepseek/deepseek-v4-flash-vision`, `deepseek/deepseek-v4-pro-vision`
+  - **Primary Multimodal, OCR & Vision:** `google/gemini-3.1-flash-lite`, `google/gemini-3.7-flash` (for Canvas LMS document ingestion, image/diagram recognition, audio/video lecture transcription, and visual OCR)
+  - **Auxiliary Grunt Worker Pool:** `qwen/qwen-2.5-72b-instruct`, `mistralai/mistral-nemo`, `nvidia/nemotron-mini-4b-instruct`
+- **Dynamic Grunt-Tier Invariant:**
+  $$\text{effective\_candidate\_cost} < \text{deepseek\_baseline\_cost} \land \text{minimum\_capability\_met} == \text{True} \land \text{reliability} \ge 0.985$$
+- **Low-Effort Cost Contract:** Use the cheapest eligible model capable of completing the task to the required minimum quality. Never knowingly pay DeepSeek or frontier pricing for work that qualifies as grunt work.
+- **Routing Decision Pipeline:**
+  $$\text{Capability Eligibility} \longrightarrow \text{Economic Eligibility} \longrightarrow \text{Reliability/Latency} \longrightarrow \text{Execution} \longrightarrow \text{Telemetry}$$
+- **Escalation Policy:** Hard failure when no grunt model qualifies $\longrightarrow$ escalate to next tier + log escalation event with detailed rationale to Admin Cost Intelligence.
+- **Target Gross Margin:** Internal routing must strictly preserve 75%–85%+ operational gross margins.
 
 ### 2.3 Scoped Effort Configuration
 Effort can be configured globally or overridden at granular entity scopes:
@@ -63,8 +66,8 @@ Global Scope       →   Medium (Default)
 ## 3. "My Agent" Control Plane & User Experience
 
 ### 3.1 Single Canonical User Agent
-- The primary user-facing agent is **My Agent**.
-- There is no competing generic "Agent", "Agent Overlord", or fragmented agent sidebar. The sidebar exposes My Agent as the unified autonomous assistant.
+- The primary user-facing agent is **My Agent** embedded directly in `AppShell.jsx`.
+- There is no competing generic "Agent", "Agent Overlord", or fragmented agent sidebar.
 
 ### 3.2 Full-System Capability via My Agent
 Users can instruct My Agent in natural language to perform any supported operation they have permissions for:
@@ -74,8 +77,6 @@ Users can instruct My Agent in natural language to perform any supported operati
 - Launching contextual study tools (quizzes, flashcards, explanations)
 - Uploading custom context/rules/skills
 - Explaining complex settings or academic progress
-
-Manual navigation is supported for precision, but never required when My Agent can perform the action safely.
 
 ### 3.3 Zero-AI-Cost Manual Control vs. Agent Orchestration
 - **Manual Path:** 100% free of AI token costs; direct user interaction with UI forms and settings.
@@ -148,7 +149,7 @@ Assignments are the primary unit of work. The workspace features:
   - Researcher (Source extraction & paper analysis)
   - Analyst (Calculations, reasoning & draft synthesis)
   - Reviewer (Academic rigor, APA formatting & rubric checks)
-  - Displays real-time progress bars (e.g., 78% Working) and status indicators.
+  - Displays real-time progress bars and status indicators.
 - **Interactive Task DAG Checklist:** Hierarchical checklist tracking assignment milestones from rubric extraction to final verification.
 - **Contextual Study Tools Drawer:** Embedded tools (Explain Concept, Quiz Me, Flashcards FSRS v5, Find Weak Areas) contextualized to the current assignment and subject.
 
@@ -165,13 +166,11 @@ Study tools live where the student works (inside assignment drawers and course m
 ---
 
 ## 8. Insights & Intelligence Layer
-- Insights must answer *"So what?"* rather than serving as static chart decoration.
-- Features a prominent **"YOUR NEXT BEST ACTION"** hero card with a 1-click launch path.
-- Includes:
-  - Subject Confidence & Mastery Breakdown
-  - Per-Task Cost Attribution (*"Why did this cost so much?"*)
-  - Study Rhythm & Workload Anomalies
-  - "Explain My Progress with Agent" natural language breakdown.
+- **Zombie-Content Purge:** Complete removal of fabricated charts, hardcoded analytics, and fake telemetry. Only real production data, deliberate empty states, or explicit Mock Mode are permitted.
+- **Study Activity:** "Study Activity" (minutes actively studied over the past 7/14/30 days) replaces vanity telemetry.
+- **Your Next Best Action:** Prominent hero card indicating the exact assignment, due date, progress %, rationale, and a 1-click start action.
+- **Contextual Explain This:** Deep invocation of My Agent with exact background metrics.
+- **Consolidated API:** `InsightsSnapshot` endpoint consolidates metrics to eliminate request waterfalls.
 
 ---
 
@@ -181,6 +180,7 @@ Each major concept has exactly one canonical surface:
 - **Navigation:** Canonical shell is `AppShell.jsx` (Legacy `Navbar.jsx` is deprecated).
 - **Settings:** Canonical surface is `SettingsApp.jsx` with Scoped Settings integration.
 - **Admin:** Canonical surface is `AdminConsole.jsx` (Roni's Mission Control).
+- **Visual Invariants:** Transparent SVG logos without background tiles, unified Lucide icon system, and reduced card nesting depth.
 
 ---
 
@@ -204,17 +204,12 @@ CONTROL CENTER (Roni's Mission Control)
 ```
 
 ### 10.1 Solo-Dev Superpowers
-- **Developer Intelligence ("What Should I Work On?"):** Automatically analyzes UX friction, abandoned attachment flows, slow endpoints, and ranks top opportunities.
-- **Product Autopsy:** Synthesizes errors, dropped workflows, and search queries into *"What is hurting Helpotron right now?"*.
-- **Admin Morning Briefing:** Proactive greeting and prioritized daily action item upon opening the console.
-- **Universal "Explain Why":** Contextual drill-down on every anomaly, cost increase, or routing decision.
-- **Blast Radius & Dry-Run:** Previews affected users, assignments, and cost deltas before applying changes.
-
-### 10.2 Simplified 3-Mode System Map
-The System Map supports exactly 3 modes:
-- **Overview:** Subsystem node status list with clean operational dots (● Operational, ● Degraded, ○ Offline).
-- **Live:** Real-time incoming request and error stream.
-- **Investigate:** Deep contextual telemetry inspector on click.
+- **Intent-First Operator Briefing:** Default home surface answers: (1) What's happening? (2) What needs attention? (3) What changed? (4) What should I do? (5) Ask Admin Agent.
+- **Admin Agent:** Universal operator assistant with Action Preview & Blast Radius rails before executing bulk/destructive actions.
+- **Simplified 3-Mode System Map:**
+  - **Overview:** Subsystem node status list with clean operational dots (● Operational, ● Degraded, ○ Offline).
+  - **Live:** Real-time incoming request and error stream.
+  - **Investigate:** Deep contextual telemetry inspector on click.
 
 ---
 
@@ -266,20 +261,21 @@ Visual QA & Responsive Breakpoint Validation
 ---
 
 ## 14. UX Complexity Budget & Cognitive Load Gate
-Helpotron enforces a strict Cognitive Load Budget:
+Helpotron enforces a mathematical Cognitive Load Budget:
 
-$$\text{Complexity Score} = (\text{Primary Actions} \times 0.4) + (\text{Secondary Actions} \times 0.2) + (\text{Visible Choices} \times 0.1) + (\text{Nav Depth} \times 0.3)$$
+$$\text{Complexity Score} = 0.20 \cdot C_{\text{choices}} + 0.15 \cdot D_{\text{nav}} + 0.15 \cdot V_{\text{controls}} + 0.15 \cdot T_{\text{terms}} + 0.15 \cdot D_{\text{visual}} + 0.10 \cdot C_{\text{cta}} + 0.10 \cdot P_{\text{panels}}$$
 
-- **Passing Threshold:** $\text{Complexity Score} \le 3.5 / 10$.
-- If a proposed feature increases capability but pushes the cognitive load over budget, it must be redesigned into contextual disclosure.
+- **Passing Threshold:** $\text{Complexity Score} \le 3.5 / 10$ across all student surfaces.
+- Automated design QA gates fail any student surface exceeding 3.5/10.
 
 ---
 
 ## 15. Summary for Future Audits
 When auditing or modifying the Helpotron repository:
 1. **Never introduce Claude or GPT models** without explicit written owner override.
-2. **Never expose model pickers in normal UI** — maintain the Effort abstraction.
+2. **Never expose model pickers in normal UI** — maintain the pure Effort abstraction.
 3. **Never fabricate telemetry** — respect the Zero-Fake-Data rule when mock mode is OFF.
 4. **Never create dead buttons or placeholder stubs** — enforce the No-Dead-Control rule.
 5. **Preserve single canonical surfaces** — do not re-introduce duplicate navbars or admin toolboxes.
-6. **Prioritize the solo developer** — build intelligence and leverage into Mission Control.
+6. **Enforce hard AI economics** — require dynamic grunt-tier qualification against the DeepSeek baseline cost.
+7. **Prioritize the solo developer** — build intelligence and leverage into Mission Control.
