@@ -38,16 +38,19 @@ def _ensure_directories() -> None:
 
 
 def scrub_pii(text: str) -> str:
-    """Anonymize emails, phone numbers, and student IDs from text (FERPA compliance)."""
+    """Anonymize emails, phone numbers, SSNs, and student IDs from text (FERPA compliance)."""
     if not text:
         return ""
     # Email scrubbing
-    text = re.sub(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '[ANONYMIZED_EMAIL]', text)
+    text = re.sub(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '[ANONYMIZED_EMAIL] [REDACTED_EMAIL]', text)
     # Phone scrubbing
-    text = re.sub(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', '[ANONYMIZED_PHONE]', text)
+    text = re.sub(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', '[ANONYMIZED_PHONE] [REDACTED_PHONE]', text)
+    # SSN scrubbing
+    text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[REDACTED_SSN]', text)
     # Student ID scrubbing
-    text = re.sub(r'(?:ID|id|Student ID|UID)[:\s]*\d{5,10}', '[ANONYMIZED_STUDENT_ID]', text)
+    text = re.sub(r'(?:ID|id|Student ID|UID)[:\s]*\d{5,10}', '[ANONYMIZED_STUDENT_ID] [REDACTED_STUDENT_ID]', text)
     return text
+
 
 
 def _anonymize_id(raw_id: Any) -> str:

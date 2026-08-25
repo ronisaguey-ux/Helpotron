@@ -276,3 +276,14 @@ def get_ai_economics_data() -> Dict[str, Any]:
         }
     }
 
+
+class ActionLedger:
+    """Action ledger for admin operator auditing (BATCH-08)."""
+    def __init__(self, db: Optional[Session] = None):
+        self.db = db
+        self.ledger: List[Dict[str, Any]] = []
+
+    def record_action(self, user_id: str, action: str, details: Dict[str, Any]) -> Dict[str, Any]:
+        entry = {"user_id": user_id, "action": action, "details": details, "timestamp": datetime.now(timezone.utc).isoformat()}
+        self.ledger.append(entry)
+        return entry

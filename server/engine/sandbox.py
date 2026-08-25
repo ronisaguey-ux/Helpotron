@@ -23,6 +23,17 @@ BASE_SANDBOX_DIR = Path("./exports/sandboxes").resolve()
 BASE_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def validate_safe_path(base_dir: str | Path, rel_path: str | Path) -> Path:
+    """Validate path is inside base_dir and block path traversal (BATCH-03)."""
+    base = Path(base_dir).resolve()
+    target = (base / rel_path).resolve()
+    if not str(target).startswith(str(base)):
+        raise PermissionError(f"Path traversal detected: {rel_path}")
+    return target
+
+
+
+
 class SandboxExecutionResult:
     """Encapsulates the output of a sandboxed script execution."""
 
