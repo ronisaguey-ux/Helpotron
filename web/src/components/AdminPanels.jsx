@@ -68,7 +68,11 @@ export function SystemMapPanel({ telemetryData, isMockMode = false, onInspectNod
           ))}
         </div>
       )}
+      {/* LiveSystemMap: architecture, traffic, dependencies telemetry */}
     </div>
   );
 }
+
+export { SystemMapPanel as LiveSystemMap };
 export default User360Panel;
+
