@@ -495,7 +495,6 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
         httponly=True,
         secure=config.production_mode,  # Secure in production with HTTPS
         samesite="lax",
-        max_age=7 * 24 * 60 * 60,
         path="/",
     )
     # Set CSRF cookie (readable by JS)
