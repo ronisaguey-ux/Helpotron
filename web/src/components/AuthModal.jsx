@@ -148,13 +148,16 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 
         {/* SIGN UP FORM */}
         {tab === 'signup' && (
-          <form onSubmit={handleSignup} className="space-y-4">
+          <form onSubmit={handleSignup} method="post" action="#" className="space-y-4" autoComplete="on">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+              <label htmlFor="signup-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
               <div className="relative">
                 <input
+                  id="signup-username"
+                  name="username"
                   type="text"
                   required
+                  autoComplete="username"
                   placeholder="e.g. alex_student24"
                   value={signupUser}
                   onChange={(e) => setSignupUser(e.target.value)}
@@ -165,11 +168,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Password</label>
+              <label htmlFor="signup-password" className="text-xs font-semibold text-slate-300">Password</label>
               <div className="relative">
                 <input
+                  id="signup-password"
+                  name="password"
                   type="password"
                   required
+                  autoComplete="new-password"
                   placeholder="Min 8 chars, 1 letter & 1 number"
                   value={signupPass}
                   onChange={(e) => setSignupPass(e.target.value)}
@@ -180,11 +186,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Confirm Password</label>
+              <label htmlFor="signup-confirm-password" className="text-xs font-semibold text-slate-300">Confirm Password</label>
               <div className="relative">
                 <input
+                  id="signup-confirm-password"
+                  name="confirm-password"
                   type="password"
                   required
+                  autoComplete="new-password"
                   placeholder="Re-enter your password"
                   value={signupPassConfirm}
                   onChange={(e) => setSignupPassConfirm(e.target.value)}
@@ -219,13 +228,16 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 
         {/* SIGN IN FORM */}
         {tab === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} method="post" action="#" className="space-y-4" autoComplete="on">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+              <label htmlFor="login-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
               <div className="relative">
                 <input
+                  id="login-username"
+                  name="username"
                   type="text"
                   required
+                  autoComplete="username"
                   placeholder="Enter your username"
                   value={loginUser}
                   onChange={(e) => setLoginUser(e.target.value)}
@@ -236,11 +248,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-300">Password</label>
+              <label htmlFor="login-password" className="text-xs font-semibold text-slate-300">Password</label>
               <div className="relative">
                 <input
+                  id="login-password"
+                  name="password"
                   type="password"
                   required
+                  autoComplete="current-password"
                   placeholder="Enter your password"
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
