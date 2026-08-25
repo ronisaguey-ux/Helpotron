@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from .database import Payment, User, CreditTransaction
 from .config import config
@@ -15,7 +16,6 @@ logger = logging.getLogger("helpotron.payments")
 
 SUPPORTED_PROVIDERS = {"stripe", "cashapp", "zelle", "venmo", "paypal"}
 
-# Stripe price IDs (set these in .env)
 STRIPE_PRICE_IDS = {
     "basic": os.getenv("STRIPE_PRICE_BASIC", ""),
     "pro": os.getenv("STRIPE_PRICE_PRO", ""),
@@ -45,7 +45,6 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
     if not price_id:
         raise ValueError(f"No Stripe price configured for plan '{plan}'")
 
-    # Create or retrieve customer
     customer_id = user.stripe_customer_id
     if not customer_id:
         customer = stripe.Customer.create(
@@ -56,7 +55,6 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
         user.stripe_customer_id = customer_id
         db.commit()
 
-    # Create checkout session
     session = stripe.checkout.Session.create(
         customer=customer_id,
         mode="subscription",
@@ -171,7 +169,6 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     db.add(payment)
     db.flush()
 
-    # Credit the user
     user.credits += credits_added
     tx = CreditTransaction(
         user_id=user.id,
@@ -180,7 +177,6 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     )
     db.add(tx)
 
-    # Consume applied discount
     if discount_pct > 0:
         apply_discount(user, db)
 
@@ -205,6 +201,7 @@ def usage_percent(user: User) -> float:
     current_credits = getattr(user, "credits", 0.0) or 0.0
     used = max(0.0, limit - current_credits)
     return min(100.0, (used / max(1.0, limit)) * 100.0)
+
 
 def verify_stripe_signature(payload: bytes, sig_header: str) -> bool:
     import stripe
