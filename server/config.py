@@ -96,7 +96,11 @@ class Settings(BaseSettings):
     # SMS (Twilio)
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
-    twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+    twilio_api_key_sid: str = os.getenv("TWILIO_API_KEY_SID", os.getenv("TWILIO_SID", ""))
+    twilio_api_key_secret: str = os.getenv("TWILIO_API_KEY_SECRET", os.getenv("TWILIO_SECRET", ""))
+    twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "MG9757965c48d30953d3670030994f0c80")
+    twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "+13187688667")
+
 
     # Feature Toggles
     enable_email_verification: bool = os.getenv("ENABLE_EMAIL_VERIFICATION", "false").lower() == "true"
