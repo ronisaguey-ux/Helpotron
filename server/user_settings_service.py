@@ -1101,3 +1101,126 @@ class UserSettingsService:
 
 
 user_settings_service = UserSettingsService()
+
+
+
+# Strict Canonical 6-Tier Hierarchy
+SCOPE_HIERARCHY = ["global", "subject", "class", "teacher", "assignment", "task"]
+
+DEFAULT_SETTINGS = {
+    "effort": "medium",
+    "auto_routing": True,
+    "humanizer_level": "medium",
+    "tone": "academic",
+    "detail_level": "comprehensive",
+    "citation_style": "apa"
+}
+
+def resolve_effective_setting(
+    db: Session,
+    user_id: str,
+    setting_key: str,
+    subject_id: Optional[str] = None,
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    assignment_id: Optional[str] = None,
+    task_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Resolve effective setting value along the strict 6-tier hierarchy."""
+    scope_values = {
+        "global": "global",
+        "subject": subject_id,
+        "class": class_id,
+        "teacher": teacher_id,
+        "assignment": assignment_id,
+        "task": task_id
+    }
+    
+    records = db.query(UserSetting).filter(
+        UserSetting.user_id == user_id,
+        UserSetting.setting_key == setting_key
+    ).all() if hasattr(db, "query") else []
+    
+    record_map = {(r.scope_type.lower(), r.scope_id): r.setting_value for r in records}
+    
+    effective_value = DEFAULT_SETTINGS.get(setting_key, "medium")
+    source_scope = "default"
+    inheritance_chain = [{"scope": "default", "value": effective_value}]
+    
+    for scope in SCOPE_HIERARCHY:
+        sid = scope_values.get(scope)
+        if sid:
+            val = record_map.get((scope, sid))
+            if val is not None:
+                effective_value = val
+                source_scope = f"{scope}:{sid}"
+                inheritance_chain.append({"scope": scope, "scope_id": sid, "value": val})
+                
+    return {
+        "key": setting_key,
+        "effective_value": effective_value,
+        "source_scope": source_scope,
+        "inheritance_chain": inheritance_chain,
+        "provenance": f"Resolved from {source_scope}"
+    }
+
+def resolve_scoped_setting(*args, **kwargs):
+    return resolve_effective_setting(*args, **kwargs)
+
+def set_scoped_setting(
+    db: Session,
+    user_id: str,
+    setting_key: str,
+    setting_value: Any,
+    scope_type: str = "global",
+    scope_id: str = "global"
+) -> Dict[str, Any]:
+    """Set or update a scoped setting in the database."""
+    scope_type = scope_type.lower()
+    if scope_type not in SCOPE_HIERARCHY:
+        raise ValueError(f"Invalid scope_type '{scope_type}'. Must be one of {SCOPE_HIERARCHY}")
+        
+    record = db.query(UserSetting).filter(
+        UserSetting.user_id == user_id,
+        UserSetting.setting_key == setting_key,
+        UserSetting.scope_type == scope_type,
+        UserSetting.scope_id == scope_id
+    ).first()
+    
+    if record:
+        record.setting_value = str(setting_value)
+    else:
+        record = UserSetting(
+            user_id=user_id,
+            setting_key=setting_key,
+            setting_value=str(setting_value),
+            scope_type=scope_type,
+            scope_id=scope_id
+        )
+        db.add(record)
+        
+    db.commit()
+    db.refresh(record)
+    return {"status": "success", "id": record.id, "setting_key": setting_key, "value": setting_value, "scope": f"{scope_type}:{scope_id}"}
+
+def get_scoped_settings_for_entity(
+    db: Session,
+    user_id: str,
+    subject_id: Optional[str] = None,
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    assignment_id: Optional[str] = None,
+    task_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Resolve all default settings for a given entity context."""
+    results = {}
+    for key in DEFAULT_SETTINGS:
+        results[key] = resolve_effective_setting(
+            db, user_id, key,
+            subject_id=subject_id,
+            class_id=class_id,
+            teacher_id=teacher_id,
+            assignment_id=assignment_id,
+            task_id=task_id
+        )
+    return results

@@ -37,7 +37,21 @@ def _ensure_directories() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
+def scrub_pii(text: str) -> str:
+    """Anonymize emails, phone numbers, and student IDs from text (FERPA compliance)."""
+    if not text:
+        return ""
+    # Email scrubbing
+    text = re.sub(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '[ANONYMIZED_EMAIL]', text)
+    # Phone scrubbing
+    text = re.sub(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', '[ANONYMIZED_PHONE]', text)
+    # Student ID scrubbing
+    text = re.sub(r'(?:ID|id|Student ID|UID)[:\s]*\d{5,10}', '[ANONYMIZED_STUDENT_ID]', text)
+    return text
+
+
 def _anonymize_id(raw_id: Any) -> str:
+
     """Anonymizes user IDs or document IDs into a salted SHA256 truncated hash."""
     if not raw_id:
         return "anon_" + uuid.uuid4().hex[:8]
