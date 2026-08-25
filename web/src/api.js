@@ -15,7 +15,7 @@ export function getServer() {
 }
 
 export function getUserId() {
-  return localStorage.getItem('public_id') || localStorage.getItem('helpotron_public_id') || 'RoniDev';
+  return localStorage.getItem('public_id') || localStorage.getItem('helpotron_public_id') || '';
 }
 
 export function setServer(server) {
@@ -23,8 +23,13 @@ export function setServer(server) {
 }
 
 export function setUserId(id) {
-  localStorage.setItem('public_id', id);
-  localStorage.setItem('helpotron_public_id', id);
+  if (id) {
+    localStorage.setItem('public_id', id);
+    localStorage.setItem('helpotron_public_id', id);
+  } else {
+    localStorage.removeItem('public_id');
+    localStorage.removeItem('helpotron_public_id');
+  }
 }
 
 function getBaseUrl() {
