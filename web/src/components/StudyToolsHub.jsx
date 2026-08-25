@@ -31,7 +31,6 @@ export const ContextualStudyTools = ({ assignment, onLaunchTool }) => {
     </div>
   );
 };
-export default ContextualStudyTools;
-
 export { ContextualStudyTools as StudyToolsHub };
 export default ContextualStudyTools;
+

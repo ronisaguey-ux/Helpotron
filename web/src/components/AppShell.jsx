@@ -62,6 +62,18 @@ const NAV_TREE = (isAdmin) => [
     : []),
 ];
 
+// Unified 6-Item Navigation Shell (August 23 Simplified IA)
+export const NAV_ITEMS = [
+  { id: 'today', label: 'Today', icon: LayoutDashboard },
+  { id: 'assignments', label: 'Assignments', icon: FileText },
+  { id: 'library', label: 'Library', icon: BookOpen },
+  { id: 'my_agent', label: 'My Agent', icon: Brain, isPrimaryAgent: true },
+  { id: 'activity', label: 'Activity', icon: Activity },
+  { id: 'billing', label: 'Billing', icon: CreditCard },
+  { id: 'settings', label: 'Settings', icon: Settings }
+];
+
+
 
 /* ── Quick settings (avatar menu) ─────────────────────────────────────────── */
 function QuickSettings({ settings, onChange, onOpenFull, user }) {

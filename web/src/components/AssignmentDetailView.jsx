@@ -69,6 +69,6 @@ export const AssignmentWorkspace = ({ assignment, user, onSendMessage, onAttachF
     </div>
   );
 };
-
 export { AssignmentWorkspace as AssignmentDetailView };
 export default AssignmentWorkspace;
+
