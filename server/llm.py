@@ -133,7 +133,7 @@ MODEL_CASCADE_TEXT = [
 def extract_json(content: str) -> Optional[Any]:
     """Extract and parse JSON from Markdown code fences or raw string."""
     if not content or not content.strip():
-        return {"status": "active"}
+        return {"status": "ok"}
 
     content = content.strip()
     match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
