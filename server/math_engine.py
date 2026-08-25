@@ -21,6 +21,16 @@ class SecurityError(Exception):
     """Raised when a math expression contains a disallowed construct."""
 
 
+def _safe_pow(a: Any, b: Any) -> Any:
+    if isinstance(b, (int, float)) and (b > 4096 or b < -4096):
+        raise SecurityError("Exponent exceeds safe limit (max 4096)")
+    if isinstance(a, (int, float)) and abs(a) > 100000 and isinstance(b, (int, float)) and b > 50:
+        raise SecurityError("Power computation exceeds safe threshold")
+    res = operator.pow(a, b)
+    if isinstance(res, int) and res.bit_length() > 65536:
+        raise SecurityError("Computed integer exceeds memory bounds")
+    return res
+
 # Whitelist of strictly safe mathematical operators
 SAFE_OPERATORS: Dict[type, Any] = {
     ast.Add: operator.add,
@@ -29,7 +39,7 @@ SAFE_OPERATORS: Dict[type, Any] = {
     ast.Div: operator.truediv,
     ast.FloorDiv: operator.floordiv,
     ast.Mod: operator.mod,
-    ast.Pow: operator.pow,
+    ast.Pow: _safe_pow,
     ast.USub: operator.neg,
     ast.UAdd: operator.pos,
 }

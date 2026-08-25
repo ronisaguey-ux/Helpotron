@@ -78,8 +78,9 @@ function scrapeGoogleClassroom() {
     document.title.replace(/ - Google Classroom/, '').trim() ||
     'Untitled Classroom Assignment';
 
-  const dueDateEl = document.querySelector('div[aria-label*="Due"], span:contains("Due")') ||
-    Array.from(document.querySelectorAll('span, div')).find((el) => /due\s+[a-z]{3}\s+\d+/i.test(el.innerText));
+  const dueDateEl =
+    document.querySelector('div[aria-label*="Due"]') ||
+    Array.from(document.querySelectorAll('span, div')).find((el) => /due\s+[a-z]{3}\s+\d+/i.test(el.innerText || ''));
   const dueDate = dueDateEl ? dueDateEl.innerText.trim() : '';
 
   const promptEl = document.querySelector('div[dir="auto"].c3I1v, div[jsname="V67aGc"], .asQXV');

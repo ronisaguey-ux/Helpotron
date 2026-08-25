@@ -54,11 +54,11 @@ def scrub_pii(text: str) -> str:
 
 
 def _anonymize_id(raw_id: Any) -> str:
-
     """Anonymizes user IDs or document IDs into a salted SHA256 truncated hash."""
     if not raw_id:
         return "anon_" + uuid.uuid4().hex[:8]
-    val = f"helpotron_salt_{raw_id}"
+    salt = os.getenv("DATALAKE_SALT", os.getenv("SECRET_KEY", "helpotron_salt_2026"))
+    val = f"{salt}_{raw_id}"
     return "usr_" + hashlib.sha256(val.encode("utf-8")).hexdigest()[:12]
 
 
@@ -272,27 +272,38 @@ class DataLakeManager:
         return entries[::-1][:limit]
 
     def update_feedback_status(self, feedback_id: str, new_status: str) -> bool:
-        """Updates resolution status for a given feedback item."""
+        """Updates resolution status for a given feedback item with atomic write."""
         if not self.feedback_file.exists():
             return False
 
         updated = False
         all_entries = []
-        with open(self.feedback_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                item = json.loads(line)
-                if item.get("feedback_id") == feedback_id:
-                    item["status"] = new_status
-                    item["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    updated = True
-                all_entries.append(item)
+        try:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        item = json.loads(line)
+                        if item.get("feedback_id") == feedback_id:
+                            item["status"] = new_status
+                            item["updated_at"] = datetime.now(timezone.utc).isoformat()
+                            updated = True
+                        all_entries.append(item)
+                    except json.JSONDecodeError:
+                        continue
 
-        if updated:
-            with open(self.feedback_file, "w", encoding="utf-8") as f:
-                for item in all_entries:
-                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+            if updated:
+                tmp = self.feedback_file.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    for item in all_entries:
+                        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                tmp.replace(self.feedback_file)
+        except Exception as e:
+            logger.error("Error updating feedback: %s", e)
+            return False
 
         return updated
 
@@ -403,7 +414,6 @@ class DataLakeManager:
             "submission_id": sub_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_hash": _anonymize_id(user_id),
-            "raw_user_id": str(user_id) if user_id else "RoniDev",
             "data_type": classified_category,
             "title": auto_title,
             "snippet": clean_text[:200] + ("..." if len(clean_text) > 200 else ""),
@@ -413,7 +423,7 @@ class DataLakeManager:
             "actual_credits": 0,
             "credits_awarded": credit_award,
             "usd_value": round(credit_award / 100.0, 2),
-            "status": "pending_review",  # Pending review and implementation into Helpotron
+            "status": "pending_review",
             "utilization_notice": "⏳ Estimated score: Once this entry is reviewed and implemented into Helpotron, actual micro-credits will be awarded to your balance (may take 2+ business days).",
             "valuation": {
                 "category": classified_category,
@@ -428,13 +438,15 @@ class DataLakeManager:
         try:
             with open(self.microcredits_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
         except Exception as e:
             logger.error("Failed recording microcredit submission: %s", e)
 
         return record
 
     def approve_and_implement_submission(self, submission_id: str, actual_credits: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """Reviews, approves, and implements a Data Lake entry, awarding actual micro-credits."""
+        """Reviews, approves, and implements a Data Lake entry with atomic write."""
         if not self.microcredits_file.exists():
             return None
         all_records = []
@@ -444,19 +456,26 @@ class DataLakeManager:
                 for line in f:
                     if not line.strip():
                         continue
-                    rec = json.loads(line)
-                    if rec.get("submission_id") == submission_id:
-                        final_awarded = actual_credits if actual_credits is not None else rec.get("estimated_credits", rec.get("credits_awarded", 10))
-                        rec["status"] = "implemented"
-                        rec["actual_credits"] = final_awarded
-                        rec["credits_awarded"] = final_awarded
-                        rec["implemented_at"] = datetime.now(timezone.utc).isoformat()
-                        target = rec
-                    all_records.append(rec)
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("submission_id") == submission_id:
+                            final_awarded = actual_credits if actual_credits is not None else rec.get("estimated_credits", rec.get("credits_awarded", 10))
+                            rec["status"] = "implemented"
+                            rec["actual_credits"] = final_awarded
+                            rec["credits_awarded"] = final_awarded
+                            rec["implemented_at"] = datetime.now(timezone.utc).isoformat()
+                            target = rec
+                        all_records.append(rec)
+                    except json.JSONDecodeError:
+                        continue
             if target:
-                with open(self.microcredits_file, "w", encoding="utf-8") as f:
+                tmp = self.microcredits_file.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
                     for r in all_records:
                         f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                tmp.replace(self.microcredits_file)
         except Exception as e:
             logger.error("Failed to approve & implement submission: %s", e)
         return target
@@ -466,16 +485,19 @@ class DataLakeManager:
         if not self.microcredits_file.exists():
             return []
         items = []
-        user_str = str(user_id) if user_id else None
+        target_hash = _anonymize_id(user_id) if user_id else None
         try:
             with open(self.microcredits_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue
-                    rec = json.loads(line)
-                    if user_str and rec.get("raw_user_id") and rec.get("raw_user_id") != user_str:
+                    try:
+                        rec = json.loads(line)
+                        if target_hash and rec.get("user_hash") and rec.get("user_hash") != target_hash:
+                            continue
+                        items.append(rec)
+                    except json.JSONDecodeError:
                         continue
-                    items.append(rec)
         except Exception as e:
             logger.error("Error reading microcredits file: %s", e)
         return items[::-1][:limit]

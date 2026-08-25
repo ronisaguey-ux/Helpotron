@@ -551,19 +551,6 @@ async def permanent_delete_request_route(payload: PermanentDataDeleteRequest, re
     }
 
 
-@router.delete("/account")
-async def delete_account_route(request: Request, db: Session = Depends(get_db)):
-    """GDPR Article 17 Right to Erasure: Instantly cascades and permanently deletes user account, assignments, materials, sessions, and logs."""
-    # Legacy alias for the canonical erasure (server/privacy.py). The old
-    # inline cascade imported a renamed model (`Material`) that no longer
-    # exists and 500'd on every call — delegate so there is ONE erasure path.
-    from .privacy import delete_user_account_and_data
-    user = _get_current_user(request, db)
-    result = delete_user_account_and_data(user, db)
-    return {
-        "status": "success",
-        "message": f"Account '{result['public_id']}' and all associated academic records, study artifacts, and sessions have been permanently erased pursuant to GDPR Article 17.",
-    }
 
 
 @router.get("/assignment-history")
@@ -826,7 +813,7 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     db.flush()
     # Anonymize the data lake (telemetry / feedback / corpus / microcredits).
     gdpr_tag = f"ANONYMIZED_GDPR_DELETED-{user.public_id}"
-    rewritten = datalake_manager.anonymize_user(user_id, gdpr_tag)
+    rewritten = datalake_manager.anonymize_user(user.public_id, gdpr_tag) + datalake_manager.anonymize_user(str(user_id), gdpr_tag)
     db.delete(user)
     db.commit()
     return {

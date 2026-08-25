@@ -1,19 +1,25 @@
 {
   "manifest_version": 3,
-  "name": "Helpotron Study Assistant",
+  "name": "Helpotron Academic OS Companion",
   "version": "2.0.0",
-
-  "description": "AI-native Canvas LMS automated study companion and assignment solver.",
+  "description": "Autonomous Canvas LMS, Google Classroom, Blackboard & Moodle study companion and assignment solver.",
   "permissions": [
     "storage",
     "activeTab",
+    "tabs",
     "scripting"
   ],
   "host_permissions": [
     "*://*.instructure.com/*",
-    "*://*.canvas.*/*",
+    "*://*.canvaslms.com/*",
+    "*://classroom.google.com/*",
+    "*://*.blackboard.com/*",
+    "*://*.moodle.com/*",
+    "*://*.moodle.org/*",
     "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://127.0.0.1:5173/*",
+    "http://localhost:5173/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -34,7 +40,11 @@
     {
       "matches": [
         "*://*.instructure.com/*",
-        "*://*.canvas.*/*"
+        "*://*.canvaslms.com/*",
+        "*://classroom.google.com/*",
+        "*://*.blackboard.com/*",
+        "*://*.moodle.com/*",
+        "*://*.moodle.org/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
