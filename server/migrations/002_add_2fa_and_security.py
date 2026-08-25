@@ -17,6 +17,3 @@ def upgrade(db_path: str):
     conn.commit()
     conn.close()
     logger.info('Successfully applied migration 002_add_2fa_and_security')
-
-if __name__ == '__main__':
-    upgrade('helpotron.db')
