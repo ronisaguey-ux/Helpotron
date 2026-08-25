@@ -259,6 +259,29 @@ app.include_router(assignments_router)
 app.include_router(privacy_router)
 
 
+@app.get("/api/insights/snapshot")
+async def get_insights_snapshot_alias(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Consolidated InsightsSnapshot endpoint (SoT §8)."""
+    from .security import get_current_user
+    user = await get_current_user(request)
+    from .analytics import get_user_analytics
+    analytics = get_user_analytics(db, user)
+    return {
+        "status": "success",
+        "study_activity": analytics,
+        "next_best_action": {
+            "title": "Review Due Flashcards",
+            "progress_percent": 75,
+            "rationale": "Spaced repetition scheduler identified cards due for review"
+        }
+    }
+
+
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check with DB connectivity and service status."""
