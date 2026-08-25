@@ -49,7 +49,7 @@ export default function TodayView({ onGoTo, user }) {
   const settings = useMemo(() => loadSettings(), []);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const name = settings.profile.displayName || user?.public_id || 'there';
+  const name = user?.public_id && user.public_id !== 'Guest' ? user.public_id : (settings.profile?.displayName || 'there');
   const demo = demoEnabled();
 
   const attention = demo ? ATTENTION : [];

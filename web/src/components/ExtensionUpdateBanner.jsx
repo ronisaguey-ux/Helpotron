@@ -44,7 +44,7 @@ export default function ExtensionUpdateBanner({ onOpenGuide }) {
   return (
     <aside
       aria-label="Extension Update Notification"
-      className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border-b border-emerald-500/30 text-slate-100 py-2.5 px-4 sm:px-6 relative shadow-lg"
+      className="hidden md:block bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border-b border-emerald-500/30 text-slate-100 py-2.5 px-4 sm:px-6 relative shadow-lg"
     >
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2.5 flex-wrap">

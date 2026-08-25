@@ -140,6 +140,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const [termsAccepted, setTermsAccepted] = useState(() => {
+    try {
+      return localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
   const checkSession = async () => {
     try {
       const data = await api.me();
@@ -151,13 +159,17 @@ export default function App() {
         setCredits(data.credits ?? 0);
         setUserPlan(data.plan || 'basic');
         setIsAdmin(Boolean(data.is_admin));
+        const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
+        if (!accepted) {
+          setShowPrivacyModal(true);
+        }
         return;
       }
     } catch (e) {}
 
     // Unauthenticated state
     setIsLoggedIn(false);
-    setIsGuest(true);
+    setIsGuest(false);
     setIsAdmin(false);
     setUserIdState('Guest');
     setUserId('');
@@ -172,12 +184,10 @@ export default function App() {
   const handleLoginSuccess = async (userPublicId) => {
     setAuthModalOpen(false);
     await checkSession();
-  };
-
-  const handleContinueGuest = () => {
-    setIsGuest(true);
-    setIsLoggedIn(false);
-    setUserIdState('Guest');
+    const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
+    if (!accepted) {
+      setShowPrivacyModal(true);
+    }
   };
 
   const handleLogout = async () => {
@@ -186,33 +196,25 @@ export default function App() {
     } catch (e) {}
     setUserId('');
     setIsLoggedIn(false);
-    setIsGuest(true);
+    setIsGuest(false);
     setIsAdmin(false);
     setUserIdState('Guest');
     setCredits(0);
     setUserPlan('basic');
+    setAuthModalOpen(true);
   };
 
   const handleAcceptPrivacy = () => {
     try {
-      localStorage.setItem('helpotron_privacy_accepted', 'true');
+      localStorage.setItem('helpotron_terms_accepted_v2', 'true');
     } catch (e) {}
+    setTermsAccepted(true);
     setShowPrivacyModal(false);
-    setIsLoggedIn(true);
-    setIsGuest(false);
-    const activeId = getUserId() || 'RoniDev';
-    setUserIdState(activeId);
-    setUserId(activeId);
   };
 
   const handleDeclinePrivacy = () => {
-    try {
-      localStorage.setItem('helpotron_privacy_accepted', 'declined');
-    } catch (e) {}
     setShowPrivacyModal(false);
-    setIsGuest(true);
-    setIsLoggedIn(false);
-    setUserIdState('Guest');
+    handleLogout();
   };
 
   /* Push the current view onto the back stack, clear the forward stack —
@@ -271,24 +273,22 @@ export default function App() {
           Skip to main content
         </a>
 
-        {/* Privacy Policy Modal Overlay */}
+        {/* Privacy Policy & Terms Modal Overlay */}
         <PrivacyPolicyModal
-          isOpen={showPrivacyModal}
+          isOpen={showPrivacyModal || (isLoggedIn && !termsAccepted)}
+          requireMandatoryAgreement={isLoggedIn && !termsAccepted}
           onAccept={handleAcceptPrivacy}
           onDecline={handleDeclinePrivacy}
+          onClose={() => setShowPrivacyModal(false)}
         />
 
-        {/* Auth Modal Overlay */}
+        {/* Auth Modal Overlay - Mandatory on first visit */}
         <AuthModal
-          isOpen={authModalOpen}
+          isOpen={!isLoggedIn || authModalOpen}
+          isMandatory={!isLoggedIn}
           onClose={() => setAuthModalOpen(false)}
           onLoginSuccess={(u) => {
             handleLoginSuccess(u);
-            setAuthModalOpen(false);
-          }}
-          onContinueGuest={() => {
-            handleContinueGuest();
-            setAuthModalOpen(false);
           }}
         />
 
@@ -451,7 +451,7 @@ export default function App() {
 
           </div>
         </AppShell>
-        <CookieBanner />
+        {isLoggedIn && termsAccepted && <CookieBanner />}
       </div>
     </ErrorBoundary>
   );
