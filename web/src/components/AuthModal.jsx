@@ -1,412 +1,270 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone } from 'lucide-react';
+import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
-export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, onContinueGuest }) {
+export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false }) {
   if (!isOpen) return null;
 
-  const [tab, setTab] = useState('login'); // login | signup | guest
-  const [loginUser, setLoginUser] = useState('RoniDev');
-  const [loginPass, setLoginPass] = useState('password123');
+  const [tab, setTab] = useState('signup'); // 'signup' | 'login'
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Sign up state
   const [signupUser, setSignupUser] = useState('');
   const [signupPass, setSignupPass] = useState('');
-  const [verifyChannel, setVerifyChannel] = useState('email'); // email | sms
-  const [verifyTarget, setVerifyTarget] = useState('');
-  const [verifyCode, setVerifyCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [signupPassConfirm, setSignupPassConfirm] = useState('');
   const [consentAgreed, setConsentAgreed] = useState(false);
   const [signupSuccessMsg, setSignupSuccessMsg] = useState('');
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && onClose) {
+      if (e.key === 'Escape' && onClose && !isMandatory) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isMandatory]);
 
   const handleLogin = async (e) => {
     e?.preventDefault();
     if (!loginUser.trim() || !loginPass) {
-      setLoginError('Please enter both username and password.');
+      setLoginError('Please enter both your Public ID / Username and password.');
       return;
     }
     setLoading(true);
     setLoginError('');
     try {
       const res = await api.login(loginUser.trim(), loginPass);
-      if (res.message === 'Logged in') {
+      if (res && res.message === 'Logged in') {
         onLoginSuccess(loginUser.trim());
       } else {
-        // Fallback demo login
-        onLoginSuccess(loginUser.trim());
+        setLoginError('Invalid credentials. Please verify your username and password.');
       }
     } catch (err) {
-      // Fallback demo bypass for mock local testing
-      onLoginSuccess(loginUser.trim());
+      setLoginError(err.message || 'Login failed. Please check your username and password.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendVerificationCode = async () => {
-    if (!signupUser.trim() || !signupPass || !verifyTarget.trim()) {
-      setLoginError('Please fill in username, password, and email/phone.');
-      return;
-    }
-    setLoading(true);
-    setLoginError('');
-    try {
-      const endpoint =
-        verifyChannel === 'email'
-          ? '/api/auth/send-email-verification'
-          : '/api/auth/2fa/send-challenge';
-
-      const payload =
-        verifyChannel === 'email'
-          ? { email: verifyTarget.trim(), username: signupUser.trim() }
-          : { phone_number: verifyTarget.trim(), username: signupUser.trim() };
-
-      const data = await api.request(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      setCodeSent(true);
-      setSignupSuccessMsg(`✅ 6-digit verification code sent to ${verifyTarget}!`);
-    } catch (err) {
-      setLoginError(err.message || 'Failed to send verification code.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCompleteSignup = async (e) => {
+  const handleSignup = async (e) => {
     e?.preventDefault();
-    if (!verifyCode.trim() || verifyCode.length < 6) {
-      setLoginError('Please enter the 6-digit verification code.');
+    const u = signupUser.trim();
+    if (!u || !signupPass) {
+      setLoginError('Please provide a username and password.');
       return;
     }
+    if (signupPass !== signupPassConfirm) {
+      setLoginError('Passwords do not match. Please re-enter.');
+      return;
+    }
+    if (signupPass.length < 8 || !/[A-Za-z]/.test(signupPass) || !/[0-9]/.test(signupPass)) {
+      setLoginError('Password must be at least 8 characters and contain both a letter and a number.');
+      return;
+    }
+    if (!consentAgreed) {
+      setLoginError('You must agree to the Terms of Service & Privacy Policy.');
+      return;
+    }
+
     setLoading(true);
     setLoginError('');
     try {
-      // 1. Verify code
-      const verifyEndpoint =
-        verifyChannel === 'email'
-          ? '/api/auth/verify-email'
-          : '/api/auth/2fa/verify-challenge';
-
-      const verifyPayload =
-        verifyChannel === 'email'
-          ? { email: verifyTarget.trim(), code: verifyCode.trim() }
-          : { phone_number: verifyTarget.trim(), code: verifyCode.trim() };
-
-      await api.request(verifyEndpoint, {
-        method: 'POST',
-        body: JSON.stringify(verifyPayload),
-      });
-
-      // 2. Create user account
-      const signupRes = await api.signup(signupUser.trim(), signupPass);
-      if (signupRes.message === 'User created') {
-        // Auto-login
-        await api.login(signupUser.trim(), signupPass);
-        onLoginSuccess(signupUser.trim());
+      const signupRes = await api.signup(u, signupPass);
+      if (signupRes && (signupRes.public_id || signupRes.message?.includes('User created'))) {
+        // Automatically log in with new credentials
+        await api.login(u, signupPass);
+        onLoginSuccess(u);
+      } else {
+        setLoginError(signupRes?.detail || 'Signup failed.');
       }
     } catch (err) {
-      setLoginError(err.message || 'Signup verification failed.');
+      setLoginError(err.message || 'Could not create account. Username may already be taken.');
     } finally {
       setLoading(false);
     }
   };
-
-  
-  useEffect(() => {
-    if (!isOpen) return;
-    const el = document.querySelector('[data-modal-container]');
-    const focusable = el ? el.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    ) : [];
-    if (focusable.length) focusable[0].focus();
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'Tab' && focusable.length) {
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault(); last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault(); first.focus();
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto"
-      onClick={(e) => { if (onClose && e.target === e.currentTarget) onClose(); }}
-      role="dialog" aria-modal="true" aria-labelledby="auth-modal-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Helpotron Authentication"
     >
       <div
-        className="bg-[#0d1424]/95 backdrop-blur-2xl rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_0_100px_rgba(99,102,241,0.15),0_30px_60px_rgba(0,0,0,0.55)] border border-white/10 space-y-6 relative"
+        className="w-full max-w-md bg-[#0c1220] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 relative overflow-hidden"
+        data-modal-container
         onClick={(e) => e.stopPropagation()}
       >
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-slate-400 hover:text-white text-lg font-bold p-2"
-          >
-            ✕
-          </button>
-        )}
-
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white text-3xl font-bold flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/40">
-            🤖
+        {/* Top Brand Banner */}
+        <div className="text-center space-y-2 pb-5 border-b border-white/10">
+          <div className="flex justify-center">
+            <AnimatedLogo size="lg" />
           </div>
-          <h1 className="text-2xl font-black text-white" id="auth-modal-title">Helpotron Automator</h1>
+          <h2 className="text-xl font-extrabold text-white tracking-tight">
+            {tab === 'signup' ? 'Create Student Account' : 'Sign in to Helpotron'}
+          </h2>
           <p className="text-xs text-slate-400">
-            Autonomous academic workflow, rubric synthesis, and evasion system.
+            {tab === 'signup'
+              ? 'Join the autonomous academic operating system & study copilot'
+              : 'Enter your credentials to access your autonomous study workspace'}
           </p>
         </div>
 
-        {/* 3 Main Auth Choice Tabs */}
-        <div className="grid grid-cols-3 gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 text-xs font-bold backdrop-blur-xl">
+        {/* Tab Toggle */}
+        <div className="flex bg-slate-950 p-1 rounded-2xl border border-white/10 my-5">
           <button
-            onClick={() => { setTab('login'); setLoginError(''); }}
-            className={`py-2 rounded-xl transition-all ${
-              tab === 'login' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            🔑 Log In
-          </button>
-          <button
+            type="button"
             onClick={() => { setTab('signup'); setLoginError(''); }}
-            className={`py-2 rounded-xl transition-all ${
-              tab === 'signup' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+              tab === 'signup' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            ✨ Sign Up
+            Create Account
           </button>
           <button
-            onClick={() => { setTab('guest'); setLoginError(''); }}
-            className={`py-2 rounded-xl transition-all ${
-              tab === 'guest' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
+            type="button"
+            onClick={() => { setTab('login'); setLoginError(''); }}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+              tab === 'login' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            👁️ Guest
+            Sign In
           </button>
         </div>
 
-        {/* ERROR / SUCCESS ALERTS */}
+        {/* Error Notification */}
         {loginError && (
-          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl">
-            {loginError}
-          </div>
-        )}
-        {signupSuccessMsg && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl">
-            {signupSuccessMsg}
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{loginError}</span>
           </div>
         )}
 
-        {/* ─── OPTION 1: LOG IN ─────────────────────────────────────── */}
-        {tab === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+        {/* SIGN UP FORM */}
+        {tab === 'signup' && (
+          <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-slate-300 font-semibold block">Username or Public ID</label>
-              <input
-                type="text"
-                placeholder="e.g. RoniDev or student_demo"
-                value={loginUser}
-                onChange={(e) => setLoginUser(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <label className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. alex_student24"
+                  value={signupUser}
+                  onChange={(e) => setSignupUser(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                />
+                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-slate-300 font-semibold block">Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <label className="text-xs font-semibold text-slate-300">Password</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  placeholder="Min 8 chars, 1 letter & 1 number"
+                  value={signupPass}
+                  onChange={(e) => setSignupPass(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                />
+                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
             </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  placeholder="Re-enter your password"
+                  value={signupPassConfirm}
+                  onChange={(e) => setSignupPassConfirm(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                />
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 cursor-pointer pt-1 select-none">
+              <input
+                type="checkbox"
+                required
+                checked={consentAgreed}
+                onChange={(e) => setConsentAgreed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-white/20 bg-slate-900 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-[11px] text-slate-400 leading-tight">
+                I agree to the <strong>Academic Honor Code</strong> and <strong>FERPA / GDPR Terms</strong>.
+              </span>
+            </label>
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 text-xs"
+              disabled={loading || !signupUser || !signupPass || !consentAgreed}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
             >
-              {loading ? 'Authenticating…' : 'Sign In to Account'}
+              {loading ? 'Creating Account…' : 'Create Free Account →'}
             </button>
           </form>
         )}
 
-        {/* ─── OPTION 2: SIGN UP (WITH VERIFICATION) ────────────────── */}
-        {tab === 'signup' && (
-          <div className="space-y-4 text-xs">
-            {!codeSent ? (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Choose Username</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Alex_Student"
-                    value={signupUser}
-                    onChange={(e) => setSignupUser(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Create Password</label>
-                  <input
-                    type="password"
-                    placeholder="At least 6 characters"
-                    value={signupPass}
-                    onChange={(e) => setSignupPass(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* Verification Channel Selector */}
-                <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Verification Method</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setVerifyChannel('email')}
-                      className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${
-                        verifyChannel === 'email'
-                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                          : 'border-white/10 text-slate-400'
-                      }`}
-                    >
-                      📧 Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVerifyChannel('sms')}
-                      className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${
-                        verifyChannel === 'sms'
-                          ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                          : 'border-white/10 text-slate-400'
-                      }`}
-                    >
-                      📱 SMS (Phone)
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-slate-300 font-semibold block mb-1">
-                    {verifyChannel === 'email' ? 'Email Address' : 'Phone Number (+1...)'}
-                  </label>
-                  <input
-                    type={verifyChannel === 'email' ? 'email' : 'tel'}
-                    placeholder={verifyChannel === 'email' ? 'student@university.edu' : '+1 (555) 019-2834'}
-                    value={verifyTarget}
-                    onChange={(e) => setVerifyTarget(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* AI Processing & Terms Consent Checkbox */}
-                <label className="flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={consentAgreed}
-                    onChange={(e) => setConsentAgreed(e.target.checked)}
-                    className="mt-0.5 rounded accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>
-                    I agree to the <strong>Privacy Policy</strong> and provide affirmative consent to automated AI study material generation via authorized subprocessors.
-                  </span>
-                </label>
-
-                <button
-                  type="button"
-                  disabled={loading || !consentAgreed}
-                  onClick={handleSendVerificationCode}
-                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
-                >
-                  {loading ? 'Sending Code…' : 'Send 6-Digit Verification Code'}
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleCompleteSignup} className="space-y-3">
-                <p className="text-slate-400">
-                  Enter the 6-digit verification code sent to <strong>{verifyTarget}</strong>:
-                </p>
-
+        {/* SIGN IN FORM */}
+        {tab === 'login' && (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+              <div className="relative">
                 <input
                   type="text"
-                  maxLength={6}
-                  placeholder="123456"
-                  value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value)}
-                  className="w-full text-center tracking-widest font-mono text-lg rounded-xl border border-indigo-500/40 px-3 py-2 text-indigo-200 focus:ring-2 focus:ring-indigo-500 font-bold bg-indigo-500/10"
+                  required
+                  placeholder="Enter your username"
+                  value={loginUser}
+                  onChange={(e) => setLoginUser(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                 />
+                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
+            </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {loading ? 'Verifying…' : 'Verify Code & Activate Account'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCodeSent(false)}
-                  className="w-full text-center text-slate-500 hover:text-slate-300 py-1 cursor-pointer"
-                >
-                  ← Change Email/Phone
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ─── OPTION 3: CONTINUE AS GUEST ──────────────────────────── */}
-        {tab === 'guest' && (
-          <div className="space-y-4 text-xs text-center">
-            <div className="bg-amber-500/10 border border-amber-500/25 p-4 rounded-2xl text-amber-300 leading-relaxed text-left space-y-2">
-              <span className="font-bold block">👁️ Guest (Read-Only) Mode:</span>
-              <p>
-                You can explore the entire interface, inspect simulated assignments, review grading rubrics, and view sub-agent workflows.
-              </p>
-              <p className="text-amber-400/90 text-[11px]">
-                ⚠️ Action execution (creating assignments, generating text, dispatching sub-agents) will be disabled until you create an account.
-              </p>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Password</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter your password"
+                  value={loginPass}
+                  onChange={(e) => setLoginPass(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                />
+                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
             </div>
 
             <button
-              type="button"
-              onClick={onContinueGuest}
-              className="w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 text-white rounded-xl font-bold shadow-md transition-all text-xs flex items-center justify-center gap-2"
+              type="submit"
+              disabled={loading || !loginUser || !loginPass}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
             >
-              Explore as Guest (Read-Only) →
+              {loading ? 'Signing in…' : 'Sign in to Workspace →'}
             </button>
-          </div>
+          </form>
         )}
+
+        {/* Footer */}
+        <div className="mt-6 pt-4 border-t border-white/8 text-center text-[11px] text-slate-500">
+          Encrypted with TLS 1.3 &bull; Enterprise Zero Data Retention (ZDR)
+        </div>
       </div>
     </div>
   );
 }
-
-
