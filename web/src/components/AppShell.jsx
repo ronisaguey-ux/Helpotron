@@ -323,6 +323,7 @@ export default function AppShell({
 }) {
   const [collapsed, setCollapsed] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
 
@@ -346,7 +347,21 @@ export default function AppShell({
     <>
       {/* ── TOPBAR ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-white/8 bg-[#090d16]/85 backdrop-blur-xl">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 h-14 flex items-center gap-2 sm:gap-3">
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/6 transition cursor-pointer"
+            aria-label="Open mobile navigation menu"
+          >
+            <div className="flex flex-col gap-1 w-4">
+              <span className="w-4 h-0.5 bg-current rounded-full" />
+              <span className="w-4 h-0.5 bg-current rounded-full" />
+              <span className="w-4 h-0.5 bg-current rounded-full" />
+            </div>
+          </button>
+
           {/* Brand */}
           <button
             type="button"
@@ -479,10 +494,107 @@ export default function AppShell({
         </div>
       </header>
 
+      {/* ── MOBILE SLIDE-OVER NAVIGATION DRAWER ─────────────────────── */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm md:hidden"
+            />
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              className="fixed inset-y-0 left-0 z-50 w-72 bg-[#0d1322] border-r border-white/10 p-4 flex flex-col justify-between shadow-2xl md:hidden overflow-y-auto"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/8">
+                  <div className="flex items-center gap-2">
+                    <AnimatedLogo size="sm" />
+                    <span className="text-xs font-bold text-white tracking-wider">HELPOTRON</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5"
+                    aria-label="Close menu"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Mobile Navigation Links */}
+                <div className="space-y-3">
+                  {tree.map((group) => (
+                    <div key={group.group} className="space-y-1">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 pt-1">
+                        {group.group}
+                      </div>
+                      {group.items.map((item) => {
+                        const selected = activeView === item.key;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => {
+                              onNavigate(item.key);
+                              setMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition ${
+                              selected
+                                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+                                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            {item.Icon && <item.Icon className={`w-4 h-4 ${selected ? 'text-blue-400' : 'text-slate-400'}`} />}
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mobile Drawer Footer */}
+              <div className="pt-4 border-t border-white/8 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenPrivacy();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Privacy Policy
+                </button>
+                {isLoggedIn && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10"
+                  >
+                    <LogOut className="w-4 h-4" /> Sign out
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* ── CONTENT ROW: sidebar + main ───────────────────────────────────── */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6 flex gap-6 items-start">
-        {/* Sidebar */}
-        <aside className={`shrink-0 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[64px]'}`}>
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4 sm:pt-6 flex gap-6 items-start">
+        {/* Desktop Sidebar */}
+        <aside className={`hidden md:block shrink-0 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[64px]'}`}>
           <div className={`clean-card flex flex-col gap-1 ${sidebarOpen ? 'p-3' : 'p-2'}`}>
             <button
               type="button"
@@ -538,7 +650,6 @@ export default function AppShell({
                             {item.Icon && <item.Icon className={`w-5 h-5 shrink-0 ${selected ? 'text-blue-400' : 'text-slate-400'}`} aria-hidden="true" />}
                             {sidebarOpen && <span className="truncate">{item.label}</span>}
                           </button>
-
                         );
                       })}
                     </div>
@@ -546,25 +657,24 @@ export default function AppShell({
                 </div>
               );
             })}
-
           </div>
         </aside>
 
         {/* Main content */}
-        <main id="main-content" className="flex-1 min-w-0 w-full">
+        <main id="main-content" className="flex-1 min-w-0 w-full pb-24 md:pb-12">
           {/* View header */}
-          <div className="clean-card px-6 py-4 mb-5 flex items-center justify-between">
+          <div className="clean-card px-4 sm:px-6 py-3 sm:py-4 mb-4 sm:mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
               {activeView !== 'agent' && (
-                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
                   {current?.logo
-                    ? <img src={current.logo} alt="" className="w-[84px] h-[84px] rounded-lg object-cover" />
-                    : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
+                    ? <img src={current.logo} alt="" className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover" />
+                    : <span className="text-base sm:text-lg leading-none">{current?.icon ?? '✦'}</span>}
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="text-base font-semibold text-white truncate">{current?.label ?? 'Helpotron'}</h1>
-                <p className="text-xs text-slate-500 truncate">
+                <h1 className="text-sm sm:text-base font-semibold text-white truncate">{current?.label ?? 'Helpotron'}</h1>
+                <p className="text-[11px] sm:text-xs text-slate-500 truncate">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
                   {activeView === 'history' && 'All your assignments, in one place'}
@@ -578,18 +688,83 @@ export default function AppShell({
               </div>
             </div>
             {activeView === 'overview' && (
-              <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-500">
+              <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-500">
                 <GraduationCap className="w-3.5 h-3.5" /> Capture → Understand → Execute → Improve
               </span>
             )}
           </div>
 
           {/* Page body */}
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             {React.Children.count(children) ? children : null}
           </div>
         </main>
       </div>
+
+      {/* ── MOBILE STICKY BOTTOM NAVIGATION BAR ────────────────────── */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#090d16]/95 border-t border-white/10 backdrop-blur-xl px-2 py-1.5 flex items-center justify-around"
+        aria-label="Mobile Bottom Navigation"
+      >
+        <button
+          type="button"
+          onClick={() => onNavigate('overview')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
+            activeView === 'overview' ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px]">Dashboard</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('agent')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
+            activeView === 'agent' ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Brain className="w-5 h-5" />
+          <span className="text-[10px]">My Agent</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('history')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
+            activeView === 'history' ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          <span className="text-[10px]">Tasks</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('insights')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
+            activeView === 'insights' ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <BarChart3 className="w-5 h-5" />
+          <span className="text-[10px]">Insights</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition"
+          aria-label="Open full menu"
+        >
+          <div className="flex flex-col gap-0.5 items-center justify-center w-5 h-5">
+            <span className="w-3.5 h-0.5 bg-current rounded-full" />
+            <span className="w-3.5 h-0.5 bg-current rounded-full" />
+            <span className="w-3.5 h-0.5 bg-current rounded-full" />
+          </div>
+          <span className="text-[10px]">More</span>
+        </button>
+      </nav>
     </>
   );
 }
+
