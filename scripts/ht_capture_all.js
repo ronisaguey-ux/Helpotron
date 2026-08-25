@@ -19,37 +19,25 @@ const BASE = 'http://localhost:5173';
 const OUT = '/tmp/ht_cap';
 const DONE = path.join(OUT, '.done');
 const RESUME = process.argv.includes('--resume');
+let THEME_SUFFIX = '';   // 08-24: set to '_light' for the light-theme matrix pass
 
 // id -> exact aria-label of the AppShell sidebar button (AppShell.jsx nav tree).
+// 08-24: v20 nav (AppShell groups HOME/WORKSPACE/INTELLIGENCE/ACCOUNT/ADMIN).
 const NAV = [
-  ['overview', 'Today'],
+  ['dashboard', 'Dashboard'],
   ['activity', 'Activity'],
+  ['agent', 'My Agent'],
   ['history', 'Assignments'],
-  ['study', 'Study Tools'],
-  ['ai-workspace', 'AI Workspace'],
   ['library', 'Library'],
-  ['automation', 'Automations'],
-  ['analytics', 'Analytics'],
-  ['progress', 'Academic Progress'],
-  ['recommendations', 'Recommendations'],
-  ['cost', 'Cost Intelligence'],
-  ['wallet', 'Credits'],
-  ['referral', 'Referrals'],
+  ['insights', 'Insights'],
+  ['credits', 'Credits'],
   ['settings', 'Settings'],
   ['admin', 'Control Center'],
-  ['billing', 'Plans & Credits'],
-  ['datalake', 'Data Lake'],
-  ['leaderboard', 'Credits Leaderboard'],
-  ['dump', 'Assignment Dump'],
 ];
 // palette-routed pages: [id, query to type into the command palette]
-const PALETTE_ROUTES = [
-  ['privacy', 'Privacy'],
-  ['terms', 'Terms'],
-  ['inbox', 'Inbox'],
-  ['message_admin', 'Message Admin'],
-  ['notifications', 'Notifications'],
-];
+// 08-24: palette-routed pages no longer exist in v20 (CommandPalette has no
+// privacy/terms/inbox routes) — emptied so the sweep targets only live pages.
+const PALETTE_ROUTES = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -61,6 +49,7 @@ const results = [];
 
 // Save one shot immediately (resume-safe) and record it in the manifest.
 async function shot(page, key) {
+  if (THEME_SUFFIX) key = key + THEME_SUFFIX;   // 08-24: theme-matrix pass reuses the helper
   if (RESUME && doneKeys.has(key)) {
     results.push({ key, ok: true, resumed: true });
     return true;
@@ -92,7 +81,7 @@ async function clickSidebar(page, label) {
 async function paletteNav(page, query) {
   await page.evaluate(() => {
     const b = [...document.querySelectorAll('button[aria-label]')]
-      .find((x) => x.getAttribute('aria-label') === 'Global search');
+      .find((x) => x.getAttribute('aria-label') === 'Search anything…');
     if (b) b.click();
   });
   await sleep(700);
@@ -133,6 +122,11 @@ async function main() {
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 30000 });
     await sleep(2500);
     await shot(page, '00_landing_desktop');
+    await page.setViewport({ width: 420, height: 900 });
+    await sleep(800);
+    await shot(page, '00_landing_mobile');
+    await page.setViewport({ width: 1440, height: 950 });
+    await sleep(300);
 
     // ── All nav views: desktop top, desktop bottom (if scrollable), mobile ──
     for (const [id, label] of NAV) {
@@ -153,12 +147,21 @@ async function main() {
       await page.setViewport({ width: 420, height: 900 });
       await sleep(800);
       await shot(page, `${id}_mobile_top`);
+      const mScroll = await page.evaluate(() =>
+        document.documentElement.scrollHeight > window.innerHeight + 150);
+      if (mScroll) {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await sleep(600);
+        await shot(page, `${id}_mobile_bottom`);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await sleep(300);
+      }
       await page.setViewport({ width: 1440, height: 950 });
       await sleep(300);
     }
 
     // ── Overlays (on overview) ──
-    await clickSidebar(page, 'Today');
+    await clickSidebar(page, 'Dashboard');
     await sleep(700);
     // Notifications dropdown
     await page.evaluate(() => {
@@ -170,36 +173,88 @@ async function main() {
     await shot(page, '20_notifications_dropdown');
     await page.keyboard.press('Escape');
     await sleep(300);
-    // Command palette open
-    await page.evaluate(() => {
-      const b = [...document.querySelectorAll('button[aria-label]')]
-        .find((x) => x.getAttribute('aria-label') === 'Global search');
-      if (b) b.click();
-    });
-    await sleep(600);
-    await shot(page, '21_palette_open');
-    // Palette with a query typed
-    await page.type('input[aria-label="Command palette search"]', 'cred');
-    await sleep(600);
-    await shot(page, '22_palette_query');
-    await page.keyboard.press('Escape');
-    await sleep(400);
-    // Quick settings avatar menu
-    await page.evaluate(() => {
-      const b = [...document.querySelectorAll('button[aria-label]')]
-        .find((x) => x.getAttribute('aria-label') === 'Quick settings');
-      if (b) b.click();
-    });
-    await sleep(500);
-    await shot(page, '23_quick_settings');
-    await page.keyboard.press('Escape');
-    await sleep(300);
+    // Command palette + quick-settings overlays: wrapped in a guard so a
+    // missing modal (silent click no-op) SKIPS these shots instead of
+    // crashing the whole sweep at the same point every run (08-24 fix).
+    try {
+      await page.evaluate(() => {
+        const b = [...document.querySelectorAll('button[aria-label]')]
+          .find((x) => x.getAttribute('aria-label') === 'Search anything…');
+        if (b) b.click();
+      });
+      await sleep(600);
+      const palInput = await page.$('input[aria-label="Command palette search"]').catch(() => null);
+      if (palInput) {
+        await shot(page, '21_palette_open');
+        await palInput.type('cred');
+        await sleep(600);
+        await shot(page, '22_palette_query');
+        await page.keyboard.press('Escape');
+        await sleep(400);
+      } else {
+        process.stdout.write('[warn] palette did not open — skipping palette shots\n');
+      }
+      await page.evaluate(() => {
+        const b = [...document.querySelectorAll('button[aria-label]')]
+          .find((x) => x.getAttribute('aria-label') === 'Quick settings');
+        if (b) b.click();
+      });
+      await sleep(500);
+      await shot(page, '23_quick_settings');
+      await page.keyboard.press('Escape');
+      await sleep(300);
+    } catch (e) {
+      process.stdout.write(`[warn] overlay shots skipped: ${String(e.message).slice(0, 80)}\n`);
+    }
 
     // ── Palette-routed pages ──
     for (const [id, query] of PALETTE_ROUTES) {
       const ok = await paletteNav(page, query);
       if (!ok) { results.push({ key: `${id}`, ok: false, note: 'palette-fail' }); continue; }
       await shot(page, `${id}`);
+    }
+    // ── v20 expansion (08-24): Settings sections + Control Center panels ──
+    const SECTIONS = ['Account','Appearance','AI & Intelligence','Academic Profile','Writing & Output','Notifications','Privacy & Security','Credits & Billing','Automation','Integrations','Browser Extension','Shortcuts'];
+    const clickText = (page, text) => page.evaluate((t) => {
+      const b = [...document.querySelectorAll('button')].filter((x) => (x.innerText || '').trim().toLowerCase() === t.toLowerCase());
+      if (!b.length) return false; b[0].click(); return true;
+    }, text);
+    await clickSidebar(page, 'Settings');
+    await sleep(700);
+    for (const s of SECTIONS) {
+      const ok = await clickText(page, s); await sleep(600);
+      await shot(page, `settings__${s.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`);
+    }
+    await clickSidebar(page, 'Control Center');
+    await sleep(800);
+    for (const s of ['Command','People','AI & Agents','Product','System','Security']) {
+      const ok = await clickText(page, s); await sleep(600);
+      await shot(page, `admin__${s.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`);
+    }
+
+    // ── LIGHT-THEME MATRIX (08-24): flip theme via Settings → re-shoot all views ──
+    await clickSidebar(page, 'Settings'); await sleep(700);
+    await clickText(page, 'Appearance'); await sleep(600);
+    const themeSet = await clickText(page, 'Light'); await sleep(500);
+    if (themeSet) {
+      THEME_SUFFIX = '_light';
+      await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 30000 }); await sleep(2200);
+      await shot(page, '00_landing_desktop');
+      for (const [id, label] of NAV) {
+        if (!(await clickSidebar(page, label))) continue;
+        await sleep(700);
+        await shot(page, `${id}_desktop_top`);
+        const sc = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 150);
+        if (sc) {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(600);
+          await shot(page, `${id}_desktop_bottom`);
+          await page.evaluate(() => window.scrollTo(0, 0)); await sleep(300);
+        }
+        await page.setViewport({ width: 420, height: 900 }); await sleep(700);
+        await shot(page, `${id}_mobile_top`);
+        await page.setViewport({ width: 1440, height: 950 }); await sleep(300);
+      }
+      THEME_SUFFIX = '';
     }
   } finally {
     await browser.close().catch(() => {});
