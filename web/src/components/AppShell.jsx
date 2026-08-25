@@ -11,7 +11,8 @@ import api from '../api.js';
 import { applyFontScale } from './SettingsApp.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
-  ChevronDown, ShieldCheck,
+  ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
+  BarChart3, CreditCard, Shield,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import DemoModeToggle from './DemoModeToggle.jsx';
@@ -26,40 +27,41 @@ const NAV_TREE = (isAdmin) => [
   {
     group: 'HOME',
     items: [
-      { key: 'overview', label: 'Dashboard', icon: '🏠', logo: '/dashboard_logo.jpeg' },
-      { key: 'activity', label: 'Activity', icon: '⚡', logo: '/activity_logo.jpeg' },
+      { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard },
+      { key: 'activity', label: 'Activity', Icon: Activity },
     ],
   },
   {
     group: 'WORKSPACE',
     items: [
-      { key: 'agent', id: 'my_agent', label: 'My Agent', icon: '🧠', logo: '/My_Agent_logo.jpeg' },
-      { key: 'history', label: 'Assignments', icon: '📝', logo: '/assignments_logo.jpeg' },
-      { key: 'library', label: 'Library', icon: '🗂️', logo: '/library_logo.jpeg' },
+      { key: 'agent', id: 'my_agent', label: 'My Agent', Icon: Brain },
+      { key: 'history', label: 'Assignments', Icon: FileText },
+      { key: 'library', label: 'Library', Icon: BookOpen },
     ],
   },
   {
     group: 'INTELLIGENCE',
     items: [
-      { key: 'insights', label: 'Insights', icon: '📊', logo: '/insights_logo.jpeg' },
+      { key: 'insights', label: 'Insights', Icon: BarChart3 },
     ],
   },
   {
     group: 'ACCOUNT',
     items: [
-      { key: 'credits', label: 'Credits', icon: '💳', logo: '/credits_logo.png' },
-      { key: 'settings', label: 'Settings', icon: '⚙', logo: '/settings_logo.jpeg' },
+      { key: 'credits', label: 'Credits', Icon: CreditCard },
+      { key: 'settings', label: 'Settings', Icon: Settings },
     ],
   },
   ...(isAdmin
     ? [{
         group: 'ADMIN',
         items: [
-          { key: 'admin', label: 'Control Center', icon: '🛡️', logo: '/control_center_logo.jpeg' },
+          { key: 'admin', label: 'Control Center', Icon: Shield },
         ],
       }]
     : []),
 ];
+
 
 /* ── Quick settings (avatar menu) ─────────────────────────────────────────── */
 function QuickSettings({ settings, onChange, onOpenFull, user }) {
@@ -521,11 +523,10 @@ export default function AppShell({
                             aria-label={item.label}
                             aria-current={selected ? 'page' : undefined}
                           >
-                            {item.logo
-                              ? <img src={item.logo} alt="" className={`shrink-0 ${sidebarOpen ? 'w-12 h-12 rounded object-cover' : 'w-11 h-11 rounded object-contain'}`} loading="lazy" />
-                              : <span className="text-[1.6rem] leading-none shrink-0">{item.icon}</span>}
+                            {item.Icon && <item.Icon className={`w-5 h-5 shrink-0 ${selected ? 'text-blue-400' : 'text-slate-400'}`} aria-hidden="true" />}
                             {sidebarOpen && <span className="truncate">{item.label}</span>}
                           </button>
+
                         );
                       })}
                     </div>
