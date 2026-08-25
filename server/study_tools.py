@@ -165,6 +165,11 @@ async def generate_practice_test(
     raise RuntimeError("practice-test: could not parse JSON output after retries")
 
 
+# Alias for test compatibility
+generate_quiz = generate_practice_test
+
+
+
 async def generate_summary(
     transcript: str,
     on_progress: ProgressCB | None = None,

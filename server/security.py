@@ -39,15 +39,24 @@ JWT_ALGORITHM = getattr(config, 'JWT_ALGORITHM', 'HS256')
 JWT_EXPIRATION_HOURS = 24
 
 
-def create_jwt_token(user_id: int, role: str = 'user', expires_delta: Optional[timedelta] = None) -> str:
+def create_jwt_token(user_id: Any, role: str = 'user', expires_delta: Optional[timedelta] = None) -> str:
+    if isinstance(user_id, dict):
+        role = user_id.get('role', role)
+        user_id = user_id.get('sub', 1)
+    # Ensure user_id sub is int if digit or string
+    sub_val = int(user_id) if str(user_id).isdigit() else str(user_id)
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
     payload = {
-        'sub': user_id,
+        'sub': sub_val,
         'role': role,
         'exp': expire,
         'iat': datetime.now(timezone.utc)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+create_access_token = create_jwt_token
+
 
 
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:

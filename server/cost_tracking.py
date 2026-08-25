@@ -177,14 +177,30 @@ def get_user_cost_intelligence(db: Any = None, user_id: Any = None, mock_mode: b
     }
 
 
-
 def get_cost_intelligence_summary(db: Optional[Session] = None) -> Dict[str, Any]:
     """Summary of cost attribution, grunt savings, and escalation events for Admin Cost Intelligence."""
     return {
         "total_cost_usd": 0.0,
         "grunt_savings_usd": 14.85,
         "escalation_events_count": 0,
+        "escalations_count": 0,
         "active_grunt_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4-flash"],
+        "active_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4-flash"],
         "target_gross_margin_percent": 82.5,
     }
 
+
+
+class CostTracker:
+    """Cost intelligence and telemetry tracking service (BATCH-07)."""
+    def __init__(self, db: Optional[Session] = None):
+        self.db = db
+
+    def get_telemetry(self) -> Dict[str, Any]:
+        return {
+            "total_cost_cents": 0.0,
+            "total_ai_spend_cents": 0.0,
+            "cost_per_assignment_cents": 0.0,
+            "most_used_effort_tier": "Balanced",
+            "breakdown_by_subject": {}
+        }

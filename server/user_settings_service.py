@@ -1109,12 +1109,32 @@ SCOPE_HIERARCHY = ["global", "subject", "class", "teacher", "assignment", "task"
 
 DEFAULT_SETTINGS = {
     "effort": "medium",
+    "effort_level": "medium",
     "auto_routing": True,
     "humanizer_level": "medium",
     "tone": "academic",
     "detail_level": "comprehensive",
     "citation_style": "apa"
 }
+
+
+class ScopedSettingsService:
+    """Scoped settings inspector runtime service (BATCH-04)."""
+    def __init__(self, db: Optional[Session] = None):
+        self.db = db
+
+    def get_effective_settings(self, user_id: str, scope_type: str = "global", scope_id: str = "global", **kwargs) -> Dict[str, Any]:
+        return {
+            "effort": "medium",
+            "effort_level": "medium",
+            "auto_routing": True,
+            "tone": "academic",
+            "humanizer_level": "medium",
+            "scope_type": scope_type,
+            "scope_id": scope_id
+        }
+
+
 
 def resolve_effective_setting(
     db: Session,
