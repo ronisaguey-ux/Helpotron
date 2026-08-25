@@ -215,6 +215,23 @@ class UserSettingsScope(Base):
     __table_args__ = (UniqueConstraint("user_id", "scope_type", "scope_id", name="uq_user_scope_target"),)
 
 
+class UserSetting(Base):
+    """Scoped user setting key-value record (SoT §5)."""
+    __tablename__ = "user_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    setting_key: Mapped[str] = mapped_column(String(64), index=True)
+    setting_value: Mapped[str] = mapped_column(Text)
+    scope_type: Mapped[str] = mapped_column(String(32), default="global", index=True)
+    scope_id: Mapped[str] = mapped_column(String(64), default="global", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "setting_key", "scope_type", "scope_id", name="uq_user_setting_target"),)
+
+
+
 class StudyMaterial(Base):
     __tablename__ = "study_materials"
 

@@ -4,15 +4,13 @@ import httpx
 
 async def benchmark_endpoint(url: str, concurrency: int = 20, total_requests: int = 100):
     latencies = []
-    sem = asyncio.Semaphore(concurrency)
     async with httpx.AsyncClient(timeout=10.0) as client:
         async def make_req():
-            async with sem:
-                start = time.perf_counter()
-                res = await client.get(url)
-                latencies.append((time.perf_counter() - start) * 1000)
-                return res.status_code
-
+            start = time.perf_counter()
+            res = await client.get(url)
+            latencies.append((time.perf_counter() - start) * 1000)
+            return res.status_code
+        
         tasks = [make_req() for _ in range(total_requests)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
     
@@ -25,8 +23,4 @@ async def benchmark_endpoint(url: str, concurrency: int = 20, total_requests: in
     return p95
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(benchmark_endpoint('http://127.0.0.1:8000/health'))
-    except Exception as e:
-        print(f"Benchmark notice: {e}")
-
+    asyncio.run(benchmark_endpoint('http://127.0.0.1:8000/health'))
