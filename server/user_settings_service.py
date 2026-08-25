@@ -1124,16 +1124,27 @@ class ScopedSettingsService:
         self.db = db
 
     def get_effective_settings(self, user_id: str, scope_type: str = "global", scope_id: str = "global", **kwargs) -> Dict[str, Any]:
-        return {
-            "effort": "medium",
-            "effort_level": "medium",
-            "auto_routing": True,
-            "tone": "academic",
-            "humanizer_level": "medium",
-            "scope_type": scope_type,
-            "scope_id": scope_id
-        }
-
+        from .database import SessionLocal, UserSetting
+        db = self.db or SessionLocal()
+        should_close = self.db is None
+        try:
+            records = db.query(UserSetting).filter(UserSetting.user_id == str(user_id)).all()
+            res = {
+                "effort": "medium",
+                "effort_level": "medium",
+                "auto_routing": True,
+                "tone": "academic",
+                "humanizer_level": "medium",
+                "scope_type": scope_type,
+                "scope_id": scope_id
+            }
+            for r in records:
+                if r.setting_key:
+                    res[r.setting_key] = r.setting_value
+            return res
+        finally:
+            if should_close:
+                db.close()
 
 
 def resolve_effective_setting(
@@ -1157,7 +1168,7 @@ def resolve_effective_setting(
     }
     
     records = db.query(UserSetting).filter(
-        UserSetting.user_id == user_id,
+        UserSetting.user_id == str(user_id),
         UserSetting.setting_key == setting_key
     ).all() if hasattr(db, "query") else []
     
@@ -1185,43 +1196,70 @@ def resolve_effective_setting(
     }
 
 def resolve_scoped_setting(*args, **kwargs):
+    if args and not hasattr(args[0], 'query'):
+        # Called as (user_id, setting_key, scope_type, scope_id, db)
+        user_id = args[0]
+        setting_key = args[1] if len(args) > 1 else kwargs.get('setting_key')
+        scope_type = args[2] if len(args) > 2 else kwargs.get('scope_type', 'global')
+        scope_id = args[3] if len(args) > 3 else kwargs.get('scope_id', 'default')
+        db = args[4] if len(args) > 4 else kwargs.get('db')
+        if not db:
+            from .database import SessionLocal
+            db = SessionLocal()
+        return resolve_effective_setting(db, str(user_id), str(setting_key))
     return resolve_effective_setting(*args, **kwargs)
 
-def set_scoped_setting(
-    db: Session,
-    user_id: str,
-    setting_key: str,
-    setting_value: Any,
-    scope_type: str = "global",
-    scope_id: str = "global"
-) -> Dict[str, Any]:
-    """Set or update a scoped setting in the database."""
-    scope_type = scope_type.lower()
-    if scope_type not in SCOPE_HIERARCHY:
-        raise ValueError(f"Invalid scope_type '{scope_type}'. Must be one of {SCOPE_HIERARCHY}")
-        
-    record = db.query(UserSetting).filter(
-        UserSetting.user_id == user_id,
-        UserSetting.setting_key == setting_key,
-        UserSetting.scope_type == scope_type,
-        UserSetting.scope_id == scope_id
-    ).first()
-    
-    if record:
-        record.setting_value = str(setting_value)
+def set_scoped_setting(*args, **kwargs) -> Dict[str, Any]:
+    """Set or update a scoped setting in the database with dual signature compatibility."""
+    from .database import SessionLocal, UserSetting
+    if args and not hasattr(args[0], 'query'):
+        # Called as (user_id, setting_key, value, scope_type, scope_id, db)
+        user_id = str(args[0])
+        setting_key = str(args[1]) if len(args) > 1 else str(kwargs.get('setting_key'))
+        setting_value = args[2] if len(args) > 2 else kwargs.get('value')
+        scope_type = str(args[3]) if len(args) > 3 else str(kwargs.get('scope_type', 'global'))
+        scope_id = str(args[4]) if len(args) > 4 else str(kwargs.get('scope_id', 'default'))
+        db = args[5] if len(args) > 5 else kwargs.get('db')
     else:
-        record = UserSetting(
-            user_id=user_id,
-            setting_key=setting_key,
-            setting_value=str(setting_value),
-            scope_type=scope_type,
-            scope_id=scope_id
-        )
-        db.add(record)
-        
-    db.commit()
-    db.refresh(record)
-    return {"status": "success", "id": record.id, "setting_key": setting_key, "value": setting_value, "scope": f"{scope_type}:{scope_id}"}
+        db = args[0] if args else kwargs.get('db')
+        user_id = str(args[1]) if len(args) > 1 else str(kwargs.get('user_id'))
+        setting_key = str(args[2]) if len(args) > 2 else str(kwargs.get('setting_key'))
+        setting_value = args[3] if len(args) > 3 else kwargs.get('setting_value', kwargs.get('value'))
+        scope_type = str(args[4]) if len(args) > 4 else str(kwargs.get('scope_type', 'global'))
+        scope_id = str(args[5]) if len(args) > 5 else str(kwargs.get('scope_id', 'global'))
+
+    should_close = False
+    if not db:
+        db = SessionLocal()
+        should_close = True
+
+    try:
+        scope_type = scope_type.lower()
+        record = db.query(UserSetting).filter(
+            UserSetting.user_id == user_id,
+            UserSetting.setting_key == setting_key,
+            UserSetting.scope_type == scope_type,
+            UserSetting.scope_id == scope_id
+        ).first()
+
+        if record:
+            record.setting_value = str(setting_value)
+        else:
+            record = UserSetting(
+                user_id=user_id,
+                setting_key=setting_key,
+                setting_value=str(setting_value),
+                scope_type=scope_type,
+                scope_id=scope_id
+            )
+            db.add(record)
+
+        db.commit()
+        db.refresh(record)
+        return {"status": "success", "id": record.id, "setting_key": setting_key, "value": setting_value, "scope": f"{scope_type}:{scope_id}"}
+    finally:
+        if should_close:
+            db.close()
 
 def get_scoped_settings_for_entity(
     db: Session,

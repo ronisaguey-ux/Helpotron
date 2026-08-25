@@ -25,33 +25,32 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 ADMIN_IDS = [ADMIN_PUBLIC_ID]
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
-    # NOTE: called as a plain function everywhere (require_admin(request)), never via
-    # FastAPI Depends — so it opens its own session instead of taking an injected db.
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        session_token = request.cookies.get('helpotron_session')
-        if not session_token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication required')
-        token = session_token
-    else:
-        token = auth_header.split(' ', 1)[1]
-
-    payload = verify_jwt_token(token)
-    if not payload or 'sub' not in payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired authentication token')
-
-    db = SessionLocal()
+    auth_user = None
+    local_db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == payload['sub']).first()
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ', 1)[1]
+            payload = verify_jwt_token(token)
+            if payload and 'sub' in payload:
+                auth_user = local_db.query(User).filter(User.id == payload['sub']).first()
+        else:
+            session_token = request.cookies.get('helpotron_session')
+            if session_token:
+                from .security import SessionStore
+                session_data = SessionStore.get_session(session_token)
+                if session_data:
+                    auth_user = local_db.query(User).filter(User.id == session_data['user_id']).first()
+
+        if not auth_user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication required')
+
+        if not getattr(auth_user, 'is_admin', False) and getattr(auth_user, 'role', '') != 'admin' and not is_admin_user(auth_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrative privileges required')
+
+        return auth_user
     finally:
-        db.close()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User account no longer exists')
-
-    if not getattr(user, 'is_admin', False) and user.role != 'admin' and not is_admin_user(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrative privileges required')
-
-    return user
+        local_db.close()
 
 
 class TokenRequest(BaseModel):
