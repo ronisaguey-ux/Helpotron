@@ -1,5 +1,7 @@
 // export target: web/src/components/Navbar.jsx
+// @deprecated — Legacy standalone Navbar decommissioned in favor of canonical AppShell.jsx (SoT §9)
 import React, { useState } from 'react';
+
 import {
   User,
   Zap,
