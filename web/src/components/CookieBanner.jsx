@@ -23,9 +23,9 @@ export function CookieBanner() {
   };
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-        <p className="text-sm text-slate-300 flex-1">
+    <div className="fixed bottom-14 md:bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur shadow-2xl">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+        <p className="text-xs sm:text-sm text-slate-300 flex-1 text-center sm:text-left">
           We use cookies to improve your experience. By continuing you agree to our use of cookies.
         </p>
         <div className="flex items-center gap-2 shrink-0">
