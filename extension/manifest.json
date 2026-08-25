@@ -1,41 +1,43 @@
 {
   "manifest_version": 3,
-  "name": "Helpotron Universal Automator",
+  "name": "Helpotron Study Assistant",
   "version": "2.0.0",
-  "description": "Universal educational assignment scraper, lecture recorder, and AI subagent across Canvas, Google Classroom, Blackboard, Moodle, and any arbitrary webpage.",
+
+  "description": "AI-native Canvas LMS automated study companion and assignment solver.",
   "permissions": [
-    "tabs",
-    "activeTab",
-    "scripting",
     "storage",
-    "downloads",
-    "microphone"
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
-    "https://*.instructure.com/*",
-    "http://*.instructure.com/*"
+    "*://*.instructure.com/*",
+    "*://*.canvas.*/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": [
-        "<all_urls>"
+        "*://*.instructure.com/*",
+        "*://*.canvas.*/*"
       ],
-      "js": [
-        "content.js"
-      ],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ],
-  "action": {
-    "default_popup": "popup.html"
-  },
-  "icons": {
-    "16": "icon16.png",
-    "32": "icon32.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
-  }
+  ]
 }
