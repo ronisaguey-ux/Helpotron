@@ -47,6 +47,16 @@ function AccountSection({ s, set, userId }) {
       <Field label="Email" hint="Managed by your sign-in provider.">
         <input value={`${userId || 'you'}@helpotron.app`} readOnly className={`${inputCls} opacity-50`} />
       </Field>
+      <Field label="Phone number" hint="Used for SMS 2FA codes and account recovery.">
+        <input
+          type="tel"
+          inputMode="tel"
+          value={s.profile.phone || ''}
+          onChange={(e) => set('profile.phone', e.target.value)}
+          placeholder="+1 555 123 4567"
+          className={inputCls}
+        />
+      </Field>
       <Field label="Password">
         <button type="button" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer">
           <KeyRound className="w-3.5 h-3.5" /> Change password
@@ -346,7 +356,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
     setLoading2FA(true);
     setMsg2FA({ text: '', type: '' });
     try {
-      const res = await api.setup2FA(method);
+      const res = await api.setup2FA(method, s?.profile?.phone || null);
       if (res && res.status === 'success') {
         setSecret(res.secret || '');
         setQrUri(res.qr_uri || '');
