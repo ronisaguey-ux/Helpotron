@@ -51,7 +51,7 @@ async def transcribe_audio(
     3. Faster-Whisper local CPU/GPU (if installed)
     """
     model_name = preferred_model or config.gemini_flash_lite_model or "gemini-3.1-flash-lite"
-    public_id = user_id or "RoniDev"
+    public_id = user_id or getattr(config, "admin_public_id", "default_user")
 
     # 1. Primary: Gemini 3.1 Flash-Lite Transcription
     if config.gemini_api_key or (config.omniroute_api_key and "gemini" in model_name):

@@ -6,10 +6,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PRODUCTION_MODE=true
+      - PRODUCTION_MODE=${PRODUCTION_MODE:-false}
+      - JWT_SECRET=${JWT_SECRET:-helpotron_super_secret_jwt_signing_key_for_docker_local_32chars}
+      - DATABASE_URL=postgresql+psycopg2://helpotron:${POSTGRES_PASSWORD:-helpotron_secure_pg_pass_2026}@postgres:5432/helpotron
       - POSTGRES_SERVER=postgres
       - POSTGRES_USER=helpotron
-      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-helpotron_secure_pg_pass_2026}
       - POSTGRES_DB=helpotron
     depends_on:
       postgres:
@@ -19,7 +21,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: helpotron
-      POSTGRES_PASSWORD: changeme
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpotron_secure_pg_pass_2026}
       POSTGRES_DB: helpotron
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U helpotron"]
@@ -28,3 +30,8 @@ services:
       retries: 5
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

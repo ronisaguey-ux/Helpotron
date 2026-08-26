@@ -330,8 +330,260 @@ function NotificationsSection({ s, set, scoped, setVariants, subjectRefs }) {
 /* ── PRIVACY & SECURITY ──────────────────────────────────────────────────── */
 function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  // 2FA state
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(Boolean(s?.privacy?.twoFactorEnabled));
+  const [method, setMethod] = useState('totp');
+  const [setupStep, setSetupStep] = useState('idle'); // 'idle' | 'configuring' | 'disabling'
+  const [secret, setSecret] = useState('');
+  const [qrUri, setQrUri] = useState('');
+  const [code, setCode] = useState('');
+  const [loading2FA, setLoading2FA] = useState(false);
+  const [msg2FA, setMsg2FA] = useState({ text: '', type: '' });
+
+  const handleStartSetup = async () => {
+    setLoading2FA(true);
+    setMsg2FA({ text: '', type: '' });
+    try {
+      const res = await api.setup2FA(method);
+      if (res && res.status === 'success') {
+        setSecret(res.secret || '');
+        setQrUri(res.qr_uri || '');
+        setSetupStep('configuring');
+        if (res.message) setMsg2FA({ text: res.message, type: 'info' });
+      } else {
+        setMsg2FA({ text: res?.detail || 'Could not start 2FA setup', type: 'error' });
+      }
+    } catch (err) {
+      setMsg2FA({ text: err.message || 'Error starting 2FA setup', type: 'error' });
+    } finally {
+      setLoading2FA(false);
+    }
+  };
+
+  const handleVerifySetup = async () => {
+    if (!code.trim()) return;
+    setLoading2FA(true);
+    setMsg2FA({ text: '', type: '' });
+    try {
+      const res = await api.verifySetup2FA(method, code.trim(), secret);
+      if (res && res.status === 'success') {
+        setTwoFactorEnabled(true);
+        setSetupStep('idle');
+        setCode('');
+        set('privacy', { ...s.privacy, twoFactorEnabled: true, twoFactorMethod: method });
+        setMsg2FA({ text: 'Two-Factor Authentication is now active on your account.', type: 'success' });
+      } else {
+        setMsg2FA({ text: res?.detail || 'Invalid verification code', type: 'error' });
+      }
+    } catch (err) {
+      setMsg2FA({ text: err.message || 'Verification failed. Please check the code.', type: 'error' });
+    } finally {
+      setLoading2FA(false);
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    if (!code.trim()) return;
+    setLoading2FA(true);
+    setMsg2FA({ text: '', type: '' });
+    try {
+      const res = await api.disable2FA(code.trim());
+      if (res && res.status === 'success') {
+        setTwoFactorEnabled(false);
+        setSetupStep('idle');
+        setCode('');
+        set('privacy', { ...s.privacy, twoFactorEnabled: false });
+        setMsg2FA({ text: 'Two-Factor Authentication has been disabled.', type: 'info' });
+      } else {
+        setMsg2FA({ text: res?.detail || 'Failed to disable 2FA', type: 'error' });
+      }
+    } catch (err) {
+      setMsg2FA({ text: err.message || 'Failed to disable 2FA', type: 'error' });
+    } finally {
+      setLoading2FA(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await api.delete('/api/user/account');
+      window.location.reload();
+    } catch (err) {
+      setDeleteError(err.message || 'Deletion failed');
+    }
+  };
+
   return (
     <div className="space-y-7 max-w-lg">
+      {/* 2FA Security Controls */}
+      <div className="p-4 rounded-2xl bg-white/4 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-blue-400" />
+              Two-Factor Authentication (2FA)
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Secure your account with an extra verification layer on sign in.
+            </p>
+          </div>
+          <Badge color={twoFactorEnabled ? 'emerald' : 'slate'}>
+            {twoFactorEnabled ? 'Enabled' : 'Disabled'}
+          </Badge>
+        </div>
+
+        {msg2FA.text && (
+          <div className={`p-2.5 rounded-xl text-xs ${msg2FA.type === 'error' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300' : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'}`}>
+            {msg2FA.text}
+          </div>
+        )}
+
+        {setupStep === 'idle' && (
+          <div className="flex items-center gap-3 pt-1">
+            {!twoFactorEnabled ? (
+              <button
+                type="button"
+                onClick={() => setSetupStep('method_select')}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-blue-900/30"
+              >
+                Enable 2FA Protection
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setSetupStep('disabling'); setCode(''); setMsg2FA({ text: '', type: '' }); }}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold transition cursor-pointer"
+              >
+                Disable 2FA
+              </button>
+            )}
+          </div>
+        )}
+
+        {setupStep === 'method_select' && (
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            <label className="block text-xs font-medium text-slate-300">Choose Verification Method:</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: 'totp', label: 'Authenticator App', desc: 'Google Auth, Authy, 1Password' },
+                { key: 'email', label: 'Email Code', desc: 'Delivered to registered email' },
+                { key: 'sms', label: 'SMS Message', desc: 'Delivered via text message' },
+              ].map(m => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setMethod(m.key)}
+                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${method === m.key ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-white/4 border-white/8 text-slate-400 hover:text-slate-200'}`}
+                >
+                  <div className="text-xs font-bold">{m.label}</div>
+                  <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={loading2FA}
+                onClick={handleStartSetup}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+              >
+                {loading2FA ? 'Setting up…' : 'Continue Setup →'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSetupStep('idle')}
+                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {setupStep === 'configuring' && (
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            {method === 'totp' && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-300">
+                  Scan this QR code in your Authenticator app (Google Authenticator, Microsoft Authenticator, Authy), or enter the key manually:
+                </p>
+                <div className="p-3 bg-slate-950 rounded-xl border border-white/10 text-center font-mono text-xs text-blue-400 select-all break-all">
+                  {secret}
+                </div>
+              </div>
+            )}
+            {method !== 'totp' && (
+              <p className="text-xs text-slate-300">
+                A 6-digit verification code has been sent via {method.toUpperCase()}.
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={loading2FA || code.length < 6}
+                onClick={handleVerifySetup}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+              >
+                {loading2FA ? 'Verifying…' : 'Activate 2FA'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSetupStep('idle'); setCode(''); }}
+                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {setupStep === 'disabling' && (
+          <div className="space-y-3 pt-2 border-t border-white/10">
+            <p className="text-xs text-slate-300">
+              Enter your current 6-digit 2FA security code to confirm turning off 2FA:
+            </p>
+            <input
+              type="text"
+              maxLength={6}
+              placeholder="123456"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-rose-500"
+            />
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={loading2FA || code.length < 6}
+                onClick={handleDisable2FA}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+              >
+                {loading2FA ? 'Disabling…' : 'Confirm Turn Off'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSetupStep('idle'); setCode(''); }}
+                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div>
         <div className="text-xs font-medium text-slate-300 mb-3">Data usage</div>
         <div className="space-y-3">
@@ -353,7 +605,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
       <div>
         <div className="text-xs font-medium text-slate-300 mb-3">Your data</div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer">
+          <button type="button" onClick={() => api.exportAllUserData()} className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer">
             <Download className="w-3.5 h-3.5" /> Export all data
           </button>
           <button type="button" onClick={() => onGoTo && onGoTo('privacy')} className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer">
@@ -364,14 +616,15 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
             onClick={() => setDeleting(!deleting)}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-300 hover:bg-rose-500/20 transition cursor-pointer"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Request account deletion
+            <Trash2 className="w-3.5 h-3.5" /> Request account deletion (GDPR Art. 17)
           </button>
         </div>
         {deleting && (
           <div className="mt-3 p-4 rounded-xl bg-rose-500/8 border border-rose-500/25 text-[11px] text-rose-200 space-y-2">
-            Deleting your account erases all assignments, materials, credits and study history. This cannot be undone.
+            Deleting your account erases all assignments, materials, credits and study history, and anonymizes your data lake contributions under GDPR Article 17. This action is permanent.
+            {deleteError && <div className="text-rose-400 font-medium">{deleteError}</div>}
             <div className="flex gap-2">
-              <button type="button" className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer">Confirm deletion</button>
+              <button type="button" onClick={handleConfirmDelete} className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer">Confirm deletion</button>
               <button type="button" onClick={() => setDeleting(false)} className="px-3 py-1.5 rounded-lg bg-white/5 text-slate-300 text-[11px] transition cursor-pointer">Cancel</button>
             </div>
           </div>
