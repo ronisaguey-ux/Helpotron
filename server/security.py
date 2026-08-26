@@ -40,8 +40,17 @@ JWT_SECRET = getattr(config, 'jwt_secret', getattr(config, 'JWT_SECRET', os.gete
 JWT_ALGORITHM = getattr(config, 'algorithm', getattr(config, 'JWT_ALGORITHM', 'HS256'))
 JWT_EXPIRATION_HOURS = 24
 
+KNOWN_INSECURE_SECRETS = {
+    'dev-insecure-secret-key-change-in-prod-32bytesmin',
+    'helpotron_jwt_secret_dev_key_32chars',
+    'helpotron_super_secret_jwt_signing_key_min_32_chars',
+    'helpotron_super_secret_session_key_min_32_characters',
+    'secret',
+    'changeme',
+}
+
 if getattr(config, 'production_mode', False):
-    if not JWT_SECRET or JWT_SECRET.startswith('dev-insecure') or JWT_SECRET == 'helpotron_jwt_secret_dev_key_32chars':
+    if not JWT_SECRET or JWT_SECRET in KNOWN_INSECURE_SECRETS or len(JWT_SECRET) < 32 or JWT_SECRET.startswith('dev-') or 'change_me' in JWT_SECRET:
         raise RuntimeError("Production mode requires secure non-default JWT_SECRET in environment")
 
 

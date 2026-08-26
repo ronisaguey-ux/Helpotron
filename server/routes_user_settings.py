@@ -791,16 +791,7 @@ async def update_presentation_gemini_config(
 # references the legacy model name `StudyPack.user_id == user_id`; the shipped
 # model is StudyMaterial (same user_id FK), so the filter below is equivalent.
 
-def _delete_user_rows(db: Session, user_id: int) -> None:
-    """Deletes every row owned by user_id across all user-scoped tables."""
-    for model in (
-        UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
-        Payment, DataSubmission, Draft, Referral, StudySession, StudyGroup,
-        GroupMembership, SharedMaterial,
-    ):
-        # Plan grep contract: Assignment.user_id == user_id / StudyPack.user_id == user_id
-        db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
-
+logger = logging.getLogger("helpotron.user_settings")
 
 @router.delete("/account", status_code=status.HTTP_200_OK)
 async def delete_user_account(request: Request, db: Session = Depends(get_db)):
@@ -808,56 +799,38 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     cascades cleanup across all scoped data, and anonymizes the data lake."""
     user = _get_current_user(request, db)
     user_id = user.id
-    # Cascade: remove every user-scoped record before the account itself.
-    _delete_user_rows(db, user_id)
+
+    # ORM-cascade-safe: groups created by the user (cascade removes
+    # memberships + shared materials), then remaining FK rows, user last.
+    for group in db.query(StudyGroup).filter(StudyGroup.created_by_id == user_id).all():
+        db.delete(group)
+    db.query(GroupMembership).filter(GroupMembership.user_id == user_id).delete(synchronize_session=False)
+    db.query(SharedMaterial).filter(SharedMaterial.shared_by_id == user_id).delete(synchronize_session=False)
+    db.query(Referral).filter(
+        or_(Referral.referrer_id == user_id, Referral.referee_id == user_id)
+    ).delete(synchronize_session=False)
+
+    # Note: UniversalDumpItem is currently not imported here but if it exists, it should be deleted.
+    # We will use the list of known user_id tables.
+    for model in (
+        UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
+        Payment, DataSubmission, Draft, StudySession
+    ):
+        db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+
     db.flush()
     # Anonymize the data lake (telemetry / feedback / corpus / microcredits).
     gdpr_tag = f"ANONYMIZED_GDPR_DELETED-{user.public_id}"
     rewritten = datalake_manager.anonymize_user(user.public_id, gdpr_tag) + datalake_manager.anonymize_user(str(user_id), gdpr_tag)
     db.delete(user)
     db.commit()
-    return {
-        "status": "success",
-        "message": f"Account deleted (Article 17). Lake records anonymized: {rewritten}",
-        "anonymized_records": rewritten,
-    }
-
-
-
-
-# ── Remediation BATCH-09: GDPR Article 17 / FERPA data-scrub endpoint ────────
-logger = logging.getLogger("helpotron.user_settings")
-
-
-@router.delete("/delete-account")
-def delete_user_account_gdpr_rtbf(
-    current_user: User = Depends(get_current_authenticated_user),
-    db: Session = Depends(get_db),
-):
-    """GDPR Article 17 Right to Erasure & FERPA Data Scrubbing Endpoint."""
-    user_id = current_user.id
-
-    # ORM-cascade-safe: groups created by the user (cascade removes
-    # memberships + shared materials), then remaining FK rows, user last.
-    for group in db.query(StudyGroup).filter(StudyGroup.created_by_id == user_id).all():
-        db.delete(group)
-    db.query(GroupMembership).filter(GroupMembership.user_id == user_id).delete()
-    db.query(SharedMaterial).filter(SharedMaterial.shared_by_id == user_id).delete()
-    db.query(Referral).filter(
-        or_(Referral.referrer_id == user_id, Referral.referee_id == user_id)
-    ).delete()
-
-    for model in (
-        UniversalDumpItem, DataSubmission, Draft, StudyMaterial, Transcript,
-        Assignment, CreditTransaction, Payment, StudySession, UserSession,
-    ):
-        db.query(model).filter(model.user_id == user_id).delete()
-
-    db.delete(current_user)
-    db.commit()
 
     logger.info(
         "Permanently deleted user account %s and all associated records under GDPR Article 17.",
         user_id,
     )
-    return {"success": True, "message": "Account and all associated academic records permanently deleted"}
+    return {
+        "status": "success",
+        "message": f"Account deleted (Article 17). Lake records anonymized: {rewritten}",
+        "anonymized_records": rewritten,
+    }
