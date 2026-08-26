@@ -14,7 +14,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=Fals
 
 def verify_jwt_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, config.jwt_secret, algorithms=["HS256"])
         return payload
     except jwt.PyJWTError:
         raise HTTPException(

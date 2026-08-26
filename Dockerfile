@@ -12,8 +12,9 @@ COPY server/ /app/server/
 # Copy web dist (built separately)
 COPY web/dist/ /app/web/dist/
 
-# Copy .env.example as .env (override in production)
-COPY .env.example /app/.env
+# Set production defaults
+ENV PRODUCTION_MODE=true
+ENV PORT=8000
 
 # Create data directories
 RUN mkdir -p /app/exports /app/datalake_storage /app/data_lake
