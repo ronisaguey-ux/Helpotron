@@ -429,22 +429,28 @@ async def compact_agent_chat(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/uploads/avatar")
 async def upload_avatar(
+    request: Request,
     file: UploadFile = File(...),
     kind: Optional[str] = Form(None),
     subject: Optional[str] = Form(None),
-    user_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
 ):
     """Avatar upload for the user, the agent, or a subject (PNG/JPG only)."""
+    _get_current_user(request, db)
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Avatar too large (max 5 MB).")
-    content_type = (file.content_type or "").lower()
-    ext = "png" if content_type == "image/png" else "jpg" if content_type in ("image/jpeg", "image/jpg") else None
-    if ext is None:
+    # Trust the bytes, not the client-supplied Content-Type: the file lands in a
+    # statically served directory, so a mislabelled payload must not be stored.
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        ext = "png"
+    elif content.startswith(b"\xff\xd8\xff"):
+        ext = "jpg"
+    else:
         raise HTTPException(status_code=400, detail="Only PNG or JPG images are accepted.")
-    _AVATAR_DIR = Path("./uploads/avatars")
+    _AVATAR_DIR = Path(__file__).resolve().parent.parent / "uploads" / "avatars"
     _AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     disk_name = f"{uuid.uuid4().hex}.{ext}"
     (_AVATAR_DIR / disk_name).write_bytes(content)
@@ -461,6 +467,12 @@ async def upload_avatar(
 @router.get("/agent/chat/{assignment_id}")
 async def get_chat(assignment_id: int, request: Request, db: Session = Depends(get_db)):
     """Fetches chat conversation history with Overlord / Sub-Agent team for an assignment."""
+    user = _get_current_user(request, db)
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id, Assignment.user_id == user.id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
     return {"status": "success", "chat": overlord_agent.get_chat_history(assignment_id)}
 
 
@@ -819,6 +831,7 @@ async def execute_sandbox_script_endpoint(
 @router.get("/agent/sandbox/active")
 def list_active_sandboxes_endpoint(request: Request, db: Session = Depends(get_db)):
     """Lists currently active virtual sub-agent sandboxes."""
+    _get_current_user(request, db)
     from .engine.sandbox import sandbox_manager
     return {"sandboxes": sandbox_manager.list_active()}
 
@@ -826,6 +839,7 @@ def list_active_sandboxes_endpoint(request: Request, db: Session = Depends(get_d
 @router.post("/agent/sandbox/cleanup")
 def cleanup_sandbox_endpoint(payload: Dict[str, str], request: Request, db: Session = Depends(get_db)):
     """Manually cleans up a virtual sandbox."""
+    _get_current_user(request, db)
     sandbox_id = payload.get("sandbox_id", "")
     from .engine.sandbox import sandbox_manager
     success = sandbox_manager.cleanup_sandbox(sandbox_id)
