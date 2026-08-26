@@ -338,3 +338,99 @@ html { font-size: 110%; } /* 17.6px base */
   pointer-events: none;
 }
 .clean-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * APPEARANCE ENGINE (08-26): the Settings → Appearance controls now actually
+ * restyle the app. applyAppearance() sets data-theme / data-accent /
+ * data-density on <html> (SettingsApp.jsx). These token layers + the
+ * var-driven surfaces (body, .app-background, .clean-card, .glass-panel,
+ * .clean-input, focus rings) follow along. Deep hardcoded-slate shells are the
+ * remaining migration surface (tracked; next sweep converts them to vars).
+ * ───────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-base: #eef2f7;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f2f5fa;
+  --border-subtle: rgba(15, 23, 42, 0.10);
+  --border-hover: rgba(15, 23, 42, 0.22);
+  --text-primary: #0f172a;
+  --text-secondary: #1e293b;
+  --text-muted: #526071;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+}
+[data-theme="oled"] {
+  --bg-base: #000000;
+  --bg-surface: #060606;
+  --bg-surface-elevated: #0d0d0d;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #7d8aa0;
+}
+[data-theme="midnight"] {
+  --bg-base: #0a1024;
+  --bg-surface: #101a38;
+  --bg-surface-elevated: #182448;
+  --border-subtle: rgba(140, 160, 255, 0.10);
+  --border-hover: rgba(140, 160, 255, 0.22);
+  --text-primary: #e8ecff;
+  --text-secondary: #c3cbee;
+  --text-muted: #8894c4;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-subtle: rgba(99, 102, 241, 0.16);
+}
+[data-theme="graphite"] {
+  --bg-base: #101114;
+  --bg-surface: #17181c;
+  --bg-surface-elevated: #1f2026;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.20);
+  --text-primary: #f4f5f7;
+  --text-secondary: #ced1d6;
+  --text-muted: #8b909a;
+  --accent: #94a3b8;
+  --accent-hover: #64748b;
+  --accent-subtle: rgba(148, 163, 184, 0.14);
+}
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --bg-base: #eef2f7;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f2f5fa;
+    --border-subtle: rgba(15, 23, 42, 0.10);
+    --border-hover: rgba(15, 23, 42, 0.22);
+    --text-primary: #0f172a;
+    --text-secondary: #1e293b;
+    --text-muted: #526071;
+  }
+}
+
+/* Accent palettes — flip --accent so buttons/rings/chips follow the pick */
+[data-accent="purple"]   { --accent: #a855f7; --accent-hover: #9333ea; --accent-subtle: rgba(168, 85, 247, 0.14); }
+[data-accent="emerald"]  { --accent: #10b981; --accent-hover: #059669; --accent-subtle: rgba(16, 185, 129, 0.14); }
+[data-accent="amber"]    { --accent: #f59e0b; --accent-hover: #d97706; --accent-subtle: rgba(245, 158, 11, 0.14); }
+[data-accent="rose"]     { --accent: #f43f5e; --accent-hover: #e11d48; --accent-subtle: rgba(244, 63, 94, 0.14); }
+[data-accent="cyan"]     { --accent: #06b6d4; --accent-hover: #0891b2; --accent-subtle: rgba(6, 182, 212, 0.14); }
+[data-accent="custom"]   { --accent: #ec4899; --accent-hover: #db2777; --accent-subtle: rgba(236, 72, 153, 0.14); }
+
+/* Density — scale the OS spacing/padding rhythm */
+[data-density="compact"]     { --density-gap: 0.7; --density-pad: 0.8; }
+[data-density="spacious"]    { --density-gap: 1.25; --density-pad: 1.3; }
+[data-density="compact"]    .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
+[data-density="spacious"]   .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
+
+/* Light theme: keep the fixed-slate shells readable (semantic overrides) */
+[data-theme="light"] body { background: var(--bg-base); color: var(--text-primary); }
+[data-theme="light"] .app-background { background-color: var(--bg-base); }
+[data-theme="light"] .clean-card,
+[data-theme="light"] .glass-panel { background: var(--bg-surface); border-color: var(--border-subtle); }
+[data-theme="light"] .clean-input { background: #f5f7fb; color: var(--text-primary); border-color: var(--border-subtle); }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.25); }
+
+/* Font-scale smoothing: rem scaling w/o layout jarring */
+html { scroll-behavior: smooth; }
+
