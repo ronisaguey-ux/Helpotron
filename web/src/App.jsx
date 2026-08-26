@@ -20,8 +20,7 @@ import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
 import TermsOfServiceView from './components/TermsOfServiceView.jsx';
 import DataLakeView from './components/DataLakeView.jsx';
 import AssignmentDumpView from './components/AssignmentDumpView.jsx';
-import ExtensionGuideModal from './components/ExtensionGuideModal.jsx';
-import ExtensionUpdateBanner from './components/ExtensionUpdateBanner.jsx';
+import ExtensionInstallView from './components/ExtensionInstallView.jsx';
 
 /* OS chrome + new views */
 import AppShell from './components/AppShell.jsx';
@@ -125,7 +124,6 @@ export default function App() {
     ? 'assignment'
     : `${activeView}:${viewTab ?? ''}`;
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [extensionGuideOpen, setExtensionGuideOpen] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   /* Global command palette: ⌘K / Ctrl+K */
@@ -292,16 +290,7 @@ export default function App() {
           }}
         />
 
-        {/* Extension Setup & Update Guide Modal */}
-        <ExtensionGuideModal
-          isOpen={extensionGuideOpen}
-          onClose={() => setExtensionGuideOpen(false)}
-        />
-
-        {/* Real-Time Extension Update Notification Banner */}
-        <ExtensionUpdateBanner
-          onOpenGuide={() => setExtensionGuideOpen(true)}
-        />
+        {/* Extension install is a sidebar section now (see ExtensionInstallView) */}
 
         {/* Global command palette */}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
@@ -426,6 +415,7 @@ export default function App() {
                   {/* ACCOUNT */}
                   {activeView === 'credits' && <CreditsView userId={userId} initialTab={viewTab} userCredits={credits} />}
                   {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} />}
+                  {activeView === 'extension' && <ExtensionInstallView />}
 
                   {/* LEGACY + LEGAL */}
                   {activeView === 'dump' && (
