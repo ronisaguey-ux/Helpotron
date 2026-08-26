@@ -533,8 +533,10 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     """Create a new user account with a 7-day free trial."""
     # Account creation is far tighter than the blanket 120/min IP budget:
     # a demo box should never let one client mint dozens of trial accounts.
+    # 08-26 prototype-beta: free test run means real users share an IP — 5/hr
+    # was starving them; raise to 20/hr (still stops minting machines).
     client = request.client.host if request.client else "unknown"
-    if not ratelimit.limiter.allow(f"signup:{client}", 5, window=3600.0):
+    if not ratelimit.limiter.allow(f"signup:{client}", 20, window=3600.0):
         raise HTTPException(429, "Too many accounts created from this address. Try again later.")
     if not validate_public_id(body.public_id):
         raise HTTPException(400, "Invalid public_id (3-64 chars, alphanumeric, underscore, hyphen)")
