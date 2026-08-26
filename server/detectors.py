@@ -133,7 +133,7 @@ class PangramDetector(Detector):
 
     async def detect(self, text: str) -> DetectorResult:
         if not self.api_key or self.api_key.startswith("your_"):
-            return DetectorResult(self.name, 12.0, {"configured": False, "status": "placeholder_pass"})
+            return DetectorResult(self.name, 0.0, {"configured": False, "unavailable": True, "reason": "API key not configured"})
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -160,7 +160,7 @@ class SaplingDetector(Detector):
 
     async def detect(self, text: str) -> DetectorResult:
         if not self.api_key or self.api_key.startswith("your_"):
-            return DetectorResult(self.name, 14.0, {"configured": False, "status": "placeholder_pass"})
+            return DetectorResult(self.name, 0.0, {"configured": False, "unavailable": True, "reason": "API key not configured"})
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -186,7 +186,7 @@ class OriginalityAIDetector(Detector):
 
     async def detect(self, text: str) -> DetectorResult:
         if not self.api_key or self.api_key.startswith("your_"):
-            return DetectorResult(self.name, 10.0, {"configured": False, "status": "placeholder_pass"})
+            return DetectorResult(self.name, 0.0, {"configured": False, "unavailable": True, "reason": "API key not configured"})
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -213,7 +213,7 @@ class CopyleaksDetector(Detector):
 
     async def detect(self, text: str) -> DetectorResult:
         if not self.api_key or self.api_key.startswith("your_"):
-            return DetectorResult(self.name, 15.0, {"configured": False, "status": "placeholder_pass"})
+            return DetectorResult(self.name, 0.0, {"configured": False, "unavailable": True, "reason": "API key not configured"})
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -263,14 +263,23 @@ registry = DetectorRegistry()
 registry.register(DummyDetector())
 registry.register(PerplexityCadenceDetector())
 registry.register(StatisticalBurstinessDetector())
-registry.register(PangramDetector())
-registry.register(SaplingDetector())
-registry.register(OriginalityAIDetector())
-registry.register(CopyleaksDetector())
-registry.register(WinstonAIDetector())
 
+# Only the fetched detectors are available (owner 08-26). Heuristic detectors
+# always run; API-backed detectors are gated on their API key being present.
+_cfg = __import__('server.config', fromlist=['config']).config
+if getattr(_cfg, 'pangram_api_key', ''):
+    registry.register(PangramDetector())
+if getattr(_cfg, 'sapling_api_key', ''):
+    registry.register(SaplingDetector())
+if getattr(_cfg, 'winston_api_key', ''):
+    registry.register(WinstonAIDetector())
 
-
+# Originality.ai and Copyleaks are intentionally not registered when no key is
+# fetched (owner 08-26 directive: only the fetched detectors are available).
+if getattr(_cfg, 'originality_api_key', ''):
+    registry.register(OriginalityAIDetector())
+if getattr(_cfg, 'copyleaks_api_key', ''):
+    registry.register(CopyleaksDetector())
 # In-memory score cache by text SHA256 hash with 24h TTL (plan contract:
 # detectors must not re-run on identical text within a day — repeated
 # humanizer/verification passes on the same draft hit this, not the LLM).
