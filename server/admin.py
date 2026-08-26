@@ -186,16 +186,25 @@ async def get_user_detail(public_id: str, request: Request, db: Session = Depend
 
 
 @router.post("/user/{public_id}/credits")
-async def adjust_user_credits(public_id: str, amount: float, reason: str = "admin adjustment", request: Request = None, db: Session = Depends(get_db)):
+async def adjust_user_credits(
+    public_id: str,
+    amount: int = Query(..., description="Positive integer credit adjustment (negative to deduct)"),
+    reason: str = Query("admin adjustment"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
     require_admin(request)
+    if amount == 0:
+        raise HTTPException(status_code=400, detail="Credit adjustment amount must be non-zero")
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    user.credits += amount
+    user.credits = (user.credits or 0) + amount
     tx = CreditTransaction(user_id=user.id, delta=amount, reason=f"admin: {reason}")
     db.add(tx)
     db.commit()
-    return {"new_balance": user.credits}
+    db.refresh(user)
+    return {"new_balance": user.credits, "public_id": user.public_id, "amount": amount}
 
 
 @router.post("/user/{public_id}/plan")
