@@ -27,6 +27,12 @@ EXEMPT_PATHS = {
 }
 
 
+try:
+    from .config import config
+except (ImportError, ValueError):
+    from server.config import config
+
+
 def generate_csrf_token() -> str:
     """Generate a cryptographically secure random token."""
     return secrets.token_urlsafe(32)
@@ -39,7 +45,7 @@ def set_csrf_cookie(response: Response) -> str:
         key=CSRF_COOKIE_NAME,
         value=token,
         httponly=False,   # Must be readable by JavaScript to send back
-        secure=False,     # Set to True in production with HTTPS
+        secure=getattr(config, 'production_mode', False),
         samesite="lax",
         path="/",
     )

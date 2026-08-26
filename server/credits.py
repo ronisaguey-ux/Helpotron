@@ -94,6 +94,15 @@ def charge(user: Any, task_name: str, db: Session, cost_override: Optional[int] 
     )
     if result.rowcount == 0:
         return False
+        
+    tx = CreditTransaction(
+        user_id=user_id,
+        delta=-cost,
+        reason=reason or f"charge:{task_name}",
+    )
+    db.add(tx)
+    db.commit()
+
     if user_obj:
         try:
             if user_obj in db:

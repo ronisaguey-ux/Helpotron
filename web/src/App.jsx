@@ -258,7 +258,7 @@ export default function App() {
     setOpenAssignment(null);
   };
 
-  const effectiveIsAdmin = isAdmin || userId === 'RoniDev' || userId === 'admin';
+  const effectiveIsAdmin = isAdmin;
 
   return (
     <ErrorBoundary>
