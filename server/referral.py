@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from .config import config
 from .database import CreditTransaction, Referral, User
 
 
@@ -19,7 +20,8 @@ def generate_referral_code() -> str:
 def check_user_subscription(user: User) -> bool:
     """Checks if the user is currently on an active paid subscription plan."""
     active_plans = {"basic", "pro", "elite"}
-    is_admin = getattr(user, "role", "member") == "admin" or getattr(user, "public_id", "") == "RoniDev"
+    admin_id = getattr(config, "admin_public_id", "RoniDev")
+    is_admin = getattr(user, "role", "member") == "admin" or getattr(user, "public_id", "") == admin_id
     has_plan = (user.plan or "").lower() in active_plans
     not_canceled = (user.subscription_status or "").lower() not in {"canceled", "past_due"}
     return is_admin or (has_plan and not_canceled)

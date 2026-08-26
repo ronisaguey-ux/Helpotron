@@ -11,6 +11,9 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState('totp');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   // Sign up state
   const [signupUser, setSignupUser] = useState('');
@@ -35,11 +38,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
       setLoginError('Please enter both your Public ID / Username and password.');
       return;
     }
+    if (requires2FA && !twoFactorCode.trim()) {
+      setLoginError('Please enter your 2FA verification code.');
+      return;
+    }
     setLoading(true);
     setLoginError('');
     try {
-      const res = await api.login(loginUser.trim(), loginPass);
-      if (res && res.message === 'Logged in') {
+      const res = await api.login(loginUser.trim(), loginPass, requires2FA ? twoFactorCode.trim() : null);
+      if (res && res.status === '2fa_required') {
+        setRequires2FA(true);
+        setTwoFactorMethod(res.method || 'totp');
+      } else if (res && res.message === 'Logged in') {
         onLoginSuccess(loginUser.trim());
       } else {
         setLoginError('Invalid credentials. Please verify your username and password.');
@@ -229,48 +239,86 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
         {/* SIGN IN FORM */}
         {tab === 'login' && (
           <form onSubmit={handleLogin} method="post" action="#" className="space-y-4" autoComplete="on">
-            <div className="space-y-1">
-              <label htmlFor="login-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
-              <div className="relative">
-                <input
-                  id="login-username"
-                  name="username"
-                  type="text"
-                  required
-                  autoComplete="username"
-                  placeholder="Enter your username"
-                  value={loginUser}
-                  onChange={(e) => setLoginUser(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
-                />
-                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-              </div>
-            </div>
+            {!requires2FA ? (
+              <>
+                <div className="space-y-1">
+                  <label htmlFor="login-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+                  <div className="relative">
+                    <input
+                      id="login-username"
+                      name="username"
+                      type="text"
+                      required
+                      autoComplete="username"
+                      placeholder="Enter your username"
+                      value={loginUser}
+                      onChange={(e) => setLoginUser(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                    />
+                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                  </div>
+                </div>
 
-            <div className="space-y-1">
-              <label htmlFor="login-password" className="text-xs font-semibold text-slate-300">Password</label>
-              <div className="relative">
-                <input
-                  id="login-password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                  value={loginPass}
-                  onChange={(e) => setLoginPass(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
-                />
-                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <div className="space-y-1">
+                  <label htmlFor="login-password" className="text-xs font-semibold text-slate-300">Password</label>
+                  <div className="relative">
+                    <input
+                      id="login-password"
+                      name="password"
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      placeholder="Enter your password"
+                      value={loginPass}
+                      onChange={(e) => setLoginPass(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                    />
+                    <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3 bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4">
+                <div className="flex items-center gap-2 text-blue-400">
+                  <ShieldCheck className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Two-Factor Authentication</span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Enter the 6-digit verification code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} to continue.
+                </p>
+                <div className="space-y-1">
+                  <label htmlFor="two-factor-code" className="text-xs font-semibold text-slate-300">Security Code</label>
+                  <div className="relative">
+                    <input
+                      id="two-factor-code"
+                      type="text"
+                      maxLength={6}
+                      autoFocus
+                      required
+                      placeholder="123456"
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-slate-900 border border-blue-500/40 rounded-xl px-3.5 py-2.5 pl-9 text-base text-center tracking-widest font-mono text-white placeholder:text-slate-600 focus:border-blue-400 outline-none"
+                    />
+                    <Lock className="w-4 h-4 text-blue-400 absolute left-3 top-3.5" />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setRequires2FA(false); setTwoFactorCode(''); }}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
+                >
+                  ← Back to password sign in
+                </button>
               </div>
-            </div>
+            )}
 
             <button
               type="submit"
-              disabled={loading || !loginUser || !loginPass}
+              disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 6)}
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
             >
-              {loading ? 'Signing in…' : 'Sign in to Workspace →'}
+              {loading ? 'Verifying…' : (requires2FA ? 'Verify Code & Sign In →' : 'Sign in to Workspace →')}
             </button>
           </form>
         )}

@@ -71,7 +71,50 @@ export function SystemMapPanel({ telemetryData, isMockMode = false, onInspectNod
     </div>
   );
 }
+import AdminAdvancedDashboard from './AdminAdvancedDashboard.jsx';
+
 export default function AdminPanels(props) {
-  return <SystemMapPanel {...props} />;
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'system_map'
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-white/10">
+        <div>
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Shield className="w-4 h-4 text-blue-400" />
+            Helpotron Platform Admin Control Center
+          </h2>
+          <p className="text-[11px] text-slate-400">
+            Manage user subscription plans, grant credits, inspect live node telemetry, and handle direct messages.
+          </p>
+        </div>
+        <div className="flex gap-1.5 bg-slate-950 p-1 rounded-xl border border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveTab('users')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+              activeTab === 'users' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+            Users &amp; Credits Management
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('system_map')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+              activeTab === 'system_map' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+            System Map &amp; Nodes
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'users' && <AdminAdvancedDashboard userId={props.userId} />}
+      {activeTab === 'system_map' && <SystemMapPanel {...props} />}
+    </div>
+  );
 }
 
