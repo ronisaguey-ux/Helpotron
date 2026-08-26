@@ -152,7 +152,7 @@ export const api = {
   me: () => request('/api/me', { method: 'GET' }),
   signup: (public_id, password) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password }) }),
   adminCheck: () => request('/api/admin/check', { method: 'GET' }),
-  setup2FA: (method = 'totp') => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method }) }),
+  setup2FA: (method = 'totp', phone = null) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method, phone_number: phone }) }),
   verifySetup2FA: (method, code, secret) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret }) }),
   sendChallenge2FA: (method) => request('/api/auth/2fa/send-challenge', { method: 'POST', body: JSON.stringify({ method }) }),
   disable2FA: (code) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
