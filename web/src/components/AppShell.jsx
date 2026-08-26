@@ -12,7 +12,7 @@ import { applyFontScale } from './SettingsApp.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
-  BarChart3, CreditCard, Shield,
+  BarChart3, CreditCard, Shield, Puzzle,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import DemoModeToggle from './DemoModeToggle.jsx';
@@ -29,6 +29,7 @@ const NAV_TREE = (isAdmin) => [
     items: [
       { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard },
       { key: 'activity', label: 'Activity', Icon: Activity },
+      { key: 'extension', label: 'Extension', Icon: Puzzle },
     ],
   },
   {
