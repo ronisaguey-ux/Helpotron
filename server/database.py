@@ -19,7 +19,7 @@ except (ImportError, ValueError):
     from server.config import config
 
 
-_connect_args = {"check_same_thread": False} if config.database_url.startswith("sqlite") else {}
+_connect_args = {"check_same_thread": False, "timeout": 30.0} if config.database_url.startswith("sqlite") else {}
 engine = create_engine(
     config.database_url,
     connect_args=_connect_args,

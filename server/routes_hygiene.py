@@ -6,21 +6,24 @@ marks — invisible Unicode, bidi/tag chars, C2PA/EXIF/XMP metadata — from fil
 the user owns, before they are exported or shared. Stdlib-only external
 dependency (httpx is already used across the server).
 
-Endpoints (all authenticated by the router's X-Public-ID auth, same as the
-rest of the user API):
+Endpoints (authenticated via get_current_user session/Bearer):
   POST /api/hygiene/inspect — multipart file -> findings report JSON
   POST /api/hygiene/clean   — multipart file -> cleaned file bytes (+ X-Hygiene-Report)
 """
 import base64
 import json
+import os
 
 import httpx
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import Response
+
+from .database import User
+from .security import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="/api/hygiene", tags=["hygiene"])
 
-SERVICE_URL = "http://127.0.0.1:8765"
+SERVICE_URL = os.getenv("HYGIENE_SERVICE_URL", "http://127.0.0.1:8765")
 
 
 def _service_health() -> dict:
@@ -32,7 +35,7 @@ def _service_health() -> dict:
 
 
 @router.get("/status")
-async def status():
+async def status(current_user: User | None = Depends(get_current_user_optional)):
     return _service_health()
 
 
@@ -51,13 +54,13 @@ async def _forward(file: UploadFile, endpoint: str) -> dict:
 
 
 @router.post("/inspect")
-async def inspect(file: UploadFile):
+async def inspect(file: UploadFile, current_user: User = Depends(get_current_user)):
     """Reporting only: which provenance marks were found (no rewrite)."""
     return await _forward(file, "/inspect")
 
 
 @router.post("/clean")
-async def clean(file: UploadFile):
+async def clean(file: UploadFile, current_user: User = Depends(get_current_user)):
     """Returns the cleaned file with the same media type, plus an
     X-Hygiene-Report header with the cleanup summary."""
     res = await _forward(file, "/clean")

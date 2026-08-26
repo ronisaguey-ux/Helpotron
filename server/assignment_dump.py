@@ -220,7 +220,8 @@ class AssignmentDumpManager:
     ) -> UniversalDumpItem:
         """Processes file upload, extracts content, and executes Overlord routing."""
         category = AssignmentDumpManager.detect_file_category(filename)
-        safe_name = f"{uuid.uuid4().hex[:8]}_{filename}"
+        clean_filename = os.path.basename(filename).replace('..', '').replace('/', '').replace('\\', '')
+        safe_name = f"{uuid.uuid4().hex}.{clean_filename.rsplit('.', 1)[-1] if '.' in clean_filename else 'bin'}"
         file_path = str(DUMP_DIR / safe_name)
         with open(file_path, "wb") as f:
             f.write(content)

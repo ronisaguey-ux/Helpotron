@@ -290,7 +290,7 @@ async def call_llm(
             
         return data["choices"][0]["message"]["content"]
 
-def extract_json(content: str) -> Dict[str, Any]:
+def extract_json(content: str) -> Any:
     if not content or not content.strip():
         return {}
     content = content.strip()
@@ -301,11 +301,18 @@ def extract_json(content: str) -> Dict[str, Any]:
     try:
         return json.loads(content)
     except Exception:
-        start = content.find("{")
-        end = content.rfind("}")
-        if start != -1 and end != -1:
+        start_obj = content.find("{")
+        end_obj = content.rfind("}")
+        start_arr = content.find("[")
+        end_arr = content.rfind("]")
+        if start_arr != -1 and (start_obj == -1 or start_arr < start_obj) and end_arr != -1:
             try:
-                return json.loads(content[start:end+1])
+                return json.loads(content[start_arr:end_arr+1])
+            except Exception:
+                pass
+        if start_obj != -1 and end_obj != -1:
+            try:
+                return json.loads(content[start_obj:end_obj+1])
             except Exception:
                 pass
         return {}

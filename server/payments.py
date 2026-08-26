@@ -159,29 +159,31 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     discount_factor = 1.0 - (discount_pct / 100.0)
     credits_added = round((amount_cents / 100.0) * discount_factor, 2)
 
+    status = "captured" if provider == "stripe" else "pending"
     payment = Payment(
         user_id=user.id,
         provider=provider,
         amount_cents=amount_cents,
-        status="captured" if provider == "stripe" else "manual",
+        status=status,
         provider_ref=f"{provider}_{user.id}_{amount_cents}",
     )
     db.add(payment)
     db.flush()
 
-    user.credits += credits_added
-    tx = CreditTransaction(
-        user_id=user.id,
-        delta=credits_added,
-        reason=f"payment:{provider}:${amount_cents/100:.2f} (discount: {discount_pct}%)"
-    )
-    db.add(tx)
+    if status == "captured":
+        user.credits += credits_added
+        tx = CreditTransaction(
+            user_id=user.id,
+            delta=credits_added,
+            reason=f"payment:{provider}:${amount_cents/100:.2f} (discount: {discount_pct}%)"
+        )
+        db.add(tx)
 
     if discount_pct > 0:
         apply_discount(user, db)
 
     db.commit()
-    return {"id": payment.id, "status": payment.status, "credits_added": credits_added}
+    return {"id": payment.id, "status": payment.status, "credits_added": credits_added if status == "captured" else 0}
 
 
 def refund_unused(db: Session, user: User, amount_cents: int) -> dict:

@@ -28,10 +28,10 @@ try:
     from .user_settings_service import user_settings_service
     from .agent_session import manager as agent_manager
     from .config import config
-    from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
+    from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
     from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user
     from .admin import require_admin, ResetPasswordRequest
     from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 except (ImportError, ValueError):
@@ -39,10 +39,10 @@ except (ImportError, ValueError):
     from server.user_settings_service import user_settings_service
     from server.agent_session import manager as agent_manager
     from server.config import config
-    from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db
+    from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
     from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from server.draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter
+    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user
     from server.admin import require_admin, ResetPasswordRequest
     from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 
@@ -690,8 +690,8 @@ def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_
 # ─── assignments (from extension) ──────────────────────────────────────────
 
 @app.post("/api/assignments")
-def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, body.public_id)
+def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
     assignment = None
     if body.canvas_id:
         assignment = db.query(Assignment).filter_by(user_id=user.id, canvas_id=body.canvas_id).first()
@@ -708,9 +708,10 @@ def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db)):
 
 
 @app.get("/api/status/{public_id}")
-def status(public_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
-    db.commit()  # persist freshly created user
+def status(public_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
+    user = current_user
     out = []
     for a in db.query(Assignment).filter_by(user_id=user.id).order_by(Assignment.id.desc()).limit(50):
         out.append({
@@ -834,13 +835,15 @@ async def generate_stream(kind: str, body: GenerateIn, db: Session = Depends(get
 
         async def run() -> None:
             try:
+                target_user = db.query(User).filter(User.id == user.id).first() or user
                 material = await _generate(
-                    db, user, kind, transcript_text, body.assignment_prompt,
+                    db, target_user, kind, transcript_text, body.assignment_prompt,
                     body.reading_level, body.assignment_id, transcript_id,
                     on_progress=on_progress, count=body.count)
                 db.commit()
                 await q.put(_sse("done", material=_material_payload(material)))
             except HTTPException as e:
+                db.rollback()
                 await q.put(_sse("error", status=e.status_code, detail=e.detail))
             except Exception as e:  # noqa: BLE001 — stream carries the error in-band
                 db.rollback()
@@ -960,23 +963,26 @@ def dashboard_query(
 
 
 @app.get("/api/dashboard/{public_id}")
-def dashboard(public_id: str, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
-    db.commit()
+def dashboard(public_id: str, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
+    user = current_user
     return _build_dashboard_payload(user, db, limit=limit, offset=offset)
 
 
 @app.get("/api/credits/{public_id}")
-def credits_balance(public_id: str, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
+def credits_balance(public_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
+    user = current_user
     return {"plan": user.plan, "credits": credits.get_balance(user)}
 
 
 # ─── payments / discounts ──────────────────────────────────────────────────
 
 @app.post("/api/payments")
-def pay(body: PaymentIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, body.public_id)
+def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
         payment = process_payment(db, user, body.provider, body.amount_cents)
     except ValueError as e:
@@ -992,9 +998,9 @@ class CheckoutIn(BaseModel):
 
 
 @app.post("/api/checkout")
-def checkout(body: CheckoutIn, db: Session = Depends(get_db)):
+def checkout(body: CheckoutIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a Stripe Checkout session for a subscription."""
-    user = get_or_create_user(db, body.public_id)
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
         result = create_checkout_session(db, user, body.plan, body.is_annual)
     except ValueError as e:
@@ -1015,19 +1021,22 @@ async def stripe_webhook(request: Request):
 
 
 @app.post("/api/refund")
-def refund(public_id: str, payment_id: int, unused_fraction: float = 1.0, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
-    payment = db.get(credits.Payment, payment_id)
+def refund(public_id: str, payment_id: int, unused_fraction: float = 1.0, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
+    payment = db.get(Payment, payment_id)
     if payment is None or payment.user_id != user.id:
         raise HTTPException(404, "payment not found")
-    refunded = refund_unused(db, payment, unused_fraction)
+    amount_cents = int(payment.amount_cents * unused_fraction)
+    refunded = refund_unused(db, user, amount_cents)
     db.commit()
     return {"refunded_credits": refunded}
 
 
 @app.post("/api/discount")
-def discount(body: DiscountIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, body.public_id)
+def discount(body: DiscountIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
     result = credits.record_data_submission(db, user, body.payload)
     db.commit()
     return result
@@ -1173,10 +1182,10 @@ async def generate_draft(body: DraftGenerateIn, db: Session = Depends(get_db)):
 
 
 @app.get("/api/draft/{draft_id}")
-def get_draft_status(draft_id: int, db: Session = Depends(get_db)):
+def get_draft_status(draft_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Check status of a draft generation."""
     draft = db.get(Draft, draft_id)
-    if not draft:
+    if not draft or draft.user_id != current_user.id:
         raise HTTPException(404, "Draft not found")
     # We need to return the draft data
     return {
@@ -1196,13 +1205,17 @@ def get_draft_status(draft_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/draft/{draft_id}/retry")
-def retry_draft(draft_id: int, db: Session = Depends(get_db)):
+def retry_draft(draft_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Manually retry a risky draft (student asks for further instruction)."""
     draft = db.get(Draft, draft_id)
-    if not draft:
+    if not draft or draft.user_id != current_user.id:
         raise HTTPException(404, "Draft not found")
     if draft.status != "risky":
         raise HTTPException(400, "Only risky drafts can be retried")
+    if current_user.credits < DRAFT_COST:
+        raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
+    
+    current_user.credits -= DRAFT_COST
     # Reset status and retries
     draft.status = "pending"
     draft.retries_left = MAX_RETRIES
