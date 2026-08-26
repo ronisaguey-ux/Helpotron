@@ -46,7 +46,7 @@ class AssignmentDumpManager:
         return "text"
 
     @staticmethod
-    async def extract_text_from_file(file_path: str, file_category: str, user_id: str = "RoniDev") -> Tuple[str, str]:
+    async def extract_text_from_file(file_path: str, file_category: str, user_id: Optional[str] = None) -> Tuple[str, str]:
         """Extracts text, Markdown transcript, or OCR text based on file type."""
         ext = os.path.splitext(file_path)[1].lower()
 

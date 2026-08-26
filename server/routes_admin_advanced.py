@@ -313,7 +313,7 @@ async def get_user_budget_endpoint(user_id: Optional[str] = None, request: Reque
     from .security import is_admin_user
     from sqlalchemy import func
     from datetime import datetime, timezone
-    uid = user_id or "RoniDev"
+    uid = user_id or getattr(config, "admin_public_id", "default_user")
     user = db.query(User).filter(User.public_id == uid).first()
     budget = getattr(user, "monthly_budget_usd", 50.0) if user else 50.0
     multiplier = getattr(user, "token_cost_multiplier", 1.0) if user else 1.0
@@ -352,7 +352,7 @@ async def get_user_budget_endpoint(user_id: Optional[str] = None, request: Reque
 async def update_user_budget_endpoint(payload: UserBudgetPayload, user_id: Optional[str] = None, db: Session = Depends(get_db)):
     """User endpoint: Updates monthly budget and effort level."""
     from .database import User
-    uid = user_id or "RoniDev"
+    uid = user_id or getattr(config, "admin_public_id", "default_user")
     user = db.query(User).filter(User.public_id == uid).first()
     if user:
         user.monthly_budget_usd = payload.monthly_budget_usd
@@ -367,7 +367,7 @@ async def estimate_cost_endpoint(payload: CostEstimatePayload, user_id: Optional
     """Pre-flight cost calculator for tasks."""
     from .model_tiering import model_tiering_engine
     from .database import User
-    uid = user_id or "RoniDev"
+    uid = user_id or getattr(config, "admin_public_id", "default_user")
     user = db.query(User).filter(User.public_id == uid).first()
     mult = getattr(user, "token_cost_multiplier", 1.0) if user else 1.0
 

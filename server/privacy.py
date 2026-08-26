@@ -93,12 +93,3 @@ def delete_user_account_and_data(
         user_id, public_id, {k: v for k, v in counts.items() if v},
     )
     return {"status": "deleted", "public_id": public_id, "rows_deleted": counts}
-
-
-@router.delete("/user/account")
-async def delete_account(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Erasure endpoint — authenticated user deletes their own account."""
-    return delete_user_account_and_data(current_user, db)
