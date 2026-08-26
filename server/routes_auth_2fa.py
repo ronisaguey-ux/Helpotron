@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 
 from .config import config
 from .database import User, Payment, get_db
-from .security import verify_password, hash_password
+from .security import verify_password, hash_password, get_current_user
 from .auth_2fa import code_store, email_service, sms_service, totp_service
 from .routes_features import get_current_authenticated_user
+import asyncio
 
 router = APIRouter(prefix="/api/auth", tags=["auth_2fa"])
 
@@ -79,7 +80,7 @@ class PurchaseVerifyRequest(BaseModel):
 async def send_email_verification(payload: EmailVerificationRequest):
     """Generates and sends a 6-digit email verification code (15-min TTL)."""
     code = code_store.generate_code(payload.email, purpose="email_verification")
-    sent = email_service.send_verification_code(payload.email, code, purpose_label="Email Verification")
+    sent = await asyncio.to_thread(email_service.send_verification_code, payload.email, code, purpose_label="Email Verification")
     if not sent:
         raise HTTPException(500, "Failed sending verification email. Please check SMTP configuration.")
     return {"status": "success", "message": "Verification code sent to your email (expires in 15 minutes)."}
@@ -127,7 +128,7 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
     elif method == "email":
         target_email = payload.email or payload.user_id
         code = code_store.generate_code(target_email, purpose="2fa_setup")
-        email_service.send_verification_code(target_email, code, purpose_label="2FA Setup")
+        await asyncio.to_thread(email_service.send_verification_code, target_email, code, purpose_label="2FA Setup")
         return {
             "status": "success",
             "method": "email",
@@ -138,7 +139,7 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
         if not payload.phone_number:
             raise HTTPException(400, "Phone number is required for SMS 2FA setup.")
         code = code_store.generate_code(payload.user_id, purpose="2fa_setup")
-        await sms_service.send_sms_code(payload.phone_number, code)
+        await asyncio.to_thread(sms_service.send_sms_code, payload.phone_number, code)
         return {
             "status": "success",
             "method": "sms",
@@ -188,7 +189,7 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
 
     if method == "email":
         code = code_store.generate_code(payload.user_id, purpose="2fa_challenge")
-        email_service.send_verification_code(payload.user_id, code, purpose_label="2FA Login")
+        await asyncio.to_thread(email_service.send_verification_code, payload.user_id, code, purpose_label="2FA Login")
         return {"status": "success", "message": "2FA verification code sent to your email."}
 
     elif method == "sms":
@@ -197,7 +198,7 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
         if not phone:
             raise HTTPException(400, "No phone number found on account for SMS 2FA.")
         code = code_store.generate_code(payload.user_id, purpose="2fa_challenge")
-        await sms_service.send_sms_code(phone, code)
+        await asyncio.to_thread(sms_service.send_sms_code, phone, code)
         return {"status": "success", "message": f"2FA code sent via SMS to {phone}."}
 
     elif method == "totp":
@@ -231,13 +232,43 @@ async def verify_two_factor_challenge(payload: TwoFactorVerifyChallengeRequest, 
 
 
 @router.post("/2fa/disable")
-async def disable_two_factor(payload: TwoFactorDisableRequest, db: Session = Depends(get_db)):
+async def disable_two_factor(
+    payload: TwoFactorDisableRequest,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db)
+):
     """Disables 2FA on the user's account."""
-    user = db.query(User).filter(User.public_id == payload.user_id).first()
+    user = current_user
     if not user:
         raise HTTPException(404, "User not found.")
 
     current_settings = dict(user.settings or {})
+    if not current_settings.get("2fa_enabled"):
+        raise HTTPException(400, "2FA is not enabled.")
+
+    method = current_settings.get("2fa_method", "").lower()
+    
+    if method == "totp":
+        secret = current_settings.get("2fa_totp_secret")
+        if not secret:
+            raise HTTPException(400, "TOTP secret missing.")
+        if not totp_service.verify_code(secret, payload.code):
+            raise HTTPException(400, "Invalid 2FA code.")
+    elif method == "email":
+        target = user.public_id
+        valid, msg = code_store.verify_code(target, payload.code, purpose="2fa_challenge")
+        if not valid:
+            raise HTTPException(400, "Invalid 2FA code.")
+    elif method == "sms":
+        target = current_settings.get("phone_number")
+        if not target:
+            raise HTTPException(400, "Phone number missing.")
+        valid, msg = code_store.verify_code(user.public_id, payload.code, purpose="2fa_challenge")
+        if not valid:
+            raise HTTPException(400, "Invalid 2FA code.")
+    else:
+        raise HTTPException(400, "Unknown 2FA method.")
+
     current_settings["2fa_enabled"] = False
     current_settings.pop("2fa_method", None)
     current_settings.pop("2fa_totp_secret", None)
@@ -250,36 +281,40 @@ async def disable_two_factor(payload: TwoFactorDisableRequest, db: Session = Dep
 # ─── Mandatory 2FA Purchase Authentication Routes ─────────────────────────────
 
 @router.post("/2fa/purchase-challenge")
-async def send_purchase_challenge(payload: PurchaseChallengeRequest, db: Session = Depends(get_db)):
+async def send_purchase_challenge(
+    payload: PurchaseChallengeRequest,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db)
+):
     """Sends a mandatory 6-digit 2FA purchase verification code via Email or SMS."""
     method = payload.method.lower()
-    target = payload.destination or payload.public_id
-
-    if not target or not target.strip():
-        raise HTTPException(400, "Destination email or phone number is required.")
-
-    code = code_store.generate_code(target.strip(), purpose="purchase_verification")
 
     if method == "email":
-        sent = email_service.send_verification_code(target.strip(), code, purpose_label="Purchase Authorization")
+        target = current_user.public_id
+        code = code_store.generate_code(target, purpose="purchase_verification")
+        sent = await asyncio.to_thread(email_service.send_verification_code, target, code, purpose_label="Purchase Authorization")
         if not sent:
             raise HTTPException(500, "Failed to send purchase verification email.")
         return {
             "status": "success",
             "method": "email",
-            "destination": target.strip(),
-            "message": f"6-digit purchase verification code sent to {target.strip()}.",
+            "destination": target,
+            "message": f"6-digit purchase verification code sent to {target}.",
         }
 
     elif method == "sms":
-        sent = await sms_service.send_sms_code(target.strip(), code)
+        target = (current_user.settings or {}).get("phone_number")
+        if not target:
+            raise HTTPException(400, "No phone number found on account for SMS verification.")
+        code = code_store.generate_code(target, purpose="purchase_verification")
+        sent = await asyncio.to_thread(sms_service.send_sms_code, target, code)
         if not sent:
             raise HTTPException(500, "Failed to send purchase verification SMS.")
         return {
             "status": "success",
             "method": "sms",
-            "destination": target.strip(),
-            "message": f"6-digit purchase verification code sent via SMS to {target.strip()}.",
+            "destination": target,
+            "message": f"6-digit purchase verification code sent via SMS to {target}.",
         }
 
     else:
@@ -287,76 +322,51 @@ async def send_purchase_challenge(payload: PurchaseChallengeRequest, db: Session
 
 
 @router.post("/2fa/purchase-verify")
-async def verify_purchase_challenge(payload: PurchaseVerifyRequest, db: Session = Depends(get_db)):
-    """Validates account password + 6-digit Email/SMS 2FA code, and finalizes purchase."""
+async def verify_purchase_challenge(
+    payload: PurchaseVerifyRequest,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db)
+):
+    """Validates account password + 6-digit Email/SMS 2FA code."""
     method = payload.method.lower()
-    target = (payload.destination or payload.public_id).strip()
 
     if not payload.password or not payload.password.strip():
         raise HTTPException(400, "Account password is required for purchase authorization.")
 
-    user = db.query(User).filter(User.public_id == payload.public_id).first()
+    user = current_user
     if not user:
-        # Create user if new
-        user = User(public_id=payload.public_id, plan="free", credits=1000)
+        raise HTTPException(404, "User not found. Create an account first.")
+
+    # Verify password if user has password set
+    if user.password_hash and user.password_salt:
+        if not verify_password(payload.password, user.password_hash, user.password_salt):
+            raise HTTPException(401, "Invalid account password.")
+    else:
+        # Set initial password for user
         h, s = hash_password(payload.password)
         user.password_hash = h
         user.password_salt = s
-        db.add(user)
-        db.flush()
-    else:
-        # Verify password if user has password set
-        if user.password_hash and user.password_salt:
-            if not verify_password(payload.password, user.password_hash, user.password_salt):
-                raise HTTPException(401, "Invalid account password.")
-        else:
-            # Set initial password for user
-            h, s = hash_password(payload.password)
-            user.password_hash = h
-            user.password_salt = s
 
     # Verify 6-digit 2FA code
+    if method == "email":
+        target = user.public_id
+    elif method == "sms":
+        target = (user.settings or {}).get("phone_number")
+        if not target:
+            raise HTTPException(400, "No phone number found on account for SMS verification.")
+    else:
+        raise HTTPException(400, "Unsupported purchase 2FA method.")
+
     valid, msg = code_store.verify_code(target, payload.code, purpose="purchase_verification")
     if not valid:
         raise HTTPException(400, msg)
 
-    # Process Plan & Credits Grant
-    plan = payload.plan.lower()
-    credits_to_add = 0
-    if plan == "elite":
-        user.plan = "elite"
-        credits_to_add = 4000
-    elif plan == "pro":
-        user.plan = "pro"
-        credits_to_add = 2000
-    elif plan == "basic":
-        user.plan = "basic"
-        credits_to_add = 1000
-    else:
-        credits_to_add = max(100, (payload.amount_cents or 500) * 10)
-
-    user.credits = (user.credits or 0) + credits_to_add
-
-    # Create Payment record
-    payment_rec = Payment(
-        user_id=user.id,
-        provider=f"2fa_{method}",
-        amount_cents=payload.amount_cents or 0,
-        status="captured",
-        provider_ref=f"2fa_{code_store.generate_code(user.public_id, purpose='receipt')}",
-    )
-    db.add(payment_rec)
     db.commit()
-    db.refresh(user)
 
     return {
         "status": "success",
         "verified": True,
-        "new_plan": user.plan,
-        "new_credits": user.credits,
-        "credits_added": credits_to_add,
-        "payment_id": payment_rec.id,
-        "message": f"✅ 2FA Verification successful! Plan upgraded to {user.plan.upper()} with +{credits_to_add} Credits.",
+        "message": "✅ 2FA Verification successful!",
     }
 
 
