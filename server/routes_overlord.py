@@ -392,32 +392,14 @@ async def delete_agent_memory(entry_id: str, request: Request, db: Session = Dep
     return {"status": "success", "entries": load_memory(user.public_id)}
 
 
-@router.get("/agent/files")
-async def get_agent_files(request: Request, db: Session = Depends(get_db)):
-    """Files loaded into the user's personal agent (skill/rule/automation/personality)."""
-    user = _get_current_user(request, db)
-    return {"status": "success", "files": list_agent_files(user.id)}
-
-
-@router.post("/agent/files/upload")
-async def upload_agent_file(
+@router.post("/agent/upload-file")
+async def upload_agent_file_endpoint(
+    request: Request,
     file: UploadFile = File(...),
     kind: Optional[str] = Form(None),
-    user_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload a skill / rule / automation / personality file into the agent.
-
-    Follows the existing dump-upload convention: a user may identify via the
-    multipart field when no Bearer token is present (demo/extension flows).
-    """
-    uid = user_id or "RoniDev"
-    user = db.query(User).filter(User.public_id == uid).first()
-    if not user:
-        user = User(public_id=uid, plan="basic", credits=50.0)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    user = _get_current_user(request, db)
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
@@ -639,7 +621,8 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     """One agent, any request: the LLM picks the action, the pipeline executes it."""
     user = _get_current_user(request, db)
     settings = dict(user.settings or {})
-    is_admin = bool(getattr(user, "is_admin", False)) or user.public_id in ("RoniDev", "admin")
+    from .security import is_admin_user
+    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
 
     # Record user message
     user_msg = overlord_agent.add_chat_message(payload.assignment_id, sender="user", text=payload.text)

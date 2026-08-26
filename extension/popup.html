@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Helpotron Universal Automator</title>
+  <title>Helpotron Academic OS Companion</title>
   <style>
     body {
       width: 320px;
@@ -123,7 +123,7 @@
 <body>
     <h2>
     <img src="icon128.jpeg" alt="" style="width: 20px; height: 20px; border-radius: 5px; object-fit: cover; box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);">
-    <span>Helpotron Automator</span>
+    <span>Helpotron Companion</span>
   </h2>
   
   <label for="tabSelect">Select Target Tab to Scrape:</label>
@@ -161,13 +161,15 @@
   </div>
 
   <details>
-    <summary>Connection Settings</summary>
+    <summary>Account &amp; Connection Settings</summary>
     <div style="margin-top: 6px;">
       <label>Server URL</label>
       <input id="server" placeholder="http://localhost:8000">
-      <label>User ID</label>
-      <input id="public_id" placeholder="RoniDev">
-      <button id="saveSettings" class="btn-secondary" style="padding: 5px;">Save Settings</button>
+      <label>Username / Public ID</label>
+      <input id="public_id" placeholder="your Helpotron username">
+      <label>Password (login to enable sync &amp; AI agent)</label>
+      <input id="password" type="password" placeholder="Account password">
+      <button id="saveSettings" class="btn-secondary" style="padding: 5px;">Log In &amp; Save</button>
     </div>
   </details>
 

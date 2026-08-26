@@ -811,8 +811,8 @@ print(f"Active files: {os.listdir('.')}")
             }
 
         elif action_type == "admin_lookup_user":
-            admin_id = getattr(config, "admin_public_id", "RoniDev")
-            if not getattr(user, "is_admin", False) and user.public_id not in (admin_id, "admin"):
+            admin_id = getattr(config, "admin_public_id", None)
+            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()
@@ -829,8 +829,8 @@ print(f"Active files: {os.listdir('.')}")
                 _db.close()
 
         elif action_type == "admin_adjust_credits":
-            admin_id = getattr(config, "admin_public_id", "RoniDev")
-            if not getattr(user, "is_admin", False) and user.public_id not in (admin_id, "admin"):
+            admin_id = getattr(config, "admin_public_id", None)
+            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()
@@ -846,8 +846,8 @@ print(f"Active files: {os.listdir('.')}")
                 _db.close()
 
         elif action_type == "admin_system_status":
-            admin_id = getattr(config, "admin_public_id", "RoniDev")
-            if not getattr(user, "is_admin", False) and user.public_id not in (admin_id, "admin"):
+            admin_id = getattr(config, "admin_public_id", None)
+            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()

@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+from starlette.websockets import WebSocket
 
 try:
     from .config import config
@@ -44,6 +45,7 @@ KNOWN_INSECURE_SECRETS = {
     'dev-insecure-secret-key-change-in-prod-32bytesmin',
     'helpotron_jwt_secret_dev_key_32chars',
     'helpotron_super_secret_jwt_signing_key_min_32_chars',
+    'helpotron_super_secret_jwt_signing_key_for_docker_local_32chars',
     'helpotron_super_secret_session_key_min_32_characters',
     'secret',
     'changeme',
@@ -329,11 +331,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # ─── user authentication ──────────────────────────────────────────────────
 
-async def get_current_user(request: Request):
-    """Authenticate via session cookie or Bearer JWT. Hardened:
-    the X-Public-ID header is never an identity."""
+async def get_current_user(request: Request = None, websocket: WebSocket = None):
+    """Authenticate via session cookie, Bearer JWT, or WebSocket token param.
+    Hardened: the X-Public-ID header is never an identity."""
+    conn = request or websocket
+    if conn is None:
+        raise HTTPException(401, "Not authenticated: valid session token required")
     from .database import SessionLocal, User
-    token = request.cookies.get(SESSION_COOKIE_NAME)
+    token = conn.cookies.get(SESSION_COOKIE_NAME)
     if token:
         session = SessionStore.get_session(token)
         if session:
@@ -346,9 +351,22 @@ async def get_current_user(request: Request):
             finally:
                 db.close()
 
-    auth_header = request.headers.get("Authorization")
+    auth_header = conn.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         payload = verify_jwt_token(auth_header.split(" ", 1)[1])
+        if payload and 'sub' in payload:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == payload['sub']).first()
+                if user:
+                    return user
+            finally:
+                db.close()
+
+    query_params = getattr(conn, "query_params", {})
+    query_token = query_params.get("token")
+    if query_token:
+        payload = verify_jwt_token(query_token)
         if payload and 'sub' in payload:
             db = SessionLocal()
             try:
@@ -361,9 +379,9 @@ async def get_current_user(request: Request):
     raise HTTPException(401, "Not authenticated: valid session token required")
 
 
-async def get_current_user_optional(request: Request):
+async def get_current_user_optional(request: Request = None, websocket: WebSocket = None):
     try:
-        return await get_current_user(request)
+        return await get_current_user(request, websocket)
     except Exception:
         return None
 

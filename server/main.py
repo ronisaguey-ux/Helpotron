@@ -31,7 +31,7 @@ try:
     from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
     from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user
+    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user, create_jwt_token
     from .admin import require_admin, ResetPasswordRequest
     from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 except (ImportError, ValueError):
@@ -42,7 +42,7 @@ except (ImportError, ValueError):
     from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
     from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from server.draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user
+    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user, create_jwt_token
     from server.admin import require_admin, ResetPasswordRequest
     from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
 
@@ -518,7 +518,14 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
     # Set CSRF cookie (readable by JS)
     csrf_token = set_csrf_cookie(response)
     
-    return {"message": "Logged in", "public_id": user.public_id, "plan": user.plan, "credits": user.credits, "csrf_token": csrf_token}
+    return {
+        "message": "Logged in",
+        "public_id": user.public_id,
+        "plan": user.plan,
+        "credits": user.credits,
+        "csrf_token": csrf_token,
+        "token": create_jwt_token(user.id),
+    }
 
 
 @app.post("/api/signup")
@@ -570,7 +577,13 @@ def me(request: Request, db: Session = Depends(get_db)):
         if session:
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
-                return {"public_id": user.public_id, "plan": user.plan, "credits": user.credits, "authenticated": True}
+                return {
+                    "public_id": user.public_id,
+                    "plan": user.plan,
+                    "credits": user.credits,
+                    "authenticated": True,
+                    "is_admin": is_admin_user(user),
+                }
 
     raise HTTPException(401, "Not authenticated")
 
@@ -1035,20 +1048,6 @@ async def stripe_webhook(request: Request):
     return result
 
 
-@app.post("/api/refund")
-def refund(public_id: str, payment_id: int, unused_fraction: float = 1.0, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.public_id != public_id:
-        raise HTTPException(403, "Forbidden")
-    user = db.query(User).filter(User.id == current_user.id).first() or current_user
-    payment = db.get(Payment, payment_id)
-    if payment is None or payment.user_id != user.id:
-        raise HTTPException(404, "payment not found")
-    amount_cents = int(payment.amount_cents * unused_fraction)
-    refunded = refund_unused(db, user, amount_cents)
-    db.commit()
-    return {"refunded_credits": refunded}
-
-
 @app.post("/api/discount")
 def discount(body: DiscountIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
@@ -1125,7 +1124,13 @@ def agent_status(session_id: str, current_user: User = Depends(get_current_user)
 
 
 @app.websocket("/ws/agent/{session_id}")
-async def agent_ws(websocket: WebSocket, session_id: str, current_user: User = Depends(get_current_user)):
+async def agent_ws(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    try:
+        current_user = await get_current_user(websocket=websocket)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
     session = agent_manager.get(session_id)
     if not session or session.user_public_id != current_user.public_id:
         await websocket.close(code=1008)
@@ -1318,43 +1323,22 @@ async def export_gdocs_route(assignment_id: int, payload: dict, current_user: Us
         raise HTTPException(500, f"Google Docs export failed: {e}")
 
 
-@app.get("/api/extension/download")
-async def download_extension_archive():
-    """Generates and serves downloadable zip package for Chrome/Canvas companion extension."""
-    import io
-    import os
-    import zipfile
-    from fastapi.responses import Response
-
-    ext_dir = Path(__file__).resolve().parent.parent / "extension"
-    if not ext_dir.exists():
-        raise HTTPException(404, "Extension directory not found")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in os.walk(str(ext_dir)):
-            for file in files:
-                full_path = Path(root) / file
-                rel_path = full_path.relative_to(ext_dir)
-                zf.write(str(full_path), arcname=str(rel_path))
-    buf.seek(0)
-    return Response(
-        content=buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="helpotron-extension.zip"'},
-    )
-
-
 # ─── Unified Safe Localhost / Production SPA Mount ───────────────────────────
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-_WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_WEB_DIST = _REPO_ROOT / "web" / "dist"
+
+_UPLOADS_DIR = _REPO_ROOT / "uploads"
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+(_REPO_ROOT / "exports").mkdir(parents=True, exist_ok=True)
+(_REPO_ROOT / "data_lake").mkdir(parents=True, exist_ok=True)
 
 # User uploads (avatars, agent files) served statically — mounted before the
-# SPA catch-all below so /uploads/* resolves to files, not index.html. (08-22)
-app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
+# SPA catch-all below so /uploads/* resolves to files, not index.html.
+app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
 
 if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
     if (_WEB_DIST / "assets").exists():
