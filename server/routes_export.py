@@ -143,12 +143,13 @@ def download_export(filename: str, user: User = Depends(get_current_user)):
     if "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid filename parameter.")
         
-    safe_path = (EXPORT_DIR / filename).resolve()
+    user_root = (EXPORT_DIR / user.public_id).resolve()
+    safe_path = (user_root / filename).resolve()
     try:
-        if not safe_path.is_relative_to(EXPORT_DIR) or not safe_path.exists() or not safe_path.is_file():
+        if not safe_path.is_relative_to(user_root) or not safe_path.exists() or not safe_path.is_file():
             raise HTTPException(status_code=404, detail="File not found or access denied.")
     except (ValueError, AttributeError):
-        if not str(safe_path).startswith(str(EXPORT_DIR)) or not safe_path.exists() or not safe_path.is_file():
+        if not str(safe_path).startswith(str(user_root)) or not safe_path.exists() or not safe_path.is_file():
             raise HTTPException(status_code=404, detail="File not found or access denied.")
             
     return FileResponse(path=safe_path, filename=filename, media_type="application/octet-stream")

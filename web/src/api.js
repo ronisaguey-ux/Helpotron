@@ -377,7 +377,7 @@ export const api = {
   checkExtensionUpdate: (currentVersion) => request('/api/extension/check-update', { method: 'POST', body: JSON.stringify({ current_version: currentVersion }) }),
 
   // FERPA / GDPR Self-Service Account Deletion
-  deleteAccount: () => request('/api/features/account/delete', { method: 'POST' }),
+  deleteAccount: () => request('/api/user/account', { method: 'DELETE' }),
 };
 
 export default api;

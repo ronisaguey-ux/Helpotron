@@ -41,7 +41,8 @@ def export_summary_text(summary: str) -> str:
     return summary
 
 
-ALLOWED_EXPORT_DIR = "/tmp/helpotron_exports"
+from .config import BASE_DIR
+ALLOWED_EXPORT_DIR = str(BASE_DIR / "exports")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -55,11 +56,12 @@ async def generate_export_bundle(assignment_id: int, export_format: str, user: A
     """Generates a local export file bundle for the given assignment strictly within allowed export directory."""
     from pathlib import Path
     safe_base = Path(ALLOWED_EXPORT_DIR).resolve()
-    safe_base.mkdir(parents=True, exist_ok=True)
+    user_subdir = safe_base / sanitize_filename(str(getattr(user, "public_id", "anon")))
+    user_subdir.mkdir(parents=True, exist_ok=True)
     
     clean_fmt = sanitize_filename(export_format.lower())
     target_filename = f"assignment_{int(assignment_id)}_bundle.{clean_fmt}"
-    target_path = (safe_base / target_filename).resolve()
+    target_path = (user_subdir / target_filename).resolve()
     
     # Boundary traversal assertion
     if not str(target_path).startswith(str(safe_base)):

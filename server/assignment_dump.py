@@ -25,7 +25,7 @@ from .transcription import transcribe_audio
 
 logger = logging.getLogger(__name__)
 
-DUMP_DIR = BASE_DIR.parent / "uploads" / "assignment_dump"
+DUMP_DIR = BASE_DIR / "uploads" / "assignment_dump"
 DUMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -250,6 +250,9 @@ class AssignmentDumpManager:
         # Route to Assignment
         user_assignments = db.query(Assignment).filter(Assignment.user_id == user.id).all()
         if manual_assignment_id:
+            assignment = db.query(Assignment).filter(Assignment.id == manual_assignment_id, Assignment.user_id == user.id).first()
+            if not assignment:
+                raise ValueError("Manual assignment ID does not belong to user")
             dump_item.matched_assignment_id = manual_assignment_id
             dump_item.auto_match_confidence = 1.0
             dump_item.status = "manual_routed"

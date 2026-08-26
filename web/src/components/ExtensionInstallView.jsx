@@ -9,25 +9,41 @@ export default function ExtensionInstallView() {
   const [versionData, setVersionData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const publicId = getUserId() || 'RoniDev';
   const serverUrl = getServer() || window.location.origin;
 
   useEffect(() => {
-    api.getExtensionVersion().then(setVersionData).catch(() => setVersionData({ latest_version: '2.0.0' }));
+    api.getExtensionVersion().then(setVersionData).catch(() => setVersionData({ latest_version: '2.0.1' }));
   }, []);
 
   const handleDownloadZip = () => {
     setIsDownloading(true);
     const link = document.createElement('a');
-    link.href = '/api/extension/download';
-    link.download = `helpotron-extension-v${versionData?.latest_version || '2.0.0'}.zip`;
+    link.href = `${serverUrl}/api/extension/download`;
+    link.download = `helpotron-extension-v${versionData?.latest_version || '2.0.1'}.zip`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     setTimeout(() => setIsDownloading(false), 2000);
   };
 
-  const copy = (t) => { navigator.clipboard.writeText(t); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const copy = async (t) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(t);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = t;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
 
   const Step = ({ n, children }) => (
     <li className="flex gap-3">

@@ -215,22 +215,3 @@ async def get_user_theme(request: Request, db: Session = Depends(get_db)):
     user = await _get_feature_user(request, db)
     return {"theme": get_theme(user)}
 
-
-# ─── 8. FERPA/GDPR SELF-SERVICE ACCOUNT DELETION ─────────────────────────
-
-@router.post("/account/delete")
-async def delete_user_account(request: Request, db: Session = Depends(get_db)):
-    user = await _get_feature_user(request, db)
-    from .database import Assignment, StudySet, DraftSubmission, DumpItem
-    
-    # Cascade delete all student study data
-    db.query(DraftSubmission).filter(DraftSubmission.public_id == user.public_id).delete(synchronize_session=False)
-    db.query(StudySet).filter(StudySet.user_id == user.public_id).delete(synchronize_session=False)
-    db.query(Assignment).filter(Assignment.public_id == user.public_id).delete(synchronize_session=False)
-    db.query(DumpItem).filter(DumpItem.user_id == user.public_id).delete(synchronize_session=False)
-    
-    db.delete(user)
-    db.commit()
-    
-    return {"status": "success", "message": "Account and all associated academic data permanently deleted."}
-

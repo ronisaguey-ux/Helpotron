@@ -26,7 +26,7 @@ except (ImportError, ValueError):
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = BASE_DIR.parent / "uploads"  # repo-root/uploads
+UPLOAD_DIR = BASE_DIR / "uploads"  # repo-root/uploads
 
 
 def save_upload(content: bytes, filename: str) -> str:
