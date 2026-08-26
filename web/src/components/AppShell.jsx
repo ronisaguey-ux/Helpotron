@@ -682,7 +682,7 @@ export default function AppShell({
                   {activeView === 'study' && 'Guides, flashcards, practice tests and summaries'}
                   {activeView === 'library' && 'Files, saved materials and your calendar'}
                   {activeView === 'insights' && 'Analytics, progress and recommendations'}
-                  {activeView === 'credits' && 'Balance, plans, top-ups and earnings'}
+                  {activeView === 'credits' && 'Balance, plans, top-ups and earnings — free beta, payments not available yet'}
                   {activeView === 'settings' && 'Your complete configuration workspace'}
                   {activeView === 'admin' && 'Helpotron Control Center'}
                 </p>
