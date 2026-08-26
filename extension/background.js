@@ -20,7 +20,23 @@ async function authHeaders() {
                : { 'Content-Type': 'application/json' };
 }
 
+// 08-26: an unauthenticated extension must NEVER send scraped data — it has to
+// land on the right account. Returns an {ok:false,error} refusal when the
+// popup hasn't been logged in; null = proceed.
+async function requireLoggedIn() {
+  const { public_id, token } = await chrome.storage.local.get(['public_id', 'token']);
+  if (!public_id || !token) {
+    return {
+      ok: false,
+      error: 'Not logged in — open the Helpotron extension popup, enter your Helpotron username & password in Settings, then save. Scraping is disabled until then.',
+    };
+  }
+  return null;
+}
+
 async function syncAssignments(assignment) {
+  const blocked = await requireLoggedIn();
+  if (blocked) return blocked;
   const server = await getServer();
   const public_id = await getPublicId();
   const res = await fetch(`${server}/api/assignments`, {
@@ -86,6 +102,8 @@ let agentSessionId = null;
 let targetTabId = null;
 
 async function activateAgent(chosenTabId) {
+  const blocked = await requireLoggedIn();
+  if (blocked) return blocked;
   const server = await getServer();
   const public_id = await getPublicId();
 
@@ -206,6 +224,8 @@ async function startScrape(chosenTabId) {
       };
     }
 
+    const blocked = await requireLoggedIn();
+    if (blocked) return blocked;
     const server = await getServer();
     const public_id = await getPublicId();
     const resp = await fetch(`${server}/api/assignments`, {
@@ -234,6 +254,8 @@ async function startScrape(chosenTabId) {
 
 async function ingestScrapedAssignment(assignment) {
   try {
+    const blocked = await requireLoggedIn();
+    if (blocked) return blocked;  // never upload under a missing/unverified account
     const server = await getServer();
     const public_id = await getPublicId();
     await fetch(`${server}/api/assignments`, {
