@@ -4,8 +4,9 @@
 const DEFAULT_SERVER = 'http://localhost:8000';
 
 async function getServer() {
-  const { server } = await chrome.storage.local.get('server');
-  return server || DEFAULT_SERVER;
+  const localData = await chrome.storage.local.get('server');
+  const syncData = await chrome.storage.sync.get('server');
+  return localData.server || syncData.server || DEFAULT_SERVER;
 }
 
 async function getPublicId() {

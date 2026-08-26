@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  helpotron-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PRODUCTION_MODE=true
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=helpotron
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=helpotron
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: helpotron
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: helpotron
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpotron"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"

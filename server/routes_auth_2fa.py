@@ -107,7 +107,11 @@ async def verify_email_code(payload: EmailVerificationConfirm, db: Session = Dep
 # ─── 2FA Setup Routes ─────────────────────────────────────────────────────────
 
 @router.post("/2fa/setup")
-async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends(get_db)):
+async def setup_two_factor(
+    payload: TwoFactorSetupRequest, 
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db)
+):
     """Initiates 2FA setup for TOTP, Email, or SMS."""
     if not config.enable_2fa:
         raise HTTPException(400, "2FA is currently disabled globally by administrator.")
@@ -116,7 +120,7 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
 
     if method == "totp":
         secret = totp_service.generate_secret()
-        qr_uri = totp_service.get_provisioning_uri(secret, payload.user_id)
+        qr_uri = totp_service.get_provisioning_uri(secret, current_user.public_id)
         return {
             "status": "success",
             "method": "totp",
@@ -126,7 +130,7 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
         }
 
     elif method == "email":
-        target_email = payload.email or payload.user_id
+        target_email = payload.email or current_user.public_id
         code = code_store.generate_code(target_email, purpose="2fa_setup")
         await asyncio.to_thread(email_service.send_verification_code, target_email, code, purpose_label="2FA Setup")
         return {
@@ -138,7 +142,7 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
     elif method == "sms":
         if not payload.phone_number:
             raise HTTPException(400, "Phone number is required for SMS 2FA setup.")
-        code = code_store.generate_code(payload.user_id, purpose="2fa_setup")
+        code = code_store.generate_code(current_user.public_id, purpose="2fa_setup")
         await asyncio.to_thread(sms_service.send_sms_code, payload.phone_number, code)
         return {
             "status": "success",
@@ -151,7 +155,11 @@ async def setup_two_factor(payload: TwoFactorSetupRequest, db: Session = Depends
 
 
 @router.post("/2fa/verify-setup")
-async def verify_two_factor_setup(payload: TwoFactorVerifySetupRequest, db: Session = Depends(get_db)):
+async def verify_two_factor_setup(
+    payload: TwoFactorVerifySetupRequest, 
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db)
+):
     """Verifies the initial code to confirm and activate 2FA on the user account."""
     method = payload.method.lower()
 
@@ -162,12 +170,12 @@ async def verify_two_factor_setup(payload: TwoFactorVerifySetupRequest, db: Sess
         if not valid:
             raise HTTPException(400, "Invalid TOTP verification code.")
     else:
-        valid, msg = code_store.verify_code(payload.user_id, payload.code, purpose="2fa_setup")
+        valid, msg = code_store.verify_code(current_user.public_id, payload.code, purpose="2fa_setup")
         if not valid:
             raise HTTPException(400, msg)
 
     # Activate 2FA in user settings
-    user = db.query(User).filter(User.public_id == payload.user_id).first()
+    user = db.query(User).filter(User.public_id == current_user.public_id).first()
     if user:
         current_settings = dict(user.settings or {})
         current_settings["2fa_enabled"] = True

@@ -100,10 +100,19 @@ def test_api_auth_2fa_routes():
     assert v_resp.status_code == 200
     assert v_resp.json()["status"] == "success"
 
-    # 3. Setup TOTP 2FA
+    # 3. Setup TOTP 2FA (requires authenticated session)
+    import uuid
+    uid = f"user_{uuid.uuid4().hex[:8]}"
+    pwd = "Password123!"
+    client.post("/api/signup", json={"public_id": uid, "password": pwd})
+    login_resp = client.post("/api/login", json={"public_id": uid, "password": pwd})
+    csrf = login_resp.json().get("csrf_token", "")
+    headers = {"X-CSRF-Token": csrf}
+
     setup_resp = client.post(
         "/api/auth/2fa/setup",
-        json={"user_id": "test_auth_student@univ.edu", "method": "totp"},
+        json={"user_id": uid, "method": "totp"},
+        headers=headers,
     )
     assert setup_resp.status_code == 200
     data = setup_resp.json()
@@ -116,11 +125,12 @@ def test_api_auth_2fa_routes():
     verify_resp = client.post(
         "/api/auth/2fa/verify-setup",
         json={
-            "user_id": "test_auth_student@univ.edu",
+            "user_id": uid,
             "method": "totp",
             "code": current_totp_code,
             "secret": secret,
         },
+        headers=headers,
     )
     assert verify_resp.status_code == 200
     assert verify_resp.json()["status"] == "success"
