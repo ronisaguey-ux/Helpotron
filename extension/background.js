@@ -10,7 +10,7 @@ async function getServer() {
 
 async function getPublicId() {
   const { public_id } = await chrome.storage.local.get('public_id');
-  return public_id || 'RoniDev';
+  return public_id || '';
 }
 
 async function syncAssignments(assignment) {

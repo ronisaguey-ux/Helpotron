@@ -17,4 +17,8 @@ def set_password(public_id, password):
         db.close()
 
 if __name__ == "__main__":
-    set_password("RoniDev", "Mongosdev999")
+    import sys
+    if len(sys.argv) != 3:
+        print("Usage: python set_password.py <public_id> <password>")
+        sys.exit(1)
+    set_password(sys.argv[1], sys.argv[2])
