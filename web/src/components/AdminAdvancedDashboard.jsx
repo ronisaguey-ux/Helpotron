@@ -55,6 +55,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   const [usersCosts, setUsersCosts] = useState([]);
   const [multiplierMap, setMultiplierMap] = useState({});
   const [costMsg, setCostMsg] = useState('');
+  const [creditAmountMap, setCreditAmountMap] = useState({});
 
   const fetchUsers = async () => {
     try {
@@ -469,16 +470,33 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                           </div>
                         </td>
                         <td className="py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await api.adminAdjustCredits(u.id, 50, 'Admin Grant');
-                              fetchUsers();
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] font-medium transition cursor-pointer"
-                          >
-                            +50 cr
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <input
+                              type="number"
+                              step="1"
+                              placeholder="amount"
+                              value={creditAmountMap[u.id] ?? ''}
+                              onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                              className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
+                              title="Custom credit amount (positive to grant, negative to deduct)"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const amt = Number(creditAmountMap[u.id]);
+                                if (!Number.isInteger(amt) || amt === 0) {
+                                  setBulkStatus('Enter a non-zero whole number credit amount');
+                                  return;
+                                }
+                                await api.adminAdjustCredits(u.public_id, amt, 'Admin Grant');
+                                fetchUsers();
+                                setCreditAmountMap((prev) => ({ ...prev, [u.id]: '' }));
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                            >
+                              Apply
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
