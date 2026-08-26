@@ -150,7 +150,7 @@ Config = Settings
 settings = Settings()
 config = settings
 # Export JWT constants for legacy imports
-JWT_SECRET = settings.secret_key
+JWT_SECRET = settings.jwt_secret
 JWT_ALGORITHM = settings.algorithm
 
 # LLM config aliases

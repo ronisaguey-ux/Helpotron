@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
+from .database import User
+from .routes_features import get_current_authenticated_user
 from .math_executor import run_python_math_bash, solve_deterministic_math, sanitize_math_hallucinations_in_text, safe_eval_math_expr
 
 router = APIRouter(prefix="/api/math", tags=["math_execution"])
@@ -25,7 +27,10 @@ class PythonCodeExecuteRequest(BaseModel):
 
 
 @router.post("/solve")
-async def solve_math_endpoint(req: MathSolveRequest):
+async def solve_math_endpoint(
+    req: MathSolveRequest,
+    current_user: User = Depends(get_current_authenticated_user)
+):
     """Solves any algebraic equation, calculus problem, or arithmetic expression using exact Python math."""
     res = solve_deterministic_math(req.expression)
     if not res.get("success"):
@@ -34,7 +39,10 @@ async def solve_math_endpoint(req: MathSolveRequest):
 
 
 @router.post("/verify-text")
-async def verify_text_math_endpoint(req: MathVerifyTextRequest):
+async def verify_text_math_endpoint(
+    req: MathVerifyTextRequest,
+    current_user: User = Depends(get_current_authenticated_user)
+):
     """Scans and corrects arithmetic calculations in text using deterministic Python evaluation."""
     corrected = sanitize_math_hallucinations_in_text(req.text)
     return {
@@ -46,7 +54,10 @@ async def verify_text_math_endpoint(req: MathVerifyTextRequest):
 
 
 @router.post("/execute")
-async def execute_python_math_endpoint(req: PythonCodeExecuteRequest):
+async def execute_python_math_endpoint(
+    req: PythonCodeExecuteRequest,
+    current_user: User = Depends(get_current_authenticated_user)
+):
     """Evaluate a math expression through the AST whitelist only (remediation
     BATCH-03: the previous implementation ran arbitrary code via subprocess —
     a remote code-execution surface. `safe_eval_math_expr` never executes

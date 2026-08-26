@@ -129,6 +129,7 @@ async def implement_datalake_submission(
     submission_id: str,
     payload: ImplementDataLakePayload,
     request: Request,
+    current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Reviews and implements a Data Lake entry, officially awarding actual micro-credits to the author.
@@ -139,7 +140,7 @@ async def implement_datalake_submission(
     if not entry:
         raise HTTPException(status_code=404, detail="Data Lake submission not found")
 
-    author_id = entry.get("raw_user_id", "RoniDev")
+    author_id = entry.get("raw_user_id", current_user.public_id)
     awarded_amount = entry.get("actual_credits", 0)
 
     user = db.query(User).filter(User.public_id == author_id).first()

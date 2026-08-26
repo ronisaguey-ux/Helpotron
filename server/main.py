@@ -444,6 +444,8 @@ class DiscountIn(BaseModel):
 class LoginIn(BaseModel):
     public_id: str = Field(..., max_length=100)
     password: str = Field(..., max_length=256)
+    code: Optional[str] = None
+    two_factor_code: Optional[str] = None
 
 class SignupIn(BaseModel):
     public_id: str = Field(..., max_length=100)
@@ -486,6 +488,22 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
     # Reset failures on successful login
     auth_limiter.reset_failures(key)
     
+    if user.settings and user.settings.get("2fa_enabled"):
+        from .auth_2fa import totp_service, code_store
+        code = body.code or body.two_factor_code
+        method = user.settings.get("2fa_method", "totp")
+        if not code:
+            return {"status": "2fa_required", "method": method, "message": "2FA verification code required"}
+        
+        if method == "totp":
+            secret = user.settings.get("2fa_totp_secret")
+            if not totp_service.verify_code_with_replay(user.id, secret, code):
+                raise HTTPException(401, "Invalid 2FA code")
+        else:
+            valid, msg = code_store.verify_code(user.public_id, code, purpose="2fa_challenge")
+            if not valid:
+                raise HTTPException(401, "Invalid 2FA code")
+
     # Create session
     token = SessionStore.create_session(user.id, user.public_id)
     # Set session cookie
@@ -725,17 +743,13 @@ def status(public_id: str, db: Session = Depends(get_db), current_user: User = D
 
 @app.post("/api/transcribe")
 async def transcribe(file: UploadFile = File(...),
-                     public_id: str | None = Form(default=None),
-                     public_id_q: str | None = Query(default=None),
                      assignment_id: int | None = Form(default=None),
                      assignment_id_q: int | None = Query(default=None),
+                     current_user: User = Depends(get_current_user),
                      db: Session = Depends(get_db)):
-    # clients (extension recorder, web) send public_id/assignment_id as form
+    # clients (extension recorder, web) send assignment_id as form
     # fields; curl and direct callers use query params — accept both
-    public_id = public_id or public_id_q or "dev-user"
     assignment_id = assignment_id if assignment_id is not None else assignment_id_q
-    user = get_or_create_user(db, public_id)
-    db.commit()
     content = await file.read()
     if not content:
         raise HTTPException(400, "empty upload")
@@ -749,19 +763,19 @@ async def transcribe(file: UploadFile = File(...),
 
     # charge: 1 credit per started hour of audio
     hours = max(1.0, math.ceil((duration or 3600.0) / 3600.0))
-    if not (user.plan == "elite" or user.credits >= hours):
+    if not (current_user.plan == "elite" or current_user.credits >= hours):
         raise HTTPException(402, "insufficient credits for transcription")
-    if user.plan != "elite":
-        user.credits -= hours
-        db.add(credits.CreditTransaction(user_id=user.id, delta=-hours, reason=f"spend:transcription:{hours}h"))
+    if current_user.plan != "elite":
+        current_user.credits -= hours
+        db.add(credits.CreditTransaction(user_id=current_user.id, delta=-hours, reason=f"spend:transcription:{hours}h"))
 
-    t = Transcript(user_id=user.id, assignment_id=assignment_id, source="upload",
+    t = Transcript(user_id=current_user.id, assignment_id=assignment_id, source="upload",
                    text=text, duration_seconds=duration)
     db.add(t)
     db.flush()
     if assignment_id is not None:
         a = db.get(Assignment, assignment_id)
-        if a and a.user_id == user.id:
+        if a and a.user_id == current_user.id:
             a.status = "transcribed"
             a.progress = {**a.progress, "transcribed": True}
     db.commit()
@@ -771,31 +785,29 @@ async def transcribe(file: UploadFile = File(...),
 # ─── study materials ───────────────────────────────────────────────────────
 
 @app.post("/api/study-guide")
-async def study_guide(body: GenerateIn, db: Session = Depends(get_db)):
-    return await _material_endpoint(db, body, "study_guide")
+async def study_guide(body: GenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return await _material_endpoint(db, body, "study_guide", current_user)
 
 
 @app.post("/api/flashcards")
-async def flashcards(body: GenerateIn, db: Session = Depends(get_db)):
-    return await _material_endpoint(db, body, "flashcards")
+async def flashcards(body: GenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return await _material_endpoint(db, body, "flashcards", current_user)
 
 
 @app.post("/api/practice-test")
-async def practice_test(body: GenerateIn, db: Session = Depends(get_db)):
-    return await _material_endpoint(db, body, "practice_test")
+async def practice_test(body: GenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return await _material_endpoint(db, body, "practice_test", current_user)
 
 
 @app.post("/api/summary")
-async def summary(body: GenerateIn, db: Session = Depends(get_db)):
-    return await _material_endpoint(db, body, "summary")
+async def summary(body: GenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return await _material_endpoint(db, body, "summary", current_user)
 
 
-async def _material_endpoint(db: Session, body: GenerateIn, kind: str) -> dict:
-    user = get_or_create_user(db, body.public_id)
-    db.commit()
-    transcript_text, transcript_id = _require_transcript(db, body.public_id, body.transcript_id, body.transcript_text)
+async def _material_endpoint(db: Session, body: GenerateIn, kind: str, current_user: User) -> dict:
+    transcript_text, transcript_id = _require_transcript(db, current_user.public_id, body.transcript_id, body.transcript_text)
     try:
-        material = await _generate(db, user, kind, transcript_text, body.assignment_prompt,
+        material = await _generate(db, current_user, kind, transcript_text, body.assignment_prompt,
                                    body.reading_level, body.assignment_id, transcript_id,
                                    count=body.count)
     except HTTPException:
@@ -808,7 +820,7 @@ async def _material_endpoint(db: Session, body: GenerateIn, kind: str) -> dict:
 
 
 @app.post("/api/generate/stream/{kind}")
-async def generate_stream(kind: str, body: GenerateIn, db: Session = Depends(get_db)):
+async def generate_stream(kind: str, body: GenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """FIX B3: SSE progress streaming for long-running generation tasks.
 
     Same contract as the plain material endpoints, but emits 4 progress
@@ -819,10 +831,8 @@ async def generate_stream(kind: str, body: GenerateIn, db: Session = Depends(get
     """
     if kind not in study_tools.GENERATORS:
         raise HTTPException(404, f"unknown generation kind: {kind}")
-    user = get_or_create_user(db, body.public_id)
-    db.commit()
     transcript_text, transcript_id = _require_transcript(
-        db, body.public_id, body.transcript_id, body.transcript_text)
+        db, current_user.public_id, body.transcript_id, body.transcript_text)
 
     def _sse(event: str, **payload: Any) -> str:
         return f"data: {json.dumps({'event': event, **payload}, ensure_ascii=False)}\n\n"
@@ -835,7 +845,7 @@ async def generate_stream(kind: str, body: GenerateIn, db: Session = Depends(get
 
         async def run() -> None:
             try:
-                target_user = db.query(User).filter(User.id == user.id).first() or user
+                target_user = db.query(User).filter(User.id == current_user.id).first() or current_user
                 material = await _generate(
                     db, target_user, kind, transcript_text, body.assignment_prompt,
                     body.reading_level, body.assignment_id, transcript_id,
@@ -870,11 +880,13 @@ async def generate_stream(kind: str, body: GenerateIn, db: Session = Depends(get
 def materials(public_id: str, kind: str,
               limit: int = Query(default=20, ge=1, le=100),
               offset: int = Query(default=0, ge=0),
+              current_user: User = Depends(get_current_user),
               db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
     if kind not in ALL_MATERIAL_KINDS:
         raise HTTPException(400, f"kind must be one of {ALL_MATERIAL_KINDS}")
-    q = db.query(StudyMaterial).filter_by(user_id=user.id, kind=kind)
+    q = db.query(StudyMaterial).filter_by(user_id=current_user.id, kind=kind)
     total = q.count()
     rows = q.order_by(StudyMaterial.id.desc()).offset(offset).limit(limit).all()
     return {"materials": [_material_payload(m) for m in rows],
@@ -950,16 +962,15 @@ def dashboard_query(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     x_public_id: Optional[str] = Header(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Remediation BATCH-11: identity must be explicit — the X-Public-ID
-    # header/query fallback and the RoniDev default are never trusted.
-    if not public_id:
+    target_id = public_id or x_public_id
+    if not target_id:
         raise HTTPException(401, "public_id required")
-    target_id = public_id
-    user = get_or_create_user(db, target_id)
-    db.commit()
-    return _build_dashboard_payload(user, db, limit=limit, offset=offset)
+    if current_user.public_id != target_id:
+        raise HTTPException(403, "Forbidden")
+    return _build_dashboard_payload(current_user, db, limit=limit, offset=offset)
 
 
 @app.get("/api/dashboard/{public_id}")
@@ -1051,13 +1062,11 @@ class AgentStartIn(BaseModel):
 
 
 @app.post("/api/agent/start")
-async def agent_start(body: AgentStartIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, body.public_id)
-    db.commit()
-    if not credits.charge(user, "agent_session", db):
+async def agent_start(body: AgentStartIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not credits.charge(current_user, "agent_session", db):
         raise HTTPException(402, "insufficient credits — agent sessions cost 1 credit")
     db.commit()
-    session = agent_manager.create(user.public_id, body.assignment_id, body.instruction)
+    session = agent_manager.create(current_user.public_id, body.assignment_id, body.instruction)
     asyncio.create_task(_run_agent_and_persist(session))
     return {"session_id": session.session_id, "max_seconds": agent_session.MAX_SESSION_SECONDS}
 
@@ -1104,15 +1113,19 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
 
 
 @app.get("/api/agent/{session_id}")
-def agent_status(session_id: str, db: Session = Depends(get_db)):
+def agent_status(session_id: str, current_user: User = Depends(get_current_user)):
     session = agent_manager.get(session_id)
-    if session is None:
+    if session is None or session.user_public_id != current_user.public_id:
         raise HTTPException(404, "session not found")
     return session.snapshot()
 
 
 @app.websocket("/ws/agent/{session_id}")
-async def agent_ws(websocket: WebSocket, session_id: str):
+async def agent_ws(websocket: WebSocket, session_id: str, current_user: User = Depends(get_current_user)):
+    session = agent_manager.get(session_id)
+    if not session or session.user_public_id != current_user.public_id:
+        await websocket.close(code=1008)
+        return
     await agent_manager.attach(session_id, websocket)
     try:
         while True:
@@ -1132,18 +1145,20 @@ class StyleUploadIn(BaseModel):
 
 
 @app.post("/api/style/upload")
-def upload_style(body: StyleUploadIn, db: Session = Depends(get_db)):
+def upload_style(body: StyleUploadIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Upload the student's custom writing style for mimicry."""
-    user = get_or_create_user(db, body.public_id)
-    set_style(user.id, body.style_text, db)
+    if current_user.public_id != body.public_id:
+        raise HTTPException(403, "Forbidden")
+    set_style(current_user.id, body.style_text, db)
     return {"status": "ok", "message": "Style uploaded successfully"}
 
 
 @app.get("/api/style/{public_id}")
-def get_style_endpoint(public_id: str, db: Session = Depends(get_db)):
+def get_style_endpoint(public_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Retrieve the student's current style text."""
-    user = get_or_create_user(db, public_id)
-    style = get_style(user.id, db)
+    if current_user.public_id != public_id:
+        raise HTTPException(403, "Forbidden")
+    style = get_style(current_user.id, db)
     return {"style_text": style or ""}
 
 
@@ -1156,23 +1171,21 @@ class DraftGenerateIn(BaseModel):
 
 
 @app.post("/api/draft/generate")
-async def generate_draft(body: DraftGenerateIn, db: Session = Depends(get_db)):
+async def generate_draft(body: DraftGenerateIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Start a draft generation workflow. Returns draft_id for polling."""
-    user = get_or_create_user(db, body.public_id)
-    db.commit()
     # Check credits
-    if user.credits < DRAFT_COST:
+    if current_user.credits < DRAFT_COST:
         raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
     # Check style exists
-    style = get_style(user.id, db)
+    style = get_style(current_user.id, db)
     if not style:
         raise HTTPException(400, "No writing style uploaded. Please upload custom text first.")
     # Check assignment exists
     assignment = db.get(Assignment, body.assignment_id)
-    if not assignment or assignment.user_id != user.id:
+    if not assignment or assignment.user_id != current_user.id:
         raise HTTPException(404, "Assignment not found")
     # Create draft record and start background task
-    draft = await create_draft_task(user.id, body.assignment_id, body.threshold, db)
+    draft = await create_draft_task(current_user.id, body.assignment_id, body.threshold, db)
     start_draft_workflow(draft.id)
     return {
         "draft_id": draft.id,
@@ -1227,7 +1240,7 @@ def retry_draft(draft_id: int, db: Session = Depends(get_db), current_user: User
 
 
 @app.post("/api/draft/{draft_id}/admin")
-def admin_help(draft_id: int, db: Session = Depends(get_db)):
+def admin_help(draft_id: int, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Send /admin command via Telegram to the dev."""
     draft = db.get(Draft, draft_id)
     if not draft:
@@ -1248,7 +1261,7 @@ except (ImportError, ValueError):
 humanizer_pipeline = AIHumanizerPipeline()
 
 @app.post("/api/assignment/humanize")
-async def humanize_assignment_route(payload: dict, db: Session = Depends(get_db)):
+async def humanize_assignment_route(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = payload.get("content", "")
     sanitized_text, metrics = await humanizer_pipeline.humanize_loop(text)
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
@@ -1263,10 +1276,10 @@ except (ImportError, ValueError):
 
 
 @app.post("/api/assignment/{assignment_id}/export-gdocs")
-async def export_gdocs_route(assignment_id: int, payload: dict, db: Session = Depends(get_db)):
+async def export_gdocs_route(assignment_id: int, payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Explicit user-triggered export streaming content into Google Docs with human typing history."""
     assignment = db.get(Assignment, assignment_id)
-    if not assignment:
+    if not assignment or assignment.user_id != current_user.id:
         raise HTTPException(404, "Assignment not found")
 
     access_token = payload.get("google_access_token", "")
