@@ -236,6 +236,7 @@ async def call_llm(
     required_capabilities: Optional[List[str]] = None,
     complexity_score: float = 3.0,
     user_id: str = "system",
+    model: Optional[str] = None,
     db = None
 ) -> str:
     if response_format == "json" or json_mode:
@@ -247,7 +248,7 @@ async def call_llm(
         required_capabilities=required_capabilities,
         complexity_score=complexity_score
     )
-    model_id = route["model"]
+    model_id = model or route["model"]
     
     for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
         if prohibited in model_id:
