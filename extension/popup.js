@@ -20,10 +20,15 @@ function hideUnparseable() {
 }
 
 async function init() {
-  const { server, public_id, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'update_available', 'latest_version']);
+  const { server, public_id, token, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'token', 'update_available', 'latest_version']);
   serverInput.value = server || 'http://localhost:8000';
   publicIdInput.value = public_id || '';
   publicIdInput.placeholder = 'your Helpotron username';
+  // 08-26: scrape data must land on the right account — force login first.
+  if (!public_id || !token) {
+    setStatus('⚠️ Login required: enter your Helpotron username & password below and Save — scrapes stay disabled until then.');
+    statusEl.classList.remove('hidden');
+  }
 
   const updateBanner = document.getElementById('updateBanner');
   const updateBadge = document.getElementById('updateVersionBadge');
