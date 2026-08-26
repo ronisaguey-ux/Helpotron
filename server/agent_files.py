@@ -7,13 +7,16 @@ filename); the DB row (AgentFile) is the index. (My Agent experience, 08-22.)
 """
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
 from .database import AgentFile, SessionLocal, User
 
-_AGENT_FILES_DIR = Path("./uploads/agent_files")
+# AGENT_FILES_DIR env (run_native.sh) keeps all user uploads in data/uploads/;
+# default stays relative for dev/legacy runs.
+_AGENT_FILES_DIR = Path(os.getenv("AGENT_FILES_DIR", "./uploads/agent_files"))
 
 ALLOWED_KINDS = {"skill", "rule", "automation", "personality"}
 # Never allow client-supplied paths: disk name is always uuid4 hex.
