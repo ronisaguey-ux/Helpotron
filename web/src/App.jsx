@@ -176,6 +176,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    // logout=1 (set by handleLogout's hard redirect): force-clear the server
+    // session so a reload can never resurrect the previous account.
+    const forceLogout = new URLSearchParams(window.location.search).get('logout');
+    if (forceLogout) {
+      api.logout().catch(() => {});
+      try {
+        localStorage.removeItem('public_id');
+        localStorage.removeItem('helpotron_public_id');
+        localStorage.removeItem('helpotron_csrf_token');
+        localStorage.removeItem('token');
+      } catch (e) {}
+      window.history.replaceState({}, '', window.location.pathname.replace('?logout=1', '') || '/');
+    }
     checkSession();
   }, []);
 
@@ -199,7 +212,10 @@ export default function App() {
     setUserIdState('Guest');
     setCredits(0);
     setUserPlan('basic');
-    setAuthModalOpen(true);
+    // Hard reset: reload with ?logout=1 so the mount effect force-clears the
+    // session cookie again — a failed/partial logout must NEVER leave the
+    // previous user's identity behind (08-26 cross-account leak report).
+    window.location.assign('/?logout=1');
   };
 
   const handleAcceptPrivacy = () => {
