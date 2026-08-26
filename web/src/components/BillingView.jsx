@@ -33,6 +33,15 @@ export default function BillingView({ userId }) {
 
   return (
     <div className="space-y-6">
+      {/* Prototype notice (08-26): payments NOT available rn — free beta test run. */}
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+        <p className="text-sm font-semibold text-amber-100">Payments not available yet — prototype only</p>
+        <p className="mt-1 text-amber-200/90">
+          We're running a free beta test right now: you're testing for free, the
+          product isn't fully launched, and Stripe payments aren't wired up yet.
+          Credits are test-only and settle when the real product launches.
+        </p>
+      </div>
       {msg && (
         <div className="clean-card p-4 border border-blue-500/30 text-xs text-blue-300">
           {msg}
