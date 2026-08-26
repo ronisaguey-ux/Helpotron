@@ -159,6 +159,14 @@ def _get_current_user(request: Request, db: Session) -> User:
     return get_current_authenticated_user(request, db)
 
 
+def _require_admin_request(request: Request) -> User:
+    """Platform-administrator gate for the admin inbox routes that live under
+    this router's /api/user prefix. Delegates to the same check admin.py uses."""
+    from .admin import require_admin
+
+    return require_admin(request)
+
+
 # ─── Settings Endpoints ───────────────────────────────────────────────────────
 
 @router.get("/settings")
@@ -684,6 +692,7 @@ async def get_my_admin_messages_route(request: Request, db: Session = Depends(ge
 @router.get("/admin/messages")
 async def get_all_admin_messages_route(request: Request, limit: int = 100, db: Session = Depends(get_db)):
     """Admin endpoint: lists all incoming messages from students/users."""
+    _require_admin_request(request)
     from .database import AdminMessage
     msgs = db.query(AdminMessage).order_by(AdminMessage.id.desc()).limit(limit).all()
     return {
@@ -707,8 +716,9 @@ async def get_all_admin_messages_route(request: Request, limit: int = 100, db: S
 
 
 @router.post("/admin/messages/{message_id}/reply")
-async def reply_to_admin_message_route(message_id: int, payload: AdminReplyPayload, db: Session = Depends(get_db)):
+async def reply_to_admin_message_route(message_id: int, payload: AdminReplyPayload, request: Request, db: Session = Depends(get_db)):
     """Admin endpoint: replies to a student/user inquiry."""
+    _require_admin_request(request)
     from .database import AdminMessage
     from datetime import datetime, timezone
     msg = db.query(AdminMessage).filter(AdminMessage.id == message_id).first()
@@ -724,7 +734,7 @@ async def reply_to_admin_message_route(message_id: int, payload: AdminReplyPaylo
         "status": "success",
         "message_id": message_id,
         "admin_reply": payload.reply,
-        "status": "replied",
+        "message_status": "replied",
     }
 
 
@@ -745,8 +755,9 @@ class PresentationGeminiConfigRequest(BaseModel):
 
 
 @router.post("/fake-writing-history/simulate")
-async def simulate_fake_writing_history_route(payload: FakeWritingHistorySimulationRequest):
+async def simulate_fake_writing_history_route(payload: FakeWritingHistorySimulationRequest, request: Request, db: Session = Depends(get_db)):
     """Simulates realistic keystroke intervals and Google Docs/LMS incremental version history snapshots for audit evasion."""
+    _get_current_user(request, db)
     from .model_tiering import model_tiering_engine
     history = model_tiering_engine.generate_fake_writing_history(
         content=payload.content,

@@ -22,10 +22,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 try:
-    from .database import Assignment, StudyMaterial, Transcript, User, UserSettingsScope, get_db
+    from .database import Assignment, StudyMaterial, Transcript, User, get_db
     from .default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
 except (ImportError, ValueError):
-    from server.database import Assignment, StudyMaterial, Transcript, User, UserSettingsScope, get_db
+    from server.database import Assignment, StudyMaterial, Transcript, User, get_db
     from server.default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
 
 
@@ -349,84 +349,6 @@ DEFAULT_CUSTOM_SUBJECTS = [
 ]
 
 
-# ─── BATCH-04: UNIVERSAL SCOPED SETTINGS CORE ──────────────────────────────
-# Per-scope overrides resolve through the deterministic inheritance chain
-# task → assignment → teacher → class → subject → academic → global.
-# Lower scopes override higher ones; global acts as the fallback floor.
-
-SCOPE_HIERARCHY = ['global', 'academic', 'subject', 'class', 'teacher', 'assignment', 'task']
-
-
-def resolve_scoped_setting(
-    user_id: int,
-    setting_key: str,
-    scope_type: str = 'global',
-    scope_id: Optional[str] = None,
-    db: Session = None
-) -> Dict[str, Any]:
-    """Resolves effective setting value using deterministic inheritance chain:
-    Task -> Assignment -> Teacher -> Class -> Subject -> Academic -> Global
-    """
-    query = db.query(UserSettingsScope).filter(UserSettingsScope.user_id == user_id)
-    all_scopes = query.all()
-
-    scope_map: Dict[str, Dict[str, Any]] = {}
-    for s in all_scopes:
-        k = f"{s.scope_type}:{s.scope_id or 'default'}"
-        scope_map[k] = json.loads(s.settings_json) if isinstance(s.settings_json, str) else s.settings_json
-
-    global_settings = scope_map.get('global:default', {})
-    effective_value = global_settings.get(setting_key)
-    inheritance_chain = [{'scope': 'global', 'id': 'default', 'value': effective_value}]
-
-    if scope_type != 'global' and scope_id:
-        target_k = f"{scope_type}:{scope_id}"
-        if target_k in scope_map and setting_key in scope_map[target_k]:
-            override_val = scope_map[target_k][setting_key]
-            inheritance_chain.append({'scope': scope_type, 'id': scope_id, 'value': override_val, 'overrides': 'global'})
-            effective_value = override_val
-
-    return {
-        'setting_key': setting_key,
-        'effective_value': effective_value,
-        'inheritance_chain': inheritance_chain,
-        'auto_routing_active': global_settings.get('auto_routing', True)
-    }
-
-
-def set_scoped_setting(
-    user_id: int,
-    setting_key: str,
-    value: Any,
-    scope_type: str = 'global',
-    scope_id: Optional[str] = 'default',
-    db: Session = None
-) -> UserSettingsScope:
-    """Persists setting at a specific scope level."""
-    scope_record = db.query(UserSettingsScope).filter(
-        UserSettingsScope.user_id == user_id,
-        UserSettingsScope.scope_type == scope_type,
-        UserSettingsScope.scope_id == (scope_id or 'default')
-    ).first()
-
-    if not scope_record:
-        scope_record = UserSettingsScope(
-            user_id=user_id,
-            scope_type=scope_type,
-            scope_id=scope_id or 'default',
-            settings_json=json.dumps({setting_key: value})
-        )
-        db.add(scope_record)
-    else:
-        current = json.loads(scope_record.settings_json) if isinstance(scope_record.settings_json, str) else scope_record.settings_json
-        current[setting_key] = value
-        scope_record.settings_json = json.dumps(current)
-
-    db.commit()
-    db.refresh(scope_record)
-    return scope_record
-
-
 class UserSettingsService:
     """Manages context-aware personalization, TRIO scopes, styles, detectors, and scheduling."""
 
@@ -506,8 +428,6 @@ class UserSettingsService:
             "ai_detectors": {
                 "pangram": True,
                 "sapling": True,
-                "originality_ai": True,
-                "copyleaks": True,
                 "winston_ai": True,
                 "perplexity_cadence": True,
                 "statistical_burstiness": True,
@@ -1129,15 +1049,9 @@ class ScopedSettingsService:
         should_close = self.db is None
         try:
             records = db.query(UserSetting).filter(UserSetting.user_id == str(user_id)).all()
-            res = {
-                "effort": "medium",
-                "effort_level": "medium",
-                "auto_routing": True,
-                "tone": "academic",
-                "humanizer_level": "medium",
-                "scope_type": scope_type,
-                "scope_id": scope_id
-            }
+            res = dict(DEFAULT_SETTINGS)
+            res["scope_type"] = scope_type
+            res["scope_id"] = scope_id
             for r in records:
                 if r.setting_key:
                     res[r.setting_key] = r.setting_value

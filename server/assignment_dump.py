@@ -129,12 +129,14 @@ class AssignmentDumpManager:
     @staticmethod
     async def _ocr_image_gemini(image_path: str, user_id: str) -> str:
         """Performs visual OCR and diagram parsing via Gemini 3.7 Flash Vision."""
-        api_key = config.gemini_api_key or config.omniroute_api_key
+        api_key = (os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key or config.omniroute_api_key).strip()
         if not api_key:
             return f"OCR Image scan: {os.path.basename(image_path)}"
 
-        base_url = config.omniroute_api_base if config.omniroute_api_key else "https://generativelanguage.googleapis.com/v1beta"
-        model_name = config.gemini_flash_model or "gemini-3.7-flash"
+        # OpenRouter is the sole LLM upstream (owner 08-26). Use the OpenAI-
+        # compatible chat completions endpoint even for Gemini vision models.
+        base_url = "https://openrouter.ai/api/v1"
+        model_name = config.gemini_flash_model or "google/gemini-2.0-flash"
 
         with open(image_path, "rb") as f:
             img_bytes = f.read()
@@ -148,32 +150,32 @@ class AssignmentDumpManager:
             "Output clear, formatted Markdown preserving LaTeX equations and rubrics."
         )
 
-        url = f"{base_url}/models/{model_name}:generateContent?key={api_key}"
+        url = f"{base_url}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {
-            "contents": [
+            "model": model_name,
+            "messages": [
                 {
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime,
-                                "data": b64_img,
-                            }
-                        },
-                    ]
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_img}"}},
+                    ],
                 }
-            ]
+            ],
+            "temperature": 0.2,
         }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, headers=headers, json=payload)
 
         if resp.status_code == 200:
             data = resp.json()
-            candidates = data.get("candidates", [])
-            if candidates:
-                text = "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", []))
-                return text.strip()
+            try:
+                return data["choices"][0]["message"]["content"].strip() or ""
+            except (KeyError, IndexError, TypeError, ValueError):
+                logger.error("Unexpected OpenRouter vision response: %s", resp.text[:300])
+                return ""
 
         return f"Image scanned: {os.path.basename(image_path)}"
 
