@@ -154,7 +154,8 @@ def test_admin_endpoints_and_messages_inbox():
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert reply_res.status_code == 200
-    assert reply_res.json()["status"] == "replied"
+    assert reply_res.json()["status"] == "success"
+    assert reply_res.json()["message_status"] == "replied"
 
     # Admin routes require JWT auth (hardened require_admin), so mint a token
     from server.security import create_jwt_token

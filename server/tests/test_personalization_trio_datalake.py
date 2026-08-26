@@ -397,8 +397,16 @@ def test_message_admin_workflow():
     my_msgs = my_msgs_resp.json()["messages"]
     assert any(m["id"] == msg_id for m in my_msgs)
 
+    # 2b. The inbox is admin-only: a plain student session must not read it or
+    #     be able to post a reply that impersonates the admin.
+    assert client.get("/api/admin/messages").status_code == 403
+    assert client.post(
+        f"/api/admin/messages/{msg_id}/reply", json={"reply": "not the admin"}
+    ).status_code == 403
+
     # 3. Admin retrieves all incoming inquiries
-    admin_msgs_resp = client.get("/api/admin/messages")
+    admin_headers = _admin_headers()
+    admin_msgs_resp = client.get("/api/admin/messages", headers=admin_headers)
     assert admin_msgs_resp.status_code == 200
     admin_msgs = admin_msgs_resp.json()["messages"]
     assert any(m["id"] == msg_id for m in admin_msgs)
@@ -407,9 +415,11 @@ def test_message_admin_workflow():
     reply_resp = client.post(
         f"/api/admin/messages/{msg_id}/reply",
         json={"reply": "Investigating the portal DOM structure now. Universal extension subagent will support it in the next push."},
+        headers=admin_headers,
     )
     assert reply_resp.status_code == 200
-    assert reply_resp.json()["status"] == "replied"
+    assert reply_resp.json()["status"] == "success"
+    assert reply_resp.json()["message_status"] == "replied"
 
     # 5. Student sees admin reply
     my_msgs_resp2 = client.get("/api/user/my-admin-messages")
@@ -426,6 +436,26 @@ def test_message_admin_workflow():
 
 # ── Remediation BATCH-11: /api/user/* now requires real auth — the trio HTTP
 # tests previously rode the first-user fallback (dead since BATCH-09). ──────
+def _admin_headers():
+    """Bearer headers for the platform administrator (the admin inbox is gated)."""
+    from server.security import create_jwt_token
+    from server.database import SessionLocal, User
+    from server.config import config
+
+    db = SessionLocal()
+    try:
+        admin_id = getattr(config, "admin_public_id", "RoniDev")
+        admin = db.query(User).filter(User.public_id == admin_id).first()
+        if admin is None:
+            admin = User(public_id=admin_id, plan="elite", credits=999.0, settings={})
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+        return {"Authorization": f"Bearer {create_jwt_token(user_id=admin.id, role='admin')}"}
+    finally:
+        db.close()
+
+
 def _authed_client(app):
     from fastapi.testclient import TestClient
     from server.security import create_jwt_token
