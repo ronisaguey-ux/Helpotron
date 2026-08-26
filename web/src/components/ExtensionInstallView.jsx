@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Puzzle, ExternalLink, HelpCircle, CheckCircle, AlertTriangle, Copy, Cpu, Globe, RefreshCw } from 'lucide-react';
-import api, { getUserId, getServer } from '../api';
+import api, { getServer } from '../api';
 
 /* ExtensionInstallView — replaces the old extension popup. Sidebar section with the
  * download button + full cross-platform install guide (Win/macOS/Linux × Chrome/Edge/
@@ -57,7 +57,7 @@ export default function ExtensionInstallView() {
   return (
     <div className="p-6 max-w-5xl">
       <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-        <Puzzle className="text-cyan-400" size={26} /> Helpotron Extension
+        <Puzzle className="text-cyan-400" size={26} /> Helpotron Academic OS Companion
       </h1>
       <p className="text-slate-400 text-sm mt-1">
         Scrapes Canvas, Google Classroom, Blackboard, Brightspace, Moodle, Schoology, Notion &amp; any website into assignments.
