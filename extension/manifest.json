@@ -1,7 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Helpotron Academic OS Companion",
-  "version": "2.0.0",
+  "version": "2.0.1",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
   "description": "Autonomous Canvas LMS, Google Classroom, Blackboard & Moodle study companion and assignment solver.",
   "permissions": [
     "storage",
