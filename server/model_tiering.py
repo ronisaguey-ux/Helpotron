@@ -39,8 +39,6 @@ class ModelTieringEngine:
     DETECTOR_PRICING = {
         "pangram": {"name": "Pangram Cadence", "cost_usd": 0.0020, "tier": "cheap"},
         "sapling": {"name": "Sapling Academic", "cost_usd": 0.0015, "tier": "cheap"},
-        "originality_ai": {"name": "Originality.ai 3.0", "cost_usd": 0.0030, "tier": "standard"},
-        "copyleaks": {"name": "Copyleaks Enterprise", "cost_usd": 0.0040, "tier": "premium"},
         "winston_ai": {"name": "Winston AI", "cost_usd": 0.0020, "tier": "cheap"},
     }
 
@@ -100,7 +98,7 @@ class ModelTieringEngine:
 
         # Detectors Cost
         detector_cost = 0.0
-        active_detectors = enabled_detectors or ["pangram", "originality_ai"]
+        active_detectors = enabled_detectors or ["pangram", "sapling", "winston_ai"]
         for d in active_detectors:
             if d in ModelTieringEngine.DETECTOR_PRICING:
                 detector_cost += ModelTieringEngine.DETECTOR_PRICING[d]["cost_usd"]

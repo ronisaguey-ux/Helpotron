@@ -428,8 +428,6 @@ class UserSettingsService:
             "ai_detectors": {
                 "pangram": True,
                 "sapling": True,
-                "originality_ai": True,
-                "copyleaks": True,
                 "winston_ai": True,
                 "perplexity_cadence": True,
                 "statistical_burstiness": True,
