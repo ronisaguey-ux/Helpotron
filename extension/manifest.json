@@ -37,14 +37,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.instructure.com/*",
-        "*://*.canvaslms.com/*",
-        "*://classroom.google.com/*",
-        "*://*.blackboard.com/*",
-        "*://*.moodle.com/*",
-        "*://*.moodle.org/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
