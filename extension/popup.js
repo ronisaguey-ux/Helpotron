@@ -22,7 +22,8 @@ function hideUnparseable() {
 async function init() {
   const { server, public_id, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'update_available', 'latest_version']);
   serverInput.value = server || 'http://localhost:8000';
-  publicIdInput.value = public_id || 'RoniDev';
+  publicIdInput.value = public_id || '';
+  publicIdInput.placeholder = 'your Helpotron username';
 
   const updateBanner = document.getElementById('updateBanner');
   const updateBadge = document.getElementById('updateVersionBadge');
@@ -47,10 +48,12 @@ async function init() {
     if (resp?.ok && resp.tabs) {
       tabSelect.innerHTML = '';
       resp.tabs.forEach((t) => {
-        if (!t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://')) {
+        if (t.url && /^https?:/i.test(t.url)) {
           const opt = document.createElement('option');
           opt.value = t.id;
-          opt.innerText = `${t.active ? '👉 ' : ''}${t.title.slice(0, 38)} (${new URL(t.url).hostname})`;
+          let host = '';
+          try { host = new URL(t.url).hostname; } catch {}
+          opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || '').slice(0, 38)} (${host})`;
           if (t.active) opt.selected = true;
           tabSelect.appendChild(opt);
         }
@@ -127,9 +130,40 @@ btnOpenDataLake.addEventListener('click', () => {
 });
 
 document.getElementById('saveSettings').addEventListener('click', async () => {
+  const srv = serverInput.value.trim() || 'http://localhost:8000';
+  const pid = publicIdInput.value.trim();
+  const pwd = document.getElementById('password')?.value;
+
+  if (pid && pwd) {
+    try {
+      setStatus('🔐 Authenticating with Helpotron…');
+      const res = await fetch(`${srv}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_id: pid, password: pwd }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        await chrome.storage.local.set({
+          server: srv,
+          public_id: data.public_id || pid,
+          token: data.token,
+        });
+        setStatus('✅ Logged in & token saved');
+        return;
+      } else {
+        setStatus(`❌ Auth failed: ${data.detail || data.message || 'Invalid credentials'}`);
+        return;
+      }
+    } catch (e) {
+      setStatus(`❌ Connection error: ${String(e)}`);
+      return;
+    }
+  }
+
   await chrome.storage.local.set({
-    server: serverInput.value.trim(),
-    public_id: publicIdInput.value.trim(),
+    server: srv,
+    public_id: pid,
   });
   setStatus('✅ Settings saved');
 });

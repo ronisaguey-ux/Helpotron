@@ -13,19 +13,10 @@
     "storage",
     "activeTab",
     "tabs",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
-    "*://*.instructure.com/*",
-    "*://*.canvaslms.com/*",
-    "*://classroom.google.com/*",
-    "*://*.blackboard.com/*",
-    "*://*.moodle.com/*",
-    "*://*.moodle.org/*",
-    "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*",
-    "http://127.0.0.1:5173/*",
-    "http://localhost:5173/*",
     "<all_urls>"
   ],
   "content_security_policy": {
@@ -41,7 +32,8 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {

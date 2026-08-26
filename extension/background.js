@@ -14,12 +14,18 @@ async function getPublicId() {
   return public_id || '';
 }
 
+async function authHeaders() {
+  const { token } = await chrome.storage.local.get('token');
+  return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+               : { 'Content-Type': 'application/json' };
+}
+
 async function syncAssignments(assignment) {
   const server = await getServer();
   const public_id = await getPublicId();
   const res = await fetch(`${server}/api/assignments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ public_id, ...assignment }),
   });
   return { ok: res.ok, status: res.status };
@@ -68,7 +74,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'openDataLake') {
     getServer().then((srv) => {
-      chrome.tabs.create({ url: `${srv}/#datalake` });
+      chrome.tabs.create({ url: srv });
       sendResponse({ ok: true });
     });
     return true;
@@ -94,7 +100,7 @@ async function activateAgent(chosenTabId) {
 
   const resp = await fetch(`${server}/api/agent/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ public_id }),
   });
   if (!resp.ok) return { ok: false, error: `Server error: ${resp.status}` };
@@ -104,8 +110,9 @@ async function activateAgent(chosenTabId) {
   return { ok: true, session_id: agentSessionId };
 }
 
-function connectAgentSocket(server, sessionId) {
-  const wsUrl = server.replace(/^http/, 'ws') + `/ws/agent/${sessionId}`;
+async function connectAgentSocket(server, sessionId) {
+  const { token } = await chrome.storage.local.get('token');
+  const wsUrl = server.replace(/^http/, 'ws') + `/ws/agent/${sessionId}?token=${encodeURIComponent(token || '')}`;
   const ws = new WebSocket(wsUrl);
   agentSocket = ws;
   ws.onopen = () => console.log(`[helpotron] Universal agent ${sessionId} connected on tab ${targetTabId}`);
@@ -118,118 +125,59 @@ function connectAgentSocket(server, sessionId) {
           JSON.stringify({
             type: 'result',
             command_id: msg.command_id,
-            ok: result.ok,
-            error: result.error,
-            result: result.result,
+            result,
           })
         );
-      } else if (msg.type === 'finished') {
-        console.log('[helpotron] agent finished:', msg.summary);
-        if (msg.assignment && msg.assignment.title) {
-          await ingestScrapedAssignment(msg.assignment);
-        }
-        ws.close();
-        agentSocket = null;
-      } else if (msg.type === 'unparseable') {
-        console.warn('[helpotron] website unparseable:', msg.reason);
-        chrome.runtime.sendMessage({
-          action: 'unparseable_report',
-          reason: msg.reason,
-        }).catch(() => {});
-        ws.close();
-        agentSocket = null;
       }
-    } catch (e) {
-      console.error('[helpotron] Universal agent bridge error:', e);
+    } catch (err) {
+      console.error('[helpotron] ws parse error:', err);
     }
   };
+  ws.onerror = (e) => console.warn('[helpotron] agent socket error:', e);
   ws.onclose = () => {
+    console.log(`[helpotron] agent socket ${sessionId} closed`);
     agentSocket = null;
   };
 }
 
 async function executeTabCommand(tabId, command) {
-  if (!tabId) return { ok: false, error: 'No active tab ID available' };
-
-  if (command.action === 'navigate') {
-    await chrome.tabs.update(tabId, { url: command.url });
-    await new Promise((r) => setTimeout(r, 3500));
-    return { ok: true, result: { url: command.url } };
-  }
-
   try {
-    const res = await chrome.scripting.executeScript({
+    const fnMap = {
+      click: (selector) => {
+        const el = document.querySelector(selector);
+        if (!el) return { success: false, error: 'Element not found' };
+        el.click();
+        return { success: true, clicked: selector };
+      },
+      extract_text: (selector) => {
+        const el = selector ? document.querySelector(selector) : document.body;
+        return { success: true, text: el ? el.innerText.slice(0, 8000) : '' };
+      },
+      fill_input: (selector, value) => {
+        const el = document.querySelector(selector);
+        if (!el) return { success: false, error: 'Input element not found' };
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true, filled: selector };
+      },
+      scroll_down: () => {
+        window.scrollBy(0, window.innerHeight);
+        return { success: true, scrolled: window.scrollY };
+      },
+    };
+
+    const action = fnMap[command.action];
+    if (!action) return { success: false, error: `Unknown command: ${command.action}` };
+
+    const injection = await chrome.scripting.executeScript({
       target: { tabId },
-      func: runPageCommand,
-      args: [command],
+      func: action,
+      args: command.args || [],
     });
-    return { ok: true, result: res?.[0]?.result ?? {} };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
-}
-
-// Runs inside the target page execution context
-function runPageCommand(cmd) {
-  switch (cmd.action) {
-    case 'read_page': {
-      const text = (document.body ? document.body.innerText : '').slice(0, 30000);
-      const links = Array.from(document.querySelectorAll('a[href]'))
-        .filter((a) => a.href && !a.href.startsWith('javascript:'))
-        .map((a) => ({ text: (a.innerText || '').trim().slice(0, 80), href: a.href }))
-        .slice(0, 120);
-
-      // Extract metadata
-      const isDRM = document.querySelector('canvas:only-child, embed[type="application/pdf"], iframe[src*="protected"]');
-      const isCoursework = Boolean(
-        document.querySelector('h1, h2, table, .rubric, #assignment_description, .user_content, .c3I1v')
-      );
-
-      return {
-        text,
-        links,
-        url: location.href,
-        title: document.title,
-        is_drm_protected: Boolean(isDRM && text.length < 100),
-        has_coursework_markers: isCoursework,
-      };
-    }
-    case 'inspect_dom': {
-      const el = document.querySelector(cmd.selector);
-      if (!el) return { error: `Element not found: ${cmd.selector}` };
-      return { html: el.outerHTML.slice(0, 5000), text: el.innerText.slice(0, 2000) };
-    }
-    case 'extract_rubric': {
-      const rubrics = Array.from(document.querySelectorAll('table, .rubric, .rubric-table'))
-        .map((t) => t.innerText.trim())
-        .filter(Boolean);
-      return { rubrics };
-    }
-    case 'extract_files': {
-      const files = Array.from(document.querySelectorAll('a[download], a[href$=".pdf"], a[href$=".docx"], a[href*="drive.google"]'))
-        .map((a) => a.href)
-        .slice(0, 50);
-      return { files };
-    }
-    case 'click': {
-      const el = document.querySelector(cmd.selector);
-      if (!el) return { error: `Element not found for selector: ${cmd.selector}` };
-      el.click();
-      return { clicked: cmd.selector };
-    }
-    case 'type': {
-      const el = document.querySelector(cmd.selector);
-      if (!el) return { error: `Element not found: ${cmd.selector}` };
-      el.value = cmd.text || '';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return { typed: true };
-    }
-    case 'scroll': {
-      window.scrollBy(0, cmd.direction === 'down' ? 800 : -800);
-      return { scrolled: cmd.direction };
-    }
-    default:
-      return { error: `Unknown action: ${cmd.action}` };
+    return injection?.[0]?.result || { success: false, error: 'Script injection returned no result.' };
+  } catch (err) {
+    return { success: false, error: String(err) };
   }
 }
 
@@ -242,6 +190,8 @@ async function startScrape(chosenTabId) {
   if (!tabId) return { ok: false, error: 'No tab selected' };
 
   try {
+    // Ensure content.js is injected even on non-matching domains
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => (window.__helpotron_scrape_universal ? window.__helpotron_scrape_universal() : null),
@@ -260,7 +210,7 @@ async function startScrape(chosenTabId) {
     const public_id = await getPublicId();
     const resp = await fetch(`${server}/api/assignments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({
         public_id,
         title: data.title,
@@ -288,7 +238,7 @@ async function ingestScrapedAssignment(assignment) {
     const public_id = await getPublicId();
     await fetch(`${server}/api/assignments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({
         public_id,
         title: assignment.title || 'Scraped Coursework',
@@ -306,14 +256,16 @@ async function ingestScrapedAssignment(assignment) {
 async function agentStatus() {
   if (!agentSessionId) return { ok: true, active: false };
   const server = await getServer();
-  const resp = await fetch(`${server}/api/agent/${agentSessionId}`);
+  const resp = await fetch(`${server}/api/agent/${agentSessionId}`, {
+    headers: await authHeaders(),
+  });
   if (!resp.ok) return { ok: false, error: `Server: ${resp.status}` };
   return { ok: true, active: true, ...(await resp.json()) };
 }
 
 // ─── Periodic Extension Update Checker ────────────────────────────────────────
 
-const CURRENT_VERSION = '2.0.0';
+const CURRENT_VERSION = chrome.runtime.getManifest().version;
 
 async function checkForExtensionUpdate() {
   try {
@@ -349,7 +301,11 @@ async function checkForExtensionUpdate() {
   }
 }
 
-// Run version check on startup and every 30 minutes
+// Run version check on startup and periodically using alarms
 checkForExtensionUpdate();
-setInterval(checkForExtensionUpdate, 30 * 60 * 1000);
-
+if (chrome.alarms) {
+  chrome.alarms.create('helpotron_update_check', { periodInMinutes: 30 });
+  chrome.alarms.onAlarm.addListener((a) => {
+    if (a.name === 'helpotron_update_check') checkForExtensionUpdate();
+  });
+}

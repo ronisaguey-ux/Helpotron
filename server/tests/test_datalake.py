@@ -69,9 +69,38 @@ def test_log_telemetry_and_agent_analysis():
 
 
 def test_api_feedback_and_datalake_routes():
-    # Submit feedback
+    from server.database import SessionLocal, User
+    from server.security import create_jwt_token
+
+    # 1. Verify unauthenticated requests are rejected
+    unauth_resp = client.post(
+        "/api/feedback/submit",
+        json={"category": "praise", "urgency": "low", "message": "Test message", "feature_tag": "gdocs_export"},
+    )
+    assert unauth_resp.status_code == 401
+
+    unauth_list = client.get("/api/feedback/list")
+    assert unauth_list.status_code == 401
+
+    # 2. Authenticate as admin user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "RoniDev").first()
+        if not user:
+            user = User(public_id="RoniDev", plan="elite", credits=1000)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        admin_token = create_jwt_token({"sub": user.id, "public_id": user.public_id})
+    finally:
+        db.close()
+
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Submit feedback (authenticated)
     resp = client.post(
         "/api/feedback/submit",
+        headers=headers,
         json={
             "category": "praise",
             "urgency": "low",
@@ -84,21 +113,21 @@ def test_api_feedback_and_datalake_routes():
     assert data["status"] == "success"
     fb_id = data["feedback"]["feedback_id"]
 
-    # List feedback
-    list_resp = client.get("/api/feedback/list")
+    # List feedback (admin authenticated)
+    list_resp = client.get("/api/feedback/list", headers=headers)
     assert list_resp.status_code == 200
     assert list_resp.json()["status"] == "success"
 
     # Patch feedback
-    patch_resp = client.patch(f"/api/feedback/{fb_id}", json={"status": "resolved"})
+    patch_resp = client.patch(f"/api/feedback/{fb_id}", headers=headers, json={"status": "resolved"})
     assert patch_resp.status_code == 200
 
     # Get insights
-    insights_resp = client.get("/api/datalake/insights")
+    insights_resp = client.get("/api/datalake/insights", headers=headers)
     assert insights_resp.status_code == 200
     assert insights_resp.json()["status"] == "success"
 
     # Get stats
-    stats_resp = client.get("/api/datalake/stats")
+    stats_resp = client.get("/api/datalake/stats", headers=headers)
     assert stats_resp.status_code == 200
     assert stats_resp.json()["status"] == "success"

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .database import DataSubmission, User, get_db
 from .routes_features import get_current_authenticated_user
+from .security import is_admin_user
 from .datalake import datalake_manager, datalake_agent
 from .user_settings_service import user_settings_service
 
@@ -34,9 +35,8 @@ class MicroCreditSubmission(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
-class MicroCreditRedeemRequest(BaseModel):
-    amount_credits: Optional[int] = None
-    amount: Optional[int] = None
+class MicroCreditRedeemPayload(BaseModel):
+    credits_amount: int = Field(..., ge=1, le=10000)
     redemption_method: Optional[str] = "compute_credits"
     destination: Optional[str] = None
     user_id: Optional[str] = None
@@ -45,13 +45,13 @@ class MicroCreditRedeemRequest(BaseModel):
 # ─── Feedback Routes ─────────────────────────────────────────────────────────
 
 @router.post("/feedback/submit")
-async def submit_user_feedback(payload: FeedbackSubmission):
+async def submit_user_feedback(payload: FeedbackSubmission, current_user: User = Depends(get_current_authenticated_user)):
     """Submits user feedback into the Data Lake with categorization and urgency tagging."""
     entry = datalake_manager.record_feedback(
         category=payload.category,
         urgency=payload.urgency,
         message=payload.message,
-        user_id=payload.user_id,
+        user_id=current_user.public_id,
         feature_tag=payload.feature_tag,
     )
     return {"status": "success", "feedback": entry}
@@ -63,8 +63,11 @@ async def list_user_feedback(
     urgency: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_authenticated_user),
 ):
-    """Retrieves filtered feedback entries."""
+    """Retrieves filtered feedback entries (admin only)."""
+    if not is_admin_user(current_user):
+        raise HTTPException(403, "Admin only")
     items = datalake_manager.list_feedback(
         category=category,
         urgency=urgency,
@@ -75,8 +78,14 @@ async def list_user_feedback(
 
 
 @router.patch("/feedback/{feedback_id}")
-async def update_feedback_status_route(feedback_id: str, payload: FeedbackStatusUpdate):
-    """Updates feedback resolution status."""
+async def update_feedback_status_route(
+    feedback_id: str,
+    payload: FeedbackStatusUpdate,
+    current_user: User = Depends(get_current_authenticated_user),
+):
+    """Updates feedback resolution status (admin only)."""
+    if not is_admin_user(current_user):
+        raise HTTPException(403, "Admin only")
     ok = datalake_manager.update_feedback_status(feedback_id, payload.status)
     if not ok:
         raise HTTPException(status_code=404, detail="Feedback entry not found")
@@ -223,22 +232,28 @@ async def redeem_microcredits(
 # ─── Data Lake Intelligence Insights ─────────────────────────────────────────
 
 @router.get("/datalake/insights")
-async def get_datalake_insights():
-    """Fetches synthesized insights, pattern discovery, and performance metrics from the Data Lake."""
+async def get_datalake_insights(current_user: User = Depends(get_current_authenticated_user)):
+    """Fetches synthesized insights, pattern discovery, and performance metrics from the Data Lake (admin only)."""
+    if not is_admin_user(current_user):
+        raise HTTPException(403, "Admin only")
     insights = await datalake_agent.analyze_lake()
     return {"status": "success", "insights": insights}
 
 
 @router.post("/datalake/analyze")
-async def trigger_datalake_analysis():
-    """Manually triggers the intelligence processing cycle across the Data Lake."""
+async def trigger_datalake_analysis(current_user: User = Depends(get_current_authenticated_user)):
+    """Manually triggers the intelligence processing cycle across the Data Lake (admin only)."""
+    if not is_admin_user(current_user):
+        raise HTTPException(403, "Admin only")
     insights = await datalake_agent.analyze_lake()
     return {"status": "analysis_completed", "insights": insights}
 
 
 @router.get("/datalake/stats")
-async def get_datalake_stats():
-    """Returns high-level event counts and telemetry health."""
+async def get_datalake_stats(current_user: User = Depends(get_current_authenticated_user)):
+    """Returns high-level event counts and telemetry health (admin only)."""
+    if not is_admin_user(current_user):
+        raise HTTPException(403, "Admin only")
     telemetry = datalake_manager.get_raw_telemetry(limit=5000)
     feedback = datalake_manager.list_feedback(limit=5000)
     microcredits = datalake_manager.list_microcredit_submissions(limit=5000)

@@ -426,7 +426,7 @@ export default function AppShell({
               aria-label={`${Number(user.credits).toLocaleString()} credits, open credit wallet`}
             >
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-              {Number(user.credits ?? 10029).toLocaleString()} credits
+              {Number(user?.credits ?? 0).toLocaleString()} credits
             </button>
 
             {/* Notification bell */}

@@ -424,11 +424,19 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
 /* Font size scaling (1-100). Not a uniform resize: every step multiplies the
  * base font size, so all text scales proportionally and 50 = default.
  * Hooked onto the html root font-size so rem-based utilities follow along. */
-const fontScaleMultiplier = (score) => 0.6 + Math.max(0, Math.min(100, Number(score) || 50)) * 0.008; // 1→0.61, 50→1.0, 100→1.4
 export function applyFontScale(score) {
   const m = fontScaleMultiplier(score);
   document.documentElement.style.fontSize = `${16 * 1.1 * m}px`;
   document.documentElement.style.setProperty('--font-scale', String(m));
+}
+
+export function applyAppearance(appearance) {
+  if (!appearance) return;
+  const root = document.documentElement;
+  applyFontScale(appearance.fontScale);
+  if (appearance.theme) root.setAttribute('data-theme', appearance.theme);
+  if (appearance.accent) root.setAttribute('data-accent', appearance.accent);
+  if (appearance.density) root.setAttribute('data-density', appearance.density);
 }
 
 export function SettingsApp({ userId, onGoTo }) {
@@ -438,10 +446,10 @@ export function SettingsApp({ userId, onGoTo }) {
   const [search, setSearch] = useState('');
   const [presetConfirm, setPresetConfirm] = useState(null);
 
-  /* Live font scaling as the slider moves. */
+  /* Live appearance scaling & theming as controls move. */
   useEffect(() => {
-    applyFontScale(settings.appearance?.fontScale);
-  }, [settings.appearance?.fontScale]);
+    applyAppearance(settings.appearance);
+  }, [settings.appearance]);
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
