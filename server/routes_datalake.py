@@ -194,7 +194,7 @@ async def get_microcredits_history(
 
 @router.post("/datalake/microcredits/redeem")
 async def redeem_microcredits(
-    payload: MicroCreditRedeemRequest,
+    payload: MicroCreditRedeemPayload,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
@@ -202,7 +202,7 @@ async def redeem_microcredits(
     user_id = current_user.public_id
     user = db.query(User).filter(User.public_id == user_id).first()
 
-    credits_to_redeem = payload.amount_credits or payload.amount or 20
+    credits_to_redeem = payload.credits_amount
     # Strict platform compute credit policy: credits cannot be cashed out to external accounts
     method = "compute_credits"
 

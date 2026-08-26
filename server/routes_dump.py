@@ -132,7 +132,13 @@ async def manual_route_dump_item(
         item.status = "manual_routed"
         item.overlord_notes = f"Manually created and routed to new assignment '{new_assign.title}'."
     elif payload.assignment_id:
-        item.matched_assignment_id = payload.assignment_id
+        target = db.query(Assignment).filter(
+            Assignment.id == payload.assignment_id,
+            Assignment.user_id == current_user.id,
+        ).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        item.matched_assignment_id = target.id
         item.auto_match_confidence = 1.0
         item.status = "manual_routed"
         item.overlord_notes = "Manually assigned to existing assignment."
