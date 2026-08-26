@@ -45,7 +45,7 @@
 
 /* Clean, non-distracting background */
 .app-background {
-  background-color: #090d16;
+  background-color: var(--bg-base);
   background-image: radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 60%);
 }
 

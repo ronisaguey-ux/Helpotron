@@ -425,8 +425,9 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
  * base font size, so all text scales proportionally and 50 = default.
  * Hooked onto the html root font-size so rem-based utilities follow along. */
 export function applyFontScale(score) {
-  const m = fontScaleMultiplier(score);
-  document.documentElement.style.fontSize = `${16 * 1.1 * m}px`;
+  const n = Number(score);
+  const m = Number.isFinite(n) && n > 0 ? Math.min(1.6, Math.max(0.8, n / 50)) : 1;
+  document.documentElement.style.fontSize = `${16 * m}px`;
   document.documentElement.style.setProperty('--font-scale', String(m));
 }
 
