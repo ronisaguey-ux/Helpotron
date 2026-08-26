@@ -243,10 +243,6 @@ export default function App() {
   };
 
   const handleSelectView = (viewKey) => {
-    if (viewKey === 'extension_guide') {
-      setExtensionGuideOpen(true);
-      return;
-    }
     const mapped = LEGACY_VIEWS[viewKey];
     const nextView = mapped ? mapped[0] : viewKey;
     const nextTab = mapped ? mapped[1] : null;
