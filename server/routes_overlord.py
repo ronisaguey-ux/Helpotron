@@ -237,6 +237,8 @@ async def respond_to_permission(payload: PermissionResponseRequest, request: Req
     perm_entry = overlord_agent._pending_permissions.get(payload.permission_id)
     if not perm_entry:
         raise HTTPException(404, "Permission request not found")
+    if perm_entry.get("user_public_id") != user.public_id:
+        raise HTTPException(403, "Permission request does not belong to you")
 
     decision = payload.decision.lower()
     assignment_id = perm_entry.get("assignment_id")

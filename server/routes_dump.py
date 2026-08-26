@@ -23,8 +23,8 @@ class ManualRoutePayload(BaseModel):
 @router.post("/upload")
 async def upload_dump_file(
     file: UploadFile = File(...),
-    user_id: Optional[str] = Form(None),
     assignment_id: Optional[int] = Form(None),
+    current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Universal upload endpoint for any file (PDF, DOCX, TXT, Audio, Video, Image).
@@ -32,22 +32,13 @@ async def upload_dump_file(
     Extracts content via Gemini 3.1 Flash-Lite (Audio) / Gemini 3.7 Flash (Vision/OCR),
     and uses the Overlord AI to automatically route to the correct assignment.
     """
-    uid = user_id or "RoniDev"
-    user = db.query(User).filter(User.public_id == uid).first()
-    if not user:
-        # Create user record if not present
-        user = User(public_id=uid, plan="basic", credits=50.0)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
 
     dump_item = await assignment_dump_manager.process_dump_upload(
         db=db,
-        user=user,
+        user=current_user,
         filename=file.filename or "uploaded_file.bin",
         content=content,
         manual_assignment_id=assignment_id,
@@ -68,18 +59,13 @@ async def upload_dump_file(
 
 @router.get("/list")
 async def list_dump_items(
-    user_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
     """Retrieves all universal dumped items for user with Overlord assignment match details."""
-    uid = user_id or "RoniDev"
-    user = db.query(User).filter(User.public_id == uid).first()
-    if not user:
-        return {"status": "success", "count": 0, "items": []}
-
-    query = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user.id)
+    query = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == current_user.id)
     if status:
         query = query.filter(UniversalDumpItem.status == status)
 
@@ -118,7 +104,6 @@ async def list_dump_items(
 async def manual_route_dump_item(
     dump_id: int,
     payload: ManualRoutePayload,
-    user_id: Optional[str] = Query(None),  # legacy param; identity comes from the session (BATCH-04 IDOR fix)
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
@@ -128,9 +113,6 @@ async def manual_route_dump_item(
         raise HTTPException(status_code=404, detail="Dump item not found.")
     if item.user_id != current_user.id and not getattr(current_user, "is_admin", False):
         raise HTTPException(status_code=403, detail="Cannot route dump items owned by another user")
-
-    uid = user_id or current_user.public_id
-    user = db.query(User).filter(User.public_id == uid).first()
 
     if payload.create_new:
         title = payload.new_assignment_title or f"Assignment from {item.file_name}"

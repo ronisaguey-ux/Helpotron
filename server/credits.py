@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import update
+from sqlalchemy import update, text
 from server.database import CreditTransaction, DataSubmission, User
 
 logger = logging.getLogger('helpotron.credits')
@@ -73,6 +73,9 @@ def charge_with_rollback(
 
     return True, rollback
 
+class InsufficientCreditsError(Exception):
+    pass
+
 def charge(user: Any, task_name: str, db: Session, cost_override: Optional[int] = None, reason: str = "", idempotency_key: Optional[str] = None) -> bool:
     """Deduct credits atomically using database row locking."""
     user_id = user.id if hasattr(user, 'id') else user
@@ -80,18 +83,24 @@ def charge(user: Any, task_name: str, db: Session, cost_override: Optional[int] 
     if cost <= 0:
         return True
     
-    locked_user = db.query(User).filter(User.id == user_id).with_for_update().first()
-    if getattr(locked_user, "plan", "") == "elite":
+    # Just to handle plan checks if we have the user object
+    user_obj = user if hasattr(user, 'id') else db.query(User).filter(User.id == user_id).first()
+    if getattr(user_obj, "plan", "") == "elite":
         return True
-    if not locked_user or locked_user.credits < cost:
-        db.rollback()
-        logger.warning(f'User {user_id} has insufficient credits ({getattr(locked_user, "credits", 0) if locked_user else 0}) for {task_name} (cost {cost})')
+        
+    result = db.execute(
+        text("UPDATE users SET credits = credits - :cost WHERE id = :uid AND credits >= :cost"),
+        {"cost": cost, "uid": user_id}
+    )
+    if result.rowcount == 0:
         return False
-    
-    locked_user.credits -= cost
-    db.commit()
-    db.refresh(locked_user)
-    logger.info(f'Charged user {user_id} {cost} credits for {task_name}. New balance: {locked_user.credits}')
+    if user_obj:
+        try:
+            if user_obj in db:
+                db.refresh(user_obj)
+        except Exception:
+            pass
+        logger.info(f'Charged user {user_id} {cost} credits for {task_name}.')
     return True
 
 charge_user = charge
