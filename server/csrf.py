@@ -23,7 +23,6 @@ EXEMPT_PATHS = {
     "/api/auth/signup",
     "/api/auth/csrf",
     "/api/health",
-    "/api/feedback/submit",
 }
 
 

@@ -11,6 +11,7 @@ from .database import User, Payment, get_db
 from .security import verify_password, hash_password, get_current_user
 from .auth_2fa import code_store, email_service, sms_service, totp_service
 from .routes_features import get_current_authenticated_user
+from .ratelimit import limiter
 import asyncio
 
 router = APIRouter(prefix="/api/auth", tags=["auth_2fa"])
@@ -77,8 +78,16 @@ class PurchaseVerifyRequest(BaseModel):
 # ─── Verification Routes ──────────────────────────────────────────────────────
 
 @router.post("/send-email-verification")
-async def send_email_verification(payload: EmailVerificationRequest):
+async def send_email_verification(payload: EmailVerificationRequest, request: Request):
     """Generates and sends a 6-digit email verification code (15-min TTL)."""
+    # Unauthenticated by design (you verify before you have a session), so it is
+    # throttled per source address *and* per target inbox — otherwise it is an
+    # open relay that mails arbitrary strangers on demand.
+    client = request.client.host if request.client else "unknown"
+    target = (payload.email or "").lower().strip()[:200]
+    for key in (f"email_verify_ip:{client}", f"email_verify_to:{target}"):
+        if not limiter.allow(key, 3, window=900.0):
+            raise HTTPException(429, "Too many verification emails requested. Please wait 15 minutes.")
     code = code_store.generate_code(payload.email, purpose="email_verification")
     sent = await asyncio.to_thread(email_service.send_verification_code, payload.email, code, purpose_label="Email Verification")
     if not sent:

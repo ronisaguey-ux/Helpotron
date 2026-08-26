@@ -13,6 +13,25 @@ from .database import UniversalDumpItem, User, get_db
 router = APIRouter(prefix="/api/admin", tags=["admin_advanced"])
 
 
+def _resolve_budget_subject(request: Request, db: Session, user_id: Optional[str]) -> User:
+    """Cost/budget endpoints are self-service: they resolve to the caller.
+
+    A different `user_id` may only be inspected or modified by a platform
+    administrator, so these routes can never be used anonymously to read or
+    rewrite somebody else's spend limits.
+    """
+    from .routes_features import get_current_authenticated_user
+
+    current = get_current_authenticated_user(request, db)
+    if not user_id or user_id == current.public_id:
+        return current
+    require_admin(request)
+    target = db.query(User).filter(User.public_id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return target
+
+
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class BulkOperationRequest(BaseModel):
@@ -130,6 +149,7 @@ async def set_model_override_endpoint(
 @router.get("/messages")
 async def get_all_admin_messages_endpoint(request: Request, limit: int = 100, db: Session = Depends(get_db)):
     """Admin endpoint: lists all incoming messages from students/users."""
+    require_admin(request)
     from .database import AdminMessage
     msgs = db.query(AdminMessage).order_by(AdminMessage.id.desc()).limit(limit).all()
     return {
@@ -157,8 +177,9 @@ class AdminReplyPayload(BaseModel):
 
 
 @router.post("/messages/{message_id}/reply")
-async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPayload, db: Session = Depends(get_db)):
+async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPayload, request: Request, db: Session = Depends(get_db)):
     """Admin endpoint: replies to a student/user inquiry."""
+    require_admin(request)
     from .database import AdminMessage
     from datetime import datetime, timezone
     msg = db.query(AdminMessage).filter(AdminMessage.id == message_id).first()
@@ -174,7 +195,7 @@ async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPa
         "status": "success",
         "message_id": message_id,
         "admin_reply": payload.reply,
-        "status": "replied",
+        "message_status": "replied",
     }
 
 
@@ -307,17 +328,17 @@ async def update_user_token_multiplier(
 
 
 @router.get("/costs/budget")
-async def get_user_budget_endpoint(user_id: Optional[str] = None, request: Request = None, db: Session = Depends(get_db)):
+async def get_user_budget_endpoint(request: Request, user_id: Optional[str] = None, db: Session = Depends(get_db)):
     """User endpoint: Returns monthly budget and current usage/alert state."""
-    from .database import User, ApiUsageLog
+    from .database import ApiUsageLog
     from .security import is_admin_user
     from sqlalchemy import func
     from datetime import datetime, timezone
-    uid = user_id or getattr(config, "admin_public_id", "default_user")
-    user = db.query(User).filter(User.public_id == uid).first()
-    budget = getattr(user, "monthly_budget_usd", 50.0) if user else 50.0
-    multiplier = getattr(user, "token_cost_multiplier", 1.0) if user else 1.0
-    effort = getattr(user, "default_effort_level", 5) if user else 5
+    user = _resolve_budget_subject(request, db, user_id)
+    uid = user.public_id
+    budget = getattr(user, "monthly_budget_usd", None) or 50.0
+    multiplier = getattr(user, "token_cost_multiplier", None) or 1.0
+    effort = getattr(user, "default_effort_level", None) or 5
 
     # Month-to-date spent
     now = datetime.now(timezone.utc)
@@ -349,27 +370,27 @@ async def get_user_budget_endpoint(user_id: Optional[str] = None, request: Reque
 
 
 @router.post("/costs/budget")
-async def update_user_budget_endpoint(payload: UserBudgetPayload, user_id: Optional[str] = None, db: Session = Depends(get_db)):
+async def update_user_budget_endpoint(payload: UserBudgetPayload, request: Request, user_id: Optional[str] = None, db: Session = Depends(get_db)):
     """User endpoint: Updates monthly budget and effort level."""
-    from .database import User
-    uid = user_id or getattr(config, "admin_public_id", "default_user")
-    user = db.query(User).filter(User.public_id == uid).first()
-    if user:
-        user.monthly_budget_usd = payload.monthly_budget_usd
-        if payload.default_effort_level is not None:
-            user.default_effort_level = payload.default_effort_level
-        db.commit()
-    return {"status": "success", "monthly_budget_usd": payload.monthly_budget_usd, "default_effort_level": payload.default_effort_level}
+    user = _resolve_budget_subject(request, db, user_id)
+    user.monthly_budget_usd = payload.monthly_budget_usd
+    if payload.default_effort_level is not None:
+        user.default_effort_level = payload.default_effort_level
+    db.commit()
+    return {
+        "status": "success",
+        "public_id": user.public_id,
+        "monthly_budget_usd": user.monthly_budget_usd,
+        "default_effort_level": user.default_effort_level,
+    }
 
 
 @router.post("/costs/estimate")
-async def estimate_cost_endpoint(payload: CostEstimatePayload, user_id: Optional[str] = None, db: Session = Depends(get_db)):
+async def estimate_cost_endpoint(payload: CostEstimatePayload, request: Request, user_id: Optional[str] = None, db: Session = Depends(get_db)):
     """Pre-flight cost calculator for tasks."""
     from .model_tiering import model_tiering_engine
-    from .database import User
-    uid = user_id or getattr(config, "admin_public_id", "default_user")
-    user = db.query(User).filter(User.public_id == uid).first()
-    mult = getattr(user, "token_cost_multiplier", 1.0) if user else 1.0
+    user = _resolve_budget_subject(request, db, user_id)
+    mult = getattr(user, "token_cost_multiplier", None) or 1.0
 
     est = model_tiering_engine.estimate_task_cost(
         task_type=payload.task_type,
