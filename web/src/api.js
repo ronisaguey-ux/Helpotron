@@ -147,11 +147,15 @@ export const api = {
   request,
   
   // Auth endpoints
-  login: (public_id, password) => request('/api/login', { method: 'POST', body: JSON.stringify({ public_id, password }) }),
+  login: (public_id, password, code = null) => request('/api/login', { method: 'POST', body: JSON.stringify({ public_id, password, code, two_factor_code: code }) }),
   logout: () => request('/api/logout', { method: 'POST' }),
   me: () => request('/api/me', { method: 'GET' }),
   signup: (public_id, password) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password }) }),
   adminCheck: () => request('/api/admin/check', { method: 'GET' }),
+  setup2FA: (method = 'totp') => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method }) }),
+  verifySetup2FA: (method, code, secret) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret }) }),
+  sendChallenge2FA: (method) => request('/api/auth/2fa/send-challenge', { method: 'POST', body: JSON.stringify({ method }) }),
+  disable2FA: (code) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
   
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),

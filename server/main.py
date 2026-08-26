@@ -689,8 +689,10 @@ async def get_user_credits(request: Request, db: Session = Depends(get_db)):
 # ─── users ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/users")
-def create_user(body: UserIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, body.public_id)
+def create_user(body: UserIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
+    if body.public_id != user.public_id and not getattr(user, "is_admin", False):
+        raise HTTPException(403, "Cannot modify another user's profile")
     if body.telegram_id:
         user.telegram_id = body.telegram_id
     db.commit()
@@ -698,9 +700,11 @@ def create_user(body: UserIn, db: Session = Depends(get_db)):
 
 
 @app.patch("/api/users/{public_id}")
-def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_db)):
-    user = get_or_create_user(db, public_id)
-    user.settings = {**user.settings, **body.settings}
+def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first() or current_user
+    if user.public_id != public_id and not getattr(user, "is_admin", False):
+        raise HTTPException(403, "Cannot modify another user's settings")
+    user.settings = {**(user.settings or {}), **body.settings}
     db.commit()
     return {"settings": user.settings}
 
