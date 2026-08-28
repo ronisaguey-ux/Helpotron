@@ -12,7 +12,7 @@ export default function TermsOfServiceView({ onBack = null }) {
             <Scale className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Terms of Service & Fair Use Policy</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Terms of Service & Fair Use Policy</h2>
             <p className="text-xs text-slate-400 mt-0.5">Effective Date: August 18, 2026 • Helpotron Automator v2.0</p>
           </div>
         </div>

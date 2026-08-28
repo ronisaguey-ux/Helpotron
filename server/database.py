@@ -137,6 +137,11 @@ class Assignment(Base):
     status: Mapped[str] = mapped_column(String(32), default="tracked")
     progress: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Turn-in (08-27): an assignment marked as turned in moves into the
+    # assignment history. turned_in_at is the real timestamp of the turn-in;
+    # it is reset to NULL when the user undoes the turn-in.
+    turned_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    turned_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="assignments")
     transcripts = relationship("Transcript", back_populates="assignment")
@@ -423,6 +428,30 @@ class AdminMessage(Base):
     replied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class PasswordReset(Base):
+    """Password recovery requests (operator 08-28): one row per request.
+
+    code_hash is the SHA-256 of the 6-digit code (never stored in plaintext);
+    token is an opaque url-safe string that acts as the same capability for
+    link-based UX ("recovery-code link"). Rows are single-use and expire after
+    30 minutes; verify failures increment attempts (5 max → row invalidated).
+    """
+    __tablename__ = "password_resets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    public_id: Mapped[str] = mapped_column(String(64), index=True)
+    method: Mapped[str] = mapped_column(String(16))  # email | phone | dev
+    code_hash: Mapped[str] = mapped_column(String(64))
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | used | expired | invalidated
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)  # user | admin
+
+
 class ApiUsageLog(Base):
     """Detailed ledger for all API calls (LLMs, Audio Transcription, Vision, Detectors)."""
     __tablename__ = "api_usage_logs"
@@ -516,6 +545,19 @@ def init_db() -> None:
                 columns_materials = [row[1] for row in conn.execute(text("PRAGMA table_info(study_materials)")).fetchall()]
                 if "shared_with" not in columns_materials:
                     conn.execute(text("ALTER TABLE study_materials ADD COLUMN shared_with JSON DEFAULT '[]'"))
+
+                columns_assignments = [row[1] for row in conn.execute(text("PRAGMA table_info(assignments)")).fetchall()]
+                if "turned_in" not in columns_assignments:
+                    conn.execute(text("ALTER TABLE assignments ADD COLUMN turned_in BOOLEAN DEFAULT 0"))
+                if "turned_in_at" not in columns_assignments:
+                    conn.execute(text("ALTER TABLE assignments ADD COLUMN turned_in_at DATETIME"))
+
+                # Operator 08-28: the assignment full-view endpoint reads
+                # universal_dump_items (dump provenance); DBs created before the
+                # field existed would 500 without this guard.
+                columns_dump = [row[1] for row in conn.execute(text("PRAGMA table_info(universal_dump_items)")).fetchall()]
+                if columns_dump and "requested_action" not in columns_dump:
+                    conn.execute(text("ALTER TABLE universal_dump_items ADD COLUMN requested_action VARCHAR(32)"))
 
                 conn.commit()
             except Exception:

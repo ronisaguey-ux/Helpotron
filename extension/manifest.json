@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Helpotron Academic OS Companion",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "helpotron-companion@ronisaguey-ux.dev",
@@ -14,7 +14,8 @@
     "activeTab",
     "tabs",
     "scripting",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
+import NewAssignmentModal from './NewAssignmentModal.jsx';
 import {
   History as HistoryIcon,
   Search,
@@ -13,14 +14,18 @@ import {
   BookOpen,
   Award,
   Calendar,
+  ExternalLink,
+  Plus,
 } from 'lucide-react';
 
-export default function AssignmentHistoryView({ userId }) {
+export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('ALL');
   const [exportNotice, setExportNotice] = useState('');
+  const [showNewAssignment, setShowNewAssignment] = useState(false);
+  const [createNotice, setCreateNotice] = useState('');
 
   const fetchHistory = async (subj) => {
     setLoading(true);
@@ -47,11 +52,11 @@ export default function AssignmentHistoryView({ userId }) {
       `"${(h.title || '').replace(/"/g, '""')}"`,
       `"${(h.course || '').replace(/"/g, '""')}"`,
       `"${(h.teacher_name || '').replace(/"/g, '""')}"`,
-      `"${h.grade_letter || 'A'}"`,
-      h.score_predicted || 92,
-      `"${((h.detector_score || 0.01) * 100).toFixed(0)}%"`,
+      `"${h.grade_letter || 'Not graded'}"`,
+      h.score_predicted != null ? h.score_predicted : '',
+      h.detector_score != null ? `"${(h.detector_score * 100).toFixed(0)}%"` : '""',
       `"${h.completed_at || ''}"`,
-      `"${h.status || 'Submitted & Verified'}"`,
+      `"${h.status || ''}"`,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -71,10 +76,23 @@ export default function AssignmentHistoryView({ userId }) {
     const matchesSearch =
       !searchQuery ||
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.course.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.course || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.teacher_name && item.teacher_name.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesSearch;
   });
+
+  // Honest aggregates over REAL ledger data only (operator 08-27): null/absent
+  // grades and detector scores count as "not graded" / "not checked" — no
+  // fabricated A/92 defaults anywhere.
+  const gradedScores = historyList
+    .map((h) => (h.score_predicted != null && Number.isFinite(Number(h.score_predicted)) ? Number(h.score_predicted) : null))
+    .filter((n) => n != null);
+  const gradedCount = gradedScores.length;
+  const avgScore = gradedCount > 0 ? Math.round(gradedScores.reduce((a, b) => a + b, 0) / gradedCount) : null;
+  const detectorScores = historyList
+    .map((h) => (h.detector_score != null && Number.isFinite(Number(h.detector_score)) ? Number(h.detector_score) : null))
+    .filter((n) => n != null);
+  const avgDetector = detectorScores.length > 0 ? Math.round((detectorScores.reduce((a, b) => a + b, 0) / detectorScores.length) * 100) : null;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -85,7 +103,7 @@ export default function AssignmentHistoryView({ userId }) {
             <HistoryIcon className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Assignment History & Submission Archive</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Assignment History & Submission Archive</h2>
             <p className="text-xs text-slate-400">
               Permanent verified ledger of all synthesized and submitted coursework across all semesters.
             </p>
@@ -93,6 +111,15 @@ export default function AssignmentHistoryView({ userId }) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowNewAssignment(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white border border-blue-500/50 transition shadow-sm cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Assignment</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExportCsv}
@@ -120,39 +147,62 @@ export default function AssignmentHistoryView({ userId }) {
           {exportNotice}
         </div>
       )}
+      {createNotice && (
+        <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-blue-300 font-mono">
+          {createNotice}
+        </div>
+      )}
 
-      {/* ─── Metric Summary Cards ─────────────────────────────────────── */}
+      {/* ─── Metric Summary Cards (honest, computed from ledger contents) ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SectionCard id="history-total-completed" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Total Completed Submissions</span>
+            <span>Assignments in Ledger</span>
             <BookOpen className="w-4 h-4 text-blue-400" />
           </div>
         }>
           <div className="text-2xl font-bold text-white font-mono">{historyList.length}</div>
-          <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> 100% Delivery Success Rate
+          <div className="text-[11px] text-slate-400 mt-1">
+            {historyList.length} assignment{historyList.length === 1 ? '' : 's'} on record
           </div>
         </SectionCard>
 
         <SectionCard id="history-average-grade" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Average Grade Performance</span>
+            <span>Average Recorded Score</span>
             <Award className="w-4 h-4 text-amber-400" />
           </div>
         }>
-          <div className="text-2xl font-bold text-amber-300 font-mono">A <span className="text-sm font-normal text-slate-400">(92.4%)</span></div>
-          <div className="text-[11px] text-slate-400 mt-1">Calibrated to Target Score rules</div>
+          {avgScore != null ? (
+            <>
+              <div className="text-2xl font-bold text-amber-300 font-mono">{avgScore}%</div>
+              <div className="text-[11px] text-slate-400 mt-1">Across {gradedCount} graded assignment{gradedCount === 1 ? '' : 's'}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-slate-400 font-mono">Not graded</div>
+              <div className="text-[11px] text-slate-400 mt-1">Scores are recorded when an instructor publishes grades</div>
+            </>
+          )}
         </SectionCard>
 
-        <SectionCard id="history-zero-ai-risk" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
+        <SectionCard id="history-ai-risk" padding="p-4" className="rounded-2xl bg-slate-900/60 border border-white/10" header={
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Zero-AI Evasion Compliance</span>
+            <span>Average AI Detection Risk</span>
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
         }>
-          <div className="text-2xl font-bold text-emerald-300 font-mono">0% AI Risk</div>
-          <div className="text-[11px] text-emerald-400/80 mt-1">Originality pipeline validated</div>
+          {avgDetector != null ? (
+            <>
+              <div className="text-2xl font-bold text-emerald-300 font-mono">{avgDetector}%</div>
+              <div className="text-[11px] text-slate-400 mt-1">Average detection score on file</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-slate-400 font-mono">Not checked</div>
+              <div className="text-[11px] text-slate-400 mt-1">No detector scores recorded for these assignments</div>
+            </>
+          )}
         </SectionCard>
       </div>
 
@@ -198,7 +248,8 @@ export default function AssignmentHistoryView({ userId }) {
           <Archive className="w-10 h-10 text-slate-500 mx-auto" />
           <div>
             <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-              Completed assignments and synthesized coursework will automatically record into this permanent archive.
+              New assignments are created with the “New Assignment” button above, and once they are turned in they
+              record permanently into this archive. Completed coursework shows up here automatically.
             </p>
           </div>
         </SectionCard>
@@ -219,38 +270,67 @@ export default function AssignmentHistoryView({ userId }) {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredHistory.map((item) => (
-                  <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                  <tr
+                    key={item.id}
+                    onClick={() => onSelectAssignment && item.id != null && onSelectAssignment({
+                      id: item.id,
+                      name: item.title,
+                      title: item.title,
+                      subject: item.course,
+                      teacher_name: item.teacher_name,
+                      status: item.status,
+                    })}
+                    className={`transition-colors ${onSelectAssignment && item.id != null ? 'hover:bg-white/[0.04] cursor-pointer group' : 'hover:bg-white/[0.02]'}`}
+                    title={onSelectAssignment && item.id != null ? 'Open assignment in workspace' : undefined}
+                  >
                     <td className="py-4 px-4 font-semibold text-white">
                       <div className="flex items-center gap-2">
-                        <span>{item.title}</span>
+                        <span className={onSelectAssignment && item.id != null ? 'group-hover:text-blue-300 group-hover:underline underline-offset-2' : ''}>
+                          {item.title}
+                        </span>
+                        {onSelectAssignment && item.id != null && (
+                          <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-blue-400" />
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-4 text-slate-300 font-mono text-[11px]">
-                      {item.course}
+                      {item.course || '—'}
                     </td>
                     <td className="py-4 px-4 text-slate-400">
-                      {item.teacher_name || 'Department Instructor'}
+                      {item.teacher_name || '—'}
                     </td>
                     <td className="py-4 px-4">
-                      <span className="font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                        {item.grade_letter || 'A'} ({item.score_predicted || 92}%)
-                      </span>
+                      {item.grade_letter || item.score_predicted != null ? (
+                        <span className="font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                          {item.grade_letter || `${Math.round(item.score_predicted)}%`}
+                          {item.grade_letter && item.score_predicted != null ? ` (${Math.round(item.score_predicted)}%)` : ''}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-slate-500 px-1 italic">Not graded</span>
+                      )}
                     </td>
                     <td className="py-4 px-4">
-                      <span className="inline-flex items-center gap-1 font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[11px]">
-                        <ShieldCheck className="w-3 h-3" />
-                        {((item.detector_score || 0.01) * 100).toFixed(0)}% AI Risk
-                      </span>
+                      {item.detector_score != null ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[11px]">
+                          <ShieldCheck className="w-3 h-3" />
+                          {(item.detector_score * 100).toFixed(0)}% AI Risk
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-mono text-slate-500 px-2 py-0.5 text-[11px]">
+                          <ShieldCheck className="w-3 h-3" />
+                          Not checked
+                        </span>
+                      )}
                     </td>
                     <td className="py-4 px-4 text-slate-400 font-mono text-[11px]">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{item.completed_at || '2026-03-15'}</span>
+                        <span>{item.completed_at || '—'}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-right">
                       <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                        {item.status || 'Verified & Archived'}
+                        {item.status || 'Tracked'}
                       </span>
                     </td>
                   </tr>
@@ -259,6 +339,19 @@ export default function AssignmentHistoryView({ userId }) {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ─── New Assignment modal (operator 08-28) ──────────────────────── */}
+      {showNewAssignment && (
+        <NewAssignmentModal
+          onClose={() => { setShowNewAssignment(false); setCreateNotice(''); }}
+          onCreated={({ assignment_id, rubric_saved }) => {
+            setShowNewAssignment(false);
+            setCreateNotice(`✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once turned in.`);
+            setTimeout(() => setCreateNotice(''), 6000);
+            fetchHistory(subjectFilter);
+          }}
+        />
       )}
     </div>
   );

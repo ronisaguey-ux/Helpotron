@@ -77,7 +77,7 @@ export default function MessageAdminView({ userId }) {
             <MessageSquare className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Direct Channel to Admin</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Direct Channel to Admin</h2>
             <p className="text-xs text-slate-400">
               Send private inquiries, bug reports, feature suggestions, or custom parser feedback directly to Platform Admin.
             </p>
@@ -111,8 +111,9 @@ export default function MessageAdminView({ userId }) {
         <form onSubmit={handleSendMessage} className="space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="text-slate-400 block mb-1">Subject Header</label>
+              <label htmlFor="msgadmin-subject" className="text-slate-400 block mb-1">Subject Header</label>
               <input
+                id="msgadmin-subject"
                 type="text"
                 placeholder="e.g. Urgent LMS scraping format inquiry / Bug report"
                 value={subject}
@@ -121,8 +122,9 @@ export default function MessageAdminView({ userId }) {
               />
             </div>
             <div>
-              <label className="text-slate-400 block mb-1">Inquiry Category</label>
+              <label htmlFor="msgadmin-category" className="text-slate-400 block mb-1">Inquiry Category</label>
               <select
+                id="msgadmin-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
@@ -138,8 +140,9 @@ export default function MessageAdminView({ userId }) {
           </div>
 
           <div>
-            <label className="text-slate-400 block mb-1">Message Content</label>
+            <label htmlFor="msgadmin-message" className="text-slate-400 block mb-1">Message Content</label>
             <textarea
+              id="msgadmin-message"
               rows={4}
               placeholder="Describe your inquiry, request, or issue with as much detail as possible..."
               value={messageText}

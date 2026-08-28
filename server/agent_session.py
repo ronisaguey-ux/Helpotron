@@ -30,7 +30,13 @@ logger = logging.getLogger("helpotron.agent")
 
 MAX_SESSION_SECONDS = 60 * 60  # spec: "30 minutes to an hour"
 MAX_STEPS = 120                # slow, deliberate scraping pace
-MAX_PAGE_CHARS = 30000
+# 08-28 fix: the old 30k-char observation cap cut every read_page observation —
+# the model couldn't see half the assignment, so its `finish` payload was a
+# partial re-transcription and the stored dump was truncated. The extension
+# now returns the FULL page text, observations ride at 200k, and the
+# authoritative stored content is the extension's own deep scrape on
+# `finished` (never the LLM's transcription). Any cut is explicitly marked.
+MAX_PAGE_CHARS = 200_000
 COMMAND_TIMEOUT = 40  # seconds to wait for the extension to execute one command
 ATTACH_TIMEOUT = 60   # seconds to wait for the extension to connect after start
 
@@ -206,11 +212,28 @@ class AgentManager:
                     messages.append({"role": "user", "content": "The extension did not respond in time. If this repeats, finish."})
                     continue
 
-                ok = result.get("ok", False)
-                page = result.get("result") or {}
-                observation = json.dumps({"ok": ok, "error": result.get("error"), **page})[:MAX_PAGE_CHARS]
+                # 08-28 contract fix: the extension used to answer the bridge
+                # with {"success": bool, "text": ...} while this loop read
+                # {"ok": bool, "result": {...}} — every observation arrived as
+                # ok:false / {} and the agent scraped blind. Accept BOTH shapes:
+                # the extension's new {ok, result, error} plus the legacy
+                # {success, text} so any other caller keeps working.
+                ok = bool(result.get("ok", result.get("success", False)))
+                page = result.get("result")
+                if not isinstance(page, dict):
+                    page = {}
+                if not page and isinstance(result.get("text"), str):
+                    page = {"text": result["text"]}
+                err = result.get("error")
+                if err is None and not ok:
+                    err = result.get("error", "command failed")
+                obs = json.dumps({"ok": ok, "error": err, **page})
+                if len(obs) > MAX_PAGE_CHARS:
+                    obs = (obs[:MAX_PAGE_CHARS] +
+                           f"\n[…observation truncated at {MAX_PAGE_CHARS} chars — "
+                           "the stored scrape is full; this is only the model view.]").strip()
                 messages.append({"role": "assistant", "content": json.dumps({"tool": tool, "args": args})})
-                messages.append({"role": "user", "content": f"Tool result: {observation}"})
+                messages.append({"role": "user", "content": f"Tool result: {obs}"})
 
             if session.status == "running":
                 session.status = "done"
@@ -225,9 +248,13 @@ class AgentManager:
 def _agent_prompt(messages: list[dict]) -> str:
     """Compact prompt: mission + recent conversation tail (keeps context small)."""
     head = messages[0]["content"] if messages else ""
-    tail = messages[-6:]
+    # 08-28 fix: 6 messages x 6000 chars was too little for full-page
+    # observations (and silently truncated them into illegible fragments).
+    # Carry the last 10 turns with a 20k per-message cap — the model keeps
+    # seeing the page it is scraping across steps.
+    tail = messages[-10:]
     return head + "\n\n--- recent ---\n" + "\n".join(
-        f"{m['role'].upper()}: {m['content'][:6000]}" for m in tail
+        f"{m['role'].upper()}: {m['content'][:20000]}" for m in tail
     )
 
 

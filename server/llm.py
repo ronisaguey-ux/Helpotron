@@ -3,8 +3,18 @@ import json
 import itertools
 import httpx
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+
+# .env is authoritative: stale OPENROUTER_API_KEY exports in the surrounding
+# shell have shadowed the real key repeatedly (os.environ wins over pydantic's
+# env_file). override=True forces .env values into os.environ at import.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+except Exception:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +29,18 @@ class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
     
     PRIMARY_MODELS = {
-        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision-exp",  # NEVER deepseek-chat (V3) — user rule 08-26; exp slug verified 08-26
+        "deepseek_v4_flash_vision": "google/gemini-3.1-flash-lite",  # v4-flash-vision-exp slug dead on OpenRouter (404 guardrails for BOTH keys 08-27); lite = verified 08-27; NEVER deepseek-chat (V3) — user rule 08-26
         "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro",
         "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",  # verified live 08-26
         "gemini_37_flash": "google/gemini-3.7-flash",
     }
     
     GRUNT_CANDIDATES = [
-        "mistralai/mistral-nemo",
+        # all verified live 08-27; old IDs were retired/renamed on OpenRouter:
+        # nvidia/nemotron-mini-4b-instruct (retired → nemotron-3-nano), qwen/qwen-2.5-coder-32b (→ -instruct), mistral/mistral-nemo-12b (→ mistralai/mistral-nemo)
+        # NOTE 08-27: mistralai/mistral-nemo dropped — returns blank 200 bodies on this account (data-policy); use qwen/nemotron instead.
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "qwen/qwen-2.5-coder-32b-instruct",
         "qwen/qwen-2.5-72b-instruct"
     ]
     
@@ -40,6 +54,8 @@ class ModelPolicy:
         "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
         "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
         "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
+        "qwen/qwen-2.5-coder-32b-instruct": {"input": 0.66, "output": 1.00, "modalities": ["text"], "reliability": 0.98},
         # Candidate Grunt Models (Dynamic Economic Evaluation)
         "nvidia/nemotron-mini-4b-instruct": {"input": 0.04, "output": 0.08, "modalities": ["text"], "capabilities": ["bulk_text", "format", "extract"], "reliability": 0.98},
         "mistralai/mistral-nemo": {"input": 0.06, "output": 0.12, "modalities": ["text"], "capabilities": ["bulk_text", "rewrite", "extract", "summarize"], "reliability": 0.985},
@@ -68,7 +84,7 @@ def get_deepseek_baseline_cost(modality: str = "text", input_tokens: int = 1000,
     """
     if modality == "audio":
         return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    return calculate_effective_task_cost("deepseek/deepseek-v4-flash-vision-exp", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
+    return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
 
 def evaluate_grunt_candidate(
     candidate_id: str,
@@ -200,7 +216,7 @@ def resolve_model_routing(
     elif effort == "advanced":
         selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
     else:
-        selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
+        selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]  # medium: v4-flash-vision-exp dead (08-27) → verified gemini-3.7-flash
     
     is_escalated = bool(allow_grunt and effort == "low" and rejection_reasons)
     return {
@@ -220,7 +236,10 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
     token widget reads REAL usage, not fabricated numbers."""
     try:
         from .cost_tracking import cost_engine
-        cost_engine.record_usage(
+        # CostEngine has no `record_usage` (the old call warned on every LLM
+        # round-trip and dropped the row); log_api_call is the real ledger
+        # writer (same shape transcription.py uses).
+        cost_engine.log_api_call(
             db_session,
             public_id=user_id,
             tool_or_model=route_info.get("model", "unknown"),
@@ -231,10 +250,11 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
     except Exception as e:
         logger.warning(f"Failed to persist routing telemetry: {e}")
 
+
 async def call_llm(
     user_prompt: str,
     system_prompt: str = "",
-    effort: str = "medium",
+    effort: str = "auto",
     modality: str = "text",
     json_mode: bool = False,
     response_format: Optional[str] = None,
@@ -247,16 +267,19 @@ async def call_llm(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
 ) -> str:
-    # effort_score (1-1000 int, app convention: Low <=400 / Balanced <750 / High)
-    # maps to the routing effort bucket when passed — several callers use this
-    # kwarg (agent intent, conversational fallback, study tools) — previously
-    # it raised TypeError here and silently dropped to fallback paths.
+    # EFFORT GATE (operator 08-27, DEMO MODE): user effort scores are
+    # NON-OVERRIDABLE — every request is forced through "auto" routing.
+    # resolve_model_routing's auto path picks the engine by task complexity:
+    # junk/low-value prompts land on the cheap-and-fast tier, hard problems
+    # still escalate to the flagship engines. Slider in the UI is locked +
+    # demo banner shown; remove this gate to restore per-user effort control.
     if effort_score is not None:
         try:
             es = int(effort_score)
         except (TypeError, ValueError):
             es = 500
-        effort = "low" if es <= 400 else ("medium" if es < 750 else "advanced")
+        # gate: user score is ignored entirely — auto routing (complexity-based)
+        effort = "auto"
 
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
@@ -267,7 +290,7 @@ async def call_llm(
         required_capabilities=required_capabilities,
         complexity_score=complexity_score
     )
-    model_id = model or route["model"]
+    model_id = MODELS.get(model, model) if model else route["model"]  # short names (flash/pro/...) → real slug 08-28
     
     for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
         if prohibited in model_id:
@@ -298,24 +321,42 @@ async def call_llm(
     }
     if max_tokens:
         payload["max_tokens"] = int(max_tokens)
+    elif model_id in ModelPolicy.GRUNT_CANDIDATES:
+        # grunt models (nemotron-3-nano et al.) return empty 200 bodies
+        # without an explicit output cap (08-27) — always cap them.
+        payload["max_tokens"] = 4096
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
     openrouter_err = None
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
+    # Grunt tier is flaky (nemotron-3-nano / mistral-nemo are tiny providers
+    # that intermittently return blank 200s) — walk candidates until one
+    # answers instead of falling straight to dead local lanes (08-27).
+    if model_id in ModelPolicy.GRUNT_CANDIDATES:
+        _pos = ModelPolicy.GRUNT_CANDIDATES.index(model_id)
+        attempt_models = ModelPolicy.GRUNT_CANDIDATES[_pos:] + ModelPolicy.GRUNT_CANDIDATES[:_pos]
+    else:
+        attempt_models = [model_id]
 
-            usage = data.get("usage", {})
-            if db and user_id:
-                await record_routing_telemetry(db, user_id, route, usage)
-
-            return data["choices"][0]["message"]["content"]
-    except Exception as err:
-        openrouter_err = err
-        logger.warning("call_llm openrouter failed: %s — using local webchat lanes", err)
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for cand_id in attempt_models:
+            cand_payload = dict(payload)
+            cand_payload["model"] = cand_id
+            try:
+                resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=cand_payload)
+                resp.raise_for_status()
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                if content is None:
+                    # reasoning model burned its output cap — retry next candidate
+                    raise ValueError("blank content (reasoning cap)")
+                usage = data.get("usage", {})
+                if db and user_id:
+                    await record_routing_telemetry(db, user_id, {**route, "model": cand_id}, usage)
+                return content
+            except Exception as err:
+                openrouter_err = err
+                logger.warning("call_llm openrouter model %s failed: %s — next candidate", cand_id, err)
 
     # Fallback: local webchat gateway lanes (deepseek :8080 / gemini :8085) —
     # no auth, model name is the gateway passthrough. Keeps the agent alive
@@ -334,7 +375,12 @@ async def call_llm(
             try:
                 resp = await client.post(lane_url, json=lp)
                 resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"] or ""
+                ldata = resp.json()
+                lcontent = ldata["choices"][0]["message"]["content"] or ""
+                lusage = ldata.get("usage") or {}
+                if db and user_id:
+                    await record_routing_telemetry(db, user_id, route, lusage)
+                return lcontent
             except Exception as err:
                 lane_errs.append(f"{lane_url}: {err}")
                 logger.warning("call_llm lane failed: %s", err)
@@ -373,12 +419,12 @@ def extract_json(content: str) -> Any:
 
 # --- Compatibility Wrappers ---
 MODELS = {
-    "flash": "deepseek/deepseek-v4-flash-vision-exp",
+    "flash": "google/gemini-3.1-flash-lite",  # v4-flash-vision-exp dead on OR (08-27); lite verified
     "pro": "deepseek/deepseek-v4-pro",
-    "math": "deepseek/deepseek-v4-flash-vision-exp",
+    "math": "deepseek/deepseek-r1",
     "lite": "google/gemini-3.1-flash-lite",
-    "grunt": "qwen/qwen-2.5-coder-32b",
-    "cheapest": "mistral/mistral-nemo-12b",
+    "grunt": "nvidia/nemotron-3-nano-30b-a3b",
+    "cheapest": "google/gemini-3.1-flash-lite",
 }
 
 class TaskCategory:
@@ -393,10 +439,10 @@ class EffortLevel:
     MEDIUM = "medium"
     HIGH = "high"
 
-async def generate_with_deepseek(prompt: str, system_prompt: str = "", model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
+async def generate_with_deepseek(prompt: str, system_prompt: str = "", model: str = "google/gemini-3.1-flash-lite", **kwargs) -> str:
     return await call_llm(user_prompt=prompt, system_prompt=system_prompt, model=model, **kwargs)
 
-async def chat_complete(messages: list, model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
+async def chat_complete(messages: list, model: str = "google/gemini-3.1-flash-lite", **kwargs) -> str:
     user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     sys_msg = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
     return await call_llm(user_prompt=user_msg, system_prompt=sys_msg, model=model, **kwargs)

@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 try:
     from .database import User, get_db
-    from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
+    from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token, is_user_banned
 except (ImportError, ValueError):
     from server.database import User, get_db
-    from server.security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token
+    from server.security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token, is_user_banned
 
 from fastapi import status
 
@@ -31,6 +31,11 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
             SessionStore.refresh_session(session_token)
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
+                if is_user_banned(user):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail='Account suspended'
+                    )
                 return user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,6 +48,11 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
         if payload and 'sub' in payload:
             user = db.query(User).filter(User.id == payload['sub']).first()
             if user:
+                if is_user_banned(user):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail='Account suspended'
+                    )
                 return user
 
     raise HTTPException(

@@ -607,6 +607,17 @@ html[data-density="spacious"] .mb-2 { margin-bottom: calc(0.5rem * var(--density
 html[data-density="compact"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
 html[data-density="spacious"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
 
+/* Cookie notice clearance (08-28, visual polish): the fixed consent bar must
+   never sit over the footer or bury primary actions at the page bottom.
+   CookieBanner.jsx toggles this class on <body> while the bar is visible
+   (dropped as soon as the user accepts/rejects) and the pad reserves just
+   enough scroll room: taller on mobile where the bar stacks, plus room for
+   the sticky bottom nav (bottom-16 clearance from it). */
+body.cookie-banner-visible { padding-bottom: 9rem; }
+@media (min-width: 768px) {
+  body.cookie-banner-visible { padding-bottom: 6.5rem; }
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Accessibility (operator 08-26) — wired to settings.accessibility via
  * applyAccessibility(). Without these, the toggles did nothing.

@@ -104,3 +104,84 @@ def delete_agent_file(user_id: int, file_id: int) -> bool:
 def agent_files_summary(user_id: int, limit: int = 20) -> List[str]:
     """Compact list for chat system-prompt injection."""
     return [f"[{f['kind']}] {f['file_name']}" for f in list_agent_files(user_id)[:limit]]
+
+
+# Per-file character cap when injecting content into chat prompts. The full
+# text beyond this is still readable through GET /api/agent/files/{id}; the
+# prompt gets enough that a personality/rule/skill file actually shapes the
+# model rather than just sitting in the file list.
+_FULL_SUMMARY_MAX_PER_FILE = 6000
+_FULL_SUMMARY_MAX_TOTAL = 30000
+_FULL_SUMMARY_MAX_FILES = 15
+
+_KIND_HEADERS = {
+    "personality": "PERSONALITY (BINDING — the user loaded this as HOW YOU MUST SPEAK AND ACT; follow it entirely)",
+    "rule": "RULE (BINDING — always follow this, it overrides your defaults)",
+    "skill": "SKILL (capability instructions — apply where relevant)",
+    "automation": "AUTOMATION (background behavior definition)",
+}
+
+
+def agent_files_full_summary(
+    user_id: int,
+    max_per_file: int = _FULL_SUMMARY_MAX_PER_FILE,
+    max_total: int = _FULL_SUMMARY_MAX_TOTAL,
+    limit: int = _FULL_SUMMARY_MAX_FILES,
+) -> Optional[List[str]]:
+    """Full CONTENT blocks for agent system-prompt injection.
+
+    Operator 08-28 fix: `agent_files_summary` injected only
+    "[kind] file_name" strings, so loaded personality/rule/skill files never
+    actually reached the model. This reads each file's disk content (uuid hex
+    disk_name — never the client filename) and returns complete, readable
+    text blocks, identity-bearing kinds (personality, rule) first, each
+    truncated sensibly with a visible marker.
+    """
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AgentFile)
+            .filter(AgentFile.user_id == user_id)
+            .order_by(AgentFile.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        metas = [
+            {"id": r.id, "file_name": r.file_name, "kind": r.kind,
+             "disk_name": r.disk_name, "created_at": r.created_at}
+            for r in rows
+        ]
+    finally:
+        db.close()
+    if not metas:
+        return None
+    _prio = {"personality": 0, "rule": 1, "skill": 2, "automation": 3}
+    metas.sort(key=lambda m: (_prio.get(m["kind"], 3), str(m["created_at"] or "")))
+    out: List[str] = []
+    used = 0
+    for m in metas:
+        budget = max(0, max_total - used)
+        if budget <= 0:
+            break
+        body = ""
+        try:
+            p = _AGENT_FILES_DIR / m["disk_name"]
+            if p.exists():
+                body = p.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            body = ""
+        if not body:
+            out.append(f"=== [FILE: {m['kind'].upper()}] {m['file_name']} (unreadable/empty — name only) ===")
+            continue
+        truncated = len(body) > max_per_file
+        cap = min(max_per_file, budget)
+        shown = body[:cap]
+        if (truncated or len(body) > cap) and cap < len(body):
+            shown = shown + "\n…[truncated]"
+        header = f"=== FILE [{m['kind'].upper()}] {m['file_name']}"
+        note = _KIND_HEADERS.get(m["kind"])
+        if note:
+            header += f" — {note}"
+        out.append(f"{header} ===\n{shown}\n=== END FILE {m['file_name']} ===\n")
+        used += len(shown) + 160  # header/footer overhead
+    return out

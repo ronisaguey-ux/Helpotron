@@ -60,7 +60,7 @@ export function Navbar({
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs text-slate-300 font-mono">
               <Zap className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-slate-400">Credits:</span>
-              <span className="font-semibold text-slate-100">{Number(user.credits ?? 10029).toLocaleString()}</span>
+              <span className="font-semibold text-slate-100">{Number(user.credits ?? 0).toLocaleString()}</span>
             </div>
           )}
 
@@ -90,7 +90,7 @@ export function Navbar({
           {user && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-300 font-mono">
               <Zap className="w-3 h-3 text-blue-400" />
-              <span>{Number(user.credits ?? 10029).toLocaleString()}</span>
+              <span>{Number(user.credits ?? 0).toLocaleString()}</span>
             </div>
           )}
 
@@ -134,7 +134,7 @@ export function Navbar({
               <div className="p-3.5 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between text-xs font-mono">
                 <span className="text-slate-400">Available Credits:</span>
                 <span className="text-blue-400 font-bold flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5" /> {Number(user.credits ?? 10029).toLocaleString()}
+                  <Zap className="w-3.5 h-3.5" /> {Number(user.credits ?? 0).toLocaleString()}
                 </span>
               </div>
             )}

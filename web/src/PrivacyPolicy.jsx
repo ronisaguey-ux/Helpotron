@@ -18,7 +18,7 @@ export default function PrivacyPolicy({ onBack }) {
         <div className="flex items-center gap-2 text-blue-400 text-xs font-mono font-bold uppercase tracking-wider">
           <Shield className="w-4 h-4" /> Institutional Data Governance &amp; Statutory Disclosure
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Helpotron Privacy Policy &amp; Student Data Protection</h1>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Helpotron Privacy Policy &amp; Student Data Protection</h2>
         <p className="text-xs sm:text-sm text-slate-400">
           Last Updated: August 25, 2026 &bull; Compliant with FERPA (34 CFR Part 99), GDPR (EU 2016/679), CCPA/CPRA, and Enterprise Zero-Data-Retention (ZDR) Standards.
         </p>

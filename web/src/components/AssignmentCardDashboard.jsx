@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
 import SectionCard from './SectionCard';
 import api from '../api';
+import { normalizeCards } from '../lib/assignmentEvents';
 import {
   Layers,
   Sparkles,
@@ -45,6 +46,9 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [fullViewData, setFullViewData] = useState(null);
+  // Ghost filter (operator 08-28): ids of assignments that were turned in —
+  // they live in the history ledger, so they never render in the bubbles.
+  const [turnedInIds, setTurnedInIds] = useState(() => new Set());
 
   // Active View: 'bubbles' | 'history'
   const [dashboardTab, setDashboardTab] = useState('bubbles'); // 'bubbles' | 'history'
@@ -76,14 +80,27 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   const [permDeleteSendNotification, setPermDeleteSendNotification] = useState(true);
   const [permDeleteStatus, setPermDeleteStatus] = useState('');
 
-  // Simulator
-  const [simEnabled, setSimEnabled] = useState(true);
-  const [simSeeding, setSimSeeding] = useState(false);
-
   useEffect(() => {
     fetchDashboardData();
     fetchCustomBubbles();
-    fetchSimulationStatus();
+  }, [userId]);
+
+  // Ghost guard (operator 08-28): the cards snapshot is a one-shot mount-time
+  // fetch — an assignment deleted or turned in inside another view (agent
+  // chat, dump, turn-in history) would keep rendering as a dead card here.
+  // Re-pull the snapshot whenever the tab regains attention; the turned-in
+  // cross-reference then drops history rows from every count and card list.
+  useEffect(() => {
+    const refetch = () => {
+      if (document.visibilityState === 'visible') fetchDashboardData();
+    };
+    document.addEventListener('visibilitychange', refetch);
+    window.addEventListener('focus', refetch);
+    return () => {
+      document.removeEventListener('visibilitychange', refetch);
+      window.removeEventListener('focus', refetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   useEffect(() => {
@@ -95,15 +112,33 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   async function fetchCustomBubbles() {
     try {
       const data = await api.getCustomBubbles();
-      if (data?.bubbles) setCustomBubbles(data.bubbles);
+      if (data?.bubbles) {
+        // Dedupe by id — a duplicated/corrupt row must never render two
+        // bubble tiles or collide React keys.
+        const seen = new Set();
+        setCustomBubbles(data.bubbles.filter((b) => {
+          if (!b || b.id == null) return false;
+          if (seen.has(b.id)) return false;
+          seen.add(b.id);
+          return true;
+        }));
+      }
     } catch (e) {}
   }
 
   async function fetchDashboardData() {
     setLoading(true);
     try {
-      const cardsData = await api.assignmentCards();
-      if (cardsData?.cards) setCards(cardsData.cards);
+      const [cardsData, turnedInRes] = await Promise.all([
+        api.assignmentCards().catch(() => null),
+        api.getTurnedInAssignments().catch(() => null),
+      ]);
+      // Normalize (dedupe + drop idless rows) before it ever reaches state.
+      if (cardsData?.cards) setCards(normalizeCards(cardsData.cards));
+      setTurnedInIds(new Set(
+        (turnedInRes?.history || []).map((h) => h.id ?? h.assignment_id)
+          .filter((id) => id != null).map(String)
+      ));
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
@@ -120,24 +155,6 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
       console.error('Failed to load assignment history:', e);
     } finally {
       setHistoryLoading(false);
-    }
-  }
-
-  async function fetchSimulationStatus() {
-    try {
-      const data = await api.simulationStatus();
-      if (data?.is_enabled !== undefined) setSimEnabled(data.is_enabled);
-    } catch (e) {}
-  }
-
-  async function seedDemoData() {
-    setSimSeeding(true);
-    try {
-      await api.simulationSeed();
-      await fetchDashboardData();
-      if (dashboardTab === 'history') fetchAssignmentHistory();
-    } catch (e) {} finally {
-      setSimSeeding(false);
     }
   }
 
@@ -260,10 +277,27 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
     ...customBubbles.map((b) => ({ ...b, is_custom: true })),
   ];
 
-  // Cards for active bubble
-  const currentBubbleCards = activeBubble
-    ? cards.filter((c) => matchCardToBubble(c, activeBubble))
-    : [];
+  // Ghost filter (operator 08-28): turned-in assignments belong to the
+  // history ledger — the cards endpoint still includes them, so every count
+  // and every card list renders from this visible set only. Ids are
+  // canonicalized to String on both sides (numeric vs string id mismatch).
+  const visibleCards = cards.filter((c) => !turnedInIds.has(String(c.id)));
+
+  // Cards for active bubble (ghost guard 08-28: rows without an id can't
+  // own a chat thread or a detail view — drop them silently, never render).
+  const currentBubbleCards = (activeBubble
+    ? visibleCards.filter((c) => matchCardToBubble(c, activeBubble))
+    : []
+  ).filter((c) => c != null && c.id != null);
+
+  // Chat bubble entry (operator 08-28): open the SAME per-assignment agent
+  // team chat the detail workspace hosts — pass focus_chat so the workspace
+  // scrolls to and focuses the composer the moment it loads.
+  const handleAssignmentChat = (card, e) => {
+    if (e) e.stopPropagation();
+    if (onSelectAssignment) onSelectAssignment({ ...card, focus_chat: true });
+    else setSelectedCardId(card.id);
+  };
 
   return (
     <div className="space-y-6">
@@ -274,7 +308,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                 <div>
                   <h2 className="text-sm font-bold text-white flex items-center gap-2">
                     <Layers className="w-4 h-4 text-blue-400" />
-                    Curriculum Assignment Bubbles ({allBubblesList.length})
+                    <span>Curriculum Assignment Bubbles</span>
+                    {/* Count + noun live in one visual text (08-28): no "(7)"
+                        split label, correct pluralization */}
+                    <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                      {`${allBubblesList.length} ${allBubblesList.length === 1 ? 'bubble' : 'bubbles'}`}
+                    </span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Click any bubble to enter its workspace and view organized assignments and sub-agent teams.
@@ -360,8 +399,8 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {allBubblesList.map((bubble) => {
                   const count = bubble.id === 'all'
-                    ? cards.length
-                    : cards.filter((c) => matchCardToBubble(c, bubble)).length;
+                    ? visibleCards.length
+                    : visibleCards.filter((c) => matchCardToBubble(c, bubble)).length;
 
                   return (
                     <div
@@ -377,7 +416,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
-                            {count} Assignment{count === 1 ? '' : 's'}
+                            {`${count} ${count === 1 ? 'Assignment' : 'Assignments'}`}
                           </span>
 
                           {/* - Button for Custom Bubbles */}
@@ -394,10 +433,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         </div>
                       </div>
 
-                      {/* Content */}
+                      {/* Content (ghost guard 08-28: blank title/description from
+                          legacy data renders an honest placeholder, never an
+                          empty bubble shell) */}
                       <div>
                         <div className="font-bold text-sm text-white group-hover:text-blue-300 transition-colors flex items-center gap-1.5">
-                          <span>{bubble.title}</span>
+                          <span>{(bubble.title || '').trim() || 'Untitled Bubble'}</span>
                           {bubble.is_custom && (
                             <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-mono">
                               Custom
@@ -405,7 +446,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                           )}
                         </div>
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                          {bubble.description}
+                          {(bubble.description || '').trim() || 'No description provided.'}
                         </p>
                       </div>
 
@@ -442,7 +483,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       <span className="text-lg">{activeBubble.icon || '🫧'}</span>
                       <h2 className="text-base font-bold text-white">{activeBubble.title}</h2>
                       <span className="text-xs font-mono bg-blue-500/15 text-blue-300 border border-blue-500/25 px-2 py-0.5 rounded-full">
-                        {currentBubbleCards.length} Assignments
+                        {`${currentBubbleCards.length} ${currentBubbleCards.length === 1 ? 'Assignment' : 'Assignments'}`}
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{activeBubble.description}</p>
@@ -451,7 +492,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
                 <div className="flex items-center gap-2 text-xs font-mono">
                   <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl">
-                    🤖 Sub-Agent Teams Synchronized
+                    🤖 {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
                   </span>
                 </div>
               </div>
@@ -467,26 +508,28 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {currentBubbleCards.map((card) => {
-                    const hasVideoOrMedia = (card.title || '').toLowerCase().includes('video') ||
-                      (card.title || '').toLowerCase().includes('lecture') ||
-                      (card.title || '').toLowerCase().includes('presentation') ||
-                      (card.course || '').toLowerCase().includes('biology');
+                    const cardBlob = `${card.name || ''} ${card.subject || ''}`.toLowerCase();
+                    const hasVideoOrMedia = cardBlob.includes('video') ||
+                      cardBlob.includes('lecture') ||
+                      cardBlob.includes('presentation');
 
                     return (
                       <div key={card.id} className="relative group">
                         <AssignmentCard
                           id={card.id}
-                          title={card.title}
-                          course={card.course}
+                          title={card.name}
+                          course={[card.subject, card.class_code].filter(Boolean).join(' · ') || '—'}
                           dueDate={card.due_date}
                           status={card.status}
                           urgency={card.urgency}
                           detectorRisk={card.detector_risk}
+                          scoreAI={card.score_ai}
                           teacherName={card.teacher_name}
                           onSelect={() => {
-                            if (onSelectAssignment) onSelectAssignment(card.id);
+                            if (onSelectAssignment) onSelectAssignment(card);
                             else setSelectedCardId(card.id);
                           }}
+                          onChat={(e) => handleAssignmentChat(card, e)}
                         />
 
                         {/* AI Multimodal Attachment */}

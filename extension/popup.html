@@ -118,11 +118,76 @@
       color: #64748b;
       cursor: pointer;
     }
+    #chatMessages {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 60px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 8px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      background: #0b1120;
+    }
+    .chat-msg {
+      max-width: 88%;
+      padding: 6px 9px;
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 3px;
+    }
+    .chat-msg.agent {
+      align-self: flex-start;
+      background: #1e293b;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #e2e8f0;
+      border-bottom-left-radius: 3px;
+    }
+    .chat-msg.chat-note {
+      align-self: center;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      font-size: 10px;
+    }
+    .chat-sender {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 9px;
+      opacity: 0.7;
+    }
+    #chatRow {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    #chatInput {
+      flex: 1;
+      margin: 0;
+    }
+    #chatSend {
+      width: auto;
+      margin: 0;
+      padding: 8px 12px;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
     <h2>
-    <img src="icon128.jpeg" alt="" style="width: 20px; height: 20px; border-radius: 5px; object-fit: cover; box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);">
+    <!-- Popup-open latency: this renders on every open. icon128.jpeg is a
+         1024x1024/151KB decode for a 20px slot; icon48.png is 3.8KB. -->
+    <img src="icon48.png" width="20" height="20" alt="" style="border-radius: 5px; object-fit: cover; box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);">
     <span>Helpotron Companion</span>
   </h2>
   
@@ -133,7 +198,27 @@
 
   <button id="activateAgent" class="btn-primary">🤖 Spawn AI Subagent (Methodical Scrape)</button>
   <button id="startScrape" class="btn-secondary">📄 Quick Scrape Selected Tab</button>
+  <button id="startCrawl" class="btn-secondary">🌐 Scrape Entire Course (throttled, ~2-5s/page)</button>
+  <button id="stopCrawl" class="btn-secondary" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fca5a5;">⏹ Stop Course Crawl</button>
+  <div id="crawlProgress" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(96, 165, 250, 0.3); font-size: 11px; line-height: 1.4; color: #93c5fd; font-family: monospace;"></div>
   <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
+
+  <!-- Mini Agent Chatbox (talk to the scraper/capture agent) -->
+  <div id="agentChat" style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <label for="chatInput" style="margin: 0; font-size: 11px; font-weight: 700; color: #60a5fa;">💬 Agent Chat — talk to your scraper</label>
+      <button id="chatRefresh" title="Reload conversation from the server" style="width: auto; margin: 0; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: #cbd5e1; font-size: 11px; cursor: pointer;">⟳</button>
+    </div>
+    <div id="chatMessages"><div class="chat-msg chat-note">💡 Type an instruction, e.g. “only scrape algebra” — the agent replies here.</div></div>
+    <div id="chatRow">
+      <input id="chatInput" placeholder="e.g. only scrape algebra…" autocomplete="off">
+      <button id="chatSend" class="btn-primary" disabled>Send</button>
+    </div>
+    <div style="margin-top: 6px;">
+      <button id="chatScrapeTab" class="btn-secondary" style="padding: 6px; font-size: 11px;">🤖 Scrape selected tab with this instruction</button>
+      <button id="chatScrapeContext" class="btn-secondary" style="margin-top: 4px; padding: 6px; font-size: 11px;">📄 Scrape page into prompt (context)</button>
+    </div>
+  </div>
 
   <!-- Extension Update Alert Banner -->
   <div id="updateBanner" style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
@@ -150,6 +235,11 @@
   </div>
 
   <div id="status">Ready. Select a tab above to begin.</div>
+
+  <!-- 08-28: after a successful scrape the returned bubble id is surfaced
+       here and this button opens the bubble in the web app (#assignment deep
+       link) — the "auto-create/return assignment bubble" leg. -->
+  <button id="openAssignmentBtn" class="btn-secondary" style="display: none; border-color: rgba(59, 130, 246, 0.35); color: #93c5fd;">📖 Open assignment bubble in Helpotron</button>
 
   <!-- Honest Unparseable Warning Box with Direct Data Lake Prompt -->
   <div id="unparseableBox" class="unparseable-card">

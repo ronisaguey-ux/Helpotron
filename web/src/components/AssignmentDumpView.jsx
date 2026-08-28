@@ -97,17 +97,28 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
     fetchItems();
   }, [userId]);
 
+  const dumpTargetToast = (res) => {
+    if (!res?.matched_assignment_id) return null;
+    const target = res.matched_assignment_title || `assignment #${res.matched_assignment_id}`;
+    return res.item_status === 'auto_routed'
+      ? `Routed to the "${target}" bubble — a new one was created from your dump.`
+      : `Routed to the "${target}" bubble.`;
+  };
+
   const handleFileUpload = async (files) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
+      let lastRes = null;
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('user_id', userId);
-        await api.uploadDumpFile(formData);
+        lastRes = await api.uploadDumpFile(formData);
       }
       await fetchItems();
+      const msg = dumpTargetToast(lastRes);
+      if (msg) showToast(msg);
     } catch (e) {
       alert(e.message || 'Error uploading file to Assignment Dump');
     } finally {
@@ -129,10 +140,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       const formData = new FormData();
       formData.append('file', file);
       formData.append('user_id', userId);
-      await api.uploadDumpFile(formData);
+      const res = await api.uploadDumpFile(formData);
       setPasteText('');
       await fetchItems();
-      showToast('Assignment text dumped — AI is pairing it to a bubble.');
+      showToast(dumpTargetToast(res) || 'Assignment text dumped — AI is pairing it to a bubble.');
     } catch (e) {
       showToast(e.message || 'Error dumping text', false);
     } finally {
@@ -191,18 +202,59 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
     }
   };
 
-  const handleDelete = async (dumpId) => {
-    if (!confirm('Are you sure you want to delete this dumped item?')) return;
+  // Track in-flight deletes so a double-click can't fire a second DELETE
+  // (the second one returns 404 and used to surface as a bogus "Failed to
+  // delete item" even though the first request actually succeeded).
+  const [deletingIds, setDeletingIds] = useState(new Set());
+
+  const isAlreadyGone = (e) => {
+    const msg = (e && e.message) ? e.message : String(e || '');
+    return /not found|dump item .*not.*exist|gone|missing/i.test(msg);
+  };
+
+  const handleDelete = async (dumpId, item) => {
+    const label = item && item.file_name ? item.file_name : `dump item #${dumpId}`;
+    if (!confirm(`Are you sure you want to delete "${label}"?`)) return;
+    if (deletingIds.has(dumpId)) return;
+
+    // Optimistic remove — the card leaves the list immediately.
+    const removedIndex = items.findIndex((it) => it.id === dumpId);
+    const removedItem = removedIndex >= 0 ? items[removedIndex] : null;
+    setItems((prev) => prev.filter((it) => it.id !== dumpId));
+    setDeletingIds((prev) => new Set(prev).add(dumpId));
     try {
       await api.deleteDumpItem(dumpId);
+      showToast(`Deleted "${label}".`);
+      // Refresh to pick up server-side truth (deleting a dumped item can also
+      // remove the assignment bubble the dump itself created).
       await fetchItems();
     } catch (e) {
-      alert('Failed to delete item.');
+      if (isAlreadyGone(e)) {
+        // Already deleted (double-click, another tab) — not a failure.
+        await fetchItems();
+        return;
+      }
+      // Roll the card back and surface the SERVER's message (blind "Failed
+      // to delete item" hid real 401/403/500 reasons).
+      setItems((prev) => {
+        if (removedItem && !prev.some((it) => it.id === dumpId)) {
+          const at = Math.min(removedIndex < 0 ? prev.length : removedIndex, prev.length);
+          return [...prev.slice(0, at), removedItem, ...prev.slice(at)];
+        }
+        return prev;
+      });
+      showToast(e && e.message ? e.message : 'Failed to delete item.', false);
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(dumpId);
+        return next;
+      });
     }
   };
 
   const needsTypeAsk = (item) =>
-    !item.requested_action && ['matched', 'manual_routed', 'unmatched'].includes(item.status);
+    !item.requested_action && ['matched', 'manual_routed', 'auto_routed', 'unmatched'].includes(item.status);
 
   const handleFinalize = async (item, action) => {
     const opt = FINALIZE_OPTIONS.find((o) => o.action === action);
@@ -274,7 +326,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   };
 
   const filteredItems = items.filter((item) => {
-    if (activeTab === 'matched') return ['matched', 'manual_routed', 'finalized'].includes(item.status);
+    if (activeTab === 'matched') return ['matched', 'manual_routed', 'auto_routed', 'finalized'].includes(item.status);
     if (activeTab === 'unmatched') return item.status === 'unmatched';
     if (activeTab === 'audio') return item.file_type === 'audio' || item.file_type === 'video';
     return true;
@@ -292,9 +344,9 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] font-semibold mb-1">
               <Bot className="w-3.5 h-3.5" /> {agentName} AI Auto-Routing
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Universal Assignment Dump</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Universal Assignment Dump</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Dump any document (PDF, Word), lecture audio (AI transcription), image, or video. {agentName} AI auto-pairs it to the right assignment.
+              Dump any document (PDF, Word), lecture audio (AI transcription), image, or video. {agentName} AI auto-pairs it to the right assignment or creates a bubble for it.
             </p>
           </div>
         </div>
@@ -430,7 +482,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredItems.map((item) => {
-              const isMatched = item.status === 'matched' || item.status === 'manual_routed';
+              const isMatched = item.status === 'matched' || item.status === 'manual_routed' || item.status === 'auto_routed';
               const isFinalized = item.status === 'finalized';
               const confPct = Math.round((item.auto_match_confidence || 0) * 100);
 
@@ -468,7 +520,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                               : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         }`}
                       >
-                        {isFinalized ? '✅ Finalized' : isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
+                        {isFinalized ? '✅ Finalized' : item.status === 'auto_routed' ? `Auto-Routed (${confPct}%)` : isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
                       </span>
                     </div>
                   }
@@ -555,11 +607,14 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition cursor-pointer"
-                        title="Delete dump item"
+                        onClick={() => handleDelete(item.id, item)}
+                        disabled={deletingIds.has(item.id)}
+                        className="p-1 text-slate-500 hover:text-rose-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={deletingIds.has(item.id) ? 'Deleting…' : 'Delete dump item'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {deletingIds.has(item.id)
+                          ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>

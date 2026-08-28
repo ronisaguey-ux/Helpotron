@@ -76,12 +76,12 @@ const DEMO_GUIDE = {
 const DEMO_SUMMARY = 'This lecture covers learning theory, from classical conditioning (Pavlov) through operant conditioning (Skinner), including reinforcement schedules, extinction, and modern classroom applications such as token economies. Key takeaway: retrieval practice and spacing outperform passive review for long-term retention.';
 
 const DEMO_TRANSACTIONS = [
-  { delta: 12840.0, reason: 'Elite plan subscription — monthly allocation', created_at: '2026-08-01T09:00:00-04:00' },
+  { delta: 0.0, reason: 'No plan — dev/beta account, no monthly allocation', created_at: '2026-08-01T09:00:00-04:00' },
   { delta: -2.0, reason: 'Study guide generation — PSY 210', created_at: '2026-08-05T18:22:00-04:00' },
   { delta: -1.0, reason: 'Flashcards (10) — MAT 201', created_at: '2026-08-07T20:11:00-04:00' },
   { delta: -2.0, reason: 'Practice test — CHE 110', created_at: '2026-08-09T16:45:00-04:00' },
   { delta: -0.5, reason: 'Summary — HIS 340', created_at: '2026-08-12T14:03:00-04:00' },
-  { delta: 500.0, reason: 'Cashapp top-up +$50', created_at: '2026-08-15T12:30:00-04:00' },
+  { delta: 0.0, reason: 'Top-ups disabled in demo mode — no plan, zero balance', created_at: '2026-08-15T12:30:00-04:00' },
 ];
 
 const DEMO_LEADERBOARD = [
@@ -123,18 +123,18 @@ function dashboardPayload(publicId = mockAlias()) {
   return {
     status: 'success',
     public_id: publicId,
-    plan: 'Elite',
-    credits: 12840,
-    monthly_credits: 20000,
+    plan: 'none',
+    credits: 0,
+    monthly_credits: 0,
     settings: { theme: 'dark', default_course: 'PSY 210', demo: true },
     discount_balance: 0,
     pagination: { limit: 50, offset: 0 },
     user: {
       public_id: publicId,
-      tier: 'Elite',
-      credits_remaining: 12840,
-      credits_formatted: '12,840.0',
-      tokens_processed: 128400000,
+      tier: 'none',
+      credits_remaining: 0,
+      credits_formatted: '0.0',
+      tokens_processed: 0,
     },
     telemetry: {
       health: 'Nominal',
@@ -182,8 +182,8 @@ export async function mockGenerateStream(kind, body, onProgress) {
 // null to pass the request through to the real backend.
 const ROUTES = [
   { match: /^\/api\/dashboard(\/.*)?$/, handle: (m, u) => dashboardPayload(u.pathname.split('/').filter(Boolean).pop() || u.params.public_id || mockAlias()) },
-  { match: /^\/api\/credits\/.+/, handle: () => ({ plan: 'Elite', credits: 12840 }) },
-  { match: /^\/api\/me$/, handle: () => ({ message: 'Authenticated (demo)', public_id: mockAlias(), plan: 'Elite', credits: 12840, authenticated: true }) },
+  { match: /^\/api\/credits\/.+/, handle: () => ({ plan: 'none', credits: 0 }) },
+  { match: /^\/api\/me$/, handle: () => ({ message: 'Authenticated (demo)', public_id: mockAlias(), plan: 'none', credits: 0, token_balance: 0, authenticated: true }) },
   { match: /^\/api\/health$/, handle: () => ({ status: 'ok' }) },
   { match: /^\/api\/user\/settings$/, handle: (m) => (m === 'PATCH' ? { status: 'ok', settings: { theme: 'dark', demo: true } } : { settings: { theme: 'dark', default_course: 'PSY 210', notifications: true, demo: true } }) },
   { match: /^\/api\/user\/models$/, handle: () => ({ models: [
@@ -198,7 +198,7 @@ const ROUTES = [
   { match: /^\/api\/status\/.+/, handle: () => ({ assignments: DEMO_ASSIGNMENTS }) },
   { match: /^\/api\/materials\/[^/]+\/([a-z_-]+)/, handle: (m, u) => { const kind = u.pathname.split('/').pop(); return { materials: [{ id: 600, kind, topic: 'Sample material (demo)', content: mockMaterialFor(kind).content, created_at: new Date().toISOString() }], kind }; } },
   { match: /^\/api\/(study-guide|flashcards|practice-test|summary)$/, handle: (m, u, body) => mockMaterialFor(u.pathname.split('/').pop()) },
-  { match: /^\/api\/payments$/, handle: (m, u, body) => { const cents = Number(body?.amount_cents || 0); return { payment_id: `demo_${Date.now()}`, status: 'manual', credits: 12840 + cents / 10 }; } },
+  { match: /^\/api\/payments$/, handle: (m, u, body) => { const cents = Number(body?.amount_cents || 0); return { payment_id: `demo_${Date.now()}`, status: 'manual', credits: cents / 10 }; } },
   { match: /^\/api\/checkout$/, handle: () => ({ message: 'Checkout is disabled in demo mode (sample data only)', session_id: null }) },
   { match: /^\/api\/datalake\/microcredits\/history/, handle: () => ({ records: [{ id: 1, action: 'quiz_solved', points: 25, created_at: '2026-08-10T19:00:00-04:00' }, { id: 2, action: 'peer_review', points: 15, created_at: '2026-08-11T10:12:00-04:00' }, { id: 3, action: 'streak_bonus', points: 10, created_at: '2026-08-12T08:45:00-04:00' }], total_earned: 50 }) },
   { match: /^\/api\/datalake\/microcredits\/redeem/, handle: () => ({ status: 'ok', redeemed: 50 }) },
@@ -208,8 +208,8 @@ const ROUTES = [
   { match: /^\/api\/admin\/costs\/summary/, handle: () => ({ total_spend_usd: 128.4, today_spend_usd: 2.15, avg_cost_per_task_usd: 0.41, budget_usd: 200 }) },
   { match: /^\/api\/admin\/costs\/users/, handle: () => ({ users: [{ public_id: mockAlias(), total_usd: 61.2, tasks: 148 }, { public_id: 'sam_w', total_usd: 42.8, tasks: 96 }, { public_id: 'maya_o', total_usd: 24.4, tasks: 61 }] }) },
   { match: /^\/api\/admin\/analytics/, handle: () => ({ users: 3, assignments: DEMO_ASSIGNMENTS.length, materials: 12, revenue_usd: 128.4, mrr_usd: 97 }) },
-  { match: /^\/api\/admin\/users/, handle: () => ({ users: [{ public_id: mockAlias(), plan: 'Elite', credits: 12840, created_at: '2026-07-01T00:00:00-04:00' }, { public_id: 'sam_w', plan: 'Pro', credits: 4200, created_at: '2026-07-12T00:00:00-04:00' }] }) },
-  { match: /^\/api\/admin\/user\/[^/]+\/credits/, handle: () => ({ status: 'ok', credits: 12840 }) },
+  { match: /^\/api\/admin\/users/, handle: () => ({ users: [{ public_id: mockAlias(), plan: 'none', credits: 0, banned: false, created_at: '2026-07-01T00:00:00-04:00' }, { public_id: 'sam_w', plan: 'none', credits: 0, banned: false, created_at: '2026-07-12T00:00:00-04:00' }] }) },
+  { match: /^\/api\/admin\/user\/[^/]+\/credits/, handle: () => ({ status: 'ok', credits: 0 }) },
   { match: /^\/api\/features\/stats$/, handle: () => ({ streak_days: 12, xp: 4820, level: 14, badges: ['Early Bird', 'Consistent Scholar', 'Quiz Master'] }) },
   { match: /^\/api\/features\/calendar\/deadlines$/, handle: () => ({ deadlines: DEMO_ASSIGNMENTS.map((a) => ({ assignment: a.title, course: a.course, due: a.due_date })) }) },
   { match: /^\/api\/features\/recommend$/, handle: () => ({ recommendation: { focus: 'MAT 201 — Problem Set 7 is due soonest; your integration accuracy is 71%.', suggested_study_minutes: 45 } }) },

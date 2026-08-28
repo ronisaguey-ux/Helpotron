@@ -53,6 +53,23 @@ def set_style(user_id: int, text: str, db: Session) -> None:
         db.commit()
 
 
+# 08-28 fix: transcripts/scraped source were sliced at 5000 chars — the model
+# drafted from only the first minutes of any lecture (or the first 5k chars of a
+# scraped page), and the rest was silently missing from the draft. Now cap at
+# 120k chars with an explicit marker on cut (storage is full either way; this
+# only bounds the outbound LLM prompt).
+TRANSCRIPT_PROMPT_CAP = 120_000
+
+
+def _transcript_chunk(text: str) -> str:
+    t = (text or "").strip()
+    if len(t) <= TRANSCRIPT_PROMPT_CAP:
+        return t
+    return (t[:TRANSCRIPT_PROMPT_CAP] +
+            f"\n\n[…transcript continues beyond the {TRANSCRIPT_PROMPT_CAP}-char prompt cap; "
+            f"the full recorded text is available on the assignment.]")
+
+
 def build_style_prompt(style_text: str, assignment_prompt: str, transcript_text: str) -> str:
     """Build a system prompt that instructs the LLM to mimic the student's style."""
     return f"""You are an AI assistant helping a student write an assignment draft.
@@ -66,7 +83,7 @@ Assignment prompt:
 {assignment_prompt}
 
 Lecture/transcript context:
-{transcript_text[:5000]}
+{_transcript_chunk(transcript_text)}
 
 Write a complete draft that directly addresses the assignment prompt. Do not include any meta-commentary. Just produce the draft text."""
 
@@ -90,7 +107,7 @@ Assignment prompt:
 {assignment_prompt}
 
 Lecture/transcript context:
-{transcript_text[:5000]}
+{_transcript_chunk(transcript_text)}
 
 Write a complete draft that directly addresses the assignment prompt. Mimic the style of the sample as closely as possible. Do not include any meta-commentary. Just produce the draft text."""
 
@@ -180,9 +197,15 @@ async def _draft_workflow_async(draft_id: int) -> None:
             .order_by(Transcript.id.desc())
             .first()
         )
+        # 08-28 fix: scraped assignments have no Transcript row — the scraped
+        # page content IS the source. Fall back so drafts/team work can be
+        # generated instead of erroring out ("No transcript found").
         if not transcript:
-            raise ValueError("No transcript found for this assignment")
-        transcript_text = transcript.text
+            transcript_text = (assignment.prompt or "").strip() or ""
+            if not transcript_text:
+                raise ValueError("No transcript found for this assignment")
+        else:
+            transcript_text = transcript.text
         assignment_prompt = assignment.prompt
 
         # Get style, reading level, target grade

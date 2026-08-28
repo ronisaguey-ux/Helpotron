@@ -1,69 +1,66 @@
-import React, { useState } from 'react';
-import { Users, Shield, Cpu, Box, Activity, DollarSign, Power, RotateCcw, AlertTriangle, HelpCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Users, Shield, Cpu, Bot, RefreshCw } from 'lucide-react';
+import api from '../api.js';
+import AdminAdvancedDashboard from './AdminAdvancedDashboard.jsx';
+import AdminAgentChat from './AdminAgentChat.jsx';
 
-export function User360Panel({ user, isMockMode = false, onAction, onExplainWhy }) {
-  const [tab, setTab] = useState('overview');
-  const healthStatus = user?.health_score || (isMockMode ? 'Normal' : 'No Data');
-  const errorCount = user?.error_count != null ? user.error_count : (isMockMode ? 0 : '--');
-  
-  return (
-    <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div>
-          <h3 className="text-sm font-semibold text-white">{user?.email || (isMockMode ? 'student@university.edu' : 'No user selected')}</h3>
-          <span className="text-xs text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5">
-            User Health: {healthStatus} • {errorCount} Errors
-            <button onClick={() => onExplainWhy && onExplainWhy('user_health')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3 h-3" /></button>
-          </span>
-        </div>
-        <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-          {['overview', 'activity', 'usage', 'config', 'actions'].map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`px-2.5 py-1 text-xs rounded capitalize ${tab === t ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>{t}</button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+export function SystemMapPanel({ telemetryData }) {
+  const [nodes, setNodes] = useState(() => telemetryData?.nodes || []);
+  const [state, setState] = useState(telemetryData?.nodes ? 'ready' : 'loading');
 
-export function SystemMapPanel({ telemetryData, isMockMode = false, onInspectNode, onExplainWhy }) {
-  // EXACTLY 3 modes: overview, live, investigate (no 7 layers)
-  const [mode, setMode] = useState('overview');
-  
-  const nodes = telemetryData?.nodes || (isMockMode ? [
-    { name: 'FastAPI Gateway', status: 'operational', p95_latency_ms: 12.4 },
-    { name: 'SQLite WAL Database', status: 'operational', p95_latency_ms: 2.1 },
-    { name: 'OpenRouter Dispatcher', status: 'operational', p95_latency_ms: 340.0 },
-    { name: 'Storage Sandbox', status: 'operational', p95_latency_ms: 4.2 }
-  ] : []);
+  const loadNodes = async () => {
+    if (telemetryData?.nodes) return; // caller supplied data — don't override
+    setState('loading');
+    try {
+      const res = await api.adminSystemMapNodes();
+      setNodes(Array.isArray(res?.nodes) ? res.nodes : []);
+      setState('ready');
+    } catch (e) {
+      console.warn('Failed to fetch system map nodes:', e);
+      setNodes([]);
+      setState('error');
+    }
+  };
+
+  useEffect(() => {
+    loadNodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            System Map & Subsystem Nodes 
-            <button onClick={() => onExplainWhy && onExplainWhy('system_map')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3.5 h-3.5" /></button>
-          </h3>
-          <p className="text-xs text-slate-400">Operational node telemetry (Overview • Live • Investigate)</p>
+          <h3 className="text-sm font-semibold text-white">System Map &amp; Subsystem Nodes</h3>
+          <p className="text-xs text-slate-400">Operational subsystem node health &amp; p95 latency.</p>
         </div>
-        <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-          {['overview', 'live', 'investigate'].map(m => (
-            <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1 text-xs rounded capitalize ${mode === m ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>{m}</button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={loadNodes}
+          className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition cursor-pointer"
+          aria-label="Refresh node telemetry"
+          title="Refresh"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
       </div>
-      {nodes.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">No live node telemetry connected. Enable Mock Preview Mode to view sample architecture.</div>
+      {state === 'loading' ? (
+        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">Loading live node telemetry…</div>
+      ) : state === 'error' ? (
+        <div className="p-6 text-center text-xs text-rose-400 border border-dashed border-rose-500/30 rounded-lg">
+          Could not reach the node telemetry endpoint. <button type="button" onClick={loadNodes} className="underline hover:text-rose-300 cursor-pointer">Retry</button>
+        </div>
+      ) : nodes.length === 0 ? (
+        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">No subsystem nodes reported.</div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {nodes.map(n => (
-            <div key={n.name} onClick={() => onInspectNode && onInspectNode(n.name)} className="p-3 rounded-lg bg-slate-950 hover:bg-slate-850 border border-slate-800 cursor-pointer flex items-center justify-between transition-colors">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {nodes.map((n) => (
+            <div key={n.name} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
               <div>
                 <div className="text-xs font-semibold text-white">{n.name}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">Latency: {n.p95_latency_ms ? `${n.p95_latency_ms}ms` : 'N/A'}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Latency: {n.p95_latency_ms != null ? `${n.p95_latency_ms}ms` : 'N/A'}</div>
               </div>
-              <span className="text-xs font-bold text-emerald-400">● {n.status}</span>
+              <span className={`text-xs font-bold ${n.status === 'operational' ? 'text-emerald-400' : 'text-amber-400'}`}>● {n.status}</span>
             </div>
           ))}
         </div>
@@ -71,50 +68,48 @@ export function SystemMapPanel({ telemetryData, isMockMode = false, onInspectNod
     </div>
   );
 }
-import AdminAdvancedDashboard from './AdminAdvancedDashboard.jsx';
 
-export default function AdminPanels(props) {
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'system_map'
+const TABS = [
+  { key: 'users', label: 'Users & Credits Management', Icon: Users },
+  { key: 'system_map', label: 'System Map & Nodes', Icon: Cpu },
+  { key: 'agent', label: 'Admin Agent', Icon: Bot },
+];
+
+export default function AdminPanels({ userId = '' }) {
+  const [activeTab, setActiveTab] = useState('users');
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-white/10">
+      <div className="flex items-start justify-between gap-3 flex-wrap bg-slate-900/60 p-3 rounded-2xl border border-white/10">
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-400" />
             Helpotron Platform Admin Control Center
           </h2>
           <p className="text-[11px] text-slate-400">
-            Manage user subscription plans, grant credits, inspect live node telemetry, and handle direct messages.
+            Manage user subscription plans, grant credits, inspect live node telemetry, and drive the platform with the admin agent.
           </p>
         </div>
-        <div className="flex gap-1.5 bg-slate-950 p-1 rounded-xl border border-white/10">
-          <button
-            type="button"
-            onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
-              activeTab === 'users' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-            Users &amp; Credits Management
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('system_map')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
-              activeTab === 'system_map' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-            System Map &amp; Nodes
-          </button>
+        <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1 rounded-xl border border-white/10">
+          {TABS.map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5 ${
+                activeTab === key ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {activeTab === 'users' && <AdminAdvancedDashboard userId={props.userId} />}
-      {activeTab === 'system_map' && <SystemMapPanel {...props} />}
+      {activeTab === 'users' && <AdminAdvancedDashboard userId={userId} />}
+      {activeTab === 'system_map' && <SystemMapPanel />}
+      {activeTab === 'agent' && <AdminAgentChat />}
     </div>
   );
 }
-

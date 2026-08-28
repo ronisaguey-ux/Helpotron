@@ -144,11 +144,26 @@ class RateLimiter:
             return False, wait
         return True, 0
 
-    def log_failure(self, key: str) -> None:
+    def check_ip_auth(self, key: str, max_failures: int = 5,
+                      window_seconds: float = 60.0) -> tuple[bool, int]:
+        """Per-IP login throttle (audit 08-28, LOW): count only FAILED
+        attempts in a sliding window. Returns (allowed, retry_after_seconds)
+        so the caller can emit a 429 with Retry-After. Completely independent
+        of check_auth's per-account exponential backoff — both stay active:
+        the account limiter stops 5 bad logins against ONE account, this one
+        stops 12 bad logins across 12 different accounts from one client."""
+        now = time.time()
+        cutoff = now - window_seconds
+        recent = [t for t in self._failures.get(key, []) if t > cutoff]
+        if len(recent) >= max_failures:
+            return False, max(1, int(window_seconds - (now - recent[0])))
+        return True, 0
+
+    def log_failure(self, key: str, window_seconds: float = 3600.0) -> None:
         now = time.time()
         if key not in self._failures:
             self._failures[key] = []
-        self._failures[key] = [t for t in self._failures[key] if now - t < 3600]
+        self._failures[key] = [t for t in self._failures[key] if now - t < window_seconds]
         self._failures[key].append(now)
 
     def reset_failures(self, key: str) -> None:
@@ -314,26 +329,97 @@ class SessionStore:
 # ─── security headers middleware ─────────────────────────────────────────
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
+    """Security headers on EVERY response — API, static assets, and the SPA.
+
+    Registered in server/main.py (this class sat unused before audit 08-28 —
+    it was defined but never added to the app, so no response carried any of
+    it). Policy decisions:
+
+    * CSP is the built SPA's real policy: the bundled JS comes from 'self'
+      (Vite emits module scripts under /assets); the Inter font is hosted on
+      Google Fonts (index.html preconnects to fonts.googleapis.com /
+      fonts.gstatic.com); the bundle injects inline styles, so style-src
+      allows 'unsafe-inline'; images may be data:/blob: (thumbnails, PDF
+      previews); connect-src is 'self' (same-origin fetch + ws://same-host
+      for /ws/agent/*). The framework docs pages (/docs, /redoc) are exempt —
+      Swagger UI is loaded from a third-party CDN with inline bootstrap
+      scripts, which a strict 'self' policy would break.
+    * X-Frame-Options DENY + frame-ancestors 'none' (belt and braces;
+      browsers that ignore the legacy header honor frame-ancestors).
+    * Permissions-Policy is minimal but deliberately leaves microphone
+      unlisted: the SPA's lecture recorder uses navigator.mediaDevices
+      .getUserMedia({audio:true}) and a mic lock would kill that feature.
+    * HSTS only when the request is actually secure: this box also serves
+      plain HTTP (localhost / demo), and HSTS must never be emitted over
+      HTTP (it is ignored there, and 'includeSubDomains' would still be wrong
+      to advertise on an untrusted connection).
+    """
+
+    CSP = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        # blob: audio: the SPA plays the /api/voice/tts response through
+        # new Audio(URL.createObjectURL(...)) — default-src would block it.
+        "media-src 'self' blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    PERMISSIONS_POLICY = "camera=(), geolocation=(), payment=(), usb=(), display-capture=()"
+    # Framework doc pages load Swagger UI from a CDN with inline scripts —
+    # exempt them from the strict CSP only (the other headers still apply).
+    CSP_EXEMPT_PATHS = {"/docs", "/redoc", "/docs/", "/redoc/"}
+    HSTS_VALUE = "max-age=31536000; includeSubDomains"
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        csp = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:5173 http://localhost:8000"
-        response.headers["Content-Security-Policy"] = csp
-        if not config.debug:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Permissions-Policy"] = self.PERMISSIONS_POLICY
+        if request.url.path not in self.CSP_EXEMPT_PATHS:
+            response.headers["Content-Security-Policy"] = self.CSP
+        if request.url.is_secure:
+            response.headers["Strict-Transport-Security"] = self.HSTS_VALUE
         return response
 
 # ─── user authentication ──────────────────────────────────────────────────
 
+def is_user_banned(user) -> bool:
+    """Ban enforcement (operator 08-27): settings['banned'] is only honored
+    while effective — a 'banned_until' stamp in the past counts as expired.
+    Also used directly by login/me endpoints for a clean 403."""
+    if user is None:
+        return False
+    settings = getattr(user, "settings", None) or {}
+    if not settings.get("banned"):
+        return False
+    until = settings.get("banned_until")
+    if not until:
+        return True  # permanent ban
+    try:
+        until_dt = datetime.fromisoformat(str(until))
+        if until_dt.tzinfo is not None:
+            until_dt = until_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return until_dt > now
+    except (TypeError, ValueError):
+        return True
+
+
+def _enforce_not_banned(user):
+    """Raises 403 immediately after a successful user lookup."""
+    if user is not None and is_user_banned(user):
+        raise HTTPException(403, "Account suspended by the operator")
+    return user
+
+
 async def get_current_user(request: Request = None, websocket: WebSocket = None):
     """Authenticate via session cookie, Bearer JWT, or WebSocket token param.
-    Hardened: the X-Public-ID header is never an identity."""
+    Hardened: the X-Public-ID header is never an identity. Banned accounts
+    (ban / tempban) are rejected here — one choke point for all routes."""
     conn = request or websocket
     if conn is None:
         raise HTTPException(401, "Not authenticated: valid session token required")
@@ -347,19 +433,34 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
             try:
                 user = db.query(User).filter(User.id == session['user_id']).first()
                 if user:
-                    return user
+                    return _enforce_not_banned(user)
             finally:
                 db.close()
 
     auth_header = conn.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
-        payload = verify_jwt_token(auth_header.split(" ", 1)[1])
+        bearer = auth_header.split(" ", 1)[1]
+        payload = verify_jwt_token(bearer)
         if payload and 'sub' in payload:
             db = SessionLocal()
             try:
                 user = db.query(User).filter(User.id == payload['sub']).first()
                 if user:
-                    return user
+                    return _enforce_not_banned(user)
+            finally:
+                db.close()
+        # Long-lived DB-backed session token (the same token the web UI's
+        # helpotron_session cookie carries, and what the browser extension
+        # stores after login — the 24h JWT above forced daily re-logins).
+        # Survives server restarts and slides its 7-day window on use.
+        session = SessionStore.get_session(bearer)
+        if session:
+            SessionStore.refresh_session(bearer)
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == session['user_id']).first()
+                if user:
+                    return _enforce_not_banned(user)
             finally:
                 db.close()
 
@@ -372,7 +473,7 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
             try:
                 user = db.query(User).filter(User.id == payload['sub']).first()
                 if user:
-                    return user
+                    return _enforce_not_banned(user)
             finally:
                 db.close()
 
