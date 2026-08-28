@@ -113,6 +113,7 @@ export default function DevContactModal() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
+                aria-label="Message topic"
                 className="bg-slate-900 border border-white/15 rounded-xl px-2 py-2 text-[11px] text-white focus:border-blue-500 outline-none"
                 title="Topic"
               >
@@ -126,6 +127,7 @@ export default function DevContactModal() {
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && send()}
                 placeholder="Type a message…"
+                aria-label="Type a message to the developer"
                 className="flex-1 bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
               />
               {attachment && (

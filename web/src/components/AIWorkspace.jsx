@@ -17,7 +17,7 @@ export const AIWorkspace = ({ user, activeScope, onExecuteAction, onRollbackActi
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">My Agent</h1>
+              <h2 className="text-xl font-bold">My Agent</h2>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">● Ready</span>
             </div>
             <p className="text-xs text-muted-foreground">Universal Natural Language Control Plane for Helpotron</p>

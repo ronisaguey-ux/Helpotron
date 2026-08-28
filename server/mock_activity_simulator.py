@@ -132,7 +132,11 @@ class MockActivitySimulator:
     """Manages synthetic user activity, seeding, and live background events."""
 
     def __init__(self) -> None:
-        self.is_enabled: bool = True
+        # Default OFF (operator 08-27): the simulator writes SAMPLE_COURSES
+        # rows directly into the user's real assignment tables, which surfaced
+        # as fake coursework in regular users' views. It is now a strictly
+        # opt-in dev tool — never enabled unless explicitly toggled.
+        self.is_enabled: bool = False
         self._background_task: Optional[asyncio.Task] = None
 
     def toggle(self, enable: Optional[bool] = None) -> bool:
@@ -173,7 +177,10 @@ class MockActivitySimulator:
                 db.add(assign)
                 created_assignments.append(item["title"])
 
-        # Seed study materials if none exist
+        # Seed study materials if none exist (08-27: content uses the canonical
+        # per-kind shapes — flashcards = [{q, a}], study guide = markdown str,
+        # practice test = {"multiple_choice": [...], "short_answer": [...]} —
+        # the old merged dict crashed exporters and viewers reading .get("q")).
         mat_count = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).count()
         if mat_count < 3:
             for title, kind in [
@@ -181,17 +188,40 @@ class MockActivitySimulator:
                 ("Macroeconomics Midterm Study Guide", "study_guide"),
                 ("CRISPR Vector Practice Exam", "practice_test"),
             ]:
+                if kind == "flashcards":
+                    content = json.dumps([
+                        {"q": "What is the primary function of Cas9?",
+                         "a": "An RNA-guided endonuclease that catalyzes double-strand breaks in target DNA."},
+                        {"q": "Define Automation Bias in clinical settings.",
+                         "a": "The tendency to favor machine-generated diagnostic recommendations over contradictory human observations."},
+                    ], ensure_ascii=False)
+                elif kind == "study_guide":
+                    content = (
+                        f"# {title}\n\n"
+                        "## Key concepts\n"
+                        "- Neural architectures: feed-forward, convolutional, recurrent\n"
+                        "- Backpropagation and gradient-based optimization\n"
+                        "- Overfitting, regularization, and dropout\n\n"
+                        "## Practice questions\n"
+                        "1. Explain how backpropagation updates weights.\n"
+                        "2. What role does an activation function play?"
+                    )
+                else:
+                    content = json.dumps({
+                        "multiple_choice": [
+                            {"q": "Which enzyme makes double-strand breaks in target DNA?",
+                             "options": ["Cas9", "Cas3", "Cas12a", "RecA"],
+                             "answer_index": 0,
+                             "explanation": "Cas9 is the RNA-guided endonuclease."},
+                        ],
+                        "short_answer": [
+                            {"q": "Define automation bias.", "model_answer": "Over-reliance on machine recommendations over human observation."},
+                        ],
+                    }, ensure_ascii=False)
                 mat = StudyMaterial(
                     user_id=user.id,
                     kind=kind,
-                    content=json.dumps({
-                        "title": title,
-                        "summary": f"Comprehensive {kind} generated automatically from lecture transcripts.",
-                        "cards": [
-                            {"front": "What is the primary function of Cas9?", "back": "An RNA-guided endonuclease that catalyzes double-strand breaks in target DNA."},
-                            {"front": "Define Automation Bias in clinical settings.", "back": "The tendency to favor machine-generated diagnostic recommendations over contradictory human observations."},
-                        ],
-                    }),
+                    content=content,
                 )
                 db.add(mat)
 

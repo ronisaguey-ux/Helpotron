@@ -575,18 +575,21 @@ async def get_assignment_history_route(
     query = db.query(Assignment).filter(Assignment.user_id == user.id)
 
     records = query.order_by(Assignment.id.desc()).limit(limit).all()
+    # Honest ledger (operator 08-27): never fabricate grades/scores/dates —
+    # assignments have no stored grade, so grade fields are null until a
+    # grader writes one; the UI renders "Not graded" for those rows.
     history_list = [
         {
             "id": h.id,
-            "title": h.title or "Assignment",
-            "course": (h.progress or {}).get("course", "General Studies"),
-            "teacher_name": (h.progress or {}).get("teacher_name", "Department Instructor"),
-            "grade_letter": "A",
-            "score_predicted": 92.0,
-            "detector_score": (h.progress or {}).get("detector_risk", 0.01),
-            "word_count": 1250,
-            "completed_at": h.due_date or "2026-03-15",
-            "status": h.status or "Submitted & Verified",
+            "title": h.title or "",
+            "course": (h.progress or {}).get("course") or (h.progress or {}).get("subject") or "",
+            "teacher_name": (h.progress or {}).get("teacher_name") or "",
+            "grade_letter": (h.progress or {}).get("grade"),
+            "score_predicted": (h.progress or {}).get("score"),
+            "detector_score": (h.progress or {}).get("detector_risk"),
+            "word_count": (h.progress or {}).get("word_count"),
+            "completed_at": (h.progress or {}).get("completed_at"),
+            "status": h.status or "tracked",
         }
         for h in records
     ]

@@ -174,6 +174,74 @@ export default function LibraryView({ user }) {
         )
       )}
 
+      {tab === 'materials' && (
+        mats.length === 0 ? (
+          <EmptyState icon="🃏" title="No materials yet" body="Generate a study guide, flashcards or practice test from your agent, an assignment bubble, or the assignment dump — saved materials appear here." />
+        ) : (
+          <div className="space-y-3">
+            {mats.map((m) => {
+              const meta = MAT_META[m.kind] || { icon: '📄', label: m.kind.replace('_', ' ') };
+              // content arrives pre-parsed for flashcards/practice_test; be
+              // defensive for rows stored as JSON strings.
+              const content = m.content;
+              const parsed =
+                typeof content === 'string'
+                  ? (() => { try { return JSON.parse(content); } catch { return content; } })()
+                  : content;
+              const cards = m.kind === 'flashcards' && Array.isArray(parsed) ? parsed.filter((c) => c && (c.q || c.front)) : null;
+              const quiz = m.kind === 'practice_test' && (Array.isArray(parsed) || (parsed && typeof parsed === 'object' && (parsed.multiple_choice || parsed.short_answer))) ? parsed : null;
+              return (
+                <SectionCard key={`mat-${m.id}`} id={`library-material-${m.id}`} className="hover:border-blue-500/25 transition" header={
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span className="text-sm font-semibold text-white flex items-center gap-2">
+                      <span className="text-xl">{meta.icon}</span> {meta.label}
+                    </span>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                      {m.model_used && <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/8 font-mono">{m.model_used}</span>}
+                      {m.created_at && <span>saved {timeAgo(m.created_at)}</span>}
+                    </div>
+                  </div>
+                }>
+                  {cards ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {cards.map((c, i) => (
+                        <div key={i} className="rounded-xl bg-slate-950/40 border border-white/6 p-3 space-y-1.5">
+                          <div className="text-xs font-semibold text-blue-200">Q{i + 1}. {String(c.q ?? c.front ?? '')}</div>
+                          <div className="text-[11px] text-slate-300 leading-relaxed">{String(c.a ?? c.back ?? '')}</div>
+                        </div>
+                      ))}
+                      {cards.length === 0 && (
+                        <p className="text-xs text-slate-500 col-span-full">This deck is empty.</p>
+                      )}
+                    </div>
+                  ) : quiz ? (
+                    (Array.isArray(parsed) ? parsed : [
+                      ...(parsed.multiple_choice || []).map((q) => ({ type: 'mc', ...q })),
+                      ...(parsed.short_answer || []).map((q) => ({ type: 'sa', ...q })),
+                    ]).map((q, i) => (
+                      <div key={i} className="rounded-xl bg-slate-950/40 border border-white/6 p-3 space-y-1.5">
+                        <div className="text-xs font-semibold text-cyan-200">Q{i + 1}. {String(q.q ?? q.question ?? '')}</div>
+                        {q.options && Array.isArray(q.options) && (
+                          <ol className="text-[11px] text-slate-400 list-decimal pl-4 space-y-0.5">
+                            {q.options.map((o, j) => (
+                              <li key={j} className={q.answer_index === j || q.answer === j ? 'text-emerald-300' : ''}>{o}</li>
+                            ))}
+                          </ol>
+                        )}
+                        {q.explanation && <div className="text-[10px] text-slate-500">💡 {q.explanation}</div>}
+                        {q.model_answer && <div className="text-[11px] text-slate-300">Model answer: {q.model_answer}</div>}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap font-mono">{String(content ?? '')}</p>
+                  )}
+                </SectionCard>
+              );
+            })}
+          </div>
+        )
+      )}
+
       {tab === 'calendar' && (
         <>
           <CalendarGrid />

@@ -24,27 +24,35 @@ from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 try:
-    from . import agent_session, credits, ratelimit, study_tools, transcription
+    from . import agent_session, credits, detectors, ratelimit, study_tools, transcription
     from .user_settings_service import user_settings_service
     from .agent_session import manager as agent_manager
     from .config import config
-    from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
+    from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment, utcnow
     from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from .security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user, create_jwt_token
+    from .security import (hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME,
+                           validate_public_id, validate_password_strength, is_admin_user,
+                           is_user_banned, auth_limiter, get_current_user, create_jwt_token,
+                           SecurityHeadersMiddleware)
     from .admin import require_admin, ResetPasswordRequest
     from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+    from .monitors import MonitorMiddleware, run_monitors_loop
 except (ImportError, ValueError):
-    from server import agent_session, credits, ratelimit, study_tools, transcription
+    from server import agent_session, credits, detectors, ratelimit, study_tools, transcription
     from server.user_settings_service import user_settings_service
     from server.agent_session import manager as agent_manager
     from server.config import config
     from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
     from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
     from server.draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
-    from server.security import hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME, validate_public_id, validate_password_strength, is_admin_user, auth_limiter, get_current_user, create_jwt_token
+    from server.security import (hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME,
+                                 validate_public_id, validate_password_strength, is_admin_user,
+                                 is_user_banned, auth_limiter, get_current_user, create_jwt_token,
+                                 SecurityHeadersMiddleware)
     from server.admin import require_admin, ResetPasswordRequest
     from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+    from server.monitors import MonitorMiddleware, run_monitors_loop
 
 
 # Import route modules
@@ -55,11 +63,13 @@ try:
     from .routes_export import router as export_router
     from .routes_study_groups import router as study_groups_router
     from .routes_datalake import router as datalake_router
+    from .routes_monitors import router as monitors_router
     from .routes_auth_2fa import router as auth_2fa_router
     from .routes_user_settings import router as user_settings_router
     from .routes_hygiene import router as hygiene_router
     from .routes_agent_actions import router as agent_actions_router
     from .routes_admin_advanced import router as admin_advanced_router
+    from .routes_recovery import router as recovery_router
     from .routes_overlord import router as overlord_router
     from .routes_voice import router as voice_router
     from .routes_simulation import router as simulation_router
@@ -67,6 +77,7 @@ try:
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
     from .assignments import router as assignments_router
+    from .assignment_turnin import router as assignment_turnin_router
     from .privacy import router as privacy_router
     from .admin import router as admin_router
     from .routes_features import router as features_router
@@ -77,17 +88,20 @@ except (ImportError, ValueError):
     from server.routes_export import router as export_router
     from server.routes_study_groups import router as study_groups_router
     from server.routes_datalake import router as datalake_router
+    from server.routes_monitors import router as monitors_router
     from server.routes_auth_2fa import router as auth_2fa_router
     from server.routes_user_settings import router as user_settings_router
     from server.routes_hygiene import router as hygiene_router
     from server.routes_agent_actions import router as agent_actions_router
     from server.routes_admin_advanced import router as admin_advanced_router
+    from server.routes_recovery import router as recovery_router
     from server.routes_overlord import router as overlord_router
     from server.routes_simulation import router as simulation_router
     from server.routes_dump import router as dump_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
     from server.assignments import router as assignments_router
+    from server.assignment_turnin import router as assignment_turnin_router
     from server.privacy import router as privacy_router
     from server.admin import router as admin_router
     from server.routes_features import router as features_router
@@ -149,15 +163,21 @@ async def lifespan(_app: FastAPI):
     Path("./datalake_storage").mkdir(parents=True, exist_ok=True)
     lake_task = asyncio.create_task(_datalake_background_loop())
     cleanup_task = asyncio.create_task(_cleanup_temp_files_loop())
+    monitor_task = asyncio.create_task(run_monitors_loop())
     yield
     lake_task.cancel()
     cleanup_task.cancel()
+    monitor_task.cancel()
     try:
         await lake_task
     except asyncio.CancelledError:
         pass
     try:
         await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await monitor_task
     except asyncio.CancelledError:
         pass
 
@@ -219,6 +239,17 @@ app.add_middleware(RateLimitMiddleware)
 # Add CSRF protection middleware (applied to all API routes)
 app.add_middleware(CSRFMiddleware)
 
+# Monitor traffic itself: outermost so rate-limited/CSRF-rejected requests
+# are counted too (add_middleware prepends — last added runs first).
+app.add_middleware(MonitorMiddleware)
+
+# Security headers on every response — API, static assets, and the SPA
+# (audit 08-28 HIGH: the middleware class existed in security.py but was
+# never registered, so nothing ever carried CSP/nosniff/XFO/Referrer-Policy).
+# Added last so it is outermost and sees every response, including the
+# inner middlewares' 401/403/429 rejections and the SPA FileResponses.
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -229,9 +260,15 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "chrome-extension://*",
     ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    # NOTE: "chrome-extension://*" is NOT a CORS wildcard — CORS only has one
+    # wildcard ("*"), so real extension origins must be matched by regex
+    # (Chrome extension IDs: 32 chars [a-p]; Firefox UUIDs: 8-4-4-4-12 hex).
+    allow_origin_regex=(
+        r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?"
+        r"|chrome-extension://[a-pA-P0-9]{6,64}"
+        r"|moz-extension://[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -245,6 +282,7 @@ app.include_router(organization_router)
 app.include_router(export_router)
 app.include_router(study_groups_router)
 app.include_router(datalake_router)
+app.include_router(monitors_router)
 app.include_router(auth_2fa_router)
 app.include_router(user_settings_router)
 app.include_router(hygiene_router)
@@ -252,11 +290,13 @@ app.include_router(agent_actions_router)
 app.include_router(admin_advanced_router)
 app.include_router(admin_router)
 app.include_router(features_router)
+app.include_router(recovery_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)
 app.include_router(math_router)
 app.include_router(extension_router)
+app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
 app.include_router(assignments_router)
 app.include_router(privacy_router)
 
@@ -325,6 +365,55 @@ def get_or_create_user(db: Session, public_id: str) -> User:
         db.add(user)
         db.flush()
     return user
+
+
+# ─── subject classification for extension-scraped assignments (08-28) ───────
+# Fallback under the client-supplied subject (the extension classifies from the
+# Canvas course name); keyword hints mirror assignment_dump._TOPIC_HINTS so scrape
+# and dump bubbles agree. Deterministic + free: never carries an LLM call on
+# the extension scrape path.
+
+_SUBJECT_HINTS: dict[str, tuple[str, ...]] = {
+    "Mathematics": ("algebra", "geometry", "calculus", "trig", "trigonometr", "statistic",
+                    "equation", "theorem", "linear", "quadratic", "function", "probability",
+                    "arithmetic", "math", "integral", "derivative", "exponential", "logarithm"),
+    "Biology": ("cell", "dna", "genetics", "organism", "biology", "evolution", "crispr",
+                "photosynthesis", "ecosystem", "bacteria", "mitochondria"),
+    "Chemistry": ("chemistry", "chemical", "molecule", "atom", "compound", "reaction", "acid", "periodic"),
+    "Physics": ("physics", "motion", "force", "kinematics", "newton", "velocity", "acceleration",
+                "gravity", "electricity", "magnet"),
+    "Computer Science": ("algorithm", "code", "programming", "data structure", "python",
+                         "machine learning", "neural", "ap csp", "apcsp", "computer science", "java"),
+    "History": ("history", "reconstruction", "civil war", "president", "ancient", "revolution",
+                "empire", "world war", "century", "antebellum", "columbian"),
+    "Literature": ("novel", "literature", "poem", "woolf", "faulkner", "narrative", "modernist",
+                   "english literature", "shakespeare", "poetry"),
+    "English": ("english", "grammar", "essay", "vocabulary", "reading", "writing", "rhetoric"),
+    "Economics": ("economic", "inflation", "gdp", "macroeconomic", "microeconomic", "monetary",
+                  "supply", "demand", "market"),
+    "Ethics": ("ethics", "ethical", "moral", "autonomous systems"),
+    "Psychology": ("cognitive", "behavior", "psychology", "bias", "decision"),
+    "Spanish": ("spanish", "espanol", "español", "conjugat", "vocabulario"),
+    "French": ("french", "francais", "français"),
+    "Health": ("health", "nutrition", "p.e.", "physical education", "wellness"),
+}
+
+
+def _classify_subject(text: str) -> tuple[str, str]:
+    """Return (subject, course_code) from scrape title/prompt text.
+
+    Defaults to the sensible 'General Academic' / GEN-101 when nothing matches
+    (same neutral bucket the dump flow uses) so a bubble always has a topic.
+    Keywords match at a word START so substrings never misroute a page
+    ("miscellaneous" must not hit the 'cell' biology hint).
+    """
+    import re
+    lower = (text or "").lower()
+    for subj, keys in _SUBJECT_HINTS.items():
+        for k in keys:
+            if re.search(r"(?:^|[\s\W])" + re.escape(k), lower):
+                return subj, subj.split()[0][:4].upper() + "-101"
+    return "General Academic", "GEN-101"
 
 
 def _material_payload(m: StudyMaterial) -> dict:
@@ -405,12 +494,42 @@ def _require_transcript(db: Session, public_id: str, transcript_id: int | None, 
 # ─── models ────────────────────────────────────────────────────────────────
 
 class AssignmentIn(BaseModel):
-    public_id: str = Field(..., max_length=100)
+    # Audit 08-28, LOW: this used to be REQUIRED even though the route never
+    # reads it — clients that omitted it got a baffling 422 "Field required".
+    # Optional now: the authenticated session is always the identity (the
+    # route below keys everything on current_user), and the field remains in
+    # the schema purely for extension-payload compatibility.
+    public_id: str | None = Field(default=None, max_length=100)
     canvas_id: str | None = Field(default=None, max_length=200)
+    # Extension scrape metadata (08-28): the scraped page carries its LMS
+    # identity + detected topic so the row lands in the right bubble.
+    # canvas_id from the extension is "<courseId>:<assignmentId>" so the same
+    # assignment id in two different courses can never dedupe wrongly.
+    subject: str | None = Field(default=None, max_length=64)
+    course_name: str | None = Field(default=None, max_length=200)
+    course_code: str | None = Field(default=None, max_length=16)
+    rubric: str | None = Field(default=None, max_length=500_000)
+    source_url: str | None = Field(default=None, max_length=2000)
+    # Explicit bubble target: only honored when the assignment belongs to the
+    # caller (same ownership rule the materials/flashcards routes use).
+    assignment_id: int | None = None
     title: str = Field(..., max_length=500)
     due_date: str | None = Field(default=None, max_length=100)
-    prompt: str = Field(default="", max_length=50_000)
-    file_urls: list[str] = Field(default_factory=list, max_length=50)
+    # 08-28 truncation fix: long assignment pages (pacing guides, packets,
+    # rubric+prompt pages) exceed the old 50k cap and were REJECTED with a 422
+    # — the scrape payload (and tail of the content) was lost. SQLite stores
+    # String/TEXT unbounded; the extension marks anything above 1M chars.
+    prompt: str = Field(default="", max_length=1_000_000)
+    file_urls: list[str] = Field(default_factory=list, max_length=200)
+    # 08-28 quick-scrape integrity: per-file records {url, filename, size,
+    # sha256, content_type, uploaded, dump_id} from the extension's real
+    # scrape — a file that could not stream into the dump flow still keeps its
+    # URL + content-hash on the bubble.
+    files_meta: list[dict] | None = Field(default=None, max_length=200)
+    # 08-28 chatbox→scrape binding: the mini-chatbox instruction that produced
+    # (or last re-ran) this scrape, persisted per assignment so a follow-up
+    # message continues the scrape with full context.
+    instruction: str | None = Field(default=None, max_length=4000)
 
 
 class GenerateIn(BaseModel):
@@ -463,33 +582,55 @@ def get_csrf(response: Response):
 
 
 @app.post("/api/login")
-def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user with public_id and password."""
     logger.info("Login attempt for public_id: %s", body.public_id)
-    
+
+    # Per-IP login throttle (audit 08-28, LOW): the per-account limiter below
+    # keys on the public_id, so 12 bad logins across 12 different accounts
+    # from one IP never tripped it. Keep BOTH: the account limiter (5/hr,
+    # exponential backoff) still runs, and this sliding window stops ~5
+    # failed attempts per minute per client IP with a Retry-After.
+    client = request.client.host if request.client else "unknown"
+    ip_key = f"login_ip:{client}"
+    allowed_ip, ip_wait = auth_limiter.check_ip_auth(ip_key)
+    if not allowed_ip:
+        raise HTTPException(
+            429, f"Too many failed login attempts from this address. Try again in {ip_wait}s",
+            headers={"Retry-After": str(ip_wait)})
+
     # Check adaptive rate limiting for auth failures
     key = f"auth:{body.public_id}"
     allowed, wait = auth_limiter.check_auth(key)
     if not allowed:
-        raise HTTPException(429, f"Too many failed attempts. Try again in {wait}s")
-    
+        raise HTTPException(429, f"Too many failed attempts. Try again in {wait}s",
+                            headers={"Retry-After": str(wait)})
+
     user = db.query(User).filter(User.public_id == body.public_id).first()
     if not user:
         auth_limiter.log_failure(key)
+        auth_limiter.log_failure(ip_key, window_seconds=60.0)
         logger.warning("User not found: %s", body.public_id)
         raise HTTPException(401, "Invalid credentials")
     if not user.password_hash or not user.password_salt:
         auth_limiter.log_failure(key)
+        auth_limiter.log_failure(ip_key, window_seconds=60.0)
         logger.warning("No password set for user: %s", body.public_id)
         raise HTTPException(401, "Invalid credentials")
     if not verify_password(body.password, user.password_hash, user.password_salt):
         auth_limiter.log_failure(key)
+        auth_limiter.log_failure(ip_key, window_seconds=60.0)
         logger.warning("Invalid password for user: %s", body.public_id)
         raise HTTPException(401, "Invalid credentials")
-    
+
     # Reset failures on successful login
     auth_limiter.reset_failures(key)
-    
+
+    # Ban enforcement (operator 08-27): banned / temp-banned accounts are
+    # refused at sign-in even with valid credentials.
+    if is_user_banned(user):
+        raise HTTPException(403, "Account suspended by the operator")
+
     if user.settings and user.settings.get("2fa_enabled"):
         from .auth_2fa import totp_service, code_store
         code = body.code or body.two_factor_code
@@ -500,22 +641,33 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
         if method == "totp":
             secret = user.settings.get("2fa_totp_secret")
             if not totp_service.verify_code_with_replay(user.id, secret, code):
+                auth_limiter.log_failure(ip_key, window_seconds=60.0)
                 raise HTTPException(401, "Invalid 2FA code")
         else:
             valid, msg = code_store.verify_code(user.public_id, code, purpose="2fa_challenge")
             if not valid:
+                auth_limiter.log_failure(ip_key, window_seconds=60.0)
                 raise HTTPException(401, "Invalid 2FA code")
 
     # Create session
     token = SessionStore.create_session(user.id, user.public_id)
-    # Set session cookie
+    # Set session cookie — max_age keeps the login across browser restarts
+    # (operator 08-27, kaitylyn: without it the cookie is a browser-session
+    # cookie and users re-login on every visit; the DB session already lives
+    # 7 days). Same window as SessionStore._session_expiry.
+    # Secure is conditional (audit 08-28, LOW): over plain HTTP on this box a
+    # hard-Secure cookie is silently dropped by non-localhost HTTP clients,
+    # so login just breaks with no clue. Secure only once the connection is
+    # real HTTPS, or whenever production_mode forces it (HTTPS-terminated
+    # proxy deployments). HttpOnly / SameSite=lax / Max-Age stay as-is.
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=config.production_mode,  # Secure in production with HTTPS
+        secure=config.production_mode or request.url.is_secure,
         samesite="lax",
         path="/",
+        max_age=SessionStore._session_expiry,
     )
     # Set CSRF cookie (readable by JS)
     csrf_token = set_csrf_cookie(response)
@@ -527,6 +679,11 @@ def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
         "credits": user.credits,
         "csrf_token": csrf_token,
         "token": create_jwt_token(user.id),
+        # Long-lived opaque session token (same value as the cookie, DB-backed,
+        # 7-day sliding window) — API clients like the browser extension store
+        # this and send it as `Authorization: Bearer <session_token>` so the
+        # 24h JWT expiry does not force a re-login on every use.
+        "session_token": token,
     }
 
 
@@ -539,7 +696,15 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     # was starving them; raise to 20/hr (still stops minting machines).
     client = request.client.host if request.client else "unknown"
     if not ratelimit.limiter.allow(f"signup:{client}", 20, window=3600.0):
-        raise HTTPException(429, "Too many accounts created from this address. Try again later.")
+        # Audit 08-28, LOW: the 429 told the user nothing — no Retry-After,
+        # no hint of HOW long. The message now names the window and the
+        # response carries Retry-After in seconds (standard 429 contract).
+        retry_after = ratelimit.limiter.retry_after(f"signup:{client}", 20, window=3600.0)
+        raise HTTPException(
+            429,
+            f"Too many accounts created from this address. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
     if not validate_public_id(body.public_id):
         raise HTTPException(400, "Invalid public_id (3-64 chars, alphanumeric, underscore, hyphen)")
     if not validate_password_strength(body.password):
@@ -585,9 +750,11 @@ def me(request: Request, db: Session = Depends(get_db)):
         if session:
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
+                if is_user_banned(user):
+                    raise HTTPException(403, "Account suspended by the operator")
                 return {
                     "public_id": user.public_id,
-                    "plan": user.plan,
+                    "plan": user.plan or "none",
                     "credits": user.credits,
                     "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
                     "authenticated": True,
@@ -624,6 +791,8 @@ def get_admin_users(request: Request, db: Session = Depends(get_db)):
             "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
             "is_active": True,
             "role": getattr(u, "role", "user"),
+            "banned": bool((u.settings or {}).get("banned")),
+            "banned_until": (u.settings or {}).get("banned_until"),
             "created_at": str(u.created_at) if hasattr(u, "created_at") else None,
         }
         for u in users
@@ -692,6 +861,51 @@ async def admin_user_unban(public_id: str, request: Request, db: Session = Depen
     return await unban_user(public_id=public_id, request=request, db=db)
 
 
+@app.post("/api/admin/user/{public_id}/tempban")
+async def admin_user_tempban(public_id: str, hours: float = 24, request: Request = None,
+                             db: Session = Depends(get_db)):
+    from .admin import temp_ban_user
+    return await temp_ban_user(public_id=public_id, hours=hours, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/kick")
+async def admin_user_kick(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+    from .admin import kick_user
+    return await kick_user(public_id=public_id, request=request, db=db)
+
+
+@app.delete("/api/admin/user/{public_id}")
+async def admin_user_delete(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+    from .admin import delete_user
+    return await delete_user(public_id=public_id, request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/act")
+async def admin_user_act(public_id: str, request: Request, db: Session = Depends(get_db)):
+    """Impersonate a user for debugging: swap the session cookie to a fresh
+    session of the target user. The admin's browser becomes that account until
+    they log in again."""
+    from .admin import require_admin
+    from .database import User
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    token = SessionStore.create_session(user.id, user.public_id)
+    response = JSONResponse({"ok": True, "acting_as": user.username})
+    # Same conditional Secure rule as the login cookie (audit 08-28, LOW).
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=config.production_mode or request.url.is_secure,
+        samesite="lax",
+        path="/",
+        max_age=SessionStore._session_expiry,
+    )
+    return response
+
+
 # ─── health ────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -735,10 +949,42 @@ def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_
 # ─── assignments (from extension) ──────────────────────────────────────────
 
 @app.post("/api/assignments")
-def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Extension scrape save (08-28): dedupe on the LMS canvas_id and attribute
+    the scraped page to the right assignment bubble.
+
+    Fixes the 'scraped but not in the math bubble' bug: the extension now sends
+    canvas_id ('<courseId>:<assignmentId>') so a re-scrape updates the SAME
+    assignment (never a new orphan), and subject/course metadata so the bubble
+    renders under its real topic (e.g. Mathematics) instead of a blank card.
+    The optional assignment_id links the page to an explicit bubble the client
+    chose — validated: only assignments owned by the caller are accepted.
+
+    Identity (audit 08-28, LOW): the assignment is always created/updated for
+    the AUTHENTICATED session user — body.public_id is optional (kept in the
+    schema for extension-payload compatibility) and never an identity; a
+    client that omits it gets the same behavior, no 422. When supplied it is
+    ignored for ownership, exactly as before.
+
+    Team launch (08-28 BUG 3 fix): once the scrape stores REAL content (≥200
+    chars of prompt/rubric), the assignment workflow is kicked off so the
+    sub-agent team actually works it — one kick per bubble (progress
+    team_launched is the idempotence key, set before commit). Files the
+    extension could not stream (URL + hash only) are handed to the server-side
+    attachment job, which downloads what it can and routes the bytes through
+    the real dump flow (process_dump_upload) with progress.attached_files as
+    the honest record of what is attached.
+    """
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     assignment = None
-    if body.canvas_id:
+    # Explicit bubble target wins when supplied and owned by this user.
+    if body.assignment_id is not None:
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == body.assignment_id, Assignment.user_id == user.id)
+            .first()
+        )
+    if assignment is None and body.canvas_id:
         assignment = db.query(Assignment).filter_by(user_id=user.id, canvas_id=body.canvas_id).first()
     if assignment is None:
         assignment = Assignment(user_id=user.id)
@@ -746,10 +992,145 @@ def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), current
     assignment.canvas_id = body.canvas_id
     assignment.title = body.title
     assignment.due_date = body.due_date
-    assignment.prompt = body.prompt
+    # 08-28: never let an empty scrape silently wipe existing content (the
+    # "quick scrape did nothing" case) — only overwrite with real text.
+    if body.prompt:
+        assignment.prompt = body.prompt
     assignment.file_urls = body.file_urls
+    progress = {**(assignment.progress or {})}
+    if body.source_url:
+        progress["source_url"] = body.source_url
+    if body.rubric:
+        progress["rubric"] = body.rubric
+    if body.files_meta:
+        progress["files_meta"] = body.files_meta
+    if body.instruction:
+        progress["last_instruction"] = body.instruction
+    # Subject attribution: client-detected > existing > keyword fallback.
+    # Never overwrite a bubble's real subject with 'General Academic'.
+    subj = (body.subject or "").strip()
+    detected_subj = None
+    if not subj and not progress.get("subject"):
+        detected_subj, detected_code = _classify_subject(f"{body.title} {body.prompt}")
+        subj = detected_subj
+    if subj:
+        progress["subject"] = subj
+        code = (body.course_code or "").strip()
+        if not code:
+            code = detected_code if detected_subj else str(subj).split()[0][:4].upper() + "-101"
+        progress["course_code"] = code
+        if not body.course_name:
+            progress.setdefault("course_name", subj)
+    if body.canvas_id or body.source_url:
+        progress["scraped"] = True
+
+    # Team routing (BUG 3): a scrape with REAL material becomes a work order
+    # for the assignment sub-agent team. Kicked exactly once per bubble — a
+    # re-scrape of the same canvas page must not re-run the whole workflow.
+    team_content_len = len((body.prompt or "").strip()) + len((body.rubric or "").strip())
+    should_launch_team = (
+        team_content_len >= 200
+        and not progress.get("team_launched")
+        and not progress.get("orchestrator_done")
+    )
+    if should_launch_team:
+        progress["team_launched"] = utcnow().isoformat()
+
+    # AI-detection seed (BUG 4): the card must show the REAL source risk, not
+    # None/0 forever. Score the scraped content now (real registry — the
+    # DummyDetector randomizer is gone from the default registry; 24h cache by
+    # hash makes rescrapes free). If an explicit score already exists (e.g.
+    # finalize scored the produced work), keep it; only seed when absent and
+    # only when there is real content.
+    scorable = f"{body.prompt or ''}\n{body.rubric or ''}".strip()
+    if len(scorable) >= 200 and not progress.get("detector_risk"):
+        try:
+            progress["detector_risk"] = await detectors.check_ai_detection_cached(scorable)
+            progress["detector_at"] = utcnow().isoformat()
+        except Exception as e:  # noqa: BLE001 — never fail a scrape save
+            logger.warning("detector seed skipped for assignment %s: %s", assignment.id, e)
+
+    assignment.progress = progress
     db.commit()
-    return {"assignment_id": assignment.id, "status": assignment.status}
+
+    # Post-commit side effects (never fail the API response on them).
+    if should_launch_team:
+        try:
+            from .orchestrator import start_assignment_workflow
+            start_assignment_workflow(assignment.id, user.public_id)
+        except Exception as e:  # noqa: BLE001 — scrape save must still succeed
+            logger.warning("Team launch failed for assignment %s: %s", assignment.id, e)
+    unuploaded = [m for m in (body.files_meta or []) if isinstance(m, dict) and m.get("url") and not m.get("uploaded")]
+    if unuploaded:
+        from .assignment_dump import launch_attach_scraped_files
+        try:
+            asyncio.create_task(launch_attach_scraped_files(
+                assignment.id, user.id, unuploaded,
+            ))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("File attach task wasn't started for assignment %s: %s", assignment.id, e)
+
+    return {
+        "assignment_id": assignment.id,
+        "status": assignment.status,
+        "subject": progress.get("subject", ""),
+        "course_code": progress.get("course_code", ""),
+    }
+
+
+class AiDetectRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1_000_000)
+    threshold: float = Field(default=80.0, ge=0, le=100)
+    assignment_id: Optional[int] = None
+
+
+@app.post("/api/ai/detect")
+async def ai_detect(
+    body: AiDetectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Real AI-detection verdict for any text (BUG 4): runs the actual detector
+    registry (perplexity + burstiness heuristics always; Pangram/Sapling/
+    Originality/Copyleaks/Winston when their API keys are configured) through
+    the same 24h cache as everything else. Returns the same 0-1 risk scale the
+    cards read (progress.detector_risk), plus 0-100 average and per-detector
+    breakdown. Optionally persists the verdict onto an owned assignment."""
+    text = body.text.strip()
+    if len(text) < 20:
+        return {"risk": 0.0, "score": 0.0, "passed": True, "scored_chars": len(text),
+                "detectors": [], "note": "text too short to score"}
+
+    avg_score, results, passed = await detectors.score_text(text, threshold=body.threshold)
+    details = [{"detector": r.name, "score": round(r.score, 2), "error": r.error, "details": r.details}
+               for r in results][:12]
+    verdict = {
+        "risk": round(max(0.0, min(1.0, avg_score / 100.0)), 4),
+        "score": round(float(avg_score), 2),
+        "passed": bool(passed),
+        "scored_chars": len(text),
+        "detectors": details,
+    }
+    if body.assignment_id is not None:
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == body.assignment_id, Assignment.user_id == current_user.id)
+            .first()
+        )
+        if assignment is None:
+            raise HTTPException(404, "Assignment not found")
+        assignment.progress = {
+            **(assignment.progress or {}),
+            "detector_risk": verdict["risk"],
+            "ai_score": verdict["score"],
+            "detector_passed": verdict["passed"],
+            "detector_scored_chars": verdict["scored_chars"],
+            "detector_details": [{"detector": d["detector"], "score": d["score"]} for d in details],
+            "detector_at": utcnow().isoformat(),
+        }
+        db.commit()
+        verdict["assignment_id"] = assignment.id
+    return verdict
 
 
 @app.get("/api/status/{public_id}")
@@ -762,6 +1143,8 @@ def status(public_id: str, db: Session = Depends(get_db), current_user: User = D
         out.append({
             "id": a.id, "title": a.title, "due_date": a.due_date, "status": a.status,
             "progress": a.progress, "created_at": a.created_at.isoformat(),
+            "turned_in": bool(a.turned_in),
+            "turned_in_at": a.turned_in_at.isoformat() if a.turned_in_at else None,
         })
     return {"assignments": out}
 
@@ -933,7 +1316,21 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
         credits.CreditTransaction.id.desc()).limit(20).all()
     monthly = credits.TIER_MONTHLY_CREDITS.get(user.plan, 2000)
     bal = credits.get_balance(user)
-    
+
+    # Real usage aggregate (operator 08-27): tokens_processed used to be
+    # fabricated as credits*10000. Pull REAL input+output tokens from the
+    # ApiUsageLog ledger so the number is honest — it can be 0 for fresh
+    # users and that is correct.
+    try:
+        from .database import ApiUsageLog
+        from sqlalchemy import func as sa_func
+        tokens_used = db.query(
+            sa_func.coalesce(sa_func.sum(ApiUsageLog.input_tokens + ApiUsageLog.output_tokens), 0)
+        ).filter(ApiUsageLog.public_id == user.public_id).scalar()
+        tokens_used = int(tokens_used or 0)
+    except Exception:
+        tokens_used = 0
+
     return {
         "status": "success",
         "public_id": user.public_id,
@@ -945,10 +1342,10 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
         "pagination": {"limit": limit, "offset": offset},
         "user": {
             "public_id": user.public_id,
-            "tier": (user.plan or "pro").capitalize(),
+            "tier": (user.plan or "none").capitalize(),
             "credits_remaining": bal,
             "credits_formatted": f"{bal:,.1f}",
-            "tokens_processed": int(bal * 10000)
+            "tokens_processed": tokens_used
         },
         "telemetry": {
             "health": "Nominal",
@@ -969,10 +1366,11 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
                 "due_date": a.due_date,
                 "status": a.status,
                 "progress": a.progress,
-                "course": getattr(a, "subject", "GEN-101"),
-                "instructor": getattr(a, "teacher_name", "Academic Staff"),
-                "ai_risk": 0.05,
-                "urgency": "normal"
+                "course": (a.progress or {}).get("course") or (a.progress or {}).get("subject") or "",
+                "instructor": (a.progress or {}).get("teacher_name") or "",
+                "ai_risk": (a.progress or {}).get("detector_risk"),
+                "turned_in": bool(a.turned_in),
+                "turned_in_at": a.turned_in_at.isoformat() if a.turned_in_at else None,
             }
             for a in assignments
         ],

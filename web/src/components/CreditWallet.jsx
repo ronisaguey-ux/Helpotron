@@ -26,7 +26,7 @@ export default function CreditWallet({ onGoToBilling }) {
     );
   }
 
-  const projectedPct = Math.round((wallet.projected / wallet.addedThisMonth) * 100);
+  const projectedPct = wallet.addedThisMonth > 0 ? Math.round((wallet.projected / wallet.addedThisMonth) * 100) : 0;
 
   return (
     <div className="space-y-5">
@@ -67,7 +67,7 @@ export default function CreditWallet({ onGoToBilling }) {
           <div>
             <div className="text-[11px] text-slate-500">Added this month</div>
             <div className="text-lg font-bold text-white tabular-nums">+{wallet.addedThisMonth.toLocaleString()}</div>
-            <div className="text-[10px] text-slate-600">Elite plan renewal · referrals · promos</div>
+            <div className="text-[10px] text-slate-600">Plan allocations · referrals · promos</div>
           </div>
         </div>
         <div className="clean-card p-5 flex items-center gap-4">

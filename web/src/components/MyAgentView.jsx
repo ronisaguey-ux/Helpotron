@@ -8,29 +8,25 @@
  * Admins additionally see an admin tools block — same agent, wider reach.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Send, Paperclip, Mic, ShieldCheck, Shield, Flame, RefreshCw,
-  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, User as UserIcon, Undo2, Pin, Pencil,
+  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, ChevronUp, User as UserIcon, Undo2, Pin, Pencil,
+  Settings2, ArrowUpRight,
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
+import { normalizeCards, computeAssignmentEvents, formatAssignmentEvent, EVENT_META } from '../lib/assignmentEvents.js';
 import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
+import AgentConfigsSidebar from './AgentConfigsSidebar.jsx';
 
 const FILE_KINDS = [
   { key: 'skill', label: 'Skill', icon: '🧩', hint: 'Teach the agent new abilities (.md/.txt)' },
   { key: 'rule', label: 'Rule', icon: '📏', hint: 'Always-follow behavioral rules (.md/.txt)' },
   { key: 'automation', label: 'Automation', icon: '⚙️', hint: 'Scheduled or trigger workflows (.json/.md)' },
   { key: 'personality', label: 'Personality', icon: '🎭', hint: 'Tone, voice and values (.md/.txt)' },
-];
-
-const QUICK_ACTIONS = [
-  { label: '🧠 Summarize my workload', prompt: 'Summarize my current workload and tell me what to prioritize.' },
-  { label: '🎯 Flashcards, weakest subject', prompt: 'Generate flashcards for my weakest subject.' },
-  { label: '✍️ Draft my essay', prompt: 'Draft the next section of my current essay assignment.' },
-  { label: '📅 Plan my week', prompt: 'Plan my study week around my deadlines.' },
-  { label: '🔍 What should I do?', prompt: 'What should I do right now?' },
 ];
 
 const MODE_META = {
@@ -72,7 +68,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   );
 }
 
-export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {} }) {
+export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {}, onTokenBalance = () => {} }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [threads, setThreads] = useState([]);
   const [activeThread, setActiveThread] = useState(null); // null = the original chat (key 0)
@@ -85,6 +81,42 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     },
   ]);
   const [input, setInput] = useState('');
+
+  /* ── CONFIGS sidebar (operator 08-28): SEE / ADD / SELECT every custom
+   * agent config. Renders as a fixed column at xl+, a slide-over drawer at
+   * lg (1024-1279) so the chat never gets pinched, and an inline block on
+   * small screens. Default open on xl desktops (a drawer covering the chat
+   * at load would be worse); toggled anytime via ⚙ Configs in the chat
+   * header or the panel's own Minimize control. ───────────────────────── */
+  const [configsOpen, setConfigsOpen] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
+  );
+  /* Responsive breakpoints — matchMedia state so the grid can re-flow when
+   * the window crosses lg (1024) / xl (1280) without relying on CSS alone. */
+  const [isXL, setIsXL] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
+  );
+  const [isLG, setIsLG] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  );
+  useEffect(() => {
+    const mqXl = window.matchMedia('(min-width: 1280px)');
+    const mqLg = window.matchMedia('(min-width: 1024px)');
+    const onXl = () => setIsXL(mqXl.matches);
+    const onLg = () => setIsLG(mqLg.matches);
+    mqXl.addEventListener('change', onXl);
+    mqLg.addEventListener('change', onLg);
+    return () => { mqXl.removeEventListener('change', onXl); mqLg.removeEventListener('change', onLg); };
+  }, []);
+  /* Drawer mode: Escape closes the configs overlay. */
+  useEffect(() => {
+    if (!(configsOpen && !isXL && isLG)) return;
+    const onKey = (e) => { if (e.key === 'Escape') setConfigsOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [configsOpen, isXL, isLG]);
+  /* operator 08-28: collapse the prompt composer to a slim bar (header toggle) */
+  const [promptMinimized, setPromptMinimized] = useState(false);
 
   /* ── voice (08-27): mic dictation + spoken replies via local Voicebox ── */
   const [recording, setRecording] = useState(false);
@@ -193,19 +225,91 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const bubbleFileRef = useRef(null);
   const bubbleFileTarget = useRef(null);
 
+  /* Assignment lifecycle watcher (operator 08-28): everywhere else the cards
+   * payload is a one-shot mount-time snapshot — that is how a "ghost"
+   * assignment survives a deletion or turn-in done in another view. Here the
+   * snapshot is re-pulled on a timer and on tab focus, deduped/normalized,
+   * and diffed against the previous snapshot. The resulting events (NEW
+   * ASSIGNMENT / DUE SOON / SUBMITTED) are pushed into the chat as distinct
+   * assignment bubbles. Each event type is announced ONCE per session (seen
+   * keys), so a repeated poll never duplicates a bubble. */
+  const assignmentEventsAnnouncedRef = useRef(new Set()); // "type:id" keys
+  const assignmentsBaselineRef = useRef(null);            // Map<id, card> — last snapshot
+  const turnedInIdsRef = useRef(new Set());               // ids in the turn-in history
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let alive = true;
-    if (!localStorage.getItem('token')) return;
-    api.assignmentCards().then((d) => {
-      if (!alive) return;
-      const cards = d?.cards || [];
-      setAssignments(cards);
-      if (cards.length > 0) {
-        setBubbleOpen((prev) => ({ ...prev, [cards[0].id]: true }));
-        loadBubbleHistory(cards[0].id);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  function pushAssignmentBubble(event) {
+    const info = formatAssignmentEvent(event);
+    setMessages((prev) => [...prev, {
+      id: `evt_${Date.now()}_${Math.random()}`,
+      sender: 'assistant',
+      kind: 'assignment',
+      eventType: info.type,
+      assignment: { ...event.card },
+      text: info.headline,
+      detail: info.detail,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
+  }
+
+  async function refreshAssignmentsData({ firstLoad = false } = {}) {
+    try {
+      const [cardsRes, turnedInRes] = await Promise.all([
+        api.assignmentCards().catch(() => null),
+        api.getTurnedInAssignments().catch(() => null),
+      ]);
+      if (!mountedRef.current) return;
+      if (!cardsRes?.cards || !Array.isArray(cardsRes.cards)) return;
+      const normalized = normalizeCards(cardsRes.cards);
+      const turnedInIds = new Set(
+        (turnedInRes?.history || []).map((h) => h.id ?? h.assignment_id)
+          .filter((id) => id != null).map(String)
+      );
+      // Ghost filter: a turned-in assignment belongs to history, not to the
+      // active bubble list — the cards payload does not exclude it server-side.
+      setAssignments(normalized.filter((c) => !turnedInIds.has(String(c.id))));
+      const events = computeAssignmentEvents({
+        prev: firstLoad ? null : assignmentsBaselineRef.current,
+        cards: normalized,
+        turnedInIds,
+        prevTurnedInIds: turnedInIdsRef.current,
+      });
+      let pushed = 0;
+      for (const evt of events) {
+        const key = `${evt.type}:${evt.card.id}`;
+        if (assignmentEventsAnnouncedRef.current.has(key)) continue;
+        assignmentEventsAnnouncedRef.current.add(key);
+        if (pushed >= 8) continue; // flood guard — the baseline still records the batch
+        pushed += 1;
+        pushAssignmentBubble(evt);
       }
-    }).catch(() => {});
-    return () => { alive = false; };
+      assignmentsBaselineRef.current = new Map(normalized.map((c) => [c.id, c]));
+      turnedInIdsRef.current = turnedInIds;
+      if (firstLoad && normalized.length > 0) {
+        setBubbleOpen((prev) => ({ ...prev, [normalized[0].id]: true }));
+        loadBubbleHistory(normalized[0].id);
+      }
+    } catch (e) { /* demo / offline — the bubbles section simply keeps its last state */ }
+  }
+
+  useEffect(() => {
+    if (!localStorage.getItem('token')) return;
+    refreshAssignmentsData({ firstLoad: true });
+    const interval = setInterval(() => refreshAssignmentsData(), 45000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible') refreshAssignmentsData();
+    };
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    window.addEventListener('focus', refreshOnReturn);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+      window.removeEventListener('focus', refreshOnReturn);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -296,6 +400,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [compactMsg, setCompactMsg] = useState('');
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
+  const chatInputRef = useRef(null);
   const effortTimer = useRef(null);
 
   const persist = (next) => { setSettingsState(next); saveSettings(next); };
@@ -422,6 +527,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         session_mode_override: mode,
         thread_id: activeThread ?? undefined,
       });
+      // Live token balance (08-27): the chat response carries the post-charge
+      // balance — reflect it in the top-bar widget immediately, no refresh.
+      if (res && res.token_balance != null) onTokenBalance(Number(res.token_balance) || 0);
       // reply may be a plain string OR the message object (gate/status replies)
       const replyRaw = res?.reply ?? res?.message;
       const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
@@ -431,6 +539,43 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     } finally {
       setBusy(false);
       loadThreads(); // refresh updated_at / auto-title
+    }
+  }
+
+  /* ── composer paperclip (operator 08-28): images/pdf/docs/txt are uploaded
+   * as the REAL file — the server OCR/extracts them and the agent sees the
+   * content. Other kinds (audio/video/unknown) fall back to the old
+   * filename-text message. The typed input goes WITH the file, and survives a
+   * failed send. ──────────────────────────────────────────────────────────── */
+  async function handleComposerAttach(f) {
+    const typed = input.trim();
+    const textKind = /\.(png|jpe?g|webp|gif|pdf|docx?|txt|md)$/i.test(f.name);
+    if (!textKind) { // not a readable-attach kind — old behavior
+      sendMessage(`Process this file and tell me what you found: ${f.name}`);
+      return;
+    }
+    setMessages((prev) => [...prev, {
+      id: Date.now(), sender: 'user', text: `📎 ${f.name}`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      if (typed) fd.append('text', typed);
+      const res = await api.agentChatAttach(fd);
+      if (res && res.token_balance != null) onTokenBalance(Number(res.token_balance) || 0);
+      const replyRaw = res?.reply ?? res?.message;
+      const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
+      pushAssistant(replyText);
+      setInput(''); // the typed text went with the attachment
+    } catch (e) {
+      setBusy(false);
+      await sendMessage(`Process this file and tell me what you found: ${f.name}`);
+      if (typed) setInput(typed); // keep the user's typed text (sendMessage cleared it)
+    } finally {
+      setBusy(false);
+      loadThreads();
     }
   }
 
@@ -468,6 +613,22 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       await api.request(`/api/agent/threads/${t.id}`, { method: 'PATCH', body: JSON.stringify({ pinned: !t.pinned }) });
       await loadThreads();
     } catch (e) { /* ignore */ }
+  }
+
+  async function deleteThread(t) {
+    try {
+      await api.request(`/api/agent/threads/${t.id}`, { method: 'DELETE' });
+      setThreads((prev) => prev.filter((x) => x.id !== t.id));
+      if (activeThread === t.id) {
+        // Deleting the open thread — fall back to the current conversation.
+        await openThread({ id: 0 });
+        await loadThreads();
+      } else {
+        await loadThreads();
+      }
+    } catch (e) {
+      pushAssistant(`⚠️ Couldn't delete that chat: ${e.message}`);
+    }
   }
 
   async function newChat() {
@@ -534,16 +695,70 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     try { await api.deleteAgentMemory(id); } catch (e) { /* optimistic */ }
   }
 
+  /* operator 08-28: pick a saved memory → load it into the prompt box */
+  function useMemory(m) {
+    setInput(m.text);
+    chatInputRef.current?.focus();
+    chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /* operator 08-28: SELECT semantics for the CONFIGS sidebar — load any
+   * config (identity / file) into the prompt box and focus it. */
+  function selectConfig(text) {
+    if (!text) { chatInputRef.current?.focus(); return; }
+    setInput(text);
+    chatInputRef.current?.focus();
+    chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /* operator 08-28: identity SAVE from the sidebar — same path as the
+   * Identity section (set() persists locally + mirrors to the server). */
+  function savePersonality(v) {
+    if ((v || '') === (ai.personality || '')) return;
+    set('ai.personality', v);
+    pushAssistant(`🎭 Personality updated — that's how ${agentName} will act now.`);
+  }
+
+  function saveInstructions(v) {
+    if ((v || '') === (ai.instructions || '')) return;
+    set('ai.instructions', v);
+    pushAssistant('📋 Instructions updated — I\'ll follow them from now on.');
+  }
+
+  /* operator 08-28: file → prompt box (SELECT) — fetch the full content
+   * (same endpoint as openFile) and load it in so the user can talk
+   * about/with it. */
+  async function useFileInPrompt(f) {
+    try {
+      const res = await api.get(`/api/agent/files/${f.id}`);
+      const content = res?.file?.content || '';
+      selectConfig(`📎 ${f.file_name}\n\n${content}`);
+    } catch (e) {
+      selectConfig(`📎 ${f.file_name}`);
+    }
+  }
+
+  /* operator 08-28: prompt box grows with the text instead of staying tiny */
+  function autosizeChat(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+  }
+  useEffect(() => { autosizeChat(chatInputRef.current); }, [input]);
+
   /* ── files (skill / rule / automation / personality) ──────────────────── */
-  async function handleUploadFile(e) {
+  /* operator 08-28: kindOverride lets the CONFIGS sidebar upload straight
+   * into a specific kind group without touching the shared fileKind state. */
+  async function handleUploadFile(e, kindOverride) {
     const f = e.target.files?.[0];
     if (!f) return;
+    const kind = kindOverride || fileKind;
     setBusy(true);
     try {
-      const res = await api.uploadAgentFile(f, fileKind);
-      const file = res?.file || { id: `f_${Date.now()}`, file_name: f.name, kind: fileKind, size_bytes: f.size, created_at: new Date().toISOString() };
+      const res = await api.uploadAgentFile(f, kind);
+      const file = res?.file || { id: `f_${Date.now()}`, file_name: f.name, kind, size_bytes: f.size, created_at: new Date().toISOString() };
       setFiles((prev) => [...prev, file]);
-      pushAssistant(`📎 Loaded “${f.name}” as a ${fileKind}. It's live — ask me to use it.`);
+      pushAssistant(`📎 Loaded “${f.name}” as a ${kind}. It's live — ask me to use it.`);
     } catch (err) {
       pushAssistant(`⚠️ Upload failed: ${err.message}`);
     } finally {
@@ -626,7 +841,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               />
             ) : t.title}
           </span>
-          <span className="block text-[9px] text-slate-600">{timeShort(t.updated_at)}</span>
+          <span className="block text-[9px] text-slate-600" title={t.last_message_at || t.updated_at || ''}>{timeShort(t.last_message_at || t.updated_at)}</span>
         </span>
       </button>
       <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5 opacity-0 group-hover:opacity-100 transition">
@@ -648,9 +863,25 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         >
           <Pin className="w-3 h-3" />
         </button>
+        <button
+          type="button"
+          onClick={() => deleteThread(t)}
+          className="p-1 text-slate-500 hover:text-red-400 transition cursor-pointer"
+          title="Delete chat"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );
+
+  /* Configs panel props — shared by the xl column, the lg drawer and the
+   * small-screen inline block so they always render identically. */
+  const configsSidebarProps = {
+    ai, memory, memoryText, setMemoryText, addMemory, deleteMemory, useMemory,
+    files, fileKinds: FILE_KINDS, handleUploadFile, openFile, deleteFile,
+    useFileInPrompt, selectConfig, savePersonality, saveInstructions,
+  };
 
   return (
     <div className="space-y-5">
@@ -858,8 +1089,11 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     <span className="text-base leading-none">📘</span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-xs font-semibold text-white truncate">{a.name || `Assignment #${a.id}`}</span>
+                      {/* Ghost guard (08-28): scrape pipelines can leave
+                          subject/class/due empty — never render a bare
+                          separator line. */}
                       <span className="block text-[10px] text-slate-500 truncate">
-                        {a.subject} · {a.class_code} · due {a.due_date}
+                        {[a.subject, a.class_code].filter(Boolean).join(' · ') || 'uncategorized'} · due {a.due_date || 'No deadline'}
                       </span>
                     </span>
                     <Badge color={a.status === 'In Progress' ? 'blue' : a.status === 'Submitted' ? 'green' : 'slate'}>
@@ -1023,20 +1257,72 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       )}
 
       {/* ── Chat + side panels ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+      {/* CONFIGS panel: xl+ = fixed column (chat+rail+configs on one row),
+       * lg (1024-1279) = slide-over drawer so the chat keeps its width,
+       * below lg = inline stacked block (toggled via ⚙ Configs). The chat
+       * column is always minmax(0,1fr) so fixed side columns can never
+       * pinch it below the available room. */}
+      <div className={`grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px] ${configsOpen && isXL ? 'xl:grid-cols-[220px_minmax(0,1fr)_300px]' : ''}`}>
+        {configsOpen && isXL && (
+          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] min-w-0">
+            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
+          </div>
+        )}
+        {configsOpen && !isXL && isLG && createPortal(
+          <div className="fixed inset-0 z-50">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-fadeIn"
+              onClick={() => setConfigsOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-y-0 left-0 w-[min(320px,85vw)] p-3 sm:p-4 flex flex-col" role="dialog" aria-label="Agent configs">
+              <div className="flex-1 min-h-0">
+                <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+        {configsOpen && !isLG && (
+          <div className="h-[clamp(480px,calc(100vh-16rem),760px)]">
+            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
+          </div>
+        )}
         {/* Chat */}
-        <SectionCard id="myagent-chat" padding="p-0" className="overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-13rem),720px)]" header={
-          <div className="px-5 py-3.5 border-b border-white/8 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
+        <SectionCard id="myagent-chat" padding="p-0" className="min-w-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-16rem),760px)]" header={
+          <div className="px-4 sm:px-5 py-3.5 border-b border-white/8 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex items-center gap-2.5 min-w-0 shrink">
               <AgentAvatar
                 size="sm"
                 status={busy ? 'working' : 'ready'}
                 src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
               />
-              <span className="text-xs font-semibold text-white">Chat with {agentName}</span>
+              <span className="text-xs font-semibold text-white truncate">Chat with {agentName}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-600 hidden sm:block">{agentName}</span>
+            <div className="flex items-center gap-1.5 flex-wrap shrink">
+              <span className="text-[10px] text-slate-600 hidden 2xl:block">{agentName}</span>
+              <button
+                type="button"
+                onClick={() => setConfigsOpen(!configsOpen)}
+                aria-pressed={configsOpen}
+                title={configsOpen ? 'Hide the Configs sidebar' : 'Show the Configs sidebar'}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition cursor-pointer ${
+                  configsOpen
+                    ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
+                    : 'bg-white/4 border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
+                }`}
+              >
+                <Settings2 className="w-3 h-3" /> Configs
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromptMinimized((v) => !v)}
+                title={promptMinimized ? 'Expand the prompt box' : 'Minimize the prompt box'}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                {promptMinimized ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {promptMinimized ? 'Prompt' : 'Minimize'}
+              </button>
               <button
                 type="button"
                 onClick={newChat}
@@ -1059,27 +1345,50 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         }>
 
 
-          {/* Quick actions */}
-          <div className="px-5 py-3 border-b border-white/5 flex flex-wrap gap-1.5 bg-slate-950/20">
-            {QUICK_ACTIONS.map((qa) => (
-              <button
-                key={qa.label}
-                type="button"
-                onClick={() => sendMessage(qa.prompt)}
-                className="px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/8 transition cursor-pointer"
-              >
-                {qa.label}
-              </button>
-            ))}
-          </div>
-
           {/* Messages */}
           <div ref={listRef} className="flex-1 min-h-0 p-5 overflow-y-auto space-y-3">
             {messages.map((m) => {
               const isUser = m.sender === 'user';
+              const isAssignmentBubble = m.kind === 'assignment';
+              const evtMeta = EVENT_META[m.eventType] || EVENT_META.created;
+              if (isAssignmentBubble) {
+                return (
+                  <div key={m.id} className="w-full flex flex-col items-start">
+                    {/* Assignment bubble (operator 08-28): lifecycle events from the
+                        assignment watcher render as own card-style bubble — label,
+                        headline, detail and a jump to the dashboard. */}
+                    <div className="w-full sm:max-w-[92%] rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-slate-900/70 to-slate-950/50 p-3.5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-base leading-none" aria-hidden="true">{evtMeta.icon}</span>
+                        <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25">
+                          {evtMeta.label}
+                        </span>
+                        <span className="ml-auto text-[9px] text-slate-500 font-mono">{m.time}</span>
+                      </div>
+                      <div className="text-[12px] font-semibold text-slate-100 leading-relaxed">{m.text}</div>
+                      {m.detail && <div className="text-[10px] text-slate-400 mt-0.5">{m.detail}</div>}
+                      <div className="flex items-center gap-2 mt-2.5">
+                        <button
+                          type="button"
+                          onClick={() => onGoTo('overview')}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                          title="Open the assignment dashboard"
+                        >
+                          <ArrowUpRight className="w-3 h-3" aria-hidden="true" /> Open in dashboard
+                        </button>
+                        {m.assignment && (
+                          <span className="text-[9px] text-slate-500 font-mono truncate max-w-[50%]">
+                            Assignment #{m.assignment.id}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
                     isUser ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800/80 border border-white/5 text-slate-200'
                   }`}>
                     {m.text}
@@ -1106,11 +1415,20 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             )}
           </div>
 
-          {/* Composer */}
+          {/* Composer (operator 08-28: minimize toggle in the chat header) */}
           <div className="p-4 border-t border-white/8 bg-slate-950/30">
+            {promptMinimized ? (
+              <button
+                type="button"
+                onClick={() => { setPromptMinimized(false); setTimeout(() => chatInputRef.current?.focus(), 0); }}
+                className="w-full py-2.5 rounded-xl bg-slate-900 border border-white/10 text-[11px] text-slate-500 hover:text-slate-300 hover:border-blue-500/40 transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <ChevronUp className="w-3.5 h-3.5" /> Prompt box minimized — click to expand
+              </button>
+            ) : (
             <form
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-              className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition"
+              className="flex items-end gap-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition"
             >
               <button
                 type="button"
@@ -1135,17 +1453,24 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) sendMessage(`Process this file and tell me what you found: ${f.name}`);
+                  if (f) handleComposerAttach(f);
                   e.target.value = '';
                 }}
               />
-              <input
-                type="text"
+              <textarea
+                ref={chatInputRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim()) sendMessage();
+                  }
+                }}
                 placeholder={`Ask ${agentName} to do anything…`}
                 aria-label="Agent prompt input"
-                className="flex-1 bg-transparent border-none text-xs text-slate-100 placeholder-slate-500 focus:outline-none"
+                className="flex-1 bg-transparent border-none text-[13px] text-slate-100 placeholder-slate-500 focus:outline-none resize-none leading-relaxed py-1.5 max-h-[240px] overflow-y-auto"
               />
               <button
                 type="submit"
@@ -1156,16 +1481,17 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 <Send className="w-3.5 h-3.5" />
               </button>
             </form>
+            )}
           </div>
         </SectionCard>
 
         {/* Right rail */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           {/* Chat history (operator 08-26): timestamps, rename, pin */}
           <SectionCard id="myagent-chats" padding="p-3" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Database className="w-3 h-3" /> Chats
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+                <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Chats</span>
               </span>
               <button
                 type="button"
@@ -1177,24 +1503,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             </div>
           }>
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => openThread({ id: 0 })}
-                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition cursor-pointer border ${
-                  activeThread == null || activeThread === 0
-                    ? 'bg-blue-600/20 border-blue-500/40'
-                    : 'border-white/6 hover:bg-white/4'
-                }`}
-              >
-                <span className="text-sm">💬</span>
-                <span className="flex-1 min-w-0">
-                  <span className={`block text-[11px] font-semibold truncate ${activeThread == null || activeThread === 0 ? 'text-blue-300' : 'text-slate-300'}`}>Main chat</span>
-                  <span className="block text-[9px] text-slate-600">original conversation</span>
-                </span>
-              </button>
-              {threads.length === 0 && (
-                <div className="text-[10px] text-slate-600 px-2.5 py-1">No other chats yet — hit New to start one.</div>
-              )}
+              {/* No hardcoded "Main chat" entry (operator 08-27): the current
+                  conversation (id 0) comes from /api/agent/threads as a regular
+                  chat row — rename/pin/delete affordances included. */}
               {threads.some((t) => t.pinned) && (
                 <>
                   <div className="text-[9px] text-amber-400/90 uppercase tracking-wider px-1 pt-1.5">📌 Pinned</div>
@@ -1213,8 +1524,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Identity controls */}
           <SectionCard id="myagent-identity-controls" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <UserIcon className="w-3 h-3" /> Identity
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+                <UserIcon className="w-3 h-3 shrink-0" /> <span className="truncate">Identity</span>
               </span>
             </div>
           }>
@@ -1303,26 +1614,41 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Permanent memory */}
           <SectionCard id="myagent-memory" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Database className="w-3 h-3" /> Permanent memory
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+                <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Permanent memory</span>
               </span>
               <Badge color={memory.length ? 'blue' : 'slate'}>{memory.length} entries</Badge>
             </div>
           }>
             <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
               The agent always reads this. Add facts about yourself, preferences, deadlines — and it stays forever until you delete it.
+              Click any entry (or its arrow) to load it into your prompt box.
             </p>
             <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
               {memory.length === 0 && <div className="text-[11px] text-slate-600 py-2">No memories yet — teach your agent something.</div>}
               {memory.map((m) => (
-                <div key={m.id} className="group flex items-start gap-2 p-3 rounded-xl bg-slate-950/40 border border-white/6">
+                <div
+                  key={m.id}
+                  onClick={() => useMemory(m)}
+                  title="Select this memory — loads into your prompt"
+                  className="group flex items-start gap-2 p-3 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 hover:bg-slate-950/70 transition cursor-pointer"
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
                     <div className="text-[9px] text-slate-600 mt-1">{timeAgo(m.created_at)}</div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => deleteMemory(m.id)}
+                    onClick={(e) => { e.stopPropagation(); useMemory(m); }}
+                    aria-label="Load this memory into the prompt"
+                    title="Load into prompt box"
+                    className="p-1 text-slate-500 hover:text-blue-400 transition cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
                     aria-label="Delete memory entry"
                     className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
                   >
@@ -1354,8 +1680,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Files */}
           <SectionCard id="myagent-files" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <FileText className="w-3 h-3" /> Files
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+                <FileText className="w-3 h-3 shrink-0" /> <span className="truncate">Files</span>
               </span>
               <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
             </div>
@@ -1428,7 +1754,18 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 <span className="truncate">{viewFile.file_name}</span>
                 <span className="text-[10px] text-slate-500 font-mono">{viewFile.kind}</span>
               </div>
-              <button type="button" onClick={() => setViewFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* operator 08-28: SELECT this file's content into the prompt box */}
+                <button
+                  type="button"
+                  onClick={() => { selectConfig(`📎 ${viewFile.file_name}\n\n${viewFile.content}`); setViewFile(null); }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                  title="Load this file into the prompt box"
+                >
+                  <Send className="w-3 h-3" /> Prompt
+                </button>
+                <button type="button" onClick={() => setViewFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+              </div>
             </div>
             <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">
               {viewFile.content}

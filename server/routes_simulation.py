@@ -36,14 +36,13 @@ async def get_simulation_status(request: Request, db: Session = Depends(get_db))
 
 @router.post("/toggle")
 async def toggle_simulation(payload: ToggleRequest, request: Request, db: Session = Depends(get_db)):
-    """Toggles simulator ON or OFF."""
+    """Toggles simulator ON or OFF.
+
+    Explicit opt-in only (operator 08-27): toggling no longer auto-seeds
+    sample data into the user's real assignment tables — mock rows must be
+    explicitly created via /api/simulation/seed, which is a dev/test action.
+    """
     new_state = mock_simulator.toggle(payload.enabled)
-    user = _get_current_user(request, db)
-    # Auto-seed when toggled ON if empty
-    if new_state:
-        count = db.query(Assignment).filter(Assignment.user_id == user.id).count()
-        if count < 3:
-            mock_simulator.seed_user_data(db, user)
     return {
         "status": "success",
         "is_enabled": new_state,

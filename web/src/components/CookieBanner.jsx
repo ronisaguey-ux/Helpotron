@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const CONSENT_KEY = 'helpotron_cookie_consent';
 
@@ -10,6 +10,16 @@ export function CookieBanner() {
       return null;
     }
   });
+
+  // 08-28 (visual polish): while the fixed bar is visible, reserve matching
+  // scroll space at the bottom of the page (see .cookie-banner-visible in
+  // index.css) so it never covers the footer or primary actions. The class is
+  // dropped the moment consent is chosen or the banner unmounts.
+  useEffect(() => {
+    if (consent) return;
+    document.body.classList.add('cookie-banner-visible');
+    return () => document.body.classList.remove('cookie-banner-visible');
+  }, [consent]);
 
   if (consent) return null;
 
@@ -23,7 +33,11 @@ export function CookieBanner() {
   };
 
   return (
-    <div className="fixed bottom-14 md:bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur shadow-2xl">
+    <div
+      role="region"
+      aria-label="Cookie consent notice"
+      className="fixed bottom-16 md:bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur shadow-2xl"
+    >
       <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
         <p className="text-xs sm:text-sm text-slate-300 flex-1 text-center sm:text-left">
           We use cookies to improve your experience. By continuing you agree to our use of cookies.

@@ -27,11 +27,14 @@ def clear_ratelimiter(client):
     can't trip the 120/min per-IP limit mid-run.
     Also clear testclient cookies so tests are isolated."""
     from server import ratelimit
+    from server.security import auth_limiter
 
     ratelimit.limiter._hits.clear()
+    auth_limiter._failures.clear()  # per-account AND per-IP login throttle
     client.cookies.clear()
     yield
     ratelimit.limiter._hits.clear()
+    auth_limiter._failures.clear()
     client.cookies.clear()
 
 

@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome' });
+const page = await browser.newPage();
+await page.setContent('<div style="padding:40px;font-size:24px"><p id="t">Hello world this is a test paragraph for selection.</p></div>');
+const box = await page.locator('#t').boundingBox();
+console.log('box', box);
+await page.mouse.move(box.x + 5, box.y + box.height / 2 - 5);
+await page.mouse.down();
+await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 8 });
+await page.waitForTimeout(300);
+console.log('DURING:', await page.evaluate(() => String(window.getSelection())));
+await page.mouse.up();
+await page.waitForTimeout(300);
+console.log('AFTER :', await page.evaluate(() => String(window.getSelection())));
+await browser.close();

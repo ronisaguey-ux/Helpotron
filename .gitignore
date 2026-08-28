@@ -11,7 +11,12 @@ verify_*.py
 # secrets + local runtime state — MUST never be committed
 # (executor commits via `git add -A`, which sweeps untracked files)
 .env
+.env.bak*
 *.db
+*.db-shm
+*.db-wal
+*.db.bak*
+backups/
 server.log
 *.log
 data_lake/

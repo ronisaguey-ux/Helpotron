@@ -53,7 +53,7 @@ export const EVENTS = demoEnabled() ? [
   { id: 'ev-007', type: 'assignment.review', actor: 'system', timestamp: ago(8 * HOUR), resource: 'assignment:eng-9', metadata: { title: 'English Essay', progress: 42 }, status: 'open', visibility: 'user' },
   { id: 'ev-008', type: 'automation.run', actor: 'system', timestamp: ago(9 * HOUR), resource: 'automation:auto-transcribe', metadata: { name: 'Auto-Transcribe Lectures', result: 'success' }, status: 'completed', visibility: 'user' },
   { id: 'ev-009', type: 'assignment.completed', actor: 'user', timestamp: ago(26 * HOUR), resource: 'assignment:psy-8', metadata: { title: 'Psychology Reflection', course: 'PSY 101' }, status: 'completed', visibility: 'user' },
-  { id: 'ev-010', type: 'credit.topup', actor: 'user', timestamp: ago(2 * DAY), resource: 'credits', metadata: { amount: 12000, reason: 'Elite plan renewal' }, status: 'completed', visibility: 'user' },
+  { id: 'ev-010', type: 'credit.topup', actor: 'user', timestamp: ago(2 * DAY), resource: 'credits', metadata: { amount: 0, reason: 'No plan — dev/beta account, zero balance' }, status: 'completed', visibility: 'user' },
   { id: 'ev-011', type: 'study.recommendation', actor: 'system', timestamp: ago(3 * DAY), resource: 'study:calculus', metadata: { title: 'Calculus refresher recommended', reason: 'no study in 4 days' }, status: 'completed', visibility: 'user' },
   { id: 'ev-012', type: 'assignment.drafted', actor: 'system', timestamp: ago(4 * DAY), resource: 'assignment:chem-3', metadata: { title: 'Chemistry Lab Write-Up', course: 'CHEM 110' }, status: 'completed', visibility: 'user' },
 ] : [];
@@ -65,7 +65,7 @@ export const ADMIN_EVENTS = demoEnabled() ? [
   { id: 'ae-003', type: 'ai.job.started', actor: 'system', timestamp: ago(16 * 60_000), resource: 'job:j-884', metadata: { kind: 'study_guide' }, status: 'running', visibility: 'admin' },
   { id: 'ae-004', type: 'automation.failed', actor: 'system', timestamp: ago(47 * 60_000), resource: 'automation:run-402', metadata: { name: 'Auto-Submit Drafts', error: 'timeout after 60s' }, status: 'open', visibility: 'admin' },
   { id: 'ae-005', type: 'user.registered', actor: 'user', timestamp: ago(2 * HOUR), resource: 'user:x73b', metadata: { user: 'NightOwl99' }, status: 'completed', visibility: 'admin' },
-  { id: 'ae-006', type: 'payment.received', actor: 'user', timestamp: ago(3 * HOUR), resource: 'payment:pay-992', metadata: { user: 'RoniDev', amount: 99.99 }, status: 'completed', visibility: 'admin' },
+  { id: 'ae-006', type: 'payment.received', actor: 'user', timestamp: ago(3 * HOUR), resource: 'payment:pay-992', metadata: { user: 'StudyLover42', amount: 0.0 }, status: 'completed', visibility: 'admin' },
   { id: 'ae-007', type: 'ai.job.failed', actor: 'system', timestamp: ago(5 * HOUR), resource: 'job:j-885', metadata: { kind: 'practice_test', error: 'rate limit' }, status: 'open', visibility: 'admin' },
   { id: 'ae-008', type: 'user.flagged', actor: 'system', timestamp: ago(7 * HOUR), resource: 'user:x12c', metadata: { user: 'GhostWriterX', flag: 'possible academic abuse' }, status: 'open', visibility: 'admin' },
 ] : [];
@@ -179,10 +179,10 @@ export const WEEK_STATS = demoEnabled() ? [
 
 /* ── Credits / wallet ────────────────────────────────────────────────────── */
 export const WALLET = demoEnabled() ? {
-  balance: 10029,
-  addedThisMonth: 12000,
-  usedThisMonth: 2341,
-  projected: 9659,
+  balance: 0,
+  addedThisMonth: 0,
+  usedThisMonth: 0,
+  projected: 0,
   usage: [
     { id: 'w-1', reason: 'Biology analysis', amount: -84, model: 'Flagship tier', tokens: 12430, operation: 'Multi-document analysis (3 sources, 2 documents, 1 draft)', at: ago(6 * HOUR) },
     { id: 'w-2', reason: 'Essay generation', amount: -42, model: 'Balanced tier', tokens: 6890, operation: 'Draft generation from rubric + notes', at: ago(1 * DAY) },
@@ -213,12 +213,12 @@ export const ADMIN_ATTENTION = demoEnabled() ? [
 ] : [];
 
 export const ADMIN_USERS = demoEnabled() ? [
-  { id: 'u-1', publicId: demoAlias(), plan: 'Elite', status: 'active', credits: 10029, assignments: 184, aiRuns: 472, spend: 31.84, joinedDaysAgo: 43, subjects: ['CS', 'Math', 'Bio', 'English'], tags: ['power-user', 'beta'], flags: [] },
-  { id: 'u-2', publicId: 'StudyLover42', plan: 'Pro', status: 'active', credits: 640, assignments: 97, aiRuns: 251, spend: 18.20, joinedDaysAgo: 88, subjects: ['Math', 'Physics'], tags: [], flags: [] },
-  { id: 'u-3', publicId: 'QuinnC', plan: 'Elite', status: 'active', credits: 3200, assignments: 210, aiRuns: 688, spend: 42.10, joinedDaysAgo: 120, subjects: ['Bio', 'Chem', 'Med'], tags: ['beta'], flags: [] },
-  { id: 'u-4', publicId: 'NightOwl99', plan: 'Basic', status: 'active', credits: 12, assignments: 23, aiRuns: 41, spend: 2.05, joinedDaysAgo: 12, subjects: ['History'], tags: [], flags: ['near-credit-limit'] },
-  { id: 'u-5', publicId: 'GhostWriterX', plan: 'Pro', status: 'flagged', credits: 840, assignments: 62, aiRuns: 310, spend: 24.60, joinedDaysAgo: 34, subjects: ['English', 'History'], tags: [], flags: ['possible academic abuse'] },
-  { id: 'u-6', publicId: 'CalcSurvivor', plan: 'Basic', status: 'suspended', credits: 0, assignments: 8, aiRuns: 12, spend: 0.80, joinedDaysAgo: 5, subjects: ['Math'], tags: [], flags: ['suspended'] },
+  { id: 'u-1', publicId: demoAlias(), plan: 'none', status: 'active', credits: 0, assignments: 184, aiRuns: 472, spend: 31.84, joinedDaysAgo: 43, subjects: ['CS', 'Math', 'Bio', 'English'], tags: ['power-user', 'beta'], flags: [] },
+  { id: 'u-2', publicId: 'StudyLover42', plan: 'none', status: 'active', credits: 0, assignments: 97, aiRuns: 251, spend: 18.20, joinedDaysAgo: 88, subjects: ['Math', 'Physics'], tags: [], flags: [] },
+  { id: 'u-3', publicId: 'QuinnC', plan: 'none', status: 'active', credits: 0, assignments: 210, aiRuns: 688, spend: 42.10, joinedDaysAgo: 120, subjects: ['Bio', 'Chem', 'Med'], tags: ['beta'], flags: [] },
+  { id: 'u-4', publicId: 'NightOwl99', plan: 'none', status: 'active', credits: 0, assignments: 23, aiRuns: 41, spend: 2.05, joinedDaysAgo: 12, subjects: ['History'], tags: [], flags: ['near-credit-limit'] },
+  { id: 'u-5', publicId: 'GhostWriterX', plan: 'none', status: 'flagged', credits: 0, assignments: 62, aiRuns: 310, spend: 24.60, joinedDaysAgo: 34, subjects: ['English', 'History'], tags: [], flags: ['possible academic abuse'] },
+  { id: 'u-6', publicId: 'CalcSurvivor', plan: 'none', status: 'suspended', credits: 0, assignments: 8, aiRuns: 12, spend: 0.80, joinedDaysAgo: 5, subjects: ['Math'], tags: [], flags: ['suspended'] },
 ] : [];
 
 export const FEATURE_FLAGS = demoEnabled() ? [

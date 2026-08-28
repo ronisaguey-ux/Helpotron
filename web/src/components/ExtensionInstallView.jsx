@@ -56,9 +56,9 @@ export default function ExtensionInstallView() {
 
   return (
     <div className="p-6 max-w-5xl">
-      <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+      <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
         <Puzzle className="text-cyan-400" size={26} /> Helpotron Academic OS Companion
-      </h1>
+      </h2>
       <p className="text-slate-400 text-sm mt-1">
         Scrapes Canvas, Google Classroom, Blackboard, Brightspace, Moodle, Schoology, Notion &amp; any website into assignments.
         Works on <b className="text-slate-200">Windows · macOS · Linux</b> in <b className="text-slate-200">Chrome · Edge · Brave · Firefox · Safari</b>.

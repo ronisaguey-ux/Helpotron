@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,8 @@ def _assignment_out(a: Assignment) -> Dict[str, Any]:
         "status": a.status,
         "progress": a.progress or {},
         "created_at": a.created_at.isoformat() if a.created_at else None,
+        "turned_in": bool(a.turned_in),
+        "turned_in_at": a.turned_in_at.isoformat() if a.turned_in_at else None,
     }
 
 
@@ -66,19 +68,25 @@ def _get_owned_assignment(assignment_id: int, user_id: int, db: Session) -> Assi
     return assignment
 
 
+@router.get("/api/assignments")
 @router.get("/assignments")
 async def list_assignments(
+    history: Optional[bool] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the authenticated user's own assignments."""
-    rows = (
-        db.query(Assignment)
-        .filter(Assignment.user_id == current_user.id)
-        .order_by(Assignment.id.desc())
-        .limit(200)
-        .all()
-    )
+    """List the authenticated user's own assignments.
+
+    ``history`` (optional): ``false`` = active only (not turned in),
+    ``true`` = turned-in only (assignment history). Omitted = all
+    assignments (legacy behavior, nothing filtered).
+    """
+    q = db.query(Assignment).filter(Assignment.user_id == current_user.id)
+    if history is True:
+        q = q.filter(Assignment.turned_in == True)  # noqa: E712
+    elif history is False:
+        q = q.filter(Assignment.turned_in == False)  # noqa: E712
+    rows = q.order_by(Assignment.id.desc()).limit(200).all()
     return {"assignments": [_assignment_out(a) for a in rows]}
 
 

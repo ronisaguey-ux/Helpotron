@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, User
+from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, Transcript, User
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
 from .engine.sandbox import sandbox_manager
@@ -67,6 +67,97 @@ def _persist_user_settings(db, user, settings) -> None:
     import copy
     from .user_settings_service import persist_user_settings
     persist_user_settings(db, user, settings)
+
+
+async def _build_flashcard_deck(
+    db: Session,
+    user: User,
+    source: str = "",
+    cards_payload: Any = None,
+    count_hint: Optional[int] = None,
+    assignment_id: Optional[int] = None,
+) -> tuple[StudyMaterial, list[dict]]:
+    """Create a real flashcard deck and persist it as a StudyMaterial row.
+
+    Operator 08-27: the old agent path built StudyMaterial with `type=`/`title=`
+    kwargs (neither is a column — 'type' is 'kind' here and there is no title),
+    which TypeError'd on every flashcard request. Cards now keep the canonical
+    {q, a} shape used by /api/flashcards, exporters and the demo deck. When the
+    intent payload carries cards they are normalized; otherwise the real
+    study-LLM pipeline (study_tools.generate_flashcards) runs against the
+    supplied text or the assignment's latest transcript (falling back to the
+    assignment's stored prompt, where the dump flow keeps pasted/uploaded
+    content). The deck's StudyMaterial row is stored with the assignment_id so
+    it lands in that assignment's bubble/materials. Raises RuntimeError
+    with a user-facing message when no source exists or generation fails.
+    """
+    # Operator 08-27: the chat route passes thread_key as assignment_id, which
+    # is an assignment id ONLY for assignment-bubble chats (main-chat thread
+    # ids are AgentChatThread ids). Resolve to a real, user-owned assignment —
+    # or None — so the deck can never be mis-attached to a wrong/nonexistent
+    # assignment, and this same row feeds the source fallback below.
+    if assignment_id:
+        _assign = (db.query(Assignment)
+                   .filter(Assignment.id == assignment_id,
+                           Assignment.user_id == user.id)
+                   .first())
+        assignment_id = _assign.id if _assign else None
+
+    cards = cards_payload
+    if (isinstance(cards, list) and cards and all(
+        isinstance(c, dict) and str(c.get("front") or c.get("q") or "").strip()
+        and str(c.get("back") or c.get("a") or "").strip() for c in cards
+    )):
+        items = [
+            {"q": str(c.get("front") if c.get("front") is not None else c.get("q")).strip(),
+             "a": str(c.get("back") if c.get("back") is not None else c.get("a")).strip()}
+            for c in cards
+        ]
+        model_used: str | None = None
+    else:
+        source = (source or "").strip()
+        if not source and assignment_id:
+            _t = (db.query(Transcript)
+                  .filter(Transcript.user_id == user.id,
+                          Transcript.assignment_id == assignment_id)
+                  .order_by(Transcript.id.desc()).first())
+            if _t:
+                source = (_t.text or "").strip()
+        if not source and assignment_id:
+            # Fallback (operator 08-27): the dump flow stores the extracted
+            # pasted/uploaded content in Assignment.prompt, and no Transcript
+            # row exists for it. Without this, "make flashcards for this
+            # assignment" in an assignment bubble died with the
+            # "Nothing to build flashcards from" error note even though the
+            # assignment body is right there.
+            if _assign and (_assign.prompt or "").strip():
+                source = _assign.prompt.strip()
+        if not source:
+            raise RuntimeError(
+                "Nothing to build flashcards from — upload or paste a transcript, "
+                "or name the topic you want cards for."
+            )
+        from .study_tools import generate_flashcards
+        try:
+            effort = int((user.settings or {}).get("effort_score", 500))
+        except (TypeError, ValueError):
+            effort = 500
+        try:
+            count = max(1, min(int(count_hint or 20), 100))
+        except (TypeError, ValueError):
+            count = 20
+        items, model_used = await generate_flashcards(source, count=count, effort_score=effort)
+
+    mat = StudyMaterial(
+        user_id=user.id,
+        assignment_id=assignment_id,
+        kind="flashcards",
+        content=json.dumps(items, ensure_ascii=False),
+        model_used=model_used,
+    )
+    db.add(mat)
+    db.commit()
+    return mat, items
 
 
 
@@ -248,6 +339,12 @@ class OverlordAgent:
             self._chat_histories[k] = []
         self._chat_histories[k].append(msg)
         return msg
+
+    def forget_chat_history(self, target_key: str | int, user_id: int | None = None) -> None:
+        """Drop the in-memory conversation (thread deletion) so it can never
+        resurrect from the cache after the persistent rows are gone."""
+        k = _history_key(target_key, user_id)
+        self._chat_histories.pop(k, None)
 
     async def compact_chat_history(
         self,
@@ -563,18 +660,17 @@ class OverlordAgent:
                 self.add_chat_message(target_key, "overlord", reply)
                 return {"status": "pending_permission", "permission_id": perm["id"], "reply": reply}
 
-            # Generate material
-            mat = StudyMaterial(
-                user_id=user.id,
-                type="flashcards",
-                title=f"Flashcards: {text[:30]}",
-                content=json.dumps([{"front": "Core Concept", "back": f"Synthesized definition via {display_name} subagent"}]),
-            )
-            db.add(mat)
-            db.commit()
-            reply = f"✨ Active Recall Flashcard deck created: '{mat.title}'."
+            # Generate material (operator 08-27: real cards, valid columns —
+            # the old code 500'd on `type=`/`title=` kwargs of StudyMaterial).
+            try:
+                mat, items = await _build_flashcard_deck(db, user, source=text)
+            except Exception as e:  # noqa: BLE001 — honest in-band failure
+                reply = f"⚠️ Flashcards could not be generated: {e}"
+                self.add_chat_message(target_key, "overlord", reply)
+                return {"status": "failed", "reply": reply}
+            reply = f"✨ Active Recall Flashcard deck created — {len(items)} cards (material #{mat.id})."
             self.add_chat_message(target_key, "overlord", reply, suggested_actions=["Practice Flashcards", "Create Quiz"])
-            return {"status": "success", "reply": reply, "material_id": mat.id}
+            return {"status": "success", "reply": reply, "material_id": mat.id, "cards": items}
 
         # ─── 5. Message Admin Direct Channel ─────────────────────────────────
         # e.g., "message admin about canvas integration issue"
@@ -647,8 +743,36 @@ print(f"Active files: {os.listdir('.')}")
             return {"status": "success", "reply": reply, "sandbox": sandbox_res, "logs": subagent_logs}
 
         # ─── 7. General NLP Directive ───────────────────────────────────────
+        # 08-28: this path never called the LLM — every unmatched directive
+        # got the canned "executed directive" line, so identity/skills/memory
+        # were meaningless here. Answer through the canonical agent prompt
+        # (same identity the chat path uses); the canned line stays only as
+        # an offline fallback and never fabricates a completion.
         subagent_logs.append(f"{display_name}: Routing query to DeepSeek-V4 Tier...")
         reply = f"🤖 {display_name} executed directive: '{text}'. All ecosystem subsystems and sub-agents synchronized."
+        try:
+            from .agent_prompt import agent_system_prompt
+            from .llm import call_llm
+            ans = await call_llm(
+                system_prompt=(
+                    agent_system_prompt(user, node="my_agent")  # explicit My Agent surface (operator 08-28)
+                    + "The user sent this directive to their agent:\n\n"
+                    + text[:3000]
+                    + "\n\nIt didn't match a known work command. Do whatever is within your powers "
+                      "to comply (never claim actions you didn't take); if you cannot do it, say what "
+                      "you actually did and what the user should do next. Reply directly to the user "
+                      "in plain text, under 220 words, staying in character per the identity above."
+                ),
+                user_prompt="Reply now, as the agent, to the user.",
+                temperature=0.4,
+                max_tokens=500,
+                effort_score=120,
+            )
+            ans = (ans or "").strip()
+            if ans and ans.lower() not in ("ok", "done", "sure"):
+                reply = ans
+        except Exception:
+            pass  # offline: keep the canned acknowledgment
         self.add_chat_message(
             target_key,
             "overlord",
@@ -665,8 +789,15 @@ print(f"Active files: {os.listdir('.')}")
         action_type: str,
         payload: Dict[str, Any],
         assignment_id: Optional[int] = None,
+        node: str = "my_agent",
     ) -> Dict[str, Any]:
-        """Executes the specific sub-agent, settings mutation, team dispatch, or tool action."""
+        """Executes the specific sub-agent, settings mutation, team dispatch, or tool action.
+
+        `node` (operator 08-28) is the surface the action came from ("my_agent",
+        "assignment_team", ...). It flows into LLM sub-paths (analyze_rubric
+        decomposition) so those speak as the surface's own config — never with
+        My Agent's identity/memory/files on another surface."""
+        logger.info("Executing action: %s for user %s (node %s)", action_type, user.public_id, node)
         logger.info("Executing action: %s for user %s", action_type, user.public_id)
 
         # ── Action ledger: snapshot + record BEFORE execution so every action
@@ -808,19 +939,31 @@ print(f"Active files: {os.listdir('.')}")
             }
 
         elif action_type == "generate_flashcards":
-            mat = StudyMaterial(
-                user_id=user.id,
-                type="flashcards",
-                title=payload.get("title", "Flashcards Deck"),
-                content=json.dumps(payload.get("cards", [{"front": "Question", "back": "Answer"}])),
-            )
-            db.add(mat)
-            db.commit()
+            # Operator 08-27: this used `type="flashcards"` + `title=` — neither
+            # is a StudyMaterial column ("kind" is the field; the table has no
+            # title), so every chat "generate flashcards" request 500'd with
+            # "TypeError: 'type' is an invalid keyword argument for StudyMaterial".
+            # Routed through _build_flashcard_deck: real cards, canonical {q,a}.
+            try:
+                mat, items = await _build_flashcard_deck(
+                    db,
+                    user,
+                    source=str(payload.get("prompt") or payload.get("text") or ""),
+                    cards_payload=payload.get("cards"),
+                    count_hint=payload.get("count"),
+                    assignment_id=payload.get("assignment_id") or assignment_id,
+                )
+            except Exception as e:  # noqa: BLE001 — in-band honest failure, never a 500
+                logger.warning("generate_flashcards failed for user %s: %s", user.public_id, e)
+                return {"action": action_type, "status": "failed",
+                        "message": str(e) or "Flashcard generation failed."}
             return {
                 "action": action_type,
                 "status": "completed",
                 "material_id": mat.id,
-                "message": f"Flashcards deck '{mat.title}' generated.",
+                "cards": items,
+                "cards_count": len(items),
+                "message": f"Flashcards deck generated — {len(items)} cards (material #{mat.id}).",
             }
 
         elif action_type == "humanize_text":
@@ -840,7 +983,26 @@ print(f"Active files: {os.listdir('.')}")
             coordinator = SubAgentCoordinator()
             prompt_text = payload.get("prompt", "Analyze research assignment criteria")
             rubric_text = payload.get("rubric", "Standard grading rubric with analysis, thesis, evidence, and citations.")
-            decomp = await coordinator.decompose_rubric(prompt_text, rubric_text)
+            # 08-28: this decomposition LLM previously ran with a generic
+            # "expert decomposer" prompt — the user's identity never reached
+            # it. Prepend the canonical persona block, NODE-SCOPED (operator
+            # 08-28): only the executing surface's own config goes in. When
+            # the node (assignment_team etc.) has no config of its own, the
+            # My Agent identity/memory/files are NOT injected — the decomposer
+            # stays a plain expert.
+            try:
+                from .agent_prompt import agent_persona_block
+                node_identity = agent_persona_block(user, node=node)
+                if node_identity:
+                    persona_ctx = (
+                        "You are operating as the user's agent on this surface. Their configured identity "
+                        "is binding on how you work for them — follow it.\n\n" + node_identity
+                    )
+                else:
+                    persona_ctx = ""
+            except Exception:
+                persona_ctx = ""
+            decomp = await coordinator.decompose_rubric(prompt_text, rubric_text, persona_ctx=persona_ctx)
             return {
                 "action": action_type,
                 "status": "completed",
@@ -994,6 +1156,24 @@ print(f"Active files: {os.listdir('.')}")
                 "sandbox_result": res,
             }
 
+        elif action_type == "scrape_assignment":
+            # Extension-surface scrape (08-28): the server-side agent can NOT
+            # fetch a Canvas page (CORS/auth/DRM) — the REAL scrape runs in
+            # the user's browser. Return the explicit scrape_request contract
+            # the popup dispatches on: {instruction} → runTabScrapeWithInstruction
+            # → agent session → extension saves on `finished`. The old fallback
+            # lied ("completed by sub-agent cluster") with no execution and no
+            # instruction — nothing was ever scraped.
+            instruction = str(payload.get("instruction") or "").strip() or "scrape the assignment"
+            aid = payload.get("assignment_id") or assignment_id
+            return {
+                "action": action_type,
+                "status": "completed",
+                "assignment_id": aid,
+                "scrape_request": {"instruction": instruction},
+                "message": "On it — scraping your tab now…",
+            }
+
         else:
             return {
                 "action": action_type,
@@ -1027,13 +1207,19 @@ def load_chat_history_from_db(db, user_id: int, target_key):
                 # scoped key OR legacy unscoped rows (pre-08-26 storage)
                 AgentChatMessage.target_key.in_([k, str(target_key)]),
             )
-            .order_by(AgentChatMessage.created_at.asc())
+            .order_by(AgentChatMessage.created_at.desc())
             .limit(40)
             .all()
         )
     except Exception:
         return
     if rows:
+        # 08-27 bugfix: the cache was seeded with the OLDEST 40 rows (ASC +
+        # limit), so a conversation's recent turns — today's messages — were
+        # never loaded after a restart; the agent's "conversation so far"
+        # stayed stamped on the prior day's task payloads. Load the NEWEST 40
+        # and restore chronological order so the cache reads like the thread.
+        rows = list(reversed(rows))
         overlord_agent._chat_histories[k] = [
             {
                 "id": f"db_{r.id}",

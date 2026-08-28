@@ -62,6 +62,16 @@ def validate_csrf(request: Request) -> None:
     if request.url.path in EXEMPT_PATHS or any(p.endswith("/") and request.url.path.startswith(p) for p in EXEMPT_PATHS):
         return
 
+    # API/extension clients authenticate with an Authorization: Bearer
+    # credential (JWT or DB session token). A cross-site attacker can never
+    # add that header through a form submission, and such clients cannot
+    # echo the double-submit token the way a page does — so CSRF double-
+    # submit only applies to cookie-based auth. Without this exemption the
+    # browser extension's scrape POST /api/assignments gets 403
+    # "CSRF token missing" whenever a helpotron_session cookie is present.
+    if request.headers.get("Authorization", "").startswith("Bearer "):
+        return
+
     session_cookie = request.cookies.get("helpotron_session")
     if not session_cookie:
         return

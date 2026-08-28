@@ -135,7 +135,7 @@ def test_admin_endpoints_and_messages_inbox():
     # Test user sends inquiry to admin
     msg_res = client.post(
         "/api/user/message-admin",
-        json={"subject": "Question on tokens", "category": "billing", "message": "How many assignment tokens do I get?"},
+        data={"subject": "Question on tokens", "category": "billing", "message": "How many assignment tokens do I get?"},
         headers={"Authorization": f"Bearer {student_token}"},
     )
     assert msg_res.status_code == 200

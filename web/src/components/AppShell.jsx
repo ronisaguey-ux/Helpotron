@@ -12,7 +12,7 @@ import { applyAppearance, applyAccessibility, applyFontScale } from './SettingsA
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
-  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database,
+  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
@@ -46,6 +46,7 @@ const NAV_TREE = (isAdmin) => [
     group: 'INTELLIGENCE',
     items: [
       { key: 'insights', label: 'Insights', Icon: BarChart3 },
+      { key: 'monitors', label: 'Monitors', Icon: Gauge },
     ],
   },
   {
@@ -696,6 +697,7 @@ export default function AppShell({
                 <p className="text-[11px] sm:text-xs text-slate-500 truncate">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
+                  {activeView === 'monitors' && 'Live traffic, activity, data lake & cost'}
                   {activeView === 'history' && 'All your assignments, in one place'}
                   {activeView === 'study' && 'Guides, flashcards, practice tests and summaries'}
                   {activeView === 'library' && 'Files, saved materials and your calendar'}
@@ -719,6 +721,11 @@ export default function AppShell({
           </div>
         </main>
       </div>
+
+      {/* ── FOOTER LANDMARK (audit 08-27): page-level contentinfo ────────── */}
+      <footer role="contentinfo" className="text-center text-[10px] text-slate-600 px-4 pb-3 pt-1">
+        © 2026 Helpotron Automator
+      </footer>
 
       {/* ── MOBILE STICKY BOTTOM NAVIGATION BAR ────────────────────── */}
       <nav

@@ -1,6 +1,25 @@
 // Helpotron Universal Content Script
 // Supports Canvas, Google Classroom, Blackboard, Brightspace, Moodle, Schoology, Google Docs, Notion, and arbitrary websites.
 
+// ── Scrape content retention (08-28 fix: full content, never silently cut) ──
+// The old scrapers sliced prompts to 30k/25k/20k characters — beyond that the
+// assignment text was dropped from the stored dump with no marker. Real LMS
+// pages (pacing guides, packets, rubric+prompt pages) routinely exceed 30k
+// chars. The byte storage (assignments.prompt TEXT, dump extracted_text Text)
+// has no such limit, so the scrape-side slices were the ONLY truncation.
+// Guard is now a generous hard ceiling (pathological multi-MB pages only) and
+// any cut is EXPLICITLY marked so the stored content never silently loses tail.
+const SCRAPE_TEXT_CAP = 1_000_000; // chars — storage is TEXT; this only bounds megabyte pages
+
+function capScrapeText(s) {
+  const t = (s || '').trim();
+  if (t.length <= SCRAPE_TEXT_CAP) return t;
+  return t.slice(0, SCRAPE_TEXT_CAP) +
+    '\n\n[…extension scrape truncated at ' + SCRAPE_TEXT_CAP +
+    ' chars — the full page was larger than the scrape guard. Re-scrape only ' +
+    'the missing sections, or use the file links below.]';
+}
+
 function detectPlatform() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
@@ -13,6 +32,135 @@ function detectPlatform() {
   if (host.includes('docs.google.com')) return 'google_docs';
   if (host.includes('notion.so') || host.includes('notion.site')) return 'notion';
   return 'generic';
+}
+
+// ── Course context + subject attribution (08-28) ─────────────────────────────
+// The scraped page's LMS identity must reach the server so the material lands
+// in the RIGHT assignment bubble: the Canvas course id is the dedupe scope and
+// the course/subject name is how the bubble gets its topic.
+
+// Client-side mirror of the server's keyword classifier. Course names are the
+// best signal ("Algebra 2 Honors Topic 1 Packet" -> Mathematics).
+const SUBJECT_HINTS = [
+  ['Mathematics', ['algebra', 'geometry', 'calculus', 'trig', 'trigonometr', 'statistic', 'equation', 'theorem', 'linear', 'quadratic', 'function', 'probability', 'arithmetic', 'math', 'integral', 'derivative', 'exponential', 'logarithm']],
+  ['Biology', ['cell', 'dna', 'genetics', 'organism', 'biology', 'evolution', 'crispr', 'photosynthesis', 'ecosystem', 'bacteria', 'mitochondria']],
+  ['Chemistry', ['chemistry', 'chemical', 'molecule', 'atom', 'compound', 'reaction', 'acid', 'periodic']],
+  ['Physics', ['physics', 'motion', 'force', 'kinematics', 'newton', 'velocity', 'acceleration', 'gravity', 'electricity', 'magnet']],
+  ['Computer Science', ['algorithm', 'code', 'programming', 'data structure', 'python', 'machine learning', 'neural', 'ap csp', 'apcsp', 'computer science', 'java']],
+  ['History', ['history', 'reconstruction', 'civil war', 'president', 'ancient', 'revolution', 'empire', 'world war', 'century', 'antebellum', 'columbian']],
+  ['Literature', ['novel', 'literature', 'poem', 'woolf', 'faulkner', 'narrative', 'modernist', 'english literature', 'shakespeare', 'poetry']],
+  ['English', ['english', 'grammar', 'essay', 'vocabulary', 'reading', 'writing', 'rhetoric']],
+  ['Economics', ['economic', 'inflation', 'gdp', 'macroeconomic', 'microeconomic', 'monetary', 'supply', 'demand', 'market']],
+  ['Ethics', ['ethics', 'ethical', 'moral', 'autonomous systems']],
+  ['Psychology', ['cognitive', 'behavior', 'psychology', 'bias', 'decision']],
+  ['Spanish', ['spanish', 'espanol', 'español', 'conjugat', 'vocabulario']],
+  ['French', ['french', 'francais', 'français']],
+  ['Health', ['health', 'nutrition', 'p.e.', 'physical education', 'wellness']],
+];
+
+function classifySubject(text) {
+  const lower = (text || '').toLowerCase();
+  for (const [subj, keys] of SUBJECT_HINTS) {
+    for (const k of keys) {
+      // Word-START boundary so substrings never false-positive:
+      // "miscellaneous" must not match the 'cell' keyword.
+      const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp('(?:^|[\\s\\W])' + esc).test(lower)) return subj;
+    }
+  }
+  return '';
+}
+
+// Canvas URL shapes: /courses/123/assignments/456 (/quizzes/…, /pages/x, /discussion_topics/…,
+// /modules/items/…). Returns {courseId, itemId, itemKind} or nulls outside a course page.
+function parseCourseUrl(url) {
+  try {
+    const u = new URL(url);
+    const m = u.pathname.match(/^\/courses\/(\d+)\/(assignments|quizzes|pages|discussion_topics|modules|files|modules\/items)\/([^/?#]+)/);
+    if (!m) {
+      const c = u.pathname.match(/^\/courses\/(\d+)/);
+      return { courseId: c ? c[1] : '', itemId: '', itemKind: '', courseUrl: c ? u.origin + c[0] : '' };
+    }
+    return { courseId: m[1], itemKind: m[2], itemId: decodeURIComponent(m[3]), courseUrl: new URL(`/courses/${m[1]}`, u.origin).href };
+  } catch { return { courseId: '', itemId: '', itemKind: '', courseUrl: '' }; }
+}
+
+function getCourseName() {
+  const els = document.querySelectorAll(
+    '#crumb_title a, .context-name, #breadcrumbs a:last-of-type, a[data-course-id] span'
+  );
+  for (const el of els) {
+    const t = (el.innerText || '').trim();
+    if (t && t.length > 1 && t.toLowerCase() !== 'dashboard') return t;
+  }
+  const parts = (document.title || '').split(/[:\-–]/);
+  return (parts.length > 1 ? parts[0] : document.title || '').trim().slice(0, 120);
+}
+
+function scrapeCourseContext() {
+  const { courseId, itemId, itemKind, courseUrl } = parseCourseUrl(window.location.href);
+  const courseName = getCourseName();
+  // Subject from the COURSE name first (most reliable), then the page title.
+  let subject = classifySubject(courseName);
+  if (!subject) subject = classifySubject(document.title || '');
+  let courseCode = subject ? subject.split(' ')[0].slice(0, 4).toUpperCase() + '-101' : '';
+  return {
+    platformOrigin: 'canvas',
+    courseId,
+    itemId,
+    itemKind,
+    courseUrl,
+    courseName,
+    subject,
+    courseCode,
+  };
+}
+
+// Link discovery for the full-course crawl: same course, content pages only.
+// Never follows navigation chrome (people, grades, settings) or foreign hosts.
+function collectCourseLinks() {
+  const ctx = scrapeCourseContext();
+  if (!ctx.courseId) return { ok: false, error: 'Not a Canvas course page — open an assignment/module/page inside the course first.', courseId: '', courseUrl: '', links: [] };
+  const prefix = new RegExp('^/courses/' + ctx.courseId + '/');
+  // Content pages only (kind + real item id/slug); bare index URLs are not
+  // scraped as content.
+  const allowed = /^\/(assignments|quizzes|pages|discussion_topics|modules(\/items)?|files|content|external_tools|rubrics)\/[^/?#]/;
+  // Paginated index listings (e.g. /assignments?page=2) are queued AS INDEX
+  // pages for discovery, never scraped as content.
+  const listedKinds = /^\/(assignments|modules|pages|quizzes|discussion_topics)$/;
+  const seen = new Set();
+  const out = [];
+  const indexOut = [];
+  const indexSeen = new Set();
+  document.querySelectorAll('a[href]').forEach((a) => {
+    let href = a.href || '';
+    if (!href) return;
+    try {
+      const u = new URL(href, window.location.origin);
+      if (u.origin !== window.location.origin) return;
+      const p = u.pathname;
+      if (!prefix.test(p) || p.includes('/users/') || p.includes('/grades')) return;
+      if (allowed.test(p.replace(prefix, '/'))) {
+        u.hash = '';
+        u.search = '';
+        const canon = u.href;
+        if (!seen.has(canon)) { seen.add(canon); out.push(canon); }
+        return;
+      }
+      const kindMatch = listedKinds.exec(p.replace(prefix, '/'));
+      if (kindMatch) {
+        const page = parseInt(u.searchParams.get('page') || '1', 10);
+        // Only the first few result pages exist; pages 2-4 cover virtually all
+        // Canvas listings and keep the crawl bounded.
+        if (page >= 2 && page <= 4) {
+          u.hash = '';
+          const canon = u.href;
+          if (!indexSeen.has(canon)) { indexSeen.add(canon); indexOut.push(canon); }
+        }
+      }
+    } catch { /* skip malformed */ }
+  });
+  return { ok: true, courseId: ctx.courseId, courseUrl: ctx.courseUrl, courseName: ctx.courseName, subject: ctx.subject, links: out, indexLinks: indexOut };
 }
 
 function scrapeAssignmentUniversal() {
@@ -43,6 +191,8 @@ function scrapeAssignmentUniversal() {
   result.platform = platform;
   result.url = window.location.href;
   result.scraped_at = new Date().toISOString();
+  // LMS identity + topic (08-28): server-side bubble attribution depends on it.
+  result.meta = scrapeCourseContext();
   return result;
 }
 
@@ -61,7 +211,7 @@ function scrapeCanvas() {
     '';
 
   const promptEl = document.querySelector('#assignment_description, .user_content, .description');
-  const prompt = promptEl?.innerText?.trim()?.slice(0, 30000) || '';
+  const prompt = promptEl ? capScrapeText(promptEl.innerText || '') : '';
 
   const rubrics = Array.from(document.querySelectorAll('.rubric_criterion, .rubric-criterion, table.rubric'))
     .map((e) => e.innerText.trim())
@@ -84,7 +234,9 @@ function scrapeGoogleClassroom() {
   const dueDate = dueDateEl ? dueDateEl.innerText.trim() : '';
 
   const promptEl = document.querySelector('div[dir="auto"].c3I1v, div[jsname="V67aGc"], .asQXV');
-  const prompt = promptEl?.innerText?.trim() || (document.body ? document.body.innerText.slice(0, 20000) : '');
+  const prompt = promptEl
+    ? capScrapeText(promptEl.innerText || '')
+    : (document.body ? capScrapeText(document.body.innerText || '') : '');
 
   const files = extractAllFileLinks();
   return { title, dueDate, prompt, rubric: '', files };
@@ -157,8 +309,8 @@ function scrapeGeneric() {
   // Extract main article or body content
   const mainEl = document.querySelector('article, main, #main-content, #content, .assignment, .post-content');
   const prompt = mainEl
-    ? mainEl.innerText.trim().slice(0, 30000)
-    : bodyText.slice(0, 25000);
+    ? capScrapeText(mainEl.innerText || '')
+    : capScrapeText(bodyText);
 
   // Extract tables that resemble rubrics
   const rubrics = Array.from(document.querySelectorAll('table'))
@@ -173,32 +325,209 @@ function scrapeGeneric() {
   return { title, dueDate, prompt, rubric: rubrics, files };
 }
 
+// 08-28: downloadable-file detection (real quick-scrape). Broader than before:
+// explicit download markers + Canvas/Drive/OneDrive file routes + ANY link whose
+// path (or visible link text) ends in a document/media extension. URLs are
+// resolved ABSOLUTE and deduped so the server-side bubble stores real URLs.
+const FILE_EXT_RE = /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|rtf|txt|csv|md|tex|mobi|epub|odt|ods|odp|key|pages|numbers|png|jpe?g|gif|webp|bmp|svg|tiff?|mp3|wav|m4a|aac|ogg|flac|mp4|mov|avi|mkv|webm|tar|gz|dmg|exe)$/i;
+
 function extractAllFileLinks() {
-  const files = [];
-  const patterns = [
+  const fileHints = [
     'a[download]',
     'a.file-link',
+    'a[data-file-id]',
+    'a[data-preview-id]',
     'a[href*="/files/"]',
-    'a[href$=".pdf"]',
-    'a[href$=".docx"]',
-    'a[href$=".pptx"]',
-    'a[href$=".zip"]',
-    'a[href*="drive.google.com"]',
-    'a[href*="docs.google.com"]',
+    'a[href*="/download"]',
+    'a[href*="download_file"]',
+    'a[href*="attachment"]',
+    'a[href*="drive.google.com/"]',
+    'a[href*="docs.google.com/file"]',
+    'a[href*="onedrive.live.com"]',
   ];
-
-  document.querySelectorAll(patterns.join(', ')).forEach((link) => {
-    const href = link.href;
-    if (href && !files.includes(href) && !href.startsWith('javascript:')) {
-      files.push(href);
-    }
+  const files = [];
+  const seen = new Set();
+  const push = (raw, fromText) => {
+    if (!raw || raw.startsWith('javascript:') || raw.startsWith('blob:')) return;
+    let abs = '';
+    try { abs = new URL(raw, window.location.href).href; } catch { return; }
+    if (!abs || seen.has(abs)) return;
+    const pathPart = abs.split('#')[0].split('?')[0].split('/').pop();
+    const isFileByPath = FILE_EXT_RE.test(pathPart);
+    const isFileByText = fromText && FILE_EXT_RE.test(String(fromText).trim());
+    if (!isFileByPath && !isFileByText) return; // only real files, never nav links
+    seen.add(abs);
+    files.push(abs);
+  };
+  document.querySelectorAll(fileHints.join(', ')).forEach((link) => {
+    push(link.href || '', link.getAttribute('download') || link.innerText || '');
   });
-  return files.slice(0, 50);
+  document.querySelectorAll('a[href]').forEach((link) => {
+    push(link.href || '', link.innerText || link.ariaLabel || '');
+  });
+  // 08-28 file retention: 100 discovered URLs ride along (server stores up to
+  // 200); deep mode hashes/uploads the first fileCap (now 25) — the rest keep
+  // their URL + hash records on the bubble.
+  return files.slice(0, 100);
+}
+
+// ── Deep scrape (08-28): make Quick Scrape REAL ──────────────────────────────
+// The old quick scrape ran ONE synchronous DOM snapshot: no wait, no reveal
+// clicks, no scrolling for lazy content, no file downloads/hashes. This routine
+// drives the page like a person: expand collapsed sections, scroll through
+// every step of the document (triggers intersection-observer lazy loads),
+// wait for the DOM to settle, THEN extract; finally fetch + sha256 every
+// downloadable file through the page's own session so LMS cookies apply.
+
+const DEEP_REVEAL_RE = /^(show|view|read|load|open|see|display|expand|continue)\b.*(more|all|full|details|everything)|^(show all|view all|load more|read more|see more|expand all|continue reading|more)$|more|expand|continue reading|展开|更多|查看全部|显示/i;
+
+function deepVisible(el) {
+  const r = el.getBoundingClientRect();
+  return r.height > 0 && r.width > 0;
+}
+
+function deepRevealCandidates() {
+  const sel = 'details:not([open]) summary, button, a[role="button"], [role="button"], [aria-expanded="false"], .expand, .more-link, .see-more';
+  const out = [];
+  document.querySelectorAll(sel).forEach((el) => {
+    const txt = (el.innerText || el.textContent || '').trim();
+    if (!txt || txt.length > 60) return;              // real buttons have short labels
+    if (!DEEP_REVEAL_RE.test(txt)) return;
+    if (!deepVisible(el)) return;
+    out.push(el);
+  });
+  return out;
+}
+
+const sleepDeep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function deepScrapeUniversal(options) {
+  const opts = options || {};
+  const maxClicks = opts.maxClicks || 10;
+  const scrollSteps = opts.scrollSteps || 8;
+  const fileCap = opts.fileCap || 25;
+  const settleWindowMs = opts.settleMs || 800;
+  const b64Cap = opts.b64Cap || 6_000_000; // base64 byte cap for dump upload (8B -> 6MB: bigger PDFs/packets stream)
+  const t0 = performance.now();
+
+  let clicks = 0;
+  let scrolls = 0;
+  let lastTextLen = -1;
+  let stalledRounds = 0;
+
+  const maybeEnd = () => {
+    const tl = document.body.innerText.length;
+    if (tl === lastTextLen) stalledRounds += 1; else { stalledRounds = 0; lastTextLen = tl; }
+    return stalledRounds >= 3;
+  };
+
+  // 1. Reveal rounds: expand details/accordions/"show more" buttons.
+  for (let round = 0; round < 4 && clicks < maxClicks; round++) {
+    const cands = deepRevealCandidates();
+    if (cands.length === 0) break;
+    let clickedThisRound = 0;
+    for (const el of cands) {
+      if (clicks >= maxClicks) break;
+      try {
+        el.click();
+        clicks += 1;
+        clickedThisRound += 1;
+        await sleepDeep(280);
+      } catch { /* element may have detached */ }
+    }
+    if (clickedThisRound === 0) break;
+    if (maybeEnd()) break;
+  }
+
+  // 2. Scroll EVERY step of the page (lazy-load triggers fire on scroll
+  //    position, not on content change — an early break leaves bottom-of-page
+  //    sections unloaded). Returns to the top so extraction starts at the top.
+  const maxY = Math.max(1, document.body.scrollHeight - window.innerHeight);
+  for (let i = 1; i <= scrollSteps; i++) {
+    window.scrollTo(0, Math.min(maxY, Math.floor((maxY * i) / scrollSteps)));
+    scrolls += 1;
+    await sleepDeep(420);
+    if (maxY <= 0) break;                                 // no scrollable page at all
+    if (Math.floor((maxY * i) / scrollSteps) >= maxY - 2) break; // reached the bottom
+  }
+  window.scrollTo(0, 0);
+
+  // 3. Settle: wait for a quiet window after the last DOM mutation (frames,
+  //    async fetches, scroll listeners) with a hard 4s cap.
+  try {
+    const done = await new Promise((resolve) => {
+      let timer = null;
+      const obs = new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { obs.disconnect(); resolve(true); }, settleWindowMs);
+      });
+      obs.observe(document.body, { subtree: true, childList: true, characterData: true });
+      timer = setTimeout(() => { obs.disconnect(); resolve(true); }, 4000);
+    });
+  } catch { /* extremely odd DOMs — proceed anyway */ }
+
+  // 4. Extract through the EXACT same parser the platform scrapers use (so the
+  //    structured shape never diverges between quick and deep mode), then
+  //    supplement a thin prompt with the main-content text when available.
+  const base = (typeof scrapeAssignmentUniversal === 'function') ? scrapeAssignmentUniversal() : null;
+  if (!base) return null;
+  if ((base.prompt || '').trim().length < 200) {
+    const main = document.querySelector('article, main, #main-content, #content, .assignment, .post-content, .user_content');
+    const altText = (main ? main.innerText : '') || document.body.innerText || '';
+    if (altText.trim().length > (base.prompt || '').trim().length) {
+      base.prompt = capScrapeText(altText);
+    }
+  }
+
+  // 5. Files: full detection + per-file sha256 via the page's own fetch (the
+  //    file URL in an LMS resolves with the user's cookies). Bytes ≤ b64Cap
+  //    come back base64 so the service worker can push them into the dump
+  //    flow; larger/unauth'd files keep URL + hash on the bubble.
+  base.files = extractAllFileLinks();
+  base.filesWithMeta = [];
+  const budget = performance.now() + 25000; // total hashing budget
+  for (const url of base.files.slice(0, fileCap)) {
+    if (performance.now() > budget) break;
+    const rec = { url, ok: false, filename: decodeURIComponent(url.split('?')[0].split('/').pop() || 'file'), size: 0, sha256: '', contentType: '' };
+    try {
+      const resp = await Promise.race([
+        fetch(url, { credentials: 'include' }),
+        sleepDeep(6000).then(() => null),
+      ]);
+      if (!resp || !resp.ok) {
+        rec.error = resp ? `HTTP ${resp.status}` : 'timeout';
+        base.filesWithMeta.push(rec);
+        continue;
+      }
+      const buf = new Uint8Array(await resp.arrayBuffer());
+      rec.size = buf.byteLength;
+      rec.contentType = resp.headers.get('content-type') || '';
+      rec.ok = true;
+      if (window.crypto && crypto.subtle && rec.size > 0) {
+        const digest = await crypto.subtle.digest('SHA-256', buf);
+        rec.sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+      if (rec.size > 0 && rec.size <= b64Cap) {
+        let binary = '';
+        const CH = 0x8000;
+        for (let i = 0; i < buf.length; i += CH) binary += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+        rec.b64 = btoa(binary);
+      }
+    } catch (e) {
+      rec.error = String(e).slice(0, 120);
+    }
+    base.filesWithMeta.push(rec);
+  }
+
+  base.deep = { clicks, scrollSteps: scrolls, totalMs: Math.round(performance.now() - t0), fileHashes: base.filesWithMeta.length };
+  return base;
 }
 
 // Subagent Tool Execution Helpers
 window.__helpotron_read_assignment = scrapeAssignmentUniversal;
 window.__helpotron_scrape_universal = scrapeAssignmentUniversal;
+window.__helpotron_deep_scrape_universal = deepScrapeUniversal;
+window.__helpotron_extract_file_links = extractAllFileLinks;
 
 window.__helpotron_inspect_dom = function (selector) {
   if (!selector) return { error: 'Missing selector' };
@@ -227,6 +556,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       ? scrapeAssignmentUniversal()
       : null;
     sendResponse({ success: !!data, assignment: data || null });
+  } else if (request && request.action === 'DEEP_SCRAPE_CURRENT_ASSIGNMENT') {
+    deepScrapeUniversal().then((data) => sendResponse({ success: !!data, assignment: data || null }));
+    return true;
+  } else if (request && request.action === 'COLLECT_COURSE_LINKS') {
+    sendResponse(collectCourseLinks());
   } else if (request && request.action) {
     sendResponse({ success: false, error: 'unknown action' });
   } else {

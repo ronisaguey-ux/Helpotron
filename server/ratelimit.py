@@ -4,6 +4,7 @@ Provides both a class-based RateLimiter and a FastAPI dependency factory.
 """
 from __future__ import annotations
 
+import math
 import time
 from collections import defaultdict, deque
 from fastapi import HTTPException, Request, status
@@ -33,6 +34,18 @@ class RateLimiter:
             return False
         q.append(now)
         return True
+
+    def retry_after(self, key: str, limit: int, window: float = 60.0) -> int:
+        """Seconds until the caller's `allow()` starts permitting again.
+
+        Must be called right after `allow()` returned False for the same
+        (key, limit, window) — allow() has already pruned the deque down to
+        in-window hits, so its oldest entry is the one that keeps the key
+        blocked; this is the Retry-After value for a 429."""
+        q = self._hits.get(key)
+        if not q:
+            return 0
+        return max(1, int(math.ceil(window - (time.time() - q[0]))))
 
     def prune(self, max_age: float = 120.0) -> None:
         cutoff = time.time() - max_age

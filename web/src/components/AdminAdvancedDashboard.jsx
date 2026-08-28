@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import {
   ShieldAlert,
@@ -30,6 +30,15 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
   const [bulkCredits, setBulkCredits] = useState('');
   const [bulkTag, setBulkTag] = useState('');
   const [bulkStatus, setBulkStatus] = useState('');
+  const [tempbanHoursMap, setTempbanHoursMap] = useState({});
+
+  // Change-password dialog (operator 08-28): admin sets a new password for a
+  // user WITHOUT their current password; an optional recovery code ties the
+  // change to a request in flight (consumed on success).
+  const [pwChangeFor, setPwChangeFor] = useState(null); // public_id | null
+  const [pwChangeNew, setPwChangeNew] = useState('');
+  const [pwChangeCode, setPwChangeCode] = useState('');
+  const [pwChangeBusy, setPwChangeBusy] = useState(false);
 
   // Health State
   const [healthData, setHealthData] = useState(null);
@@ -204,6 +213,103 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     }
   };
 
+  /* Per-row user management (operator 08-27): Kick / Temp Ban / Ban-Unban /
+   * Delete / Act-as. Status feedback reuses the bulkStatus banner. */
+  const statusTimer = useRef(null);
+  const flash = (text) => {
+    setBulkStatus(text);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setBulkStatus(''), 5000);
+  };
+
+  const handleRowKick = async (u) => {
+    try {
+      await api.adminKickUser(u.public_id);
+      flash(`✅ Kicked ${u.public_id} — active sessions terminated`);
+    } catch (e) {
+      flash(`❌ Kick failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const handleRowTempBan = async (u) => {
+    const hours = Number(tempbanHoursMap[u.public_id] ?? 24);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      flash('❌ Temp-ban needs a number of hours > 0');
+      return;
+    }
+    try {
+      await api.adminTempBanUser(u.public_id, hours);
+      flash(`✅ Temp-banned ${u.public_id} for ${hours}h`);
+      fetchUsers();
+    } catch (e) {
+      flash(`❌ Temp-ban failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const handleRowBanToggle = async (u) => {
+    try {
+      if (u.banned) {
+        await api.adminUnbanUser(u.public_id);
+        flash(`✅ Unbanned ${u.public_id} — login & sessions allowed again`);
+      } else {
+        await api.adminBanUser(u.public_id);
+        flash(`✅ Banned ${u.public_id} — login & sessions blocked`);
+      }
+      fetchUsers();
+    } catch (e) {
+      flash(`❌ Ban change failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const handleRowDelete = async (u) => {
+    if (!window.confirm(`Permanently delete user ${u.public_id}? This destroys the account, all assignments, materials and credits. This cannot be undone.`)) return;
+    try {
+      await api.adminDeleteUser(u.public_id);
+      flash(`🗑 Deleted user ${u.public_id}`);
+      setSelectedUserIds((prev) => prev.filter((id) => id !== u.id));
+      fetchUsers();
+    } catch (e) {
+      flash(`❌ Delete failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const handleRowActAs = async (u) => {
+    try {
+      await api.adminActAsUser(u.public_id);
+      // Server swapped the session cookie to the target user — reload the app
+      // so the UI renders that user's full account (operator 08-27).
+      window.location.reload();
+    } catch (e) {
+      flash(`❌ Act-as failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const openPwDialog = (publicId) => {
+    setPwChangeFor(publicId);
+    setPwChangeNew('');
+    setPwChangeCode('');
+  };
+
+  const handleRowChangePw = async () => {
+    if (!pwChangeFor) return;
+    if (pwChangeNew.length < 8) {
+      flash('❌ New password must be at least 8 characters.');
+      return;
+    }
+    setPwChangeBusy(true);
+    try {
+      const res = await api.adminChangePassword(pwChangeFor, pwChangeNew, pwChangeCode.trim() || null);
+      flash(`✅ ${res.message || `Password changed for ${pwChangeFor} — sessions revoked`}`);
+      setPwChangeFor(null);
+      setPwChangeNew('');
+      setPwChangeCode('');
+    } catch (e) {
+      flash(`❌ Password change failed: ${e.message || 'unknown error'}`);
+    } finally {
+      setPwChangeBusy(false);
+    }
+  };
+
   const handleModerationAction = async (modId, action) => {
     try {
       await api.request(`/api/admin/moderation/${modId}/action`, {
@@ -278,7 +384,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
             <ShieldAlert className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Helpotron Master Admin Panel</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Helpotron Master Admin Panel</h2>
             <p className="text-xs text-slate-400">
               Exclusive platform controls: User Management, Inquiries Inbox, Access Keys, Model Scorecards & Health.
             </p>
@@ -324,8 +430,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
             <h3 className="font-semibold text-sm text-white">Bulk User Operations ({selectedUserIds.length} selected)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">Set Plan</label>
+                <label htmlFor="admin-bulk-plan" className="text-slate-400 block mb-1">Set Plan</label>
                 <select
+                  id="admin-bulk-plan"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   value={bulkPlan}
                   onChange={(e) => setBulkPlan(e.target.value)}
@@ -338,8 +445,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Adjust Credits (+ / -)</label>
+                <label htmlFor="admin-bulk-credits" className="text-slate-400 block mb-1">Adjust Credits (+ / -)</label>
                 <input
+                  id="admin-bulk-credits"
                   type="number"
                   placeholder="e.g. 50 or -20"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -349,8 +457,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Assign Tag</label>
+                <label htmlFor="admin-bulk-tag" className="text-slate-400 block mb-1">Assign Tag</label>
                 <input
+                  id="admin-bulk-tag"
                   type="text"
                   placeholder="e.g. vip, tester"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -385,6 +494,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               placeholder="Search user ID… (fuzzy: 'dreybejerking' finds 'dreybejerkin22')"
+              aria-label="Search user ID"
               className="w-full mb-3 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-purple-500/50 outline-none"
             />
             <table className="w-full text-left text-xs">
@@ -393,6 +503,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   <th className="pb-3">
                     <input
                       type="checkbox"
+                      aria-label="Select all users for bulk operation"
                       onChange={(e) => {
                         if (e.target.checked) setSelectedUserIds(safeUsers.map((u) => u.id));
                         else setSelectedUserIds([]);
@@ -423,6 +534,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                         <td className="py-3">
                           <input
                             type="checkbox"
+                            aria-label={`Select user ${u.public_id} for bulk operation`}
                             checked={selectedUserIds.includes(u.id)}
                             onChange={(e) => {
                               if (e.target.checked) setSelectedUserIds([...selectedUserIds, u.id]);
@@ -431,10 +543,18 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                           />
                         </td>
                         <td className="py-3 font-semibold text-white">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{u.public_id}</span>
                             {u.role === 'admin' && (
-                              <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded">ADMIN</span>
+                              <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded">ADMIN</span>
+                            )}
+                            {u.banned && (
+                              <span
+                                className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded"
+                                title={u.banned_until ? `Banned until ${u.banned_until}` : 'Banned'}
+                              >
+                                BANNED{u.banned_until ? ` · till ${String(u.banned_until).slice(0, 10)}` : ''}
+                              </span>
                             )}
                           </div>
                         </td>
@@ -456,6 +576,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 const val = e.target.value;
                                 setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
                               }}
+                              aria-label={`Token cost multiplier for ${u.public_id}`}
                               className="w-16 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
                               title="Token Cost Multiplier (e.g. 0.5x, 1.0x, 1.5x)"
                             />
@@ -493,6 +614,80 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                         </td>
                         <td className="py-3">
                           <div className="flex flex-col items-end gap-1.5">
+                            {/* Per-row user management: Kick / Temp Ban / Ban / Unban / Delete / Act as user */}
+                            <div className="flex flex-wrap items-center justify-end gap-1.5 pb-1.5 mb-1.5 border-b border-white/8 max-w-[360px]">
+                              <button
+                                type="button"
+                                onClick={() => handleRowKick(u)}
+                                title="Terminate all of this user's active sessions"
+                                className="px-2 py-1 rounded-lg bg-amber-600/15 border border-amber-500/30 text-amber-300 hover:bg-amber-600/30 text-[10px] font-semibold transition cursor-pointer"
+                              >
+                                Kick
+                              </button>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={tempbanHoursMap[u.public_id] ?? 24}
+                                  onChange={(e) => setTempbanHoursMap((prev) => ({ ...prev, [u.public_id]: e.target.value }))}
+                                  className="w-14 bg-slate-900 border border-white/10 rounded-lg px-1.5 py-1 text-white text-[11px] font-mono text-center focus:border-orange-500/50"
+                                  title="Temp-ban duration (hours)"
+                                  aria-label={`Temp-ban hours for ${u.public_id}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRowTempBan(u)}
+                                  title="Temporarily ban — blocks login/sessions until the clock runs out"
+                                  className="px-2 py-1 rounded-lg bg-orange-600/15 border border-orange-500/30 text-orange-300 hover:bg-orange-600/30 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Temp Ban
+                                </button>
+                              </div>
+                              {u.banned ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRowBanToggle(u)}
+                                  title="Lift the ban — login & sessions allowed again"
+                                  className="px-2 py-1 rounded-lg bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Unban
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRowBanToggle(u)}
+                                  title="Ban — block login & sessions (until unbanned)"
+                                  className="px-2 py-1 rounded-lg bg-rose-600/15 border border-rose-500/30 text-rose-300 hover:bg-rose-600/30 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Ban
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRowDelete(u)}
+                                title="Permanently delete this user (confirmation required)"
+                                className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRowActAs(u)}
+                                title="Impersonate: switch this session to the user's account (reload: the app enters their full account; logout returns to admin)"
+                                className="px-2 py-1 rounded-lg bg-blue-600/15 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 text-[10px] font-semibold transition cursor-pointer"
+                              >
+                                Act as user
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPwDialog(u.public_id)}
+                                title="Change this user's password without their current password (optional recovery code consumes an open request)"
+                                className="px-2 py-1 rounded-lg bg-violet-600/15 border border-violet-500/40 text-violet-300 hover:bg-violet-600/30 text-[10px] font-semibold transition cursor-pointer"
+                              >
+                                Change Pw
+                              </button>
+                            </div>
                             <div className="flex items-center gap-1">
                               <span className="text-[9px] uppercase tracking-wider text-slate-500 w-11 text-right">plan</span>
                               <select
@@ -503,6 +698,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   setBulkStatus(`Plan for ${u.public_id} → ${e.target.value}`);
                                   fetchUsers();
                                 }}
+                                aria-label={`Set plan for ${u.public_id}`}
                                 className="w-24 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono focus:border-purple-500/50"
                                 title="Upgrade / downgrade plan"
                               >
@@ -518,6 +714,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 type="number"
                                 step="1"
                                 placeholder="amount"
+                                aria-label={`Token amount to grant or remove for ${u.public_id}`}
                                 value={tokenAmountMap[u.id] ?? ''}
                                 onChange={(e) => setTokenAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
                                 className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-emerald-500/50"
@@ -576,6 +773,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 type="number"
                                 step="1"
                                 placeholder="amount"
+                                aria-label={`Credit amount to adjust for ${u.public_id}`}
                                 value={creditAmountMap[u.id] ?? ''}
                                 onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
                                 className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
@@ -702,6 +900,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                     <input
                       type="text"
                       placeholder="Type admin response to student..."
+                      aria-label="Type admin response to student"
                       value={replyTextMap[msg.id] || ''}
                       onChange={(e) => setReplyTextMap({ ...replyTextMap, [msg.id]: e.target.value })}
                       className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
@@ -737,8 +936,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           }>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">Duration (Days)</label>
+                <label htmlFor="admin-token-duration" className="text-slate-400 block mb-1">Duration (Days)</label>
                 <input
+                  id="admin-token-duration"
                   type="number"
                   value={tokenDuration}
                   onChange={(e) => setTokenDuration(Number(e.target.value))}
@@ -746,8 +946,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 />
               </div>
               <div>
-                <label className="text-slate-400 block mb-1">Max Uses</label>
+                <label htmlFor="admin-token-max-uses" className="text-slate-400 block mb-1">Max Uses</label>
                 <input
+                  id="admin-token-max-uses"
                   type="number"
                   value={tokenMaxUses}
                   onChange={(e) => setTokenMaxUses(Number(e.target.value))}
@@ -827,6 +1028,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {/* TAB 4: MODEL METRICS */}
       {activeTab === 'models' && (
         <div className="space-y-4">
+          {safeScorecards.length === 0 && (
+            <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-2xl">
+              No model scorecards reported yet.
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {safeScorecards.map((m) => (
               <div key={m.model_id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
@@ -954,6 +1160,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 const val = e.target.value;
                                 setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
                               }}
+                              aria-label={`Token cost multiplier for ${u.public_id}`}
                               className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center"
                             />
                             <span className="text-slate-400 text-[11px]">x</span>
@@ -1025,25 +1232,32 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       )}
 
       {/* TAB 6: HEALTH */}
-      {activeTab === 'health' && healthData && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-          <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-            <span className="text-slate-400 block text-[10px]">API Status</span>
-            <strong className="text-emerald-400 text-base">{healthData.api || 'operational'}</strong>
+      {activeTab === 'health' && (
+        healthData ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
+              <span className="text-slate-400 block text-[10px]">API Status</span>
+              <strong className="text-emerald-400 text-base">{healthData.api || 'operational'}</strong>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
+              <span className="text-slate-400 block text-[10px]">Database</span>
+              <strong className="text-emerald-400 text-base">{healthData.database || 'connected'}</strong>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
+              <span className="text-slate-400 block text-[10px]">Sandbox Daemon</span>
+              <strong className="text-emerald-400 text-base">{healthData.sandbox || 'active'}</strong>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
+              <span className="text-slate-400 block text-[10px]">System Latency</span>
+              <strong className="text-white text-base">{healthData.latency_ms || 12}ms</strong>
+            </div>
           </div>
-          <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-            <span className="text-slate-400 block text-[10px]">Database</span>
-            <strong className="text-emerald-400 text-base">{healthData.database || 'connected'}</strong>
+        ) : (
+          <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-2xl">
+            System health telemetry is unavailable right now.{' '}
+            <button type="button" onClick={fetchHealth} className="text-purple-300 hover:text-purple-200 underline cursor-pointer">Retry</button>
           </div>
-          <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-            <span className="text-slate-400 block text-[10px]">Sandbox Daemon</span>
-            <strong className="text-emerald-400 text-base">{healthData.sandbox || 'active'}</strong>
-          </div>
-          <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-            <span className="text-slate-400 block text-[10px]">System Latency</span>
-            <strong className="text-white text-base">{healthData.latency_ms || 12}ms</strong>
-          </div>
-        </div>
+        )
       )}
 
       {/* TAB 7: SYSTEM CONTROL */}
@@ -1062,6 +1276,73 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           >
             Clear Local Runtime Cache
           </button>
+        </div>
+      )}
+
+      {/* Change user password dialog (operator 08-28) */}
+      {pwChangeFor && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPwChangeFor(null)}>
+          <div
+            className="w-full max-w-md bg-slate-950/95 border border-purple-500/30 rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/10">
+              <KeyRound className="w-4 h-4 text-purple-400" />
+              <h3 className="text-sm font-bold text-white">
+                Change password — <span className="font-mono text-purple-300">{pwChangeFor}</span>
+              </h3>
+            </div>
+            <div className="px-5 py-4 space-y-3 text-xs">
+              <p className="text-slate-400 leading-relaxed">
+                Sets a new password without the user's current one. Sessions are revoked on
+                success. Optionally enter an open recovery code to tie this change to a
+                request in flight (it gets consumed).
+              </p>
+              <label htmlFor="pw-change-new" className="block text-slate-400">
+                New password <span className="text-slate-600">(min 8 chars, letter + number)</span>
+              </label>
+              <input
+                id="pw-change-new"
+                type="password"
+                autoComplete="new-password"
+                value={pwChangeNew}
+                onChange={(e) => setPwChangeNew(e.target.value)}
+                placeholder="New password"
+                autoFocus
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:border-purple-500/50 outline-none"
+              />
+              <label htmlFor="pw-change-code" className="block text-slate-400">
+                Recovery code <span className="text-slate-600">(optional, 6 digits)</span>
+              </label>
+              <input
+                id="pw-change-code"
+                type="text"
+                value={pwChangeCode}
+                onChange={(e) => setPwChangeCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Optionally consume an open recovery request"
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:border-purple-500/50 outline-none"
+              />
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleRowChangePw}
+                  disabled={pwChangeBusy}
+                  className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
+                >
+                  {pwChangeBusy ? 'Changing…' : 'Change password'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPwChangeFor(null)}
+                  className="px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

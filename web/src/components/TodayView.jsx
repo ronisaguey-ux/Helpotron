@@ -49,7 +49,14 @@ export default function TodayView({ onGoTo, user }) {
   const settings = useMemo(() => loadSettings(), []);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const name = user?.public_id && user.public_id !== 'Guest' ? user.public_id : (settings.profile?.displayName || 'there');
+  // 08-28 (visual polish): never greet through empty name slots or bare
+  // punctuation — if no real name exists, greet without the name fragment.
+  const rawName =
+    user?.public_id && user.public_id !== 'Guest'
+      ? user.public_id
+      : (settings.profile?.displayName || '');
+  const displayName = typeof rawName === 'string' ? rawName.trim() : '';
+  const useName = displayName.length > 0 && displayName.toLowerCase() !== 'there';
   const demo = demoEnabled();
 
   const attention = demo ? ATTENTION : [];
@@ -72,7 +79,7 @@ export default function TodayView({ onGoTo, user }) {
           header={
             <div className="relative z-10">
               <div className="text-2xl font-bold text-white">
-                {greeting}, {name}.
+                {useName ? `${greeting}, ${displayName}.` : `${greeting}.`}
               </div>
               <p className="text-sm text-slate-400 mt-1.5">
                 Here’s what needs your attention.
@@ -83,8 +90,10 @@ export default function TodayView({ onGoTo, user }) {
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none" aria-hidden>
           <img src="/assets/hero_aurora.webp" alt="" className="w-full h-full object-cover opacity-35" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#090d16]/90 via-[#090d16]/30 to-transparent" />
+          {/* Decorative orb lives INSIDE the clipped wrapper (08-28): at -right-16 it
+              once extended ~39px past the viewport (scrollW 1479 @ 1440) */}
+          <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         </div>
-        <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         <div className="relative">
           {demo && (
             <ul className="mt-4 space-y-1.5 text-[13px]">
@@ -99,7 +108,7 @@ export default function TodayView({ onGoTo, user }) {
                 Your <strong className="text-white">English work</strong> is trending on schedule.
               </li>
               <li className="text-slate-300">
-                You have <strong className="text-blue-300">{Number(user.credits ?? 10029).toLocaleString()} credits</strong> remaining.
+                You have <strong className="text-blue-300">{Number(user.credits ?? 0).toLocaleString()} credits</strong> remaining.
               </li>
               <li className="text-amber-200/90">
                 You haven’t studied <strong>Calculus in 4 days</strong>.

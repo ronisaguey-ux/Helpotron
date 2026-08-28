@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
 import subprocess
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
-from .database import AgentChatThread, Assignment, User, get_db
+from .agent_prompt import agent_persona_block, agent_system_prompt
+from .database import AgentChatMessage, AgentChatThread, Assignment, StudyMaterial, UniversalDumpItem, User, get_db
 from .overlord_agent import agent_display_name, overlord_agent, permission_engine
 
 router = APIRouter(prefix="/api", tags=["overlord_and_cards"])
@@ -86,10 +90,19 @@ def _claude_bridge_allowed(is_admin: bool) -> bool:
     return (not admin_only) or is_admin
 
 
-def _claude_bridge_call(public_id: str, user_text: str) -> Optional[str]:
+def _claude_bridge_call(public_id: str, persona_block: str, user_text: str, assignment_context: str = "") -> Optional[str]:
     """Forward one agent-chat message to headless Claude Code. Returns the
     reply text, or None on any failure (caller falls back to the local
-    pipeline). Never shells out — argv array only."""
+    pipeline). Never shells out — argv array only. Pure-stdlib arguments
+    (the persona block is materialized by the async caller before the
+    executor thread — no ORM access off the session).
+
+    08-28 fix: the bridge previously spoke with a GENERIC "You are Helpotron's
+    My Agent" prompt — the user's identity never reached the model at all
+    whenever the bridge was enabled. The canonical persona block is now
+    embedded into the prompt; assignment_context ("" for the main chat) adds
+    the real assignment-bubble grounding when present.
+    """
     try:
         mcp_cfg = Path(__file__).resolve().parent.parent / "mcp" / "claude_bridge_config.json"
         if not mcp_cfg.exists():
@@ -98,6 +111,9 @@ def _claude_bridge_call(public_id: str, user_text: str) -> Optional[str]:
             "You are Helpotron's My Agent, responding to a user on the helpotron "
             f"website (public_id: {public_id}). The user sent this message:\n\n"
             f"{user_text}\n\n"
+            f"You are that user's personal agent, and their configured identity is BINDING on how you speak and act:\n\n"
+            f"{persona_block}"
+            f"{assignment_context}"
             "If the user asks to do anything on the platform — look up a user, "
             "adjust credits, check system health, platform operations — use the "
             "helpotron-admin MCP tools to resolve it. Reply to the user directly "
@@ -172,16 +188,22 @@ async def get_assignment_cards(request: Request, db: Session = Depends(get_db)):
         else:
             status_label = raw_status.replace("_", " ").title()
 
+        # Honest fields (operator 08-27): real creators write progress keys
+        # under "course"/"teacher_name"/"ai_score"; the old "subject"/
+        # "course_code" fallbacks fabricated "GEN-101"/"Prof. Academic". Never
+        # invent values — missing data is an empty/null field, the UI renders
+        # "—" / "Not checked".
         card = {
             "id": a.id,
             "name": a.title,
-            "subject": progress.get("subject", "General Academic"),
-            "class_code": progress.get("course_code", "GEN-101"),
-            "teacher_name": progress.get("teacher_name", "Prof. Academic"),
-            "estimated_time": progress.get("estimated_time", "45 mins"),
+            "subject": progress.get("subject") or progress.get("course") or "",
+            "class_code": progress.get("course_code") or "",
+            "teacher_name": progress.get("teacher_name") or "",
+            "estimated_time": progress.get("estimated_time") or "",
             "status": status_label,
             "due_date": a.due_date or "No Deadline",
-            "score_ai": progress.get("ai_score", 12.0),
+            "score_ai": progress.get("ai_score"),
+            "detector_risk": progress.get("detector_risk"),
         }
         cards.append(card)
 
@@ -200,6 +222,82 @@ def _assignment_materials(db, assignment_id: int) -> list:
     } for m in rows]
 
 
+def _assignment_dump_lookup(db, user, assignment) -> Optional[UniversalDumpItem]:
+    """The REAL UniversalDumpItem row behind an assignment bubble (operator
+    08-28): progress.dump_file_id first (auto-route), then a matched/finalized
+    dump linked via matched_assignment_id. None when the assignment was created
+    by hand — never invent a dump identity. Shared by the full-view route (the
+    provenance block) and the chat assignment-context builder."""
+    progress = assignment.progress or {}
+    dump_row = None
+    dump_file_id = progress.get("dump_file_id")
+    if dump_file_id:
+        dump_row = db.query(UniversalDumpItem).filter(
+            UniversalDumpItem.id == dump_file_id, UniversalDumpItem.user_id == user.id
+        ).first()
+    if dump_row is None:
+        dump_row = (
+            db.query(UniversalDumpItem)
+            .filter(
+                UniversalDumpItem.matched_assignment_id == assignment.id,
+                UniversalDumpItem.user_id == user.id,
+            )
+            .order_by(UniversalDumpItem.id.desc())
+            .first()
+        )
+    return dump_row
+
+
+def _dump_info_dict(dump_row: Optional[UniversalDumpItem]) -> Optional[dict]:
+    """Stable dump_info dict for the full-view payload (None when no dump row)."""
+    if dump_row is None:
+        return None
+    return {
+        "id": dump_row.id,
+        "file_name": dump_row.file_name,
+        "file_type": dump_row.file_type,
+        "status": dump_row.status,
+        "requested_action": dump_row.requested_action,
+        "auto_match_confidence": dump_row.auto_match_confidence,
+        "overlord_notes": dump_row.overlord_notes,
+        "created_at": dump_row.created_at.isoformat() if dump_row.created_at else None,
+    }
+
+
+def _agent_assignment_context(db, user, assignment: Assignment) -> str:
+    """Assignment-bubble grounding block for the chat system prompt (operator
+    08-28): the subagent team previously had NO idea which assignment it was
+    talking about — the prompt carried nothing about the bubble. Real metadata
+    (name, subject, class_code, teacher_name, status) + the originating dump's
+    identity + a short excerpt (cap 1500 chars) of the extracted dump text, so
+    "question 3" has the actual sheet behind it. "" never — returns the block,
+    callers append it additively (guards/tails untouched)."""
+    progress = assignment.progress or {}
+    dump_row = _assignment_dump_lookup(db, user, assignment)
+    excerpt = ""
+    if dump_row is not None:
+        excerpt = str(dump_row.extracted_text or "").strip()
+    if not excerpt:
+        excerpt = str(assignment.prompt or "").strip()
+    lines = [
+        "ASSIGNMENT CONTEXT (this chat is the bubble for this REAL assignment — the user says \"question 3\" etc. refers to THIS material):",
+        f"Name: {assignment.title or '(untitled)'}",
+        f"Subject: {progress.get('subject') or progress.get('course') or '(unknown)'}",
+        f"Class code: {progress.get('course_code') or '(unknown)'}",
+        f"Teacher: {progress.get('teacher_name') or '(unknown)'}",
+        f"Status: {assignment.status or '(unknown)'}",
+    ]
+    if dump_row is not None:
+        lines.append(
+            f"Dump source file: {dump_row.file_name or '(unknown)'} "
+            f"({dump_row.file_type or 'file'}, status {dump_row.status or 'unknown'})"
+        )
+    if excerpt:
+        lines.append("EXTRACTED CONTENT (start of the real material this assignment is built from):")
+        lines.append(excerpt[:1500])
+    return "\n".join(lines) + "\n\n"
+
+
 @router.get("/assignment/{assignment_id}/full-view")
 async def get_assignment_full_view(assignment_id: int, request: Request, db: Session = Depends(get_db)):
     """Returns comprehensive full-page assignment details: prompt, rubric, attachments, subagent progress."""
@@ -211,23 +309,33 @@ async def get_assignment_full_view(assignment_id: int, request: Request, db: Ses
     progress = assignment.progress or {}
     chat_history = overlord_agent.get_chat_history(assignment_id, user=user)
 
+    # Provenance (operator 08-28): the real UniversalDumpItem row that created
+    # this bubble (auto-route writes progress.dump_file_id; matched/finalized
+    # dumps are linked via matched_assignment_id). None when the assignment was
+    # created by hand — never invent a dump identity. (Shared lookup helper
+    # _assignment_dump_lookup — same logic the chat context uses.)
+    dump_row = _assignment_dump_lookup(db, user, assignment)
+    dump_info = _dump_info_dict(dump_row)
+
     return {
         "status": "success",
         "assignment": {
             "id": assignment.id,
             "title": assignment.title,
-            "prompt": assignment.prompt or "Full research essay prompt and requirements.",
+            "prompt": assignment.prompt or "",
             "due_date": assignment.due_date,
             "status": assignment.status,
-            "rubric": progress.get("rubric", "Standard grading rubric: Thesis & Argumentation (25%), Textual Evidence (25%), Structural Cadence (25%), Citations & Format (25%)."),
-            "attached_files": progress.get("attached_files", ["lecture_transcript_week3.txt", "rubric_guidelines.pdf"]),
-            "subagent_progress": progress.get("subagent_steps", [
-                {"agent": "Rubric Decomposition Agent", "status": "completed", "progress": 100},
-                {"agent": "Draft Synthesis Agent", "status": "in_progress", "progress": 70},
-                {"agent": "AI Humanizer & Cadence Agent", "status": "pending", "progress": 0},
-            ]),
+            "rubric": progress.get("rubric"),
+            "attached_files": progress.get("attached_files") or [],
+            "subagent_progress": progress.get("subagent_steps") or [],
+            # Honest metadata (operator 08-28): real values written by the
+            # creator/engine only — empty string when genuinely missing.
+            "subject": progress.get("subject") or progress.get("course") or "",
+            "class_code": progress.get("course_code") or "",
+            "teacher_name": progress.get("teacher_name") or "",
             # Completed work from Assignment Dump "do it" finalize (operator 08-26).
             "do_it_work": progress.get("do_it_work"),
+            "dump_info": dump_info,
         },
         "materials": _assignment_materials(db, assignment_id),
         "chat_history": chat_history,
@@ -237,19 +345,80 @@ async def get_assignment_full_view(assignment_id: int, request: Request, db: Ses
 # ─── Chat threads (operator 08-26) ──────────────────────────────────────────
 @router.get("/agent/threads")
 async def list_chat_threads(request: Request, db: Session = Depends(get_db)):
-    """All conversation threads for the user, newest first."""
+    """All conversation threads for the user, newest first — pinned chats on
+    top, most recently active first within each group (operator 08-27).
+    `last_message_at` is the real timestamp of the newest agent_chat_messages
+    row for the thread; thread.updated_at is the fallback for empty threads."""
     user = _get_current_user(request, db)
-    rows = (
+    threads = (
         db.query(AgentChatThread)
         .filter(AgentChatThread.user_id == user.id)
-        .order_by(AgentChatThread.pinned.desc(), AgentChatThread.updated_at.desc())
         .all()
     )
-    return {"status": "success", "threads": [
-        {"id": t.id, "title": t.title, "pinned": bool(t.pinned), "created_at": t.created_at.isoformat() if t.created_at else None,
-         "updated_at": t.updated_at.isoformat() if t.updated_at else None}
-        for t in rows
-    ]}
+    # Bulk last-message lookup: message target keys are u{uid}:{tid} (scoped,
+    # current) or {tid} (legacy unscoped rows load_chat_history_from_db reads).
+    scoped_last: Dict[int, datetime] = {}
+    bare_last: Dict[int, datetime] = {}
+    if threads:
+        keys = [f"u{user.id}:{t.id}" for t in threads] + [str(t.id) for t in threads]
+        rows = (
+            db.query(AgentChatMessage.target_key, func.max(AgentChatMessage.created_at))
+            .filter(
+                AgentChatMessage.user_id == user.id,
+                AgentChatMessage.target_key.in_(keys),
+            )
+            .group_by(AgentChatMessage.target_key)
+            .all()
+        )
+        for key, ts in rows:
+            if key.startswith(f"u{user.id}:"):
+                scoped_last[int(key.split(":", 1)[1])] = ts
+            elif key.isdigit():
+                bare_last[int(key)] = ts
+    last_at = {**bare_last, **scoped_last}
+
+    out = []
+    for t in threads:
+        ts = last_at.get(t.id) or t.updated_at
+        out.append({
+            "id": t.id,
+            "title": t.title,
+            "pinned": bool(t.pinned),
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+            "last_message_at": ts.isoformat() if ts else None,
+        })
+
+    # The current conversation (key 0) is a regular chat too — no special
+    # "Main chat" entry (operator 08-27). It has no agent_chat_threads row;
+    # its title/pin live in user.settings and its messages under key u{uid}:0.
+    settings = dict(user.settings or {})
+    cur_ts = None
+    mrow = (
+        db.query(func.max(AgentChatMessage.created_at))
+        .filter(
+            AgentChatMessage.user_id == user.id,
+            AgentChatMessage.target_key.in_([f"u{user.id}:0", "0"]),
+        )
+        .scalar()
+    )
+    if mrow:
+        cur_ts = mrow
+    out.append({
+        "id": 0,
+        "title": str(settings.get("current_chat_title") or "current chat")[:120],
+        "pinned": bool(settings.get("current_chat_pinned", False)),
+        "created_at": None,
+        "updated_at": cur_ts.isoformat() if cur_ts else None,
+        "last_message_at": cur_ts.isoformat() if cur_ts else None,
+    })
+
+    # Pinned first, most recently active first within each group. ISO strings
+    # order chronologically, so a stable two-pass sort does it: newest first,
+    # then pin state — pin state wins but keeps the recency order per group.
+    out.sort(key=lambda x: x["last_message_at"] or x["updated_at"] or "", reverse=True)
+    out.sort(key=lambda x: not x["pinned"])
+    return {"status": "success", "threads": out}
 
 
 @router.post("/agent/threads")
@@ -265,6 +434,21 @@ async def create_chat_thread(payload: ThreadCreateRequest, request: Request, db:
 @router.patch("/agent/threads/{thread_id}")
 async def rename_chat_thread(thread_id: int, payload: ThreadRenameRequest, request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
+    # id 0 = the current conversation: no thread row — title/pin live in
+    # user.settings so they persist like any other thread (operator 08-27).
+    if thread_id == 0:
+        settings = dict(user.settings or {})
+        if payload.title is not None:
+            settings["current_chat_title"] = payload.title.strip()[:120] or "current chat"
+        if payload.pinned is not None:
+            settings["current_chat_pinned"] = bool(payload.pinned)
+        user.settings = settings
+        db.commit()
+        return {"status": "success", "thread": {
+            "id": 0,
+            "title": str(settings.get("current_chat_title") or "current chat"),
+            "pinned": bool(settings.get("current_chat_pinned", False)),
+        }}
     t = db.query(AgentChatThread).filter(AgentChatThread.id == thread_id, AgentChatThread.user_id == user.id).first()
     if not t:
         raise HTTPException(404, "Thread not found")
@@ -275,6 +459,63 @@ async def rename_chat_thread(thread_id: int, payload: ThreadRenameRequest, reque
     t.updated_at = datetime.now()
     db.commit()
     return {"status": "success", "thread": {"id": t.id, "title": t.title, "pinned": bool(t.pinned)}}
+
+
+@router.delete("/agent/threads/{thread_id}")
+async def delete_chat_thread(thread_id: int, request: Request, db: Session = Depends(get_db)):
+    """Delete one chat thread and all of its messages (owner or admin only,
+    operator 08-27). The in-memory cache entry for the conversation is dropped
+    so the deleted thread can never resurrect on the next server restart."""
+    user = _get_current_user(request, db)
+    from .security import is_admin_user
+    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
+    # id 0 = the current conversation: deletable like any other chat (operator
+    # 08-27) — drop its cache, its key-0 messages and its settings title/pin.
+    if thread_id == 0:
+        try:
+            overlord_agent.forget_chat_history(0, user.id)
+        except Exception:
+            pass
+        try:
+            db.query(AgentChatMessage).filter(
+                AgentChatMessage.user_id == user.id,
+                AgentChatMessage.target_key.in_([f"u{user.id}:0", "0"]),
+            ).delete(synchronize_session=False)
+            settings = dict(user.settings or {})
+            settings.pop("current_chat_title", None)
+            settings.pop("current_chat_pinned", None)
+            user.settings = settings
+            db.commit()
+        except Exception:
+            db.rollback()
+            pass
+        return {"ok": True}
+    t = db.query(AgentChatThread).filter(AgentChatThread.id == thread_id).first()
+    if not t:
+        raise HTTPException(404, "Thread not found")
+    if t.user_id != user.id and not is_admin:
+        raise HTTPException(403, "You can only delete your own chats")
+
+    # In-memory conversation history (keyed u{user_id}:{thread_id}) — remove
+    # before the DB rows so a concurrent GET can't reseed from stale rows.
+    try:
+        overlord_agent.forget_chat_history(thread_id, t.user_id)
+    except Exception:
+        pass
+
+    # Persistent messages: AgentChatMessage has no FK to the thread (it stores
+    # a scoped target_key string), so delete both the scoped key and the legacy
+    # unscoped rows that load_chat_history_from_db also reads.
+    try:
+        db.query(AgentChatMessage).filter(
+            AgentChatMessage.user_id == t.user_id,
+            AgentChatMessage.target_key.in_([f"u{t.user_id}:{thread_id}", str(thread_id)]),
+        ).delete(synchronize_session=False)
+    except Exception:
+        db.rollback()  # keep the thread delete valid even if message cleanup fails
+    db.delete(t)
+    db.commit()
+    return {"ok": True}
 
 
 # ─── 2. Operation Modes & Permissions ─────────────────────────────────────────
@@ -586,7 +827,16 @@ async def get_chat(assignment_id: int, request: Request, db: Session = Depends(g
             Assignment.id == assignment_id, Assignment.user_id == user.id
         ).first()
         if not assignment:
-            raise HTTPException(status_code=404, detail="Assignment not found")
+            # 08-27: chat threads live in agent_chat_threads, not assignments —
+            # a thread id that isn't an Assignment row (the common case!) must
+            # still serve its history. Only give a 404 when the id is neither
+            # the user's assignment NOR the user's thread (IDOR-safe: both
+            # checks are scoped to the authenticated user).
+            thread = db.query(AgentChatThread).filter(
+                AgentChatThread.id == assignment_id, AgentChatThread.user_id == user.id
+            ).first()
+            if not thread:
+                raise HTTPException(status_code=404, detail="Assignment not found")
     try:
         from .overlord_agent import load_chat_history_from_db
         load_chat_history_from_db(db, user.id, assignment_id)
@@ -603,7 +853,7 @@ _AGENT_ACTIONS = {
     "read_assignment": {"assignment_id": "int"},
     "edit_assignment": {"assignment_id": "int", "updates": "dict with optional keys title, due_date (ISO string), prompt, status (one of: tracked, not_started, in_progress, completed, submitted, graded, paused), progress — progress MUST be a JSON object of {section: state} e.g. {\"section 2\": \"done\"}, NEVER a string or list"},
     "change_settings": {"settings": "dict — valid keys: effort_score (int 1-1000), agent_name (str), personality (str), instructions (str), operation_mode (manual|auto|yolo), auto_approved_actions (list of action names), school_name, major, goal"},
-    "generate_flashcards": {"title": "str", "cards": "list of {front,back}"},
+    "generate_flashcards": {"title": "str", "prompt": "str — the topic/subject or source text to build the deck from", "count": "int optional (1-100, default 20)"},
     "humanize_text": {"text": "str to humanize"},
     "analyze_rubric": {"prompt": "str", "rubric": "str"},
     "draft_section": {"section_name": "str"},
@@ -613,6 +863,18 @@ _AGENT_ACTIONS = {
     "run_shell": {"command": "str — ONE tiny SAFE command (no ;, |, &, `, $, <, >): for math use python3 -c \"import math;print(<expr>)\"; for date/time use the exact python date one-liner. The command is generated BY YOU (never taken from the user text) and must only compute or print a fact."},
     "remember": {"text": "str fact/preference to store permanently"},
     "forget_memory": {"entry_id": "str or text snippet to forget"},
+}
+
+# ─── Extension-surface scrape tool (operator 08-28) ─────────────────────────
+# The browser extension popup hosts the REAL tab-scraper: the capture runs in
+# the user's browser (content.js -> background.js -> /api/agent/start control
+# session -> POST /api/assignments save). The server-side agent cannot fetch
+# a Canvas page itself, so this surface declares the tool the model CALLS so
+# the popup drives the actual scrape. Payload contract mirrors the extension
+# chatbox's "scrapeWithInstruction" message: {instruction}.
+SCRAPE_ACTION_SPEC = {
+    "instruction": "str — what to collect / any constraint, e.g. \"only the rubric\", "
+                   "\"focus on the main prompt lines\"; empty string = the whole page",
 }
 
 # Credit gate (operator 08-26): actions that do work have to be affordable even
@@ -630,6 +892,7 @@ _AGENT_ACTION_COSTS = {
     "message_assignment_team": 5,  # assignment_solve
     "run_sandbox_script": 10,      # subagent_browser
     "run_shell": 3,                # code_analysis
+    "scrape_assignment": 1,        # prompt-only trigger; the extension does the work
     "read_assignment": 0, "change_settings": 0,
     "remember": 0, "forget_memory": 0, "plain_answer": 0,
     "admin_lookup_user": 0, "admin_adjust_credits": 0, "admin_system_status": 0,
@@ -700,7 +963,7 @@ def _build_math_command(expr: str) -> str:
     return f'python3 -c "{code}"'
 
 
-def _insufficient_tokens_response(target_key, user, required) -> Dict[str, Any]:
+def _insufficient_tokens_response(target_key, user, required, db=None) -> Dict[str, Any]:
     """Non-upgraded user without token budget: friendly refusal, action NOT run.
     Tokens = usage; credits = discounts (operator 08-26)."""
     reply = (
@@ -708,11 +971,18 @@ def _insufficient_tokens_response(target_key, user, required) -> Dict[str, Any]:
         "Ask them to grant you tokens (or upgrade your account) to use My Agent."
     )
     msg = overlord_agent.add_chat_message(target_key, sender="overlord", text=reply, user_id=user.id)
+    if db is not None:  # 08-27: refusals persist too, so the reloaded chat matches
+        try:
+            from .overlord_agent import persist_chat_message
+            persist_chat_message(db, user.id, target_key, "overlord", reply)
+        except Exception:
+            pass
     return {
         "status": "insufficient_tokens",
         "message": msg,
         "reply": reply,
-        "payload": {"required": required, "available": float((user.settings or {}).get("token_balance", 0) or 0)},
+        "token_balance": _tk_balance(user),
+        "payload": {"required": required, "available": _tk_balance(user)},
     }
 
 
@@ -764,20 +1034,34 @@ def _charge_tokens(user, db, cost: float) -> None:
     db.commit()
 
 
-async def _conversational_fallback(user, text: str, db: Session = None) -> str:
+def _tk_balance(user) -> float:
+    """Current remaining token balance — resend with chat responses so the UI
+    can update live without a refresh (operator 08-27)."""
+    return float((user.settings or {}).get("token_balance", 0) or 0)
+
+
+async def _conversational_fallback(user, text: str, db: Session = None, node: str = "my_agent", assignment_context: Optional[str] = None) -> str:
     """When an action executed silently, give a genuine answer to the user's
-    question instead of a canned 'Task completed.' (operator 08-26)."""
+    question instead of a canned 'Task completed.' (operator 08-26).
+
+    08-28 fix: this was the ONE fluent-answer generator with NO identity —
+    a conversationally-natural reply produced with a generic 'you are the
+    user's personal agent' prompt, which is exactly why a user-set identity
+    (personality/instructions/memory/files) appeared to "never apply" when
+    a degenerate reply landed here. It now uses the canonical prompt, node-
+    scoped (operator 08-28: assignment_team bubbles get that surface's own
+    config, never My Agent's), plus the assignment grounding when present.
+    """
     from .llm import call_llm
     try:
         raw = await call_llm(
             system_prompt=(
-                f"You are '{agent_display_name(user)}', the user's personal agent. "
-                f"Today's real date (server-computed, never guess another): "
-                f"Today is {datetime.now().strftime('%A, %B %-d, %Y')}. "
-                "The user sent a message and no specific tool action applied. "
-                "Answer helpfully and briefly: acknowledge what you can (or can't "
-                "yet) do, and ask a clarifying question if needed. Keep it under "
-                "90 words; plain text only."
+                agent_system_prompt(user, node=node)
+                + (assignment_context or "")
+                + "The user sent a message and no specific tool action applied. "
+                  "Answer helpfully and briefly: acknowledge what you can (or can't "
+                  "yet) do, and ask a clarifying question if needed. Keep it under "
+                  "90 words; plain text only. Stay in character per the identity above."
             ),
             user_prompt=(text or "")[:2000],
             temperature=0.4,
@@ -822,12 +1106,16 @@ def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _regex_fallback_intent(text: str) -> Dict[str, Any]:
+def _regex_fallback_intent(text: str, node: str = "my_agent") -> Dict[str, Any]:
     """Old keyword dispatch — only used when the LLM JSON contract fails."""
     shell_cmd = _extract_shell_query(text)
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
     lower = text.lower()
+    if node == "extensions" and any(k in lower for k in ("scrape", "canvas", "capture this page")):
+        return {"action": "scrape_assignment",
+                "payload": {"instruction": text},
+                "reply": "On it — scraping your tab now…"}
     if any(k in lower for k in ("remember", "memorize", "remember that", "note that", "keep in mind")):
         return {"action": "remember", "payload": {"text": text}, "reply": "Noted — stored in my permanent memory."}
     if "forget" in lower and any(k in lower for k in ("memory", "remember")):
@@ -839,7 +1127,10 @@ def _regex_fallback_intent(text: str) -> Dict[str, Any]:
     if "submit" in lower:
         return {"action": "submit_assignment", "payload": {"assignment_id": None}, "reply": "Submitting…"}
     if "flashcard" in lower:
-        return {"action": "generate_flashcards", "payload": {"title": "Flashcards", "cards": []}, "reply": "Generating flashcards…"}
+        # 08-27: pass the user's message as the source prompt so the executor
+        # can seed real generation (previously an empty cards stub).
+        return {"action": "generate_flashcards", "payload": {"title": "Flashcards", "prompt": text},
+                "reply": "Generating flashcards…"}
     if "due date" in lower or "change the due" in lower or "edit" in lower and "assignment" in lower:
         return {"action": "edit_assignment", "payload": {"updates": {}}, "reply": "Editing the assignment…"}
     # Catch-all: unmatched text is a QUESTION, not a work order. Answer it
@@ -849,26 +1140,136 @@ def _regex_fallback_intent(text: str) -> Dict[str, Any]:
     return {"action": "plain_answer", "payload": {}, "reply": ""}
 
 
-async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None) -> Dict[str, Any]:
+# ─── Assignment grounding guard (operator 08-28) ──────────────────────────
+# The LLM once converted "complete a worksheet" (no assignment ever given)
+# into a FABRICATED create_assignment card + "ok" — the bubble showed
+# in_progress with no subagent activity. This guard refuses to create an
+# assignment card unless the request is grounded in REAL material: content
+# pasted in the message, a real topic behind the ask, loaded agent files, or
+# an existing assignment card that has content. Otherwise the agent asks for
+# the actual assignment instead of making one up.
+
+_WORK_NOUNS = r"assignment|worksheet|sheet|homework|paper|packet|coursework|task|lab|project|essay"
+_ASK_BOILERPLATE = frozenset("""
+complete finish do solve write work start help you please my me the a an this that these those
+it with for on in to and or of is are was were i we they not will can could would need
+""".split())
+_ASK_CONTENT_MSG = (
+    "I can't get started on that yet — you haven't sent the actual assignment. "
+    "Paste the worksheet text, attach a file, or point me at the existing assignment "
+    "card, and I'll do it from the real material."
+)
+
+
+def _assignment_request_grounded(text: str, user: User, db: Session,
+                                 assignment_id: Optional[int] = None) -> tuple[bool, str]:
+    """True when the agent may create/start an assignment card for this request."""
+    t = " ".join((text or "").split())
+    low = t.lower()
+    # Explicit card creation ("make me a new card for Latin") is always fine —
+    # the user is asking for the card itself, not for work on one they never gave.
+    if re.search(r"\b(create|add|make|new)\b.{0,40}\b(assignment|card)\b", low):
+        return True, ""
+    # Only guard requests that ask for WORK over an assignment document.
+    if not re.search(rf"\b(complete|finish|do|solve|write|work|start|help)\b.{{0,40}}\b({_WORK_NOUNS})\b", low):
+        return True, ""
+    # 1) the user pasted actual material (beyond a short request)
+    words = re.findall(r"[a-z0-9]+", low)
+    if len(t) >= 60 and len(words) >= 15:
+        return True, ""
+    # 2) a real topic behind the ask (e.g. "worksheet on the civil war map")
+    content = [w for w in words if len(w) > 2 and w not in _ASK_BOILERPLATE]
+    if len(content) >= 2:
+        return True, ""
+    # 3) files loaded into the agent
+    try:
+        from .agent_files import agent_files_summary
+        fs = agent_files_summary(user.id) or ""
+        if fs and "(none loaded)" not in fs:
+            return True, ""
+    except Exception:
+        pass
+    # 4) pointing at an existing card that has real content
+    if assignment_id:
+        a = db.query(Assignment).filter_by(id=assignment_id, user_id=user.id).first()
+        if a and a.prompt and len(a.prompt.strip()) >= 60:
+            return True, ""
+    return False, _ASK_CONTENT_MSG
+
+
+# ─── Pure-greeting detection (operator 08-28; BUG: "yo" -> study refusal) ──
+# "yo", "hey how are you", "thanks" — messages with NO content ask. These were
+# gated by the educational-mode school-only rule ("that isn't part of
+# studying") because the LLM treated them as off-topic. Deterministic quick
+# path: pure greetings/thanks get a warm ack — never a refusal, no LLM round.
+
+_GREETING_PHRASES = frozenset({
+    "hi", "hiya", "hey", "heyo", "hi there", "hey there", "hi hi", "hello",
+    "hello there", "howdy", "hola", "yo", "yo yo", "sup", "wassup",
+    "whats up", "what's up", "what is up", "whats good", "what's good",
+    "what is good", "hows it going", "how's it going", "how is it going",
+    "hows everything", "how's everything", "how are you", "how are u",
+    "how r u", "how you doing", "how are you doing", "how are you today",
+    "how are ya", "good morning", "good afternoon", "good evening",
+    "good night", "morning", "afternoon", "evening", "night",
+})
+_THANKS_PHRASES = frozenset({"thanks", "thank you", "thank u", "ty", "thx", "thnx"})
+_GREETING_WORDS = _GREETING_PHRASES | _THANKS_PHRASES | {
+    "you", "u", "it", "going", "doing", "today", "there", "good", "great",
+    "fine", "perfect", "nice", "day", "bro", "dude", "friend", "guys",
+    "yall", "all", "hows", "how's", "how", "are", "what",
+}
+
+
+def _normalize_chat_text(text: str) -> str:
+    t = (text or "").strip().lower()
+    # Emoji/symbols and punctuation -> spaces, collapse whitespace.
+    t = re.sub(r"[\U0001F300-\U0001FAFF☀-➿←-⇿⬀-⯿]+", " ", t)
+    t = re.sub(r"[^\w\s']+", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _pure_greeting_reply(text: str) -> str:
+    """Warm ack for messages that are ONLY a greeting / thanks / small talk.
+    Returns '' when the message carries real content (fall through to the
+    normal pipeline). Never mentions scope, never refuses."""
+    t = _normalize_chat_text(text)
+    if not t or len(t) > 40:
+        return ""
+    if t in _THANKS_PHRASES:
+        return "You're welcome! What's next — assignment, flashcards, or a quiz?"
+    if t in _GREETING_PHRASES:
+        return "Hey! Good to see you. What are you studying or working on today?"
+    words = t.split()
+    if len(words) <= 4 and all(w in _GREETING_WORDS for w in words):
+        # e.g. "hey yo hows it going", "yo sup", "hi how are you today"
+        if any(w in ("hey", "hi", "yo", "hello", "sup", "howdy",
+                     "hows", "how's", "how", "what") for w in words):
+            return "Hey! Good to see you. What are you studying or working on today?"
+    return ""
+
+
+async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
-    The model sees the user's identity + personality + instructions, their
-    permanent memory, the files loaded into the agent, and the exact tool
-    catalogue. It must reply with {"action", "payload", "reply"}. Any failure
-    falls back to the keyword dispatcher so chat never breaks.
+    The model sees the surface's identity + personality + instructions, its
+    memory, the files loaded into it, and the exact tool catalogue. It must
+    reply with {"action", "payload", "reply"}. Any failure falls back to the
+    keyword dispatcher so chat never breaks.
+
+    08-28 (operator): node-scoped. node="my_agent" (default) injects the
+    user's canonical config; an assignment-bubble chat passes node=
+    "assignment_team" + the real assignment context block (name/subject/
+    class/teacher/status/dump excerpt) so the team knows WHAT sheet it is
+    working on. Both are additive — the guards/contract below are untouched.
     """
     from .llm import call_llm
 
-    ai = settings.get("ai", {}) or {}
     agent_name = agent_display_name(user)
-    personality = ai.get("personality") or "Professional"
-    instructions = (ai.get("instructions") or "").strip()
-
-    from .agent_files import agent_files_summary
-    from .agent_memory import memory_summary
-
-    memory_block = memory_summary(user.public_id) or "(empty — nothing remembered yet)"
-    files_block = agent_files_summary(user.id) or "(none loaded)"
+    # personality / instructions / memory / loaded files are assembled ONCE
+    # by agent_prompt.agent_system_prompt below (08-28) — no private copies
+    # that could drift or drop config.
 
     # Deterministic quick-path (operator 08-26): self-contained math/date/time
     # questions MUST be computed for real — never left to model memory or a
@@ -877,7 +1278,20 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
 
+    # Deterministic greeting quick-path (operator 08-28): a PURE greeting /
+    # thanks / small talk must never be gated into a study-scope refusal (the
+    # LLM used to turn "yo" into "that isn't part of studying"). Warm short
+    # ack, educational-mode carve-out is in the prompt block below too.
+    greet_reply = _pure_greeting_reply(text)
+    if greet_reply:
+        return {"action": "plain_answer", "payload": {}, "reply": greet_reply}
+
     actions = dict(_AGENT_ACTIONS)
+    if node == "extensions":
+        # The extension surface owns the REAL browser tab-scraper: the model
+        # declares it so capture requests land on the tool instead of a
+        # refusal ("I can't directly scrape canvas").
+        actions["scrape_assignment"] = SCRAPE_ACTION_SPEC
     if is_admin:
         actions.update({
             "admin_lookup_user": {"query": "public_id or name substring"},
@@ -887,36 +1301,19 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
 
     action_spec = "\n".join(f"- {name}: {json.dumps(spec)}" for name, spec in sorted(actions.items()))
 
-    today_label = datetime.now().strftime("%A, %B %-d, %Y")
-    from .security import educational_guards_on
-    _edu_block = (
-        "EDUCATIONAL MODE (operator 08-26): this is a study workspace. When a user asks you to "
-        "echo, repeat, remember, or roleplay slurs, sexualized insults, harassment, or otherwise "
-        "abusive content — decline simply and neutrally (\"that isn't part of studying — let me "
-        "help with your assignment instead\") and redirect to the study task. Never repeat the "
-        "phrase yourself, even inside quotes or as a \"joke\". The 'remember' action stores real "
-        "personal facts only (dates, preferences, constraints) — never store this kind of phrase. "
-        "You are still free to discuss sensitive academic topics seriously.\n"
-        if educational_guards_on(user) else ""
-    )
-    system_prompt = (
-        _edu_block +
-        f"You are '{agent_name}', the user's single personal agent. You do EVERYTHING — "
-        f"you change their settings, edit assignments, generate materials, humanize text, "
-        f"run scripts, manage your own memory and files, and answer questions directly. "
-        f"Personality: {personality}. User instructions: {instructions or '(none)'}\n\n"
-        f"TODAY'S REAL DATE (computed server-side, NEVER guess another one): "
-        f"Today is {today_label} ({datetime.now().strftime('%Y-%m-%d')}). "
-        f"If the user asks the date/time or whether it's a weekday, answer with THIS date exactly.\n\n"
-        f"PERMANENT MEMORY (always true, respect it):\n{memory_block}\n\n"
-        f"FILES LOADED INTO YOU:\n{files_block}\n\n"
-        f'EDUCATIONAL MODE (operator 08-26): this is a study workspace. When a user asks you to '
-        f'echo, repeat, remember, or roleplay slurs, sexualized insults, harassment, or otherwise '
-        f'abusive content — decline simply and neutrally ("that isn\'t part of studying — let me '
-        f'help with your assignment instead") and redirect to the study task. Never repeat the '
-        f'phrase yourself, even inside quotes or as a "joke". The "remember" action stores real '
-        f'personal facts only (dates, preferences, constraints) — never store this kind of phrase. '
-        f'You are still free to discuss sensitive academic topics seriously.\n\n'
+    # Operator 08-28: canonical identity/memory/files prompt — the ONLY
+    # assembler of the user's custom agent config (personality/identity,
+    # user instructions, permanent memory, FULL content of loaded agent
+    # files). Its gated educational block and today's-date paragraph live
+    # inside it; everything below (action contract, run-shell rule,
+    # never-refuse rule, assignment guard) is appended AFTER the identity
+    # block so identity/memory/files can never be lost or re-ordered out.
+    # Node-scoped: assignment bubbles use the assignment_team surface config
+    # (or none at all) — never My Agent's — plus the real assignment context.
+    system_prompt = agent_system_prompt(user, settings, node=node)
+    if assignment_context:
+        system_prompt += assignment_context
+    system_prompt += (
         f"AVAILABLE ACTIONS (choose exactly one):\n{action_spec}\n\n"
         f'For ANY math/calculation/date/time or "check/prove/compute" question, always use '
         f'"action": "run_shell" — you pick a tiny SAFE python3 one-liner (or the date one-liner) '
@@ -927,22 +1324,72 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         f'YOU PRODUCE IT, completely, right now. No "I can\'t generate...", no "I can provide a brief '
         f'overview", no "what specific aspects would you like", no deferring. If the request is '
         f'under-specified, pick reasonable defaults and deliver the complete finished thing.\n\n'
+        f'ASSIGNMENT GUARD (operator 08-28): "never refuse" never means fabricating an assignment. '
+        f'If the user asks you to complete, do, or help with a worksheet/assignment/paper you were '
+        f'NEVER given — nothing pasted in the message, no attached or loaded file, no existing '
+        f'assignment card with real content — never use "create_assignment" and never claim you '
+        f'started that work. Reply with "plain_answer" asking them to send the actual assignment '
+        f'(paste the text, attach a file, or point at an existing card). Only start assignment work '
+        f'grounded in real material.\n\n'
         f"Reply STRICTLY as a single JSON object, no markdown, no extra text: "
         f'{{"action": "<action name>", "payload": {{...}}, "reply": "<your answer>"}}. '
         f'If the user is just talking or asking a question, use "action": "plain_answer" and put the COMPLETE answer in "reply" (it may be long — essays/guides can run several thousand words).'
     )
+    if node == "extensions":
+        # Tool reality for the extension surface (operator 08-28): the popup
+        # sits next to the user's browser tabs and has a REAL tab-scraper the
+        # agent can request — declare the mechanism so "scrape this canvas
+        # assignment" becomes a tool call, never a refusal. This paragraph is
+        # appended AFTER the identity/edu blocks so the greeting carve-out and
+        # the tool guidance are both visible; it never overrides the edu gate.
+        system_prompt += (
+            'TOOL REALITY (browser extension surface): you run inside the Helpotron extension popup, '
+            "right next to the user's browser tabs, and you have a REAL tab-scraper here: the "
+            "'scrape_assignment' action listed above. When the user asks you to scrape, capture, or "
+            "collect the assignment on their tab (Canvas or any school page), opens a page and says "
+            "'help me with this', or asks you to 'look at' the current page — choose the action "
+            "scrape_assignment, with instruction set to what to collect (any constraint, e.g. "
+            "'only the rubric' or 'focus on the main prompt lines'; an empty string means the whole "
+            "page; include a brief page/course hint when the user names one, e.g. 'the current "
+            "assignment page'). The extension then runs the real browser scrape of the selected tab "
+            "and saves the assignment into the dump for you. NEVER refuse with 'I can't scrape "
+            "canvas' and NEVER tell the user to paste the assignment text instead — you have that "
+            "tool.\n"
+        )
     # Conversation memory (operator 08-26): the LLM previously saw ONLY the
-    # current message — every reply started with zero context, which is why
-    # the agent "forgot the last message". Include recent prior turns.
+    # current message. 08-27 bugfix: the loop walked the history from the
+    # OLDEST end and stopped after 10 turns, and load_chat_history_from_db
+    # seeded the cache with the OLDEST 40 rows — so the model's "conversation
+    # so far" was dominated by PRIOR sessions' task orders (e.g. yesterday's
+    # "write a 500-word essay about bananas") and it re-ran them instead of
+    # answering the new message. Scope the turns to the SAME DAY as the new
+    # message and take the NEWEST ones only (oldest → newest order so the
+    # block ends at the immediately prior turn).
+    history_full = overlord_agent.get_chat_history(target_key, user=user)
+    prior_turns = history_full[:-1]
+    cur_ts = history_full[-1].get("timestamp") if history_full else None
+    try:
+        _cur_day = datetime.fromisoformat(str(cur_ts).replace("Z", "+00:00")).replace(tzinfo=None).date()
+    except (ValueError, TypeError):
+        _cur_day = datetime.now().date()  # undated message: same-day filter off
     conv_parts = []
-    for m in overlord_agent.get_chat_history(target_key, user=user)[:-1]:
+    for m in reversed(prior_turns):
+        ts = m.get("timestamp")
+        try:
+            m_day = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).replace(tzinfo=None).date()
+        except (ValueError, TypeError):
+            m_day = _cur_day  # legacy rows without a usable date: keep in the turn
+        if m_day != _cur_day:
+            continue  # prior day's task payloads never leak into today's reply
         sender = "User" if m.get("sender") == "user" else agent_name
         body = str(m.get("text") or "").strip()
-        if body:
-            conv_parts.append(f"{sender}: {body[:800]}")
+        if not body:
+            continue
+        conv_parts.append(f"{sender}: {body[:800]}")
         if len(conv_parts) >= 10:
             break
-    history_block = ("\n".join(reversed(conv_parts)) or "")
+    conv_parts.reverse()  # chronological — the newest prior turn is last
+    history_block = "\n".join(conv_parts) or ""
     user_prompt = (
         (f"CONVERSATION SO FAR (most recent last):\n{history_block}\n\n" if history_block else "")
         + f"User said: {text[:3000]}"
@@ -977,11 +1424,38 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         }
     if parsed and parsed.get("action") == "plain_answer":
         lower = text.lower()
-        if "submit" in lower or "delete" in lower or "humanize" in lower or "rubric" in lower:
-            return _regex_fallback_intent(text)
+        scrape_ask = node == "extensions" and any(
+            k in lower for k in ("scrape", "canvas", "capture the page", "collect this page"))
+        if "submit" in lower or "delete" in lower or "humanize" in lower or "rubric" in lower or scrape_ask:
+            return _regex_fallback_intent(text, node)
         return {"action": "plain_answer", "payload": {}, "reply": str(parsed.get("reply") or text)}
     # LLM failed or chose an unknown action — fall back to keyword dispatch
-    return _regex_fallback_intent(text)
+    return _regex_fallback_intent(text, node)
+
+
+def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:
+    """Record one agent reply in the in-memory history AND the durable store
+    (operator 08-27 fix: only the user's messages were persisted before, so
+    every agent reply vanished on reload/restart). Also bumps the thread's
+    updated_at so the history list reorders correctly."""
+    msg = overlord_agent.add_chat_message(
+        thread_key, sender="overlord", text=text, user_id=user.id, **kw)
+    try:
+        from .overlord_agent import persist_chat_message
+        persist_chat_message(db, user.id, thread_key, "overlord", text)
+    except Exception:
+        pass
+    try:
+        if thread_key:
+            th = db.query(AgentChatThread).filter(
+                AgentChatThread.id == thread_key, AgentChatThread.user_id == user.id
+            ).first()
+            if th:
+                th.updated_at = datetime.now()
+                db.commit()
+    except Exception:
+        pass
+    return msg
 
 
 @router.post("/agent/chat")
@@ -994,6 +1468,27 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     # Chat threads (operator 08-26): thread_id selects a conversation; none =
     # the legacy single conversation (key 0).
     thread_key = payload.thread_id if payload.thread_id is not None else payload.assignment_id
+    # Surface node + assignment grounding (operator 08-28): an assignment
+    # bubble (assignment_id > 0, no thread) IS the per-assignment subagent
+    # team surface; everything else is the My Agent surface. The bubble gets
+    # the REAL assignment context block injected into the system prompt —
+    # name/subject/class/teacher/status/provenance + a short excerpt of the
+    # extracted sheet text — so "question 3" has the actual material behind it.
+    bubble_assignment_id = (payload.assignment_id
+                            if payload.thread_id is None
+                            and payload.assignment_id not in (None, 0)
+                            else None)
+    agent_node = "assignment_team" if bubble_assignment_id else "my_agent"
+    assignment_ctx = ""
+    if bubble_assignment_id:
+        try:
+            _assign_row = db.query(Assignment).filter(
+                Assignment.id == bubble_assignment_id, Assignment.user_id == user.id
+            ).first()
+            if _assign_row is not None:
+                assignment_ctx = _agent_assignment_context(db, user, _assign_row)
+        except Exception:
+            assignment_ctx = ""  # context injection never breaks the chat
     # Restore conversation context from the durable store (operator 08-26).
     try:
         from .overlord_agent import load_chat_history_from_db
@@ -1006,13 +1501,13 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     if not is_admin and user.plan != "elite":
         token_bal = float((user.settings or {}).get("token_balance", 0) or 0)
         if token_bal <= 0:
-            agent_reply = overlord_agent.add_chat_message(
-                thread_key,
-                sender="overlord",
+            agent_reply = _chat_reply(
+                db, user, thread_key,
                 text="⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet. "
                      "Ask them to grant you tokens (or upgrade your account) to use My Agent.",
-                suggested_actions=[], user_id=user.id)
-            return {"status": "insufficient_tokens", "message": agent_reply, "reply": agent_reply}
+                suggested_actions=[])
+            return {"status": "insufficient_tokens", "message": agent_reply, "reply": agent_reply,
+                    "token_balance": _tk_balance(user)}
 
     # Record user message
     user_msg = overlord_agent.add_chat_message(thread_key, sender="user", text=payload.text, user_id=user.id)
@@ -1022,6 +1517,8 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     except Exception:
         pass
     # Auto-title a new thread from its first user message (operator 08-26).
+    # The current conversation (key 0) titles the same way, unless the user
+    # already renamed it (operator 08-27: it is a regular chat, not "Main chat").
     try:
         if payload.thread_id:
             th = db.query(AgentChatThread).filter(
@@ -1031,6 +1528,12 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
                 th.updated_at = datetime.now()
                 if th.title == "New chat":
                     th.title = payload.text.strip().replace("\n", " ")[:60] or "New chat"
+                db.commit()
+        elif not thread_key:
+            settings = dict(user.settings or {})
+            if "current_chat_title" not in settings:
+                settings["current_chat_title"] = payload.text.strip().replace("\n", " ")[:60] or "current chat"
+                user.settings = settings
                 db.commit()
     except Exception:
         pass
@@ -1043,8 +1546,20 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     if _claude_bridge_allowed(is_admin) and not request.headers.get("X-Helpotron-MCP"):
         # Run in a thread: subprocess.run blocks the event loop, and the
         # spawned claude's MCP server calls back into THIS server — a blocking
-        # call would deadlock the event loop until the 120s timeout.
-        reply = await asyncio.to_thread(_claude_bridge_call, user.public_id, payload.text)
+        # call would deadlock the event loop until the 120s timeout. The
+        # identity block is materialized HERE (async context) so the executor
+        # thread never touches the request-scoped ORM session.
+        public_id = user.public_id
+        try:
+            # Canonical prompt (gated edu block + identity + memory + files)
+            # — same config the local pipeline injects. The bridge is the My
+            # Agent surface, so node stays "my_agent" (explicit — operator
+            # 08-28); the assignment context rides separately so an
+            # assignment-bubble message still reaches Claude Code grounded.
+            persona_block = agent_system_prompt(user, node="my_agent")
+        except Exception:
+            persona_block = ""  # never let identity IO break the bridge
+        reply = await asyncio.to_thread(_claude_bridge_call, public_id, persona_block, payload.text, assignment_ctx)
         if reply:
             agent_reply = overlord_agent.add_chat_message(
                 thread_key,
@@ -1061,10 +1576,14 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
                 "message": agent_reply,
                 "execution": {"action": "claude_bridge", "status": "completed", "bridge": True},
                 "reply": reply,
+                "token_balance": _tk_balance(user),
             }
 
     # 1. LLM decides the intent (strict JSON contract, regex fallback)
-    intent = await _resolve_agent_intent(user, settings, payload.text, is_admin, db=db, target_key=thread_key)
+    intent = await _resolve_agent_intent(
+        user, settings, payload.text, is_admin, db=db, target_key=thread_key,
+        node=agent_node, assignment_context=assignment_ctx,
+    )
 
     # 2. Plain conversational answer — no action needed (still costs tokens: every
     #    LLM reply is paid from the usage budget — operator 08-26).
@@ -1073,16 +1592,16 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             _charge_tokens(user, db, 1.0)
         reply_text = intent["reply"]
         if _is_degenerate_reply(reply_text):
-            reply_text = await _conversational_fallback(user, payload.text, db=db)
+            reply_text = await _conversational_fallback(
+                user, payload.text, db=db, node=agent_node, assignment_context=assignment_ctx,
+            )
         if _is_degenerate_reply(reply_text):
             reply_text = ("I didn't catch that — mind rephrasing? "
                           "(Reply generation came back empty.)")
-        agent_reply = overlord_agent.add_chat_message(
-            thread_key,
-            sender="overlord",
-            text=reply_text, user_id=user.id)
+        agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
-        return {"status": "success", "message": agent_reply, "execution": None, "reply": reply_text}
+        return {"status": "success", "message": agent_reply, "execution": None, "reply": reply_text,
+                "token_balance": _tk_balance(user)}
 
     # 2.5 CREDIT GATE (operator 08-26): actions that do work must be affordable
     # BEFORE execution. Elite accounts are exempt (same rule charge_with_rollback
@@ -1091,7 +1610,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     privileged = bool(getattr(user, "plan", "") == "elite" or is_admin)
     tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
     if cost > 0 and not privileged and tok_bal < cost:
-        return _insufficient_tokens_response(thread_key, user, cost)
+        return _insufficient_tokens_response(thread_key, user, cost, db)
 
     # 3. Permission gate (manual mode asks; auto approves routine; yolo never asks)
     is_approved, reason = permission_engine.evaluate_action_permission(
@@ -1111,24 +1630,40 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             payload={"text": payload.text, **intent["payload"]},
             assignment_id=thread_key,
         )
-        agent_reply = overlord_agent.add_chat_message(
-            thread_key,
-            sender="overlord",
+        agent_reply = _chat_reply(
+            db, user, thread_key,
             text=f"⚠️ Action '{intent['action'].replace('_', ' ')}' requires your permission before execution.",
-            suggested_actions=["Approve", "Write Something Else", "Always Approve This Action"], user_id=user.id)
+            suggested_actions=["Approve", "Write Something Else", "Always Approve This Action"])
         return {
             "status": "permission_required",
             "permission_request": perm,
             "message": agent_reply,
+            "token_balance": _tk_balance(user),
         }
 
     # 4. Execute the chosen action
+    # Operator 08-27: thread_key is the assignment id for assignment-bubble
+    # chats but a conversation-thread id for main chat. Only pass a real
+    # assignment context so flashcards/materials attach to the assignment
+    # they were asked in — never to a thread id (which mis-links decks).
+    # (bubble_assignment_id was resolved at the top of this handler, operator
+    # 08-28 — same rule, shared by the node/context resolution.)
+    # 3.9 ASSIGNMENT GUARD (operator 08-28): never fabricate an assignment card
+    # the user never gave. Ask for the real material instead of a fake "✅".
+    if intent["action"] == "create_assignment":
+        _grounded, _ask = _assignment_request_grounded(payload.text, user, db, bubble_assignment_id)
+        if not _grounded:
+            reply_text = f"⚠️ {_ask}"
+            agent_reply = _chat_reply(db, user, thread_key, text=reply_text, suggested_actions=[])
+            return {"status": "failed", "message": agent_reply, "reply": reply_text,
+                    "token_balance": _tk_balance(user)}
     exec_res = await overlord_agent.execute_task_action(
         db,
         user=user,
         action_type=intent["action"],
         payload=intent["payload"],
-        assignment_id=thread_key,
+        assignment_id=bubble_assignment_id,
+        node=agent_node,
     )
     if not is_admin and user.plan != "elite":
         _charge_tokens(user, db, _action_cost(intent["action"]))
@@ -1141,7 +1676,9 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         if _is_degenerate_reply(result_msg):
             # Execution completed silently (misclassified intent / empty result):
             # answer the user's message conversationally instead of a bare ✅.
-            result_msg = await _conversational_fallback(user, payload.text)
+            result_msg = await _conversational_fallback(
+                user, payload.text, node=agent_node, assignment_context=assignment_ctx,
+            )
         if intent["action"] == "humanize_text" and exec_res.get("result_text"):
             reply_text = exec_res["result_text"]
             if _is_degenerate_reply(reply_text):
@@ -1152,24 +1689,129 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             reply_text = _LLM_EMPTY_HONEST
         else:
             reply_text = f"✅ {result_msg}"
-    agent_reply = overlord_agent.add_chat_message(
-        thread_key,
-        sender="overlord",
+    agent_reply = _chat_reply(
+        db, user, thread_key,
         text=reply_text,
         suggested_actions=[],
         subagent_logs=[],
-        metadata={"intent_action": intent["action"]}, user_id=user.id)
+        metadata={"intent_action": intent["action"]})
 
     # 5. Auto-compaction: keep the thread lean (>40 msgs or >12k chars → summarize)
     await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
 
-    return {"status": "success", "message": agent_reply, "execution": exec_res, "reply": reply_text}
+    return {"status": "success", "message": agent_reply, "execution": exec_res, "reply": reply_text,
+            "token_balance": _tk_balance(user)}
+
+
+# ─── My Agent composer attachment (operator 08-28): the paperclip now sends
+# the REAL file. The upload is OCR/text-extracted with the same helpers the
+# assignment dump uses, then forwarded through the EXACT chat pipeline above
+# (intent, token gate, permission system, persistence — all identical). ──────
+
+_ATTACH_MAX_BYTES = 30 * 1024 * 1024
+
+_ATTACH_FALLBACK_MARKERS = (
+    "OCR Image scan: ", "Image scanned: ", "Image document: ",
+    "File content: ", "PDF extract: ", "Error reading text file: ",
+)
+
+
+def _sniff_image_ext(content: bytes) -> Optional[str]:
+    """Content sniff (operator 08-28): a renamed .txt that holds a PNG is still
+    an image. Only png/jpg/gif/webp get the vision-OCR route — everything else
+    falls to the document text extraction."""
+    if content[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if content[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if content[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def _attach_text_usable(text: str) -> bool:
+    """True when extraction produced real content, not an error/fallback
+    placeholder (same markers the dump engine rejects; %PDF content is binary
+    junk the 'printable chars' fallback can fabricate)."""
+    t = (text or "").strip()
+    return len(t) >= 5 and not t.startswith("%PDF") and not any(m in t for m in _ATTACH_FALLBACK_MARKERS)
+
+
+@router.post("/agent/chat/attach")
+async def attach_to_agent_chat(
+    request: Request,
+    file: UploadFile = File(...),
+    text: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """My Agent composer attachment: extract the upload (vision OCR for images,
+    text extraction for documents), then call the same handler as
+    POST /api/agent/chat with the content — the agent sees the REAL file."""
+    user = _get_current_user(request, db)
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(content) > _ATTACH_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large (30 MB max).")
+
+    filename = os.path.basename(file.filename or "attachment")
+    ext = os.path.splitext(filename)[1].lower()
+    sniffed = _sniff_image_ext(content)
+    is_image = sniffed is not None or ext in (".png", ".jpg", ".jpeg", ".webp", ".gif")
+
+    # Save to a temp file first — the dump helpers and vision OCR both need a
+    # real path (and the OCR mime follows the extension). Always cleaned up.
+    with tempfile.NamedTemporaryFile(
+        prefix="helpotron_attach_", suffix=f".{sniffed or ext.lstrip('.') or 'bin'}", delete=False
+    ) as tmpf:
+        tmp_path = tmpf.name
+        tmpf.write(content)
+    try:
+        from .assignment_dump import AssignmentDumpManager
+        if is_image:
+            extracted = await AssignmentDumpManager._ocr_image_gemini(tmp_path, user.public_id)
+        else:
+            category = AssignmentDumpManager.detect_file_category(filename)
+            extracted, _engine = await AssignmentDumpManager.extract_text_from_file(
+                file_path=tmp_path, file_category=category, user_id=user.public_id
+            )
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+
+    if _attach_text_usable(extracted):
+        extraction_block = f"[Attachment: {filename}]\n{extracted[:8000]}"
+    else:
+        # OCR/fallback text ("OCR Image scan: ...") or genuinely empty content —
+        # still hand the agent the file so it can answer knowledgeably.
+        extraction_block = f"[Attachment: {filename}]\n(the attachment produced no readable text)"
+
+    user_text = text.strip()
+    combined = f"{user_text}\n\n{extraction_block}" if user_text else extraction_block
+
+    forwarded = await send_chat_message(
+        ChatMessageRequest(assignment_id=0, text=combined[:12000], session_mode_override="auto"),
+        request,
+        db,
+    )
+    if not isinstance(forwarded, dict):
+        forwarded = {"reply": str(forwarded)}
+    # Most branches reply under "reply"; failure branches put it under "message"
+    # — normalize to the same shape the chat UI reads.
+    if not forwarded.get("reply"):
+        forwarded = dict(forwarded)
+        forwarded["reply"] = forwarded.get("message") or (
+            "I got your file but couldn't process it right now — try again.")
+    return forwarded
 
 
 @router.post("/agent/task")
 async def dispatch_task(payload: TaskRequest, request: Request, db: Session = Depends(get_db)):
     """Dispatches a direct task to the sub-agent pipeline with mode-based permission checks."""
     user = _get_current_user(request, db)
+    thread_key = payload.assignment_id  # 08-28 operator: was undefined -> NameError (crash)
 
     is_approved, reason = permission_engine.evaluate_action_permission(
         user_settings=user.settings or {},
