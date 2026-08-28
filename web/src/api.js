@@ -32,6 +32,27 @@ export function setUserId(id) {
   }
 }
 
+/* Session-presence check for the app's auth gate (08-28).
+ * The server's helpotron_session cookie is HttpOnly, so JS cannot read it.
+ * The readable side-effects of a successful login are the csrf_token cookie
+ * (set on login, deleted on logout — see server/csrf.py) and the local
+ * auth artifacts (public_id / token). When NONE of them exist there is
+ * provably no user session in this browser, so the /api/me probe is skipped
+ * entirely and a signed-out visitor causes zero authenticated requests
+ * (clean console — no expected-401 flood). */
+export function hasSessionIndicator() {
+  try {
+    if (localStorage.getItem('token')) return true;
+  } catch (e) { /* storage unavailable — fall through to cookie check */ }
+  if (getUserId()) return true;
+  try {
+    const parts = decodeURIComponent(document.cookie).split(';');
+    return parts.some((part) => part.trim().indexOf('csrf_token=') === 0);
+  } catch (e) {
+    return false;
+  }
+}
+
 function getBaseUrl() {
   return getServer();
 }
@@ -237,11 +258,34 @@ export const api = {
   addAgentPermissionRule: (rule) => request('/api/agent/permissions/rules', { method: 'POST', body: JSON.stringify({ rule }) }),
   deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
   agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  // Composer paperclip (operator 08-28): the REAL file goes to the agent —
+  // FormData {file, text} → server OCR/extracts and forwards to the chat.
+  agentChatAttach: async (formData) => {
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 350));
+      return { status: 'success', reply: 'I received your file (demo mode).' };
+    }
+    const headers = { 'X-Public-ID': getUserId() };
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${getServer()}/api/agent/chat/attach`, {
+      method: 'POST', credentials: 'include', headers, body: formData,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Attachment send failed');
+    return res.json();
+  },
   agentThreads: () => request('/api/agent/threads', { method: 'GET' }),
   agentThreadCreate: () => request('/api/agent/threads', { method: 'POST', body: JSON.stringify({}) }),
   agentChatHistory: (key) => request(`/api/agent/chat/${key}`, { method: 'GET' }),
   updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
   getSubagentTeam: (id) => request(`/api/assignments/${id}/subagent-team`, { method: 'GET' }),
+
+  // Turn-in (08-27): mark an assignment as turned in; it moves into history.
+  listAssignments: (history) => request(`/api/assignments${history != null ? `?history=${history}` : ''}`, { method: 'GET' }),
+  turnInAssignment: (id, turnedIn = true) => request(`/api/assignments/${id}/turn-in`, { method: 'PATCH', body: JSON.stringify({ turned_in: turnedIn }) }),
+  getTurnedInAssignments: () => request('/api/assignments/turned-in', { method: 'GET' }),
 
   // ── My Agent: permanent memory, files, compaction (Experience Rewrite, 08-22)
   getAgentMemory: () => request('/api/agent/memory', { method: 'GET' }),
@@ -331,6 +375,12 @@ export const api = {
 
   // Message Admin Direct Channel
   changePassword: (currentPassword, newPassword) => request('/api/user/change-password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
+
+  // Forgot-password / recovery flow (operator 08-28)
+  recoveryOptions: (publicId) => request(`/api/recovery/options?public_id=${encodeURIComponent(publicId)}`, { method: 'GET' }),
+  recoveryRequest: (publicId, method) => request('/api/recovery/request', { method: 'POST', body: JSON.stringify({ public_id: publicId, method }) }),
+  recoveryVerify: (payload) => request('/api/recovery/verify', { method: 'POST', body: JSON.stringify(payload) }),
+  recoverySetContact: (data) => request('/api/recovery/contact', { method: 'POST', body: JSON.stringify(data) }),
   sendMessageToAdmin: (data, file = null) => {
     const fd = new FormData();
     fd.append('subject', data.subject || 'Direct Message to Admin');
@@ -360,12 +410,21 @@ export const api = {
   adminGrantTokens: (userId, amount) => request('/api/admin/tokens/grant', { method: 'POST', body: JSON.stringify({ public_id: userId, amount }) }),
   adminSetPlan: (userId, plan) => request(`/api/admin/user/${userId}/plan?plan=${plan}`, { method: 'POST' }),
   adminResetPassword: (userId, newPassword) => request(`/api/admin/user/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }),
+  // Control Center: change a user's password without their current one (08-28);
+  // optional recovery_code ties the change to an open recovery request.
+  adminChangePassword: (userId, newPassword, recoveryCode = null) => request(`/api/admin/user/${userId}/change-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword, recovery_code: recoveryCode || null }) }),
   adminBanUser: (userId) => request(`/api/admin/user/${userId}/ban`, { method: 'POST' }),
   adminUnbanUser: (userId) => request(`/api/admin/user/${userId}/unban`, { method: 'POST' }),
+  adminTempBanUser: (userId, hours) => request(`/api/admin/user/${userId}/tempban?hours=${encodeURIComponent(hours)}`, { method: 'POST' }),
+  adminKickUser: (userId) => request(`/api/admin/user/${userId}/kick`, { method: 'POST' }),
+  adminDeleteUser: (userId) => request(`/api/admin/user/${userId}`, { method: 'DELETE' }),
+  adminActAsUser: (userId) => request(`/api/admin/user/${userId}/act`, { method: 'POST' }),
   adminSearch: (q) => request(`/api/admin/search?q=${encodeURIComponent(q)}`, { method: 'GET' }),
   adminGenerateToken: (durationDays, maxUses) => request('/api/admin/tokens/generate', { method: 'POST', body: JSON.stringify({ duration_days: durationDays, max_uses: maxUses }) }),
   adminDeactivateToken: (token) => request(`/api/admin/tokens/deactivate?token=${token}`, { method: 'POST' }),
   adminListTokens: () => request('/api/admin/tokens', { method: 'GET' }),
+  // Control Center · System Map: live subsystem node health + p95 latency.
+  adminSystemMapNodes: () => request('/api/admin/system-map/nodes', { method: 'GET' }),
 
   // Cost Monitoring & Per-User Token Multipliers
   adminCostsSummary: () => request('/api/admin/costs/summary', { method: 'GET' }),

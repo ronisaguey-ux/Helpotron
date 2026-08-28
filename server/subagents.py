@@ -47,9 +47,14 @@ class AgentWorker:
 
 
 class SubAgentCoordinator:
-    async def decompose_rubric(self, prompt: str, rubric: str) -> List[Dict[str, Any]]:
-        system_prompt = (
-            "You are an expert academic assignment decomposer. Break the provided prompt and rubric "
+    async def decompose_rubric(self, prompt: str, rubric: str, persona_ctx: str = "") -> List[Dict[str, Any]]:
+        # 08-28: persona_ctx (the user's canonical agent identity/memory/files
+        # block) is prepended when this decomposition runs INSIDE the agent's
+        # chat path, so the sub-task output reflects the user's agent config.
+        head = persona_ctx.strip() + "\n\n" if persona_ctx else ""
+        system_prompt = head + (
+            "You are an expert academic assignment decomposer, working as the above user's agent. "
+            "Break the provided prompt and rubric "
             "into discrete, non-overlapping sub-tasks for execution. Output a JSON list of tasks."
         )
         user_msg = f"Assignment Prompt:\n{prompt}\n\nRubric:\n{rubric}"

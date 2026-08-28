@@ -259,8 +259,13 @@ class WinstonAIDetector(Detector):
 
 
 # Default registry
+# 08-28 BUG-4 fix: DummyDetector was registered BY DEFAULT and returned a
+# random score (uniform(5,25)) — averaged into every real score_text result,
+# so detector_risk was ~always "safe" regardless of the actual text and the
+# UI's AI-risk meter was fiction. The dummy class is kept for tests, but the
+# default registry is REAL detectors only: perplexity + burstiness heuristics
+# (always run, deterministic, free), plus the gated API detectors below.
 registry = DetectorRegistry()
-registry.register(DummyDetector())
 registry.register(PerplexityCadenceDetector())
 registry.register(StatisticalBurstinessDetector())
 
@@ -348,15 +353,44 @@ def get_text_hash(text: str) -> str:
 
 
 async def check_ai_detection_cached(text: str) -> float:
+    """Real AI-detection risk (0.0-1.0) for ``text``, cached 24h by exact hash.
+
+    08-28 BUG-4 fix: this used to return a hardcoded ``score = 0.05``
+    ("Simulate / call external detector") no matter what the text was — the
+    dashboard/cards read `progress.detector_risk` (multiplied by 100) and this
+    stub meant the value was always a fiction, and worse, ALWAYS "humanized".
+    It now runs the REAL registry via :func:`score_text` — the exact engine
+    draft.py / humanizer.py / gdocs_exporter.py already use: perplexity +
+    burstiness heuristics always (free, deterministic), Pangram/Sapling/
+    Originality/Copyleaks/Winston when their keys are configured. Result is
+    still 0-1 so every existing reader (progress.detector_risk, dashboard
+    ai_risk, settings detector_score) works unchanged.
+
+    Args:
+        text: text to score; empty/short text returns 0.0 (nothing to flag).
+
+    Returns:
+        float: average detector score as a 0.0-1.0 fraction.
+    """
+    text = (text or "").strip()
+    if not text or len(text) < 20:
+        return 0.0
     text_hash = get_text_hash(text)
     now = time.time()
     if text_hash in DETECTOR_CACHE:
         score, ts = DETECTOR_CACHE[text_hash]
         if now - ts < CACHE_TTL_SECONDS:
-            logger.info(f"Detector cache hit for hash {text_hash[:8]}: score {score}")
+            logger.info("Detector cache hit for hash %s: score %s", text_hash[:8], score)
             return score
 
-    # Simulate / call external detector
-    score = 0.05  # Standard humanized score
+    try:
+        avg_score, _results, _passed = await score_text(text, threshold=80.0)
+        score = round(max(0.0, min(1.0, avg_score / 100.0)), 4)
+    except Exception as e:  # noqa: BLE001 — detection is never fatal
+        logger.warning("AI detection failed (%s) — returning neutral 0.0", e)
+        score = 0.0
     DETECTOR_CACHE[text_hash] = (score, now)
+    if len(DETECTOR_CACHE) > 2000:
+        for k in list(DETECTOR_CACHE.keys())[:1000]:
+            DETECTOR_CACHE.pop(k, None)
     return score

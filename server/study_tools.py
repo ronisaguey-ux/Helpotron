@@ -53,23 +53,33 @@ def _reading_level_clause(level: str | None) -> str:
     ) if level else ""
 
 
-def _transcript_block(transcript: str, limit: int = 40000) -> str:
+def _transcript_block(transcript: str, limit: int = 200000) -> str:
+    # 08-28 BUG-1: was 40000 — a 2-hour lecture transcript (~60k chars) was
+    # silently cut to 40k before it ever reached the model, so flashcards and
+    # study guides missed the second half of the class. The slice stays (LLM
+    # prompts must be bounded) but the limit is now 200k and the truncation is
+    # always MARKED, never silent.
     transcript = (transcript or "").strip()
     if not transcript:
         raise ValueError("transcript is empty")
     if len(transcript) > limit:
-        transcript = transcript[:limit] + "\n[truncated]"
+        transcript = transcript[:limit] + "\n[truncated at 200,000 chars — the full transcript is in the session]"
     return transcript
 
 
 async def _invoke_llm(system: str, user: str, effort_score: int = 500) -> str:
+    # call_llm's contract is (user_prompt, system_prompt). Pass the *user*
+    # content as user_prompt and the system persona as system_prompt — the
+    # previous positional order swapped them (flashcard prompts+transcript
+    # landed in the system role, so models answered "You are Helpotron..."
+    # instead of the JSON deck). Fallbacks stay for legacy fakes/tests.
     try:
-        return await llm.call_llm(system, user, effort_score=effort_score)
+        return await llm.call_llm(user_prompt=user, system_prompt=system, effort_score=effort_score)
     except TypeError:
         try:
-            return await llm.call_llm(system, user)
+            return await llm.call_llm(user_prompt=user, system_prompt=system)
         except TypeError:
-            return await llm.call_llm(user, system_prompt=system)
+            return await llm.call_llm(system, user)
 
 
 

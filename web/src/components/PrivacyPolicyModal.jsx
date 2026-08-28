@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 
 const SUBPROCESSORS = [
   { name: 'OpenRouter, Inc.', purpose: 'AI model orchestration, dynamic LLM token generation and inference dispatching', country: 'United States', link: 'https://openrouter.ai/privacy' },
@@ -13,6 +14,27 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
   const [tab, setTab] = useState('terms');
   const [hasScrolledTerms, setHasScrolledTerms] = useState(false);
   const [acceptedCheckbox, setAcceptedCheckbox] = useState(false);
+  const [consentFromSignup, setConsentFromSignup] = useState(false);
+
+  /* Single-consent flow (legal-gate UX fix, 08-28): the signup modal records
+   * `helpotron_signup_consent` when the user agreed to the Terms/FERPA/GDPR
+   * conditions there (Step 1). When this gate (Step 2) opens, that consent is
+   * carried over — the checkbox arrives pre-checked so accepting is ONE click.
+   * The gate itself still requires an explicit Accept click before entry;
+   * nothing is accepted silently, and the compliance gate stays mandatory. */
+  useEffect(() => {
+    if (!isOpen) return;
+    let carried = false;
+    try {
+      carried = localStorage.getItem('helpotron_signup_consent') === '1';
+    } catch (e) { /* storage unavailable — do not pre-check */ }
+    if (carried) {
+      try { localStorage.removeItem('helpotron_signup_consent'); } catch (e) { /* keep going */ }
+      setConsentFromSignup(true);
+      setAcceptedCheckbox(true);
+    }
+    // No else: never re-check the box the user un-cleared while the gate was open.
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -30,12 +52,19 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-2">
-              📜 Helpotron Legal Agreement &amp; Privacy Policy
+              📜 Helpotron Legal Agreement & Privacy Policy
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Governing Academic Terms of Service, FERPA Compliance, GDPR Article 17, and AI Data Processing.
+            <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+              {requireMandatoryAgreement && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30 whitespace-nowrap">
+                  Step 2 of 2 · Confirm consent
+                </span>
+              )}
+              <span>
+                Governing Academic Terms of Service, FERPA Compliance, GDPR Article 17, and AI Data Processing.
+              </span>
             </p>
           </div>
           {!requireMandatoryAgreement && onClose && (
@@ -82,27 +111,27 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
           {tab === 'terms' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
-                1. Acceptance of Terms &amp; Academic Integrity Standard
+                1. Acceptance of Terms & Academic Integrity Standard
               </h3>
               <p>
-                By creating an account, accessing, or utilizing the Helpotron platform, Chrome Extension, API endpoints, or autonomous study agents (collectively, the &quot;Services&quot;), you enter into a legally binding agreement with Helpotron Automator Inc. (&quot;Helpotron&quot;, &quot;we&quot;, &quot;our&quot;, or &quot;us&quot;).
+                By creating an account, accessing, or utilizing the Helpotron platform, Chrome Extension, API endpoints, or autonomous study agents (collectively, the "Services"), you enter into a legally binding agreement with Helpotron Automator Inc. ("Helpotron", "we", "our", or "us").
               </p>
-              <h4 className="font-semibold text-white">1.1 Academic Honor Code &amp; Ethical Assistance</h4>
+              <h4 className="font-semibold text-white">1.1 Academic Honor Code & Ethical Assistance</h4>
               <p>
                 Helpotron is designed strictly as an automated supplementary academic operating system, study accelerator, and research assistant. You expressly acknowledge and warrant that:
               </p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>You will use the platform in strict accordance with your academic institution&apos;s student code of conduct, honor code, and course-specific syllabi regarding artificial intelligence tooling.</li>
+                <li>You will use the platform in strict accordance with your academic institution's student code of conduct, honor code, and course-specific syllabi regarding artificial intelligence tooling.</li>
                 <li>You are solely responsible for verifying the factual accuracy, citations, calculations, and originality of all generated study guides, practice tests, and mathematical solutions.</li>
                 <li>You shall not misrepresent autonomous agent synthesis as unassisted independent human work in violation of proctored examinations or honor examinations.</li>
               </ul>
-              <h4 className="font-semibold text-white">1.2 Account Ownership &amp; Authentication Safeguards</h4>
+              <h4 className="font-semibold text-white">1.2 Account Ownership & Authentication Safeguards</h4>
               <p>
                 Each student account is strictly personal and non-transferable. You agree to safeguard your authentication credentials, session cookies, and 2FA tokens. Any unauthorized activity conducted through your authenticated session is your legal responsibility. Helpotron reserves the right to immediately terminate or suspend any account engaged in credential sharing, automated scraping, or security evasion attempts.
               </p>
-              <h4 className="font-semibold text-white">1.3 Limitation of Liability &amp; Warranty Disclaimer</h4>
+              <h4 className="font-semibold text-white">1.3 Limitation of Liability & Warranty Disclaimer</h4>
               <p>
-                THE SERVICES ARE PROVIDED ON AN &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. HELPOTRON DOES NOT WARRANT THAT STUDY MATERIALS OR GENERATED CALCULATIONS WILL BE ERROR-FREE OR THAT THE PLATFORM WILL MEET SPECIFIC GRADE OUTCOMES. IN NO EVENT SHALL HELPOTRON BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES.
+                THE SERVICES ARE PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. HELPOTRON DOES NOT WARRANT THAT STUDY MATERIALS OR GENERATED CALCULATIONS WILL BE ERROR-FREE OR THAT THE PLATFORM WILL MEET SPECIFIC GRADE OUTCOMES. IN NO EVENT SHALL HELPOTRON BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES.
               </p>
             </div>
           )}
@@ -110,12 +139,12 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
           {tab === 'ferpa' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
-                2. FERPA &amp; Student Educational Record Protection
+                2. FERPA & Student Educational Record Protection
               </h3>
               <p>
                 Helpotron adheres to the statutory guidelines set forth by the Family Educational Rights and Privacy Act (FERPA) (34 CFR Part 99) and state educational privacy standards.
               </p>
-              <h4 className="font-semibold text-white">2.1 Client-Side De-Identification &amp; PII Scrubbing</h4>
+              <h4 className="font-semibold text-white">2.1 Client-Side De-Identification & PII Scrubbing</h4>
               <p>
                 When you connect your Canvas LMS or upload coursework assignments, our automated intake filters execute deterministic redaction heuristics to strip Personally Identifiable Information (PII), including:
               </p>
@@ -124,7 +153,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 <li>Full student names in extracted assignment rubrics, replacing them with randomized cryptographic pseudonym tags.</li>
                 <li>Institutional directory emails and personal phone records.</li>
               </ul>
-              <h4 className="font-semibold text-white">2.2 Zero Data Sale &amp; Non-Commercial Educational Mandate</h4>
+              <h4 className="font-semibold text-white">2.2 Zero Data Sale & Non-Commercial Educational Mandate</h4>
               <p>
                 We do not sell, rent, monetize, or license student coursework, uploaded syllabi, lecture audio recordings, or grade records to any third-party data brokers or marketing networks. Coursework is processed solely to fulfill your active study requests and maintain your private workspace history.
               </p>
@@ -134,7 +163,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
           {tab === 'gdpr' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
-                3. GDPR (EU 2016/679) &amp; Statutory Privacy Rights
+                3. GDPR (EU 2016/679) & Statutory Privacy Rights
               </h3>
               <p>
                 For individuals residing within the European Economic Area (EEA), United Kingdom, or California (CCPA/CPRA), you are endowed with full statutory control over your personal data under Chapter III of the GDPR:
@@ -142,7 +171,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               <ul className="list-disc pl-5 space-y-1.5">
                 <li><strong>Article 15 (Right of Access):</strong> You may inspect and request an immutable structured copy of all personal profile data, study materials, and billing records.</li>
                 <li><strong>Article 16 (Right to Rectification):</strong> You may correct inaccurate profile data or update your academic preferences in Settings at any time.</li>
-                <li><strong>Article 17 (Right to Erasure / &quot;Right to be Forgotten&quot;):</strong> You may execute self-service account deletion via Settings &rarr; Account &rarr; Delete Account. This immediately cascades and permanently purges your user record, assignments, transcripts, payment records, and study materials from active databases.</li>
+                <li><strong>Article 17 (Right to Erasure / "Right to be Forgotten"):</strong> You may execute self-service account deletion via Settings → Account → Delete Account. This immediately cascades and permanently purges your user record, assignments, transcripts, payment records, and study materials from active databases.</li>
                 <li><strong>Article 20 (Right to Data Portability):</strong> You may export all flashcard decks and assignment solutions in standard JSON, Anki (.apkg), or Markdown formats.</li>
                 <li><strong>30-Day Backup Pruning:</strong> Encrypted automated database backups are strictly subject to a 30-day rolling expiration cycle, after which purged data is irrecoverably overwritten.</li>
               </ul>
@@ -152,7 +181,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
           {tab === 'subprocessors' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
-                4. Third-Party AI Subprocessors &amp; Zero Training Mandate
+                4. Third-Party AI Subprocessors & Zero Training Mandate
               </h3>
               <p>
                 To provide high-performance reasoning, mathematical verification, and lecture transcription, Helpotron interfaces with specialized, enterprise-grade AI cloud infrastructure:
@@ -193,14 +222,14 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
           {tab === 'billing' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
-                5. Credits, Subscriptions &amp; Billing Policy
+                5. Credits, Subscriptions & Billing Policy
               </h3>
               <p>
                 Helpotron operates on a transparent token credit economy and tiered monthly subscription model processed through Stripe.
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li><strong>Credit Consumption:</strong> Automated tasks (e.g. assignment solving, multi-agent study teams, audio transcription) atomically deduct credits based on exact computational effort tiers.</li>
-                <li><strong>Idempotency &amp; Double-Spend Protection:</strong> All credit debits and payment webhooks are enforced with unique cryptographic idempotency keys to ensure you are never billed twice for interrupted requests.</li>
+                <li><strong>Idempotency & Double-Spend Protection:</strong> All credit debits and payment webhooks are enforced with unique cryptographic idempotency keys to ensure you are never billed twice for interrupted requests.</li>
                 <li><strong>Subscription Renewals:</strong> Pro and Elite subscription plans recur monthly until cancelled via the user billing portal. You retain access to your plan benefits through the conclusion of the active billing period.</li>
                 <li><strong>Refund Policy:</strong> Due to immediate upstream API computing costs incurred during AI model generation, consumed credits are generally non-refundable except where required by applicable consumer protection laws.</li>
               </ul>
@@ -219,6 +248,12 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
             />
             <span className="text-xs text-slate-300">
               I have read, understood, and solemnly agree to the <strong>Helpotron Terms of Service</strong>, <strong>Academic Honor Code</strong>, <strong>FERPA Student Privacy Standards</strong>, and <strong>GDPR Data Processing Terms</strong>.
+              {consentFromSignup && (
+                <em className="not-italic flex items-center gap-1 mt-1 text-[11px] text-blue-300/90">
+                  <Check className="w-3 h-3 shrink-0" />
+                  Consent carried over from signup (Step 1) — press Accept below to enter.
+                </em>
+              )}
             </span>
           </label>
 
@@ -229,16 +264,16 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 onClick={onDecline}
                 className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 text-xs font-semibold transition cursor-pointer"
               >
-                Decline &amp; Sign Out
+                Decline & Sign Out
               </button>
             )}
             <button
               type="button"
               disabled={!acceptedCheckbox}
               onClick={() => onAccept && onAccept()}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition cursor-pointer shadow-lg shadow-blue-900/40"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition cursor-pointer shadow-lg shadow-blue-900/40 whitespace-nowrap"
             >
-              Accept Legal Terms &amp; Enter Workspace &rarr;
+              Accept & Enter Workspace →
             </button>
           </div>
         </div>

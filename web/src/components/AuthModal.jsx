@@ -91,6 +91,11 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     try {
       const signupRes = await api.signup(u, signupPass);
       if (signupRes && (signupRes.public_id || signupRes.message?.includes('User created'))) {
+        // Single-consent flow (legal-gate UX fix, 08-28): consent was just given
+        // in THIS modal (Step 1) — carry it into the mandatory legal gate
+        // (Step 2) so the gate opens with the checkbox pre-checked and needs
+        // only one click. The gate still requires an explicit Accept.
+        try { localStorage.setItem('helpotron_signup_consent', '1'); } catch (e) { /* storage unavailable */ }
         // Automatically log in with new credentials
         await api.login(u, signupPass);
         onLoginSuccess(u);
@@ -129,6 +134,11 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
               ? 'Join the autonomous academic operating system & study copilot'
               : 'Enter your credentials to access your autonomous study workspace'}
           </p>
+          {tab === 'signup' && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30">
+              Step 1 of 2 · Legal consent
+            </span>
+          )}
         </div>
 
         {/* Tab Toggle */}
@@ -234,6 +244,11 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
               />
               <span className="text-[11px] text-slate-400 leading-tight">
                 I agree to the <strong>Academic Honor Code</strong> and <strong>FERPA / GDPR Terms</strong>.
+                {!consentAgreed && (
+                  <em className="not-italic block text-[10px] mt-0.5 text-amber-300/90">
+                    Check this box to continue.
+                  </em>
+                )}
               </span>
             </label>
 

@@ -5,6 +5,11 @@ const tabSelect = document.getElementById('tabSelect');
 const unparseableBox = document.getElementById('unparseableBox');
 const unparseableReason = document.getElementById('unparseableReason');
 const btnOpenDataLake = document.getElementById('btnOpenDataLake');
+const openAssignmentBtn = document.getElementById('openAssignmentBtn');
+
+const TABS_CACHE_KEY = 'helpotron_tabs_cache';
+const CRAWL_CACHE_KEY = 'helpotron_crawl_cache';
+const LAST_SCRAPE_KEY = 'helpotron_last_scrapes';
 
 function setStatus(text) {
   statusEl.innerText = text;
@@ -19,13 +24,54 @@ function hideUnparseable() {
   unparseableBox.style.display = 'none';
 }
 
+// Popup-open latency: the popup paints from cached snapshots first, then
+// refreshes from the service worker / server after first paint. The tab
+// dropdown is the slowest piece today — it waits for a SW message round-trip
+// (cold SW = wake + parse), so cache the last-known tab list in storage and
+// render it synchronously in init().
+function renderTabOptions(tabs) {
+  tabSelect.innerHTML = '';
+  tabs.forEach((t) => {
+    if (t.url && /^https?:/i.test(t.url)) {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      let host = '';
+      try { host = new URL(t.url).hostname; } catch {}
+      opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || '').slice(0, 38)} (${host})`;
+      if (t.active) opt.selected = true;
+      tabSelect.appendChild(opt);
+    }
+  });
+  if (tabSelect.options.length === 0) {
+    tabSelect.innerHTML = '<option value="">No eligible tabs open</option>';
+  }
+}
+
+async function refreshTabs() {
+  chrome.runtime.sendMessage({ action: 'getTabs' }, (resp) => {
+    if (resp?.ok && resp.tabs) {
+      renderTabOptions(resp.tabs, false);
+      // Cache the snapshot for instant paint on the next popup open.
+      chrome.storage.local.set({ [TABS_CACHE_KEY]: resp.tabs }).catch(() => {});
+    }
+  });
+}
+
 async function init() {
-  const { server, public_id, token, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'token', 'update_available', 'latest_version']);
-  serverInput.value = server || 'https://helpotron.dpdns.org';
-  publicIdInput.value = public_id || '';
+  // ONE batched storage read — everything else paints from these snapshots.
+  const st = await chrome.storage.local.get([
+    'server', 'public_id', 'token', 'session_token',
+    'update_available', 'latest_version', CHAT_KEY,
+    TABS_CACHE_KEY, CRAWL_CACHE_KEY,
+  ]);
+  serverInput.value = st.server || 'https://helpotron.dpdns.org';
+  publicIdInput.value = st.public_id || '';
   publicIdInput.placeholder = 'your Helpotron username';
   // 08-26: scrape data must land on the right account — force login first.
-  if (!public_id || !token) {
+  // session_token is the long-lived (7-day sliding) credential returned by
+  // /api/login; the 24h JWT in `token` is only a fallback.
+  const loggedIn = !!(st.public_id && (st.token || st.session_token));
+  if (!loggedIn) {
     setStatus('⚠️ Login required: enter your Helpotron username & password below and Save — scrapes stay disabled until then.');
     statusEl.classList.remove('hidden');
   }
@@ -34,9 +80,9 @@ async function init() {
   const updateBadge = document.getElementById('updateVersionBadge');
   const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
 
-  if (update_available && latest_version) {
+  if (st.update_available && st.latest_version) {
     updateBanner.style.display = 'block';
-    if (updateBadge) updateBadge.innerText = `v${latest_version}`;
+    if (updateBadge) updateBadge.innerText = `v${st.latest_version}`;
   } else {
     updateBanner.style.display = 'none';
   }
@@ -48,37 +94,87 @@ async function init() {
     });
   }
 
-  // Populate open tabs into dropdown
-  chrome.runtime.sendMessage({ action: 'getTabs' }, (resp) => {
-    if (resp?.ok && resp.tabs) {
-      tabSelect.innerHTML = '';
-      resp.tabs.forEach((t) => {
-        if (t.url && /^https?:/i.test(t.url)) {
-          const opt = document.createElement('option');
-          opt.value = t.id;
-          let host = '';
-          try { host = new URL(t.url).hostname; } catch {}
-          opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || '').slice(0, 38)} (${host})`;
-          if (t.active) opt.selected = true;
-          tabSelect.appendChild(opt);
-        }
-      });
-      if (tabSelect.options.length === 0) {
-        tabSelect.innerHTML = '<option value="">No eligible tabs open</option>';
-      }
-    }
+  // Instant paint #1: cached tab dropdown (no SW round-trip needed).
+  if (st[TABS_CACHE_KEY] && st[TABS_CACHE_KEY].length) {
+    renderTabOptions(st[TABS_CACHE_KEY]);
+  }
+
+  // Instant paint #2: cached chat mirror (empty → greeting + help note).
+  renderChat(st[CHAT_KEY]);
+
+  // Instant paint #3: last-known crawl progress.
+  if (st[CRAWL_CACHE_KEY]) {
+    renderCrawlStatus(st[CRAWL_CACHE_KEY]);
+  }
+
+  // Chatbox: enabled only when logged in.
+  chatSendBtn.disabled = !loggedIn;
+
+  // ── Anything requiring the service worker or the network is deferred to
+  // past the first drawn frame; the UI above is already fully informative. ──
+  requestAnimationFrame(() => {
+    // Refresh tabs list (also re-caches it) after paint.
+    refreshTabs();
+    // Resume showing an in-flight course crawl (08-28).
+    pollCrawlStatus();
+    // Reconcile chat with the server (mirror already painted).
+    if (loggedIn) loadChatHistory();
   });
 }
 
+// 08-28 auto-create/return bubble: the server upsert creates the Assignment
+// bubble when the scraped page has none yet (dedupe on canvas_id) and returns
+// its id; remember the payload per tab so the chatbox can pin instructions and
+// follow-up runs to the SAME bubble, and surface an "open bubble" button.
+async function rememberScrape(tabId, resp) {
+  if (!tabId || !resp?.assignment_id) return;
+  try {
+    const all = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY] || {};
+    all[String(tabId)] = {
+      assignment_id: resp.assignment_id,
+      title: resp.title || '',
+      payload: resp.payload || null,
+      ts: Date.now(),
+    };
+    // keep only the newest 40 tabs
+    const keys = Object.keys(all);
+    if (keys.length > 40) delete all[keys[0]];
+    await chrome.storage.local.set({ [LAST_SCRAPE_KEY]: all });
+  } catch { /* storage is best-effort here */ }
+}
+
+function showOpenAssignment(assignmentId) {
+  if (!assignmentId) return;
+  openAssignmentBtn.style.display = 'block';
+  openAssignmentBtn.innerText = `📖 Open bubble #${assignmentId} in Helpotron`;
+  openAssignmentBtn.dataset.assignmentId = String(assignmentId);
+}
+
+openAssignmentBtn.addEventListener('click', () => {
+  const id = openAssignmentBtn.dataset.assignmentId;
+  if (!id) return;
+  const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+  chrome.tabs.create({ url: `${srv}/#assignment=${id}` });
+  setStatus(`📖 Opening bubble #${id} in Helpotron…`);
+});
+
 document.getElementById('startScrape').addEventListener('click', async () => {
   hideUnparseable();
+  openAssignmentBtn.style.display = 'none';
   const selectedTabId = tabSelect.value;
-  setStatus('🔍 Analyzing page & running extraction heuristics…');
+  setStatus('🔍 Deep-scraping page (waiting for load, expanding content, hashing files)…');
   const resp = await chrome.runtime.sendMessage({ action: 'startScrape', tabId: selectedTabId });
   if (resp?.ok) {
-    setStatus(`✅ Tracked & Ingested: ${resp.title}`);
+    const bits = [];
+    if (resp.promptLen) bits.push(`${resp.promptLen} chars of content`);
+    if (resp.filesFound) bits.push(`${resp.filesFound} files found (${resp.filesUploaded || 0} uploaded to dump, ${resp.filesRecorded || 0} URL+hash saved)`);
+    const detail = bits.length ? ` — ${bits.join(', ')}` : '';
+    setStatus(`✅ Tracked & Ingested: ${resp.title}${detail} — bubble #${resp.assignment_id}`);
+    const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+    await rememberScrape(selectedTabId, resp);
+    showOpenAssignment(resp.assignment_id);
   } else if (resp?.unparseable) {
-    setStatus('❌ Unable to parse assignment content.');
+    setStatus('❌ Nothing could be collected — no content and no files found.');
     showUnparseable(resp.error);
   } else {
     setStatus(`❌ ${resp?.error || 'Extraction failed'}`);
@@ -96,6 +192,82 @@ document.getElementById('activateAgent').addEventListener('click', async () => {
     setStatus(`🤖 Subagent ${resp.session_id} active. Methodically inspecting DOM, rubrics, and attachments…`);
     pollAgentStatus(resp.session_id);
   }
+});
+
+// ── Full-course crawl UI (08-28) ──────────────────────────────────────────────
+const btnStartCrawl = document.getElementById('startCrawl');
+const btnStopCrawl = document.getElementById('stopCrawl');
+const crawlProgressEl = document.getElementById('crawlProgress');
+let crawlPollTimer = null;
+
+function renderCrawlStatus(s) {
+  if (!s || !s.phase || s.phase === 'idle') {
+    btnStartCrawl.style.display = '';
+    btnStopCrawl.style.display = 'none';
+    crawlProgressEl.style.display = 'none';
+    return;
+  }
+  const active = s.phase === 'queued' || s.phase === 'running' || s.phase === 'stopping';
+  btnStartCrawl.style.display = active ? 'none' : '';
+  btnStopCrawl.style.display = active ? '' : 'none';
+  crawlProgressEl.style.display = 'block';
+  let text = '';
+  if (s.phase === 'queued' || s.phase === 'running') {
+    text = `🌐 Scraping ${s.scope || ''} — ${s.done}/${s.total} pages saved`;
+    if (s.failed) text += `, ${s.failed} skipped`;
+    if (s.lastTitle) text += `\nLast: ${s.lastTitle}`;
+    if (s.phase === 'queued') text = '🌐 Course crawl queued — starting in a moment… ' + text.slice(10);
+    crawlProgressEl.style.color = '#93c5fd';
+  } else if (s.phase === 'done') {
+    text = `✅ Course crawl finished — ${s.done}/${s.total} pages saved` + (s.failed ? `, ${s.failed} skipped (${s.lastError || ''})` : '');
+    crawlProgressEl.style.color = '#6ee7b7';
+  } else if (s.phase === 'stopped') {
+    text = `⏹ Crawl stopped — ${s.done}/${s.total} pages saved before stopping.`;
+    crawlProgressEl.style.color = '#fda4af';
+  } else if (s.phase === 'stopping') {
+    text = '⏹ Stopping crawl…';
+    crawlProgressEl.style.color = '#fda4af';
+  } else if (s.phase === 'failed') {
+    text = `❌ Crawl error: ${s.lastError || 'unknown'}`;
+    crawlProgressEl.style.color = '#fca5a5';
+  }
+  crawlProgressEl.innerText = text;
+}
+
+async function pollCrawlStatus() {
+  const resp = await chrome.runtime.sendMessage({ action: 'crawlStatus' }).catch(() => null);
+  const state = resp && resp.ok ? resp : { phase: 'idle' };
+  renderCrawlStatus(state);
+  // Instant-paint cache: the last-known crawl progress so the next popup open
+  // paints it before the SW reply arrives.
+  if (state.phase && state.phase !== 'idle') {
+    chrome.storage.local.set({ [CRAWL_CACHE_KEY]: state }).catch(() => {});
+  }
+  if (state.phase !== 'idle' && state.phase !== 'done' && state.phase !== 'stopped' && state.phase !== 'failed') {
+    crawlPollTimer = setTimeout(pollCrawlStatus, 2000);
+  } else {
+    crawlPollTimer = null;
+  }
+}
+
+btnStartCrawl.addEventListener('click', async () => {
+  hideUnparseable();
+  const selectedTabId = tabSelect.value;
+  setStatus('🌐 Scanning course links & index pages… (robots-respecting)');
+  const resp = await chrome.runtime.sendMessage({ action: 'startCrawl', tabId: selectedTabId });
+  if (resp?.ok) {
+    setStatus(`🌐 Queued ${resp.total} pages of ${resp.scope} — scraping slowly with the badge showing progress. You can close the popup.`);
+    pollCrawlStatus();
+  } else {
+    setStatus(`❌ ${resp?.error || 'Failed to start course crawl'}`);
+  }
+});
+
+btnStopCrawl.addEventListener('click', async () => {
+  setStatus('⏹ Stopping course crawl…');
+  const resp = await chrome.runtime.sendMessage({ action: 'stopCrawl' });
+  setStatus(resp?.ok ? `⏹ Crawl stopped.` : `❌ ${resp?.error || 'No crawl running'}`);
+  pollCrawlStatus();
 });
 
 async function pollAgentStatus(sessionId) {
@@ -153,8 +325,11 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
           server: srv,
           public_id: data.public_id || pid,
           token: data.token,
+          session_token: data.session_token || '',
         });
         setStatus('✅ Logged in & token saved');
+        chatSendBtn.disabled = false;
+        loadChatHistory();
         return;
       } else {
         setStatus(`❌ Auth failed: ${data.detail || data.message || 'Invalid credentials'}`);
@@ -171,6 +346,280 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     public_id: pid,
   });
   setStatus('✅ Settings saved');
+});
+
+// ── Mini Agent Chatbox (talk to the scraper/capture agent) ───────────────────
+// Messages go to POST /api/extension/agent_chat (same agent pipeline as the
+// web chat, on the 'extensions' surface). History comes from
+// GET /api/extension/agent_chat/history. A local mirror in chrome.storage
+// keeps the conversation visible even when the server is unreachable, and
+// everything also persists server-side (AgentChatMessage), so the popup
+// reopen / restart / web-chat views all agree.
+
+const CHAT_KEY = 'helpotron_chat';
+const chatMessagesEl = document.getElementById('chatMessages');
+const chatInputEl = document.getElementById('chatInput');
+const chatSendBtn = document.getElementById('chatSend');
+const chatScrapeBtn = document.getElementById('chatScrapeTab');
+const chatRefreshBtn = document.getElementById('chatRefresh');
+let chatBusy = false;
+
+async function chatAuthHeaders() {
+  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
+  const auth = session_token || token || '';
+  return auth ? { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` }
+              : { 'Content-Type': 'application/json' };
+}
+
+async function chatIsLoggedIn() {
+  const { public_id, session_token, token } = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
+  return !!(public_id && (session_token || token));
+}
+
+function addChatMessageEl(sender, text, isTyping) {
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
+  if (sender === 'user') {
+    const sp = document.createElement('span');
+    sp.className = 'chat-sender';
+    sp.textContent = 'You';
+    div.appendChild(sp);
+  } else if (sender === 'agent') {
+    const sp = document.createElement('span');
+    sp.className = 'chat-sender';
+    sp.textContent = 'Agent';
+    div.appendChild(sp);
+  }
+  const body = document.createElement('span');
+  body.textContent = text;
+  div.appendChild(body);
+  chatMessagesEl.appendChild(div);
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  return div;
+}
+
+function chatReplyText(data, fallback) {
+  const raw = data && (data.reply || data.message);
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw.text === 'string') return raw.text;
+  if (data && data.status === 'insufficient_tokens') return '⚠️ Insufficient tokens — the operator hasn’t granted you tokens yet.';
+  return fallback || '✅ Done.';
+}
+
+async function cacheChat(msgs) {
+  const list = (msgs || []).slice(-80).map((m) => ({
+    sender: m.sender === 'user' ? 'user' : 'agent',
+    text: m.text,
+    ts: m.timestamp || new Date().toISOString(),
+  }));
+  await chrome.storage.local.set({ [CHAT_KEY]: list });
+}
+
+// ── Greeting handling (08-28) ────────────────────────────────────────────────
+// The extension agent chat greets by time of day. Empty-name fix (consistent
+// with the web TodayView fix): a missing, blank or 'Guest' name is NEVER
+// interpolated — it hides the name fragment and falls back to the neutral
+// 'there', so no "Good afternoon , there ." style gap can ever render.
+function greetingNameFallback() {
+  const pid = (publicIdInput.value || '').trim();
+  return (pid && pid !== 'Guest') ? pid : 'there';
+}
+
+function chatGreetingText() {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  return `${greeting}, ${greetingNameFallback()}.`;
+}
+
+function renderChat(msgs) {
+  chatMessagesEl.innerHTML = '';
+  if (!msgs || msgs.length === 0) {
+    // Welcome/onboarding greeting: renders the neutral 'there' when the
+    // account has no display name yet — never an empty-name fragment.
+    addChatMessageEl('note', `👋 ${chatGreetingText()} This chat talks to your Helpotron agent — ask it to scrape, summarize, or plan the page you have open.`);
+    addChatMessageEl('note', '💡 Type an instruction, e.g. “only scrape algebra” — the agent replies here.');
+    return;
+  }
+  msgs.forEach((m) => addChatMessageEl(m.sender === 'user' ? 'user' : 'agent', m.text));
+}
+
+async function loadChatHistory() {
+  // Instant paint from the local mirror, then reconcile with the server.
+  const cached = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY];
+  if (cached && cached.length) renderChat(cached);
+  const srv = serverInput.value.trim() || 'http://localhost:8000';
+  try {
+    const headers = await chatAuthHeaders();
+    if (!headers.Authorization) return; // login required; init() holds the note
+    const res = await fetch(`${srv}/api/extension/agent_chat/history`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const msgs = ((data && data.chat) || []).map((m) => ({ sender: m.sender, text: m.text }));
+    if (msgs.length) {
+      renderChat(msgs);
+      cacheChat(msgs);
+    } else if (cached && cached.length) {
+      renderChat(cached); // server has nothing (new account) — keep the mirror
+    }
+  } catch (e) {
+    if (!cached || !cached.length) {
+      addChatMessageEl('note', '⚠️ Could not reach server history — is the server up and restarted with the chat route?');
+    }
+  }
+}
+
+async function sendChatMessage() {
+  const text = chatInputEl.value.trim();
+  if (!text || chatBusy) return;
+  if (!(await chatIsLoggedIn())) {
+    setStatus('⚠️ Login required: enter your Helpotron username & password below and save.');
+    return;
+  }
+  const srv = serverInput.value.trim() || 'http://localhost:8000';
+  chatBusy = true;
+  chatSendBtn.disabled = true;
+  chatInputEl.value = '';
+  addChatMessageEl('user', text);
+  const typingEl = addChatMessageEl('agent', '…thinking…');
+  try {
+    const res = await fetch(`${srv}/api/extension/agent_chat`, {
+      method: 'POST',
+      headers: await chatAuthHeaders(),
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    const reply = chatReplyText(data, '✅ Done.');
+    typingEl.replaceWith(addChatMessageEl('agent', reply));
+    setStatus(`💬 Agent answered (${reply.slice(0, 60)}${reply.length > 60 ? '…' : ''})`);
+    const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
+    await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
+    // 08-28: the agent picked its scrape tool (scrape_assignment on the
+    // extensions surface) — the answer prose is the ack; the REAL capture
+    // runs in the browser, so drive the same local scraper the button uses.
+    // Response shapes accepted: data.scrape_request (route-level contract)
+    // or data.execution.action === 'scrape_assignment' (executor passthrough).
+    const scrapeAsked = !!(data && (data.scrape_request ||
+      (data.execution && data.execution.action === 'scrape_assignment')));
+    if (scrapeAsked) {
+      // scrape_request rides top-level on the route contract and inside
+      // execution on the executor passthrough — accept both.
+      const execReq = data.execution && data.execution.scrape_request;
+      const scrapeReq = data.scrape_request || execReq || {};
+      const instruction = (scrapeReq && typeof scrapeReq.instruction === 'string')
+        ? scrapeReq.instruction.trim() : text;
+      const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
+      const assignmentId = last ? (last[String(tabSelect.value)]?.assignment_id || null) : null;
+      const autoNote = scrapeReq.note || '';
+      if (autoNote) addChatMessageEl('agent', autoNote);
+      await runTabScrapeWithInstruction(instruction || 'scrape the assignment', assignmentId);
+    }
+  } catch (e) {
+    typingEl.replaceWith(addChatMessageEl('agent', `⚠️ ${e.message}`));
+    setStatus('❌ Chat send failed; messages stay in this popup only.');
+  } finally {
+    chatBusy = false;
+    chatSendBtn.disabled = false;
+    chatInputEl.focus();
+  }
+}
+
+chatSendBtn.addEventListener('click', sendChatMessage);
+chatInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChatMessage();
+});
+chatRefreshBtn.addEventListener('click', async () => {
+  setStatus('⟳ Reloading conversation…');
+  await loadChatHistory();
+  setStatus('✅ Chat reloaded.');
+});
+
+// Run the REAL tab scrape for an instruction (08-28): sends the instruction
+// into the tab-scraper flow — the same browser agent the 🤖 Spawn button uses,
+// with the given instruction as its mission constraint (e.g. "only scrape
+// algebra"). Shared by the "Scrape selected tab" button and by the chatbox
+// agent's scrape_assignment action (see sendChatMessage).
+async function runTabScrapeWithInstruction(instruction, assignmentId) {
+  const selectedTabId = tabSelect.value;
+  if (!selectedTabId) {
+    setStatus('⚠️ Select a target tab above first.');
+    return { ok: false, error: 'No tab selected' };
+  }
+  setStatus('🤖 Sending instruction to the tab scraper…');
+  const resp = await chrome.runtime.sendMessage({
+    action: 'scrapeWithInstruction',
+    tabId: selectedTabId,
+    instruction,
+    assignmentId,
+  }).catch((e) => ({ ok: false, error: String(e) }));
+  if (resp?.ok) {
+    const bubbleNote = assignmentId ? ` — linked to bubble #${assignmentId}` : '';
+    const note = `🤖 Sent to the tab scraper (session ${resp.session_id})${bubbleNote}: “${instruction}”. Progress shows in the status line.`;
+    addChatMessageEl('agent', note);
+    const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
+    await cacheChat([...cur, { sender: 'user', text: instruction }, { sender: 'agent', text: note }]);
+    // Persist the instruction on the bubble (server keeps the last one) so a
+    // follow-up message re-runs the scrape with full context.
+    const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
+    const lastScrape = last ? last[String(selectedTabId)] : null;
+    if (lastScrape?.payload && assignmentId) {
+      chrome.runtime.sendMessage({
+        action: 'persistInstruction',
+        payload: lastScrape.payload,
+        assignmentId,
+        instruction,
+      }).catch(() => {});
+    }
+    setStatus(`🤖 Scraper ${resp.session_id} running with your instruction — methodical scrape started${assignmentId ? ` for bubble #${assignmentId}` : ''}.`);
+    pollAgentStatus(resp.session_id);
+    return { ok: true };
+  }
+  setStatus(`❌ ${resp?.error || 'Failed to start the scraper'}`);
+  return { ok: false, error: resp?.error || 'Failed to start the scraper' };
+}
+
+// Send the typed instruction into the tab-scraper flow (the same browser
+// agent the 🤖 Spawn button uses, but with the chatbox text as its mission
+// instruction — e.g. "only scrape algebra" constrains what it collects).
+chatScrapeBtn.addEventListener('click', async () => {
+  const instruction = chatInputEl.value.trim();
+  if (!instruction) {
+    setStatus('⚠️ Type the instruction first (e.g. "only scrape algebra"), then press this.');
+    return;
+  }
+  // 08-28: continue the SAME bubble the tab was already scraped into (when
+  // there is one) — the instruction enters the actual agent scrape run AND is
+  // persisted on the assignment for follow-up context.
+  const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
+  const assignmentId = last ? (last[String(tabSelect.value)]?.assignment_id || null) : null;
+  const res = await runTabScrapeWithInstruction(instruction, assignmentId);
+  if (res && res.ok) chatInputEl.value = '';
+});
+
+// ── Scrape tool (08-28): fill the prompt with scraped page context ───────────
+// Given the selected tab, extracts title + URL + visible/main text through the
+// same parser as the Scrape buttons (content.js) and FILLS the chat prompt
+// with the scraped context — no assignment is saved here; the user reviews and
+// sends it to the agent ("scrape into prompt/notes").
+const chatScrapeContextBtn = document.getElementById('chatScrapeContext');
+chatScrapeContextBtn.addEventListener('click', async () => {
+  hideUnparseable();
+  const selectedTabId = tabSelect.value;
+  setStatus('📄 Extracting page content from the selected tab…');
+  const resp = await chrome.runtime.sendMessage({ action: 'scrapeContext', tabId: selectedTabId })
+    .catch((e) => ({ ok: false, error: String(e) }));
+  if (!resp?.ok) {
+    setStatus(`❌ ${resp?.error || 'Scrape failed'}`);
+    return;
+  }
+  chatInputEl.value = resp.text;
+  chatInputEl.focus();
+  chatInputEl.setSelectionRange(0, 0);
+  setStatus(`📄 Scraped "${resp.title}" (${resp.chars} chars) into the prompt — review, add any instruction, then press Send.`);
+  const note = `📋 Scraped page into the prompt: ${resp.title} — ${resp.chars} chars of context ready to send.`;
+  addChatMessageEl('agent', note);
+  const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
+  await cacheChat([...cur, { sender: 'agent', text: note }]);
 });
 
 chrome.runtime.onMessage.addListener((msg) => {

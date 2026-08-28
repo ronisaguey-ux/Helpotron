@@ -107,7 +107,11 @@ def test_api_auth_2fa_routes():
     client.post("/api/signup", json={"public_id": uid, "password": pwd})
     login_resp = client.post("/api/login", json={"public_id": uid, "password": pwd})
     csrf = login_resp.json().get("csrf_token", "")
-    headers = {"X-CSRF-Token": csrf}
+    # BATCH-01 auth remediation: protected feature routes accept a real
+    # session — the login response's JWT is the API-client path (cookie path
+    # requires https/secure transport in production mode).
+    auth_token = login_resp.json().get("token") or login_resp.json().get("session_token") or ""
+    headers = {"X-CSRF-Token": csrf, "Authorization": f"Bearer {auth_token}"}
 
     setup_resp = client.post(
         "/api/auth/2fa/setup",

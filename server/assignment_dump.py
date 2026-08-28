@@ -7,6 +7,7 @@ to intelligently auto-route and attach materials to relevant assignments.
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import os
 import re
@@ -27,6 +28,77 @@ logger = logging.getLogger(__name__)
 
 DUMP_DIR = BASE_DIR / "uploads" / "assignment_dump"
 DUMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# Subject keyword hints for dump-created assignment bubbles (08-28: shared by
+# the upload auto-route and the finalize path — membership mirrors main.py's
+# _SUBJECT_HINTS so scrape and dump bubbles agree; specific disciplines are
+# checked before the generic-Math tail so 'chemical equations' is Chemistry,
+# not Mathematics).
+_TOPIC_HINTS = {
+    "Biology": ("cell", "dna", "genetics", "organism", "biology", "evolution", "crispr",
+                "photosynthesis", "ecosystem", "bacteria", "mitochondria"),
+    "Chemistry": ("chemistry", "chemical", "molecule", "atom", "compound", "reaction", "acid", "periodic"),
+    "Physics": ("physics", "motion", "force", "kinematics", "newton", "velocity", "acceleration",
+                "gravity", "electricity", "magnet"),
+    "History": ("history", "reconstruction", "civil war", "president", "ancient", "revolution",
+                "empire", "world war", "century", "antebellum", "columbian"),
+    "Literature": ("novel", "literature", "poem", "woolf", "faulkner", "narrative", "modernist",
+                   "english literature", "shakespeare", "poetry"),
+    "English": ("english", "grammar", "essay", "vocabulary", "reading", "writing", "rhetoric"),
+    "Economics": ("economic", "inflation", "gdp", "macroeconomic", "microeconomic", "monetary",
+                  "supply", "demand", "market"),
+    "Ethics": ("ethics", "ethical", "moral", "autonomous systems"),
+    "Psychology": ("cognitive", "behavior", "psychology", "bias", "decision"),
+    "Computer Science": ("algorithm", "code", "programming", "data structure", "python",
+                         "machine learning", "neural", "ap csp", "apcsp", "computer science",
+                         "java", "liquidity protocol"),
+    "Spanish": ("spanish", "espanol", "español", "conjugat", "vocabulario"),
+    "French": ("french", "francais", "français"),
+    "Health": ("health", "nutrition", "p.e.", "physical education", "wellness"),
+    "Mathematics": ("calculus", "algebra", "statistics", "equation", "theorem", "geometry",
+                    "probability", "integral", "derivative", "trigonometry", "quadratic",
+                    "arithmetic", "linear", "math", "mathematics"),
+}
+
+
+async def classify_assignment_meta(source_text: str, file_name: str) -> dict:
+    """Subject/title detection for dump-created assignment bubbles (08-27).
+    LLM first (lanes-backed), keyword heuristic as fallback — a bubble is
+    never a bare 'General Academic' when the text says what it is."""
+    lines = [l.strip() for l in (source_text or "").splitlines() if l.strip()]
+    fallback = {
+        "title": (lines[0][:80] if lines else (file_name or "Dumped assignment")),
+        "subject": "General Academic",
+        "course_code": "GEN-101",
+    }
+    try:
+        from .llm import call_llm, extract_json
+        raw = await call_llm(
+            user_prompt=(source_text or "The user pasted an assignment.")[:5000],
+            system_prompt=(
+                "Classify this academic assignment text. Output ONE LINE of JSON only: "
+                '{"subject": "<real academic subject, e.g. American History>", '
+                '"title": "<short title, max 60 chars>", "course_code": "<e.g. HIST-101 or GEN-101>"}. '
+                "The subject must be a concrete academic field, never 'General Academic'."
+            ),
+            effort_score=25, max_tokens=220, response_format="json_object", model="flash",
+        )
+        parsed = extract_json(raw or "")
+        if isinstance(parsed, dict) and parsed.get("subject"):
+            return {
+                "title": str(parsed.get("title") or fallback["title"])[:80],
+                "subject": str(parsed["subject"])[:48],
+                "course_code": str(parsed.get("course_code") or "GEN-101")[:12],
+            }
+    except Exception:
+        pass
+    lower = (source_text or "").lower()
+    for subj, keys in _TOPIC_HINTS.items():
+        if any(k in lower for k in keys):
+            fallback["subject"] = subj
+            fallback["course_code"] = subj.split()[0][:4].upper() + "-101"
+            break
+    return fallback
 
 
 class AssignmentDumpManager:
@@ -74,9 +146,41 @@ class AssignmentDumpManager:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     raw = f.read()
                 clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
-                return clean[:4000], "pypdf_fallback"
+                # 08-28 truncation fix: 4000 chars silently cut every real
+                # scanned-contract PDF. The storage column is TEXT — keep the
+                # printable text in full (a 2M-char guard only stops pathological
+                # binary blobs; any cut is explicitly marked).
+                if len(clean) > 2_000_000:
+                    clean = clean[:2_000_000] + (
+                        "\n\n[extraction truncated at 2,000,000 chars — "
+                        "original PDF retained in the dump file store]")
+                return clean, "pypdf_fallback"
             except Exception as e:
                 return f"PDF extract: {os.path.basename(file_path)}", "pdf_meta"
+
+        # 2b. DOCX -> stdlib ZIP/XML text extraction (no python-docx dep on the
+        # box). Paragraphs + tables in document order; tables add tab-joined
+        # cell text so a rubric table keeps its shape.
+        elif ext in [".docx"]:
+            try:
+                import zipfile
+                from xml.etree import ElementTree
+
+                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                with zipfile.ZipFile(file_path) as z:
+                    xml = z.read("word/document.xml")
+                root = ElementTree.fromstring(xml)
+                parts: list[str] = []
+                for p in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+                    texts = [t.text or "" for t in p.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")]
+                    line = "".join(texts).strip()
+                    if line:
+                        parts.append(line)
+                text = "\n".join(parts)
+                if len(text.strip()) > 30:
+                    return text.strip(), "docx-xml"
+            except Exception as e:
+                logger.warning("DOCX extraction failed: %s", e)
 
         # 3. Audio file -> Gemini 3.1 Flash-Lite Transcription
         elif file_category == "audio":
@@ -106,11 +210,18 @@ class AssignmentDumpManager:
         # 5. Presentation / PowerPoint / Google Slides -> Pure Gemini Extraction
         elif file_category == "presentation" or ext in [".pptx", ".ppt", ".key", ".gslides"]:
             try:
-                # Extract text / notes directly, bypassing Nemotron/DeepSeek
+                # Extract text / notes directly, bypassing Nemotron/DeepSeek.
+                # 08-28 truncation fix: real slide decks are binary ZIPs, so the
+                # printable-text pass gives clean text at full length (capped
+                # generously with an explicit marker, never silently cut).
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     raw = f.read()
                 clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
-                text_preview = clean[:3000].strip() if len(clean.strip()) > 20 else f"Presentation Slide Deck: {os.path.basename(file_path)}"
+                if len(clean) > 2_000_000:
+                    clean = clean[:2_000_000] + (
+                        "\n\n[presentation extraction truncated at 2,000,000 chars — "
+                        "original file retained in the dump file store]")
+                text_preview = clean.strip() if len(clean.strip()) > 20 else f"Presentation Slide Deck: {os.path.basename(file_path)}"
                 return f"# Presentation Deck Outline ({os.path.basename(file_path)})\n\n{text_preview}\n\n*Routed Exclusively to Google Gemini Engine (Nemotron/DeepSeek Bypassed)*", "pure-gemini"
             except Exception:
                 return f"# Presentation: {os.path.basename(file_path)}\n\n[Slide deck loaded for Gemini generation]", "pure-gemini"
@@ -178,6 +289,24 @@ class AssignmentDumpManager:
                 return ""
 
         return f"Image scanned: {os.path.basename(image_path)}"
+
+    @staticmethod
+    def _has_readable_text(text: str) -> bool:
+        """True when extraction produced real content, not an error/fallback
+        placeholder (08-28: unrouted dumps only become bubbles when the file
+        actually had readable text — junk stays unmatched and says so)."""
+        t = (text or "").strip()
+        if len(t) < 40:
+            return False
+        for marker in (
+            "File content: ", "PDF extract: ", "Error reading text file:",
+            "Image document: ", "Image scanned: ", "OCR Image scan: ",
+            "# Lecture Audio: ", "# Video Recording ", "# Presentation: ",
+            "[Audio content pending review]", "Video lecture notes and syllabus discussion.",
+        ):
+            if marker in t:
+                return False
+        return True
 
     @staticmethod
     def match_assignment_nlp(extracted_text: str, assignments: List[Assignment]) -> Tuple[Optional[int], float, str]:
@@ -261,10 +390,49 @@ class AssignmentDumpManager:
             dump_item.overlord_notes = "Manually assigned by user."
         else:
             matched_id, conf, reason = AssignmentDumpManager.match_assignment_nlp(extracted_text, user_assignments)
-            dump_item.matched_assignment_id = matched_id
-            dump_item.auto_match_confidence = conf
-            dump_item.status = "matched" if matched_id else "unmatched"
-            dump_item.overlord_notes = f"Overlord Engine ({engine_used}): {reason}"
+            if matched_id:
+                dump_item.matched_assignment_id = matched_id
+                dump_item.auto_match_confidence = conf
+                dump_item.status = "matched"
+                dump_item.overlord_notes = f"Overlord Engine ({engine_used}): {reason}"
+            elif AssignmentDumpManager._has_readable_text(extracted_text):
+                # 08-28 auto-route: an unrouted dump with readable text ALWAYS
+                # gets a real bubble immediately — subject classification via
+                # the same engine finalize uses (keyword fallback, so a 'math'
+                # assignment becomes a Mathematics bubble even with no match).
+                # The create path is DB-only and free: no token gate until
+                # finalize (generation is gated there).
+                meta = await classify_assignment_meta(extracted_text, filename)
+                new_assign = Assignment(
+                    user_id=user.id,
+                    title=meta["title"],
+                    prompt=extracted_text,
+                    status="tracked",
+                    progress={
+                        "subject": meta["subject"],
+                        "course_code": meta["course_code"],
+                        "created_from_dump": True,
+                        "dump_file_id": dump_item.id,
+                        "requested_action": None,
+                    },
+                )
+                db.add(new_assign)
+                db.flush()
+                dump_item.matched_assignment_id = new_assign.id
+                dump_item.auto_match_confidence = 1.0
+                dump_item.status = "auto_routed"
+                dump_item.overlord_notes = (
+                    f"Overlord Engine ({engine_used}): no match found — created and "
+                    f"routed to new '{meta['title']}' ({meta['subject']}) bubble."
+                )
+            else:
+                dump_item.matched_assignment_id = None
+                dump_item.auto_match_confidence = 0.0
+                dump_item.status = "unmatched"
+                dump_item.overlord_notes = (
+                    f"Overlord Engine ({engine_used}): no readable text extracted — "
+                    "no assignment bubble created. Try re-dumping the file."
+                )
 
         # If matched, append to assignment prompt / notes if relevant
         if dump_item.matched_assignment_id:
@@ -314,3 +482,140 @@ def get_assignment_dump_secure(dump_id: str, user_id: str, db) -> dict:
         'is_unlocked': False,
         'cost_credits': getattr(dump, 'cost_credits', 5)
     }
+
+
+# ─── Server-side attachment of scraped file URLs (08-28 BUG 2 fix) ───────────
+# The extension streams files it can fetch IN the page session (LMS cookies) up
+# to its 6MB b64 cap; everything else rides to the server as URL + sha256 with
+# uploaded=false. This job takes those leftovers and downloads what the SERVER
+# can reach (public files, Drive/Docs direct links, school-hosted PDFs — LMS
+# cookie-protected URLs will 401 and are honestly recorded as unreachable, with
+# the URL + hash still on the bubble). Every downloaded byte goes through the
+# REAL dump flow (process_dump_upload -> extraction -> routing) so the dump has
+# the original file on disk plus its extracted text.
+
+ATTACH_MAX_BYTES = 15 * 1024 * 1024
+ATTACH_MAX_FILES = 6
+ATTACH_TIMEOUT_SECONDS = 25.0
+
+
+async def attach_scraped_files(assignment_id: int, user_id: int,
+                               files_meta: List[dict]) -> List[dict]:
+    """Download unreach-from-extension scrape files and attach them to the
+    assignment via the dump flow. Returns per-file outcome records."""
+    from .database import Assignment, SessionLocal, UniversalDumpItem  # local: own session
+
+    outcomes: List[dict] = []
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+        if user is None or assignment is None or assignment.user_id != user_id:
+            return [{"filename": "?", "status": "error", "error": "assignment/user not found"}]
+
+        async with httpx.AsyncClient(timeout=ATTACH_TIMEOUT_SECONDS, follow_redirects=True) as client:
+            for rec in (files_meta or [])[:ATTACH_MAX_FILES]:
+                url = str((rec or {}).get("url") or "")
+                filename = os.path.basename(url.split("?")[0]) or str((rec or {}).get("filename") or "file")
+                if not url.startswith(("http://", "https://")):
+                    outcomes.append({"url": url, "filename": filename, "status": "skipped",
+                                     "error": "non-http URL"})
+                    continue
+                try:
+                    ok = False
+                    buf = b""
+                    async with client.stream("GET", url) as resp:
+                        if resp.status_code >= 400:
+                            outcomes.append({"url": url, "filename": filename, "status": "unreachable",
+                                             "error": f"HTTP {resp.status_code}"})
+                            continue
+                        declared = int(resp.headers.get("content-length") or 0)
+                        if declared > ATTACH_MAX_BYTES:
+                            outcomes.append({"url": url, "filename": filename, "status": "skipped",
+                                             "error": f"too large ({declared} bytes)"})
+                            continue
+                        chunks = []
+                        total = 0
+                        async for chunk in resp.aiter_bytes():
+                            total += len(chunk)
+                            if total > ATTACH_MAX_BYTES:
+                                break
+                            chunks.append(chunk)
+                        buf = b"".join(chunks)
+                    ok = len(buf) > 0
+                    if not ok:
+                        outcomes.append({"url": url, "filename": filename, "status": "unreachable",
+                                         "error": "empty response"})
+                        continue
+
+                    # Idempotence: a re-scrape must not re-upload the identical
+                    # bytes as a second dump row (same file + same size + same
+                    # target bubble already attached).
+                    existing = (
+                        db.query(UniversalDumpItem)
+                        .filter(
+                            UniversalDumpItem.matched_assignment_id == assignment_id,
+                            UniversalDumpItem.file_size_bytes == len(buf),
+                            UniversalDumpItem.file_name == filename,
+                        )
+                        .first()
+                    )
+                    if existing is not None:
+                        outcomes.append({"url": url, "filename": filename, "size": len(buf),
+                                         "status": "attached", "dump_id": existing.id,
+                                         "already": True})
+                        continue
+
+                    item = await assignment_dump_manager.process_dump_upload(
+                        db, user, filename, buf, manual_assignment_id=assignment_id,
+                    )
+                    outcomes.append({"url": url, "filename": filename, "size": len(buf),
+                                     "sha256": hashlib.sha256(buf).hexdigest(),
+                                     "status": "attached", "dump_id": item.id,
+                                     "dump_status": item.status,
+                                     "extracted_chars": len(item.extracted_text or "")})
+                except Exception as e:  # noqa: BLE001 — per-file honest record
+                    outcomes.append({"url": url, "filename": filename, "status": "unreachable",
+                                     "error": str(e)[:200]})
+
+        # Persist the outcome ledger on the bubble (progress.attached_files +
+        # refreshed files_meta rows) so the UI shows real attachments.
+        if outcomes:
+            progress = dict(assignment.progress or {})
+            attached = list(progress.get("attached_files") or [])
+            meta = list(progress.get("files_meta") or [])
+            by_url = {str(m.get("url") or ""): m for m in meta if isinstance(m, dict)}
+            for o in outcomes:
+                o_url = o.get("url") or ""
+                key = {"attached": "attached", "unreachable": "unreachable",
+                       "skipped": "skipped", "error": "error"}.get(o.get("status"), "attached")
+                attached.append({
+                    "url": o_url, "filename": o.get("filename"), "size": o.get("size", 0),
+                    "sha256": o.get("sha256", ""), "status": key,
+                    "dump_id": o.get("dump_id"), "error": o.get("error", ""),
+                })
+                if o_url in by_url:
+                    by_url[o_url]["uploaded"] = o.get("status") == "attached"
+                    by_url[o_url]["dump_id"] = o.get("dump_id")
+                    by_url[o_url]["upload_error"] = o.get("error", "")
+            # keep the ledger bounded (longest 40 entries, newest last)
+            progress["attached_files"] = attached[-40:]
+            progress["files_meta"] = list(by_url.values())[-200:]
+            assignment.progress = progress
+            db.commit()
+        return outcomes
+    except Exception as e:  # noqa: BLE001 — background job never kills the caller
+        logger.error("attach_scraped_files failed for assignment %s: %s", assignment_id, e)
+        return [{"status": "error", "error": str(e)[:200]}]
+    finally:
+        db.close()
+
+
+async def launch_attach_scraped_files(assignment_id: int, user_id: int,
+                                      files_meta: List[dict]) -> List[dict]:
+    """Background entry point (asyncio.create_task target) — never raises."""
+    try:
+        return await attach_scraped_files(assignment_id, user_id, files_meta)
+    except Exception as e:  # noqa: BLE001
+        logger.error("attach task died for assignment %s: %s", assignment_id, e)
+        return []

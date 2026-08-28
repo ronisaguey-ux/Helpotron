@@ -143,8 +143,8 @@ export default function TwoFactorSetup({ s, set }) {
             <p className="text-xs text-slate-300">A 6-digit verification code has been sent via {method.toUpperCase()}.</p>
           )}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
-            <input type="text" maxLength={6} placeholder="123456" value={code}
+            <label htmlFor="two-factor-setup-code" className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
+            <input id="two-factor-setup-code" type="text" maxLength={6} placeholder="123456" value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-blue-500" />
           </div>
@@ -164,7 +164,7 @@ export default function TwoFactorSetup({ s, set }) {
       {setupStep === 'disabling' && (
         <div className="space-y-3 pt-2 border-t border-white/10">
           <p className="text-xs text-slate-300">Enter your current 6-digit 2FA security code to confirm turning off 2FA:</p>
-          <input type="text" maxLength={6} placeholder="123456" value={code}
+          <input type="text" maxLength={6} placeholder="123456" value={code} aria-label="6-digit security code to confirm turning off 2FA"
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
             className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-rose-500" />
           <div className="flex gap-2 pt-1">

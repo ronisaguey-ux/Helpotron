@@ -22,6 +22,9 @@ def setup_overlord_data():
                 settings={
                     "operation_mode": "auto",
                     "auto_approved_actions": ["humanize", "analyze_rubric"],
+                    # Token gate (operator 08-27): the agent chat requires a
+                    # granted token_balance — fixtures must budget for it.
+                    "token_balance": 500,
                 },
             )
             db.add(user)
@@ -29,6 +32,7 @@ def setup_overlord_data():
             user.settings = {
                 "operation_mode": "auto",
                 "auto_approved_actions": ["humanize", "analyze_rubric"],
+                "token_balance": 500,
             }
         db.commit()
 

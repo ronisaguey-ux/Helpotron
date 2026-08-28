@@ -465,9 +465,12 @@ class UserSettingsService:
             "micro_credits_auto_redeem": False,
 
             # 10. Public Credits Leaderboard (Custom Alias / Privacy Protected)
-            "leaderboard_alias": "QuantumScholar_42",
+            # (08-27: no fabricated defaults. A private alias is auto-generated
+            # as Learner_<public_id> in get_credits_leaderboard when the user
+            # has not set one, and credits start at 0 until real usage exists.)
+            "leaderboard_alias": None,
             "leaderboard_opt_in": True,
-            "credits_used_total": 4820.0,
+            "credits_used_total": 0.0,
 
             # 6. Context-Aware TRIO Overrides
             "trio_rules": [],  # Array of { id, name, target: {type, value}, restriction, inclusion, overrides, apply_to_all }
@@ -758,21 +761,13 @@ class UserSettingsService:
         users = db.query(User).all()
         board = []
 
-        # Synthetic baseline learners if single/few users exist
-        demo_profiles = [
-            {"alias": "NeuralScribe_99", "credits_used": 14280.0, "level": "PhD Researcher", "badge": "🥇 Grandmaster", "is_self": False},
-            {"alias": "AeroScholar_TX", "credits_used": 11450.0, "level": "Master's Scholar", "badge": "🥈 Master", "is_self": False},
-            {"alias": "CyberSynthesist", "credits_used": 9820.0, "level": "Undergraduate", "badge": "🥉 Expert", "is_self": False},
-            {"alias": "DeepReason_Dev", "credits_used": 8340.0, "level": "Undergraduate", "badge": "⭐ Senior", "is_self": False},
-            {"alias": "BioMatrix_AI", "credits_used": 6910.0, "level": "Master's Scholar", "badge": "⭐ Senior", "is_self": False},
-            {"alias": "CalculusVoyager", "credits_used": 5400.0, "level": "High School", "badge": "🚀 Prodigy", "is_self": False},
-        ]
-
+        # (08-27: synthetic baseline learners removed — the board ranks only
+        # real users, honestly, even when few signups exist.)
         for u in users:
             s = UserSettingsService.get_user_settings(u)
             if s.get("leaderboard_opt_in", True):
                 alias = s.get("leaderboard_alias") or f"Learner_{u.public_id[:4]}"
-                used = float(s.get("credits_used_total", 4820.0))
+                used = float(s.get("credits_used_total") or 0.0)
                 level_key = s.get("academic_level", "high_school")
                 level_label = level_key.replace("_", " ").title()
                 is_current = (current_user is not None) and (u.id == current_user.id)
@@ -784,13 +779,6 @@ class UserSettingsService:
                     "badge": "⭐ Contender",
                     "is_self": is_current,
                 })
-
-        # Merge with demo profiles if list is small
-        if len(board) < 5:
-            existing_aliases = {b["alias"] for b in board}
-            for d in demo_profiles:
-                if d["alias"] not in existing_aliases:
-                    board.append(d)
 
         # Sort descending by credits used
         board.sort(key=lambda x: x["credits_used"], reverse=True)
@@ -816,10 +804,12 @@ class UserSettingsService:
             "leaderboard": board[:50],
             "total_participants": len(board),
             "user_stats": {
-                "rank": user_rank or 4,
-                "current_alias": current_settings.get("leaderboard_alias", "QuantumScholar_42"),
+                # (08-27: honest user_stats — rank is None when the user is not
+                # on the board yet; alias/credits come from real settings only.)
+                "rank": user_rank,
+                "current_alias": current_settings.get("leaderboard_alias") or None,
                 "opt_in": current_settings.get("leaderboard_opt_in", True),
-                "credits_used": current_settings.get("credits_used_total", 4820.0),
+                "credits_used": float(current_settings.get("credits_used_total") or 0.0),
             },
         }
 
@@ -1003,9 +993,9 @@ class UserSettingsService:
                 "status": a.status,
                 "created_at": a.created_at.isoformat() if a.created_at else None,
                 "progress": a.progress or {},
-                "score_ai": (a.progress or {}).get("ai_score", 12.5),
-                "grade": (a.progress or {}).get("grade", "A"),
-                "subject": (a.progress or {}).get("subject", "General Academic"),
+                "score_ai": (a.progress or {}).get("ai_score"),
+                "grade": (a.progress or {}).get("grade"),
+                "subject": (a.progress or {}).get("subject") or (a.progress or {}).get("course") or "",
             }
             results.append(item)
         return results
@@ -1023,8 +1013,8 @@ class UserSettingsService:
                 h["subject"],
                 h["due_date"],
                 h["status"],
-                h["grade"],
-                f"{h['score_ai']}%",
+                h["grade"] or "Not graded",
+                f"{h['score_ai']}%" if h["score_ai"] is not None else "",
                 h["created_at"],
             ])
         return output.getvalue()

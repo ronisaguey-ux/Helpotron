@@ -9,8 +9,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import { WifiOff } from 'lucide-react';
-import { api, getServer, getUserId, setServer, setUserId } from './api.js';
+import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } from './api.js';
 import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
+import AssignmentTurnInView from './components/AssignmentTurnInView.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import AssignmentDetailView from './components/AssignmentDetailView.jsx';
@@ -19,12 +20,15 @@ import MessageAdminView from './components/MessageAdminView.jsx';
 import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
 import TermsOfServiceView from './components/TermsOfServiceView.jsx';
 import DataLakeView from './components/DataLakeView.jsx';
+import MonitorsView from './components/MonitorsView.jsx';
 import AssignmentDumpView from './components/AssignmentDumpView.jsx';
 import ExtensionInstallView from './components/ExtensionInstallView.jsx';
 
 /* OS chrome + new views */
 import AppShell from './components/AppShell.jsx';
+import AnonymousLanding from './components/AnonymousLanding.jsx';
 import CookieBanner from './components/CookieBanner.jsx';
+import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import TodayView from './components/TodayView.jsx';
 import ActivityView from './components/ActivityView.jsx';
@@ -81,6 +85,22 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+/* Pre-auth boot screen (auth gate 08-28): shown only while the session probe
+ * is in flight. The dashboard never mounts before the auth state is known. */
+function SessionBootScreen() {
+  return (
+    <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-5">
+        <AnimatedLogo size="lg" />
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+          <span className="w-3 h-3 rounded-full border-2 border-blue-500/60 border-t-transparent animate-spin" />
+          Checking session…
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [userId, setUserIdState] = useState(() => {
     try {
@@ -93,11 +113,19 @@ export default function App() {
   const [connected, setConnected] = useState(true);
   const [activeView, setActiveView] = useState('overview');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  /* Auth gate (audit 08-28): three states —
+   *   'checking'  — session probe in flight (indicator present, needs /api/me)
+   *   'authed'    — session confirmed; only now does the shell mount
+   *   'signedOut' — no session; anonymous landing only, zero authed fetches
+   * The initializer runs synchronously: when no session indicator exists
+   * (fresh/logged-out browser) the /api/me probe is skipped ENTIRELY, so a
+   * signed-out visit causes no 401 console noise at all. */
+  const [authStatus, setAuthStatus] = useState(() => (hasSessionIndicator() ? 'checking' : 'signedOut'));
   const [isGuest, setIsGuest] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [credits, setCredits] = useState(0);
   const [tokenBalance, setTokenBalance] = useState(0);
-  const [userPlan, setUserPlan] = useState('basic');
+  const [userPlan, setUserPlan] = useState('none');
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* Back/forward navigation history — stack of {view, tab, assignment}
@@ -153,11 +181,12 @@ export default function App() {
       if (data && data.authenticated) {
         setIsLoggedIn(true);
         setIsGuest(false);
+        setAuthStatus('authed');
         setUserIdState(data.public_id || data.user_id || 'Student');
         setUserId(data.public_id || data.user_id || 'Student');
         setCredits(data.credits ?? 0);
         setTokenBalance(Number(data.token_balance ?? 0) || 0);
-        setUserPlan(data.plan || 'basic');
+        setUserPlan(data.plan || 'none');
         setIsAdmin(Boolean(data.is_admin));
         const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
         if (!accepted) {
@@ -165,22 +194,37 @@ export default function App() {
         }
         return;
       }
-    } catch (e) {}
+    } catch (e) {
+      // 401 etc. — session did not verify; fall through to signed-out state.
+    }
 
     // Unauthenticated state
     setIsLoggedIn(false);
     setIsGuest(false);
+    setAuthStatus('signedOut');
     setIsAdmin(false);
     setUserIdState('Guest');
     setUserId('');
+    // Drop stale local auth artifacts so the next load takes the zero-request
+    // fast path instead of probing (and 401ing) again. The csrf_token cookie
+    // is a JS-readable double-submit nonce (regenerated on the next login),
+    // so a client-side delete is safe and keeps the console 401-free.
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('helpotron_csrf_token');
+      document.cookie = 'csrf_token=; Max-Age=0; path=/; SameSite=Lax';
+    } catch (e) {}
     setCredits(0);
     setTokenBalance(0);
-    setUserPlan('basic');
+    setUserPlan('none');
   };
 
   useEffect(() => {
     // logout=1 (set by handleLogout's hard redirect): force-clear the server
-    // session so a reload can never resurrect the previous account.
+    // session so a reload can never resurrect the previous account. The
+    // session cookie is HttpOnly — the POST to /api/logout removes it; the
+    // browser is then known-signed-out, so no /api/me probe is made (the
+    // probe would be an expected-401 the console must not see).
     const forceLogout = new URLSearchParams(window.location.search).get('logout');
     if (forceLogout) {
       api.logout().catch(() => {});
@@ -191,9 +235,42 @@ export default function App() {
         localStorage.removeItem('token');
       } catch (e) {}
       window.history.replaceState({}, '', window.location.pathname.replace('?logout=1', '') || '/');
+      setAuthStatus('signedOut');
+      return;
     }
+    // Auth gate (audit 08-28): probe the session ONLY when a client-side
+    // indicator says one might exist. A fresh/logged-out browser already
+    // initialized 'signedOut' synchronously — no request fires at all.
+    if (authStatus !== 'checking') return;
     checkSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Live token balance polling (08-27): /api/me every 25s while logged in —
+   * the top-bar widget stays fresh without a page refresh. Stops on 403
+   * (banned — the session UI already shows the suspension, no spam). */
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    const pollBalance = async () => {
+      try {
+        const resp = await fetch(`${serverUrl}/api/me`, { credentials: 'include' });
+        if (resp.status === 403) {
+          // banned — stop polling; the session UI already shows the suspension
+          clearInterval(timer);
+          return;
+        }
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data && data.authenticated) {
+          setCredits(data.credits ?? 0);
+          setTokenBalance(Number(data.token_balance ?? 0) || 0);
+          setUserPlan(data.plan || 'basic');
+        }
+      } catch (e) { /* transient network error — retry next tick */ }
+    };
+    let timer = setInterval(pollBalance, 25000);
+    return () => { if (timer) clearInterval(timer); };
+  }, [isLoggedIn, serverUrl]);
 
   const handleLoginSuccess = async (userPublicId) => {
     setAuthModalOpen(false);
@@ -215,7 +292,7 @@ export default function App() {
     setUserIdState('Guest');
     setCredits(0);
     setTokenBalance(0);
-    setUserPlan('basic');
+    setUserPlan('none');
     // Hard reset: reload with ?logout=1 so the mount effect force-clears the
     // session cookie again — a failed/partial logout must NEVER leave the
     // previous user's identity behind (08-26 cross-account leak report).
@@ -274,6 +351,35 @@ export default function App() {
     setOpenAssignment(null);
   };
 
+  /* Extension deep link (08-28): the popup's "Open assignment bubble" button
+   * navigates to /#assignment=<id> — open that bubble directly instead of
+   * landing on the overview. Best-effort: needs an active web session.
+   * Auth gate: the full-view fetch is a private endpoint — never fired while
+   * signed out (it would be an expected-401), only once 'authed', and the
+   * hash still works after sign-in for a logged-out tab. */
+  useEffect(() => {
+    if (authStatus !== 'authed') return undefined;
+    const openFromHash = async () => {
+      const m = window.location.hash.match(/assignment=(\d+)/);
+      if (!m) return;
+      const id = Number(m[1]);
+      if (!id) return;
+      try {
+        const full = await api.assignmentFullView(id);
+        const a = full && full.assignment;
+        if (a && a.id) {
+          recordNav();
+          setOpenAssignment(a);
+          setActiveView('overview');
+        }
+      } catch (e) { /* not logged in or no such assignment — stay on overview */ }
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus]);
+
   const effectiveIsAdmin = isAdmin;
 
   return (
@@ -296,10 +402,12 @@ export default function App() {
           onClose={() => setShowPrivacyModal(false)}
         />
 
-        {/* Auth Modal Overlay - Mandatory on first visit */}
+        {/* Auth Modal Overlay - Mandatory on first visit. Auth gate: opens
+            over the ANONYMOUS landing (confirmed signed-out state) or the
+            dialog-on-demand handle — never while the probe is in flight. */}
         <AuthModal
-          isOpen={!isLoggedIn || authModalOpen}
-          isMandatory={!isLoggedIn}
+          isOpen={authStatus === 'signedOut' || authModalOpen}
+          isMandatory={authStatus === 'signedOut'}
           onClose={() => setAuthModalOpen(false)}
           onLoginSuccess={(u) => {
             handleLoginSuccess(u);
@@ -308,6 +416,22 @@ export default function App() {
 
         {/* Extension install is a sidebar section now (see ExtensionInstallView) */}
 
+        {/* ─── AUTH GATE (audit 08-28) ───────────────────────────────────────
+             signedOut → anonymous marketing landing ONLY (no dashboard
+             internals, no authed fetches, modal opens above the landing);
+             checking → boot screen while the probe runs; authed → the full
+             OS shell + data views. AppShell never mounts before auth. */}
+        {authStatus === 'checking' && <SessionBootScreen />}
+
+        {authStatus === 'signedOut' && (
+          <AnonymousLanding
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenPrivacy={() => setShowPrivacyModal(true)}
+          />
+        )}
+
+        {authStatus === 'authed' && (
+          <>
         {/* Global command palette */}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
 
@@ -409,6 +533,9 @@ export default function App() {
                             onSelectAssignment={(a) => { recordNav(); setOpenAssignment(a); }}
                           />
                         </div>
+                        <div className="mt-5">
+                          <AssignmentTurnInView userId={userId} />
+                        </div>
                       </>
                     )
                   )}
@@ -416,8 +543,17 @@ export default function App() {
                   {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
 
                   {/* WORKSPACE */}
-                  {activeView === 'agent' && <MyAgentView userId={userId} onGoTo={handleSelectView} />}
-                  {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
+                  {activeView === 'agent' && <MyAgentView userId={userId} onGoTo={handleSelectView} onTokenBalance={setTokenBalance} />}
+                  {activeView === 'history' && (
+                    <AssignmentHistoryView
+                      userId={userId}
+                      onSelectAssignment={(a) => {
+                        recordNav();
+                        setOpenAssignment(a);
+                        setActiveView('overview');
+                      }}
+                    />
+                  )}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
                   {activeView === 'library' && <LibraryView user={{ public_id: userId }} />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
@@ -430,7 +566,7 @@ export default function App() {
 
                   {/* ACCOUNT */}
                   {activeView === 'credits' && <CreditsView userId={userId} initialTab={viewTab} userCredits={credits} />}
-                  {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} />}
+                  {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} plan={userPlan} credits={credits} tokenBalance={tokenBalance} isAdmin={effectiveIsAdmin} />}
                   {activeView === 'extension' && <ExtensionInstallView />}
 
                   {/* LEGACY + LEGAL */}
@@ -445,12 +581,13 @@ export default function App() {
                     />
                   )}
                   {activeView === 'datalake' && <DataLakeView userId={userId} />}
+                  {activeView === 'monitors' && <MonitorsView userId={userId} />}
                   {activeView === 'message_admin' && <MessageAdminView userId={userId} />}
                   {activeView === 'privacy' && <PrivacyPolicyView />}
                   {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
 
                   {/* ADMIN — hard route guard: non-admins get a denial, not a shell */}
-                  {activeView === 'admin' && effectiveIsAdmin && <AdminPanels initialTab="overview" />}
+                  {activeView === 'admin' && effectiveIsAdmin && <AdminPanels userId={userId} />}
                   {activeView === 'admin' && !effectiveIsAdmin && (
                     <div className="p-10 text-center">
                       <div className="text-3xl mb-3">🔒</div>
@@ -464,6 +601,8 @@ export default function App() {
 
           </div>
         </AppShell>
+          </>
+        )}
         {isLoggedIn && termsAccepted && <CookieBanner />}
       </div>
     </ErrorBoundary>

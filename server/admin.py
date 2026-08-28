@@ -7,18 +7,18 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 try:
     from .config import config
-    from .database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
-    from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token
+    from .database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
+    from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
 except (ImportError, ValueError):
     from server.config import config
-    from server.database import Assignment, CreditTransaction, Payment, StudyMaterial, Transcript, User, SessionLocal, get_db
-    from server.security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token
+    from server.database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
+    from server.security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -247,6 +247,10 @@ async def ban_user(public_id: str, request: Request, db: Session = Depends(get_d
     settings["banned"] = True
     user.settings = settings
     db.commit()
+    # Match tempban: revoke live sessions so the ban bites immediately, not
+    # at the user's next login/poll. SessionStore uses its OWN connection —
+    # commit first so this doesn't deadlock on the open write transaction.
+    SessionStore.revoke_all_sessions(user.id)
     return {"message": "User banned"}
 
 
@@ -258,9 +262,72 @@ async def unban_user(public_id: str, request: Request, db: Session = Depends(get
         raise HTTPException(404, "User not found")
     settings = user.settings or {}
     settings["banned"] = False
+    settings.pop("banned_until", None)
     user.settings = settings
     db.commit()
     return {"message": "User unbanned"}
+
+
+@router.post("/user/{public_id}/tempban")
+async def temp_ban_user(public_id: str, request: Request, hours: float = 24, db: Session = Depends(get_db)):
+    """Ban enforcement (operator 08-27): banned_until = ISO timestamp. The
+    auth layer (security.is_user_banned) refuses the account until it passes;
+    banned but expired = effectively unbanned."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    until = datetime.now(timezone.utc) + timedelta(hours=max(0.1, float(hours)))
+    settings = user.settings or {}
+    settings["banned"] = True
+    settings["banned_until"] = until.isoformat()
+    user.settings = settings
+    db.commit()
+    # Kick live sessions immediately — the ban should bite now, not at
+    # the user's next login. SessionStore uses its OWN connection — commit
+    # first so this doesn't deadlock on the open write transaction.
+    SessionStore.revoke_all_sessions(user.id)
+    return {"message": f"User temp-banned until {until.isoformat()}"}
+
+
+@router.post("/user/{public_id}/kick")
+async def kick_user(public_id: str, request: Request, db: Session = Depends(get_db)):
+    """Revoke ALL live sessions — forces re-login without touching the account."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    revoked = SessionStore.revoke_all_sessions(user.id)
+    return {"message": f"{revoked} session(s) revoked", "revoked": revoked}
+
+
+@router.delete("/user/{public_id}")
+async def delete_user(public_id: str, request: Request, db: Session = Depends(get_db)):
+    """Permanent account deletion: cascade via User relationships plus the
+    ledger/dump tables that carry plain FK columns. Banned first so the user
+    cannot slip a request in mid-deletion."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    uid = user.id
+    settings = dict(user.settings or {})
+    settings["banned"] = True
+    user.settings = settings
+    db.commit()
+    # Tables without a cascade relationship from User (plain FKs / soft refs):
+    db.query(AgentAction).filter(AgentAction.user_id == uid).delete(synchronize_session=False)
+    db.query(ApiUsageLog).filter(ApiUsageLog.user_id == uid).delete(synchronize_session=False)
+    db.query(DataSubmission).filter(DataSubmission.user_id == uid).delete(synchronize_session=False)
+    db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == uid).delete(synchronize_session=False)
+    db.query(Organization).filter(Organization.admin_id == uid).update({"admin_id": None}, synchronize_session=False)
+    db.commit()
+    # SessionStore uses its OWN connection — commit above so this doesn't
+    # deadlock on the open write transaction (database-is-locked → 500).
+    SessionStore.revoke_all_sessions(uid)
+    db.delete(user)
+    db.commit()
+    return {"message": f"User {public_id} and all associated data deleted"}
 
 
 @router.get('/search')
@@ -420,4 +487,48 @@ async def get_system_map_nodes(request: Request, db: Session = Depends(get_db)):
     require_admin(request)
     return {"nodes": get_live_system_nodes(db)}
 
+
+# ─── Control Center: change user password (08-28, forgot-password flow) ──────
+# New control: set a user's password with NO knowledge of their current one.
+# Optional recovery_code ties the operation to an open password_resets row
+# (the user asked the dev for a code and hands it over), making the action
+# atomic with the recovery request — and the Inbox still shows provenance.
+
+class ChangeUserPasswordRequest(BaseModel):
+    new_password: str = Field(..., min_length=8, max_length=256)
+    recovery_code: str | None = Field(None, max_length=12, description="Optional 6-digit recovery code from an open request")
+
+
+@router.post("/user/{public_id}/change-password")
+async def change_user_password(public_id: str, req: ChangeUserPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """Admin-only password change: works without the user's current password.
+    When a recovery_code is supplied it must match an active recovery request
+    for that user (and that request is consumed). Reuses the exact hash scheme
+    from signup; then revokes the user's live sessions."""
+    from .recovery import verify_and_reset
+
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if len(req.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    if req.recovery_code:
+        try:
+            verify_and_reset(db, public_id=public_id, new_password=req.new_password,
+                             code=req.recovery_code, by="admin")
+            return {"message": f"Password reset for {public_id} (recovery code consumed). User sessions revoked."}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    # No recovery code: plain admin override — same hash, own commit order.
+    from .security import validate_password_strength
+    if not validate_password_strength(req.new_password):
+        raise HTTPException(400, "Password must be at least 8 characters and include a letter and a number")
+    hashed, salt = hash_password(req.new_password)
+    user.password_hash = hashed
+    user.password_salt = salt
+    db.commit()
+    # SessionStore uses its OWN connection — commit above first.
+    SessionStore.revoke_all_sessions(user.id)
+    return {"message": f"Password changed for {public_id}. User sessions revoked."}
 

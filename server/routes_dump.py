@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .assignment_dump import assignment_dump_manager
-from .database import Assignment, StudyMaterial, UniversalDumpItem, User, get_db
+from .assignment_dump import assignment_dump_manager, classify_assignment_meta
+from .database import Assignment, Draft, StudyMaterial, Transcript, UniversalDumpItem, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
 
@@ -17,56 +17,7 @@ router = APIRouter(prefix="/api/dump", tags=["assignment_dump"])
 # Finalize actions the subagent pipeline consumrs (Assignment Dump → study kinds).
 FINALIZE_ACTIONS = ("flashcards", "practice_quiz", "study_guide", "summary", "do_it")
 
-_TOPIC_HINTS = {
-    "History": ("history", "reconstruction", "civil war", "president", "ancient", "revolution", "empire"),
-    "Mathematics": ("calculus", "algebra", "statistics", "equation", "theorem", "geometry", "probability"),
-    "Biology": ("cell", "dna", "genetics", "organism", "biology", "evolution", "crispr"),
-    "Computer Science": ("algorithm", "code", "programming", "data structure", "python", "machine learning", "neural", "liquidity protocol"),
-    "Literature": ("novel", "literature", "poem", "woolf", "faulkner", "narrative", "modernist"),
-    "Economics": ("economic", "inflation", "gdp", "macroeconomic", "microeconomic", "monetary"),
-    "Ethics": ("ethics", "ethical", "moral", "autonomous systems"),
-    "Psychology": ("cognitive", "behavior", "psychology", "bias", "decision"),
-}
-
-
-async def _classify_assignment_meta(source_text: str, file_name: str) -> dict:
-    """Subject/title detection for dump-created assignment bubbles (08-27).
-    LLM first (lanes-backed), keyword heuristic as fallback — a bubble is
-    never a bare 'General Academic' when the text says what it is."""
-    lines = [l.strip() for l in (source_text or "").splitlines() if l.strip()]
-    fallback = {
-        "title": (lines[0][:80] if lines else (file_name or "Dumped assignment")),
-        "subject": "General Academic",
-        "course_code": "GEN-101",
-    }
-    try:
-        from .llm import call_llm, extract_json
-        raw = await call_llm(
-            user_prompt=(source_text or "The user pasted an assignment.")[:5000],
-            system_prompt=(
-                "Classify this academic assignment text. Output ONE LINE of JSON only: "
-                '{"subject": "<real academic subject, e.g. American History>", '
-                '"title": "<short title, max 60 chars>", "course_code": "<e.g. HIST-101 or GEN-101>"}. '
-                "The subject must be a concrete academic field, never 'General Academic'."
-            ),
-            effort_score=25, max_tokens=220, response_format="json_object", model="flash",
-        )
-        parsed = extract_json(raw or "")
-        if isinstance(parsed, dict) and parsed.get("subject"):
-            return {
-                "title": str(parsed.get("title") or fallback["title"])[:80],
-                "subject": str(parsed["subject"])[:48],
-                "course_code": str(parsed.get("course_code") or "GEN-101")[:12],
-            }
-    except Exception:
-        pass
-    lower = (source_text or "").lower()
-    for subj, keys in _TOPIC_HINTS.items():
-        if any(k in lower for k in keys):
-            fallback["subject"] = subj
-            fallback["course_code"] = subj.split()[0][:4].upper() + "-101"
-            break
-    return fallback
+# Subject classification (auto-route + finalize) lives in assignment_dump.py.
 # Which actions generate a StudyMaterial, and which material kind they map to
 # (practice_quiz maps to the existing "practice_test" material kind; do_it
 # maps to "solution" — the real completed work, never a fake handoff).
@@ -79,10 +30,47 @@ GENERATING_ACTIONS = {
 }
 ALL_MATERIAL_KINDS = ("study_guide", "flashcards", "practice_test", "summary", "solution")
 
+
+def _split_generation_chunks(text: Optional[str], size: int = 8000) -> list[str]:
+    """Split source text into prompt-sized chunks on paragraph/sentence
+    boundaries so finalize generation covers the FULL source (08-28 BUG-1)."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start, total = 0, len(text)
+    while start < total:
+        end = min(start + size, total)
+        if end < total:
+            # Prefer a paragraph break, then a line break — both within the
+            # second half so one chunk is never just a few words long.
+            gap = text.rfind("\n\n", start + size // 2, end)
+            if gap == -1:
+                gap = text.rfind("\n", start + size // 2, end)
+            if gap != -1 and gap > start + size // 4:
+                end = gap + 1
+        chunks.append(text[start:end].strip())
+        start = end
+    return [c for c in chunks if c]
+
+
+def _is_untouched_auto_bubble(assignment: Optional[Assignment]) -> bool:
+    """Auto-created dump bubble with no work yet (created_from_dump, no finalize
+    request, no generated materials): re-routing reuses/removes it instead of
+    leaving a duplicate bubble behind (08-28)."""
+    if assignment is None or not (assignment.progress or {}).get("created_from_dump"):
+        return False
+    progress = assignment.progress or {}
+    if progress.get("requested_action"):
+        return False
+    return not any(progress.get(k) for k in ALL_MATERIAL_KINDS) and not progress.get("do_it_work")
+
 # Per-kind generation system prompts (Assignment Dump finalize).
 FINALIZE_PROMPTS = {
     "flashcards": (
-        "Return ONLY a JSON array of 12-20 objects {\"front\": term, \"back\": definition} "
+        "Return ONLY a JSON array of 12-20 objects {\"q\": term, \"a\": definition} "
         "built from the assignment text. Plain JSON, no markdown."
     ),
     "practice_quiz": (
@@ -142,6 +130,14 @@ async def upload_dump_file(
         manual_assignment_id=assignment_id,
     )
 
+    matched_title = None
+    match_subject = None
+    if dump_item.matched_assignment_id:
+        matched_assign = db.query(Assignment).filter(Assignment.id == dump_item.matched_assignment_id).first()
+        if matched_assign:
+            matched_title = matched_assign.title
+            match_subject = (matched_assign.progress or {}).get("subject")
+
     return {
         "status": "success",
         "dump_id": dump_item.id,
@@ -150,6 +146,8 @@ async def upload_dump_file(
         "item_status": dump_item.status,
         "auto_match_confidence": dump_item.auto_match_confidence,
         "matched_assignment_id": dump_item.matched_assignment_id,
+        "matched_assignment_title": matched_title,
+        "subject": match_subject,
         "overlord_notes": dump_item.overlord_notes,
         "snippet": (dump_item.extracted_text or "")[:250],
     }
@@ -213,23 +211,39 @@ async def manual_route_dump_item(
     if item.user_id != current_user.id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Cannot route dump items owned by another user")
 
+    prev_assignment = None
+    if item.matched_assignment_id:
+        prev_assignment = db.query(Assignment).filter(
+            Assignment.id == item.matched_assignment_id,
+            Assignment.user_id == item.user_id,
+        ).first()
+
     if payload.create_new:
         title = payload.new_assignment_title or f"Assignment from {item.file_name}"
-        new_assign = Assignment(
-            user_id=item.user_id,
-            title=title,
-            prompt=item.extracted_text or f"Generated from dumped file {item.file_name}",
-            status="tracked",
-            progress={"created_from_dump": True, "dump_file_id": item.id},
-        )
-        db.add(new_assign)
-        db.commit()
-        db.refresh(new_assign)
+        if _is_untouched_auto_bubble(prev_assignment):
+            new_assign = prev_assignment
+            new_assign.title = title
+            db.flush()
+        else:
+            new_assign = Assignment(
+                user_id=item.user_id,
+                title=title,
+                prompt=item.extracted_text or f"Generated from dumped file {item.file_name}",
+                status="tracked",
+                progress={"created_from_dump": True, "dump_file_id": item.id},
+            )
+            db.add(new_assign)
+            db.commit()
+            db.refresh(new_assign)
 
         item.matched_assignment_id = new_assign.id
         item.auto_match_confidence = 1.0
         item.status = "manual_routed"
-        item.overlord_notes = f"Manually created and routed to new assignment '{new_assign.title}'."
+        item.overlord_notes = (
+            f"Re-routed to bubble '{new_assign.title}' (auto-created bubble reused)."
+            if new_assign is prev_assignment
+            else f"Manually created and routed to new assignment '{new_assign.title}'."
+        )
     elif payload.assignment_id:
         target = db.query(Assignment).filter(
             Assignment.id == payload.assignment_id,
@@ -241,6 +255,12 @@ async def manual_route_dump_item(
         item.auto_match_confidence = 1.0
         item.status = "manual_routed"
         item.overlord_notes = "Manually assigned to existing assignment."
+        if _is_untouched_auto_bubble(prev_assignment):
+            db.query(StudyMaterial).filter(StudyMaterial.assignment_id == prev_assignment.id).delete()
+            db.delete(prev_assignment)
+            item.overlord_notes = (
+                f"Manually assigned to '{target.title}' (unused auto-created bubble removed)."
+            )
     else:
         raise HTTPException(status_code=400, detail="Must provide assignment_id or create_new=True")
 
@@ -304,7 +324,7 @@ async def finalize_dump_item(
         db.flush()
         # Subject detection (08-27): the bubble gets a real academic topic +
         # readable title, not a bare filename / 'General Academic'.
-        meta = await _classify_assignment_meta(item.extracted_text or "", item.file_name or "")
+        meta = await classify_assignment_meta(item.extracted_text or "", item.file_name or "")
         assignment.title = meta["title"]
         assignment.progress = {
             "subject": meta["subject"],
@@ -326,32 +346,94 @@ async def finalize_dump_item(
         from .llm import call_llm, extract_json
 
         source_text = (item.extracted_text or "").strip()
-        user_prompt = source_text[:8000] if source_text else "No read text — see the original file."
         kind = GENERATING_ACTIONS[action]
         sys_prompt = FINALIZE_PROMPTS[action]
+
+        # 08-28 BUG-1 fix: user_prompt used to be source_text[:8000], so a long
+        # scrape silently generated material from only its first 8k chars while
+        # the rest of the assignment was ignored. Now the source is split on
+        # paragraph boundaries into <=8k chunks and generation runs per chunk,
+        # then the per-chunk outputs are merged into ONE material — the whole
+        # source feeds the deck/guide. Bounded at 12 chunks (~96k chars); if
+        # the source is longer the limitation is stated in overlord_notes and
+        # never silent (the full source is always in the dump item).
+        FINALIZE_CHUNK_CHARS = 8000
+        FINALIZE_MAX_CHUNKS = 12
+        chunks = _split_generation_chunks(source_text, FINALIZE_CHUNK_CHARS)
+        if not chunks:
+            chunks = ["No read text — see the original file."]
+        chunk_limited = len(chunks) > FINALIZE_MAX_CHUNKS
+        if chunk_limited:
+            chunks = chunks[:FINALIZE_MAX_CHUNKS]
+
         content: str | None = None
-        try:
-            raw = await call_llm(
-                user_prompt=user_prompt,
-                system_prompt=sys_prompt,
-                effort="medium",
-                effort_score=25,  # good-token bucket: cheap summary-grade generation
-            )
-            raw = (raw or "").strip()
-            if raw:
-                if kind in ("flashcards", "practice_test"):
-                    parsed = extract_json(raw)
+        pieces: list[str] = []
+        errors = 0
+        for idx, chunk in enumerate(chunks):
+            try:
+                raw = await call_llm(
+                    user_prompt=chunk,
+                    system_prompt=sys_prompt,
+                    effort="medium",
+                    effort_score=25,  # good-token bucket: cheap summary-grade generation
+                )
+                raw = (raw or "").strip()
+                if raw:
+                    pieces.append(raw)
+                else:
+                    errors += 1
+            except Exception as e:  # noqa: BLE001 — finalize must still succeed
+                errors += 1
+                note_parts.append(f"Part {idx + 1} generation failed ({type(e).__name__}).")
+
+        if pieces:
+            if kind in ("flashcards", "practice_test"):
+                # Merge per-chunk decks into one list, deduping on the first 80
+                # chars of the question (each chunk asks for the {q,a} shape —
+                # the same parse rules as before now run once per chunk).
+                combined: list[dict] = []
+                seen: set[str] = set()
+                for piece in pieces:
+                    parsed = extract_json(piece)
+                    if kind == "flashcards":
+                        # Canonical {q, a} deck shape (08-27): also unwrap a
+                        # {"flashcards": [...]} wrapper and a legacy {front, back}
+                        # array so exporters never read empty fields.
+                        if isinstance(parsed, dict) and isinstance(parsed.get("flashcards"), list):
+                            parsed = parsed["flashcards"]
                     if isinstance(parsed, list) and all(isinstance(c, dict) for c in parsed):
-                        # Store plain JSON (strip any ```json fence) so consumers
-                        # can json.loads the content directly.
-                        content = json.dumps(parsed, ensure_ascii=False)
+                        for c in parsed:
+                            q = str(c.get("q") if c.get("q") is not None else c.get("front") or "").strip()
+                            a = str(c.get("a") if c.get("a") is not None else c.get("back") or "").strip()
+                            key = q[:80].lower()
+                            if q and a and key not in seen:
+                                seen.add(key)
+                                combined.append({"q": q, "a": a})
                     else:
                         note_parts.append("Generation returned unexpected JSON shape — no material saved.")
+                if combined:
+                    content = json.dumps(combined, ensure_ascii=False)
+            else:
+                # summary / study_guide / solution / essay: concatenate the
+                # per-chunk outputs with explicit part headers so nothing is
+                # lost and every part of the source is represented.
+                if len(pieces) == 1:
+                    content = pieces[0]
                 else:
-                    content = raw
-                generated = bool(content)
-        except Exception as e:  # noqa: BLE001 — finalize must still succeed
-            note_parts.append(f"Generation failed ({type(e).__name__}).")
+                    content = "\n\n".join(
+                        f"———— Part {i}/{len(pieces)} ————\n{piece}"
+                        for i, piece in enumerate(pieces, 1)
+                    )
+            generated = bool(content)
+
+        if chunk_limited:
+            covered = FINALIZE_CHUNK_CHARS * FINALIZE_MAX_CHUNKS
+            note_parts.append(
+                f"Source was {len(source_text):,} chars — generation covered the first "
+                f"{covered:,} (12 parts); the full source remains in the dumped file."
+            )
+        if errors and pieces:
+            note_parts.append(f"{errors} generation part(s) returned nothing.")
 
         if generated and content:
             material = StudyMaterial(
@@ -396,7 +478,42 @@ async def finalize_dump_item(
             assignment.status = "tracked"
         note_parts.append(f"Recorded finalize request '{action}'.")
 
-    # 3. Persist finalization state.
+    # 3. AI detection (08-28 BUG-4 fix): everything this bubble shows the user
+    # as PROGRESS (detector_risk / ai_score / detector_passed) was never
+    # written by the real engine — only by a mock. Finalize is where material
+    # is GENERATED, so the produced content is scored here through the real
+    # detector registry (same engine as draft/humanizer); the scraped source
+    # is scored too. Cheap: local heuristics + 24h cache, guarded so a
+    # detector failure never fails finalize.
+    try:
+        from . import detectors
+
+        if generated and content:
+            avg, results, passed = await detectors.score_text(content, threshold=80.0)
+            assignment.progress = {
+                **(assignment.progress or {}),
+                "detector_risk": round(max(0.0, min(1.0, avg / 100.0)), 4),
+                "ai_score": round(avg, 2),
+                "detector_passed": bool(passed),
+                "detector_scored_chars": len(content or ""),
+                "detector_details": [
+                    {"detector": r.name, "score": round(r.score, 2)} for r in results
+                ][:12],
+                "detector_at": utcnow().isoformat(),
+            }
+        else:
+            src = (item.extracted_text or "").strip()
+            if src:
+                risk = await detectors.check_ai_detection_cached(src)
+                assignment.progress = {
+                    **(assignment.progress or {}),
+                    "detector_risk": risk,
+                    "detector_at": utcnow().isoformat(),
+                }
+    except Exception as e:  # noqa: BLE001 — best-effort, never blocks finalize
+        note_parts.append(f"AI detection skipped ({type(e).__name__}).")
+
+    # 4. Persist finalization state.
     item.requested_action = action
     item.status = "finalized"
     item.overlord_notes = " ".join(note_parts)
@@ -422,7 +539,10 @@ async def finalize_dump_item(
         "generated": generated,
         # Only present when generated: the actual content (solution/study
         # material) so the client can show the work without a second fetch.
-        "work": (content[:40000] if generated and content else None),
+        # 08-28 BUG-1: was 40000 — a long multi-chunk material arrived sliced;
+        # the response now mirrors the stored material (StudyMaterial.content
+        # is unbounded) so the client never gets a silently cut answer.
+        "work": (content[:400_000] if generated and content else None),
     }
 
 
@@ -445,7 +565,20 @@ async def delete_dump_item(
     if item.matched_assignment_id:
         assignment = db.query(Assignment).filter(Assignment.id == item.matched_assignment_id).first()
         if assignment and (assignment.progress or {}).get("created_from_dump"):
-            db.query(StudyMaterial).filter(StudyMaterial.assignment_id == assignment.id).delete()
+            # 08-28: SQLite runs PRAGMA foreign_keys=ON, so the assignment
+            # cannot be deleted while any row still references it. The item
+            # being removed goes first (it is queued for delete), but sibling
+            # dump items routed/finalized onto the same bubble would raise
+            # "FOREIGN KEY constraint failed" on the assignment delete and
+            # turn the whole request into a 500 — detach them (and any
+            # transcripts/drafts) before cascading.
+            db.query(UniversalDumpItem).filter(
+                UniversalDumpItem.matched_assignment_id == assignment.id,
+                UniversalDumpItem.id != item.id,
+            ).update({UniversalDumpItem.matched_assignment_id: None}, synchronize_session=False)
+            db.query(StudyMaterial).filter(StudyMaterial.assignment_id == assignment.id).delete(synchronize_session=False)
+            db.query(Transcript).filter(Transcript.assignment_id == assignment.id).delete(synchronize_session=False)
+            db.query(Draft).filter(Draft.assignment_id == assignment.id).delete(synchronize_session=False)
             cascaded = assignment.title
             db.delete(assignment)
     db.delete(item)

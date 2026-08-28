@@ -326,7 +326,9 @@ def test_credits_leaderboard_and_custom_alias():
     assert l_resp.status_code == 200
     data = l_resp.json()
     assert "leaderboard" in data
-    assert len(data["leaderboard"]) >= 3
+    # 08-27: synthetic demo profiles were removed — the board ranks only real users
+    # (this test's authenticated user opts in by default).
+    assert len(data["leaderboard"]) >= 1
     # Check that entries have alias and credits_used
     first = data["leaderboard"][0]
     assert "alias" in first
@@ -350,7 +352,9 @@ def test_credits_leaderboard_and_custom_alias():
 
 
 def test_datalake_microcredits_pending_policy():
-    """Verify microcredits submissions receive pending_utilization status and honest 2+ business days notice."""
+    """Verify microcredits submissions receive pending_utilization status and an honest
+    operator-review notice (08-27: notice copy now reflects the live personal-app review,
+    not the old 2+ business day SLA)."""
     from server.main import app
 
     client = _authed_client(app)  # BATCH-04 IDOR fix: submit requires an authenticated session
@@ -367,7 +371,7 @@ def test_datalake_microcredits_pending_policy():
     assert data["status"] == "success"
     submission = data["submission"]
     assert submission["status"] in ("pending_review", "pending_utilization")
-    assert "2+ business days" in submission["utilization_notice"]
+    assert "the operator reviews the submission" in submission["utilization_notice"]
     assert submission["credits_awarded"] >= 5
 
 
@@ -384,7 +388,7 @@ def test_message_admin_workflow():
         "category": "feature_request",
         "message": "Can you check why our university portal table isn't auto-scraped? Link attached in syllabus.",
     }
-    send_resp = client.post("/api/user/message-admin", json=msg_payload)
+    send_resp = client.post("/api/user/message-admin", data=msg_payload)  # multipart form endpoint (operator 08-26: file attachments)
     assert send_resp.status_code == 200
     res_data = send_resp.json()
     assert res_data["status"] == "success"

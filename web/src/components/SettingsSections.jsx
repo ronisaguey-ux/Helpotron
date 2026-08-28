@@ -11,14 +11,15 @@ import api from '../api.js';
 import TwoFactorSetup from './TwoFactorSetup.jsx';
 import ScopedSetting from './ScopedSetting.jsx';
 import DemoModeToggle from './DemoModeToggle.jsx';
+import RecoveryFlowModal from './RecoveryFlowModal.jsx';
 
 /* Every toggle also accepts hierarchy variants (On/Off per subject/class/…) */
 const ON_OFF = [{ key: true, label: 'On' }, { key: false, label: 'Off' }];
 
-function Field({ label, children, hint }) {
+function Field({ label, children, hint, id }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-300 mb-1.5">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-slate-300 mb-1.5">{label}</label>
       {children}
       {hint && <p className="text-[10px] text-slate-600 mt-1">{hint}</p>}
     </div>
@@ -28,7 +29,17 @@ function Field({ label, children, hint }) {
 const inputCls = 'clean-input w-full px-3 py-2 text-xs outline-none';
 
 /* ── ACCOUNT ─────────────────────────────────────────────────────────────── */
-function AccountSection({ s, set, userId }) {
+/* Plan display metadata — REAL plan from the account, never a hardcoded demo
+ * badge. "none" = dev/beta account with no subscription (operator 08-27). */
+const PLAN_BADGE = {
+  none: ['No plan', 'slate', 'dev/beta — no subscription'],
+  basic: ['Basic', 'blue', ''],
+  pro: ['Pro', 'amber', ''],
+  elite: ['Elite', 'purple', ''],
+};
+
+function AccountSection({ s, set, userId, plan }) {
+  const [planLabel, planColor] = PLAN_BADGE[plan] || PLAN_BADGE.none;
   const [pwOpen, setPwOpen] = useState(false);
   const [pwCur, setPwCur] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -36,6 +47,7 @@ function AccountSection({ s, set, userId }) {
   const [pwMsg, setPwMsg] = useState(null); // { ok, text }
   const [pwBusy, setPwBusy] = useState(false);
   const [pfpMsg, setPfpMsg] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
   const pfpRef = useRef(null);
 
   const uploadPfp = async (e) => {
@@ -88,7 +100,7 @@ function AccountSection({ s, set, userId }) {
         <div>
           <div className="text-sm font-semibold text-white">{s.profile.displayName || userId}</div>
           <div className="text-[11px] text-slate-500 font-mono">{userId}</div>
-          <Badge color="purple" className="mt-1">Elite plan</Badge>
+          <Badge color={planColor} className="mt-1">{planLabel}</Badge>
         </div>
       </div>
       <Field label="Profile picture" hint="PNG or JPG, max 5 MB — same pic shows in the topbar and your agent.">
@@ -126,14 +138,15 @@ function AccountSection({ s, set, userId }) {
         </div>
         {pfpMsg && <p className="text-[11px] text-rose-300 mt-1.5">⚠️ {pfpMsg}</p>}
       </Field>
-      <Field label="Display name">
-        <input value={s.profile.displayName} onChange={(e) => set('profile.displayName', e.target.value)} className={inputCls} />
+      <Field label="Display name" id="settings-display-name">
+        <input id="settings-display-name" value={s.profile.displayName} onChange={(e) => set('profile.displayName', e.target.value)} className={inputCls} />
       </Field>
-      <Field label="Email" hint="Managed by your sign-in provider.">
-        <input value={`${userId || 'you'}@helpotron.app`} readOnly className={`${inputCls} opacity-50`} />
+      <Field label="Email" id="settings-email" hint="Managed by your sign-in provider.">
+        <input id="settings-email" value={`${userId || 'you'}@helpotron.app`} readOnly className={`${inputCls} opacity-50`} />
       </Field>
-      <Field label="Phone number" hint="Used for SMS 2FA codes and account recovery.">
+      <Field label="Phone number" id="settings-phone" hint="Used for SMS 2FA codes and account recovery.">
         <input
+          id="settings-phone"
           type="tel"
           inputMode="tel"
           value={s.profile.phone || ''}
@@ -144,13 +157,23 @@ function AccountSection({ s, set, userId }) {
       </Field>
       <Field label="Password">
         {!pwOpen ? (
-          <button
-            type="button"
-            onClick={() => setPwOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer"
-          >
-            <KeyRound className="w-3.5 h-3.5" /> Change password
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPwOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5" /> Change password
+            </button>
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              title="Reset via email or phone code — or ask the developer for one. No current password needed."
+              className="px-3 py-2 rounded-xl bg-blue-600/15 border border-blue-500/40 text-[11px] text-blue-300 hover:bg-blue-600/25 hover:text-white transition cursor-pointer"
+            >
+              Forgot password?
+            </button>
+          </div>
         ) : (
           <form onSubmit={submitPassword} className="space-y-2.5 pt-1">
             <input
@@ -159,6 +182,7 @@ function AccountSection({ s, set, userId }) {
               value={pwCur}
               onChange={(e) => setPwCur(e.target.value)}
               placeholder="Current password"
+              aria-label="Current password"
               className={inputCls}
               autoFocus
             />
@@ -168,6 +192,7 @@ function AccountSection({ s, set, userId }) {
               value={pwNew}
               onChange={(e) => setPwNew(e.target.value)}
               placeholder="New password (min 8 characters)"
+              aria-label="New password"
               className={inputCls}
             />
             <input
@@ -176,6 +201,7 @@ function AccountSection({ s, set, userId }) {
               value={pwNew2}
               onChange={(e) => setPwNew2(e.target.value)}
               placeholder="Repeat new password"
+              aria-label="Repeat new password"
               className={inputCls}
             />
             {pwMsg && (
@@ -201,6 +227,7 @@ function AccountSection({ s, set, userId }) {
         )}
       </Field>
       <TwoFactorSetup s={s} set={set} />
+      <RecoveryFlowModal open={forgotOpen} onClose={() => setForgotOpen(false)} publicId={userId} />
     </div>
   );
 }
@@ -229,16 +256,16 @@ function AcademicSection({ s, set }) {
   return (
     <div className="space-y-7">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg">
-        <Field label="Education level">
-          <select value={s.profile.educationLevel} onChange={(e) => set('profile.educationLevel', e.target.value)} className={inputCls + ' cursor-pointer'}>
+        <Field label="Education level" id="settings-edu-level">
+          <select id="settings-edu-level" value={s.profile.educationLevel} onChange={(e) => set('profile.educationLevel', e.target.value)} className={inputCls + ' cursor-pointer'}>
             {['High School', 'Undergraduate', 'Graduate', 'Professional'].map((l) => <option key={l} className="bg-slate-900">{l}</option>)}
           </select>
         </Field>
-        <Field label="Major">
-          <input value={s.profile.major} onChange={(e) => set('profile.major', e.target.value)} className={inputCls} />
+        <Field label="Major" id="settings-major">
+          <input id="settings-major" value={s.profile.major} onChange={(e) => set('profile.major', e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Year">
-          <select value={s.profile.year} onChange={(e) => set('profile.year', e.target.value)} className={inputCls + ' cursor-pointer'}>
+        <Field label="Year" id="settings-year">
+          <select id="settings-year" value={s.profile.year} onChange={(e) => set('profile.year', e.target.value)} className={inputCls + ' cursor-pointer'}>
             {['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate'].map((y) => <option key={y} className="bg-slate-900">{y}</option>)}
           </select>
         </Field>
@@ -369,8 +396,8 @@ function WritingSection({ s, set, scoped, setVariants, subjectRefs }) {
         values={['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE']}
         refs={subjectRefs}
       >
-        <Field label="Citation style" hint="Applied to generated drafts and study materials.">
-          <select value={s.writing.style} onChange={(e) => set('writing.style', e.target.value)} className={inputCls + ' max-w-xs cursor-pointer'}>
+        <Field label="Citation style" id="settings-citation-style" hint="Applied to generated drafts and study materials.">
+          <select id="settings-citation-style" value={s.writing.style} onChange={(e) => set('writing.style', e.target.value)} className={inputCls + ' max-w-xs cursor-pointer'}>
             {['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE'].map((st) => <option key={st} className="bg-slate-900">{st}</option>)}
           </select>
         </Field>
@@ -677,8 +704,9 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
               </p>
             )}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
+              <label htmlFor="settings-2fa-code" className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
               <input
+                id="settings-2fa-code"
                 type="text"
                 maxLength={6}
                 placeholder="123456"
@@ -718,6 +746,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              aria-label="6-digit security code to confirm turning off 2FA"
               className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-rose-500"
             />
             <div className="flex gap-2 pt-1">
@@ -792,21 +821,46 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
 }
 
 /* ── CREDITS & BILLING ───────────────────────────────────────────────────── */
-function BillingSection({ onGoTo }) {
+/* REAL account numbers, not the old hardcoded Elite/12,000/10,029 demo card
+ * (operator 08-27: that card told every user they were on an Elite plan). */
+const BILLING_META = {
+  none: { label: 'No plan', sub: 'Dev / beta account — no subscription', badge: 'slate', limit: 0 },
+  basic: { label: 'Basic', sub: 'Allocations settle at product launch', badge: 'blue', limit: 30 },
+  pro: { label: 'Pro', sub: 'Allocations settle at product launch', badge: 'amber', limit: 100 },
+  elite: { label: 'Elite', sub: 'Allocations settle at product launch', badge: 'purple', limit: 300 },
+};
+
+function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
+  const meta = BILLING_META[plan] || BILLING_META.none;
+  const limit = meta.limit;
+  const tk = Number(tokenBalance ?? 0) || 0;
+  const cr = Number(credits ?? 0) || 0;
+  const pct = limit > 0 ? Math.min(100, Math.round((tk / limit) * 100)) : 0;
   return (
     <div className="space-y-5 max-w-lg">
       <div className="p-4 rounded-xl bg-slate-950/40 border border-white/6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-semibold text-white">Elite plan</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">$9.99 / month · 12,000 credits</div>
+            <div className="text-xs font-semibold text-white">{meta.label}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{meta.sub}</div>
           </div>
-          <Badge color="purple">active</Badge>
+          <Badge color={meta.badge}>{plan && plan !== 'none' ? 'active' : 'beta'}</Badge>
         </div>
         <div className="mt-3">
-          <div className="flex justify-between text-[10px] text-slate-500 mb-1"><span>Monthly credits</span><span className="font-mono">10,029 / 12,000</span></div>
-          <Progress value={84} color="from-amber-500 to-orange-400" />
+          {limit > 0 ? (
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+              <span>Usage tokens left</span>
+              <span className="font-mono">{tk.toLocaleString()} / {limit.toLocaleString()}</span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+              <span>Usage tokens left</span>
+              <span className="font-mono">{tk.toLocaleString()}</span>
+            </div>
+          )}
+          <Progress value={limit > 0 ? pct : 0} color={limit > 0 ? 'from-amber-500 to-orange-400' : 'from-slate-600 to-slate-500'} />
         </div>
+        <div className="mt-2 text-[10px] text-slate-600 font-mono">{cr.toLocaleString()} discount credits</div>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer">Open plans & top-ups</button>
@@ -950,13 +1004,13 @@ function AccessibilitySection({ s, set }) {
 function LanguageSection({ s, set }) {
   return (
     <div className="space-y-4 max-w-md">
-      <Field label="Language & locale">
-        <select value={s.language.locale} onChange={(e) => set('language', { ...s.language, locale: e.target.value })} className={inputCls + ' cursor-pointer'}>
+      <Field label="Language & locale" id="settings-lang-locale">
+        <select id="settings-lang-locale" value={s.language.locale} onChange={(e) => set('language', { ...s.language, locale: e.target.value })} className={inputCls + ' cursor-pointer'}>
           {[['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'], ['zh', '中文']].map(([v, label]) => <option key={v} value={v} className="bg-slate-900">{label}</option>)}
         </select>
       </Field>
-      <Field label="Timezone">
-        <select value={s.language.timezone} onChange={(e) => set('language', { ...s.language, timezone: e.target.value })} className={inputCls + ' cursor-pointer'}>
+      <Field label="Timezone" id="settings-timezone">
+        <select id="settings-timezone" value={s.language.timezone} onChange={(e) => set('language', { ...s.language, timezone: e.target.value })} className={inputCls + ' cursor-pointer'}>
           {['auto', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC'].map((tz) => <option key={tz} className="bg-slate-900">{tz}</option>)}
         </select>
       </Field>
@@ -1006,16 +1060,16 @@ function AdvancedSection({ s, set, onGoTo }) {
 }
 
 /* ── Dispatcher ──────────────────────────────────────────────────────────── */
-export function SettingsSections({ section, s, set, scoped, setVariants, subjectRefs, userId, onGoTo }) {
+export function SettingsSections({ section, s, set, scoped, setVariants, subjectRefs, userId, onGoTo, plan, credits, tokenBalance }) {
   const scopeProps = { scoped, setVariants, subjectRefs };
   switch (section) {
-    case 'account': return <AccountSection s={s} set={set} userId={userId} />;
+    case 'account': return <AccountSection s={s} set={set} userId={userId} plan={plan} />;
     case 'academic': return <AcademicSection s={s} set={set} />;
     case 'writing': return <WritingSection s={s} set={set} {...scopeProps} />;
     case 'automation': return <AutomationSection s={s} set={set} {...scopeProps} />;
     case 'notifications': return <NotificationsSection s={s} set={set} {...scopeProps} />;
     case 'privacy': return <PrivacySection s={s} set={set} {...scopeProps} onGoTo={onGoTo} />;
-    case 'billing': return <BillingSection onGoTo={onGoTo} />;
+    case 'billing': return <BillingSection onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} />;
     case 'integrations': return <IntegrationsSection s={s} set={set} />;
     case 'extension': return <ExtensionSection s={s} set={set} />;
     case 'shortcuts': return <ShortcutsSection s={s} set={set} />;

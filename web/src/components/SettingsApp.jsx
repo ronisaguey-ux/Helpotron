@@ -11,6 +11,7 @@ import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, S
 import { loadSettings, saveSettings, EFFORT_SCORES, DEFAULT_SETTINGS } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
+import AdminPanels from './AdminPanels.jsx';
 import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
 import ScopedSetting, { SCOPE_LEVELS } from './ScopedSetting.jsx';
@@ -33,6 +34,12 @@ const SECTIONS = [
   { key: 'language', label: 'Language & Region', icon: Globe, desc: 'Locale, timezone, units', tier: 'advanced' },
   { key: 'experimental', label: 'Experimental', icon: FlaskConical, desc: 'Unstable but exciting', tier: 'expert' },
   { key: 'advanced', label: 'Advanced', icon: Wrench, desc: 'Debug, config, raw JSON', tier: 'expert' },
+];
+
+/* Operator/admin view (operator 08-27): when the account is an admin, Settings
+ * shows ONLY the Control Center — no Account/Billing/Study user sections. */
+const ADMIN_SECTIONS = [
+  { key: 'control-center', label: 'Control Center', icon: Shield, desc: 'System-wide operations', tier: 'simple' },
 ];
 
 /* Pre-configured behavior profiles. Applying one RESETS everything behavioral
@@ -160,25 +167,25 @@ function AppearancePreview({ a }) {
         <div className="grid grid-cols-3 gap-1.5" style={{ padding: 10 }}>
           <div className="col-span-2 rounded-lg" style={{ padding: densityPad, background: light ? '#f1f5f9' : 'rgba(255,255,255,0.04)', border: `1px solid ${border}` }}>
             <div className="text-[9px] font-semibold" style={{ color: text }}>Good afternoon.</div>
-            <div className="text-[8px] mt-1" style={{ color: sub }}>Biology draft is ready.</div>
+            <div className="text-[8px] mt-1" style={{ color: sub }}>Assignment brief ready.</div>
             <div className="h-1.5 rounded-full mt-2" style={{ width: '80%', background: `linear-gradient(90deg, ${accentBg.replace('bg-', '#')}cc, ${accentBg.replace('bg-', '#')}44)` }} />
           </div>
           <div className="rounded-lg" style={{ background: light ? '#f1f5f9' : 'rgba(255,255,255,0.04)', border: `1px solid ${border}`, padding: densityPad }}>
             <div className="text-[9px] font-semibold" style={{ color: text }}>Credits</div>
-            <div className="text-[8px] font-mono mt-1" style={{ color: accentText }}>10,029</div>
-            <div className="text-[7px] mt-1" style={{ color: sub }}>projected 9,659</div>
+            <div className="text-[8px] font-mono mt-1" style={{ color: accentText }}>0</div>
+            <div className="text-[7px] mt-1" style={{ color: sub }}>projected 0</div>
           </div>
           <div className="col-span-2 rounded-lg" style={{ background: light ? '#f1f5f9' : 'rgba(255,255,255,0.04)', border: `1px solid ${border}`, padding: densityPad }}>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentBg }} />
-              <div className="text-[8px] font-semibold" style={{ color: text }}>Calculus Problem Set</div>
-              <span className="ml-auto text-[7px] px-1 rounded" style={{ background: 'rgba(245,158,11,0.2)', color: '#d97706' }}>due tomorrow</span>
+              <div className="text-[8px] font-semibold" style={{ color: text }}>Assignment brief</div>
+              <span className="ml-auto text-[7px] px-1 rounded" style={{ background: 'rgba(245,158,11,0.2)', color: '#d97706' }}>due soon</span>
             </div>
             <div className="h-1 rounded-full mt-1.5" style={{ width: '55%', background: 'rgba(245,158,11,0.35)' }} />
           </div>
           <div className="rounded-lg" style={{ background: light ? '#f1f5f9' : 'rgba(255,255,255,0.04)', border: `1px solid ${border}`, padding: densityPad }}>
             <div className="text-[8px] font-semibold" style={{ color: text }}>Study streak</div>
-            <div className="text-[10px] font-black mt-1" style={{ color: accentText }}>12 days</div>
+            <div className="text-[10px] font-black mt-1" style={{ color: accentText }}>—</div>
           </div>
         </div>
       </div>
@@ -272,14 +279,18 @@ const INTELLIGENCE = [
 
 const PERSONALITIES = ['Professional', 'Friendly', 'Strict', 'Socratic', 'Coach', 'Researcher', 'Tutor', 'Minimalist'];
 
-function EffortSlider({ value, onChange }) {
+function EffortSlider({ value, onChange, locked }) {
   // UI scale 1–10 (operator 08-26); backend contract stays 1–1000 (×100).
+  // locked (operator 08-27, demo mode): server forces effort="auto" — the
+  // slider is disabled and the stored/user-set score is ignored entirely.
   const n = Math.max(1, Math.min(10, Math.round(Number(value || 500) / 100)));
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <div className="text-xs font-medium text-slate-300">AI Effort</div>
-        <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>
+        {locked
+          ? <div className="text-xs font-mono font-bold text-amber-300">AUTO <span className="text-[10px] text-slate-500">(demo)</span></div>
+          : <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>}
       </div>
       <input
         type="range"
@@ -287,8 +298,9 @@ function EffortSlider({ value, onChange }) {
         max={10}
         step={1}
         value={n}
+        disabled={locked}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-blue-500 cursor-pointer"
+        className={`w-full accent-blue-500 ${locked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
         aria-label="AI effort score between 1 and 10"
       />
       <div className="flex justify-between text-[10px] text-slate-500 mt-1">
@@ -300,6 +312,184 @@ function EffortSlider({ value, onChange }) {
   );
 }
 
+
+/* ── Agent Hierarchy (operator 08-28) — per-surface educational-mode &
+ * identity scope. Stored as settings.ai.hierarchy = {node: {mode: 'edu'|
+ * 'open', personality, instructions, memories[]}}. Each node is independent,
+ * default 'edu'; non-my_agent nodes default to NO own identity — My Agent's
+ * personality/instructions/memory/files never apply to them. The my_agent
+ * node keeps using the per-user educationalMode switch (My Agent page) so
+ * both agree; its identity/memory/files live in the My Agent page. */
+const AGENT_HIERARCHY_NODES = [
+  { key: 'my_agent', label: 'My Agent', desc: 'The main personal agent (My Agent page & main chat)' },
+  { key: 'assignment_team', label: 'Assignment team', desc: 'Per-assignment subagent teams (assignment bubbles)' },
+  { key: 'study_tools', label: 'Study tools', desc: 'Flashcards, practice tests, study guides' },
+  { key: 'dump_agent', label: 'Dump agent', desc: 'Assignment Dump extraction & routing' },
+  { key: 'qa_chat', label: 'Q&A chat', desc: 'Student Q&A chat' },
+  { key: 'extensions', label: 'Extensions', desc: 'Browser extension flows' },
+];
+
+function AgentHierarchy({ s, set }) {
+  const ai = s.ai || {};
+  const hierarchy = ai.hierarchy || {};
+  const legacyEdu = s.educationalMode !== false ? 'edu' : 'open';
+
+  const nodeCfg = (key) => {
+    const c = hierarchy[key];
+    return c && typeof c === 'object' ? c : {};
+  };
+  const nodeMode = (key) => nodeCfg(key).mode || (key === 'my_agent' ? legacyEdu : 'edu');
+
+  const updateNode = (key, patch) => {
+    const nextHierarchy = JSON.parse(JSON.stringify(hierarchy || {}));
+    nextHierarchy[key] = { ...(nextHierarchy[key] || {}), ...patch };
+    set('ai.hierarchy', nextHierarchy);
+    // Server (mode_for_node/agent_prompt) reads settings.ai.hierarchy — mirror
+    // immediately; PATCH /api/settings merges one level (ai.update).
+    api.updateSettings({ ai: { hierarchy: nextHierarchy } }).catch(() => {});
+  };
+
+  const setNodeMode = (key, mode) => {
+    if (key === 'my_agent') {
+      // The per-user switch lives on the My Agent node — keep one source of
+      // truth so the My Agent page toggle and this control never disagree.
+      const edu = mode === 'edu';
+      set('educationalMode', edu);
+      api.updateSettings({ educationalMode: edu }).catch(() => {});
+      return;
+    }
+    updateNode(key, { mode });
+  };
+
+  const addMemory = (key) => {
+    const cfg = nodeCfg(key);
+    const text = (cfg._memInput || '').trim();
+    if (!text) return;
+    const memories = Array.isArray(cfg.memories) ? [...cfg.memories, text] : [text];
+    updateNode(key, { memories });
+  };
+  const delMemory = (key, idx) => {
+    const memories = Array.isArray(nodeCfg(key).memories) ? nodeCfg(key).memories.slice() : [];
+    memories.splice(idx, 1);
+    updateNode(key, { memories });
+  };
+  const onMemInput = (key, value) => {
+    // stash the pending input on the node cfg so it survives re-renders
+    updateNode(key, { _memInput: value });
+  };
+
+  return (
+    <div className="px-4 py-4 rounded-2xl bg-slate-950/40 border border-white/6 space-y-3">
+      <div>
+        <div className="text-xs font-semibold text-white flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[10px] flex items-center justify-center">🧭</span>
+          Agent Hierarchy
+        </div>
+        <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+          Which surfaces are in educational mode (school questions only) and how each surface speaks.
+          Every node starts <b>Educational</b>; each one is configured independently, and a surface never
+          inherits My Agent's identity, memory or files.
+        </div>
+      </div>
+
+      {AGENT_HIERARCHY_NODES.map((n) => {
+        const cfg = nodeCfg(n.key);
+        const mode = nodeMode(n.key);
+        return (
+          <div key={n.key} className="rounded-xl bg-slate-900/60 border border-white/6 p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-200 truncate">{n.label}</div>
+                <div className="text-[10px] text-slate-500 truncate">{n.desc}</div>
+              </div>
+              <div className="flex rounded-lg overflow-hidden border border-white/10 text-[10px] font-semibold shrink-0">
+                {[['edu', 'Educational'], ['open', 'Open']].map(([mk, ml]) => (
+                  <button
+                    key={mk}
+                    type="button"
+                    onClick={() => setNodeMode(n.key, mk)}
+                    className={`px-3 py-1.5 transition cursor-pointer ${
+                      mode === mk
+                        ? (mk === 'edu' ? 'bg-emerald-600/25 text-emerald-300' : 'bg-amber-600/25 text-amber-300')
+                        : 'bg-white/4 text-slate-500 hover:text-slate-200'
+                    }`}
+                  >
+                    {ml}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {n.key === 'my_agent' ? (
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                My Agent's identity, instructions, memory and files live on the <b>My Agent page</b> —
+                no duplication here. This switch also mirrors the Educational-only mode toggle above.
+              </p>
+            ) : (
+              <>
+                <label className="block text-[10px] text-slate-500">Personality (this surface)</label>
+                <input
+                  value={cfg.personality || ''}
+                  onChange={(e) => updateNode(n.key, { personality: e.target.value })}
+                  placeholder="e.g. Socratic, peer tutor, concise…"
+                  aria-label={`${n.label} personality`}
+                  className="clean-input w-full px-2.5 py-1.5 text-[11px] outline-none"
+                />
+                <label className="block text-[10px] text-slate-500">Instructions (this surface)</label>
+                <textarea
+                  value={cfg.instructions || ''}
+                  onChange={(e) => updateNode(n.key, { instructions: e.target.value })}
+                  rows={2}
+                  placeholder="How this surface's agent should behave for the student…"
+                  aria-label={`${n.label} instructions`}
+                  className="clean-input w-full px-2.5 py-1.5 text-[11px] outline-none resize-none"
+                />
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] text-slate-500">Inline memory (this surface)</label>
+                    <span className="text-[10px] text-slate-600">{Array.isArray(cfg.memories) ? cfg.memories.length : 0}</span>
+                  </div>
+                  <div className="space-y-1 mt-1 mb-1.5">
+                    {(Array.isArray(cfg.memories) ? cfg.memories : []).map((m, i) => (
+                      <div key={i} className="flex items-start gap-2 p-1.5 rounded-lg bg-slate-950/50 border border-white/6">
+                        <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m}</p>
+                        <button
+                          type="button"
+                          onClick={() => delMemory(n.key, i)}
+                          className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer"
+                          aria-label={`Remove memory ${i + 1} for ${n.label}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      value={cfg._memInput || ''}
+                      onChange={(e) => onMemInput(n.key, e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addMemory(n.key)}
+                      placeholder="Add a memory for this surface…"
+                      aria-label={`${n.label} memory`}
+                      className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addMemory(n.key)}
+                      className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* Agent data manager inside AI & Intelligence (operator 08-26): permanent
  * memory + loaded files, with per-hierarchy scope hints. Uses the same
@@ -364,7 +554,7 @@ function AIAgentData() {
         <div className="flex gap-2">
           <input value={memText} onChange={(e) => setMemText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addMem()}
-            placeholder="Add a memory…" className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none" />
+            placeholder="Add a memory…" aria-label="Add a memory" className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none" />
           <button type="button" onClick={addMem} disabled={busy}
             className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50">
             Add
@@ -420,6 +610,21 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
   };
   return (
     <div className="space-y-7">
+      {/* DEMO MODE (operator 08-27): effort is non-overridable during testing.
+       * Auto routing is applied as the default for all users — junk prompts
+       * drop to the cheap engines, hard problems still escalate. */}
+      <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+        <div>
+          <div className="text-xs font-semibold text-white flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🧪</span>
+            Demo mode
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Auto mode is being applied as the non-overridable default for testing purposes. Every request is routed by difficulty: junk prompts get the cheap-and-fast engines, genuinely hard problems still escalate.
+          </div>
+        </div>
+      </div>
+
       {/* Educational-only mode (operator 08-26) — guarded behavior via the
        * agent's system prompt; OFF = unrestricted, zero guidance. */}
       <div className="flex items-start justify-between gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
@@ -442,22 +647,22 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
         />
       </div>
 
+      {/* Agent Hierarchy (operator 08-28): per-surface edu-mode + identity
+       * scope — one card per node, saved through the normal settings path. */}
+      <AgentHierarchy s={s} set={set} />
+
       {/* Agent data: memory + skills/rules/personality (operator 08-26) */}
       <AIAgentData />
 
-      {/* Effort — the one control that matters */}
-      <ScopedSetting
-        path="ai.effort"
-        title="AI effort"
-        variants={scoped['ai.effort']}
-        setVariants={setVariants}
-        slider={{ min: 1, max: 10, step: 1 }}
-        refs={subjectRefs}
-        refPlaceholder="e.g. Biology"
-        description="Low effort = fast cheap engines on mechanical work. High effort = flagship research engines on hard problems. Best per course, not globally."
-      >
-        <EffortSlider value={aiEffort} onChange={setEffort} />
-      </ScopedSetting>
+      {/* Effort — the one control that matters. Locked during demo mode
+       * (operator 08-27); the server ignores stored/per-subject scores and
+       * forces auto routing in llm.call_llm. */}
+      <div className="px-4 py-3.5 rounded-2xl bg-slate-950/40 border border-white/6">
+        <EffortSlider value={aiEffort} onChange={setEffort} locked />
+        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+          Locked during demo mode. Requests auto-route by difficulty: junk prompts go to the cheap-and-fast engines, hard problems escalate to the flagship ones. Per-subject effort overrides are suspended too.
+        </p>
+      </div>
 
       <ScopedSetting
         path="ai.autoRouting"
@@ -487,10 +692,11 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
         </div>
       </div>
 
-      {/* Routing by task (tier labels, never model names) */}
+      {/* Routing by task (tier labels, never model names) — demo mode (08-27):
+       * routing is auto, so Research/Reasoning show "by difficulty". */}
       <div>
         <div className="text-xs font-medium text-slate-300 mb-2">Task routing</div>
-        <p className="text-[11px] text-slate-500 mb-3">How each task type is routed at your current effort level.</p>
+        <p className="text-[11px] text-slate-500 mb-3">How each task type is routed during demo mode (auto, by difficulty).</p>
         <div className="rounded-xl overflow-hidden border border-white/8">
           {[
             ['OCR', 'Fast tier', 'green'],
@@ -498,8 +704,8 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
             ['Summarization', 'Fast tier', 'green'],
             ['Writing', 'Balanced tier', 'blue'],
             ['Image analysis', 'Balanced tier', 'blue'],
-            ['Research', ai.effort === 'high' ? 'Flagship tier' : 'Balanced tier', ai.effort === 'high' ? 'purple' : 'blue'],
-            ['Reasoning', ai.effort === 'high' ? 'Flagship tier' : 'Balanced tier', ai.effort === 'high' ? 'purple' : 'blue'],
+            ['Research', 'By difficulty', 'purple'],
+            ['Reasoning', 'By difficulty', 'purple'],
           ].map(([task, tier, color], i) => (
             <div key={task} className={`flex items-center justify-between px-4 py-2.5 ${i % 2 ? 'bg-slate-950/40' : ''} text-xs`}>
               <span className="text-slate-300">{task}</span>
@@ -625,7 +831,7 @@ function AccessibilitySection({ s, set }) {
   );
 }
 
-export function SettingsApp({ userId, onGoTo }) {
+export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdmin = false }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [section, setSection] = useState('appearance');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -702,9 +908,12 @@ export function SettingsApp({ userId, onGoTo }) {
     setPresetConfirm(null);
   };
 
-  const current = SECTIONS.find((s) => s.key === section);
+  /* Operator (08-28): admins see the NORMAL sections too — Control Center
+   * lives in the app nav (AppShell 'admin' entry), not as a Settings takeover. */
+  const sections = SECTIONS;
+  const current = sections.find((s) => s.key === section) || sections[0];
   const q = search.trim().toLowerCase();
-  const visibleSections = SECTIONS.filter((sec) => !q || `${sec.label} ${sec.desc}`.toLowerCase().includes(q));
+  const visibleSections = sections.filter((sec) => !q || `${sec.label} ${sec.desc}`.toLowerCase().includes(q));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
@@ -755,15 +964,17 @@ export function SettingsApp({ userId, onGoTo }) {
         </div>
       }>
 
-        <div className="px-2 pt-2 pb-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search settings…"
-            aria-label="Search settings"
-            className="clean-input w-full px-3 py-2 text-[11px] outline-none"
-          />
-        </div>
+        {(
+          <div className="px-2 pt-2 pb-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search settings…"
+              aria-label="Search settings"
+              className="clean-input w-full px-3 py-2 text-[11px] outline-none"
+            />
+          </div>
+        )}
 
         <nav className="space-y-0.5 pr-1">
           {['simple', 'advanced', 'expert'].map((tier) => {
@@ -838,11 +1049,12 @@ export function SettingsApp({ userId, onGoTo }) {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
           >
+            {section === 'control-center' && <AdminPanels userId={userId} />}
             {section === 'appearance' && <AppearanceSection s={settings} set={set} />}
             {section === 'accessibility' && <AccessibilitySection s={settings} set={set} />}
             {section === 'ai' && <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />}
-            {section !== 'appearance' && section !== 'ai' && (
-              <SettingsSections section={section} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} />
+            {section !== 'appearance' && section !== 'ai' && section !== 'control-center' && (
+              <SettingsSections section={section} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} />
             )}
           </motion.div>
         </AnimatePresence>

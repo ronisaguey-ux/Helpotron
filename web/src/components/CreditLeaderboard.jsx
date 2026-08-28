@@ -35,11 +35,13 @@ const RANDOM_ALIASES = [
 export default function CreditLeaderboard({ userId, userCredits }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [userStats, setUserStats] = useState({
-    rank: 4,
-    current_alias: 'QuantumScholar_42',
-    opt_in: true,
-    credits_used: 4820.0,
+    // 08-27: honest defaults — null until real leaderboard data loads.
+    rank: null,
+    current_alias: null,
+    opt_in: false,
+    credits_used: null,
   });
+  const [microCredits, setMicroCredits] = useState(null);
   const [customAlias, setCustomAlias] = useState('');
   const [optIn, setOptIn] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -55,10 +57,15 @@ export default function CreditLeaderboard({ userId, userCredits }) {
         setLeaderboard(res.leaderboard);
         if (res.user_stats) {
           setUserStats(res.user_stats);
-          setCustomAlias(res.user_stats.current_alias || 'QuantumScholar_42');
+          setCustomAlias(res.user_stats.current_alias || '');
           setOptIn(res.user_stats.opt_in !== false);
         }
       }
+      // Real Micro-Credits balance (datalake history endpoint, session auth).
+      try {
+        const mc = await api.getMicrocreditsHistory(userId);
+        if (mc && typeof mc.balance === 'number') setMicroCredits(mc.balance);
+      } catch { /* microcredits are optional — milestone shows "—" */ }
     } catch (e) {
       console.warn('Leaderboard fetch error:', e);
     } finally {
@@ -95,7 +102,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
     setCustomAlias(`${pick}_${num}`);
   };
 
-  const topScore = leaderboard.length > 0 ? leaderboard[0].credits_used : 15000;
+  const topScore = leaderboard.length > 0 ? leaderboard[0].credits_used : 1;
 
   // Normalize entries: the demo layer returns public_id instead of alias and
   // omits rank/level/badge — fill defaults so search + render never crash.
@@ -112,6 +119,9 @@ export default function CreditLeaderboard({ userId, userCredits }) {
     (item.level && item.level.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const selfEntry = normalizedLeaderboard.find((e) => e.is_self);
+  const selfLevel = selfEntry?.level || null;
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* ─── Header & Description ────────────────────────────────────── */}
@@ -122,7 +132,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
               <Trophy className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">Credits Used Leaderboard</h1>
+              <h2 className="text-xl font-bold text-white tracking-tight">Credits Used Leaderboard</h2>
               <p className="text-xs text-slate-400">
                 Top learners ranked purely by compute credits utilized. No social feeds or friend requests.
               </p>
@@ -150,11 +160,14 @@ export default function CreditLeaderboard({ userId, userCredits }) {
           </div>
         }>
           <div className="text-2xl font-bold text-white flex items-baseline gap-2">
-            <span>#{userStats.rank}</span>
+            <span>{userStats.rank != null ? `#${userStats.rank}` : '—'}</span>
             <span className="text-xs font-normal text-slate-400 font-mono">of {leaderboard.length} Scholars</span>
           </div>
           <div className="text-[11px] text-amber-400/90 mt-1 flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5" /> Top 15% Computing Powerhouse
+            <Flame className="w-3.5 h-3.5" />
+            {userStats.rank != null && leaderboard.length > 0
+              ? `Top ${Math.max(1, Math.round((userStats.rank / leaderboard.length) * 100))}%`
+              : 'Not ranked yet — use the platform to appear'}
           </div>
         </SectionCard>
 
@@ -165,10 +178,10 @@ export default function CreditLeaderboard({ userId, userCredits }) {
           </div>
         }>
           <div className="text-2xl font-bold text-blue-400 font-mono">
-            {Number(userStats.credits_used || 4820).toLocaleString()} <span className="text-xs text-slate-400">cr</span>
+            {userStats.credits_used != null ? Number(userStats.credits_used).toLocaleString() : '—'} <span className="text-xs text-slate-400">cr</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Available: {Number(userCredits || 10029).toLocaleString()} cr
+            Available: {Number(userCredits || 0).toLocaleString()} cr
           </div>
         </SectionCard>
 
@@ -179,7 +192,7 @@ export default function CreditLeaderboard({ userId, userCredits }) {
           </div>
         }>
           <div className="text-base font-bold text-emerald-300 font-mono truncate">
-            {userStats.current_alias || 'QuantumScholar_42'}
+            {userStats.current_alias || 'Not set yet'}
           </div>
           <div className="text-[11px] text-emerald-400/80 mt-1 flex items-center gap-1">
             <span>🔒 Real identity hidden</span>
@@ -194,39 +207,44 @@ export default function CreditLeaderboard({ userId, userCredits }) {
             <Flame className="w-4 h-4 text-amber-400" />
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">Your Academic Study Milestones</h2>
           </div>
-          <span className="text-[11px] text-blue-400 font-mono">Level 4 Scholar</span>
+          <span className="text-[11px] text-blue-400 font-mono">{selfLevel || 'Unranked'}</span>
         </div>
       }>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/20 flex items-center gap-2.5">
             <span className="text-lg">🔥</span>
             <div>
-              <div className="text-xs font-semibold text-amber-300">7-Day Streak</div>
-              <div className="text-[10px] text-slate-400">Active Study Streak</div>
+              <div className="text-xs font-semibold text-amber-300">Study Streak</div>
+              <div className="text-[10px] font-mono text-slate-400">—</div>
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-indigo-500/20 flex items-center gap-2.5">
             <span className="text-lg">🎓</span>
             <div>
-              <div className="text-xs font-semibold text-indigo-300">Quiz Master</div>
-              <div className="text-[10px] text-slate-400">95% Practice Accuracy</div>
+              <div className="text-xs font-semibold text-indigo-300">Quiz Practice</div>
+              <div className="text-[10px] font-mono text-slate-400">—</div>
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-blue-500/20 flex items-center gap-2.5">
             <span className="text-lg">⚡</span>
             <div>
-              <div className="text-xs font-semibold text-blue-300">Fast Synthesist</div>
-              <div className="text-[10px] text-slate-400">12 Study Packs Built</div>
+              <div className="text-xs font-semibold text-blue-300">Study Packs Built</div>
+              <div className="text-[10px] font-mono text-slate-400">—</div>
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-900/80 border border-emerald-500/20 flex items-center gap-2.5">
             <span className="text-lg">🛡️</span>
             <div>
-              <div className="text-xs font-semibold text-emerald-300">Data Contributor</div>
-              <div className="text-[10px] text-slate-400">+150 Micro-Credits</div>
+              <div className="text-xs font-semibold text-emerald-300">Micro-Credits</div>
+              <div className="text-[10px] font-mono text-slate-400">
+                {microCredits != null ? `+${Number(microCredits).toLocaleString()}` : '—'}
+              </div>
             </div>
           </div>
         </div>
+        <p className="text-[10px] text-slate-500 mt-3">
+          Milestone values come from your live account activity — stats with no recorded activity show “—”.
+        </p>
       </SectionCard>
 
       {/* ─── Custom Alias & Privacy Customizer ────────────────────────── */}

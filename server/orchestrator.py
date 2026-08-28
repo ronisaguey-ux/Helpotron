@@ -123,23 +123,34 @@ async def _run_workflow_async(assignment_id: int):
 
         workflow.status = "analyzing"
         workflow.add_message("system", "Analyzing assignment...")
-        # Step 1: Analyze the assignment prompt and transcript
+        # Step 1: Analyze the assignment prompt and transcript.
+        # 08-28 fix: scraped assignments have NO Transcript row (the transcript
+        # table is only written by the mic/recording path) — so every scraped
+        # assignment died instantly with "No transcript found" and NO subagent
+        # ever ran. The scraped page's full content IS the source: fall back to
+        # assignment.prompt (full text now survives scrape end-to-end).
         transcript = (
             db.query(Transcript)
             .filter(Transcript.assignment_id == assignment_id)
             .order_by(Transcript.id.desc())
             .first()
         )
-        if not transcript:
+        source_text = (transcript.text if transcript is not None else None) or (assignment.prompt or "")
+        if not source_text.strip() and not (assignment.prompt or "").strip():
             workflow.status = "failed"
             workflow.error = "No transcript found"
             workflow.add_message("system", "Error: no transcript available.")
             return
+        workflow.add_message(
+            "system",
+            f"Analyzing assignment ({len(source_text):,} chars of source content"
+            + ("" if transcript is not None else " — scraped page content; no separate transcript") + ")...",
+        )
 
         # Step 2: Plan the tasks (break down into sub-tasks)
         workflow.status = "planning"
         workflow.add_message("system", "Planning tasks via subagent coordinator...")
-        tasks = await plan_tasks(assignment.prompt, transcript.text)
+        tasks = await plan_tasks(assignment.prompt, source_text)
         workflow.tasks = tasks
         workflow.estimated_time_seconds = sum(t.get("estimated_seconds", 60) for t in tasks)
 
@@ -158,7 +169,7 @@ async def _run_workflow_async(assignment_id: int):
                 draft_text, model = await generate_draft_for_task(
                     assignment.user_id,
                     assignment_id,
-                    transcript.text,
+                    source_text,
                     assignment.prompt,
                     style
                 )
@@ -183,19 +194,44 @@ async def _run_workflow_async(assignment_id: int):
         workflow.detector_results = [r.to_dict() for r in detector_results]
         workflow.passed = passed
 
+        # 08-28 fix: the produced work and detector verdict lived ONLY in the
+        # in-memory workflow dict — the moment the process restarted (or the
+        # dashboard polled the DB) it was gone; the UI reads assignment.progress
+        # (do_it_work / ai_score / detector_risk / detector_passed) and the
+        # bubble chat. Persist BOTH, plus a real chat message on the bubble.
+        progress: Dict[str, Any] = dict(assignment.progress or {})
+        progress.update({
+            "do_it_work": combined,
+            "team_output": combined,
+            "ai_score": round(float(avg_score), 2),
+            "detector_risk": round(max(0.0, min(1.0, float(avg_score) / 100.0)), 4),
+            "detector_passed": bool(passed),
+            "detector_details": [{"detector": r.name, "score": round(r.score, 2)} for r in detector_results][:12],
+            "detector_scored_chars": len(combined or ""),
+            "detector_at": datetime.now(timezone.utc).isoformat(),
+            "orchestrator_done": True,
+        })
+
         if passed:
             workflow.status = "done"
-            workflow.add_message("system", f"✅ Assignment completed! Score: {avg_score:.1f}% passed detectors.")
+            done_msg = f"✅ Assignment completed! Score: {avg_score:.1f}% passed detectors."
+            workflow.add_message("system", done_msg)
             assignment.status = "completed"
-            assignment.progress = {**assignment.progress, "orchestrator_done": True}
+            progress["status_label"] = "completed (team) — detectors passed"
+            assignment.progress = progress
             db.commit()
+            await _bubble_chat(db, assignment, done_msg + "\n\n" + combined[:12000])
             await notify_user_via_telegram(assignment.user_id, assignment.title, assignment.due_date or "No due date")
         else:
             workflow.status = "risky"
-            workflow.add_message("system", f"⚠️ Assignment risky: score {avg_score:.1f}% below threshold. Student can retry or contact admin.")
+            risky_msg = f"⚠️ Assignment risky: score {avg_score:.1f}% below threshold. Student can retry or contact admin."
+            workflow.add_message("system", risky_msg)
             assignment.status = "draft_risky"
-            assignment.progress = {**assignment.progress, "orchestrator_risky": True}
+            progress["orchestrator_risky"] = True
+            progress["orchestrator_done"] = False
+            assignment.progress = progress
             db.commit()
+            await _bubble_chat(db, assignment, risky_msg + "\n\n" + combined[:12000])
 
     except Exception as e:
         logger.exception("Workflow failed for assignment %d", assignment_id)
@@ -210,7 +246,10 @@ async def _run_workflow_async(assignment_id: int):
 async def plan_tasks(prompt: str, transcript: str) -> List[Dict]:
     """Use LLM to break down assignment into sub-tasks."""
     system = "You are a task planner. Break down the given assignment into 3-5 logical sub-tasks. Return a JSON list of tasks, each with 'name', 'description', and 'estimated_seconds' (int)."
-    user = f"Assignment prompt: {prompt}\nTranscript: {transcript[:2000]}"
+    # 08-28 fix: 2000 chars meant the planner never saw beyond the intro when
+    # the scrape is the source (full content is now up to 1M chars). 50k keeps
+    # the planner cheap while covering a real assignment document.
+    user = f"Assignment prompt: {prompt}\nTranscript: {transcript[:50000]}"
     try:
         content = await llm.call_llm(system, user)  # remediation: call_llm returns str now
         parsed = llm.extract_json(content)
@@ -235,6 +274,22 @@ async def generate_draft_for_task(user_id: int, assignment_id: int, transcript_t
 
 async def notify_user_via_telegram(user_id: int, title: str, due_date: str):
     logger.info("Telegram notification: Assignment '%s' completed. Due: %s", title, due_date)
+
+
+async def _bubble_chat(db: Session, assignment: Assignment, text: str) -> None:
+    """Post the team's handoff into the assignment bubble chat (in-memory for
+    the live thread + durable row), best-effort — chat is never fatal."""
+    try:
+        from .overlord_agent import overlord_agent, persist_chat_message
+        overlord_agent.add_chat_message(
+            assignment.id,
+            sender="overlord",
+            text=text,
+            user_id=assignment.user_id,
+        )
+        persist_chat_message(db, assignment.user_id, assignment.id, "overlord", text)
+    except Exception as e:  # noqa: BLE001 — best-effort
+        logger.warning("bubble chat for assignment %s skipped: %s", assignment.id, e)
 
 
 def send_message_to_team(assignment_id: int, sender: str, text: str) -> bool:

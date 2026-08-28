@@ -130,7 +130,7 @@ export default function DataLakeView({ userId = '' }) {
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-semibold mb-1">
               <Bot className="w-3.5 h-3.5" /> Autonomous Subagent Classification
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Academic Data Lake</h1>
+            <h2 className="text-xl font-bold text-white tracking-tight">Academic Data Lake</h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Submit empirical notes or files. Subagent evaluates an estimated score (0–25 cr); actual credits are awarded once reviewed and implemented.
             </p>
