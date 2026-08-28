@@ -18,13 +18,14 @@ import {
 } from 'lucide-react';
 import SectionCard from './SectionCard.jsx';
 
-export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
+export default function AdminAdvancedDashboard({ userId = '' }) {
   const [activeTab, setActiveTab] = useState('bulk_users');
   const [loading, setLoading] = useState(false);
 
   // Bulk Users State
   const [users, setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
   const [bulkPlan, setBulkPlan] = useState('');
   const [bulkCredits, setBulkCredits] = useState('');
   const [bulkTag, setBulkTag] = useState('');
@@ -56,6 +57,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   const [multiplierMap, setMultiplierMap] = useState({});
   const [costMsg, setCostMsg] = useState('');
   const [creditAmountMap, setCreditAmountMap] = useState({});
+  const [tokenAmountMap, setTokenAmountMap] = useState({});
 
   const fetchUsers = async () => {
     try {
@@ -253,6 +255,15 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
   };
 
   const safeUsers = Array.isArray(users) ? users : [];
+  /* Fuzzy user search (operator 08-26): matches substrings AND typo-ish tail
+   * differences via a 6-char prefix compare, so "dreybejerking" finds
+   * "dreybejerkin22". */
+  const fuzzyUserMatch = (a, b) => {
+    const x = String(a).toLowerCase().trim();
+    const y = String(b).toLowerCase().trim();
+    return x.includes(y) || y.includes(x) || (x.slice(0, 6) === y.slice(0, 6));
+  };
+  const visibleUsers = safeUsers.filter((u) => !userSearch.trim() || fuzzyUserMatch(u.public_id, userSearch.trim()));
   const safeAdminMessages = Array.isArray(adminMessages) ? adminMessages : [];
   const safeTokensList = Array.isArray(tokensList) ? tokensList : [];
   const safeModQueue = Array.isArray(modQueue) ? modQueue : [];
@@ -275,7 +286,7 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
         </div>
       } headerRight={
         <span className="text-[11px] font-mono font-bold bg-purple-500/15 border border-purple-500/30 text-purple-300 px-3 py-1 rounded-full shrink-0">
-          ADMIN: {userId || 'RoniDev'}
+          ADMIN: {userId || 'anonymous'}
         </span>
       }>
       </SectionCard>
@@ -369,6 +380,13 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
 
           {/* User Table */}
           <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 overflow-x-auto">
+            <input
+              type="text"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Search user ID… (fuzzy: 'dreybejerking' finds 'dreybejerkin22')"
+              className="w-full mb-3 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-purple-500/50 outline-none"
+            />
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-white/10 text-slate-400 text-[11px]">
@@ -390,14 +408,14 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 font-mono">
-                {safeUsers.length === 0 ? (
+                {visibleUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-6 text-center text-slate-500 text-xs">
-                      No users registered yet.
+                      {safeUsers.length === 0 ? 'No users registered yet.' : `No users match “${userSearch}”.`}
                     </td>
                   </tr>
                 ) : (
-                  safeUsers.map((u) => {
+                  visibleUsers.map((u) => {
                     const currentMult = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : (u.token_cost_multiplier || 1.0);
 
                     return (
@@ -420,8 +438,12 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                             )}
                           </div>
                         </td>
-                        <td className="py-3 uppercase text-[11px] font-bold text-blue-300">{u.plan || 'basic'}</td>
-                        <td className="py-3 text-emerald-400 font-bold">{u.credits || 0} cr</td>
+                        <td className="py-3 uppercase text-[11px] font-bold text-blue-300">{u.plan || 'none'}</td>
+                        <td className="py-3 font-mono text-[11px]">
+                          <span className="text-emerald-300 font-bold">{Number(u.token_balance ?? 0).toLocaleString()} tk</span>
+                          <span className="mx-1.5 text-slate-600">·</span>
+                          <span className="text-purple-300 font-bold">{Number(u.credits ?? 0).toLocaleString()} cr</span>
+                        </td>
                         <td className="py-3">
                           <div className="flex items-center gap-1.5">
                             <input
@@ -469,33 +491,139 @@ export default function AdminAdvancedDashboard({ userId = 'RoniDev' }) {
                             </button>
                           </div>
                         </td>
-                        <td className="py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <input
-                              type="number"
-                              step="1"
-                              placeholder="amount"
-                              value={creditAmountMap[u.id] ?? ''}
-                              onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                              className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
-                              title="Custom credit amount (positive to grant, negative to deduct)"
-                            />
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const amt = Number(creditAmountMap[u.id]);
-                                if (!Number.isInteger(amt) || amt === 0) {
-                                  setBulkStatus('Enter a non-zero whole number credit amount');
-                                  return;
-                                }
-                                await api.adminAdjustCredits(u.public_id, amt, 'Admin Grant');
-                                fetchUsers();
-                                setCreditAmountMap((prev) => ({ ...prev, [u.id]: '' }));
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition cursor-pointer"
-                            >
-                              Apply
-                            </button>
+                        <td className="py-3">
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] uppercase tracking-wider text-slate-500 w-11 text-right">plan</span>
+                              <select
+                                value={u.plan || 'none'}
+                                onChange={async (e) => {
+                                  e.stopPropagation();
+                                  await api.adminSetPlan(u.public_id, e.target.value);
+                                  setBulkStatus(`Plan for ${u.public_id} → ${e.target.value}`);
+                                  fetchUsers();
+                                }}
+                                className="w-24 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono focus:border-purple-500/50"
+                                title="Upgrade / downgrade plan"
+                              >
+                                <option value="none">none</option>
+                                <option value="basic">basic</option>
+                                <option value="pro">pro</option>
+                                <option value="elite">elite</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] uppercase tracking-wider text-emerald-400/80 w-11 text-right">tokens</span>
+                              <input
+                                type="number"
+                                step="1"
+                                placeholder="amount"
+                                value={tokenAmountMap[u.id] ?? ''}
+                                onChange={(e) => setTokenAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                                className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-emerald-500/50"
+                                title="Grant usage tokens (negative removes)"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const amt = Number(tokenAmountMap[u.id]);
+                                  if (!Number.isInteger(amt) || amt === 0) {
+                                    setBulkStatus('Enter a non-zero whole number token amount');
+                                    return;
+                                  }
+                                  try {
+                                    const res = await api.adminGrantTokens(u.public_id, amt);
+                                    setUsers((prev) => prev.map((x) =>
+                                      x.public_id === res.public_id ? { ...x, token_balance: res.token_balance } : x));
+                                    setBulkStatus(`✓ Granted ${amt} tokens to ${u.public_id} → now ${res.token_balance} tk.`);
+                                    setTokenAmountMap((prev) => ({ ...prev, [u.id]: '' }));
+                                  } catch (e) {
+                                    setBulkStatus(`✗ Grant failed: ${e.message || 'unknown error'}`);
+                                  }
+                                  fetchUsers();
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Grant
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const amt = Math.abs(Number(tokenAmountMap[u.id]));
+                                  if (!Number.isInteger(amt) || amt === 0) {
+                                    setBulkStatus('Enter a whole number amount to remove');
+                                    return;
+                                  }
+                                  try {
+                                    const res = await api.adminGrantTokens(u.public_id, -amt);
+                                    setUsers((prev) => prev.map((x) =>
+                                      x.public_id === res.public_id ? { ...x, token_balance: res.token_balance } : x));
+                                    setBulkStatus(`✓ Removed ${amt} tokens from ${u.public_id} → now ${res.token_balance} tk. (${res.token_balance === 0 && amt > 0 ? 'balance floor reached' : ''})`);
+                                    setTokenAmountMap((prev) => ({ ...prev, [u.id]: '' }));
+                                  } catch (e) {
+                                    setBulkStatus(`✗ Removal failed: ${e.message || 'unknown error'}`);
+                                  }
+                                  fetchUsers();
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] uppercase tracking-wider text-purple-400/80 w-11 text-right">credits</span>
+                              <input
+                                type="number"
+                                step="1"
+                                placeholder="amount"
+                                value={creditAmountMap[u.id] ?? ''}
+                                onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                                className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
+                                title="Discount credits (negative deducts)"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const amt = Number(creditAmountMap[u.id]);
+                                  if (!Number.isInteger(amt) || amt === 0) {
+                                    setBulkStatus('Enter a non-zero whole number credit amount');
+                                    return;
+                                  }
+                                  try {
+                                    await api.adminAdjustCredits(u.public_id, amt, 'Admin Grant');
+                                    setBulkStatus(`✓ Added ${amt} discount credits for ${u.public_id}.`);
+                                    setCreditAmountMap((prev) => ({ ...prev, [u.id]: '' }));
+                                  } catch (e) {
+                                    setBulkStatus(`✗ Credit change failed: ${e.message || 'unknown error'}`);
+                                  }
+                                  fetchUsers();
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Apply
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const amt = Math.abs(Number(creditAmountMap[u.id]));
+                                  if (!Number.isInteger(amt) || amt === 0) {
+                                    setBulkStatus('Enter a whole number amount to remove');
+                                    return;
+                                  }
+                                  try {
+                                    const res = await api.adminAdjustCredits(u.public_id, -amt, 'Admin Removal');
+                                    setBulkStatus(`✓ Removed ${amt} discount credits from ${u.public_id} → now ${res.new_balance} cr.`);
+                                    setCreditAmountMap((prev) => ({ ...prev, [u.id]: '' }));
+                                  } catch (e) {
+                                    setBulkStatus(`✗ Credit removal failed: ${e.message || 'unknown error'}`);
+                                  }
+                                  fetchUsers();
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>

@@ -19,6 +19,17 @@ const iso = (ms) => new Date(ms).toISOString();
 const ago = (ms) => iso(now() - ms);
 const inFuture = (ms) => iso(now() + ms);
 
+/* Demo fixtures never bake an operator name — they personalize to whoever is
+ * testing (fallback 'demo-user'). Live mode is unaffected (demoData only
+ * surfaces when demoEnabled()). */
+const demoAlias = () => {
+  try {
+    return localStorage.getItem('public_id') || localStorage.getItem('helpotron_public_id') || 'demo-user';
+  } catch {
+    return 'demo-user';
+  }
+};
+
 export function demoEnabled() {
   try {
     const v = localStorage.getItem('helpotron_demo_mode');
@@ -202,7 +213,7 @@ export const ADMIN_ATTENTION = demoEnabled() ? [
 ] : [];
 
 export const ADMIN_USERS = demoEnabled() ? [
-  { id: 'u-1', publicId: 'RoniDev', plan: 'Elite', status: 'active', credits: 10029, assignments: 184, aiRuns: 472, spend: 31.84, joinedDaysAgo: 43, subjects: ['CS', 'Math', 'Bio', 'English'], tags: ['power-user', 'beta'], flags: [] },
+  { id: 'u-1', publicId: demoAlias(), plan: 'Elite', status: 'active', credits: 10029, assignments: 184, aiRuns: 472, spend: 31.84, joinedDaysAgo: 43, subjects: ['CS', 'Math', 'Bio', 'English'], tags: ['power-user', 'beta'], flags: [] },
   { id: 'u-2', publicId: 'StudyLover42', plan: 'Pro', status: 'active', credits: 640, assignments: 97, aiRuns: 251, spend: 18.20, joinedDaysAgo: 88, subjects: ['Math', 'Physics'], tags: [], flags: [] },
   { id: 'u-3', publicId: 'QuinnC', plan: 'Elite', status: 'active', credits: 3200, assignments: 210, aiRuns: 688, spend: 42.10, joinedDaysAgo: 120, subjects: ['Bio', 'Chem', 'Med'], tags: ['beta'], flags: [] },
   { id: 'u-4', publicId: 'NightOwl99', plan: 'Basic', status: 'active', credits: 12, assignments: 23, aiRuns: 41, spend: 2.05, joinedDaysAgo: 12, subjects: ['History'], tags: [], flags: ['near-credit-limit'] },
@@ -225,10 +236,10 @@ export const EXPERIMENTS = demoEnabled() ? [
 ] : [];
 
 export const AUDIT_LOG = demoEnabled() ? [
-  { id: 'al-1', at: ago(38 * 60_000), actor: 'RoniDev', action: 'granted 500 credits', target: 'user:NightOwl99' },
-  { id: 'al-2', at: ago(2 * HOUR), actor: 'RoniDev', action: 'changed model routing', target: 'research → Flagship tier' },
+  { id: 'al-1', at: ago(38 * 60_000), actor: demoAlias(), action: 'granted 500 credits', target: 'user:NightOwl99' },
+  { id: 'al-2', at: ago(2 * HOUR), actor: demoAlias(), action: 'changed model routing', target: 'research → Flagship tier' },
   { id: 'al-3', at: ago(5 * HOUR), actor: 'System', action: 'feature flag changed', target: 'Experimental OCR → 12%' },
-  { id: 'al-4', at: ago(8 * HOUR), actor: 'RoniDev', action: 'broadcast published', target: 'Scheduled downtime notice' },
+  { id: 'al-4', at: ago(8 * HOUR), actor: demoAlias(), action: 'broadcast published', target: 'Scheduled downtime notice' },
   { id: 'al-5', at: ago(1 * DAY), actor: 'QuinnC', action: 'promo code created', target: 'WELCOME50' },
   { id: 'al-6', at: ago(2 * DAY), actor: 'System', action: 'maintenance mode toggled', target: 'on → off (12 min)' },
 ] : [];
@@ -286,7 +297,7 @@ export const MAINTENANCE = demoEnabled() ? {
 const SETTINGS_KEY = 'helpotron_os_settings_v1';
 
 export const DEFAULT_SETTINGS = {
-  profile: { displayName: 'Roni', educationLevel: 'Undergraduate', major: 'Computer Science', year: 'Junior', goalGpa: '3.7+' },
+  profile: { displayName: '', educationLevel: 'Undergraduate', major: 'Computer Science', year: 'Junior', goalGpa: '3.7+' },
   subjects: { Mathematics: 'Advanced', 'Computer Science': 'Expert', English: 'Intermediate', Biology: 'Advanced', Calculus: 'Intermediate' },
   learningStyle: { Visual: 80, 'Hands-on': 60, Reading: 90, Discussion: 50 },
   goals: { gpa: true, writing: true, gradSchool: false, research: false },

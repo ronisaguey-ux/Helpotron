@@ -321,3 +321,19 @@ def _auth_headers(public_id: str) -> dict:
     finally:
         db.close()
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_degenerate_reply_guard():
+    """Operator 08-27: the claude bridge (and local LLM) can hand back a lone
+    '👍' or other emoji-only text — that must be treated as NO reply so the
+    pipeline falls back to a real answer instead of sending a bare reaction."""
+    from server.routes_overlord import _is_degenerate_reply
+
+    # degenerate: empty / pure emoji / punctuation only
+    for bad in ("", "   ", "\U0001f44d", "\U0001f44d\U0001f3fd", "❤️", "✅",
+                "\U0001f525", "⚠️", "🤷***", "!!", "..."):
+        assert _is_degenerate_reply(bad) is True, repr(bad)
+    # fine: any reply containing even one word character
+    for good in ("ok", "Alright \U0001f939", "✅ Done.", "Thanks!", "你好",
+                 "привет", "a", "Can you try that again?"):
+        assert _is_degenerate_reply(good) is False, repr(good)

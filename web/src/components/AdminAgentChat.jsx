@@ -160,7 +160,7 @@ export default function AdminAgentChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Ask the admin agent… (e.g. “give RoniDev 100 credits”)"
+          placeholder="Ask the admin agent… (e.g. “give a user 100 credits”)"
           className="clean-input flex-1 px-3.5 py-2.5 text-[12px] outline-none"
           aria-label="Message the admin agent"
           disabled={busy}

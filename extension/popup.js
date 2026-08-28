@@ -21,7 +21,7 @@ function hideUnparseable() {
 
 async function init() {
   const { server, public_id, token, update_available, latest_version } = await chrome.storage.local.get(['server', 'public_id', 'token', 'update_available', 'latest_version']);
-  serverInput.value = server || 'http://localhost:8000';
+  serverInput.value = server || 'https://helpotron.dpdns.org';
   publicIdInput.value = public_id || '';
   publicIdInput.placeholder = 'your Helpotron username';
   // 08-26: scrape data must land on the right account — force login first.

@@ -160,6 +160,16 @@ async function connectAgentSocket(server, sessionId) {
 
 async function executeTabCommand(tabId, command) {
   try {
+    // SAFETY (operator 08-26): never let the agent click/fill forms on LMS
+    // pages (Canvas, Google Classroom, ...) — that is automation Canvas and
+    // friends flag as scraping/automation. Read-only extraction stays allowed;
+    // assignments get collected via the popup's explicit Scrape button.
+    const lmsHosts = /(instructure\.com|classroom\.google\.com|blackboard|brightspace|d2l\.com|moodle\.com|schoology\.com|notion\.)/i;
+    let tabUrl = '';
+    try { tabUrl = (await chrome.tabs.get(tabId)).url || ''; } catch (e) { /* tab gone */ }
+    if (tabUrl && lmsHosts.test(tabUrl) && (command.action === 'click' || command.action === 'fill_input')) {
+      return { success: false, error: 'Auto-clicking is blocked on learning platforms — use the popup Scrape button for assignments.' };
+    }
     const fnMap = {
       click: (selector) => {
         const el = document.querySelector(selector);

@@ -10,6 +10,7 @@ Includes:
 """
 from __future__ import annotations
 
+import copy
 import csv
 import io
 import json
@@ -27,6 +28,20 @@ try:
 except (ImportError, ValueError):
     from server.database import Assignment, StudyMaterial, Transcript, User, get_db
     from server.default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+
+
+def persist_user_settings(db, user, settings=None) -> dict:
+    """Persist user settings through a core UPDATE (BATCH-05 fix, operator
+    08-26): a shallow `user.settings = X` write whose nested dicts are shared
+    with the ORM-cached value compares equal (old == new), so SQLAlchemy
+    skips the flush and every nested edit silently vanishes. This always
+    fires, then refreshes the ORM view."""
+    from sqlalchemy import update
+    data = copy.deepcopy(settings if settings is not None else dict(user.settings or {}))
+    db.execute(update(User).where(User.id == user.id).values(settings=data))
+    db.commit()
+    db.refresh(user)
+    return data
 
 
 logger = logging.getLogger("helpotron.user_settings")
@@ -446,7 +461,7 @@ class UserSettingsService:
 
             # 9. Data Lake & Micro-Credits
             "datalake_opt_in": True,
-            "micro_credits_balance": 21,  # 100 micro-credits = $1.00 USD
+            "micro_credits_balance": 0,  # earned only via admin-reviewed Data Lake implementations (operator 08-26)
             "micro_credits_auto_redeem": False,
 
             # 10. Public Credits Leaderboard (Custom Alias / Privacy Protected)
@@ -525,8 +540,14 @@ class UserSettingsService:
         elif "target_score_letter" in updates and "target_score_numeric" not in updates:
             current["target_score_numeric"] = letter_to_score(updates["target_score_letter"])
 
-        user.settings = current
+        # BATCH-05 fix (operator 08-26): `current` is a SHALLOW copy whose nested
+        # dicts are shared with the ORM-cached value, so mutating them makes
+        # old == new and SQLAlchemy skips the flush — every nested update
+        # silently vanished. Write through a core UPDATE (always fired).
+        from sqlalchemy import update
+        db.execute(update(User).where(User.id == user.id).values(settings=copy.deepcopy(current)))
         db.commit()
+        db.refresh(user)
         return current
 
     # ─── Personas Lifecycle ──────────────────────────────────────────────────
@@ -548,8 +569,7 @@ class UserSettingsService:
             personas.append(persona)
 
         settings["personas"] = personas
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return persona
 
     @staticmethod
@@ -559,8 +579,7 @@ class UserSettingsService:
         settings["personas"] = personas
         if settings.get("active_persona_id") == persona_id:
             settings["active_persona_id"] = "persona_balanced"
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return True
 
     # ─── Custom Writing Style Samples (Private Per User) ────────────────────
@@ -603,8 +622,7 @@ class UserSettingsService:
 
         samples.append(sample_entry)
         settings["custom_style_samples"] = samples
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return sample_entry
 
     @staticmethod
@@ -612,8 +630,7 @@ class UserSettingsService:
         settings = UserSettingsService.get_user_settings(user)
         samples = [s for s in settings.get("custom_style_samples", []) if s.get("id") != sample_id]
         settings["custom_style_samples"] = samples
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return True
 
     # ─── TRIO (Target, Restriction, Inclusion, Override) Resolution ─────────
@@ -637,8 +654,7 @@ class UserSettingsService:
             rules.append(rule)
 
         settings["trio_rules"] = rules
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return rule
 
     @staticmethod
@@ -646,8 +662,7 @@ class UserSettingsService:
         settings = UserSettingsService.get_user_settings(user)
         rules = [r for r in settings.get("trio_rules", []) if r.get("id") != rule_id]
         settings["trio_rules"] = rules
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return True
 
     # ─── Custom Subjects Management ──────────────────────────────────────────
@@ -674,8 +689,7 @@ class UserSettingsService:
         }
         subjects.append(new_subj)
         settings["custom_subjects"] = subjects
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return new_subj
 
     @staticmethod
@@ -684,8 +698,7 @@ class UserSettingsService:
         settings = UserSettingsService.get_user_settings(user)
         subjects = [s for s in settings.get("custom_subjects", []) if s.get("id") != subject_id]
         settings["custom_subjects"] = subjects
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return True
 
     @staticmethod
@@ -719,8 +732,7 @@ class UserSettingsService:
         }
         bubbles.append(new_bubble)
         settings["custom_bubbles"] = bubbles
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return new_bubble
 
     @staticmethod
@@ -729,8 +741,7 @@ class UserSettingsService:
         settings = UserSettingsService.get_user_settings(user)
         bubbles = [b for b in settings.get("custom_bubbles", []) if b.get("id") != bubble_id]
         settings["custom_bubbles"] = bubbles
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return True
 
     @staticmethod
@@ -824,8 +835,7 @@ class UserSettingsService:
         cleaned_alias = alias.strip()
         settings["leaderboard_alias"] = cleaned_alias
         settings["leaderboard_opt_in"] = opt_in
-        user.settings = settings
-        db.commit()
+        persist_user_settings(db, user, settings)
         return {
             "status": "success",
             "leaderboard_alias": cleaned_alias,

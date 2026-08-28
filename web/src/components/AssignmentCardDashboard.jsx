@@ -233,20 +233,24 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   };
 
   // Helper to match card to bubble
+  // 08-27: the cards endpoint sends name/subject/class_code — NOT card.course
+  // / card.title, so bubbles were never populated (matching ran against empty
+  // strings). Match on the real fields, subject keywords included.
   const matchCardToBubble = (card, bubble) => {
     if (!bubble || bubble.id === 'all') return true;
     const title = (bubble.title || '').toLowerCase();
     const desc = (bubble.description || '').toLowerCase();
-    const cName = (card.course || '').toLowerCase();
-    const aTitle = (card.title || '').toLowerCase();
+    const cName = `${card.subject || ''} ${card.class_code || ''}`.toLowerCase();
+    const aTitle = (card.name || '').toLowerCase();
+    const blob = `${cName} ${aTitle}`;
 
-    return cName.includes(title) || aTitle.includes(title) ||
-      (title.includes('math') && (cName.includes('math') || cName.includes('calc') || cName.includes('algebra'))) ||
-      (title.includes('english') && (cName.includes('eng') || cName.includes('lit') || cName.includes('writing') || cName.includes('essay'))) ||
-      (title.includes('history') && (cName.includes('hist') || cName.includes('social') || cName.includes('gov'))) ||
-      (title.includes('computer') && (cName.includes('cs') || cName.includes('code') || cName.includes('comp'))) ||
-      (title.includes('biology') && (cName.includes('bio') || cName.includes('life') || cName.includes('lab'))) ||
-      (title.includes('psychology') && (cName.includes('psych') || cName.includes('cog') || cName.includes('behav'))) ||
+    return cName.includes(title) || aTitle.includes(title) || blob.includes(title) ||
+      (title.includes('math') && /math|calc|algebra|stat/.test(blob)) ||
+      (title.includes('english') && /eng|lit|writing|essay|novel|poem/.test(blob)) ||
+      (title.includes('history') && /hist|social|gov|reconstruction|war|ancient|president/.test(blob)) ||
+      (title.includes('computer') && /cs|code|comp|algorithm|neural|python|machine/.test(blob)) ||
+      (title.includes('biology') && /bio|life|lab|genetic|cell|dna|crispr/.test(blob)) ||
+      (title.includes('psychology') && /psych|cog|behav|bias|decision/.test(blob)) ||
       (desc.length > 5 && (cName.includes(desc.slice(0, 10)) || aTitle.includes(desc.slice(0, 10))));
   };
 
