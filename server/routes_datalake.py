@@ -206,7 +206,17 @@ async def redeem_microcredits(
     # Strict platform compute credit policy: credits cannot be cashed out to external accounts
     method = "compute_credits"
 
-    compute_credits_gained = credits_to_redeem * 10  # 10 compute credits per micro-credit
+    # Operator 08-26: nothing converts without an actually-implemented Data Lake
+    # submission history — and the conversion is 1:1 (no ×10 inflation).
+    history = datalake_manager.list_microcredit_submissions(user_id=current_user.public_id)
+    implemented = [s for s in history if s.get("status") == "implemented"]
+    if not implemented:
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to convert yet — micro-credits are only earned once your Data Lake submissions are reviewed and implemented by the operator.",
+        )
+
+    compute_credits_gained = credits_to_redeem * 1  # 1:1 (operator 08-26)
 
     if user:
         settings = user_settings_service.get_user_settings(user)

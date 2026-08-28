@@ -422,9 +422,11 @@ class DataLakeManager:
             "estimated_credits": credit_award,
             "actual_credits": 0,
             "credits_awarded": credit_award,
-            "usd_value": round(credit_award / 100.0, 2),
+            # 1 micro-credit = 1/1000 of an actual credit; 1 actual credit =
+            # $1 discount value → 1 cr = $0.001 (user basis 08-27).
+            "usd_value": round(credit_award / 1000.0, 4),
             "status": "pending_review",
-            "utilization_notice": "⏳ Estimated score: Once this entry is reviewed and implemented into Helpotron, actual micro-credits will be awarded to your balance (may take 2+ business days).",
+            "utilization_notice": "⏳ Estimated score: your actual micro-credits get added to the balance once the operator reviews the submission (usually within a few minutes, this is a live personal app).",
             "valuation": {
                 "category": classified_category,
                 "relevance": relevance,

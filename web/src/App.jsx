@@ -96,6 +96,7 @@ export default function App() {
   const [isGuest, setIsGuest] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [credits, setCredits] = useState(0);
+  const [tokenBalance, setTokenBalance] = useState(0);
   const [userPlan, setUserPlan] = useState('basic');
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -155,6 +156,7 @@ export default function App() {
         setUserIdState(data.public_id || data.user_id || 'Student');
         setUserId(data.public_id || data.user_id || 'Student');
         setCredits(data.credits ?? 0);
+        setTokenBalance(Number(data.token_balance ?? 0) || 0);
         setUserPlan(data.plan || 'basic');
         setIsAdmin(Boolean(data.is_admin));
         const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
@@ -172,6 +174,7 @@ export default function App() {
     setUserIdState('Guest');
     setUserId('');
     setCredits(0);
+    setTokenBalance(0);
     setUserPlan('basic');
   };
 
@@ -211,6 +214,7 @@ export default function App() {
     setIsAdmin(false);
     setUserIdState('Guest');
     setCredits(0);
+    setTokenBalance(0);
     setUserPlan('basic');
     // Hard reset: reload with ?logout=1 so the mount effect force-clears the
     // session cookie again — a failed/partial logout must NEVER leave the
@@ -274,7 +278,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
+      <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
@@ -362,7 +366,7 @@ export default function App() {
           onGoForward={goForward}
           isAdmin={effectiveIsAdmin}
           isLoggedIn={isLoggedIn}
-          user={{ credits, public_id: userId }}
+          user={{ credits, public_id: userId, token_balance: tokenBalance }}
           onLogout={handleLogout}
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenAuth={() => setAuthModalOpen(true)}
@@ -412,10 +416,10 @@ export default function App() {
                   {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
 
                   {/* WORKSPACE */}
-                  {activeView === 'agent' && <MyAgentView userId={userId} />}
+                  {activeView === 'agent' && <MyAgentView userId={userId} onGoTo={handleSelectView} />}
                   {activeView === 'history' && <AssignmentHistoryView userId={userId} />}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
-                  {activeView === 'library' && <LibraryView />}
+                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
 
                   {/* AUTOMATION */}
@@ -445,8 +449,15 @@ export default function App() {
                   {activeView === 'privacy' && <PrivacyPolicyView />}
                   {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
 
-                  {/* ADMIN */}
+                  {/* ADMIN — hard route guard: non-admins get a denial, not a shell */}
                   {activeView === 'admin' && effectiveIsAdmin && <AdminPanels initialTab="overview" />}
+                  {activeView === 'admin' && !effectiveIsAdmin && (
+                    <div className="p-10 text-center">
+                      <div className="text-3xl mb-3">🔒</div>
+                      <div className="text-sm font-bold text-white mb-1">Access denied</div>
+                      <div className="text-xs text-slate-500">The Control Center requires administrative privileges. If you need help, use the ❓ chat.</div>
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>

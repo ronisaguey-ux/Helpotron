@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button.jsx';
 
-export default function ReferralSection({ userId = 'RoniDev' }) {
+export default function ReferralSection({ userId = '' }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);

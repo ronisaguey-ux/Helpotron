@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
-import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone } from 'lucide-react';
+import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
 export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false }) {
@@ -14,6 +14,11 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   const [requires2FA, setRequires2FA] = useState(false);
   const [twoFactorMethod, setTwoFactorMethod] = useState('totp');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+
+  // Password visibility toggles (operator 08-26: toggle on/off while typing)
+  const [showLoginPass, setShowLoginPass] = useState(false);
+  const [showSignupPass, setShowSignupPass] = useState(false);
+  const [showSignupConfirm, setShowSignupConfirm] = useState(false);
 
   // Sign up state
   const [signupUser, setSignupUser] = useState('');
@@ -171,7 +176,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   placeholder="e.g. alex_student24"
                   value={signupUser}
                   onChange={(e) => setSignupUser(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                 />
                 <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
               </div>
@@ -183,15 +188,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                 <input
                   id="signup-password"
                   name="password"
-                  type="password"
+                  type={showSignupPass ? 'text' : 'password'}
                   required
                   autoComplete="new-password"
                   placeholder="Min 8 chars, 1 letter & 1 number"
                   value={signupPass}
                   onChange={(e) => setSignupPass(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                 />
                 <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                  {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -201,15 +209,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                 <input
                   id="signup-confirm-password"
                   name="confirm-password"
-                  type="password"
+                  type={showSignupConfirm ? 'text' : 'password'}
                   required
                   autoComplete="new-password"
                   placeholder="Re-enter your password"
                   value={signupPassConfirm}
                   onChange={(e) => setSignupPassConfirm(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                 />
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                  {showSignupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -253,7 +264,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       placeholder="Enter your username"
                       value={loginUser}
                       onChange={(e) => setLoginUser(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                     />
                     <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                   </div>
@@ -265,15 +276,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                     <input
                       id="login-password"
                       name="password"
-                      type="password"
+                      type={showLoginPass ? 'text' : 'password'}
                       required
                       autoComplete="current-password"
                       placeholder="Enter your password"
                       value={loginPass}
                       onChange={(e) => setLoginPass(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
                     />
                     <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                      {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               </>

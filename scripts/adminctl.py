@@ -104,7 +104,7 @@ def pj(r: dict) -> str:
     return json.dumps(r, indent=1, default=str)[:3000]
 
 
-plans = ("basic", "pro", "elite")
+plans = ("none", "basic", "pro", "elite")
 
 
 def main() -> int:
@@ -119,6 +119,7 @@ def main() -> int:
         "get": ["id"],
         "search": ["q"],
         "set-plan": ["id", "plan"],
+        "grant-tokens": ["id", "amount"],
         "credits": ["id", "amount", "reason"],
         "multiplier": ["public_id", "mult"],
         "reset-pw": ["id", "newpw"],
@@ -161,6 +162,9 @@ def main() -> int:
             print("plan must be one of", plans); return 2
         st, r = a("POST", f"/api/admin/user/{opts.id}/plan?plan={opts.plan}")
         print(f"rc={st}", pj(r)); return 0 if st == 200 else 1
+    if cmd == "grant-tokens":
+        st, r = a("POST", "/api/admin/tokens/grant", {"public_id": opts.id, "amount": float(opts.amount)})
+        print(f"rc={st}", pj(r)); return 0 if st in (200, 201) else 1
     if cmd == "credits":
         st, r = a("POST", f"/api/admin/user/{opts.id}/credits?amount={opts.amount}&reason={urllib.parse.quote(opts.reason or 'AdminGrant')}")
         print(f"rc={st}", pj(r)); return 0 if st == 200 else 1

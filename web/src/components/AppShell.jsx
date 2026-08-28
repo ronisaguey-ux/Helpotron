@@ -8,17 +8,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion';
 import api from '../api.js';
-import { applyFontScale } from './SettingsApp.jsx';
+import { applyAppearance, applyAccessibility, applyFontScale } from './SettingsApp.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
-  BarChart3, CreditCard, Shield, Puzzle,
+  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
-import DemoModeToggle from './DemoModeToggle.jsx';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
 import Button from './Button.jsx';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
+import DevContactModal from './DevContactModal.jsx';
 
 const EFFORT_LABELS = { low: 'Low', balanced: 'Balanced', high: 'High' };
 
@@ -38,6 +38,8 @@ const NAV_TREE = (isAdmin) => [
       { key: 'agent', id: 'my_agent', label: 'My Agent', Icon: Brain },
       { key: 'history', label: 'Assignments', Icon: FileText },
       { key: 'library', label: 'Library', Icon: BookOpen },
+      { key: 'dump', label: 'Assignment Dump', Icon: Inbox },
+      { key: 'datalake', label: 'Data Lake', Icon: Database },
     ],
   },
   {
@@ -91,6 +93,7 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
 
   const fileRef = useRef(null);
   const [phoneDraft, setPhoneDraft] = useState(settings.profile.phone || '');
+  const [pfpMsg, setPfpMsg] = useState(null);
 
   const savePhone = () => {
     const v = phoneDraft.trim();
@@ -106,8 +109,12 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
       const r = await api.uploadAvatar(file, 'user');
       set('profile.avatarUrl', r.url);
       api.updateSettings({ profile: { ...settings.profile, avatarUrl: r.url } }).catch(() => {});
+      setPfpMsg(null);
     } catch (err) {
       console.error('avatar upload failed', err);
+      // Surface the real reason (size/format) instead of failing silently.
+      setPfpMsg(err.message || 'Avatar upload failed');
+      setTimeout(() => setPfpMsg(null), 5000);
     }
   };
 
@@ -128,7 +135,7 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
           <div className="text-xs font-semibold text-white truncate">{settings.profile.displayName || user.public_id}</div>
           <div className="text-[10px] text-slate-500">{user.public_id}</div>
         </div>
-        <span className="ml-auto text-[10px] font-mono text-blue-300">{Number(user.credits).toLocaleString()} cr</span>
+        <span className="ml-auto text-[10px] font-mono text-blue-300">{Number(user.token_balance ?? 0).toLocaleString()} tk · {Number(user.credits).toLocaleString()} cr</span>
       </div>
 
       <div className="flex items-center justify-between">
@@ -232,6 +239,11 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
           />
         </div>
       </div>
+      {pfpMsg && (
+        <div className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg px-2 py-1.5">
+          ⚠️ {pfpMsg}
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-slate-400">Notifications</span>
@@ -327,6 +339,13 @@ export default function AppShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
+  /* Apply appearance AT BOOT (operator 08-26): without this the stored
+   * accent/light/etc only kick in when the settings view mounts — a refresh
+   * snaps back to the default look. */
+  useEffect(() => {
+    applyAppearance(settings.appearance);
+    applyAccessibility(settings.accessibility);
+  }, [settings.appearance, settings.accessibility]);
 
   /* Font size setting (1–100) applies app-wide: scale the html root. */
   useEffect(() => {
@@ -415,17 +434,16 @@ export default function AppShell({
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {/* Mock data toggle (explicit opt-in; absent key = live mode) */}
-            <DemoModeToggle />
-
-            {/* Credits chip */}
+            {/* Tokens (usage) + Credits (discounts) chips */}
             <button
               type="button"
               onClick={() => onNavigate('credits')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300 hover:bg-blue-500/20 transition cursor-pointer text-xs font-semibold font-mono"
-              aria-label={`${Number(user.credits).toLocaleString()} credits, open credit wallet`}
+              aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
             >
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              {Number(user.token_balance ?? 0).toLocaleString()} tokens
+              <span className="text-blue-400/60 font-normal">·</span>
               {Number(user?.credits ?? 0).toLocaleString()} credits
             </button>
 
@@ -684,7 +702,7 @@ export default function AppShell({
                   {activeView === 'insights' && 'Analytics, progress and recommendations'}
                   {activeView === 'credits' && 'Balance, plans, top-ups and earnings — free beta, payments not available yet'}
                   {activeView === 'settings' && 'Your complete configuration workspace'}
-                  {activeView === 'admin' && 'Helpotron Control Center'}
+                  {activeView === 'admin' && isAdmin && 'Helpotron Control Center'}
                 </p>
               </div>
             </div>
@@ -753,6 +771,17 @@ export default function AppShell({
 
         <button
           type="button"
+          onClick={() => onNavigate('dump')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
+            activeView === 'dump' ? 'text-blue-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Inbox className="w-5 h-5" />
+          <span className="text-[10px]">Dump</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setMobileMenuOpen(true)}
           className="flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition"
           aria-label="Open full menu"
@@ -765,6 +794,7 @@ export default function AppShell({
           <span className="text-[10px]">More</span>
         </button>
       </nav>
+      {!isAdmin && <DevContactModal />}
     </>
   );
 }

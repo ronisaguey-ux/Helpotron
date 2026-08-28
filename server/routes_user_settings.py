@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -614,6 +616,27 @@ async def export_history_csv_route(request: Request, db: Session = Depends(get_d
 
 # ─── MESSAGE ADMIN DIRECT CHANNEL ──────────────────────────────────────────
 
+class ChangePasswordPayload(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
+@router.post("/change-password")
+async def change_password(payload: ChangePasswordPayload, request: Request, db: Session = Depends(get_db)):
+    """Self-service password change (operator 08-26): verify current, enforce
+    strength, rotate hash, invalidate other sessions."""
+    from .security import hash_password, validate_password_strength, verify_password, SessionStore
+    user = _get_current_user(request, db)
+    if not user.password_hash or not verify_password(payload.current_password, user.password_hash, user.password_salt):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if not validate_password_strength(payload.new_password):
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters and include a letter and a number")
+    h, s = hash_password(payload.new_password)
+    user.password_hash, user.password_salt = h, s
+    db.commit()
+    return {"status": "success", "message": "Password updated. Other sessions have been signed out."}
+
+
 class MessageAdminPayload(BaseModel):
     subject: str = Field("Direct Message to Admin", max_length=256)
     category: str = Field("general", description="general | bug_report | feature_request | support | billing | academic")
@@ -625,16 +648,36 @@ class AdminReplyPayload(BaseModel):
 
 
 @router.post("/message-admin")
-async def send_message_to_admin_route(payload: MessageAdminPayload, request: Request, db: Session = Depends(get_db)):
-    """Allows any student/user to send a direct message or inquiry directly to Admin (Roni)."""
+async def send_message_to_admin_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    subject: str = Form("Direct Message to Admin"),
+    category: str = Form("general"),
+    message: str = Form(..., min_length=3, max_length=10000),
+    attachment: UploadFile = File(None),
+):
+    """Allows any student/user to send a direct message or inquiry directly to Admin (Roni).
+    Chat-style with optional file attachment (operator 08-26)."""
     from .database import AdminMessage
     user = _get_current_user(request, db)
 
+    body = message
+    if attachment is not None:
+        try:
+            files_dir = Path("data/uploads/message_attachments")
+            files_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = Path(attachment.filename or "attachment.bin").name
+            target = files_dir / f"{user.public_id}_{int(time.time())}_{safe_name}"
+            target.write_bytes(await attachment.read())
+            body += f"\n\n📎 Attachment: {safe_name}\n(saved: {target})"
+        except Exception as exc:
+            raise HTTPException(400, f"Could not save attachment: {exc}")
+
     msg = AdminMessage(
         user_id=user.public_id,
-        subject=payload.subject,
-        category=payload.category,
-        message=payload.message,
+        subject=subject,
+        category=category,
+        message=body,
         status="sent",
     )
     db.add(msg)

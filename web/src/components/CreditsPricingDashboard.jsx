@@ -29,15 +29,16 @@ import api from '../api';
 import SectionCard from './SectionCard.jsx';
 
 export function CreditsPricingDashboard({
-  currentCredits = 10029,
+  currentCredits = 0,
   onTopUp = () => {},
-  userId = 'RoniDev',
+  userId = '',
+  plan = 'basic',
 }) {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoMsg, setPromoMsg] = useState('');
-  const [userDiscountCredits, setUserDiscountCredits] = useState(21); // $21 in discount credits
+  const [userDiscountCredits, setUserDiscountCredits] = useState(0); // no free discount credits (08-26: fresh accounts get nothing)
   const [useDiscountCredits, setUseDiscountCredits] = useState(true);
 
   // Cost intelligence — live from the backend (ApiUsageLog-backed), demo-safe
@@ -57,7 +58,7 @@ export function CreditsPricingDashboard({
   const [appliedCredits, setAppliedCredits] = useState(0);
 
   // Credentials
-  const [authUsername, setAuthUsername] = useState(userId || 'RoniDev');
+  const [authUsername, setAuthUsername] = useState(userId || '');
   const [authPassword, setAuthPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -73,7 +74,7 @@ export function CreditsPricingDashboard({
   const [authSuccess, setAuthSuccess] = useState(null);
 
   useEffect(() => {
-    setAuthUsername(userId || 'RoniDev');
+    setAuthUsername(userId || '');
     if (!destination) {
       setDestination(twoFactorMethod === 'email' ? `${userId.toLowerCase()}@helpotron.internal` : '+15550192834');
     }
@@ -254,7 +255,7 @@ export function CreditsPricingDashboard({
           </div>
           <div className="text-right">
             <span className="text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono">
-              Active Tier: Pro
+              Active Tier: {plan === 'none' || !plan ? 'No plan (activate via operator)' : plan}
             </span>
           </div>
         </div>

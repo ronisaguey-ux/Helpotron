@@ -18,7 +18,7 @@ import {
 import api from '../api';
 import SectionCard from './SectionCard.jsx';
 
-export default function DataLakeView({ userId = 'RoniDev' }) {
+export default function DataLakeView({ userId = '' }) {
   const [textContent, setTextContent] = useState('');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -145,7 +145,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             <div className="text-xl font-black text-emerald-400 font-mono">
               {microCreditsBalance} cr
             </div>
-            <span className="text-[10px] text-slate-400">100 cr = 1,000 Compute Credits (Helpotron only)</span>
+            <span className="text-[10px] text-slate-400">1 cr = 1 Compute Credit (1:1, no inflation) — 1 credit ≈ $1 discount value</span>
           </div>
           <button
             type="button"
@@ -153,7 +153,7 @@ export default function DataLakeView({ userId = 'RoniDev' }) {
             disabled={microCreditsBalance < 20}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition cursor-pointer shrink-0"
           >
-            Convert 20 cr (+200 Credits)
+            Convert 20 cr (+20 Credits)
           </button>
         </div>
       </SectionCard>

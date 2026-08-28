@@ -56,9 +56,9 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
       setLoading(true);
       setError('');
       const [a, act, vm] = await Promise.all([
-        api.get(`/analytics?public_id=${userId || 'RoniDev'}`),
-        api.get(`/analytics/activity?public_id=${userId || 'RoniDev'}&days=30`),
-        api.get(`/analytics/value?public_id=${userId || 'RoniDev'}`),
+        api.get(`/analytics?public_id=${userId || ''}`),
+        api.get(`/analytics/activity?public_id=${userId || ''}&days=30`),
+        api.get(`/analytics/value?public_id=${userId || ''}`),
       ]);
       setAnalytics(a);
       setActivity(act || []);
