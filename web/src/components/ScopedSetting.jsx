@@ -133,6 +133,7 @@ export default function ScopedSetting({
   refPlaceholder,
   title,
   currentValue,
+  description,
   children,
 }) {
   const [expanded, setExpanded] = useState(false);

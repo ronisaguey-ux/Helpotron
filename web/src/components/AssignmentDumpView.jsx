@@ -21,8 +21,28 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import SectionCard from './SectionCard.jsx';
+import { loadSettings } from '../demoData.js';
 
-export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignment }) {
+// Assignment type choices shown when a dumped item is finalized (user flow:
+// "what typa assignment the user wants to do, like a flashcard, practice quiz,
+// or just actually do it").
+const FINALIZE_OPTIONS = [
+  { action: 'flashcards', label: 'Flashcards', icon: '📇' },
+  { action: 'practice_quiz', label: 'Practice quiz', icon: '🧪' },
+  { action: 'study_guide', label: 'Study guide', icon: '📗' },
+  { action: 'summary', label: 'Summary', icon: '📄' },
+  { action: 'do_it', label: 'Do it for me', icon: '▶️' },
+];
+const FINALIZE_BADGE = {
+  flashcards: '📇 Flashcards',
+  practice_quiz: '🧪 Practice quiz',
+  study_guide: '📗 Study guide',
+  summary: '📄 Summary',
+  do_it: '▶️ Do it',
+};
+
+export default function AssignmentDumpView({ userId = '', onSelectAssignment }) {
+  const agentName = loadSettings().ai?.aiName || 'Overlord';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -36,10 +56,25 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
   const [newAssignTitle, setNewAssignTitle] = useState('');
   const [createNew, setCreateNew] = useState(false);
   const [routing, setRouting] = useState(false);
+  const [finalizingId, setFinalizingId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [resultView, setResultView] = useState(null); // { title, work } for finalized work drawer
+  const [pasteText, setPasteText] = useState('');
 
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  };
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   const fetchItems = async () => {
     try {
@@ -47,7 +82,7 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
       if (res && res.status === 'success') {
         setItems(res.items || []);
       }
-      const assignRes = await api.dashboard(50, 0);
+      const assignRes = await api.dashboard(userId, 50, 0);
       if (assignRes && assignRes.assignments) {
         setAssignments(assignRes.assignments);
       }
@@ -75,6 +110,31 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
       await fetchItems();
     } catch (e) {
       alert(e.message || 'Error uploading file to Assignment Dump');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Paste-text dump: wrap the assignment text in a .txt file and run it
+  // through the same upload pipeline (engine already extracts txt).
+  const handleTextDump = async () => {
+    const text = (pasteText || '').trim();
+    if (!text) {
+      showToast('Paste some assignment text first.', false);
+      return;
+    }
+    setUploading(true);
+    try {
+      const file = new File([text], `paste_${Date.now()}.txt`, { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', userId);
+      await api.uploadDumpFile(formData);
+      setPasteText('');
+      await fetchItems();
+      showToast('Assignment text dumped — AI is pairing it to a bubble.');
+    } catch (e) {
+      showToast(e.message || 'Error dumping text', false);
     } finally {
       setUploading(false);
     }
@@ -141,8 +201,80 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
     }
   };
 
+  const needsTypeAsk = (item) =>
+    !item.requested_action && ['matched', 'manual_routed', 'unmatched'].includes(item.status);
+
+  const handleFinalize = async (item, action) => {
+    const opt = FINALIZE_OPTIONS.find((o) => o.action === action);
+    setFinalizingId(item.id);
+    try {
+      const res = await api.finalizeDumpItem(item.id, action);
+      if (res.status === 'insufficient_tokens') {
+        showToast(res.detail || '⚠️ Insufficient tokens — ask the operator to grant tokens first.', false);
+      } else if (res.status === 'success') {
+        if (res.work) {
+          setResultView({ title: item.file_name || 'Assignment', work: res.work });
+          showToast(`${opt.icon} ${opt.label} done — the work is ready.`, true);
+        } else {
+          showToast(res.generated
+            ? `${opt.icon} ${opt.label} ready — study material generated.`
+            : `${opt.icon} ${opt.label} finalized.`);
+        }
+      } else {
+        showToast('Finalized, but no content could be generated yet (LLM unavailable or file has no text). Try again later.', false);
+      }
+      await fetchItems();
+    } catch (e) {
+      showToast(`Failed to finalize: ${e.message || 'unknown error'}`, false);
+    } finally {
+      setFinalizingId(null);
+    }
+  };
+
+  // "Dump All" — process every dumped item that hasn't been finalized in one
+  // click (operator 08-26): each one gets the do_it treatment (real work) and
+  // n/a items short-circuit with a note.
+  const [dumpingAll, setDumpingAll] = useState(false);
+  const dumpAll = async () => {
+    const pending = items.filter((i) => i.status !== 'finalized');
+    if (pending.length === 0) {
+      showToast('Nothing to dump — every item is already finalized.', false);
+      return;
+    }
+    setDumpingAll(true);
+    let ok = 0, fail = 0;
+    for (const item of pending) {
+      try {
+        const res = await api.finalizeDumpItem(item.id, 'do_it');
+        if (res.status === 'success') ok += 1;
+        else fail += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    await fetchItems();
+    setDumpingAll(false);
+    showToast(`Dump All: ${ok} done, ${fail} failed.`, fail === 0);
+  };
+
+  // View the completed work of an already-finalized do_it item (fetched from
+  // the assignment's progress where finalize stored do_it_work).
+  const openWork = async (item) => {
+    if (!item.matched_assignment_id) return;
+    try {
+      const full = await api.assignmentFullView(item.matched_assignment_id);
+      const work = full?.assignment?.do_it_work;
+      setResultView({
+        title: item.file_name || 'Assignment',
+        work: work || 'Work is attached to the assignment bubble — open your agent chat to view it.',
+      });
+    } catch (e) {
+      showToast(`Couldn't load the work: ${e.message || 'unknown error'}`, false);
+    }
+  };
+
   const filteredItems = items.filter((item) => {
-    if (activeTab === 'matched') return item.status === 'matched' || item.status === 'manual_routed';
+    if (activeTab === 'matched') return ['matched', 'manual_routed', 'finalized'].includes(item.status);
     if (activeTab === 'unmatched') return item.status === 'unmatched';
     if (activeTab === 'audio') return item.file_type === 'audio' || item.file_type === 'video';
     return true;
@@ -158,11 +290,11 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
           </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] font-semibold mb-1">
-              <Bot className="w-3.5 h-3.5" /> Overlord AI Auto-Routing
+              <Bot className="w-3.5 h-3.5" /> {agentName} AI Auto-Routing
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight">Universal Assignment Dump</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Dump any document (PDF, Word), lecture audio (AI transcription), image, or video. Overlord AI auto-pairs it to the right assignment.
+              Dump any document (PDF, Word), lecture audio (AI transcription), image, or video. {agentName} AI auto-pairs it to the right assignment.
             </p>
           </div>
         </div>
@@ -170,6 +302,16 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
 
         {/* Live Audio Record Button */}
         <div className="flex items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={dumpAll}
+            disabled={dumpingAll}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/20"
+            title="Finalize every dumped item as real work in one click"
+          >
+            {dumpingAll ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            <span>Dump All</span>
+          </button>
           {!recording ? (
             <button
               type="button"
@@ -225,9 +367,37 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
           {uploading && (
             <div className="flex items-center gap-2 text-xs text-blue-400 font-mono mt-2">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              <span>Overlord is parsing & transcribing with AI…</span>
+              <span>{agentName} is parsing & transcribing with AI…</span>
             </div>
           )}
+        </div>
+
+        {/* Paste-text dump */}
+        <div className="flex items-center gap-3 pt-4 border-t border-white/8">
+          <div className="h-px flex-1 bg-white/8" />
+          <span className="text-[10px] uppercase tracking-wider text-slate-600">or paste the assignment text</span>
+          <div className="h-px flex-1 bg-white/8" />
+        </div>
+        <div className="space-y-2.5">
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder={`Paste the full assignment / rubric / instructions here — ${agentName} will extract the details and match it to an assignment bubble…`}
+            rows={5}
+            className="clean-input w-full px-3 py-2.5 text-xs rounded-xl bg-slate-900/70 border border-white/10 focus:border-blue-500/50 outline-none resize-y font-mono leading-relaxed"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-slate-600">{pasteText.length.toLocaleString()} characters</span>
+            <button
+              type="button"
+              onClick={handleTextDump}
+              disabled={uploading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
+            >
+              {uploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+              <span>Dump text</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -261,10 +431,12 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredItems.map((item) => {
               const isMatched = item.status === 'matched' || item.status === 'manual_routed';
+              const isFinalized = item.status === 'finalized';
               const confPct = Math.round((item.auto_match_confidence || 0) * 100);
 
               return (
                 <SectionCard
+                  key={`dump-item-${item.id}`}
                   id={`dump-item-${item.id}`}
                   className="rounded-2xl bg-slate-950/70 border border-white/10 flex flex-col justify-between gap-4 hover:border-blue-500/30 transition"
                   header={
@@ -289,12 +461,14 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
 
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border ${
-                          isMatched
+                          isFinalized
                             ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                            : isMatched
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                              : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         }`}
                       >
-                        {isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
+                        {isFinalized ? '✅ Finalized' : isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
                       </span>
                     </div>
                   }
@@ -310,11 +484,43 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
                       <Bot className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                       <span className="truncate">{item.overlord_notes}</span>
                     </div>
+
+                    {/* Assignment Type Ask (finalize): not yet finalized → ask what the user wants */}
+                    {needsTypeAsk(item) && (
+                      <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-2">
+                        <div className="text-[11px] font-semibold text-blue-200">
+                          What do you want to do this assignment as?
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {FINALIZE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.action}
+                              type="button"
+                              onClick={() => handleFinalize(item, opt.action)}
+                              disabled={finalizingId === item.id}
+                              className="px-2 py-1.5 rounded-lg bg-slate-900/80 hover:bg-blue-600/30 border border-white/10 hover:border-blue-500/40 text-slate-200 text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                            >
+                              {opt.icon} {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        {finalizingId === item.id && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-blue-300 font-mono">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Generating with {agentName} AI…
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Bar */}
                   <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    {item.matched_assignment_id ? (
+                    {isFinalized ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 truncate max-w-[180px]">
+                        {FINALIZE_BADGE[item.requested_action] || '✅ Finalized'}
+                      </span>
+                    ) : item.matched_assignment_id ? (
                       <div className="text-xs text-emerald-400 font-semibold truncate flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span className="truncate">{item.matched_assignment_title || `Assignment #${item.matched_assignment_id}`}</span>
@@ -326,6 +532,15 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
                     )}
 
                     <div className="flex items-center gap-2">
+                      {isFinalized && item.requested_action === 'do_it' && (
+                        <button
+                          type="button"
+                          onClick={() => openWork(item)}
+                          className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                        >
+                          📄 View work
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -451,6 +666,50 @@ export default function AssignmentDumpView({ userId = 'RoniDev', onSelectAssignm
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Finalize Toast */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-[70] max-w-xs px-4 py-2.5 rounded-xl text-xs font-semibold shadow-2xl border animate-fadeIn ${
+            toast.ok
+              ? 'bg-emerald-600/95 border-emerald-400/40 text-white'
+              : 'bg-rose-600/95 border-rose-400/40 text-white'
+          }`}
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Finalized work drawer — shows the actual generated work right away */}
+      {resultView && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setResultView(null)}>
+          <div
+            className="clean-card w-full max-w-2xl max-h-[80vh] flex flex-col bg-slate-950 border border-emerald-500/30 rounded-3xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Work ready — {resultView.title}
+              </div>
+              <button
+                type="button"
+                onClick={() => setResultView(null)}
+                className="text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">
+              {resultView.work}
+            </div>
+            <div className="px-5 py-3 border-t border-white/10 text-[10px] text-slate-500">
+              Also saved to your assignment bubble — open your agent → {agentName} to chat about it.
+            </div>
           </div>
         </div>
       )}

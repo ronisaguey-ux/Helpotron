@@ -27,6 +27,26 @@ export default defineConfig({
       },
     },
   },
+  // Production mode (08-27): the public site serves the BUILT dist via
+  // `vite preview` on the same port the tunnel points at — never raw /src/
+  // from the dev server. Mirror the /api + /uploads proxy so the built
+  // client can still reach the FastAPI backend on :8000.
+  preview: {
+    port: 5173,
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/uploads': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });
 
 

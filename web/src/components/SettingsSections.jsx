@@ -8,7 +8,9 @@ import React, { useRef, useState } from 'react';
 import { Download, Trash2, KeyRound, ExternalLink, Camera } from 'lucide-react';
 import { Toggle, Slider, Badge, Progress } from './ui/os.jsx';
 import api from '../api.js';
+import TwoFactorSetup from './TwoFactorSetup.jsx';
 import ScopedSetting from './ScopedSetting.jsx';
+import DemoModeToggle from './DemoModeToggle.jsx';
 
 /* Every toggle also accepts hierarchy variants (On/Off per subject/class/…) */
 const ON_OFF = [{ key: true, label: 'On' }, { key: false, label: 'Off' }];
@@ -27,6 +29,54 @@ const inputCls = 'clean-input w-full px-3 py-2 text-xs outline-none';
 
 /* ── ACCOUNT ─────────────────────────────────────────────────────────────── */
 function AccountSection({ s, set, userId }) {
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCur, setPwCur] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwNew2, setPwNew2] = useState('');
+  const [pwMsg, setPwMsg] = useState(null); // { ok, text }
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pfpMsg, setPfpMsg] = useState('');
+  const pfpRef = useRef(null);
+
+  const uploadPfp = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPfpMsg('');
+    try {
+      const res = await api.uploadAvatar(file, 'user');
+      set('profile.avatarUrl', res.url);
+      // Mirror to the server store (localStorage alone is device-local).
+      api.updateSettings({ profile: { ...(s.profile || {}), avatarUrl: res.url } }).catch(() => {});
+    } catch (err) {
+      setPfpMsg(err.message || 'Upload failed (max 5 MB, PNG/JPG).');
+    }
+  };
+
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    setPwMsg(null);
+    if (pwNew !== pwNew2) {
+      setPwMsg({ ok: false, text: 'New passwords do not match.' });
+      return;
+    }
+    if (pwNew.length < 8) {
+      setPwMsg({ ok: false, text: 'New password must be at least 8 characters.' });
+      return;
+    }
+    setPwBusy(true);
+    try {
+      await api.changePassword(pwCur, pwNew);
+      setPwMsg({ ok: true, text: 'Password updated. Use your new password next sign-in.' });
+      setPwCur(''); setPwNew(''); setPwNew2('');
+      setTimeout(() => setPwOpen(false), 1500);
+    } catch (err) {
+      setPwMsg({ ok: false, text: err.message || 'Failed to change password.' });
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-5 max-w-md">
       <div className="flex items-center gap-4 pb-4 border-b border-white/8">
@@ -41,6 +91,41 @@ function AccountSection({ s, set, userId }) {
           <Badge color="purple" className="mt-1">Elite plan</Badge>
         </div>
       </div>
+      <Field label="Profile picture" hint="PNG or JPG, max 5 MB — same pic shows in the topbar and your agent.">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-lg font-black text-white overflow-hidden shrink-0">
+            {s.profile.avatarUrl
+              ? <img src={s.profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+              : (s.profile.displayName?.[0] || 'P')}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => pfpRef.current?.click()}
+              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+            >
+              {s.profile.avatarUrl ? 'Change photo' : 'Upload photo'}
+            </button>
+            {s.profile.avatarUrl && (
+              <button
+                type="button"
+                onClick={() => set('profile.avatarUrl', '')}
+                className="px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-rose-300 transition cursor-pointer"
+              >
+                Remove
+              </button>
+            )}
+            <input
+              ref={pfpRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={uploadPfp}
+            />
+          </div>
+        </div>
+        {pfpMsg && <p className="text-[11px] text-rose-300 mt-1.5">⚠️ {pfpMsg}</p>}
+      </Field>
       <Field label="Display name">
         <input value={s.profile.displayName} onChange={(e) => set('profile.displayName', e.target.value)} className={inputCls} />
       </Field>
@@ -58,10 +143,64 @@ function AccountSection({ s, set, userId }) {
         />
       </Field>
       <Field label="Password">
-        <button type="button" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer">
-          <KeyRound className="w-3.5 h-3.5" /> Change password
-        </button>
+        {!pwOpen ? (
+          <button
+            type="button"
+            onClick={() => setPwOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer"
+          >
+            <KeyRound className="w-3.5 h-3.5" /> Change password
+          </button>
+        ) : (
+          <form onSubmit={submitPassword} className="space-y-2.5 pt-1">
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={pwCur}
+              onChange={(e) => setPwCur(e.target.value)}
+              placeholder="Current password"
+              className={inputCls}
+              autoFocus
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pwNew}
+              onChange={(e) => setPwNew(e.target.value)}
+              placeholder="New password (min 8 characters)"
+              className={inputCls}
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pwNew2}
+              onChange={(e) => setPwNew2(e.target.value)}
+              placeholder="Repeat new password"
+              className={inputCls}
+            />
+            {pwMsg && (
+              <p className={`text-[11px] ${pwMsg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{pwMsg.text}</p>
+            )}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={pwBusy}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
+              >
+                {pwBusy ? 'Saving…' : 'Save new password'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPwOpen(false); setPwMsg(null); setPwCur(''); setPwNew(''); setPwNew2(''); }}
+                className="px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </Field>
+      <TwoFactorSetup s={s} set={set} />
     </div>
   );
 }
@@ -75,12 +214,17 @@ function AcademicSection({ s, set }) {
   };
   /* Per-subject cover image (PNG/JPG → api.uploadAvatar kind='subject') */
   const subjectImgRefs = useRef({});
+  const [subjImgErr, setSubjImgErr] = useState('');
   const uploadSubjectImage = async (subject, file) => {
-    const res = await api.uploadAvatar(file, 'subject', subject).catch(() => null);
-    const url = res?.url || (file ? URL.createObjectURL(file) : '');
-    if (!url) return;
-    const next = { ...(s.subjectImages || {}), [subject]: url };
-    set('subjectImages', next);
+    setSubjImgErr('');
+    try {
+      const res = await api.uploadAvatar(file, 'subject', subject);
+      const url = res?.url || URL.createObjectURL(file);
+      const next = { ...(s.subjectImages || {}), [subject]: url };
+      set('subjectImages', next);
+    } catch (e) {
+      setSubjImgErr(e.message || 'Image upload failed (max 5 MB, PNG/JPG).');
+    }
   };
   return (
     <div className="space-y-7">
@@ -102,6 +246,9 @@ function AcademicSection({ s, set }) {
 
       <div>
         <div className="text-xs font-medium text-slate-300 mb-2">Subjects & skill levels</div>
+        {subjImgErr && (
+          <p className="text-[11px] text-rose-300 mb-2">⚠️ {subjImgErr}</p>
+        )}
         <div className="space-y-2 max-w-lg">
           {Object.entries(s.subjects).map(([subject, level]) => (
             <div key={subject} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-950/40 border border-white/6">
@@ -773,6 +920,15 @@ function ExperimentalSection({ s, set }) {
       <Toggle checked={s.experimental.ocrBeta} onChange={(v) => set('experimental', { ...s.experimental, ocrBeta: v })} label="OCR beta pipeline" description="New document-extraction engine, 12% rollout." />
       <Toggle checked={s.experimental.edgeEval} onChange={(v) => set('experimental', { ...s.experimental, edgeEval: v })} label="Edge evaluation" description="Score drafts against exemplars before review." />
       <Toggle checked={s.experimental.newUI} onChange={(v) => set('experimental', { ...s.experimental, newUI: v })} label="New Settings UI" description="You're looking at it." />
+      <div className="pt-2 border-t border-white/8">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+          Demo / mock data
+        </div>
+        <DemoModeToggle />
+        <p className="text-[9px] text-slate-600 mt-1.5">
+          For testing only — sample data shown instead of your real account. Stay off.
+        </p>
+      </div>
     </div>
   );
 }

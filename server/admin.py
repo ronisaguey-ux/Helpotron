@@ -155,6 +155,7 @@ async def list_users(request: Request, db: Session = Depends(get_db)):
         "public_id": u.public_id,
         "plan": u.plan,
         "credits": u.credits,
+        "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
         "telegram_id": u.telegram_id,
         "created_at": u.created_at.isoformat(),
         "assignment_count": len(u.assignments),
@@ -199,7 +200,8 @@ async def adjust_user_credits(
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    user.credits = (user.credits or 0) + amount
+    # Clamp so a balance can never go negative (operator 08-26).
+    user.credits = max(0, (user.credits or 0) + amount)
     tx = CreditTransaction(user_id=user.id, delta=amount, reason=f"admin: {reason}")
     db.add(tx)
     db.commit()
@@ -210,7 +212,7 @@ async def adjust_user_credits(
 @router.post("/user/{public_id}/plan")
 async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db)):
     require_admin(request)
-    if plan not in ["basic", "pro", "elite"]:
+    if plan not in ["none", "basic", "pro", "elite"]:
         raise HTTPException(400, "Invalid plan")
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
@@ -355,6 +357,28 @@ async def deactivate_token(token: str, request: Request, db: Session = Depends(g
     if not TokenManager.deactivate_token(db, token):
         raise HTTPException(404, "Token not found")
     return {"message": "Token deactivated"}
+
+
+class TokenGrantRequest(BaseModel):
+    public_id: str
+    amount: float
+
+
+@router.post("/tokens/grant")
+async def grant_tokens(req: TokenGrantRequest, request: Request, db: Session = Depends(get_db)):
+    """Operator: grant a usage-token balance to a user (tokens = usage budget,
+    credits stay for discounts). 08-26."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == req.public_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    settings = dict(user.settings or {})
+    bal = float(settings.get("token_balance", 0) or 0)
+    # Clamp so a balance can never go negative (operator 08-26).
+    settings["token_balance"] = max(0.0, bal + req.amount)
+    user.settings = settings
+    db.commit()
+    return {"public_id": user.public_id, "token_balance": settings["token_balance"]}
 
 
 @router.post("/tokens/redeem")

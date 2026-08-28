@@ -27,6 +27,16 @@ export function setDemoMode(on) {
   } catch { /* storage unavailable — mode just won't persist */ }
 }
 
+// Demo fixtures personalize to whoever is testing — never bake an operator
+// name into user-facing mock responses (fallback 'demo-user').
+const mockAlias = () => {
+  try {
+    return localStorage.getItem('public_id') || localStorage.getItem('helpotron_public_id') || 'demo-user';
+  } catch {
+    return 'demo-user';
+  }
+};
+
 // ─── sample dataset ────────────────────────────────────────────────────────
 
 const DEMO_ASSIGNMENTS = [
@@ -75,7 +85,7 @@ const DEMO_TRANSACTIONS = [
 ];
 
 const DEMO_LEADERBOARD = [
-  { public_id: 'RoniDev', credits_used: 15000, credits_formatted: '15,000.0', streak_days: 12 },
+  { public_id: mockAlias(), credits_used: 15000, credits_formatted: '15,000.0', streak_days: 12 },
   { public_id: 'sam_w', credits_used: 12480, credits_formatted: '12,480.0', streak_days: 9 },
   { public_id: 'maya_o', credits_used: 10992, credits_formatted: '10,992.0', streak_days: 7 },
   { public_id: 'study_bot', credits_used: 9340, credits_formatted: '9,340.0', streak_days: 5 },
@@ -109,7 +119,7 @@ const DEMO_AGENT_FILES = [
   { id: 'f4', file_name: 'atlas-personality.md', kind: 'personality', size_bytes: 1560, created_at: '2026-08-21T18:44:00-04:00' },
 ];
 
-function dashboardPayload(publicId = 'RoniDev') {
+function dashboardPayload(publicId = mockAlias()) {
   return {
     status: 'success',
     public_id: publicId,
@@ -171,9 +181,9 @@ export async function mockGenerateStream(kind, body, onProgress) {
 // Path match → handler(method, parsedUrl, body). Returns a JSON payload or
 // null to pass the request through to the real backend.
 const ROUTES = [
-  { match: /^\/api\/dashboard(\/.*)?$/, handle: (m, u) => dashboardPayload(u.pathname.split('/').filter(Boolean).pop() || u.params.public_id || 'RoniDev') },
+  { match: /^\/api\/dashboard(\/.*)?$/, handle: (m, u) => dashboardPayload(u.pathname.split('/').filter(Boolean).pop() || u.params.public_id || mockAlias()) },
   { match: /^\/api\/credits\/.+/, handle: () => ({ plan: 'Elite', credits: 12840 }) },
-  { match: /^\/api\/me$/, handle: () => ({ message: 'Authenticated (demo)', public_id: 'RoniDev', plan: 'Elite', credits: 12840, authenticated: true }) },
+  { match: /^\/api\/me$/, handle: () => ({ message: 'Authenticated (demo)', public_id: mockAlias(), plan: 'Elite', credits: 12840, authenticated: true }) },
   { match: /^\/api\/health$/, handle: () => ({ status: 'ok' }) },
   { match: /^\/api\/user\/settings$/, handle: (m) => (m === 'PATCH' ? { status: 'ok', settings: { theme: 'dark', demo: true } } : { settings: { theme: 'dark', default_course: 'PSY 210', notifications: true, demo: true } }) },
   { match: /^\/api\/user\/models$/, handle: () => ({ models: [
@@ -183,7 +193,7 @@ const ROUTES = [
   ] }) },
   { match: /^\/api\/user\/academic-levels$/, handle: () => ({ levels: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate'] }) },
   { match: /^\/api\/user\/effort-score\/resolve/, handle: () => ({ score: 720, level: 'excellent' }) },
-  { match: /^\/api\/user\/leaderboard(\/alias)?$/, handle: () => ({ leaderboard: DEMO_LEADERBOARD, alias: 'RoniDev' }) },
+  { match: /^\/api\/user\/leaderboard(\/alias)?$/, handle: () => ({ leaderboard: DEMO_LEADERBOARD, alias: mockAlias() }) },
   { match: /^\/api\/assignments\/cards$/, handle: () => ({ cards: DEMO_ASSIGNMENTS }) },
   { match: /^\/api\/status\/.+/, handle: () => ({ assignments: DEMO_ASSIGNMENTS }) },
   { match: /^\/api\/materials\/[^/]+\/([a-z_-]+)/, handle: (m, u) => { const kind = u.pathname.split('/').pop(); return { materials: [{ id: 600, kind, topic: 'Sample material (demo)', content: mockMaterialFor(kind).content, created_at: new Date().toISOString() }], kind }; } },
@@ -196,9 +206,9 @@ const ROUTES = [
   { match: /^\/api\/referrals\/code/, handle: () => ({ code: 'RIVERA-8F2K-91QZ-77HT-3BDX' }) },
   { match: /^\/api\/referrals\/generate/, handle: () => ({ code: 'RIVERA-8F2K-91QZ-77HT-3BDX' }) },
   { match: /^\/api\/admin\/costs\/summary/, handle: () => ({ total_spend_usd: 128.4, today_spend_usd: 2.15, avg_cost_per_task_usd: 0.41, budget_usd: 200 }) },
-  { match: /^\/api\/admin\/costs\/users/, handle: () => ({ users: [{ public_id: 'RoniDev', total_usd: 61.2, tasks: 148 }, { public_id: 'sam_w', total_usd: 42.8, tasks: 96 }, { public_id: 'maya_o', total_usd: 24.4, tasks: 61 }] }) },
+  { match: /^\/api\/admin\/costs\/users/, handle: () => ({ users: [{ public_id: mockAlias(), total_usd: 61.2, tasks: 148 }, { public_id: 'sam_w', total_usd: 42.8, tasks: 96 }, { public_id: 'maya_o', total_usd: 24.4, tasks: 61 }] }) },
   { match: /^\/api\/admin\/analytics/, handle: () => ({ users: 3, assignments: DEMO_ASSIGNMENTS.length, materials: 12, revenue_usd: 128.4, mrr_usd: 97 }) },
-  { match: /^\/api\/admin\/users/, handle: () => ({ users: [{ public_id: 'RoniDev', plan: 'Elite', credits: 12840, created_at: '2026-07-01T00:00:00-04:00' }, { public_id: 'sam_w', plan: 'Pro', credits: 4200, created_at: '2026-07-12T00:00:00-04:00' }] }) },
+  { match: /^\/api\/admin\/users/, handle: () => ({ users: [{ public_id: mockAlias(), plan: 'Elite', credits: 12840, created_at: '2026-07-01T00:00:00-04:00' }, { public_id: 'sam_w', plan: 'Pro', credits: 4200, created_at: '2026-07-12T00:00:00-04:00' }] }) },
   { match: /^\/api\/admin\/user\/[^/]+\/credits/, handle: () => ({ status: 'ok', credits: 12840 }) },
   { match: /^\/api\/features\/stats$/, handle: () => ({ streak_days: 12, xp: 4820, level: 14, badges: ['Early Bird', 'Consistent Scholar', 'Quiz Master'] }) },
   { match: /^\/api\/features\/calendar\/deadlines$/, handle: () => ({ deadlines: DEMO_ASSIGNMENTS.map((a) => ({ assignment: a.title, course: a.course, due: a.due_date })) }) },
@@ -300,7 +310,7 @@ const ROUTES = [
   { match: /^\/api\/discount$/, handle: () => ({ status: 'ok', discount: 0.15 }) },
   { match: /^\/api\/simulation\/toggle/, handle: () => ({ status: 'ok', enabled: true, mode: 'demo' }) },
 
-  // ── Admin panel (visible when logged in as RoniDev) ───────────────────────
+  // ── Admin panel mock routes (admin-console only) ───────────────────────────
   { match: /^\/api\/admin\/moderation(\?|$)/, handle: () => ({ items: [], pending_count: 0 }) },
   { match: /^\/api\/admin\/moderation\/[^/]+\/action/, handle: () => ({ status: 'ok' }) },
   { match: /^\/api\/admin\/system-health/, handle: () => ({

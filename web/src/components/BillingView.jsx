@@ -9,13 +9,16 @@ import CreditsPricingDashboard from './CreditsPricingDashboard.jsx';
 import SectionCard from './SectionCard.jsx';
 
 export default function BillingView({ userId }) {
-  const [balance, setBalance] = useState(10029);
+  const [balance, setBalance] = useState(0);
+  const [plan, setPlan] = useState('');
   const [msg, setMsg] = useState('');
   const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
     api.dashboard(userId).then((d) => {
-      setBalance(d.credits || 10029);
+      /* Real balance only — 0 is a valid balance, never fall back to a demo number. */
+      setBalance(typeof d.credits === 'number' ? d.credits : 0);
+      setPlan(typeof d.plan === 'string' ? d.plan : '');
       setTransactions(d.recent_transactions || []);
     }).catch(() => {});
   }, [userId]);
@@ -47,7 +50,7 @@ export default function BillingView({ userId }) {
           {msg}
         </div>
       )}
-      <CreditsPricingDashboard currentCredits={balance} onTopUp={handleTopUp} userId={userId} />
+      <CreditsPricingDashboard currentCredits={balance} plan={plan} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
       <SectionCard id="billing-transactions" title="Receipts & Credit Activity">

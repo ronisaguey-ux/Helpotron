@@ -9,12 +9,12 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Send, Paperclip, ShieldCheck, Shield, Flame, RefreshCw,
-  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, User as UserIcon, Undo2,
+  Send, Paperclip, Mic, ShieldCheck, Shield, Flame, RefreshCw,
+  Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, User as UserIcon, Undo2, Pin, Pencil,
 } from 'lucide-react';
 import api from '../api.js';
-import { loadSettings, saveSettings, AGENT_PERSONALITIES, EFFORT_SCORES } from '../demoData.js';
-import { Badge, timeAgo } from './ui/os.jsx';
+import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
+import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
 import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
 
@@ -39,7 +39,8 @@ const MODE_META = {
   yolo: { label: 'YOLO', icon: Flame, cls: 'bg-amber-600/20 border-amber-500/40 text-amber-300' },
 };
 
-const effortBucket = (v) => (v <= 400 ? 'Low' : v < 750 ? 'Balanced' : 'High');
+const effortBucket = (v) => (v <= 300 ? 'Low' : v <= 700 ? 'Balanced' : 'High');
+// 1-10 UI scale maps to the 1-1000 backend contract: score = x100, buckets <=3/<=7/8+.
 const fmt = (n) => Number(n || 0).toLocaleString();
 
 function AvatarUpload({ url, onUpload, label, initial }) {
@@ -71,8 +72,10 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   );
 }
 
-export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
+export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {} }) {
   const [settings, setSettingsState] = useState(loadSettings);
+  const [threads, setThreads] = useState([]);
+  const [activeThread, setActiveThread] = useState(null); // null = the original chat (key 0)
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -82,6 +85,62 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     },
   ]);
   const [input, setInput] = useState('');
+
+  /* ── voice (08-27): mic dictation + spoken replies via local Voicebox ── */
+  const [recording, setRecording] = useState(false);
+  const mediaRef = useRef(null);
+  const recChunksRef = useRef([]);
+
+  async function toggleRecord() {
+    if (recording) {
+      mediaRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRef.current = mr;
+      recChunksRef.current = [];
+      mr.ondataavailable = (e) => recChunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        if (!blob.size) return;
+        try {
+          const fd = new FormData();
+          fd.append('file', blob, 'rec.webm');
+          const r = await fetch('/api/voice/transcribe', { method: 'POST', body: fd });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.text) setInput((prev) => (prev ? `${prev} ${j.text}` : j.text));
+          else alert(`Voice: ${j.detail || 'transcription failed'}`);
+        } catch (err) {
+          alert(`Voicebox unavailable: ${err.message}`);
+        }
+      };
+      mr.start();
+      setRecording(true);
+    } catch (err) {
+      alert(`Mic unavailable: ${err.message}`);
+    }
+  }
+
+  async function speakText(text) {
+    try {
+      const r = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 1200) }),
+      });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({})))?.detail) || r.statusText);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      new Audio(url).play().catch(() => alert('Could not play the audio'));
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      alert(`Voicebox unavailable: ${err.message}`);
+    }
+  }
   const [mode, setMode] = useState('auto');
   const [autoApprove, setAutoApprove] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -98,6 +157,9 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
   const [memoryText, setMemoryText] = useState('');
   const [files, setFiles] = useState([]);
   const [fileKind, setFileKind] = useState('skill');
+  const [viewFile, setViewFile] = useState(null); // { name, kind, content } viewer
+  const [renameOpenId, setRenameOpenId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const [pendingPermissions, setPendingPermissions] = useState([]);
   const [ledger, setLedger] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -121,6 +183,101 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     })();
     return () => { alive = false; };
   }, []);
+
+  /* ── Assignment bubbles — per-assignment chat + file drop (08-26) ────── */
+  const [assignments, setAssignments] = useState([]);
+  const [bubbleChats, setBubbleChats] = useState({});
+  const [bubbleInputs, setBubbleInputs] = useState({});
+  const [bubbleOpen, setBubbleOpen] = useState({});
+  const [bubbleBusy, setBubbleBusy] = useState({});
+  const bubbleFileRef = useRef(null);
+  const bubbleFileTarget = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (!localStorage.getItem('token')) return;
+    api.assignmentCards().then((d) => {
+      if (!alive) return;
+      const cards = d?.cards || [];
+      setAssignments(cards);
+      if (cards.length > 0) {
+        setBubbleOpen((prev) => ({ ...prev, [cards[0].id]: true }));
+        loadBubbleHistory(cards[0].id);
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadBubbleHistory(id) {
+    try {
+      const d = await api.get(`/api/agent/chat/${id}`);
+      if (d?.chat?.length) setBubbleChats((prev) => ({ ...prev, [id]: d.chat }));
+    } catch { /* history is auth-gated; skip silently */ }
+  }
+
+  function toggleBubble(id) {
+    setBubbleOpen((prev) => {
+      const next = !prev[id];
+      if (next) loadBubbleHistory(id);
+      return { ...prev, [id]: next };
+    });
+  }
+
+  function pushBubble(id, sender, text) {
+    setBubbleChats((prev) => ({
+      ...prev,
+      [id]: [
+        ...(prev[id] || []),
+        { id: `local_${Date.now()}_${Math.random()}`, sender, text, timestamp: new Date().toISOString() },
+      ],
+    }));
+  }
+
+  async function sendBubbleMessage(id) {
+    const query = (bubbleInputs[id] || '').trim();
+    if (!query || bubbleBusy[id]) return;
+    setBubbleInputs((p) => ({ ...p, [id]: '' }));
+    pushBubble(id, 'user', query);
+    setBubbleBusy((p) => ({ ...p, [id]: true }));
+    try {
+      const res = await api.agentChat({ assignment_id: id, text: query, session_mode_override: mode });
+      pushBubble(id, 'overlord', res?.reply || res?.message || '✅ Done.');
+    } catch (e) {
+      pushBubble(id, 'overlord', `⚠️ Couldn't reach the agent right now (${e.message}).`);
+    } finally {
+      setBubbleBusy((p) => ({ ...p, [id]: false }));
+    }
+  }
+
+  /* Drop file INTO the bubble: /api/dump/upload with assignment_id FormData
+   * field — the dump engine binds it (manual_assignment_id) and extracts the
+   * text into that assignment's context. The success confirmation is a chat
+   * message in the bubble (client-rendered; the file itself persists
+   * server-side with matched_assignment_id). */
+  async function handleBubbleFile(e) {
+    const f = e.target.files?.[0];
+    const id = bubbleFileTarget.current;
+    e.target.value = '';
+    if (!f || !id) return;
+    pushBubble(id, 'user', `📎 ${f.name} (attaching to this assignment…)`);
+    setBubbleBusy((p) => ({ ...p, [id]: true }));
+    try {
+      const form = new FormData();
+      form.append('file', f);
+      form.append('assignment_id', String(id));
+      const res = await api.uploadDumpFile(form);
+      const attached = res?.status === 'success' && (res.matched_assignment_id === id || res.item_status === 'manual_routed');
+      pushBubble(id, 'overlord', attached
+        ? `File ${f.name} added ✓ — extracted and attached to this assignment.`
+        : `File ${f.name} was extracted, but I couldn't attach it to this assignment.`);
+    } catch (err) {
+      pushBubble(id, 'overlord', `⚠️ File upload failed: ${err.message}`);
+    } finally {
+      setBubbleBusy((p) => ({ ...p, [id]: false }));
+      bubbleFileTarget.current = null;
+    }
+  }
 
   async function undoAction(actionId) {
     try {
@@ -153,11 +310,28 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     api.updateSettings({ ai: next.ai }).catch(() => {});
   };
 
+  useEffect(() => { loadThreads(); }, []);
+  /* Load the surviving legacy conversation (key 0) at mount — without this the
+   * feed always starts at the intro line, looking like history was deleted. */
+  useEffect(() => {
+    api.agentChatHistory(0).then((res) => {
+      const chat = res?.chat || [];
+      if (Array.isArray(chat) && chat.length) {
+        setMessages(chat.map((m) => ({
+          id: m.id || Date.now() + Math.random(),
+          sender: m.sender === 'user' ? 'user' : 'assistant',
+          text: m.text || '',
+          time: (m.timestamp || '').slice(11, 16),
+        })));
+      }
+    }).catch(() => {});
+  }, []);
   /* ── initial load: mode, effort, memory, files, permission poll ───────── */
   useEffect(() => {
     const ai = settings.ai || {};
     setMode(ai.mode || 'auto');
-    setEffort(ai.effortScore || EFFORT_SCORES[ai.effort] || 500);
+    // UI effort is 1–10; backend storage is 1–1000 (÷100 here).
+    setEffort(Math.max(1, Math.min(10, Math.round((ai.effortScore || EFFORT_SCORES[ai.effort] || 500) / 100))));
     setAutoApprove(ai.autoApprove !== false);
     api.agentMode().then((d) => d?.operation_mode && setMode(d.operation_mode)).catch(() => {});
     api.getAgentMemory().then((d) => setMemory(d.entries || [])).catch(() => {});
@@ -208,16 +382,17 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     } catch (e) { /* local store persists regardless */ }
   }
 
-  /* ── effort scale (1–1000): debounced → settings + backend routing ────── */
+  /* ── effort scale (UI 1–10 → backend 1–1000, ×100): debounced ────────── */
   function handleEffort(v) {
-    const val = Number(v);
-    setEffort(val);
+    const val = Number(v);              // 1-10 UI value
+    const score = Math.round(val * 100); // backend contract 1-1000
+    const bucket = val <= 3 ? 'low' : val <= 7 ? 'balanced' : 'high';
+    setEffort(score);
     clearTimeout(effortTimer.current);
     effortTimer.current = setTimeout(() => {
-      const bucket = effortBucket(val);
-      const updated = { ...settings, ai: { ...settings.ai, effortScore: val, effort: bucket.toLowerCase() } };
+      const updated = { ...settings, ai: { ...settings.ai, effortScore: score, effort: bucket } };
       persist(updated);
-      api.updateSettings({ effort_score: val, ai: updated.ai }).catch(() => {});
+      api.updateSettings({ effort_score: score, ai: updated.ai }).catch(() => {});
     }, 400);
   }
 
@@ -245,12 +420,87 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
         assignment_id: 0,
         text: query,
         session_mode_override: mode,
+        thread_id: activeThread ?? undefined,
       });
-      pushAssistant(res?.reply || '✅ Done.');
+      // reply may be a plain string OR the message object (gate/status replies)
+      const replyRaw = res?.reply ?? res?.message;
+      const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
+      pushAssistant(replyText);
     } catch (e) {
       pushAssistant(`⚠️ The agent couldn't reach the backend right now (${e.message}). In demo mode responses are simulated.`);
     } finally {
       setBusy(false);
+      loadThreads(); // refresh updated_at / auto-title
+    }
+  }
+
+  /* ── chat threads: histories, new chat, switching (operator 08-26) ───── */
+  async function loadThreads() {
+    try {
+      const res = await api.agentThreads();
+      setThreads(res?.threads || []);
+    } catch { /* ignore */ }
+  }
+
+  const timeShort = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  async function renameThread(t) {
+    const title = renameDraft.trim();
+    if (!title) { setRenameOpenId(null); return; }
+    try {
+      await api.request(`/api/agent/threads/${t.id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
+      setRenameOpenId(null);
+      await loadThreads();
+    } catch (e) { /* ignore */ }
+  }
+
+  async function togglePin(t) {
+    try {
+      await api.request(`/api/agent/threads/${t.id}`, { method: 'PATCH', body: JSON.stringify({ pinned: !t.pinned }) });
+      await loadThreads();
+    } catch (e) { /* ignore */ }
+  }
+
+  async function newChat() {
+    try {
+      const res = await api.agentThreadCreate();
+      const t = res?.thread;
+      if (!t) return;
+      setActiveThread(t.id);
+      setMessages([{
+        id: Date.now(), sender: 'assistant', text: "I'm your personal agent — ask me to do anything: draft work, generate materials, change settings, edit an assignment, plan your day, or manage my own memory and files.", time: 'Just now',
+      }]);
+      await loadThreads();
+    } catch (e) {
+      pushAssistant(`⚠️ Couldn't create a new chat: ${e.message}`);
+    }
+  }
+
+  async function openThread(t) {
+    setActiveThread(t.id);
+    try {
+      const res = await api.agentChatHistory(t.id);
+      const chat = res?.chat || [];
+      const clean = (Array.isArray(chat) ? chat : []).map((m) => ({
+        id: m.id || Date.now() + Math.random(),
+        sender: m.sender === 'user' ? 'user' : 'assistant',
+        text: m.text || '',
+        time: (m.timestamp || '').slice(11, 16),
+      }));
+      setMessages(clean.length ? clean : [{
+        id: Date.now(), sender: 'assistant', text: "I'm your personal agent — ask me to do anything: draft work, generate materials, change settings, edit an assignment, plan your day, or manage my own memory and files.", time: 'Just now',
+      }]);
+    } catch (e) {
+      pushAssistant(`⚠️ Couldn't load that chat: ${e.message}`);
     }
   }
 
@@ -302,6 +552,15 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
     }
   }
 
+  async function openFile(f) {
+    try {
+      const res = await api.get(`/api/agent/files/${f.id}`);
+      setViewFile(res?.file || { file_name: f.file_name, kind: f.kind, content: '(missing)' });
+    } catch (e) {
+      setViewFile({ file_name: f.file_name, kind: f.kind, content: `⚠️ couldn't read: ${e.message}` });
+    }
+  }
+
   async function deleteFile(id) {
     setFiles((prev) => prev.filter((f) => f.id !== id));
     try { await api.deleteAgentFile(id); } catch (e) { /* optimistic */ }
@@ -344,6 +603,55 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
   const fileKindMeta = FILE_KINDS.find((k) => k.key === fileKind) || FILE_KINDS[0];
   const pending = pendingPermissions[0];
 
+  const renderThreadRow = (t) => (
+    <div key={t.id} className={`group rounded-xl transition border ${
+      activeThread === t.id
+        ? 'bg-blue-600/20 border-blue-500/40'
+        : t.pinned
+          ? 'border-amber-500/30 bg-amber-500/[0.05]'
+          : 'border-white/6 hover:bg-white/4'
+    }`}>
+      <button type="button" onClick={() => openThread(t)} className="w-full text-left px-2.5 py-2 flex items-center gap-2">
+        <span className="text-sm">{t.pinned ? '📌' : '💬'}</span>
+        <span className="flex-1 min-w-0">
+          <span className={`block text-[11px] font-semibold truncate ${activeThread === t.id ? 'text-blue-300' : t.pinned ? 'text-amber-200' : 'text-slate-300'}`}>
+            {renameOpenId === t.id ? (
+              <input
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') renameThread(t); if (e.key === 'Escape') setRenameOpenId(null); }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-slate-900 border border-blue-500/40 rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                autoFocus
+              />
+            ) : t.title}
+          </span>
+          <span className="block text-[9px] text-slate-600">{timeShort(t.updated_at)}</span>
+        </span>
+      </button>
+      <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5 opacity-0 group-hover:opacity-100 transition">
+        {renameOpenId !== t.id && (
+          <button
+            type="button"
+            onClick={() => { setRenameOpenId(t.id); setRenameDraft(t.title); }}
+            className="p-1 text-slate-500 hover:text-blue-300 transition cursor-pointer"
+            title="Rename chat"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => togglePin(t)}
+          className={`p-1 transition cursor-pointer ${t.pinned ? 'text-amber-300' : 'text-slate-500 hover:text-blue-300'}`}
+          title={t.pinned ? 'Unpin' : 'Pin chat'}
+        >
+          <Pin className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-5">
       {/* ── Identity header ──────────────────────────────────────────────── */}
@@ -368,7 +676,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                One agent for everything — ask it to do anything. · effort <span className="text-blue-300 font-mono">{effort}</span> ({effortBucket(effort)})
+                One agent for everything — ask it to do anything. · effort <span className="text-blue-300 font-mono">{Math.max(1, Math.round(effort / 100))}/10</span> ({effortBucket(effort)})
               </p>
             </div>
           </div>
@@ -469,20 +777,21 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
         <div className="mt-5 pt-4 border-t border-white/8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-blue-400" /> Effort score
+              <Cpu className="w-3.5 h-3.5 text-blue-400" /> Effort (1–10)
             </span>
             <span className="text-[11px] font-mono font-bold text-blue-300">
-              {effort} <span className="text-[10px] text-slate-500">/ 1000 · {effortBucket(effort)}</span>
+              {Math.max(1, Math.round(effort / 100))} <span className="text-[10px] text-slate-500">/ 10 · {effortBucket(effort)}</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
             <input
               type="range"
               min={1}
-              max={1000}
-              value={effort}
+              max={10}
+              step={1}
+              value={Math.max(1, Math.round(effort / 100))}
               onChange={(e) => handleEffort(e.target.value)}
-              aria-label="Agent effort score between 1 and 1000"
+              aria-label="Agent effort score between 1 and 10"
               className="flex-1 accent-blue-500 cursor-pointer"
             />
             <div className="flex gap-1.5">
@@ -490,7 +799,7 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 <button
                   key={b}
                   type="button"
-                  onClick={() => handleEffort(EFFORT_SCORES[b.toLowerCase()])}
+                  onClick={() => handleEffort(b === 'Low' ? 1 : b === 'Balanced' ? 5 : 9)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer border ${
                     effortBucket(effort) === b ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-slate-500 border-white/8 hover:text-slate-300'
                   }`}
@@ -505,6 +814,125 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             Low = cheap engines do mechanical work, high = flagship engines handle deep reasoning.
           </p>
         </div>
+      </SectionCard>
+
+      {/* ── Assignment bubbles — per-assignment chat + file drop ────────── */}
+      <SectionCard id="myagent-assignment-bubbles" padding="p-4" header={
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Assignment bubbles
+          </span>
+          <span className="text-[10px] text-slate-500">
+            {assignments.length} assignment{assignments.length === 1 ? '' : 's'}
+          </span>
+        </div>
+      }>
+        <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
+          Each assignment has its own bubble: message the agent team about it, or drop a file in —
+          it gets extracted and attached to that assignment.
+        </p>
+
+        {assignments.length === 0 && (
+          <EmptyState
+            icon="📘"
+            title="No assignments yet"
+            body="Create or dump an assignment first — each one gets its own bubble to chat with the agent team and drop files into."
+            actionLabel="Open Assignment Dump"
+            onAction={() => onGoTo('dump')}
+          />
+        )}
+
+        {assignments.length > 0 && (
+          <div className="space-y-2.5">
+            {assignments.map((a) => {
+              const open = !!bubbleOpen[a.id];
+              const chat = bubbleChats[a.id] || [];
+              return (
+                <div key={a.id} className="rounded-xl border border-white/8 bg-slate-950/40 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleBubble(a.id)}
+                    aria-expanded={open}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-white/4 transition cursor-pointer"
+                  >
+                    <span className="text-base leading-none">📘</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-semibold text-white truncate">{a.name || `Assignment #${a.id}`}</span>
+                      <span className="block text-[10px] text-slate-500 truncate">
+                        {a.subject} · {a.class_code} · due {a.due_date}
+                      </span>
+                    </span>
+                    <Badge color={a.status === 'In Progress' ? 'blue' : a.status === 'Submitted' ? 'green' : 'slate'}>
+                      {a.status}
+                    </Badge>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {open && (
+                    <div className="border-t border-white/8 p-3">
+                      <div className="max-h-56 overflow-y-auto space-y-2 mb-2.5 pr-1">
+                        {chat.length === 0 && (
+                          <p className="text-[11px] text-slate-600">
+                            This bubble is fresh — message the team about the assignment, or add its materials with 📎.
+                          </p>
+                        )}
+                        {chat.map((m) => {
+                          const isUser = m.sender === 'user';
+                          
+  return (
+                            <div key={m.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[80%] rounded-xl px-3 py-2 text-[11px] leading-relaxed ${
+                                isUser ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800/80 border border-white/5 text-slate-200'
+                              }`}>
+                                {m.text}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {bubbleBusy[a.id] && (
+                          <div className="flex items-center gap-2 text-[11px] text-blue-400 bg-slate-800/40 p-2 rounded-xl border border-white/5 w-fit">
+                            <RefreshCw className="w-3 h-3 animate-spin" /> {agentName} is working…
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 focus-within:border-blue-500 transition">
+                        <button
+                          type="button"
+                          onClick={() => { bubbleFileTarget.current = a.id; bubbleFileRef.current?.click(); }}
+                          aria-label={`Add a file to ${a.name || `assignment ${a.id}`}`}
+                          title="Attach a file — extracted and added to this assignment"
+                          className="text-slate-400 hover:text-blue-400 transition cursor-pointer p-1"
+                        >
+                          <Paperclip className="w-4 h-4" />
+                        </button>
+                        <input
+                          type="text"
+                          value={bubbleInputs[a.id] || ''}
+                          onChange={(e) => setBubbleInputs((p) => ({ ...p, [a.id]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBubbleMessage(a.id); } }}
+                          placeholder={`Message ${agentName} about this assignment…`}
+                          aria-label={`Message the ${a.name || `assignment ${a.id}`} team`}
+                          className="flex-1 bg-transparent border-none text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => sendBubbleMessage(a.id)}
+                          disabled={!bubbleInputs[a.id]?.trim() || bubbleBusy[a.id]}
+                          aria-label={`Send message to the ${a.name || `assignment ${a.id}`} team`}
+                          className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 transition cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <input ref={bubbleFileRef} type="file" className="hidden" onChange={handleBubbleFile} />
+          </div>
+        )}
       </SectionCard>
 
       {/* ── Pending permission strip ─────────────────────────────────────── */}
@@ -607,17 +1035,29 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
               />
               <span className="text-xs font-semibold text-white">Chat with {agentName}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleCompact}
-              disabled={!!compactMsg}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3 h-3 ${compactMsg ? 'animate-spin' : ''}`} />
-              {compactMsg || 'Compact history'}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-600 hidden sm:block">{agentName}</span>
+              <button
+                type="button"
+                onClick={newChat}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-semibold transition cursor-pointer"
+                title="Start a new conversation"
+              >
+                <Plus className="w-3 h-3" /> New chat
+              </button>
+              <button
+                type="button"
+                onClick={handleCompact}
+                disabled={!!compactMsg}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${compactMsg ? 'animate-spin' : ''}`} />
+                {compactMsg || 'Compact'}
+              </button>
+            </div>
           </div>
         }>
+
 
           {/* Quick actions */}
           <div className="px-5 py-3 border-b border-white/5 flex flex-wrap gap-1.5 bg-slate-950/20">
@@ -644,6 +1084,16 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                   }`}>
                     {m.text}
                   </div>
+                  {!isUser && m.text && m.text.length <= 1200 && (
+                    <button
+                      type="button"
+                      onClick={() => speakText(m.text)}
+                      className="text-[10px] text-slate-400 hover:text-blue-300 mt-1 transition cursor-pointer"
+                      title="Hear this reply (Voicebox TTS)"
+                    >
+                      🔊 hear
+                    </button>
+                  )}
                   <span className="text-[10px] text-slate-500 mt-1 px-1">{m.time}</span>
                 </div>
               );
@@ -669,6 +1119,15 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 className="text-slate-400 hover:text-blue-400 transition cursor-pointer p-1"
               >
                 <Paperclip className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleRecord}
+                aria-label={recording ? 'Stop recording' : 'Record a voice message'}
+                className={`text-slate-400 hover:text-blue-400 transition cursor-pointer p-1 ${recording ? 'text-red-400 animate-pulse' : ''}`}
+                title={recording ? 'Stop recording' : 'Dictate a message (Voicebox)'}
+              >
+                <Mic className="w-4 h-4" />
               </button>
               <input
                 ref={fileInputRef}
@@ -702,6 +1161,55 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
 
         {/* Right rail */}
         <div className="space-y-5">
+          {/* Chat history (operator 08-26): timestamps, rename, pin */}
+          <SectionCard id="myagent-chats" padding="p-3" header={
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Database className="w-3 h-3" /> Chats
+              </span>
+              <button
+                type="button"
+                onClick={newChat}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+              >
+                <Plus className="w-3 h-3" /> New
+              </button>
+            </div>
+          }>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => openThread({ id: 0 })}
+                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition cursor-pointer border ${
+                  activeThread == null || activeThread === 0
+                    ? 'bg-blue-600/20 border-blue-500/40'
+                    : 'border-white/6 hover:bg-white/4'
+                }`}
+              >
+                <span className="text-sm">💬</span>
+                <span className="flex-1 min-w-0">
+                  <span className={`block text-[11px] font-semibold truncate ${activeThread == null || activeThread === 0 ? 'text-blue-300' : 'text-slate-300'}`}>Main chat</span>
+                  <span className="block text-[9px] text-slate-600">original conversation</span>
+                </span>
+              </button>
+              {threads.length === 0 && (
+                <div className="text-[10px] text-slate-600 px-2.5 py-1">No other chats yet — hit New to start one.</div>
+              )}
+              {threads.some((t) => t.pinned) && (
+                <>
+                  <div className="text-[9px] text-amber-400/90 uppercase tracking-wider px-1 pt-1.5">📌 Pinned</div>
+                  {threads.filter((t) => t.pinned).map((t) => renderThreadRow(t))}
+                </>
+              )}
+              {threads.some((t) => !t.pinned) && (
+                <>
+                  <div className="text-[9px] text-slate-600 uppercase tracking-wider px-1 pt-1.5">Earlier</div>
+                  {threads.filter((t) => !t.pinned).map((t) => renderThreadRow(t))}
+                </>
+              )}
+            </div>
+          </SectionCard>
+
           {/* Identity controls */}
           <SectionCard id="myagent-identity-controls" header={
             <div className="flex items-center justify-between">
@@ -724,21 +1232,14 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
             </div>
             <div>
               <div className="text-[11px] font-medium text-slate-300 mb-1.5">Personality</div>
-              <div className="flex flex-wrap gap-1.5">
-                {AGENT_PERSONALITIES.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    title={p.desc}
-                    onClick={() => set('ai.personality', p.key)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer border ${
-                      ai.personality === p.key ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 font-semibold' : 'text-slate-400 border-white/8 hover:text-slate-200'
-                    }`}
-                  >
-                    {p.key}
-                  </button>
-                ))}
-              </div>
+              <input
+                value={ai.personality || ''}
+                onChange={(e) => set('ai.personality', e.target.value)}
+                placeholder='Type it — e.g. "Calm tutor who checks understanding" or "Sarcastic"'
+                aria-label="Agent personality"
+                className="clean-input w-full px-3 py-2 text-[11px] outline-none"
+              />
+              <div className="text-[9px] text-slate-600 mt-1">Free text — how the agent should act, in your own words.</div>
             </div>
             <div>
               <div className="text-[11px] font-medium text-slate-300 mb-1.5">Instructions</div>
@@ -892,10 +1393,15 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
                 return (
                   <div key={f.id} className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-950/40 border border-white/6">
                     <span className="text-sm leading-none">{km.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] text-slate-200 truncate">{f.file_name}</div>
-                      <div className="text-[9px] text-slate-600">{km.label} · {fmt(f.size_bytes)} B</div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openFile(f)}
+                      className="flex-1 min-w-0 text-left cursor-pointer"
+                      title={`Read ${f.file_name}`}
+                    >
+                      <div className="text-[11px] text-slate-200 truncate hover:text-blue-300 transition">{f.file_name}</div>
+                      <div className="text-[9px] text-slate-600">{km.label} · {fmt(f.size_bytes)} B · tap to read</div>
+                    </button>
                     <button
                       type="button"
                       onClick={() => deleteFile(f.id)}
@@ -912,6 +1418,24 @@ export default function MyAgentView({ userId = 'RoniDev', userCredits }) {
 
         </div>
       </div>
+      {/* File content viewer (operator 08-26) */}
+      {viewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setViewFile(null)}>
+          <div className="clean-card w-full max-w-xl max-h-[80vh] flex flex-col bg-slate-950 border border-white/20 rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
+              <div className="text-sm font-bold text-white flex items-center gap-2 truncate">
+                <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="truncate">{viewFile.file_name}</span>
+                <span className="text-[10px] text-slate-500 font-mono">{viewFile.kind}</span>
+              </div>
+              <button type="button" onClick={() => setViewFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">
+              {viewFile.content}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

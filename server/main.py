@@ -61,6 +61,7 @@ try:
     from .routes_agent_actions import router as agent_actions_router
     from .routes_admin_advanced import router as admin_advanced_router
     from .routes_overlord import router as overlord_router
+    from .routes_voice import router as voice_router
     from .routes_simulation import router as simulation_router
     from .routes_dump import router as dump_router
     from .routes_math import router as math_router
@@ -238,6 +239,7 @@ app.add_middleware(
 
 # ─── include routers ────────────────────────────────────────────────────────
 app.include_router(analytics_router)
+app.include_router(voice_router)
 app.include_router(referral_router)
 app.include_router(organization_router)
 app.include_router(export_router)
@@ -546,21 +548,20 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Public ID already taken")
     hash_hex, salt = hash_password(body.password)
-    # Start 7-day free trial with Pro plan
-    trial_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    # No auto trial/bonus: new accounts start with nothing (basic/0) until
+    # payment (prototype: unavailable) or an admin upgrade (operator 08-26).
     user = User(
         public_id=body.public_id,
-        plan="pro",
+        plan="none",
         password_hash=hash_hex,
         password_salt=salt,
         settings={"reading_level": "college-freshman"},
-        credits=600,
-        trial_expires_at=trial_expires,
-        subscription_status="trialing",
+        credits=0,
+        subscription_status="none",
     )
     db.add(user)
     db.commit()
-    return {"message": "User created with 7-day free trial", "public_id": user.public_id, "plan": user.plan, "trial_expires_at": trial_expires.isoformat()}
+    return {"message": "User created", "public_id": user.public_id, "plan": user.plan, "trial_expires_at": None}
 
 
 @app.post("/api/logout")
@@ -588,6 +589,7 @@ def me(request: Request, db: Session = Depends(get_db)):
                     "public_id": user.public_id,
                     "plan": user.plan,
                     "credits": user.credits,
+                    "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
                     "authenticated": True,
                     "is_admin": is_admin_user(user),
                 }
@@ -619,6 +621,7 @@ def get_admin_users(request: Request, db: Session = Depends(get_db)):
             "public_id": u.public_id,
             "plan": u.plan,
             "credits": u.credits,
+            "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
             "is_active": True,
             "role": getattr(u, "role", "user"),
             "created_at": str(u.created_at) if hasattr(u, "created_at") else None,
@@ -908,9 +911,11 @@ def materials(public_id: str, kind: str,
               db: Session = Depends(get_db)):
     if current_user.public_id != public_id:
         raise HTTPException(403, "Forbidden")
-    if kind not in ALL_MATERIAL_KINDS:
-        raise HTTPException(400, f"kind must be one of {ALL_MATERIAL_KINDS}")
-    q = db.query(StudyMaterial).filter_by(user_id=current_user.id, kind=kind)
+    if kind != "all" and kind not in ALL_MATERIAL_KINDS:
+        raise HTTPException(400, f"kind must be one of {ALL_MATERIAL_KINDS} or 'all'")
+    q = db.query(StudyMaterial).filter_by(user_id=current_user.id)
+    if kind != "all":
+        q = q.filter_by(kind=kind)
     total = q.count()
     rows = q.order_by(StudyMaterial.id.desc()).offset(offset).limit(limit).all()
     return {"materials": [_material_payload(m) for m in rows],

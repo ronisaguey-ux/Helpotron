@@ -1,5 +1,6 @@
 import os
 import json
+import itertools
 import httpx
 import logging
 from typing import Optional, Dict, Any, List
@@ -7,14 +8,21 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Local webchat gateway lanes — free fallback when the OpenRouter key is dead.
+_LOCAL_LANES = (
+    "http://127.0.0.1:8080/v1/chat/completions",  # deepseek lane
+    "http://127.0.0.1:8085/v1/chat/completions",  # gemini lane
+)
+_LANE_RR = itertools.count()
+
 class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
     
     PRIMARY_MODELS = {
-        "deepseek_v4_flash_vision": "deepseek/deepseek-chat",
-        "deepseek_v4_pro_vision": "deepseek/deepseek-chat",
-        "gemini_31_flash_lite": "google/gemini-2.5-flash-lite",
-        "gemini_37_flash": "google/gemini-2.5-flash",
+        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision-exp",  # NEVER deepseek-chat (V3) — user rule 08-26; exp slug verified 08-26
+        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro",
+        "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",  # verified live 08-26
+        "gemini_37_flash": "google/gemini-3.7-flash",
     }
     
     GRUNT_CANDIDATES = [
@@ -27,8 +35,9 @@ class ModelPolicy:
     ]
     
     PRICING = {
-        "deepseek/deepseek-v4-flash-vision": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-pro-vision": {"input": 0.55, "output": 1.10, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
+        # live OpenRouter pricing (08-26): per-1M-token figures ×1e6 of payload values
+        "deepseek/deepseek-v4-flash-vision-exp": {"input": 0.22, "output": 0.66, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
+        "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
         "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
         "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
         # Candidate Grunt Models (Dynamic Economic Evaluation)
@@ -59,7 +68,7 @@ def get_deepseek_baseline_cost(modality: str = "text", input_tokens: int = 1000,
     """
     if modality == "audio":
         return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    return calculate_effective_task_cost("deepseek/deepseek-v4-flash-vision", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
+    return calculate_effective_task_cost("deepseek/deepseek-v4-flash-vision-exp", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
 
 def evaluate_grunt_candidate(
     candidate_id: str,
@@ -204,25 +213,21 @@ def resolve_model_routing(
     }
 
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
+    """Persist real token usage per user into the ApiUsageLog ledger.
+
+    TelemetryRecord never existed in database.py (import always failed → rows
+    silently dropped). Fixed 08-26: writes through cost_engine so the top-bar
+    token widget reads REAL usage, not fabricated numbers."""
     try:
-        from server.database import TelemetryRecord
-        cost_in = (token_usage.get("prompt_tokens", 0) / 1_000_000.0) * ModelPolicy.PRICING.get(route_info["model"], {}).get("input", 0.1)
-        cost_out = (token_usage.get("completion_tokens", 0) / 1_000_000.0) * ModelPolicy.PRICING.get(route_info["model"], {}).get("output", 0.2)
-        total_cost = cost_in + cost_out
-        
-        record = TelemetryRecord(
-            user_id=user_id,
-            model=route_info["model"],
-            tier=route_info["tier"],
-            escalated=route_info.get("escalated", False),
-            reason=route_info.get("reason", ""),
-            prompt_tokens=token_usage.get("prompt_tokens", 0),
-            completion_tokens=token_usage.get("completion_tokens", 0),
-            total_cost=total_cost,
-            created_at=datetime.utcnow()
+        from .cost_tracking import cost_engine
+        cost_engine.record_usage(
+            db_session,
+            public_id=user_id,
+            tool_or_model=route_info.get("model", "unknown"),
+            category="llm",
+            input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
+            output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
         )
-        db_session.add(record)
-        db_session.commit()
     except Exception as e:
         logger.warning(f"Failed to persist routing telemetry: {e}")
 
@@ -237,11 +242,25 @@ async def call_llm(
     complexity_score: float = 3.0,
     user_id: str = "system",
     model: Optional[str] = None,
-    db = None
+    db = None,
+    effort_score: Optional[int] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
 ) -> str:
-    if response_format == "json" or json_mode:
+    # effort_score (1-1000 int, app convention: Low <=400 / Balanced <750 / High)
+    # maps to the routing effort bucket when passed — several callers use this
+    # kwarg (agent intent, conversational fallback, study tools) — previously
+    # it raised TypeError here and silently dropped to fallback paths.
+    if effort_score is not None:
+        try:
+            es = int(effort_score)
+        except (TypeError, ValueError):
+            es = 500
+        effort = "low" if es <= 400 else ("medium" if es < 750 else "advanced")
+
+    if response_format in ("json", "json_object") or json_mode:
         json_mode = True
-        
+
     route = resolve_model_routing(
         effort=effort,
         modality=modality,
@@ -275,21 +294,53 @@ async def call_llm(
     payload = {
         "model": model_id,
         "messages": messages,
-        "temperature": 0.2 if json_mode else 0.7
+        "temperature": temperature if temperature is not None else (0.2 if json_mode else 0.7),
     }
+    if max_tokens:
+        payload["max_tokens"] = int(max_tokens)
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
+    openrouter_err = None
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+            usage = data.get("usage", {})
+            if db and user_id:
+                await record_routing_telemetry(db, user_id, route, usage)
+
+            return data["choices"][0]["message"]["content"]
+    except Exception as err:
+        openrouter_err = err
+        logger.warning("call_llm openrouter failed: %s — using local webchat lanes", err)
+
+    # Fallback: local webchat gateway lanes (deepseek :8080 / gemini :8085) —
+    # no auth, model name is the gateway passthrough. Keeps the agent alive
+    # when the OpenRouter key is dead or 401 (08-27: the gifted key expired —
+    # every chat was silently falling to the regex dispatcher).
+    lp = dict(payload)
+    lp["model"] = "anymodel"
+    lp.pop("response_format", None)  # gateways may reject json_object; JSON
+    # extraction downstream (_safe_json_extract) tolerates plain text.
+    # Try BOTH lanes round-robin (deepseek can be saturated by the audit
+    # engine; gemini stays free) before giving up.
+    lane_errs = []
     async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        usage = data.get("usage", {})
-        if db and user_id:
-            await record_routing_telemetry(db, user_id, route, usage)
-            
-        return data["choices"][0]["message"]["content"]
+        for _ in range(len(_LOCAL_LANES)):
+            lane_url = _LOCAL_LANES[next(_LANE_RR) % len(_LOCAL_LANES)]
+            try:
+                resp = await client.post(lane_url, json=lp)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"] or ""
+            except Exception as err:
+                lane_errs.append(f"{lane_url}: {err}")
+                logger.warning("call_llm lane failed: %s", err)
+    raise RuntimeError(
+        f"all LLM backends failed (openrouter: {openrouter_err}; local lanes: {'; '.join(lane_errs)})"
+    )
 
 def extract_json(content: str) -> Any:
     if not content or not content.strip():
@@ -322,9 +373,9 @@ def extract_json(content: str) -> Any:
 
 # --- Compatibility Wrappers ---
 MODELS = {
-    "flash": "deepseek/deepseek-v4-flash-vision",
-    "pro": "deepseek/deepseek-v4-pro-vision",
-    "math": "deepseek/deepseek-v4-flash-vision",
+    "flash": "deepseek/deepseek-v4-flash-vision-exp",
+    "pro": "deepseek/deepseek-v4-pro",
+    "math": "deepseek/deepseek-v4-flash-vision-exp",
     "lite": "google/gemini-3.1-flash-lite",
     "grunt": "qwen/qwen-2.5-coder-32b",
     "cheapest": "mistral/mistral-nemo-12b",
@@ -342,10 +393,10 @@ class EffortLevel:
     MEDIUM = "medium"
     HIGH = "high"
 
-async def generate_with_deepseek(prompt: str, system_prompt: str = "", model: str = "deepseek/deepseek-v4-flash-vision", **kwargs) -> str:
+async def generate_with_deepseek(prompt: str, system_prompt: str = "", model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
     return await call_llm(user_prompt=prompt, system_prompt=system_prompt, model=model, **kwargs)
 
-async def chat_complete(messages: list, model: str = "deepseek/deepseek-v4-flash-vision", **kwargs) -> str:
+async def chat_complete(messages: list, model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
     user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     sys_msg = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
     return await call_llm(user_prompt=user_msg, system_prompt=sys_msg, model=model, **kwargs)

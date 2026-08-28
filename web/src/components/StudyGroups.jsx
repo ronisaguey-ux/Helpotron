@@ -10,16 +10,10 @@ export default function StudyGroups({ publicId }) {
   useEffect(() => {
     async function loadGroups() {
       try {
-        const res = await api.get(`/groups/my?public_id=${publicId || 'RoniDev'}`);
-        setGroups(res.data?.groups || res || [
-          { id: 1, name: "Distributed Systems Lab", code: "DIST-99", members: 4, course: "CS-504" },
-          { id: 2, name: "Algorithmic Decision Support", code: "ALGO-42", members: 6, course: "PSYC-240" }
-        ]);
+        const res = await api.get(`/groups/my?public_id=${publicId || ''}`);
+        setGroups(res.data?.groups || res || []);
       } catch {
-        setGroups([
-          { id: 1, name: "Distributed Systems Lab", code: "DIST-99", members: 4, course: "CS-504" },
-          { id: 2, name: "Algorithmic Decision Support", code: "ALGO-42", members: 6, course: "PSYC-240" }
-        ]);
+        setGroups([]);
       } finally {
         setLoading(false);
       }
