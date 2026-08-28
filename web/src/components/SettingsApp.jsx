@@ -7,10 +7,11 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
-import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, Shield, CreditCard, Puzzle, Keyboard, BarChart3, FlaskConical, Accessibility, Globe, Wrench, User } from 'lucide-react';
+import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, Shield, CreditCard, Puzzle, Keyboard, BarChart3, FlaskConical, Accessibility, Globe, Wrench, User, Trash2 } from 'lucide-react';
 import { loadSettings, saveSettings, EFFORT_SCORES, DEFAULT_SETTINGS } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
+import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
 import ScopedSetting, { SCOPE_LEVELS } from './ScopedSetting.jsx';
 
@@ -272,48 +273,185 @@ const INTELLIGENCE = [
 const PERSONALITIES = ['Professional', 'Friendly', 'Strict', 'Socratic', 'Coach', 'Researcher', 'Tutor', 'Minimalist'];
 
 function EffortSlider({ value, onChange }) {
-  const n = Number(value || 500);
+  // UI scale 1–10 (operator 08-26); backend contract stays 1–1000 (×100).
+  const n = Math.max(1, Math.min(10, Math.round(Number(value || 500) / 100)));
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <div className="text-xs font-medium text-slate-300">AI Effort</div>
-        <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 1000</span></div>
+        <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>
       </div>
       <input
         type="range"
         min={1}
-        max={1000}
+        max={10}
         step={1}
         value={n}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full accent-blue-500 cursor-pointer"
-        aria-label="AI effort score between 1 and 1000"
+        aria-label="AI effort score between 1 and 10"
       />
       <div className="flex justify-between text-[10px] text-slate-500 mt-1">
         <span>1 — cheap & fast</span>
-        <span className="text-slate-400">500 — balanced</span>
-        <span>1000 — flagship research</span>
+        <span className="text-slate-400">5 — balanced</span>
+        <span>10 — flagship research</span>
       </div>
     </div>
   );
 }
 
+
+/* Agent data manager inside AI & Intelligence (operator 08-26): permanent
+ * memory + loaded files, with per-hierarchy scope hints. Uses the same
+ * memory/file endpoints as My Agent. */
+function AIAgentData() {
+  const [mem, setMem] = useState([]);
+  const [memText, setMemText] = useState('');
+  const [files, setFiles] = useState([]);
+  const [openFile, setOpenFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    try {
+      const m = await api.request('/api/agent/memory', { method: 'GET' });
+      setMem(m?.entries || []);
+      const f = await api.request('/api/agent/files', { method: 'GET' });
+      setFiles(f?.files || []);
+    } catch { /* auth-gated; hidden naturally */ }
+  };
+  useEffect(() => { load(); }, []);
+  const addMem = async () => {
+    const t = memText.trim(); if (!t) return;
+    setBusy(true);
+    try {
+      await api.request('/api/agent/memory', { method: 'POST', body: JSON.stringify({ text: t }) });
+      setMemText('');
+      await load();
+    } catch (e) { alert(e.message || 'Failed to add memory'); }
+    finally { setBusy(false); }
+  };
+  const delMem = async (id) => {
+    try { await api.request(`/api/agent/memory/${id}`, { method: 'DELETE' }); await load(); } catch {}
+  };
+  const delFile = async (id) => {
+    try { await api.deleteAgentFile(id); await load(); } catch {}
+  };
+  const readFile = async (f) => {
+    try {
+      const res = await api.get(`/api/agent/files/${f.id}`);
+      setOpenFile(res?.file || f);
+    } catch (e) { alert(e.message || 'Could not read file'); }
+  };
+  const kindIcon = { skill: '🧩', rule: '📏', automation: '⚙️', personality: '🎭' };
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="rounded-2xl bg-slate-950/40 border border-white/6 p-4 space-y-2.5">
+        <div className="text-xs font-semibold text-white flex items-center justify-between">
+          <span>🧠 Permanent memory</span>
+          <Badge color={mem.length ? 'blue' : 'slate'}>{mem.length}</Badge>
+        </div>
+        <p className="text-[10px] text-slate-500">Always read by the agent. Applies globally — per-hierarchy scoping is on the AI knobs above.</p>
+        <div className="space-y-1.5 max-h-44 overflow-y-auto">
+          {mem.length === 0 && <div className="text-[11px] text-slate-600 py-1">No memories yet.</div>}
+          {mem.map((m) => (
+            <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-900/60 border border-white/6">
+              <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
+              <button type="button" onClick={() => delMem(m.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={memText} onChange={(e) => setMemText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addMem()}
+            placeholder="Add a memory…" className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none" />
+          <button type="button" onClick={addMem} disabled={busy}
+            className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50">
+            Add
+          </button>
+        </div>
+      </div>
+      <div className="rounded-2xl bg-slate-950/40 border border-white/6 p-4 space-y-2.5">
+        <div className="text-xs font-semibold text-white flex items-center justify-between">
+          <span>📂 Skills, rules & personality</span>
+          <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
+        </div>
+        <p className="text-[10px] text-slate-500">Files the agent loads and follows. Tap to read, 🗑 to remove.</p>
+        <div className="space-y-1.5 max-h-44 overflow-y-auto">
+          {files.length === 0 && <div className="text-[11px] text-slate-600 py-1">No files loaded.</div>}
+          {files.map((f) => (
+            <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-white/6">
+              <span className="text-sm">{kindIcon[f.kind] || '📄'}</span>
+              <button type="button" onClick={() => readFile(f)} className="flex-1 min-w-0 text-left cursor-pointer">
+                <span className="block text-[11px] text-slate-200 truncate hover:text-blue-300">{f.file_name}</span>
+                <span className="block text-[9px] text-slate-600">{f.kind} · {Number(f.size_bytes || 0).toLocaleString()} B · tap to read</span>
+              </button>
+              <button type="button" onClick={() => delFile(f.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      {openFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setOpenFile(null)}>
+          <div className="clean-card w-full max-w-xl max-h-[80vh] flex flex-col bg-slate-950 border border-white/20 rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
+              <div className="text-sm font-bold text-white truncate">{openFile.file_name}</div>
+              <button type="button" onClick={() => setOpenFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">{openFile.content}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function AISection({ s, set, scoped, setVariants, subjectRefs }) {
   const ai = s.ai;
-  const aiEffort = Number(ai.effortScore ?? EFFORT_SCORES[ai.effort] ?? 500);
+  const rawEffort = Number(ai.effortScore ?? EFFORT_SCORES[ai.effort] ?? 500);
+  const aiEffort = Math.max(1, Math.min(10, Math.round(rawEffort / 100)));
   const setEffort = (v) => {
-    set('ai.effortScore', v);
-    set('ai.effort', v <= 250 ? 'low' : v <= 750 ? 'balanced' : 'high');
+    // v is 1–10 on the UI; store ×100 for the backend 1–1000 contract.
+    set('ai.effortScore', v * 100);
+    set('ai.effort', v <= 3 ? 'low' : v <= 7 ? 'balanced' : 'high');
   };
   return (
     <div className="space-y-7">
+      {/* Educational-only mode (operator 08-26) — guarded behavior via the
+       * agent's system prompt; OFF = unrestricted, zero guidance. */}
+      <div className="flex items-start justify-between gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+        <div>
+          <div className="text-xs font-semibold text-white flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🎓</span>
+            Educational-only mode
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            On (default): the agent is prompted to decline slurs, insults and abusive roleplay and stick to studying. Off: zero guidance, fully unrestricted.
+          </div>
+        </div>
+        <Toggle
+          checked={s.educationalMode !== false}
+          onChange={(v) => {
+            set('educationalMode', v);
+            // Server reads this on every agent call — mirror it immediately.
+            api.updateSettings({ educationalMode: v }).catch(() => {});
+          }}
+        />
+      </div>
+
+      {/* Agent data: memory + skills/rules/personality (operator 08-26) */}
+      <AIAgentData />
+
       {/* Effort — the one control that matters */}
       <ScopedSetting
         path="ai.effort"
         title="AI effort"
         variants={scoped['ai.effort']}
         setVariants={setVariants}
-        slider={{ min: 1, max: 1000, step: 1 }}
+        slider={{ min: 1, max: 10, step: 1 }}
         refs={subjectRefs}
         refPlaceholder="e.g. Biology"
         description="Low effort = fast cheap engines on mechanical work. High effort = flagship research engines on hard problems. Best per course, not globally."
@@ -438,6 +576,53 @@ export function applyAppearance(appearance) {
   if (appearance.theme) root.setAttribute('data-theme', appearance.theme);
   if (appearance.accent) root.setAttribute('data-accent', appearance.accent);
   if (appearance.density) root.setAttribute('data-density', appearance.density);
+  /* Wire the remaining controls (operator 08-26: they were stored but never
+   * applied — picks looked dead). */
+  if (appearance.animation) root.setAttribute('data-anim', appearance.animation);
+  if (appearance.background) root.setAttribute('data-bg', appearance.background);
+  if (appearance.uiStyle) root.setAttribute('data-ui', appearance.uiStyle);
+  if (appearance.background || appearance.uiStyle || appearance.animation) {
+    root.classList.add('appearance-live');
+  }
+}
+
+/* Accessibility → CSS hooks (operator 08-26). The section existed in the nav
+ * but had NO renderer and nothing applied the stored values. */
+export function applyAccessibility(acc) {
+  if (!acc) return;
+  const root = document.documentElement;
+  root.setAttribute('data-motion', acc.reducedMotion ? 'reduced' : 'full');
+  root.setAttribute('data-contrast', acc.highContrast ? 'high' : 'normal');
+  root.setAttribute('data-reading', acc.dyslexiaFriendly ? 'dyslexia' : 'standard');
+  root.setAttribute('data-textscale', acc.largeText ? 'large' : 'normal');
+  root.setAttribute('data-screenreader', acc.screenReader ? 'on' : 'off');
+}
+
+/* Accessibility controls (bound to settings.accessibility, applied live). */
+function AccessibilitySection({ s, set }) {
+  const items = [
+    ['reducedMotion', 'Reduce motion', 'Shorten/disable animations and transitions'],
+    ['highContrast', 'High contrast', 'Stronger text & borders for visibility'],
+    ['largeText', 'Larger text', 'Bump base font size ~15%'],
+    ['dyslexiaFriendly', 'Dyslexia-friendly', 'Extra letter/word spacing, readable line height'],
+    ['screenReader', 'Screen-reader support', 'Enhanced focus rings for keyboard/screen readers'],
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-slate-400">
+        Applied instantly anywhere in the app (no reload needed). Stored per-account.
+      </div>
+      {items.map(([key, label, desc]) => (
+        <div key={key} className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+          <div>
+            <div className="text-xs font-semibold text-white">{label}</div>
+            <div className="text-[11px] text-slate-500">{desc}</div>
+          </div>
+          <Toggle checked={!!s.accessibility?.[key]} onChange={(v) => set(`accessibility.${key}`, v)} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SettingsApp({ userId, onGoTo }) {
@@ -451,6 +636,12 @@ export function SettingsApp({ userId, onGoTo }) {
   useEffect(() => {
     applyAppearance(settings.appearance);
   }, [settings.appearance]);
+
+  /* Live accessibility settings (operator 08-26: they were stored but never
+   * applied — the section rendered nothing). */
+  useEffect(() => {
+    applyAccessibility(settings.accessibility);
+  }, [settings.accessibility]);
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
@@ -648,6 +839,7 @@ export function SettingsApp({ userId, onGoTo }) {
             transition={{ duration: 0.15 }}
           >
             {section === 'appearance' && <AppearanceSection s={settings} set={set} />}
+            {section === 'accessibility' && <AccessibilitySection s={settings} set={set} />}
             {section === 'ai' && <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />}
             {section !== 'appearance' && section !== 'ai' && (
               <SettingsSections section={section} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} />

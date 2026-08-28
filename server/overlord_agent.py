@@ -15,9 +15,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import uuid
+from datetime import datetime
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -56,6 +59,15 @@ ROUTINE_ACTION_TYPES = {
     "create_assignment",
     "message_assignment_team",
 }
+
+def _persist_user_settings(db, user, settings) -> None:
+    """BATCH-05 settings write (see user_settings_service.persist_user_settings):
+    shallow dict writes that equal the ORM-cached value are skipped by the ORM —
+    nested edits vanish. Write through a core UPDATE."""
+    import copy
+    from .user_settings_service import persist_user_settings
+    persist_user_settings(db, user, settings)
+
 
 
 class PermissionEngine:
@@ -99,6 +111,100 @@ class PermissionEngine:
         return True, "Auto-approved routine action in Auto mode."
 
 
+def _history_key(target_key, user_id=None) -> str:
+    """User-scoped conversation key (operator 08-26, SECURITY): the store was
+    keyed ONLY by target_key, so every user's global chat ('0') shared ONE
+    list — context (memory words, private facts) leaked across accounts."""
+    return f"u{user_id}:{str(target_key)}" if user_id is not None else ("guest:" + str(target_key))
+
+def agent_display_name(user) -> str:
+    """User-configured agent name (settings ai.aiName -> settings agent_name ->
+    'Overlord' fallback). Only the DISPLAYED name changes; identity keys
+    (sender='overlord', module name) stay as-is."""
+    try:
+        settings = dict(user.settings or {}) if user is not None else {}
+    except Exception:
+        settings = {}
+    ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
+    name = str(ai.get("aiName") or settings.get("agent_name") or "Overlord").strip()
+    return name or "Overlord"
+
+
+def _today_label() -> str:
+    """Real current date string, computed per call (never hardcoded)."""
+    return datetime.now().strftime("%A, %B %-d, %Y")
+
+
+# ─── run_shell: one SAFE computation command through the sandbox wrapper ─────
+_SBOX_SH = Path(__file__).resolve().parent.parent / "deploy" / "sandboxes" / "sandbox_run.sh"
+_SHELL_META = re.compile(r"[|&`$<>~\\\n]")
+_CMD_ALLOW = re.compile(r"^[0-9a-zA-Z\s.+\-*/()'\"\[\],:%_=;×÷·−]+$")
+_PY3_CMD = re.compile(r'^python3\s+-c\s+"(.+)"$')
+
+
+def _validated_argv(command: str) -> Optional[list[str]]:
+    """Turn a run_shell payload into an argv array. STRICT: only a tiny set of
+    compute commands — python3 -c '<code>' or 'date'. No shell metas, no
+    arbitrary user text, never shell=True."""
+    cmd = (command or "").strip()
+    if not cmd or _SHELL_META.search(cmd) or not _CMD_ALLOW.fullmatch(cmd):
+        return None
+    if cmd == "date":
+        return ["date"]
+    m = _PY3_CMD.match(cmd)
+    if m:
+        code = m.group(1)
+        if _SHELL_META.search(code) or not _CMD_ALLOW.fullmatch(code):
+            return None
+        return ["python3", "-c", code]
+    return None
+
+
+async def _compute_shell_command(command: str) -> Optional[str]:
+    """Run the validated command inside the sandbox wrapper (argv subprocess,
+    20s timeout); fall back to a direct strict python3 run if the wrapper is
+    unavailable. Returns trimmed output (plain text answer) or None."""
+    import subprocess as sp
+
+    argv = _validated_argv(command)
+    if not argv:
+        return None
+
+    def _read_sandbox_output() -> Optional[str]:
+        try:
+            proc = sp.run(
+                [str(_SBOX_SH), "--kind", "shell", "--timeout", "20", "--"] + argv,
+                capture_output=True, text=True, timeout=60,
+            )
+            if proc.returncode != 0:
+                return None
+            m = re.search(r"\[sandbox\]\s+([0-9_]+_[a-z_]+_\d+)\s+work=", proc.stdout)
+            if not m:
+                return None
+            run_id = m.group(1)
+            data_dir = os.environ.get("DATA_DIR") or (Path(__file__).resolve().parent.parent / "data")
+            log = Path(data_dir) / "sandboxes" / run_id / "logs" / "run.log"
+            if not log.exists():
+                return None
+            lines = [ln.strip() for ln in log.read_text(errors="replace").splitlines() if ln.strip()]
+            return lines[-1] if lines else None
+        except Exception:
+            return None
+
+    out = _read_sandbox_output()
+    if out is None:
+        # Fallback: direct run, argv only, same strict allowlist.
+        try:
+            proc = sp.run(argv, capture_output=True, text=True, timeout=20)
+            if proc.returncode == 0:
+                lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+                return lines[-1] if lines else None
+        except Exception:
+            pass
+        return None
+    return out
+
+
 class OverlordAgent:
     """The central orchestrating agent managing sub-agents, virtual sandboxes, NLP tasks, and permissions."""
 
@@ -106,13 +212,13 @@ class OverlordAgent:
         self._pending_permissions: Dict[str, Dict[str, Any]] = {}
         self._chat_histories: Dict[str, List[Dict[str, Any]]] = {}
 
-    def get_chat_history(self, target_key: str | int = "global") -> List[Dict[str, Any]]:
-        k = str(target_key)
+    def get_chat_history(self, target_key: str | int = "global", user=None) -> List[Dict[str, Any]]:
+        k = _history_key(target_key, getattr(user, "id", None) if user is not None else None)
         return self._chat_histories.get(k, [
             {
                 "id": "init_msg",
                 "sender": "overlord",
-                "text": "🤖 Helpotron Overlord Agent online. Full ecosystem control and Virtual Sandboxes armed.",
+                "text": f"🤖 {agent_display_name(user)} Agent online. Today is {_today_label()}. Full ecosystem control and Virtual Sandboxes armed.",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "suggested_actions": ["Run Sandbox Script", "Modify User Settings", "Generate Flashcards", "Check System Status"],
             }
@@ -126,8 +232,9 @@ class OverlordAgent:
         suggested_actions: Optional[List[str]] = None,
         subagent_logs: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        k = str(target_key)
+        k = _history_key(target_key, user_id)
         msg = {
             "id": f"msg_{uuid.uuid4().hex[:8]}",
             "sender": sender,
@@ -160,7 +267,7 @@ class OverlordAgent:
         """
         from .llm import call_llm
 
-        k = str(target_key)
+        k = _history_key(target_key, getattr(user, "id", None) if user is not None else None)
         history = self._chat_histories.get(k, [])
         total_chars = sum(len(m.get("text", "")) for m in history)
         if len(history) <= max_messages and total_chars <= max_chars:
@@ -253,6 +360,7 @@ class OverlordAgent:
         """Parses natural language directives, dispatches sandboxes, settings mutations, team messages, or coursework actions."""
         text = prompt.strip()
         user_settings = dict(user.settings or {})
+        display_name = agent_display_name(user)
         subagent_logs: List[str] = []
 
         # ─── 1. Create Assignment ──────────────────────────────────────────
@@ -264,7 +372,7 @@ class OverlordAgent:
             )
 
             title_match = re.search(r'(?:assignment|task|coursework)\s+(?:named|called|titled)?\s*[\'"]?([^\'\"]+?)[\'"]?(?:\s+(?:for|in|due|with)|\s*$)', text, re.IGNORECASE)
-            title = title_match.group(1).strip() if title_match else "New Overlord Assignment"
+            title = title_match.group(1).strip() if title_match else f"New {display_name} Assignment"
             course_match = re.search(r'(?:for|in)\s+course\s+[\'"]?([^\'\"]+?)[\'"]?', text, re.IGNORECASE)
             course = course_match.group(1).strip() if course_match else "General Studies"
 
@@ -281,7 +389,7 @@ class OverlordAgent:
                     user.public_id,
                     action_type,
                     f"Create Assignment '{title}'",
-                    f"Authorize Overlord to instantiate new assignment card '{title}' for {course}?",
+                    f"Authorize {display_name} to instantiate new assignment card '{title}' for {course}?",
                     payload,
                 )
                 reply = f"⚠️ Permission required to create assignment '{title}'. Confirmation prompt generated."
@@ -323,7 +431,7 @@ class OverlordAgent:
                     user.public_id,
                     action_type,
                     f"Message Team for Assignment #{target_assign_id}",
-                    f"Authorize Overlord to send instruction to Assignment #{target_assign_id} team: '{team_instruction}'?",
+                    f"Authorize {display_name} to send instruction to Assignment #{target_assign_id} team: '{team_instruction}'?",
                     payload,
                     assignment_id=target_assign_id,
                 )
@@ -332,7 +440,7 @@ class OverlordAgent:
                 return {"status": "pending_permission", "permission_id": perm["id"], "reply": reply}
 
             # Record instruction directly into assignment chat feed
-            self.add_chat_message(target_assign_id, "user", f"[Direct from Overlord]: {team_instruction}")
+            self.add_chat_message(target_assign_id, "user", f"[Direct from {display_name}]: {team_instruction}")
             team_reply = f"🤖 Assignment #{target_assign_id} sub-agent team acknowledged directive: '{team_instruction}'. Synthesis underway."
             self.add_chat_message(target_assign_id, "overlord", team_reply)
 
@@ -347,8 +455,7 @@ class OverlordAgent:
             if score_match:
                 score = max(1, min(1000, int(score_match.group(1))))
                 user_settings["effort_score"] = score
-                user.settings = dict(user_settings)
-                db.commit()
+                _persist_user_settings(db, user, user_settings)
                 reply = f"✅ Effort Score calibrated to {score}/1000."
                 self.add_chat_message(target_key, "overlord", reply)
                 return {"status": "success", "reply": reply, "effort_score": score}
@@ -357,8 +464,7 @@ class OverlordAgent:
         if re.search(r"\b(auto[_\s\-]?start|autostart)\b", text, re.IGNORECASE):
             enabled = not ("off" in text.lower() or "disable" in text.lower() or "false" in text.lower())
             user_settings["auto_start"] = enabled
-            user.settings = dict(user_settings)
-            db.commit()
+            _persist_user_settings(db, user, user_settings)
             reply = f"✅ Auto-Start pipeline {'ENABLED ⚡' if enabled else 'DISABLED ⏸️'}."
             self.add_chat_message(target_key, "overlord", reply)
             return {"status": "success", "reply": reply, "auto_start": enabled}
@@ -438,7 +544,7 @@ class OverlordAgent:
             sub_name_match = re.search(r"subject\s+[\'\"`]?([A-Za-z0-9\s]+?)[\'\"`]?(?:\s+with|\s+desc|\s*$)", text, re.IGNORECASE)
             sub_name = sub_name_match.group(1).strip() if sub_name_match else "New Subject"
             subjects = list(user_settings.get("custom_subjects", []))
-            subjects.append({"id": f"sub_{uuid.uuid4().hex[:6]}", "name": sub_name, "description": "Added via Overlord Agent", "color": "blue", "is_custom": True})
+            subjects.append({"id": f"sub_{uuid.uuid4().hex[:6]}", "name": sub_name, "description": f"Added via {display_name} Agent", "color": "blue", "is_custom": True})
             user_settings["custom_subjects"] = subjects
             user.settings = dict(user_settings)
             db.commit()
@@ -462,7 +568,7 @@ class OverlordAgent:
                 user_id=user.id,
                 type="flashcards",
                 title=f"Flashcards: {text[:30]}",
-                content=json.dumps([{"front": "Core Concept", "back": "Synthesized definition via Overlord subagent"}]),
+                content=json.dumps([{"front": "Core Concept", "back": f"Synthesized definition via {display_name} subagent"}]),
             )
             db.add(mat)
             db.commit()
@@ -476,7 +582,7 @@ class OverlordAgent:
             admin_msg_match = re.search(r"message\s+admin\s*[:,\-]?\s*(.+)", text, re.IGNORECASE)
             admin_text = admin_msg_match.group(1).strip() if admin_msg_match else text
             from .database import AdminMessage
-            msg = AdminMessage(user_id=user.public_id, subject="Overlord Dispatched Inquiry", category="general", message=admin_text, status="sent")
+            msg = AdminMessage(user_id=user.public_id, subject=f"{display_name} Dispatched Inquiry", category="general", message=admin_text, status="sent")
             db.add(msg)
             db.commit()
             reply = f"📨 Delivered message directly to Admin inbox: \"{admin_text}\""
@@ -486,7 +592,7 @@ class OverlordAgent:
         # ─── 6. Virtual Sandbox Script Execution ────────────────────────────
         # e.g., "run python script in sandbox", "process audio file in sandbox"
         if "sandbox" in text.lower() or "script" in text.lower() or files:
-            subagent_logs.append("Overlord: Initializing Virtual Sub-Agent Sandbox...")
+            subagent_logs.append(f"{display_name}: Initializing Virtual Sub-Agent Sandbox...")
             
             if "audio" in text.lower() or (files and any(f.get("name", "").endswith((".mp3", ".wav", ".webm")) for f in files)):
                 script_code = """
@@ -541,8 +647,8 @@ print(f"Active files: {os.listdir('.')}")
             return {"status": "success", "reply": reply, "sandbox": sandbox_res, "logs": subagent_logs}
 
         # ─── 7. General NLP Directive ───────────────────────────────────────
-        subagent_logs.append("Overlord: Routing query to DeepSeek-V4 Tier...")
-        reply = f"🤖 Overlord executed directive: '{text}'. All ecosystem subsystems and sub-agents synchronized."
+        subagent_logs.append(f"{display_name}: Routing query to DeepSeek-V4 Tier...")
+        reply = f"🤖 {display_name} executed directive: '{text}'. All ecosystem subsystems and sub-agents synchronized."
         self.add_chat_message(
             target_key,
             "overlord",
@@ -635,11 +741,21 @@ print(f"Active files: {os.listdir('.')}")
             return {"action": action_type, "status": "completed", "assignment_id": _aid,
                     "message": "Read recorded on the action ledger — undo from Recent actions to revoke the read."}
 
+        elif action_type == "run_shell":
+            cmd = (payload.get("command") or "").strip()
+            result = await _compute_shell_command(cmd)
+            if result is None:
+                return {"action": action_type, "status": "failed",
+                        "message": "I couldn't run that computation safely — nothing executed. Rephrase it as a plain math or date question."}
+            ans = result.strip()
+            return {"action": action_type, "status": "completed",
+                    "message": ans, "result_text": ans}
+
         elif action_type == "message_assignment_team":
             aid = payload.get("assignment_id") or assignment_id
             instruction = payload.get("instruction", "Proceed with synthesis")
             if aid:
-                self.add_chat_message(aid, "user", f"[Direct from Overlord]: {instruction}")
+                self.add_chat_message(aid, "user", f"[Direct from {agent_display_name(user)}]: {instruction}")
                 self.add_chat_message(aid, "overlord", f"🤖 Team acknowledged: {instruction}")
             return {
                 "action": action_type,
@@ -755,8 +871,8 @@ print(f"Active files: {os.listdir('.')}")
 
         elif action_type == "remember":
             from .agent_memory import append_memory
-            text = payload.get("text", "")
-            if not text.strip():
+            text = str(payload.get("text", "")).strip()
+            if not text:
                 return {"action": action_type, "status": "failed", "message": "No text provided to remember."}
             entry = append_memory(user.public_id, text)
             return {
@@ -890,3 +1006,59 @@ print(f"Active files: {os.listdir('.')}")
 overlord_agent = OverlordAgent()
 permission_engine = PermissionEngine()
 
+
+
+# ─── Persistent chat store (operator 08-26) ──────────────────────────────────
+def load_chat_history_from_db(db, user_id: int, target_key):
+    """Seed the in-memory cache from the persistent table — without this,
+    every server restart erased all conversation context."""
+    try:
+        from .database import AgentChatMessage
+    except (ImportError, ValueError):
+        from server.database import AgentChatMessage
+    k = _history_key(target_key, user_id)
+    if k in overlord_agent._chat_histories:
+        return
+    try:
+        rows = (
+            db.query(AgentChatMessage)
+            .filter(
+                AgentChatMessage.user_id == user_id,
+                # scoped key OR legacy unscoped rows (pre-08-26 storage)
+                AgentChatMessage.target_key.in_([k, str(target_key)]),
+            )
+            .order_by(AgentChatMessage.created_at.asc())
+            .limit(40)
+            .all()
+        )
+    except Exception:
+        return
+    if rows:
+        overlord_agent._chat_histories[k] = [
+            {
+                "id": f"db_{r.id}",
+                "sender": r.sender,
+                "text": r.text,
+                "timestamp": r.created_at.isoformat() if r.created_at else None,
+                "suggested_actions": [],
+                "subagent_logs": [],
+                "metadata": {},
+            }
+            for r in rows
+        ]
+
+
+def persist_chat_message(db, user_id: int, target_key, sender: str, text: str) -> None:
+    """Durable copy of one conversation turn (best-effort)."""
+    try:
+        from .database import AgentChatMessage
+    except (ImportError, ValueError):
+        from server.database import AgentChatMessage
+    try:
+        db.add(AgentChatMessage(user_id=user_id, target_key=_history_key(target_key, user_id), sender=sender, text=text or ""))
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass

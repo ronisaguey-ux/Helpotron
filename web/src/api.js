@@ -37,18 +37,19 @@ function getBaseUrl() {
 }
 
 function getCsrfToken() {
-  const local = localStorage.getItem('helpotron_csrf_token');
-  if (local) return local;
+  // The COOKIE is the authority — the server rotates it on login/session, so
+  // the localStorage copy goes stale and every POST/ PATCH with it bounces
+  // 403 ("CSRF token invalid"). Cookie-first (operator 08-26).
   const name = 'csrf_token=';
   const decoded = decodeURIComponent(document.cookie);
   const parts = decoded.split(';');
   for (let i = 0; i < parts.length; i++) {
     let part = parts[i].trim();
     if (part.indexOf(name) === 0) {
-      return part.substring(name.length, part.length);
+      return part.slice(name.length);
     }
   }
-  return null;
+  return localStorage.getItem('helpotron_csrf_token') || null;
 }
 
 export async function request(endpoint, options = {}) {
@@ -110,6 +111,13 @@ export async function request(endpoint, options = {}) {
   if (!response.ok) {
     const errorText = await response.text();
     let message = errorText || `HTTP ${response.status}`;
+    // HTML (Cloudflare/Gateway 502/503/5xx error pages) must NEVER be rendered
+    // as the UI — prettify instead (operator 08-26: friend's insights showed
+    // the full 502-page source as text).
+    const ct = (response.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('text/html')) {
+      message = `The server gateway returned ${response.status} (temporarily unavailable). Try again in a few seconds.`;
+    }
     try {
       const parsed = JSON.parse(errorText);
       if (parsed && parsed.detail) {
@@ -159,7 +167,7 @@ export const api = {
   
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),
-  dashboard: (userId, limit = 50, offset = 0) => request(`/api/dashboard?public_id=${userId || 'RoniDev'}&limit=${limit}&offset=${offset}`, { method: 'GET' }),
+  dashboard: (userId, limit = 50, offset = 0) => request(`/api/dashboard?public_id=${userId}&limit=${limit}&offset=${offset}`, { method: 'GET' }),
   studyGuide: (body) => request('/api/study-guide', { method: 'POST', body: JSON.stringify(body) }),
   flashcards: (body) => request('/api/flashcards', { method: 'POST', body: JSON.stringify(body) }),
   practiceTest: (body) => request('/api/practice-test', { method: 'POST', body: JSON.stringify(body) }),
@@ -171,7 +179,7 @@ export const api = {
   generateStream: async (kind, body, onProgress) => {
     const headers = {
       'Content-Type': 'application/json',
-      'X-Public-ID': getUserId() || 'RoniDev',
+      'X-Public-ID': getUserId(),
     };
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -220,6 +228,7 @@ export const api = {
   // Assignment Cards & Overlord Dashboard
   assignmentCards: () => request('/api/assignments/cards', { method: 'GET' }),
   assignmentFullView: (id) => request(`/api/assignment/${id}/full-view`, { method: 'GET' }),
+  materialsFor: (publicId, kind = 'all') => request(`/api/materials/${publicId}/${kind}`, { method: 'GET' }),
   agentMode: () => request('/api/agent/mode', { method: 'GET' }),
   setAgentMode: (mode) => request('/api/agent/mode', { method: 'POST', body: JSON.stringify({ mode, is_session_override: true }) }),
   agentPermissionsPending: () => request('/api/agent/permissions/pending', { method: 'GET' }),
@@ -228,6 +237,9 @@ export const api = {
   addAgentPermissionRule: (rule) => request('/api/agent/permissions/rules', { method: 'POST', body: JSON.stringify({ rule }) }),
   deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
   agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  agentThreads: () => request('/api/agent/threads', { method: 'GET' }),
+  agentThreadCreate: () => request('/api/agent/threads', { method: 'POST', body: JSON.stringify({}) }),
+  agentChatHistory: (key) => request(`/api/agent/chat/${key}`, { method: 'GET' }),
   updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
   getSubagentTeam: (id) => request(`/api/assignments/${id}/subagent-team`, { method: 'GET' }),
 
@@ -247,7 +259,7 @@ export const api = {
     const form = new FormData();
     form.append('file', file);
     form.append('kind', kind);
-    const headers = { 'X-Public-ID': getUserId() || 'RoniDev' };
+    const headers = { 'X-Public-ID': getUserId() };
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRF-Token'] = csrf;
     const res = await fetch(`${getServer()}/api/agent/files/upload`, {
@@ -267,7 +279,7 @@ export const api = {
     form.append('file', file);
     form.append('kind', kind);
     if (subject) form.append('subject', subject);
-    const headers = { 'X-Public-ID': getUserId() || 'RoniDev' };
+    const headers = { 'X-Public-ID': getUserId() };
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRF-Token'] = csrf;
     const res = await fetch(`${getServer()}/api/uploads/avatar`, {
@@ -304,7 +316,7 @@ export const api = {
 
   // Data Lake & Micro-Credits
   submitDataLakeMicrocredits: (data) => request('/api/datalake/microcredits/submit', { method: 'POST', body: JSON.stringify(data) }),
-  getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId}`, { method: 'GET' }),
   redeemMicrocredits: (data) => request('/api/datalake/microcredits/redeem', { method: 'POST', body: JSON.stringify(data) }),
 
   // Referrals (40-digit single-use codes)
@@ -318,7 +330,25 @@ export const api = {
   verifyPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-verify', { method: 'POST', body: JSON.stringify(data) }),
 
   // Message Admin Direct Channel
-  sendMessageToAdmin: (data) => request('/api/user/message-admin', { method: 'POST', body: JSON.stringify(data) }),
+  changePassword: (currentPassword, newPassword) => request('/api/user/change-password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
+  sendMessageToAdmin: (data, file = null) => {
+    const fd = new FormData();
+    fd.append('subject', data.subject || 'Direct Message to Admin');
+    fd.append('category', data.category || 'general');
+    fd.append('message', data.message);
+    if (file) fd.append('attachment', file);
+    const headers = { 'X-Public-ID': getUserId() };
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(`${getBaseUrl()}/api/user/message-admin`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: fd,
+    }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.detail || 'send failed'); return d; }));
+  },
   getMyAdminMessages: () => request('/api/user/my-admin-messages', { method: 'GET' }),
   getAllAdminMessages: () => request('/api/admin/messages', { method: 'GET' }),
   replyToAdminMessage: (messageId, reply) => request(`/api/admin/messages/${messageId}/reply`, { method: 'POST', body: JSON.stringify({ reply }) }),
@@ -327,6 +357,7 @@ export const api = {
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),
   adminAnalytics: () => request('/api/admin/analytics', { method: 'GET' }),
   adminAdjustCredits: (userId, amount, reason) => request(`/api/admin/user/${userId}/credits?amount=${amount}&reason=${encodeURIComponent(reason)}`, { method: 'POST' }),
+  adminGrantTokens: (userId, amount) => request('/api/admin/tokens/grant', { method: 'POST', body: JSON.stringify({ public_id: userId, amount }) }),
   adminSetPlan: (userId, plan) => request(`/api/admin/user/${userId}/plan?plan=${plan}`, { method: 'POST' }),
   adminResetPassword: (userId, newPassword) => request(`/api/admin/user/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }),
   adminBanUser: (userId) => request(`/api/admin/user/${userId}/ban`, { method: 'POST' }),
@@ -342,15 +373,15 @@ export const api = {
   adminSetUserMultiplier: (publicId, multiplier) => request(`/api/admin/costs/users/${publicId}/multiplier`, { method: 'POST', body: JSON.stringify({ multiplier }) }),
 
   // User Budget, Effort Level & Pre-Flight Cost Estimator
-  getUserBudget: (userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'GET' }),
+  getUserBudget: (userId) => request(`/api/admin/costs/budget?user_id=${userId}`, { method: 'GET' }),
   getCostIntelligence: () => request('/api/features/costs/intelligence', { method: 'GET' }),
-  updateUserBudget: (data, userId) => request(`/api/admin/costs/budget?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
-  estimateTaskCost: (data, userId) => request(`/api/admin/costs/estimate?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(data) }),
+  updateUserBudget: (data, userId) => request(`/api/admin/costs/budget?user_id=${userId}`, { method: 'POST', body: JSON.stringify(data) }),
+  estimateTaskCost: (data, userId) => request(`/api/admin/costs/estimate?user_id=${userId}`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Universal Assignment Dump & Overlord Routing
   uploadDumpFile: async (formData) => {
     const headers = {
-      'X-Public-ID': getUserId() || 'RoniDev',
+      'X-Public-ID': getUserId(),
     };
     const csrf = getCsrfToken();
     if (csrf) {
@@ -368,8 +399,9 @@ export const api = {
     }
     return res.json();
   },
-  getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId || 'RoniDev'}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
-  routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId || 'RoniDev'}`, { method: 'POST', body: JSON.stringify(payload) }),
+  getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
+  routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId}`, { method: 'POST', body: JSON.stringify(payload) }),
+  finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }) }),
   deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
 
   // Extension Version & Updates

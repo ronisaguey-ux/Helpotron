@@ -101,6 +101,7 @@ def undo_agent_action(db, user, action: AgentAction) -> dict:
             _oa.overlord_agent.add_chat_message(
                 aid, "overlord",
                 "⏪ Retraction: the user has revoked the previous instruction. Disregard it.",
+                user_id=user.id,
             )
 
     elif kind == "read_assignment":
@@ -117,6 +118,7 @@ def undo_agent_action(db, user, action: AgentAction) -> dict:
         _oa.overlord_agent.add_chat_message(
             action.assignment_id, "overlord",
             "⏪ The user revoked their read of this assignment. Treat its content as unseen and do not reference it again.",
+            user_id=user.id,
         )
 
     else:

@@ -195,6 +195,7 @@ def usage_percent(user: User) -> float:
     """Calculate percentage of credits or quota used."""
     plan_limits = {
         "free": 100.0,
+        "basic": 2000.0,
         "starter": 500.0,
         "pro": 2000.0,
         "elite": 10000.0,

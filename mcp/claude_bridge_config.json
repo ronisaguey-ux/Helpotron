@@ -7,6 +7,11 @@
         "HELPOTRON_BASE_URL": "http://localhost:8000",
         "HELPOTRON_ADMIN_PUBLIC_ID": "RoniDev"
       }
+    },
+    "voicebox": {
+      "type": "http",
+      "url": "http://127.0.0.1:17493/mcp",
+      "headers": {}
     }
   }
 }

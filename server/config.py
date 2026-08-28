@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
 
     # Database
-    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/helpotron.db")
+    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/data/db/helpotron.db")
 
     # CORS
     cors_origins: List[str] = [

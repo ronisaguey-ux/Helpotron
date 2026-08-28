@@ -434,3 +434,216 @@ html { font-size: 110%; } /* 17.6px base */
 /* Font-scale smoothing: rem scaling w/o layout jarring */
 html { scroll-behavior: smooth; }
 
+generated lines: 106
+──────────────────────────────────────────────────────────────────────
+ * Appearance compliance sweep (operator 08-26)
+ * The app hardcodes Tailwind slate/white/blue utilities; these layers map
+ * those stems onto the theme variables so the appearance controls
+ * (light theme, accent, density, animation, background, ui style) actually
+ * apply app-wide. Overrides win over utilities via attribute specificity.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* 1. APPEARANCE: ANIMATIONS -------------------------------------------------- */
+html[data-anim="none"] *, html[data-anim="none"] *::before, html[data-anim="none"] *::after,
+html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim="reduced"] *::after {
+  animation: none !important;
+}
+html[data-anim="none"] *, html[data-anim="none"] *::before, html[data-anim="none"] *::after {
+  transition: none !important;
+}
+html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim="reduced"] *::after {
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 2. APPEARANCE: BACKGROUND STYLES ------------------------------------------ */
+.app-canvas { background-color: var(--bg-base); transition: background-color 0.3s ease; }
+html[data-bg="flat"] .app-canvas { background-image: none; }
+html[data-bg="aurora"] .app-canvas {
+  background-image:
+    radial-gradient(at 20% 0%, rgba(59,130,246,0.16) 0px, transparent 45%),
+    radial-gradient(at 80% 10%, rgba(168,85,247,0.13) 0px, transparent 50%),
+    radial-gradient(at 40% 80%, rgba(6,182,212,0.10) 0px, transparent 55%);
+}
+html[data-bg="mesh"] .app-canvas {
+  background-image:
+    linear-gradient(30deg, rgba(59,130,246,0.10) 0%, transparent 45%),
+    linear-gradient(120deg, rgba(16,185,129,0.08) 0%, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(99,102,241,0.12) 0px, transparent 60%);
+}
+html[data-ui="minimal"] .clean-card,
+html[data-ui="minimal"] .glass-panel { box-shadow: none !important; }
+html[data-ui="minimal"] .shadow-lg,
+html[data-ui="minimal"] .shadow-xl,
+html[data-ui="minimal"] .shadow-2xl,
+html[data-ui="minimal"] .shadow-sm,
+html[data-ui="minimal"] .shadow-md { box-shadow: none !important; }
+html[data-ui="blur"] .clean-card,
+html[data-ui="blur"] .glass-panel { backdrop-filter: blur(18px); }
+
+/* 3. APPEARANCE: ACCENT (blue stem -> selected accent) -------------------- */
+/* SOLID fills only — :not([class*="./"]) keeps translucent chips (/10,/20…)
+   in their default blue, otherwise every chip becomes a solid accent box. */
+html[data-accent] [class*="bg-blue-600"]:not([class*="bg-blue-600/"]) { background-color: var(--accent) !important; }
+html[data-accent] [class*="bg-blue-500"]:not([class*="bg-blue-500/"]) { background-color: var(--accent) !important; }
+html[data-accent] [class*="bg-blue-400"]:not([class*="bg-blue-400/"]) { background-color: var(--accent-hover) !important; }
+html[data-accent] [class*="bg-blue-500"]:not([class*="bg-blue-500/"]):hover { background-color: var(--accent-hover) !important; }
+html[data-accent] [class*="bg-blue-600"]:not([class*="bg-blue-600/"]):hover { background-color: var(--accent-hover) !important; }
+/* Translucent blue chips stay blue under the accent (subtle, not engulfing) */
+html[data-accent] [class*="bg-blue-500/"] { background-color: rgb(59 130 246 / var(--chip-alpha, 0.14)) !important; }
+html[data-accent] [class*="bg-blue-600/"] { background-color: rgb(59 130 246 / var(--chip-alpha, 0.16)) !important; }
+/* Accent stays SUBTLE (operator 08-26): only solid interactive fills move to
+ * the accent — chips, translucent borders and body text keep their default
+ * blue, otherwise a purple/amber accent "engulfs" the whole UI. */
+html[data-accent] [class*="from-blue-500"] { --tw-gradient-from: var(--accent) !important; }
+html[data-accent] [class*="to-blue-600"] { --tw-gradient-from: var(--accent-hover) !important; }
+html[data-accent] [class*="via-blue-500"] { --tw-gradient-from: var(--accent) !important; }
+html[data-accent] [class*="bg-blue-500/10"], html[data-accent] [class*="bg-blue-600/20"] { background-color: var(--accent-subtle) !important; }
+html[data-accent] [class*="border-blue-500/30"], html[data-accent] [class*="border-blue-600/25"], html[data-accent] [class*="border-blue-500/20"] { border-color: var(--accent-subtle) !important; }
+
+/* Accent text ON solid accent fills must stay white (operator 08-26) */
+html[data-accent] [class*="bg-blue-500"][class*="text-blue-200"],
+html[data-accent] [class*="bg-blue-500"][class*="text-blue-300"],
+html[data-accent] [class*="bg-blue-600"][class*="text-blue-200"],
+html[data-accent] [class*="bg-blue-600"][class*="text-blue-300"],
+html[data-accent] [class*="bg-emerald-500"][class*="text-emerald-200"],
+html[data-accent] [class*="bg-emerald-600"][class*="text-emerald-300"],
+html[data-accent] [class*="bg-rose-500"][class*="text-rose-200"],
+html[data-accent] [class*="bg-rose-600"][class*="text-rose-300"],
+html[data-accent] [class*="bg-purple-500"][class*="text-purple-200"],
+html[data-accent] [class*="bg-purple-600"][class*="text-purple-300"] {
+  color: #ffffff !important;
+}
+/* 4. APPEARANCE: LIGHT THEME (hardcoded slate stems -> light tokens) ------ */
+html[data-theme="light"] [class*="bg-slate-950"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-950/80"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-950/60"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-950/40"] { background-color: var(--bg-surface-elevated) !important; }
+html[data-theme="light"] [class*="bg-slate-900"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-900/80"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-900/60"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="bg-slate-900/40"] { background-color: var(--bg-surface-elevated) !important; }
+html[data-theme="light"] [class*="bg-slate-800"] { background-color: var(--bg-surface-elevated) !important; }
+html[data-theme="light"] [class*="bg-slate-800/60"] { background-color: var(--bg-surface-elevated) !important; }
+html[data-theme="light"] [class*="bg-slate-700"] { background-color: var(--bg-surface-elevated) !important; }
+html[data-theme="light"] [class*="text-slate-100"] { color: var(--text-primary) !important; }
+html[data-theme="light"] [class*="text-slate-200"] { color: var(--text-primary) !important; }
+html[data-theme="light"] [class*="text-slate-300"] { color: var(--text-secondary) !important; }
+html[data-theme="light"] [class*="text-slate-400"] { color: var(--text-muted) !important; }
+html[data-theme="light"] [class*="text-slate-500"] { color: var(--text-muted) !important; }
+html[data-theme="light"] [class*="text-slate-600"] { color: var(--text-muted) !important; }
+html[data-theme="light"] [class*="border-white/10"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="border-white/8"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="border-white/5"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="border-white/20"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="border-slate-800"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="border-slate-700"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="divide-white/5"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="divide-white/10"] { border-color: var(--border-subtle) !important; }
+html[data-theme="light"] [class*="bg-white/4"], html[data-theme="light"] [class*="bg-white/5"], html[data-theme="light"] [class*="bg-white/8"] { background-color: rgba(15,23,42,0.04) !important; }
+html[data-theme="light"] [class*="hover:bg-white/8"] { background-color: rgba(15,23,42,0.08) !important; }
+html[data-theme="light"] .clean-input, html[data-theme="light"] [class*="bg-slate-950/"] { background-color: var(--bg-surface) !important; }
+html[data-theme="light"] [class*="text-slate-9999"] { color: var(--text-primary); }
+
+
+
+/* 5. APPEARANCE: DENSITY (common spacing stems scaled) ------------------- */
+html[data-density="compact"] .gap-1.5 { gap: calc(0.375rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-1.5 { gap: calc(0.375rem * var(--density-gap)); }
+html[data-density="compact"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .gap-3 { gap: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-3 { gap: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .gap-4 { gap: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-4 { gap: calc(1rem * var(--density-gap)); }
+html[data-density="compact"] .gap-5 { gap: calc(1.25rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-5 { gap: calc(1.25rem * var(--density-gap)); }
+html[data-density="compact"] .p-1 { padding: calc(0.25rem * var(--density-gap)); }
+html[data-density="spacious"] .p-1 { padding: calc(0.25rem * var(--density-gap)); }
+html[data-density="compact"] .p-2 { padding: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .p-2 { padding: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .p-3 { padding: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .p-3 { padding: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .p-4 { padding: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .p-4 { padding: calc(1rem * var(--density-gap)); }
+html[data-density="compact"] .p-6 { padding: calc(1.5rem * var(--density-gap)); }
+html[data-density="spacious"] .p-6 { padding: calc(1.5rem * var(--density-gap)); }
+html[data-density="compact"] .px-2 { padding-left: calc(0.5rem * var(--density-gap)); padding-right: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .px-2 { padding-left: calc(0.5rem * var(--density-gap)); padding-right: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .px-3.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
+html[data-density="spacious"] .px-3.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
+html[data-density="compact"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
+html[data-density="compact"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
+html[data-density="spacious"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
+html[data-density="compact"] .py-1.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
+html[data-density="spacious"] .py-1.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
+html[data-density="compact"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .py-2.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
+html[data-density="spacious"] .py-2.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
+html[data-density="compact"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
+html[data-density="compact"] .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.25rem * var(--density-gap)); }
+html[data-density="spacious"] .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.25rem * var(--density-gap)); }
+html[data-density="compact"] .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.5rem * var(--density-gap)); }
+html[data-density="spacious"] .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.5rem * var(--density-gap)); }
+html[data-density="compact"] .mt-2 { margin-top: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .mt-2 { margin-top: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .mt-3 { margin-top: calc(0.75rem * var(--density-gap)); }
+html[data-density="spacious"] .mt-3 { margin-top: calc(0.75rem * var(--density-gap)); }
+html[data-density="compact"] .mt-4 { margin-top: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .mt-4 { margin-top: calc(1rem * var(--density-gap)); }
+html[data-density="compact"] .mb-2 { margin-bottom: calc(0.5rem * var(--density-gap)); }
+html[data-density="spacious"] .mb-2 { margin-bottom: calc(0.5rem * var(--density-gap)); }
+html[data-density="compact"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
+html[data-density="spacious"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Accessibility (operator 08-26) — wired to settings.accessibility via
+ * applyAccessibility(). Without these, the toggles did nothing.
+ * ──────────────────────────────────────────────────────────────────────────── */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-textscale="large"] { font-size: 18.4px; }
+html[data-contrast="high"] {
+  --text-primary: #050505;
+  --text-muted: #373737;
+  --text-secondary: #111111;
+  --border-subtle: rgba(5, 5, 5, 0.55);
+  --accent: #0b53c2;
+}
+html[data-contrast="high"][data-theme="dark"],
+html[data-contrast="high"][data-theme="midnight"],
+html[data-contrast="high"][data-theme="graphite"],
+html[data-contrast="high"][data-theme="oled"] {
+  --text-primary: #ffffff;
+  --text-muted: #d7dbe2;
+  --text-secondary: #f5f7fa;
+  --border-subtle: rgba(255, 255, 255, 0.55);
+  --accent: #4da3ff;
+}
+html[data-reading="dyslexia"] body,
+html[data-reading="dyslexia"] .app-canvas {
+  letter-spacing: 0.045em;
+  word-spacing: 0.14em;
+  line-height: 1.9;
+}
+html[data-reading="dyslexia"] * { line-height: 1.75; }
+html[data-screenreader="on"] :focus-visible {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 2px;
+}

@@ -59,7 +59,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
-    plan: Mapped[str] = mapped_column(String(16), default="basic")
+    plan: Mapped[str] = mapped_column(String(16), default="none")  # none|basic|pro|elite; "none" = nothing until paid/upgraded (operator 08-26)
     credits: Mapped[float] = mapped_column(Float, default=0.0)
     notifications_paused: Mapped[bool] = mapped_column(default=False)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -339,6 +339,35 @@ class StudySession(Base):
     material = relationship("StudyMaterial", back_populates="study_sessions")
 
 
+class AgentChatThread(Base):
+    """User chat threads (operator 08-26): history tabs — users can open a new
+    conversation and go back to any old one. Each thread maps to a scoped
+    chat key (u{user_id}:{thread_id}); the title derives from the first message."""
+    __tablename__ = "agent_chat_threads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(256), default="New chat")
+    pinned: Mapped[bool] = mapped_column(default=False)  # pin chats (operator 08-26)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AgentChatMessage(Base):
+    """Persistent agent conversation turns (operator 08-26). The in-memory
+    _chat_histories store dies on every restart — that's why the agent forgot
+    context after each redeploy. This is the durable copy; the in-memory dict
+    stays as a cache seeded from this table."""
+    __tablename__ = "agent_chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    target_key: Mapped[str] = mapped_column(String(64), index=True)  # 'None' = global agent chat, else assignment id
+    sender: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class StudyGroup(Base):
     __tablename__ = "study_groups"
 
@@ -426,6 +455,7 @@ class UniversalDumpItem(Base):
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     matched_assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True, index=True)
     auto_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    requested_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # flashcards, practice_quiz, study_guide, summary, do_it
     overlord_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

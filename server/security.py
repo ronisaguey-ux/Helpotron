@@ -404,3 +404,33 @@ def is_bot(user_agent: str | None) -> bool:
         if re.search(pattern, user_agent_lower):
             return True
     return False
+
+
+# ─── Junk-content guard (operator 08-26) ─────────────────────────────────────────
+# The friend test poisoned permanent memory + instructions with abusive junk and
+# the agent stored it verbatim. Prompt discipline is not enough — this is a
+# deterministic server-side block list for write paths (memory/instructions).
+_PROHIBITED_MEMORY = re.compile(
+    r"nigg[ae]r|\bfaggot\b|\bkike\b|\bspic\s|\bchink\b|\btranny\b|retard|\brape\b|fuck me deep|"
+    r"fuck (my|me)( deep)? (in|up)|deep in the ass|su(ck|ck) my|\bin the ass\b|"
+    r"\b(bitch|slut|whore|hoe)\b|cum(ming|shot|tits)",
+    re.IGNORECASE,
+)
+
+
+def is_junk_content(text: str) -> bool:
+    """True when the text is abusive/harassing content meant to poison the agent."""
+    if not text:
+        return False
+    return bool(_PROHIBITED_MEMORY.search(text))
+
+
+def educational_guards_on(user) -> bool:
+    """'Educational only' mode (operator 08-26): guards against abusive
+    memory/instructions content are ON by default; when the user switches the
+    setting off there are ZERO guards."""
+    try:
+        settings = dict(user.settings or {})
+    except Exception:
+        settings = {}
+    return settings.get("educationalMode", True) is not False

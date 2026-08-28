@@ -17,7 +17,18 @@
     "alarms"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -37,7 +48,18 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
