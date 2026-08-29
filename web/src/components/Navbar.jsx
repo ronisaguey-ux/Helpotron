@@ -30,22 +30,22 @@ export function Navbar({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header aria-label="Main Navigation" className="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-white/5 px-4 sm:px-6 py-3">
+    <header aria-label="Main Navigation" className="sticky top-0 z-40 bg-[var(--bg-surface)] backdrop-blur-xl border-b border-[var(--border-subtle)] px-4 sm:px-6 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        
+
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 via-indigo-500 to-emerald-400 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/30">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg" style={{ backgroundImage: 'var(--accent-mix)' }}>
             H
           </div>
           <div>
-            <span className="font-semibold text-sm text-slate-100 tracking-tight">Helpotron</span>
+            <span className="text-aurora font-semibold text-sm tracking-tight">Helpotron</span>
             <span className="text-[11px] text-slate-400 ml-2">Study Assistant</span>
           </div>
         </div>
 
         {/* Desktop Navigation & Actions */}
-        <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5 backdrop-blur-xl shadow-lg shadow-black/20">
+        <div className="hidden sm:flex items-center gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-1.5 backdrop-blur-xl shadow-lg shadow-black/20">
           <button
             type="button"
             onClick={onOpenExtensionGuide}
@@ -68,7 +68,7 @@ export function Navbar({
             <button
               type="button"
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition cursor-pointer shadow-lg shadow-indigo-500/30"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white glow-accent transition cursor-pointer shadow-lg"
             >
               <User className="w-3.5 h-3.5" />
               <span>Sign In</span>
@@ -98,7 +98,7 @@ export function Navbar({
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle Mobile Navigation Drawer"
-            className="p-2 rounded-xl text-slate-300 hover:text-white bg-slate-900 border border-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+            className="p-2 rounded-xl text-slate-300 hover:text-white bg-[var(--bg-surface)] border border-[var(--border-subtle)] min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -111,7 +111,7 @@ export function Navbar({
           role="dialog"
           aria-modal="true"
           aria-label="Mobile Navigation Menu"
-          className="sm:hidden fixed inset-x-0 top-[53px] bottom-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-white/10 p-5 overflow-y-auto animate-fadeIn flex flex-col justify-between"
+          className="sm:hidden fixed inset-x-0 top-[53px] bottom-0 z-50 surface-glass-strong border-t border-[var(--border-subtle)] p-5 overflow-y-auto animate-fadeIn flex flex-col justify-between"
         >
           <div className="space-y-3">
             <div className="p-3 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
@@ -146,9 +146,9 @@ export function Navbar({
                   setMobileMenuOpen(false);
                   onOpenSettings();
                 }}
-                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-[var(--bg-surface)] hover:bg-white/5 border border-[var(--border-subtle)] text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
               >
-                <Settings className="w-4 h-4 text-slate-400" /> User Settings & Models
+                <Settings className="w-4 h-4 text-slate-400" /> User Settings
               </button>
 
               <button
@@ -157,9 +157,9 @@ export function Navbar({
                   setMobileMenuOpen(false);
                   onOpenPrivacy();
                 }}
-                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-[var(--bg-surface)] hover:bg-white/5 border border-[var(--border-subtle)] text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
               >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Privacy Policy & FERPA
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Privacy Policy
               </button>
 
               <button
@@ -168,7 +168,7 @@ export function Navbar({
                   setMobileMenuOpen(false);
                   onOpenTerms();
                 }}
-                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-900/60 hover:bg-white/5 border border-white/5 text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-[var(--bg-surface)] hover:bg-white/5 border border-[var(--border-subtle)] text-slate-200 text-xs font-medium min-h-[44px] cursor-pointer"
               >
                 <FileText className="w-4 h-4 text-indigo-400" /> Terms of Service
               </button>
@@ -183,9 +183,9 @@ export function Navbar({
                   setMobileMenuOpen(false);
                   onOpenAuth();
                 }}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
               >
-                <User className="w-4 h-4" /> Sign In / Register
+                <User className="w-4 h-4" /> Sign In
               </button>
             ) : (
               <button

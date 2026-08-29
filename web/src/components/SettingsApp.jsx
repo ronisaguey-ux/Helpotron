@@ -7,14 +7,14 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
-import { Check, ChevronRight, Palette, Bot, GraduationCap, PenLine, Zap, Bell, Shield, CreditCard, Puzzle, Keyboard, BarChart3, FlaskConical, Accessibility, Globe, Wrench, User, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Palette, Bot, GraduationCap, PenLine, Zap, Bell, Shield, CreditCard, Puzzle, Keyboard, BarChart3, FlaskConical, Accessibility, Globe, Wrench, User, Trash2 } from 'lucide-react';
 import { loadSettings, saveSettings, EFFORT_SCORES, DEFAULT_SETTINGS } from '../demoData.js';
 import { Badge, Toggle, Slider } from './ui/os.jsx';
 import { SettingsSections } from './SettingsSections.jsx';
 import AdminPanels from './AdminPanels.jsx';
 import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
-import ScopedSetting, { SCOPE_LEVELS } from './ScopedSetting.jsx';
+import ScopedSetting, { SCOPE_LEVELS, APP_PLACES, PLACE_LEVELS } from './ScopedSetting.jsx';
 
 const SECTIONS = [
   { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan', tier: 'simple' },
@@ -210,7 +210,7 @@ function ChipRow({ label, options, value, onChange }) {
             onClick={() => onChange(o)}
             className={`px-3 py-1.5 rounded-lg text-[11px] capitalize transition cursor-pointer border ${
               value === o
-                ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold'
+                ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border-[var(--accent)] font-semibold'
                 : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200 hover:bg-white/8'
             }`}
           >
@@ -223,20 +223,53 @@ function ChipRow({ label, options, value, onChange }) {
 }
 
 /* ── Section: Appearance (the "insane" one) ─────────────────────────────── */
-function AppearanceSection({ s, set }) {
+/* Every field is wrapped in a ScopedSetting so it can get VARIANT CONFIGS
+ * applied to different app places (e.g. dark on Dashboard, light on Settings).
+ * The whole panel is the "expand into the full menu" view (operator 08-28). */
+function AppearanceSection({ s, set, scoped, setVariants }) {
   const a = s.appearance;
+  /* Each field's ScopedSetting gets the Global row wired to the real base
+   * value, so editing Global here == using the main control (operator 08-28). */
+  const scopedFor = (path) => {
+    const field = path.split('.')[1];
+    return {
+      path,
+      variants: scoped?.[path],
+      setVariants,
+      globalValue: a[field],
+      onGlobalChange: (v) => set(`appearance.${field}`, v),
+    };
+  };
   return (
     <div className="space-y-6">
-      <ChipRow label="Theme" options={THEMES} value={a.theme} onChange={(v) => set('appearance.theme', v)} />
-      <ChipRow label="Accent" options={ACCENTS} value={a.accent} onChange={(v) => set('appearance.accent', v)} />
-      <ChipRow label="Interface density" options={DENSITIES} value={a.density} onChange={(v) => set('appearance.density', v)} />
-      <ChipRow label="Animation" options={ANIMATIONS} value={a.animation} onChange={(v) => set('appearance.animation', v)} />
-      <ChipRow label="Background" options={BACKGROUNDS} value={a.background} onChange={(v) => set('appearance.background', v)} />
-      <ChipRow label="UI style" options={UI_STYLES} value={a.uiStyle} onChange={(v) => set('appearance.uiStyle', v)} />
+      <ScopedSetting title="Theme" levels={PLACE_LEVELS} refs={APP_PLACES} values={THEMES} currentValue={a.theme}
+        description="Pick the theme that runs app-wide, or add a variant config to run a different theme in specific places." {...scopedFor('appearance.theme')}>
+        <ChipRow label="Theme" options={THEMES} value={a.theme} onChange={(v) => set('appearance.theme', v)} />
+      </ScopedSetting>
+      <ScopedSetting title="Accent" levels={PLACE_LEVELS} refs={APP_PLACES} values={ACCENTS} currentValue={a.accent}
+        description="The accent color used for highlights and active states — or per-place variant configs." {...scopedFor('appearance.accent')}>
+        <ChipRow label="Accent" options={ACCENTS} value={a.accent} onChange={(v) => set('appearance.accent', v)} />
+      </ScopedSetting>
+      <ScopedSetting title="Interface density" levels={PLACE_LEVELS} refs={APP_PLACES} values={DENSITIES} currentValue={a.density}
+        description="How much breathing room the interface gives you — or per-place variant configs." {...scopedFor('appearance.density')}>
+        <ChipRow label="Interface density" options={DENSITIES} value={a.density} onChange={(v) => set('appearance.density', v)} />
+      </ScopedSetting>
+      <ScopedSetting title="Animation" levels={PLACE_LEVELS} refs={APP_PLACES} values={ANIMATIONS} currentValue={a.animation}
+        description="Motion level of the interface — or per-place variant configs." {...scopedFor('appearance.animation')}>
+        <ChipRow label="Animation" options={ANIMATIONS} value={a.animation} onChange={(v) => set('appearance.animation', v)} />
+      </ScopedSetting>
+      <ScopedSetting title="Background" levels={PLACE_LEVELS} refs={APP_PLACES} values={BACKGROUNDS} currentValue={a.background}
+        description="The canvas behind the app — flat, gradient, aurora, mesh, glass or noise — or per-place variant configs." {...scopedFor('appearance.background')}>
+        <ChipRow label="Background" options={BACKGROUNDS} value={a.background} onChange={(v) => set('appearance.background', v)} />
+      </ScopedSetting>
+      <ScopedSetting title="UI style" levels={PLACE_LEVELS} refs={APP_PLACES} values={UI_STYLES} currentValue={a.uiStyle}
+        description="Minimal, glass, dense, soft or terminal — or per-place variant configs." {...scopedFor('appearance.uiStyle')}>
+        <ChipRow label="UI style" options={UI_STYLES} value={a.uiStyle} onChange={(v) => set('appearance.uiStyle', v)} />
+      </ScopedSetting>
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-xs font-medium text-slate-300">Font size</div>
-          <div className="text-xs font-mono font-bold text-blue-300">
+          <div className="text-xs font-mono font-bold text-[var(--accent)]">
             {a.fontScale ?? 50} <span className="text-[10px] text-slate-500">/ 100</span>
           </div>
         </div>
@@ -247,7 +280,7 @@ function AppearanceSection({ s, set }) {
           step={1}
           value={a.fontScale ?? 50}
           onChange={(e) => set('appearance.fontScale', Number(e.target.value))}
-          className="w-full accent-blue-500 cursor-pointer"
+          className="w-full accent-[var(--accent)] cursor-pointer"
           aria-label="Font size score between 1 and 100"
         />
         <div className="flex justify-between text-[10px] text-slate-500 mt-1">
@@ -290,7 +323,7 @@ function EffortSlider({ value, onChange, locked }) {
         <div className="text-xs font-medium text-slate-300">AI Effort</div>
         {locked
           ? <div className="text-xs font-mono font-bold text-amber-300">AUTO <span className="text-[10px] text-slate-500">(demo)</span></div>
-          : <div className="text-xs font-mono font-bold text-blue-300">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>}
+          : <div className="text-xs font-mono font-bold text-[var(--accent)]">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>}
       </div>
       <input
         type="range"
@@ -300,7 +333,7 @@ function EffortSlider({ value, onChange, locked }) {
         value={n}
         disabled={locked}
         onChange={(e) => onChange(Number(e.target.value))}
-        className={`w-full accent-blue-500 ${locked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+        className={`w-full accent-[var(--accent)] ${locked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
         aria-label="AI effort score between 1 and 10"
       />
       <div className="flex justify-between text-[10px] text-slate-500 mt-1">
@@ -379,7 +412,7 @@ function AgentHierarchy({ s, set }) {
   };
 
   return (
-    <div className="px-4 py-4 rounded-2xl bg-slate-950/40 border border-white/6 space-y-3">
+    <div className="px-4 py-4 rounded-2xl bg-white/4 border border-white/8 space-y-3">
       <div>
         <div className="text-xs font-semibold text-white flex items-center gap-2">
           <span className="w-6 h-6 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[10px] flex items-center justify-center">🧭</span>
@@ -396,13 +429,13 @@ function AgentHierarchy({ s, set }) {
         const cfg = nodeCfg(n.key);
         const mode = nodeMode(n.key);
         return (
-          <div key={n.key} className="rounded-xl bg-slate-900/60 border border-white/6 p-3 space-y-2.5">
+          <div key={n.key} className="rounded-xl bg-white/4 border border-white/8 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-200 truncate">{n.label}</div>
                 <div className="text-[10px] text-slate-500 truncate">{n.desc}</div>
               </div>
-              <div className="flex rounded-lg overflow-hidden border border-white/10 text-[10px] font-semibold shrink-0">
+              <div className="flex rounded-lg overflow-hidden border border-white/8 bg-white/4 text-[10px] font-semibold shrink-0">
                 {[['edu', 'Educational'], ['open', 'Open']].map(([mk, ml]) => (
                   <button
                     key={mk}
@@ -451,7 +484,7 @@ function AgentHierarchy({ s, set }) {
                   </div>
                   <div className="space-y-1 mt-1 mb-1.5">
                     {(Array.isArray(cfg.memories) ? cfg.memories : []).map((m, i) => (
-                      <div key={i} className="flex items-start gap-2 p-1.5 rounded-lg bg-slate-950/50 border border-white/6">
+                      <div key={i} className="flex items-start gap-2 p-1.5 rounded-lg bg-white/4 border border-white/8">
                         <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m}</p>
                         <button
                           type="button"
@@ -476,7 +509,7 @@ function AgentHierarchy({ s, set }) {
                     <button
                       type="button"
                       onClick={() => addMemory(n.key)}
-                      className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
                     >
                       Add
                     </button>
@@ -534,7 +567,7 @@ function AIAgentData() {
   const kindIcon = { skill: '🧩', rule: '📏', automation: '⚙️', personality: '🎭' };
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="rounded-2xl bg-slate-950/40 border border-white/6 p-4 space-y-2.5">
+      <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-2.5">
         <div className="text-xs font-semibold text-white flex items-center justify-between">
           <span>🧠 Permanent memory</span>
           <Badge color={mem.length ? 'blue' : 'slate'}>{mem.length}</Badge>
@@ -543,7 +576,7 @@ function AIAgentData() {
         <div className="space-y-1.5 max-h-44 overflow-y-auto">
           {mem.length === 0 && <div className="text-[11px] text-slate-600 py-1">No memories yet.</div>}
           {mem.map((m) => (
-            <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-900/60 border border-white/6">
+            <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white/4 border border-white/8">
               <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
               <button type="button" onClick={() => delMem(m.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
                 <Trash2 className="w-3 h-3" />
@@ -556,12 +589,12 @@ function AIAgentData() {
             onKeyDown={(e) => e.key === 'Enter' && addMem()}
             placeholder="Add a memory…" aria-label="Add a memory" className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none" />
           <button type="button" onClick={addMem} disabled={busy}
-            className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50">
+            className="px-2.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50">
             Add
           </button>
         </div>
       </div>
-      <div className="rounded-2xl bg-slate-950/40 border border-white/6 p-4 space-y-2.5">
+      <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-2.5">
         <div className="text-xs font-semibold text-white flex items-center justify-between">
           <span>📂 Skills, rules & personality</span>
           <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
@@ -570,10 +603,10 @@ function AIAgentData() {
         <div className="space-y-1.5 max-h-44 overflow-y-auto">
           {files.length === 0 && <div className="text-[11px] text-slate-600 py-1">No files loaded.</div>}
           {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-white/6">
+            <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/4 border border-white/8">
               <span className="text-sm">{kindIcon[f.kind] || '📄'}</span>
               <button type="button" onClick={() => readFile(f)} className="flex-1 min-w-0 text-left cursor-pointer">
-                <span className="block text-[11px] text-slate-200 truncate hover:text-blue-300">{f.file_name}</span>
+                <span className="block text-[11px] text-slate-200 truncate hover:text-[var(--accent-2)]">{f.file_name}</span>
                 <span className="block text-[9px] text-slate-600">{f.kind} · {Number(f.size_bytes || 0).toLocaleString()} B · tap to read</span>
               </button>
               <button type="button" onClick={() => delFile(f.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
@@ -585,7 +618,7 @@ function AIAgentData() {
       </div>
       {openFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setOpenFile(null)}>
-          <div className="clean-card w-full max-w-xl max-h-[80vh] flex flex-col bg-slate-950 border border-white/20 rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="clean-card surface-glass-strong w-full max-w-xl max-h-[80vh] flex flex-col rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
               <div className="text-sm font-bold text-white truncate">{openFile.file_name}</div>
               <button type="button" onClick={() => setOpenFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
@@ -613,7 +646,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
       {/* DEMO MODE (operator 08-27): effort is non-overridable during testing.
        * Auto routing is applied as the default for all users — junk prompts
        * drop to the cheap engines, hard problems still escalate. */}
-      <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+      <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
         <div>
           <div className="text-xs font-semibold text-white flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🧪</span>
@@ -627,7 +660,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
 
       {/* Educational-only mode (operator 08-26) — guarded behavior via the
        * agent's system prompt; OFF = unrestricted, zero guidance. */}
-      <div className="flex items-start justify-between gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+      <div className="flex items-start justify-between gap-4 px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
         <div>
           <div className="text-xs font-semibold text-white flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🎓</span>
@@ -657,7 +690,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
       {/* Effort — the one control that matters. Locked during demo mode
        * (operator 08-27); the server ignores stored/per-subject scores and
        * forces auto routing in llm.call_llm. */}
-      <div className="px-4 py-3.5 rounded-2xl bg-slate-950/40 border border-white/6">
+      <div className="px-4 py-3.5 rounded-2xl bg-white/4 border border-white/8">
         <EffortSlider value={aiEffort} onChange={setEffort} locked />
         <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
           Locked during demo mode. Requests auto-route by difficulty: junk prompts go to the cheap-and-fast engines, hard problems escalate to the flagship ones. Per-subject effort overrides are suspended too.
@@ -671,9 +704,11 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
         setVariants={setVariants}
         values={[{ key: true, label: 'On' }, { key: false, label: 'Off' }]}
         refs={subjectRefs}
+        globalValue={s.ai?.autoRouting}
+        onGlobalChange={(v) => set('ai.autoRouting', v)}
         description="Lets Helpotron route each task to the engine its difficulty deserves. Override per subject if a particular course always needs one."
       >
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/6">
+        <div className="flex items-center justify-between p-3 rounded-xl bg-white/4 border border-white/8">
           <div>
             <div className="text-xs text-slate-200 font-medium">Auto routing</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Let Helpotron select the optimal engine based on task complexity.</div>
@@ -685,7 +720,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
       {/* Intelligence profile */}
       <div>
         <div className="text-xs font-medium text-slate-300 mb-3">Intelligence profile</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 p-4 rounded-xl bg-slate-950/40 border border-white/6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 p-4 rounded-xl bg-white/4 border border-white/8">
           {INTELLIGENCE.map((f) => (
             <Slider key={f.key} label={f.label} value={ai[f.key]} onChange={(v) => set(`ai.${f.key}`, v)} format={(v) => v} />
           ))}
@@ -707,7 +742,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
             ['Research', 'By difficulty', 'purple'],
             ['Reasoning', 'By difficulty', 'purple'],
           ].map(([task, tier, color], i) => (
-            <div key={task} className={`flex items-center justify-between px-4 py-2.5 ${i % 2 ? 'bg-slate-950/40' : ''} text-xs`}>
+            <div key={task} className={`flex items-center justify-between px-4 py-2.5 ${i % 2 ? 'bg-white/4' : ''} text-xs`}>
               <span className="text-slate-300">{task}</span>
               <Badge color={color}>{tier}</Badge>
             </div>
@@ -742,7 +777,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
                 type="button"
                 onClick={() => set('ai.personality', p)}
                 className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
-                  ai.personality === p ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+                  ai.personality === p ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border-[var(--accent)] font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
                 }`}
               >
                 {p}
@@ -819,7 +854,7 @@ function AccessibilitySection({ s, set }) {
         Applied instantly anywhere in the app (no reload needed). Stored per-account.
       </div>
       {items.map(([key, label, desc]) => (
-        <div key={key} className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl bg-slate-950/40 border border-white/6">
+        <div key={key} className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
           <div>
             <div className="text-xs font-semibold text-white">{label}</div>
             <div className="text-[11px] text-slate-500">{desc}</div>
@@ -838,16 +873,8 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
   const [search, setSearch] = useState('');
   const [presetConfirm, setPresetConfirm] = useState(null);
 
-  /* Live appearance scaling & theming as controls move. */
-  useEffect(() => {
-    applyAppearance(settings.appearance);
-  }, [settings.appearance]);
-
-  /* Live accessibility settings (operator 08-26: they were stored but never
-   * applied — the section rendered nothing). */
-  useEffect(() => {
-    applyAccessibility(settings.accessibility);
-  }, [settings.accessibility]);
+  /* Appearance/accessibility application moved to AppShell (single owner,
+   * resolves per-place variant configs against the active view). */
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
@@ -911,121 +938,31 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
   /* Operator (08-28): admins see the NORMAL sections too — Control Center
    * lives in the app nav (AppShell 'admin' entry), not as a Settings takeover. */
   const sections = SECTIONS;
-  const current = sections.find((s) => s.key === section) || sections[0];
   const q = search.trim().toLowerCase();
   const visibleSections = sections.filter((sec) => !q || `${sec.label} ${sec.desc}`.toLowerCase().includes(q));
 
+  /* Collapsed: a setting is just its name. Maximize it and the WHOLE menu
+   * opens — every full menu carries variant configs for different places. */
+  const renderSectionContent = (key) => {
+    if (key === 'control-center') return <AdminPanels userId={userId} />;
+    if (key === 'appearance') return <AppearanceSection s={settings} set={set} scoped={scoped} setVariants={setVariants} />;
+    if (key === 'accessibility') return <AccessibilitySection s={settings} set={set} />;
+    if (key === 'ai') return <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />;
+    return <SettingsSections section={key} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} isAdmin={isAdmin} />;
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
-      {/* Section list */}
-      <SectionCard id="settings-nav" padding="p-3" className="h-fit" header={
-        <div className="px-2 pb-3 border-b border-white/8">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Quick preset</div>
-          <div className="grid grid-cols-1 gap-1.5">
-            {Object.entries(PROFILE_PRESETS).map(([k, p]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setPresetConfirm(k)}
-                title={p.tagline}
-                className="w-full px-2.5 py-2 rounded-lg text-[11px] font-medium transition cursor-pointer bg-white/4 text-slate-300 hover:text-slate-100 hover:bg-white/10"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-[9px] text-slate-600 mt-1.5 leading-relaxed">
-            Budget = cheapest possible. Balanced = cost & performance middle. Power = max quality, burns tokens.
-          </p>
-          {presetConfirm && (
-            <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
-              <div className="text-[10px] text-rose-200 leading-relaxed">
-                Reset ALL settings to <b>{PROFILE_PRESETS[presetConfirm].label}</b>? Every custom value and scoped
-                override gets replaced by the preset. Your name, subjects and saved writing profiles stay.
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => applyPreset(presetConfirm)}
-                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
-                >
-                  Yes, reset everything
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPresetConfirm(null)}
-                  className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      }>
-
-        {(
-          <div className="px-2 pt-2 pb-2">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search settings…"
-              aria-label="Search settings"
-              className="clean-input w-full px-3 py-2 text-[11px] outline-none"
-            />
-          </div>
-        )}
-
-        <nav className="space-y-0.5 pr-1">
-          {['simple', 'advanced', 'expert'].map((tier) => {
-            const items = visibleSections.filter((sec) => sec.tier === tier);
-            if (items.length === 0) return null;
-            return (
-              <div key={tier}>
-                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{tier}</span>
-                  <span className="flex-1 h-px bg-white/6" />
-                </div>
-                {items.map((sec) => {
-                  const Icon = sec.icon;
-                  const active = section === sec.key;
-                  return (
-                    <button
-                      key={sec.key}
-                      type="button"
-                      onClick={() => setSection(sec.key)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
-                        active ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-xs font-medium truncate">{sec.label}</span>
-                        <span className="block text-[9px] text-slate-500 truncate">{sec.desc}</span>
-                      </span>
-                      {active && <ChevronRight className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
-          {visibleSections.length === 0 && (
-            <div className="px-3 py-6 text-center text-[10px] text-slate-600">No settings match “{search}”</div>
-          )}
-        </nav>
-      </SectionCard>
-
-      {/* Section page */}
-      <SectionCard id="settings-section" padding="p-6" className="min-w-0" header={
-        <div className="flex items-center justify-between w-full border-b border-white/8">
-          <div>
-            <div className="flex items-center gap-2">
-              <current.icon className="w-4 h-4 text-blue-400" />
-              <h2 className="text-sm font-semibold text-white">{current.label}</h2>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">{current.desc}</p>
-          </div>
+    <div className="max-w-3xl mx-auto space-y-3">
+      {/* Toolbar: search + quick presets + save flash */}
+      <SectionCard id="settings-toolbar" padding="p-4" className="h-fit" header={
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search settings…"
+            aria-label="Search settings"
+            className="clean-input flex-1 min-w-[180px] px-3 py-2 text-[11px] outline-none"
+          />
           <AnimatePresence>
             {savedFlash && (
               <motion.span
@@ -1040,25 +977,95 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
           </AnimatePresence>
         </div>
       }>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={section}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-          >
-            {section === 'control-center' && <AdminPanels userId={userId} />}
-            {section === 'appearance' && <AppearanceSection s={settings} set={set} />}
-            {section === 'accessibility' && <AccessibilitySection s={settings} set={set} />}
-            {section === 'ai' && <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />}
-            {section !== 'appearance' && section !== 'ai' && section !== 'control-center' && (
-              <SettingsSections section={section} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} />
-            )}
-          </motion.div>
-        </AnimatePresence>
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-600 mr-1">Quick presets</span>
+          {Object.entries(PROFILE_PRESETS).map(([k, p]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setPresetConfirm(k)}
+              title={p.tagline}
+              className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition cursor-pointer bg-white/4 text-slate-300 hover:text-slate-100 hover:bg-white/10"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[9px] text-slate-600 mt-1.5 leading-relaxed">
+          Budget = cheapest possible. Balanced = cost & performance middle. Power = max quality, burns tokens.
+        </p>
+        {presetConfirm && (
+          <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
+            <div className="text-[10px] text-rose-200 leading-relaxed">
+              Reset ALL settings to <b>{PROFILE_PRESETS[presetConfirm].label}</b>? Every custom value and scoped
+              override gets replaced by the preset. Your name, subjects and saved writing profiles stay.
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => applyPreset(presetConfirm)}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+              >
+                Yes, reset everything
+              </button>
+              <button
+                type="button"
+                onClick={() => setPresetConfirm(null)}
+                className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </SectionCard>
+
+      {/* The settings themselves: a simple name, maximize to the whole menu. */}
+      {visibleSections.map((sec) => {
+        const Icon = sec.icon;
+        const open = section === sec.key;
+        return (
+          <SectionCard key={sec.key} id={`settings-${sec.key}`} padding="p-0" className="overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setSection(open ? null : sec.key)}
+              aria-expanded={open}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition cursor-pointer ${
+                open ? 'bg-[var(--accent-subtle)]' : 'hover:bg-white/3'
+              }`}
+            >
+              <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition ${
+                open ? 'bg-[var(--accent)] text-white' : 'bg-white/6 text-slate-300'
+              }`}>
+                <Icon className="w-4 h-4" />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-slate-100">{sec.label}</span>
+                <span className="block text-[11px] text-slate-500 truncate">{sec.desc}</span>
+              </span>
+              <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+              <div className="px-5 pb-5 pt-4 border-t border-white/8">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={sec.key}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    {renderSectionContent(sec.key)}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
+          </SectionCard>
+        );
+      })}
+      {visibleSections.length === 0 && (
+        <div className="px-3 py-8 text-center text-[11px] text-slate-600">No settings match “{search}”</div>
+      )}
     </div>
   );
 }

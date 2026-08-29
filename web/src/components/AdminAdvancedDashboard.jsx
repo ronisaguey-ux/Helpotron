@@ -15,22 +15,36 @@ import {
   AlertCircle,
   Tag,
   Zap,
+  MoreVertical,
+  Gauge,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import SectionCard from './SectionCard.jsx';
 
 export default function AdminAdvancedDashboard({ userId = '' }) {
   const [activeTab, setActiveTab] = useState('bulk_users');
+  const [rowMoreFor, setRowMoreFor] = useState(null); // expanded per-row management panel (u.id)
   const [loading, setLoading] = useState(false);
 
   // Bulk Users State
   const [users, setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+  /* Alphabetical user groups (operator 08-28-9:42pm): collapsible per-letter
+   * sections; '#' holds every non-letter first character. */
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const toggleGroup = (key) => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   const [bulkPlan, setBulkPlan] = useState('');
   const [bulkCredits, setBulkCredits] = useState('');
   const [bulkTag, setBulkTag] = useState('');
   const [bulkStatus, setBulkStatus] = useState('');
   const [tempbanHoursMap, setTempbanHoursMap] = useState({});
+  /* Admin → user notice drafts (operator 08-28): per-row "message" input;
+   * the notice pops up on the user's screen via client polling. */
+  const [noticeTextMap, setNoticeTextMap] = useState({});
+  const [noticeSendingFor, setNoticeSendingFor] = useState(null);
 
   // Change-password dialog (operator 08-28): admin sets a new password for a
   // user WITHOUT their current password; an optional recovery code ties the
@@ -53,12 +67,6 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
   const [adminMessages, setAdminMessages] = useState([]);
   const [replyTextMap, setReplyTextMap] = useState({});
   const [replyStatusMap, setReplyStatusMap] = useState({});
-
-  // Tokens & Access Keys State
-  const [tokensList, setTokensList] = useState([]);
-  const [tokenDuration, setTokenDuration] = useState(30);
-  const [tokenMaxUses, setTokenMaxUses] = useState(1);
-  const [tokenMsg, setTokenMsg] = useState('');
 
   // Cost & Usage State
   const [costsSummary, setCostsSummary] = useState(null);
@@ -130,20 +138,6 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     }
   };
 
-  const fetchTokens = async () => {
-    try {
-      const res = await api.adminListTokens();
-      if (res && Array.isArray(res.tokens)) {
-        setTokensList(res.tokens);
-      } else {
-        setTokensList([]);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch tokens:', e);
-      setTokensList([]);
-    }
-  };
-
   const fetchCosts = async () => {
     try {
       const summary = await api.adminCostsSummary();
@@ -168,7 +162,6 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     fetchModeration();
     fetchModelMetrics();
     fetchAdminMessages();
-    fetchTokens();
     fetchCosts();
   }, [userId]);
 
@@ -284,6 +277,24 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     }
   };
 
+  const handleRowMessage = async (u) => {
+    const text = (noticeTextMap[u.id] ?? '').trim();
+    if (!text) {
+      flash('✉️ Type a message first');
+      return;
+    }
+    setNoticeSendingFor(u.id);
+    try {
+      await api.adminNotifyUser(u.public_id, text);
+      flash(`✉️ Notice sent to ${u.public_id} — pops up on their screen`);
+      setNoticeTextMap((prev) => ({ ...prev, [u.id]: '' }));
+    } catch (e) {
+      flash(`❌ Send failed: ${e.message || 'unknown error'}`);
+    } finally {
+      setNoticeSendingFor(null);
+    }
+  };
+
   const openPwDialog = (publicId) => {
     setPwChangeFor(publicId);
     setPwChangeNew('');
@@ -347,20 +358,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     }
   };
 
-  const handleGenerateToken = async () => {
-    try {
-      const res = await api.adminGenerateToken(tokenDuration, tokenMaxUses);
-      if (res && res.token) {
-        setTokenMsg(`✅ Token Created: ${res.token.token}`);
-        fetchTokens();
-        setTimeout(() => setTokenMsg(''), 6000);
-      }
-    } catch (e) {
-      setTokenMsg('❌ Failed generating token');
-    }
-  };
-
   const safeUsers = Array.isArray(users) ? users : [];
+  /* The operator is not a user (operator 08-28): hide the signed-in dev
+   * account (public_id === userId prop) from the operations list entirely —
+   * no select-all, no searching over it, no accidental bulk ops on self. */
+  const listUsers = safeUsers.filter((u) => u.public_id !== userId);
   /* Fuzzy user search (operator 08-26): matches substrings AND typo-ish tail
    * differences via a 6-char prefix compare, so "dreybejerking" finds
    * "dreybejerkin22". */
@@ -369,41 +371,62 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     const y = String(b).toLowerCase().trim();
     return x.includes(y) || y.includes(x) || (x.slice(0, 6) === y.slice(0, 6));
   };
-  const visibleUsers = safeUsers.filter((u) => !userSearch.trim() || fuzzyUserMatch(u.public_id, userSearch.trim()));
+  const visibleUsers = listUsers.filter((u) => !userSearch.trim() || fuzzyUserMatch(u.public_id, userSearch.trim()));
+  /* Alphabetical groups: one per starting letter (A–Z), '#' for anything that
+   * is not a letter. Letters sort first, special characters grouped last. */
+  const groupKeyOf = (id) => {
+    const ch = String(id || '?').trim().charAt(0).toUpperCase();
+    return /^[A-Z]$/.test(ch) ? ch : '#';
+  };
+  const userGroups = (() => {
+    const map = new Map();
+    for (const u of visibleUsers) {
+      const key = groupKeyOf(u.public_id);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(u);
+    }
+    return [...map.entries()]
+      .map(([key, users2]) => ({ key, users: users2 }))
+      .sort((a, b) => {
+        if (a.key === '#') return 1;
+        if (b.key === '#') return -1;
+        return a.key.localeCompare(b.key);
+      });
+  })();
+  /* While searching, force every group open so matches are visible. */
+  const isSearching = !!userSearch.trim();
   const safeAdminMessages = Array.isArray(adminMessages) ? adminMessages : [];
-  const safeTokensList = Array.isArray(tokensList) ? tokensList : [];
   const safeModQueue = Array.isArray(modQueue) ? modQueue : [];
   const safeScorecards = Array.isArray(modelMetrics?.scorecard) ? modelMetrics.scorecard : [];
 
   return (
-    <div className="space-y-6 text-slate-100 max-w-6xl mx-auto">
+    <div className="space-y-6 text-[var(--text-primary)] max-w-6xl mx-auto">
       {/* Header */}
-      <SectionCard id="adminadv-header" className="rounded-3xl bg-slate-950/80 border border-purple-500/30" header={
+      <SectionCard id="adminadv-header" header={
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] flex items-center justify-center text-[var(--accent)] shrink-0">
             <ShieldAlert className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Helpotron Master Admin Panel</h2>
-            <p className="text-xs text-slate-400">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Helpotron Master Admin Panel</h2>
+            <p className="text-xs text-[var(--text-muted)]">
               Exclusive platform controls: User Management, Inquiries Inbox, Access Keys, Model Scorecards & Health.
             </p>
           </div>
         </div>
       } headerRight={
-        <span className="text-[11px] font-mono font-bold bg-purple-500/15 border border-purple-500/30 text-purple-300 px-3 py-1 rounded-full shrink-0">
+        <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-mono font-semibold bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] shrink-0">
           ADMIN: {userId || 'anonymous'}
         </span>
       }>
       </SectionCard>
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-800 bg-slate-950/60 rounded-2xl overflow-x-auto text-xs font-semibold p-1.5 gap-1">
+      <div className="clean-card p-1.5 flex overflow-x-auto text-xs font-semibold gap-1">
         {[
-          ['bulk_users', `👥 User Operations (${safeUsers.length})`],
+          ['bulk_users', `👥 User Operations (${listUsers.length})`],
           ['costs', '💰 Cost & Usage'],
           ['inbox', `💬 Inquiries Inbox (${safeAdminMessages.length})`],
-          ['tokens', `🔑 Tokens & Keys (${safeTokensList.length})`],
           ['models', '⚡ Model Scorecards'],
           ['moderation', `🚨 Moderation (${safeModQueue.length})`],
           ['health', '🩺 System Health'],
@@ -412,10 +435,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`px-4 py-2.5 rounded-xl whitespace-nowrap transition cursor-pointer font-medium ${
+            aria-pressed={activeTab === key}
+            className={`px-4 py-2.5 rounded-[var(--radius-sm)] whitespace-nowrap transition cursor-pointer font-medium ${
               activeTab === key
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20 font-bold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
             }`}
           >
             {label}
@@ -426,14 +450,14 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {/* TAB 1: BULK USERS */}
       {activeTab === 'bulk_users' && (
         <div className="space-y-4">
-          <div className="p-5 rounded-2xl bg-slate-950/60 border border-white/10 space-y-4">
+          <div className="clean-card p-5 space-y-4">
             <h3 className="font-semibold text-sm text-white">Bulk User Operations ({selectedUserIds.length} selected)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <label htmlFor="admin-bulk-plan" className="text-slate-400 block mb-1">Set Plan</label>
+                <label htmlFor="admin-bulk-plan" className="text-[var(--text-secondary)] block mb-1">Set Plan</label>
                 <select
                   id="admin-bulk-plan"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="clean-input w-full px-3 py-2 text-white outline-none"
                   value={bulkPlan}
                   onChange={(e) => setBulkPlan(e.target.value)}
                 >
@@ -445,24 +469,24 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               </div>
 
               <div>
-                <label htmlFor="admin-bulk-credits" className="text-slate-400 block mb-1">Adjust Credits (+ / -)</label>
+                <label htmlFor="admin-bulk-credits" className="text-[var(--text-secondary)] block mb-1">Adjust Credits (+ / -)</label>
                 <input
                   id="admin-bulk-credits"
                   type="number"
                   placeholder="e.g. 50 or -20"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="clean-input w-full px-3 py-2 text-white outline-none"
                   value={bulkCredits}
                   onChange={(e) => setBulkCredits(e.target.value)}
                 />
               </div>
 
               <div>
-                <label htmlFor="admin-bulk-tag" className="text-slate-400 block mb-1">Assign Tag</label>
+                <label htmlFor="admin-bulk-tag" className="text-[var(--text-secondary)] block mb-1">Assign Tag</label>
                 <input
                   id="admin-bulk-tag"
                   type="text"
                   placeholder="e.g. vip, tester"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="clean-input w-full px-3 py-2 text-white outline-none"
                   value={bulkTag}
                   onChange={(e) => setBulkTag(e.target.value)}
                 />
@@ -473,7 +497,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   type="button"
                   onClick={() => handleBulkExecute(null)}
                   disabled={loading || selectedUserIds.length === 0}
-                  className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 text-white rounded-xl py-2 font-semibold transition cursor-pointer"
+                  className="flex-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-30 text-white rounded-[var(--radius-sm)] py-2 font-semibold transition cursor-pointer shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_4px_18px_rgba(139,92,246,0.30)]"
                 >
                   Apply to {selectedUserIds.length}
                 </button>
@@ -481,34 +505,54 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
             </div>
 
             {bulkStatus && (
-              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-xs text-purple-300 font-mono">
+              <div className="p-3 bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
                 {bulkStatus}
               </div>
             )}
           </div>
 
           {/* User Table */}
-          <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 overflow-x-auto">
-            <input
-              type="text"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              placeholder="Search user ID… (fuzzy: 'dreybejerking' finds 'dreybejerkin22')"
-              aria-label="Search user ID"
-              className="w-full mb-3 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-mono focus:border-purple-500/50 outline-none"
-            />
+          <div className="clean-card p-5 overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder={`Search user ID… (fuzzy: 'dreybejerking' finds 'dreybejerkin22')${isSearching ? '' : ' — uses alphabetical groups below'}`}
+                aria-label="Search user ID"
+                className="clean-input flex-1 min-w-[220px] px-3 py-2 text-white text-xs font-mono outline-none"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCollapsedGroups({})}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[11px] font-medium border border-[var(--border-subtle)] transition cursor-pointer"
+                  title="Expand every letter group"
+                >
+                  <ChevronDown className="w-3 h-3" /> Expand all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollapsedGroups(Object.fromEntries(userGroups.map((g) => [g.key, true])))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[11px] font-medium border border-[var(--border-subtle)] transition cursor-pointer"
+                  title="Collapse every letter group"
+                >
+                  <ChevronUp className="w-3 h-3" /> Collapse all
+                </button>
+              </div>
+            </div>
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-white/10 text-slate-400 text-[11px]">
+                <tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider">
                   <th className="pb-3">
                     <input
                       type="checkbox"
                       aria-label="Select all users for bulk operation"
                       onChange={(e) => {
-                        if (e.target.checked) setSelectedUserIds(safeUsers.map((u) => u.id));
+                        if (e.target.checked) setSelectedUserIds(listUsers.map((u) => u.id));
                         else setSelectedUserIds([]);
                       }}
-                      checked={selectedUserIds.length === safeUsers.length && safeUsers.length > 0}
+                      checked={selectedUserIds.length === listUsers.length && listUsers.length > 0}
                     />
                   </th>
                   <th className="pb-3">User ID</th>
@@ -518,19 +562,65 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5 font-mono">
-                {visibleUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-slate-500 text-xs">
-                      {safeUsers.length === 0 ? 'No users registered yet.' : `No users match “${userSearch}”.`}
-                    </td>
-                  </tr>
+                {listUsers.length === 0 ? (
+                  <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-[var(--text-muted)] text-xs">
+                        {safeUsers.length <= 1
+                          ? 'No other users registered yet — your account is hidden from this list.'
+                          : 'No users registered yet.'}
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : visibleUsers.length === 0 ? (
+                  <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-[var(--text-muted)] text-xs">
+                        No users match “{userSearch}”.
+                      </td>
+                    </tr>
+                  </tbody>
                 ) : (
-                  visibleUsers.map((u) => {
-                    const currentMult = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : (u.token_cost_multiplier || 1.0);
-
+                  userGroups.map(({ key, users: groupUsers }) => {
+                    const isCollapsed = isSearching ? false : !!collapsedGroups[key];
                     return (
-                      <tr key={u.id} className="hover:bg-white/[0.02]">
+                      <tbody key={key} className={`divide-y divide-[var(--border-subtle)] font-mono ${isCollapsed ? 'border-b border-[var(--border-subtle)]' : ''}`}>
+                        {/* Group header — click to collapse/expand this letter */}
+                        <tr className="bg-[var(--bg-surface-elevated)] border-y border-[var(--border-subtle)]">
+                          <td colSpan={6} className="py-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(key)}
+                              aria-expanded={!isCollapsed}
+                              aria-label={`${key} group, ${groupUsers.length} user${groupUsers.length === 1 ? '' : 's'}`}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left transition cursor-pointer hover:bg-white/[0.03]"
+                            >
+                              {isCollapsed
+                                ? <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                : <ChevronUp className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
+                              <span
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-[11px] ${
+                                  key === '#'
+                                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                    : 'bg-[var(--accent-subtle)] text-[var(--accent)] border border-[rgba(139,92,246,0.35)]'
+                                }`}
+                              >
+                                {key}
+                              </span>
+                              <span className="text-[11px] font-bold text-white uppercase tracking-wider">{key === '#' ? 'Symbols & special' : `Letter ${key}`}</span>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                {groupUsers.length} user{groupUsers.length === 1 ? '' : 's'}
+                              </span>
+                              <span className="flex-1" />
+                              <span className="text-[10px] text-[var(--text-muted)]">{isCollapsed ? 'show' : 'hide'}</span>
+                            </button>
+                          </td>
+                        </tr>
+                        {!isCollapsed && groupUsers.map((u) => {
+                          const currentMult = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : (u.token_cost_multiplier || 1.0);
+
+                          return (
+                      <tr key={u.id} className="hover:bg-white/[0.03]">
                         <td className="py-3">
                           <input
                             type="checkbox"
@@ -546,11 +636,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{u.public_id}</span>
                             {u.role === 'admin' && (
-                              <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded">ADMIN</span>
+                              <span className="text-[10px] bg-[var(--accent-subtle)] text-[var(--accent)] border border-[rgba(139,92,246,0.35)] px-1.5 py-0.5 rounded-full font-semibold">ADMIN</span>
                             )}
                             {u.banned && (
                               <span
-                                className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded"
+                                className="text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded-full font-semibold"
                                 title={u.banned_until ? `Banned until ${u.banned_until}` : 'Banned'}
                               >
                                 BANNED{u.banned_until ? ` · till ${String(u.banned_until).slice(0, 10)}` : ''}
@@ -558,11 +648,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                             )}
                           </div>
                         </td>
-                        <td className="py-3 uppercase text-[11px] font-bold text-blue-300">{u.plan || 'none'}</td>
+                        <td className="py-3 uppercase text-[11px] font-bold text-[var(--accent)]">{u.plan || 'none'}</td>
                         <td className="py-3 font-mono text-[11px]">
                           <span className="text-emerald-300 font-bold">{Number(u.token_balance ?? 0).toLocaleString()} tk</span>
-                          <span className="mx-1.5 text-slate-600">·</span>
-                          <span className="text-purple-300 font-bold">{Number(u.credits ?? 0).toLocaleString()} cr</span>
+                          <span className="mx-1.5 text-[var(--text-muted)]">·</span>
+                          <span className="text-[var(--accent)] font-bold">{Number(u.credits ?? 0).toLocaleString()} cr</span>
                         </td>
                         <td className="py-3">
                           <div className="flex items-center gap-1.5">
@@ -577,10 +667,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
                               }}
                               aria-label={`Token cost multiplier for ${u.public_id}`}
-                              className="w-16 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
+                              className="clean-input w-16 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                               title="Token Cost Multiplier (e.g. 0.5x, 1.0x, 1.5x)"
                             />
-                            <span className="text-slate-400 text-xs">x</span>
+                            <span className="text-[var(--text-muted)] text-xs">x</span>
 
                             {/* Quick Presets */}
                             <div className="hidden sm:flex items-center gap-1">
@@ -592,10 +682,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                     setMultiplierMap((prev) => ({ ...prev, [u.public_id]: preset }));
                                     handleUpdateMultiplier(u.public_id, preset);
                                   }}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] transition ${
+                                  className={`px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] transition cursor-pointer ${
                                     Number(currentMult) === preset
-                                      ? 'bg-purple-600 text-white font-bold'
-                                      : 'bg-white/5 hover:bg-white/10 text-slate-400'
+                                      ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] font-bold border border-[rgba(139,92,246,0.35)]'
+                                      : 'bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-muted)] border border-transparent'
                                   }`}
                                 >
                                   {preset}x
@@ -606,7 +696,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                             <button
                               type="button"
                               onClick={() => handleUpdateMultiplier(u.public_id, currentMult)}
-                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer ml-1 shadow-sm shadow-purple-600/20"
+                              className="px-2.5 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer ml-1"
                             >
                               Save
                             </button>
@@ -614,82 +704,100 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                         </td>
                         <td className="py-3">
                           <div className="flex flex-col items-end gap-1.5">
-                            {/* Per-row user management: Kick / Temp Ban / Ban / Unban / Delete / Act as user */}
-                            <div className="flex flex-wrap items-center justify-end gap-1.5 pb-1.5 mb-1.5 border-b border-white/8 max-w-[360px]">
-                              <button
-                                type="button"
-                                onClick={() => handleRowKick(u)}
-                                title="Terminate all of this user's active sessions"
-                                className="px-2 py-1 rounded-lg bg-amber-600/15 border border-amber-500/30 text-amber-300 hover:bg-amber-600/30 text-[10px] font-semibold transition cursor-pointer"
-                              >
-                                Kick
-                              </button>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  value={tempbanHoursMap[u.public_id] ?? 24}
-                                  onChange={(e) => setTempbanHoursMap((prev) => ({ ...prev, [u.public_id]: e.target.value }))}
-                                  className="w-14 bg-slate-900 border border-white/10 rounded-lg px-1.5 py-1 text-white text-[11px] font-mono text-center focus:border-orange-500/50"
-                                  title="Temp-ban duration (hours)"
-                                  aria-label={`Temp-ban hours for ${u.public_id}`}
-                                />
+                            {/* Per-row user management: Kick / Temp Ban / Ban / Unban / Delete / Act as / Change Pw —
+                                grouped behind a ⋮ More toggle (IA rule: max 1 primary + 2 secondary per row). */}
+                            <button
+                              type="button"
+                              onClick={() => setRowMoreFor(rowMoreFor === u.id ? null : u.id)}
+                              aria-expanded={rowMoreFor === u.id}
+                              aria-label="More user actions"
+                              title="More user actions"
+                              className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-semibold border transition cursor-pointer inline-flex items-center gap-1 ${
+                                rowMoreFor === u.id
+                                  ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border-[rgba(139,92,246,0.35)]'
+                                  : 'bg-white/4 text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <MoreVertical className="w-3 h-3" />
+                              More
+                            </button>
+                            {rowMoreFor === u.id && (
+                              <div className="flex flex-wrap items-center justify-end gap-1.5 p-2 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] max-w-[380px]">
                                 <button
                                   type="button"
-                                  onClick={() => handleRowTempBan(u)}
-                                  title="Temporarily ban — blocks login/sessions until the clock runs out"
-                                  className="px-2 py-1 rounded-lg bg-orange-600/15 border border-orange-500/30 text-orange-300 hover:bg-orange-600/30 text-[10px] font-semibold transition cursor-pointer"
+                                  onClick={() => handleRowKick(u)}
+                                  title="Terminate all of this user's active sessions"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer"
                                 >
-                                  Temp Ban
+                                  Kick
+                                </button>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={tempbanHoursMap[u.public_id] ?? 24}
+                                    onChange={(e) => setTempbanHoursMap((prev) => ({ ...prev, [u.public_id]: e.target.value }))}
+                                    className="clean-input w-14 px-1.5 py-1 text-white text-[11px] font-mono text-center outline-none"
+                                    title="Temp-ban duration (hours)"
+                                    aria-label={`Temp-ban hours for ${u.public_id}`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRowTempBan(u)}
+                                    title="Temporarily ban — blocks login/sessions until the clock runs out"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                  >
+                                    Temp Ban
+                                  </button>
+                                </div>
+                                {u.banned ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRowBanToggle(u)}
+                                    title="Lift the ban — login & sessions allowed again"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                  >
+                                    Unban
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRowBanToggle(u)}
+                                    title="Ban — block login & sessions (until unbanned)"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                  >
+                                    Ban
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRowDelete(u)}
+                                  title="Permanently delete this user (confirmation required)"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRowActAs(u)}
+                                  title="Impersonate: switch this session to the user's account (reload: the app enters their full account; logout returns to admin)"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] hover:bg-[var(--accent-subtle)]/80 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Act as
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openPwDialog(u.public_id)}
+                                  title="Change this user's password without their current password (optional recovery code consumes an open request)"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] hover:bg-[var(--accent-subtle)]/80 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Change Pw
                                 </button>
                               </div>
-                              {u.banned ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRowBanToggle(u)}
-                                  title="Lift the ban — login & sessions allowed again"
-                                  className="px-2 py-1 rounded-lg bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 text-[10px] font-semibold transition cursor-pointer"
-                                >
-                                  Unban
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRowBanToggle(u)}
-                                  title="Ban — block login & sessions (until unbanned)"
-                                  className="px-2 py-1 rounded-lg bg-rose-600/15 border border-rose-500/30 text-rose-300 hover:bg-rose-600/30 text-[10px] font-semibold transition cursor-pointer"
-                                >
-                                  Ban
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleRowDelete(u)}
-                                title="Permanently delete this user (confirmation required)"
-                                className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
-                              >
-                                Delete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRowActAs(u)}
-                                title="Impersonate: switch this session to the user's account (reload: the app enters their full account; logout returns to admin)"
-                                className="px-2 py-1 rounded-lg bg-blue-600/15 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 text-[10px] font-semibold transition cursor-pointer"
-                              >
-                                Act as user
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openPwDialog(u.public_id)}
-                                title="Change this user's password without their current password (optional recovery code consumes an open request)"
-                                className="px-2 py-1 rounded-lg bg-violet-600/15 border border-violet-500/40 text-violet-300 hover:bg-violet-600/30 text-[10px] font-semibold transition cursor-pointer"
-                              >
-                                Change Pw
-                              </button>
-                            </div>
+                            )}
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-slate-500 w-11 text-right">plan</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] w-11 text-right">plan</span>
                               <select
                                 value={u.plan || 'none'}
                                 onChange={async (e) => {
@@ -699,7 +807,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   fetchUsers();
                                 }}
                                 aria-label={`Set plan for ${u.public_id}`}
-                                className="w-24 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono focus:border-purple-500/50"
+                                className="clean-input w-24 px-2 py-1 text-white text-xs font-mono outline-none"
                                 title="Upgrade / downgrade plan"
                               >
                                 <option value="none">none</option>
@@ -717,7 +825,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 aria-label={`Token amount to grant or remove for ${u.public_id}`}
                                 value={tokenAmountMap[u.id] ?? ''}
                                 onChange={(e) => setTokenAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                                className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-emerald-500/50"
+                                className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                                 title="Grant usage tokens (negative removes)"
                               />
                               <button
@@ -739,7 +847,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   }
                                   fetchUsers();
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
                               >
                                 Grant
                               </button>
@@ -762,13 +870,13 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   }
                                   fetchUsers();
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
                               >
                                 Remove
                               </button>
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-purple-400/80 w-11 text-right">credits</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--accent)]/80 w-11 text-right">credits</span>
                               <input
                                 type="number"
                                 step="1"
@@ -776,7 +884,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 aria-label={`Credit amount to adjust for ${u.public_id}`}
                                 value={creditAmountMap[u.id] ?? ''}
                                 onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                                className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center focus:border-purple-500/50"
+                                className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                                 title="Discount credits (negative deducts)"
                               />
                               <button
@@ -796,7 +904,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   }
                                   fetchUsers();
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
                               >
                                 Apply
                               </button>
@@ -817,18 +925,42 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   }
                                   fetchUsers();
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
                               >
                                 Remove
+                              </button>
+                            </div>
+                            {/* Admin → user message (operator 08-28): pops on their screen */}
+                            <div className="flex items-center gap-1 w-full sm:w-auto sm:ml-11">
+                              <span className="text-[9px] uppercase tracking-wider text-cyan-400/80 w-11 text-right shrink-0">message</span>
+                              <input
+                                type="text"
+                                placeholder="Direct message… pops up on their screen"
+                                aria-label={`Message to ${u.public_id}`}
+                                value={noticeTextMap[u.id] ?? ''}
+                                onChange={(e) => setNoticeTextMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleRowMessage(u); }}
+                                className="clean-input flex-1 min-w-0 px-2 py-1 text-white text-xs outline-none"
+                                title="Sends a notice that pops up on this user's screen"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRowMessage(u)}
+                                disabled={noticeSendingFor === u.id}
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
+                              >
+                                {noticeSendingFor === u.id ? '…' : 'Send'}
                               </button>
                             </div>
                           </div>
                         </td>
                       </tr>
+                          );
+                        })}
+                      </tbody>
                     );
                   })
                 )}
-              </tbody>
             </table>
           </div>
         </div>
@@ -839,21 +971,23 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-purple-400" />
+              <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
               Incoming Student & User Inquiries ({safeAdminMessages.length})
             </h3>
             <button
               type="button"
               onClick={fetchAdminMessages}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-mono cursor-pointer"
+              className="px-3 py-2 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-raised)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Refresh Inbox
             </button>
           </div>
 
           {safeAdminMessages.length === 0 ? (
-            <div className="clean-card rounded-2xl p-12 text-center text-slate-500 text-xs">
-              No incoming messages in Admin inbox.
+            <div className="clean-card p-10 text-center space-y-2">
+              <MessageSquare className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
+              <p className="text-sm font-medium text-[var(--text-secondary)]">No incoming messages yet</p>
+              <p className="text-xs text-[var(--text-muted)]">Student and user inquiries addressed to Admin will appear here.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -861,37 +995,38 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 <SectionCard
                   key={msg.id}
                   id={`adminadv-message-${msg.id}`}
-                  className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3 text-xs"
+                  className="space-y-3 text-xs"
                   header={
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold mr-2">
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[rgba(139,92,246,0.28)] font-semibold mr-2">
                           {msg.category}
                         </span>
                         <strong className="text-white text-sm">{msg.subject}</strong>
-                        <span className="text-slate-400 text-xs ml-2 font-mono">from: {msg.user_id}</span>
+                        <span className="text-[var(--text-muted)] text-xs ml-2 font-mono">from: {msg.user_id}</span>
                       </div>
 
                       <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
                           msg.status === 'replied'
                             ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                             : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         }`}
                       >
-                        {msg.status === 'replied' ? '✅ Replied' : '⏳ Pending Reply'}
+                        <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'replied' ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
+                        {msg.status === 'replied' ? 'Replied' : 'Pending Reply'}
                       </span>
                     </div>
                   }
                 >
 
-                  <div className="p-3.5 rounded-xl bg-slate-900 text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">
+                  <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-sans">
                     {msg.message}
                   </div>
 
                   {msg.admin_reply && (
-                    <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/20 text-purple-200">
-                      <strong>Admin Reply:</strong> {msg.admin_reply}
+                    <div className="p-3 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--text-primary)]">
+                      <strong className="text-[var(--accent)]">Admin Reply:</strong> {msg.admin_reply}
                     </div>
                   )}
 
@@ -903,12 +1038,12 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       aria-label="Type admin response to student"
                       value={replyTextMap[msg.id] || ''}
                       onChange={(e) => setReplyTextMap({ ...replyTextMap, [msg.id]: e.target.value })}
-                      className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
+                      className="clean-input flex-1 px-3 py-2 text-white text-xs outline-none placeholder:text-[var(--text-muted)]"
                     />
                     <button
                       type="button"
                       onClick={() => handleSendAdminReply(msg.id)}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold transition cursor-pointer flex items-center gap-1.5"
+                      className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] font-semibold transition cursor-pointer flex items-center gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Reply</span>
@@ -916,7 +1051,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   </div>
 
                   {replyStatusMap[msg.id] && (
-                    <div className="text-[11px] font-mono text-purple-300">{replyStatusMap[msg.id]}</div>
+                    <div className="text-[11px] font-mono text-[var(--accent)]">{replyStatusMap[msg.id]}</div>
                   )}
                 </SectionCard>
               ))}
@@ -925,122 +1060,30 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
         </div>
       )}
 
-      {/* TAB 3: TOKENS & ACCESS KEYS */}
-      {activeTab === 'tokens' && (
-        <div className="space-y-4">
-          <SectionCard id="adminadv-token-generate" className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3" header={
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-purple-400" />
-              Generate Platform Access Tokens / Coupons
-            </h3>
-          }>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div>
-                <label htmlFor="admin-token-duration" className="text-slate-400 block mb-1">Duration (Days)</label>
-                <input
-                  id="admin-token-duration"
-                  type="number"
-                  value={tokenDuration}
-                  onChange={(e) => setTokenDuration(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label htmlFor="admin-token-max-uses" className="text-slate-400 block mb-1">Max Uses</label>
-                <input
-                  id="admin-token-max-uses"
-                  type="number"
-                  value={tokenMaxUses}
-                  onChange={(e) => setTokenMaxUses(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={handleGenerateToken}
-                  className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold transition cursor-pointer"
-                >
-                  Generate Token
-                </button>
-              </div>
-            </div>
-            {tokenMsg && (
-              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-xs text-purple-300 font-mono">
-                {tokenMsg}
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Tokens List */}
-          <div className="clean-card rounded-2xl p-5 bg-slate-950/60 border border-white/10 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10 text-slate-400 text-[11px]">
-                  <th className="pb-3">Token String</th>
-                  <th className="pb-3">Max Uses</th>
-                  <th className="pb-3">Uses Count</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 font-mono">
-                {safeTokensList.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-slate-500 text-xs">
-                      No active tokens generated yet.
-                    </td>
-                  </tr>
-                ) : (
-                  safeTokensList.map((t) => (
-                    <tr key={t.token} className="hover:bg-white/[0.02]">
-                      <td className="py-3 text-white font-semibold">{t.token}</td>
-                      <td className="py-3">{t.max_uses}</td>
-                      <td className="py-3">{t.uses_count}</td>
-                      <td className="py-3">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${t.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
-                          {t.is_active ? 'Active' : 'Deactivated'}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        {t.is_active && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await api.adminDeactivateToken(t.token);
-                              fetchTokens();
-                            }}
-                            className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded text-[10px]"
-                          >
-                            Deactivate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: MODEL METRICS */}
+      {/* TAB 3: MODEL METRICS */}
       {activeTab === 'models' && (
         <div className="space-y-4">
           {safeScorecards.length === 0 && (
-            <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-2xl">
-              No model scorecards reported yet.
+            <div className="clean-card p-10 text-center space-y-2">
+              <Gauge className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
+              <p className="text-sm font-medium text-[var(--text-secondary)]">No model scorecards yet</p>
+              <p className="text-xs text-[var(--text-muted)]">Live per-model stats from API usage logs will appear here as calls are made.</p>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {safeScorecards.map((m) => (
-              <div key={m.model_id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                <div className="font-semibold text-white text-sm">{m.model_id}</div>
-                <div className="space-y-1 font-mono text-[11px] text-slate-300">
-                  <div>Accuracy: <span className="text-emerald-400">{m.accuracy_score}%</span></div>
-                  <div>Latency: <span className="text-white">{m.avg_latency_ms}ms</span></div>
-                  <div>Cost / 1k: <span className="text-amber-400">${m.cost_per_1k_tokens_usd}</span></div>
+              <div key={m.model_id} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-2">
+                <div className="font-semibold text-white text-sm">{m.display_name || m.model_id}</div>
+                <div className="text-[10px] font-mono text-[var(--text-muted)]">{m.model_id}</div>
+                <div className="space-y-1 font-mono text-[11px] text-[var(--text-secondary)]">
+                  <div>Calls: <span className="text-white">{Number(m.calls ?? 0).toLocaleString()}</span></div>
+                  <div>
+                    Tokens: <span className="text-white">{Number(m.total_tokens ?? 0).toLocaleString()}</span>{' '}
+                    <span className="text-[var(--text-muted)]">({Number(m.input_tokens ?? 0).toLocaleString()} in / {Number(m.output_tokens ?? 0).toLocaleString()} out)</span>
+                  </div>
+                  <div>Cost / 1k: <span className="text-amber-400">${Number(m.cost_per_1k_tokens_usd ?? 0).toFixed(6)}</span></div>
+                  <div>Total charged: <span className="text-rose-400">${Number(m.charged_cost_usd ?? 0).toFixed(6)}</span></div>
+                  {m.last_used && <div>Last used: <span className="text-white">{String(m.last_used).slice(0, 10)}</span></div>}
                 </div>
               </div>
             ))}
@@ -1050,19 +1093,23 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
 
       {/* TAB 5: MODERATION */}
       {activeTab === 'moderation' && (
-        <SectionCard id="adminadv-moderation" className="rounded-2xl bg-slate-950/60 border border-white/10 space-y-3" header={
+        <SectionCard id="adminadv-moderation" className="space-y-3" header={
           <h3 className="text-sm font-bold text-white">Content Moderation Queue ({safeModQueue.length})</h3>
         }>
           {safeModQueue.length === 0 ? (
-            <p className="text-xs text-slate-500 py-6 text-center">No flagged content pending review.</p>
+            <div className="clean-card p-10 text-center space-y-2">
+              <ShieldCheck className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
+              <p className="text-sm font-medium text-[var(--text-secondary)]">No flagged content</p>
+              <p className="text-xs text-[var(--text-muted)]">The moderation queue is clear — flagged items will appear here for review.</p>
+            </div>
           ) : (
             <div className="space-y-2 text-xs">
               {safeModQueue.map((item) => (
-                <div key={item.id} className="p-3 bg-slate-900 rounded-xl flex items-center justify-between">
-                  <span>{item.type}: {item.title || item.id}</span>
+                <div key={item.id} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] flex items-center justify-between">
+                  <span className="text-[var(--text-primary)]">{item.type}: {item.title || item.id}</span>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => handleModerationAction(item.id, 'approved')} className="px-2 py-1 bg-emerald-600 text-white rounded">Approve</button>
-                    <button type="button" onClick={() => handleModerationAction(item.id, 'rejected')} className="px-2 py-1 bg-rose-600 text-white rounded">Reject</button>
+                    <button type="button" onClick={() => handleModerationAction(item.id, 'approved')} className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[var(--radius-sm)] transition cursor-pointer">Approve</button>
+                    <button type="button" onClick={() => handleModerationAction(item.id, 'rejected')} className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-[var(--radius-sm)] transition cursor-pointer">Reject</button>
                   </div>
                 </div>
               ))}
@@ -1075,7 +1122,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {activeTab === 'costs' && (
         <div className="space-y-6 animate-fadeIn">
           {costMsg && (
-            <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-xs text-purple-300 font-mono">
+            <div className="p-3 bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
               {costMsg}
             </div>
           )}
@@ -1083,49 +1130,49 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           {/* Top Platform Metrics */}
           {costsSummary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase">Total API Cost</span>
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total API Cost</span>
                 <strong className="text-rose-400 text-lg">${costsSummary.total_cost_usd || '0.00'}</strong>
-                <span className="text-[10px] text-slate-500 block">Baseline Provider Expense</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Baseline Provider Expense</span>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase">Total Charged (w/ Multipliers)</span>
-                <strong className="text-purple-400 text-lg">${costsSummary.total_charged_usd || '0.00'}</strong>
-                <span className="text-[10px] text-slate-500 block">User Token Equivalent</span>
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total Charged (w/ Multipliers)</span>
+                <strong className="text-[var(--accent)] text-lg">${costsSummary.total_charged_usd || '0.00'}</strong>
+                <span className="text-[10px] text-[var(--text-muted)] block">User Token Equivalent</span>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase">Est. Platform Profit</span>
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Est. Platform Profit</span>
                 <strong className="text-emerald-400 text-lg">${costsSummary.platform_profit_summary?.estimated_profit_usd || '0.00'}</strong>
                 <span className="text-[10px] text-emerald-400/80 block">{costsSummary.platform_profit_summary?.profit_margin_pct}% Margin</span>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-900 border border-white/5 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase">Total API Calls</span>
-                <strong className="text-blue-400 text-lg">{costsSummary.total_logs || 0}</strong>
-                <span className="text-[10px] text-slate-500 block">LLM, Audio, Vision, Detectors</span>
+              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total API Calls</span>
+                <strong className="text-[var(--text-primary)] text-lg">{costsSummary.total_logs || 0}</strong>
+                <span className="text-[10px] text-[var(--text-muted)] block">LLM, Audio, Vision, Detectors</span>
               </div>
             </div>
           )}
 
           {/* Per-User Token Cost Multiplier Adjustment */}
-          <SectionCard id="adminadv-multiplier" padding="p-6" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-4" header={
+          <SectionCard id="adminadv-multiplier" padding="p-6" className="space-y-4" header={
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
                   Per-User Token Multiplier & Pricing Control
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
                   Adjust individual user multipliers (e.g. 0.5x for beta testers, 1.0x standard, 1.5x premium, 2.0x heavy usage).
                 </p>
               </div>
-              <span className="text-[11px] text-slate-400 font-mono">{usersCosts.length} Users</span>
+              <span className="text-[11px] text-[var(--text-muted)] font-mono">{usersCosts.length} Users</span>
             </div>
           }>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-white/10 text-slate-400 text-[11px] font-mono">
+                  <tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider">
                     <th className="pb-3">User</th>
                     <th className="pb-3">Plan</th>
                     <th className="pb-3">Calls</th>
@@ -1135,15 +1182,15 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                     <th className="pb-3 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 font-mono">
+                <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
                   {usersCosts.map((u) => {
                     const currentVal = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : u.token_cost_multiplier;
 
                     return (
-                      <tr key={u.id} className="hover:bg-white/[0.02]">
+                      <tr key={u.id} className="hover:bg-white/[0.03]">
                         <td className="py-3 font-semibold text-white">{u.public_id}</td>
-                        <td className="py-3 uppercase text-[10px] font-bold text-purple-300">{u.plan}</td>
-                        <td className="py-3 text-slate-400">{u.total_calls}</td>
+                        <td className="py-3 uppercase text-[10px] font-bold text-[var(--accent)]">{u.plan}</td>
+                        <td className="py-3 text-[var(--text-muted)]">{u.total_calls}</td>
                         <td className="py-3 text-rose-400">${u.total_cost_usd}</td>
                         <td className="py-3 text-emerald-400 font-bold">
                           {u.profit_margin_pct}% (${u.estimated_profit_usd})
@@ -1161,16 +1208,16 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
                               }}
                               aria-label={`Token cost multiplier for ${u.public_id}`}
-                              className="w-20 bg-slate-900 border border-white/10 rounded-lg px-2 py-1 text-white text-xs font-mono text-center"
+                              className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                             />
-                            <span className="text-slate-400 text-[11px]">x</span>
+                            <span className="text-[var(--text-muted)] text-[11px]">x</span>
                           </div>
                         </td>
                         <td className="py-3 text-right">
                           <button
                             type="button"
                             onClick={() => handleUpdateMultiplier(u.public_id, currentVal)}
-                            className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                            className="px-3 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer"
                           >
                             Save
                           </button>
@@ -1187,43 +1234,55 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           {costsSummary && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Tool / Model Cost Breakdown */}
-              <SectionCard id="adminadv-tool-breakdown" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-3" header={
+              <SectionCard id="adminadv-tool-breakdown" className="space-y-3" header={
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                   Cost Breakdown by Tool / Model
                 </h4>
               }>
                 <div className="space-y-2 text-xs font-mono">
-                  {costsSummary.tool_breakdown?.map((tool, i) => (
-                    <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
-                      <div>
-                        <span className="font-bold text-white block">{tool.tool_or_model}</span>
-                        <span className="text-[10px] text-slate-500">{tool.call_count} invocations</span>
+                  {costsSummary.tool_breakdown?.length ? (
+                    costsSummary.tool_breakdown.map((tool, i) => (
+                      <div key={i} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] flex items-center justify-between border border-[var(--border-subtle)]">
+                        <div>
+                          <span className="font-bold text-white block">{tool.tool_or_model}</span>
+                          <span className="text-[10px] text-[var(--text-muted)]">{tool.call_count} invocations</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-rose-400 font-bold block">${tool.total_base_cost}</span>
+                          <span className="text-[10px] text-[var(--accent)]">Charged: ${tool.total_charged}</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-rose-400 font-bold block">${tool.total_base_cost}</span>
-                        <span className="text-[10px] text-purple-300">Charged: ${tool.total_charged}</span>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center text-[11px] text-[var(--text-muted)]">
+                      No usage data yet — API calls will populate this breakdown.
                     </div>
-                  ))}
+                  )}
                 </div>
               </SectionCard>
 
               {/* 7-Day Usage & Cost Trends */}
-              <SectionCard id="adminadv-usage-trends" className="rounded-3xl bg-slate-950/60 border border-white/10 space-y-3" header={
+              <SectionCard id="adminadv-usage-trends" className="space-y-3" header={
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                   Usage Trends (Last 7 Days)
                 </h4>
               }>
                 <div className="space-y-2 text-xs font-mono">
-                  {costsSummary.trends?.map((day, i) => (
-                    <div key={i} className="p-3 bg-slate-900/80 rounded-xl flex items-center justify-between border border-white/5">
-                      <div>
-                        <span className="font-bold text-white">{day.date} ({day.day_name})</span>
-                        <span className="text-[10px] text-slate-500 block">{day.calls} API calls</span>
+                  {costsSummary.trends?.length ? (
+                    costsSummary.trends.map((day, i) => (
+                      <div key={i} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] flex items-center justify-between border border-[var(--border-subtle)]">
+                        <div>
+                          <span className="font-bold text-white">{day.date} ({day.day_name})</span>
+                          <span className="text-[10px] text-[var(--text-muted)] block">{day.calls} API calls</span>
+                        </div>
+                        <span className="text-[var(--accent)] font-bold">${day.cost_usd}</span>
                       </div>
-                      <span className="text-purple-300 font-bold">${day.cost_usd}</span>
+                    ))
+                  ) : (
+                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center text-[11px] text-[var(--text-muted)]">
+                      No usage in the last 7 days.
                     </div>
-                  ))}
+                  )}
                 </div>
               </SectionCard>
             </div>
@@ -1235,34 +1294,51 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {activeTab === 'health' && (
         healthData ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-              <span className="text-slate-400 block text-[10px]">API Status</span>
-              <strong className="text-emerald-400 text-base">{healthData.api || 'operational'}</strong>
+            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
+              <span className="text-[var(--text-muted)] block text-[10px]">API Status</span>
+              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                {healthData.api || 'operational'}
+              </strong>
             </div>
-            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-              <span className="text-slate-400 block text-[10px]">Database</span>
-              <strong className="text-emerald-400 text-base">{healthData.database || 'connected'}</strong>
+            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
+              <span className="text-[var(--text-muted)] block text-[10px]">Database</span>
+              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                {healthData.database || 'connected'}
+              </strong>
             </div>
-            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-              <span className="text-slate-400 block text-[10px]">Sandbox Daemon</span>
-              <strong className="text-emerald-400 text-base">{healthData.sandbox || 'active'}</strong>
+            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
+              <span className="text-[var(--text-muted)] block text-[10px]">Sandbox Daemon</span>
+              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                {healthData.sandbox || 'active'}
+              </strong>
             </div>
-            <div className="p-4 rounded-xl bg-slate-900 border border-white/5">
-              <span className="text-slate-400 block text-[10px]">System Latency</span>
+            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
+              <span className="text-[var(--text-muted)] block text-[10px]">System Latency</span>
               <strong className="text-white text-base">{healthData.latency_ms || 12}ms</strong>
             </div>
           </div>
         ) : (
-          <div className="p-8 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-2xl">
-            System health telemetry is unavailable right now.{' '}
-            <button type="button" onClick={fetchHealth} className="text-purple-300 hover:text-purple-200 underline cursor-pointer">Retry</button>
+          <div className="clean-card p-10 text-center space-y-2">
+            <Activity className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
+            <p className="text-sm font-medium text-[var(--text-secondary)]">Health telemetry unavailable</p>
+            <p className="text-xs text-[var(--text-muted)]">System health data will appear here once the backend responds.</p>
+            <button
+              type="button"
+              onClick={fetchHealth}
+              className="mx-auto mt-1 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
+            >
+              Retry
+            </button>
           </div>
         )
       )}
 
       {/* TAB 7: SYSTEM CONTROL */}
       {activeTab === 'system_control' && (
-        <div className="p-5 rounded-2xl bg-slate-950/60 border border-white/10 space-y-4 text-xs">
+        <div className="clean-card p-5 space-y-4 text-xs">
           <h3 className="text-sm font-bold text-white">Temporary Storage & Cache Control</h3>
           <button
             type="button"
@@ -1272,7 +1348,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               } catch (e) {}
               alert('Temporary cache cleared.');
             }}
-            className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl transition cursor-pointer"
+            className="px-4 py-2 bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-[var(--radius-sm)] transition cursor-pointer"
           >
             Clear Local Runtime Cache
           </button>
@@ -1283,23 +1359,23 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {pwChangeFor && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPwChangeFor(null)}>
           <div
-            className="w-full max-w-md bg-slate-950/95 border border-purple-500/30 rounded-2xl shadow-2xl"
+            className="w-full max-w-md surface-glass-strong bg-[var(--bg-surface-elevated)] border border-[rgba(139,92,246,0.3)] rounded-[var(--radius-lg)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/10">
-              <KeyRound className="w-4 h-4 text-purple-400" />
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[var(--border-subtle)]">
+              <KeyRound className="w-4 h-4 text-[var(--accent)]" />
               <h3 className="text-sm font-bold text-white">
-                Change password — <span className="font-mono text-purple-300">{pwChangeFor}</span>
+                Change password — <span className="font-mono text-[var(--accent)]">{pwChangeFor}</span>
               </h3>
             </div>
             <div className="px-5 py-4 space-y-3 text-xs">
-              <p className="text-slate-400 leading-relaxed">
+              <p className="text-[var(--text-muted)] leading-relaxed">
                 Sets a new password without the user's current one. Sessions are revoked on
                 success. Optionally enter an open recovery code to tie this change to a
                 request in flight (it gets consumed).
               </p>
-              <label htmlFor="pw-change-new" className="block text-slate-400">
-                New password <span className="text-slate-600">(min 8 chars, letter + number)</span>
+              <label htmlFor="pw-change-new" className="block text-[var(--text-secondary)]">
+                New password <span className="text-[var(--text-muted)]">(min 8 chars, letter + number)</span>
               </label>
               <input
                 id="pw-change-new"
@@ -1309,10 +1385,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 onChange={(e) => setPwChangeNew(e.target.value)}
                 placeholder="New password"
                 autoFocus
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:border-purple-500/50 outline-none"
+                className="clean-input w-full px-3 py-2 text-white outline-none"
               />
-              <label htmlFor="pw-change-code" className="block text-slate-400">
-                Recovery code <span className="text-slate-600">(optional, 6 digits)</span>
+              <label htmlFor="pw-change-code" className="block text-[var(--text-secondary)]">
+                Recovery code <span className="text-[var(--text-muted)]">(optional, 6 digits)</span>
               </label>
               <input
                 id="pw-change-code"
@@ -1322,21 +1398,21 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="Optionally consume an open recovery request"
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:border-purple-500/50 outline-none"
+                className="clean-input w-full px-3 py-2 text-white font-mono outline-none"
               />
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
                   onClick={handleRowChangePw}
                   disabled={pwChangeBusy}
-                  className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
+                  className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
                 >
                   {pwChangeBusy ? 'Changing…' : 'Change password'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPwChangeFor(null)}
-                  className="px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer"
+                  className="px-3 py-2 rounded-[var(--radius-sm)] bg-white/4 border border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-raised)] transition cursor-pointer"
                 >
                   Cancel
                 </button>

@@ -109,8 +109,8 @@ async function assignmentRequest(method, path, body) {
   return data;
 }
 
-const inputCls = 'w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50';
-const labelCls = 'block text-[11px] font-semibold text-slate-400 mb-1';
+const inputCls = 'clean-input w-full px-3 py-2 text-sm leading-relaxed';
+const labelCls = 'block text-sm font-semibold text-[var(--text-secondary)] mb-1.5';
 
 export default function NewAssignmentModal({ onClose, onCreated }) {
   const [title, setTitle] = useState('');
@@ -137,7 +137,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
     setError('');
     setPhase('creating');
     try {
-      const res = await assignmentRequest('POST', '/assignments', {
+      const res = await assignmentRequest('POST', '/api/assignments', {
         title: title.trim(),
         prompt,
         due_date: dueDate || null,
@@ -185,16 +185,21 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+      className="fixed inset-0 z-[100] flex p-3 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto aurora-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-assignment-title"
       onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== 'creating') onClose(); }}
     >
-      <div className="w-full max-w-xl rounded-2xl bg-slate-950/95 border border-white/10 shadow-2xl p-5 space-y-4">
+      {/* Aurora modal chrome (scoped; index.css owns the design system) */}
+      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
+.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
+      <div className="m-auto w-full max-w-xl surface-glass-strong rounded-[var(--radius-lg)] p-5 sm:p-6 space-y-4 text-[var(--text-primary)] aurora-modal-panel">
         <div className="flex items-center justify-between">
-          <h3 id="new-assignment-title" className="text-sm font-bold text-white flex items-center gap-2">
-            <span className="w-7 h-7 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <h3 id="new-assignment-title" className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <span className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent)]">
               <FileText className="w-3.5 h-3.5" />
             </span>
             New Assignment
@@ -203,7 +208,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             type="button"
             onClick={() => onClose()}
             disabled={phase === 'creating'}
-            className="text-slate-400 hover:text-white disabled:opacity-40 cursor-pointer"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -247,7 +252,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
               placeholder="Paste the full assignment instructions, links, or what the instructor expects."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className={`${inputCls} resize-y leading-relaxed`}
+              className={`${inputCls} resize-y`}
             />
           </div>
 
@@ -260,12 +265,12 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
               placeholder="Grading criteria, point breakdown, or rubric table the agent should follow."
               value={rubric}
               onChange={(e) => setRubric(e.target.value)}
-              className={`${inputCls} resize-y leading-relaxed`}
+              className={`${inputCls} resize-y`}
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 font-mono whitespace-pre-wrap" role="alert">
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-[var(--radius-md)] text-xs text-rose-300 font-mono whitespace-pre-wrap" role="alert">
               {error}
               {phase === 'saving_rubric' && createdId != null && (
                 <div className="mt-2 flex gap-2">
@@ -286,14 +291,14 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
               type="button"
               onClick={() => onClose()}
               disabled={phase === 'creating'}
-              className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-semibold transition disabled:opacity-40 cursor-pointer"
+              className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-semibold transition disabled:opacity-40 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer"
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               <span>{phase === 'creating' ? 'Creating…' : phase === 'saving_rubric' ? 'Saving rubric…' : 'Create Assignment'}</span>
@@ -301,7 +306,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
           </div>
         </form>
 
-        <p className="text-[11px] text-slate-500">
+        <p className="text-xs text-[var(--text-muted)]">
           Assignments you create appear in the workspace and cards; they land in this ledger after being turned in.
         </p>
       </div>

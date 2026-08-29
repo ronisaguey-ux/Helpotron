@@ -353,6 +353,9 @@ export function loadSettings() {
 export function saveSettings(settings) {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    /* AppShell listens and re-applies appearance/accessibility centrally —
+     * keeping one owner for <html> attributes avoids cross-component fights. */
+    window.dispatchEvent(new CustomEvent('helpotron:settings-changed', { detail: settings }));
   } catch (e) { /* storage unavailable — ignore */ }
 }
 

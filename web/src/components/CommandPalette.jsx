@@ -100,11 +100,11 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: -8 }}
             transition={{ duration: 0.14, ease: 'easeOut' }}
-            className="w-full max-w-xl clean-card p-0 overflow-hidden shadow-2xl shadow-black/50"
+            className="w-full max-w-xl surface-glass-strong rounded-[var(--radius-lg)] p-0 overflow-hidden shadow-2xl shadow-black/50"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search input */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-subtle)]">
               <span className="text-slate-500">🔎</span>
               <input
                 ref={inputRef}
@@ -143,19 +143,19 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
                           onClose();
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition cursor-pointer ${
-                          isSel ? 'bg-blue-600/15 border-l-2 border-blue-500' : 'border-l-2 border-transparent'
+                          isSel ? 'bg-[var(--accent-subtle)] border-l-2 border-[var(--accent)]' : 'border-l-2 border-transparent'
                         }`}
                       >
                         <span className="w-6 text-center text-xs shrink-0">
                           {item.subtitle === 'recent' ? <Clock className="w-3.5 h-3.5 mx-auto text-slate-500" /> : <span className="text-slate-400">{kind === 'command' ? '>' : '→'}</span>}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className={`block text-xs truncate ${isSel ? 'text-blue-200' : 'text-slate-200'}`}>{item.title}</span>
+                          <span className={`block text-xs truncate ${isSel ? 'text-[var(--text-primary)]' : 'text-slate-200'}`}>{item.title}</span>
                           {item.subtitle && item.subtitle !== 'recent' && (
                             <span className="block text-[10px] text-slate-500 truncate">{item.subtitle}</span>
                           )}
                         </span>
-                        {isSel && <CornerDownLeft className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                        {isSel && <CornerDownLeft className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />}
                       </button>
                     );
                   })}
@@ -164,7 +164,7 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
             </div>
 
             {/* Footer hint */}
-            <div className="flex items-center gap-3 px-4 py-2 border-t border-white/8 text-[10px] text-slate-500">
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--border-subtle)] text-[10px] text-slate-500">
               <span><Kbd>↑</Kbd> <Kbd>↓</Kbd> navigate</span>
               <span><Kbd>↵</Kbd> open</span>
               <span className="ml-auto">Slash commands: /assignment /study /run /settings /admin</span>

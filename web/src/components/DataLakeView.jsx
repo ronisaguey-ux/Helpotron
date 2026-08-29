@@ -4,13 +4,8 @@ import {
   Upload,
   FileText,
   Send,
-  AlertCircle,
   Clock,
-  CheckCircle2,
-  Sparkles,
-  RefreshCw,
   Coins,
-  ShieldCheck,
   TrendingUp,
   X,
   Bot,
@@ -24,8 +19,6 @@ export default function DataLakeView({ userId = '' }) {
   const [submitting, setSubmitting] = useState(false);
   const [valuationResult, setValuationResult] = useState(null);
   const [dataLakeHistory, setDataLakeHistory] = useState([]);
-  const [microCreditsBalance, setMicroCreditsBalance] = useState(0);
-  const [redeemMsg, setRedeemMsg] = useState('');
   const fileInputRef = useRef(null);
 
   const fetchHistory = async () => {
@@ -33,7 +26,6 @@ export default function DataLakeView({ userId = '' }) {
       const res = await api.getMicrocreditsHistory(userId);
       if (res && res.status === 'success') {
         setDataLakeHistory(res.history || []);
-        setMicroCreditsBalance(res.balance || 0);
       }
     } catch (e) {
       console.warn('Failed to fetch Data Lake history:', e);
@@ -101,27 +93,10 @@ export default function DataLakeView({ userId = '' }) {
     }
   };
 
-  const handleRedeemMicrocredits = async () => {
-    setRedeemMsg('');
-    try {
-      const res = await api.redeemMicrocredits({
-        amount_credits: 20,
-        amount: 20,
-        redemption_method: 'compute_credits',
-        destination: 'compute_credits',
-      });
-      setRedeemMsg(res.message || '✅ 20 Micro-Credits redeemed successfully toward compute credits.');
-      await fetchHistory();
-      setTimeout(() => setRedeemMsg(''), 6000);
-    } catch (e) {
-      setRedeemMsg(`❌ Error: ${e.message || 'Redemption failed'}`);
-    }
-  };
-
   return (
     <div className="space-y-6 text-slate-100 max-w-4xl mx-auto animate-fadeIn">
       {/* Header Banner */}
-      <SectionCard id="datalake-banner" padding="p-6" className="bg-slate-950/80 border border-emerald-500/30" header={
+      <SectionCard id="datalake-banner" padding="p-6" header={
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-2xl font-bold shrink-0">
             <Database className="w-6 h-6" />
@@ -130,39 +105,14 @@ export default function DataLakeView({ userId = '' }) {
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-semibold mb-1">
               <Bot className="w-3.5 h-3.5" /> Autonomous Subagent Classification
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Academic Data Lake</h2>
+            <h2 className="text-xl font-bold text-aurora tracking-tight">Academic Data Lake</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Submit empirical notes or files. Subagent evaluates an estimated score (0–25 cr); actual credits are awarded once reviewed and implemented.
+              Submit empirical notes or files. Subagent evaluates an estimated score (0–25 micro-credits); actual credits are awarded once reviewed and implemented. 1000 micro-credits = 1 credit, shown in your balance.
             </p>
           </div>
         </div>
       }>
-
-        {/* Balance Card */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/20 flex items-center justify-between gap-4 shrink-0">
-          <div>
-            <span className="text-[10px] text-slate-400 font-mono uppercase block">Active Data Lake Balance</span>
-            <div className="text-xl font-black text-emerald-400 font-mono">
-              {microCreditsBalance} cr
-            </div>
-            <span className="text-[10px] text-slate-400">1 cr = 1 Compute Credit (1:1, no inflation) — 1 credit ≈ $1 discount value</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleRedeemMicrocredits}
-            disabled={microCreditsBalance < 20}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold transition cursor-pointer shrink-0"
-          >
-            Convert 20 cr (+20 Credits)
-          </button>
-        </div>
       </SectionCard>
-
-      {redeemMsg && (
-        <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-mono">
-          {redeemMsg}
-        </div>
-      )}
 
       {/* Crediting & Implementation Policy Notice */}
       <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-3">
@@ -173,7 +123,7 @@ export default function DataLakeView({ userId = '' }) {
       </div>
 
       {/* Simplified Submission Card: Text + File Upload */}
-      <SectionCard id="datalake-submit" padding="p-6 sm:p-8" className="bg-slate-950/60 border border-white/10 space-y-5" header={
+      <SectionCard id="datalake-submit" padding="p-6 sm:p-8" className="space-y-5" header={
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Coins className="w-4 h-4 text-emerald-400" />
@@ -194,7 +144,7 @@ export default function DataLakeView({ userId = '' }) {
               placeholder="Paste rubric details, teacher grading quirks, assignment guidelines, lecture excerpts, or study feedback..."
               value={textContent}
               onChange={(e) => setTextContent(e.target.value)}
-              className="w-full bg-slate-900 border border-white/10 rounded-2xl p-4 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 leading-relaxed font-sans"
+              className="clean-input w-full rounded-[var(--radius-md)] p-4 text-xs leading-relaxed font-sans"
             />
           </div>
 
@@ -213,7 +163,7 @@ export default function DataLakeView({ userId = '' }) {
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className="p-5 border-2 border-dashed border-white/10 hover:border-emerald-500/50 rounded-2xl bg-slate-900/50 flex flex-col items-center justify-center gap-2 text-center cursor-pointer transition"
+              className="p-5 border-2 border-dashed border-white/15 hover:border-emerald-500/60 rounded-2xl bg-white/4 flex flex-col items-center justify-center gap-2 text-center cursor-pointer transition"
             >
               <Upload className="w-6 h-6 text-emerald-400" />
               <div className="text-xs text-slate-200 font-medium">
@@ -255,27 +205,27 @@ export default function DataLakeView({ userId = '' }) {
           <button
             type="submit"
             disabled={submitting || (!textContent.trim() && attachedFiles.length === 0)}
-            className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-emerald-600/20"
+            className="w-full sm:w-auto px-6 py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-[var(--radius-md)] text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer glow-accent"
           >
             <Send className="w-4 h-4" />
-            <span>{submitting ? 'Subagent Interpreting & Classifying…' : 'Submit to Data Lake (Est. Score: 0–25 cr)'}</span>
+            <span>{submitting ? 'Subagent Interpreting & Classifying…' : 'Submit to Data Lake'}</span>
           </button>
         </form>
 
         {/* Live Subagent Valuation Output */}
         {valuationResult && (
-          <div className="p-5 rounded-2xl bg-slate-900 border border-emerald-500/40 text-xs space-y-3 animate-fadeIn">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-                <span className="font-bold text-white text-sm">Subagent Classification & Estimated Score</span>
+          <div className="p-5 rounded-2xl bg-white/4 border border-white/8 text-xs space-y-3 animate-fadeIn">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                <span className="font-bold text-white text-sm break-words">Subagent Classification & Estimated Score</span>
               </div>
               <span className="font-mono text-xs px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
                 Est. ~{valuationResult.estimated_credits || valuationResult.credits_awarded || 0} / 25 Micro-Credits
               </span>
             </div>
 
-            <div className="p-3 bg-slate-950/60 rounded-xl border border-white/5 space-y-1.5">
+            <div className="p-3 bg-white/4 rounded-xl border border-white/8 space-y-1.5">
               <div className="flex items-center gap-2 text-[11px]">
                 <span className="text-slate-400 font-medium">Classified Category:</span>
                 <span className="text-emerald-300 font-semibold font-mono">
@@ -283,8 +233,8 @@ export default function DataLakeView({ userId = '' }) {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-slate-400 font-medium">Auto Title:</span>
-                <span className="text-white font-semibold">{valuationResult.title}</span>
+                <span className="text-slate-400 font-medium shrink-0">Auto Title:</span>
+                <span className="text-white font-semibold min-w-0 break-words">{valuationResult.title}</span>
               </div>
               <p className="text-slate-300 text-[11px] leading-relaxed pt-1">
                 {valuationResult.valuation?.reasoning}
@@ -300,7 +250,7 @@ export default function DataLakeView({ userId = '' }) {
       </SectionCard>
 
       {/* History Table */}
-      <SectionCard id="datalake-history" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" header={
+      <SectionCard id="datalake-history" padding="p-6" className="space-y-4" header={
         <div className="flex items-center justify-between w-full">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -313,12 +263,14 @@ export default function DataLakeView({ userId = '' }) {
       }>
 
         {dataLakeHistory.length === 0 ? (
-          <div className="text-center py-8 text-xs text-slate-500">
+          <div className="text-center py-8 text-xs text-slate-400">
             No submissions recorded yet. Paste notes or upload a file above.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            {/* min-w: keep 6 columns legible — the wrapper scrolls on phones
+                instead of crushing cells into unreadable snippets. */}
+            <table className="w-full min-w-[640px] text-left text-xs">
               <thead>
                 <tr className="border-b border-white/10 text-slate-400 text-[11px]">
                   <th className="pb-3 font-semibold">Classified Entry</th>
@@ -336,7 +288,7 @@ export default function DataLakeView({ userId = '' }) {
                   const actualScore = isImplemented ? (sub.actual_credits || sub.credits_awarded || estScore) : 0;
 
                   return (
-                    <tr key={i} className="hover:bg-white/[0.02]">
+                    <tr key={i} className="hover:bg-white/4">
                       <td className="py-3 font-semibold text-white max-w-[200px] truncate">{sub.title}</td>
                       <td className="py-3 text-[11px] text-slate-400 capitalize">
                         {sub.data_type?.replace('_', ' ')}

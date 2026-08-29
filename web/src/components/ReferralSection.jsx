@@ -16,6 +16,7 @@ import {
   KeyRound,
   CheckCircle2,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import Button from './ui/Button.jsx';
 
@@ -28,6 +29,23 @@ export default function ReferralSection({ userId = '' }) {
   const [redeeming, setRedeeming] = useState(false);
   const [redeemMsg, setRedeemMsg] = useState('');
   const [actionError, setActionError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  /* Delete one of your UNREDEEMED codes (operator 08-28). Redeemed codes are
+   * locked — the referral already paid out. */
+  const handleDeleteCode = async (c) => {
+    if (!window.confirm(`Delete referral code ${c.code.slice(0, 16)}…? This can't be undone.`)) return;
+    setDeletingId(c.id);
+    setActionError('');
+    try {
+      await api.deleteReferralCode(c.id);
+      await fetchStats();
+    } catch (err) {
+      setActionError(err.message || 'Failed to delete referral code.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const fetchStats = async () => {
     setLoading(true);
@@ -97,13 +115,13 @@ export default function ReferralSection({ userId = '' }) {
   return (
     <div className="space-y-6 text-slate-100 animate-fadeIn max-w-5xl mx-auto">
       {/* Referral Header Banner */}
-      <SectionCard id="referral-banner" padding="p-6" className="relative overflow-hidden bg-slate-950/60 border border-white/10" header={
+      <SectionCard id="referral-banner" padding="p-6" className="relative overflow-hidden" header={
         <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold mb-3">
+            <div className="aurora-chip mb-3 text-xs">
               <Gift className="w-3.5 h-3.5" /> 40-Digit Single-Use Referral System
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Invite Classmates & Earn Compute Credits</h2>
+            <h2 className="text-xl font-bold text-aurora tracking-tight">Invite Classmates & Earn Compute Credits</h2>
             <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
               Generate <strong>40-digit cryptographic single-use invite codes</strong> attached to your account. When a classmate redeems your code, you earn <strong>+40 Compute Credits</strong> and they receive <strong>+10 bonus credits</strong>. Codes are strictly single-use and non-reusable.
             </p>
@@ -112,9 +130,9 @@ export default function ReferralSection({ userId = '' }) {
           {/* Active Code Box & Action */}
           <div className="flex flex-col items-stretch gap-2 shrink-0 max-w-md w-full sm:w-auto">
             {activeCode ? (
-              <div className="p-3 rounded-2xl bg-slate-900 border border-blue-500/30 flex flex-col gap-2">
+              <div className="p-3 rounded-2xl bg-white/4 border border-white/8 flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] uppercase font-mono text-blue-400 font-bold">Active 40-Digit Code (Single-Use)</span>
+                  <span className="text-[10px] uppercase font-mono text-[var(--accent)] font-bold">Active 40-Digit Code (Single-Use)</span>
                   <button
                     type="button"
                     onClick={() => copyCode(activeCode)}
@@ -125,7 +143,7 @@ export default function ReferralSection({ userId = '' }) {
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <div className="font-mono text-xs text-white bg-slate-950 p-2 rounded-xl border border-white/5 break-all select-all">
+                <div className="font-mono text-xs text-white bg-white/4 p-2.5 rounded-xl border border-white/8 break-all select-all">
                   {activeCode}
                 </div>
               </div>
@@ -140,7 +158,7 @@ export default function ReferralSection({ userId = '' }) {
               className="w-full sm:w-auto"
             >
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Issue Fresh 40-Digit Code
+              Issue Code
             </Button>
           </div>
         </div>
@@ -166,17 +184,17 @@ export default function ReferralSection({ userId = '' }) {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SectionCard id="referral-codes-issued" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+        <SectionCard id="referral-codes-issued" padding="p-5" className="space-y-1" header={
           <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Codes Issued</span>
-            <KeyRound className="w-4 h-4 text-blue-400" />
+            <KeyRound className="w-4 h-4 text-[var(--accent)]" />
           </div>
         }>
           <div className="text-2xl font-black text-white font-mono">{stats?.total_issued || 0}</div>
           <p className="text-[11px] text-slate-500">40-digit cryptographic tokens</p>
         </SectionCard>
 
-        <SectionCard id="referral-redemptions" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+        <SectionCard id="referral-redemptions" padding="p-5" className="space-y-1" header={
           <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Successful Redemptions</span>
             <Users className="w-4 h-4 text-emerald-400" />
@@ -186,7 +204,7 @@ export default function ReferralSection({ userId = '' }) {
           <p className="text-[11px] text-emerald-400/80">+{ (stats?.total_completed || 0) * 40 } credits earned</p>
         </SectionCard>
 
-        <SectionCard id="referral-reward-rule" padding="p-5" className="space-y-1 bg-slate-950/60 border border-white/10" header={
+        <SectionCard id="referral-reward-rule" padding="p-5" className="space-y-1" header={
           <div className="flex items-center justify-between w-full text-slate-400 text-xs">
             <span>Reward Rule</span>
             <Award className="w-4 h-4 text-purple-400" />
@@ -198,14 +216,14 @@ export default function ReferralSection({ userId = '' }) {
       </div>
 
       {/* Redeem a Referral Code Form */}
-      <SectionCard id="referral-redeem" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" title="Have a 40-Digit Referral Code from a Friend?">
+      <SectionCard id="referral-redeem" padding="p-6" className="space-y-4" title="Have a 40-Digit Referral Code from a Friend?">
         <form onSubmit={handleRedeem} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             placeholder="Paste 40-digit code (e.g. e4f9a12c8b03f7d19a2e5c8b4f019d3e8a7b6c5d)"
             value={redeemCodeInput}
             onChange={(e) => setRedeemCodeInput(e.target.value)}
-            className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-white font-mono text-xs placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
+            className="clean-input flex-1 rounded-[var(--radius-md)] px-4 py-2.5 font-mono text-xs"
           />
           <Button
             type="submit"
@@ -227,10 +245,10 @@ export default function ReferralSection({ userId = '' }) {
       </SectionCard>
 
       {/* Issued Referral Codes History Table */}
-      <SectionCard id="referral-history" padding="p-6" className="bg-slate-950/60 border border-white/10 space-y-4" header={
+      <SectionCard id="referral-history" padding="p-6" className="space-y-4" header={
         <div className="flex items-center justify-between w-full">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-blue-400" />
+            <KeyRound className="w-4 h-4 text-[var(--accent)]" />
             Your Issued 40-Digit Single-Use Codes
           </h3>
           <span className="text-[11px] text-slate-500 font-mono">
@@ -258,7 +276,7 @@ export default function ReferralSection({ userId = '' }) {
               </thead>
               <tbody className="divide-y divide-white/5 font-mono">
                 {stats.codes.map((c) => (
-                  <tr key={c.id} className="hover:bg-white/[0.02]">
+                  <tr key={c.id} className="hover:bg-white/4">
                     <td className="py-3 text-slate-200 break-all select-all font-semibold">
                       {c.code.slice(0, 16)}...{c.code.slice(-8)}
                     </td>
@@ -278,15 +296,28 @@ export default function ReferralSection({ userId = '' }) {
                       {c.is_redeemed ? '+40 Credits' : '40 Credits on use'}
                     </td>
                     <td className="py-3 text-[11px] text-slate-500">{c.created_at.slice(0, 10)}</td>
-                    <td className="py-3 text-right">
+                    <td className="py-3 text-right whitespace-nowrap">
                       {!c.is_redeemed && (
-                        <button
-                          type="button"
-                          onClick={() => copyCode(c.code)}
-                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[11px] transition cursor-pointer"
-                        >
-                          Copy Code
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => copyCode(c.code)}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[11px] transition cursor-pointer"
+                          >
+                            Copy Code
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCode(c)}
+                            disabled={deletingId === c.id}
+                            title="Delete this unredeemed code"
+                            aria-label={`Delete code ${c.code.slice(0, 16)}…`}
+                            className="inline-flex items-center gap-1 ml-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 text-[11px] transition cursor-pointer disabled:opacity-40"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            {deletingId === c.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
