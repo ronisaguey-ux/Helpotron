@@ -407,15 +407,18 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] flex items-center justify-center text-[var(--accent)] shrink-0">
             <ShieldAlert className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Helpotron Master Admin Panel</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">Helpotron Master Admin Panel</h2>
             <p className="text-xs text-[var(--text-muted)]">
               Exclusive platform controls: User Management, Inquiries Inbox, Access Keys, Model Scorecards & Health.
             </p>
           </div>
         </div>
       } headerRight={
-        <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-mono font-semibold bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] shrink-0">
+        /* hidden on phones (<sm): this shrink-0 pill starved the header column
+           to ~0 width at 390px, wrapping the h2 to 4 lines (A7 audit row 1).
+           The panel title already identifies the admin context on mobile. */
+        <span className="hidden sm:inline-flex items-center rounded-full px-3 py-1 text-[11px] font-mono font-semibold bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] shrink-0">
           ADMIN: {userId || 'anonymous'}
         </span>
       }>

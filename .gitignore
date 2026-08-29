@@ -19,6 +19,9 @@ verify_*.py
 backups/
 server.log
 *.log
+# rotated access/error logs (server/access_log.py) — *.log above misses the
+# numbered backups access.log.1 … access.log.10
+data/logs/*.log.*
 data_lake/
 web/dist/
 web/node_modules/

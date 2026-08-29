@@ -79,16 +79,16 @@ export default function MonitorsView({ userId = '' }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Gauge className="w-5 h-5 text-[var(--accent)]" />
-          <h2 className="text-lg font-semibold">Monitors</h2>
-          <span className="text-xs text-[var(--text-muted)]">
+        <div className="flex items-center gap-2 min-w-0">
+          <Gauge className="w-5 h-5 text-[var(--accent)] shrink-0" />
+          <h2 className="text-lg font-semibold shrink-0">Monitors</h2>
+          <span className="text-xs text-[var(--text-muted)] min-w-0 truncate">
             persistent collectors · traffic · activity · data lake · cost
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
           {updatedAt && (
-            <span>
+            <span className="min-w-0 truncate">
               updated {updatedAt.toLocaleTimeString()} · refreshes every {REFRESH_MS / 1000}s
             </span>
           )}
@@ -110,21 +110,24 @@ export default function MonitorsView({ userId = '' }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* [&>*]:min-w-0 — grid items default to min-width:auto, so one wide
+          child (a long endpoint or monitor name) would otherwise stretch the
+          whole track past the viewport instead of being clipped inside it. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>*]:min-w-0">
         {/* Traffic */}
         <SectionCard title="Traffic" icon={<Wifi className="w-4 h-4" />}>
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div>
-              <div className="text-2xl font-bold">{fmt(traff.total_requests)}</div>
-              <div className="text-xs text-[var(--text-muted)]">reqs total</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(traff.total_requests)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">reqs total</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(traff.requests_last_window)}</div>
-              <div className="text-xs text-[var(--text-muted)]">last 60s</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(traff.requests_last_window)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">last 60s</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{traff.requests_per_min || 0}/m</div>
-              <div className="text-xs text-[var(--text-muted)]">rate</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{traff.requests_per_min || 0}/m</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">rate</div>
             </div>
           </div>
           <div className="mt-4">
@@ -161,12 +164,15 @@ export default function MonitorsView({ userId = '' }) {
             {(traff.top_endpoints || []).slice(0, 6).map((e) => {
               const pct = Math.min(100, (e.count / (traff.total_requests || 1)) * 100);
               return (
-                <div key={e.endpoint} className="flex items-center gap-2 text-xs py-1">
-                  <code className="text-[var(--text-secondary)] truncate max-w-[220px]">{e.endpoint}</code>
-                  <div className="flex-1 h-2 bg-white/6 rounded overflow-hidden">
+                /* Endpoint strings are server-supplied and unbounded: the name
+                   cell must be able to shrink (min-w-0) or it forces the row —
+                   and the whole grid — wider than a 360px phone. */
+                <div key={e.endpoint} className="flex items-center gap-2 text-xs py-1 min-w-0">
+                  <code className="text-[var(--text-secondary)] truncate min-w-0 basis-[45%] max-w-[220px]" title={e.endpoint}>{e.endpoint}</code>
+                  <div className="flex-1 min-w-0 h-2 bg-white/6 rounded overflow-hidden">
                     <div className="bg-[var(--accent)]/70 h-full rounded" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-[var(--text-muted)] w-14 text-right">{fmt(e.count)}</span>
+                  <span className="text-[var(--text-muted)] w-14 shrink-0 text-right">{fmt(e.count)}</span>
                 </div>
               );
             })}
@@ -179,33 +185,33 @@ export default function MonitorsView({ userId = '' }) {
         {/* Activity */}
         <SectionCard title="Activity" icon={<Activity className="w-4 h-4" />}>
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.study_sessions_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)]">study sessions 24h</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.study_sessions_24h)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">study sessions 24h</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.study_sessions)}</div>
-              <div className="text-xs text-[var(--text-muted)]">sessions all-time</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.study_sessions)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">sessions all-time</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.assignments_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)]">assignments 24h</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.assignments_24h)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">assignments 24h</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.assignments)}</div>
-              <div className="text-xs text-[var(--text-muted)]">assignments all-time</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.assignments)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">assignments all-time</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.study_materials)}</div>
-              <div className="text-xs text-[var(--text-muted)]">study materials</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.study_materials)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">study materials</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(act.transcripts)}</div>
-              <div className="text-xs text-[var(--text-muted)]">transcripts</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(act.transcripts)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">transcripts</div>
             </div>
           </div>
-          <div className="mt-4 text-xs text-[var(--text-muted)] flex items-center gap-1">
-            <Server className="w-3 h-3" /> uptime {Math.floor((overview?.uptime_seconds || 0) / 3600)}h {Math.floor(((overview?.uptime_seconds || 0) % 3600) / 60)}m
+          <div className="mt-4 text-xs text-[var(--text-muted)] flex items-center gap-1 min-w-0">
+            <Server className="w-3 h-3 shrink-0" /> <span className="truncate">uptime {Math.floor((overview?.uptime_seconds || 0) / 3600)}h {Math.floor(((overview?.uptime_seconds || 0) % 3600) / 60)}m</span>
           </div>
         </SectionCard>
 
@@ -213,9 +219,9 @@ export default function MonitorsView({ userId = '' }) {
         <SectionCard title="Data Lake" icon={<Database className="w-4 h-4" />}>
           <div className="space-y-2">
             {dlRows.map((r) => (
-              <div key={r.label} className="flex items-center justify-between text-xs py-1 border-b border-[var(--border-subtle)] last:border-0">
-                <span className="text-[var(--text-secondary)]">{r.label}</span>
-                <span className="flex items-center gap-2">
+              <div key={r.label} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-[var(--border-subtle)] last:border-0 min-w-0">
+                <span className="text-[var(--text-secondary)] min-w-0 truncate" title={r.label}>{r.label}</span>
+                <span className="flex items-center gap-2 shrink-0">
                   {r.delta > 0 && (
                     <span className="text-emerald-400 text-xs">+{fmt(r.delta)}</span>
                   )}
@@ -235,26 +241,26 @@ export default function MonitorsView({ userId = '' }) {
         {/* Cost */}
         <SectionCard title="API Cost" icon={<Coins className="w-4 h-4" />}>
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <div className="text-2xl font-bold">${(cost.cost_usd_24h ?? 0).toFixed(4)}</div>
-              <div className="text-xs text-[var(--text-muted)]">spent 24h</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">${(cost.cost_usd_24h ?? 0).toFixed(4)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">spent 24h</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">${(cost.cost_usd ?? 0).toFixed(4)}</div>
-              <div className="text-xs text-[var(--text-muted)]">spent all-time</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">${(cost.cost_usd ?? 0).toFixed(4)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">spent all-time</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(cost.calls_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)]">API calls 24h</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(cost.calls_24h)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">API calls 24h</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{fmt(cost.calls)}</div>
-              <div className="text-xs text-[var(--text-muted)]">calls all-time</div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold truncate">{fmt(cost.calls)}</div>
+              <div className="text-xs text-[var(--text-muted)] break-words">calls all-time</div>
             </div>
           </div>
-          <div className="mt-4 flex justify-between text-xs text-[var(--text-muted)]">
-            <span>{fmt(cost.input_tokens)} in-tokens</span>
-            <span>{fmt(cost.output_tokens)} out-tokens</span>
+          <div className="mt-4 flex justify-between gap-2 text-xs text-[var(--text-muted)]">
+            <span className="min-w-0 truncate">{fmt(cost.input_tokens)} in-tokens</span>
+            <span className="min-w-0 truncate">{fmt(cost.output_tokens)} out-tokens</span>
           </div>
         </SectionCard>
       </div>
