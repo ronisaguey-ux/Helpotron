@@ -110,6 +110,17 @@ except (ImportError, ValueError):
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("helpotron")
 
+# Persistent access/error logs (incident 08-29: the only access log was the
+# process's stdout, redirected to a scratch file that later got cleaned up —
+# every request record for the live server was unrecoverable). Wiring the file
+# handlers here makes the logs independent of how the server was launched and
+# of where stdout points. Never fatal: falls back to stdout-only on failure.
+try:
+    from .access_log import install as _install_access_logging
+except (ImportError, ValueError):
+    from server.access_log import install as _install_access_logging
+_ACCESS_LOG_FILES = _install_access_logging(logger)
+
 ALL_MATERIAL_KINDS = ("study_guide", "flashcards", "practice_test", "summary")
 
 
@@ -155,6 +166,11 @@ async def _cleanup_temp_files_loop(interval_seconds: int = 3600):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from pathlib import Path
+    # Re-assert the file handlers here too: a --reload worker or a gunicorn
+    # UvicornWorker can apply uvicorn's logging dictConfig *after* this module
+    # was imported, which would drop the handlers off uvicorn.access. install()
+    # is idempotent, so this is a no-op in the normal single-process path.
+    _install_access_logging(logger)
     for problem in config.validate():
         logger.warning("config: %s", problem)
     init_db()
