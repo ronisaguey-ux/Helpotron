@@ -3,8 +3,31 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+// http→https 308 for the public hostname (audit 08-28): the cloudflared edge
+// also serves plain HTTP, and WebKit drops Secure cookies set from HTTP
+// pages — a phone landing on http://helpotron.dpdns.org bounced at login.
+// configurePreviewServer runs BEFORE vite's internal middlewares (incl. the
+// /api proxy + static serving), so the whole app is HTTPS-only for public
+// visitors. Local requests without the public Host/XFP pass straight through.
+function httpsRedirect() {
+  return {
+    name: 'https-redirect',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const host = req.headers.host || '';
+        if (host.includes('helpotron.dpdns.org') && req.headers['x-forwarded-proto'] === 'http') {
+          res.writeHead(308, { Location: `https://${host}${req.url}` });
+          res.end();
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), httpsRedirect()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

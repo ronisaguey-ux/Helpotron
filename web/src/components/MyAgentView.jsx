@@ -14,7 +14,7 @@ import {
   Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, ChevronUp, User as UserIcon, Undo2, Pin, Pencil,
   Settings2, ArrowUpRight,
 } from 'lucide-react';
-import api from '../api.js';
+import api, { getCsrfToken } from '../api.js';
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
 import { normalizeCards, computeAssignmentEvents, formatAssignmentEvent, EVENT_META } from '../lib/assignmentEvents.js';
@@ -43,7 +43,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   const ref = useRef(null);
   return (
     <div className="relative shrink-0 group">
-      <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 border border-white/15 flex items-center justify-center text-2xl">
+      <div className="w-14 h-14 rounded-[var(--radius-md)] overflow-hidden bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] border border-[var(--border-subtle)] flex items-center justify-center text-2xl">
         {url
           ? <img src={url} alt={label} className="w-full h-full object-cover" />
           : <span>{initial}</span>}
@@ -53,7 +53,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
         onClick={() => ref.current?.click()}
         aria-label={`Upload ${label}`}
         title={`Upload ${label} (PNG/JPG)`}
-        className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-slate-800 border border-white/20 text-slate-300 hover:text-white hover:bg-slate-700 flex items-center justify-center transition cursor-pointer opacity-0 group-hover:opacity-100"
+        className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface)] flex items-center justify-center transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Camera className="w-3 h-3" />
       </button>
@@ -142,7 +142,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         try {
           const fd = new FormData();
           fd.append('file', blob, 'rec.webm');
-          const r = await fetch('/api/voice/transcribe', { method: 'POST', body: fd });
+          const csrfHdr = getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {};
+          const r = await fetch('/api/voice/transcribe', { method: 'POST', headers: csrfHdr, body: fd });
           const j = await r.json().catch(() => ({}));
           if (r.ok && j.text) setInput((prev) => (prev ? `${prev} ${j.text}` : j.text));
           else alert(`Voice: ${j.detail || 'transcription failed'}`);
@@ -161,7 +162,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     try {
       const r = await fetch('/api/voice/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}),
+        },
         body: JSON.stringify({ text: text.slice(0, 1200) }),
       });
       if (!r.ok) throw new Error(((await r.json().catch(() => ({})))?.detail) || r.statusText);
@@ -819,37 +823,37 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const pending = pendingPermissions[0];
 
   const renderThreadRow = (t) => (
-    <div key={t.id} className={`group rounded-xl transition border ${
+    <div key={t.id} className={`group rounded-[var(--radius-md)] transition border ${
       activeThread === t.id
-        ? 'bg-blue-600/20 border-blue-500/40'
+        ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.40)]'
         : t.pinned
           ? 'border-amber-500/30 bg-amber-500/[0.05]'
-          : 'border-white/6 hover:bg-white/4'
+          : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]'
     }`}>
       <button type="button" onClick={() => openThread(t)} className="w-full text-left px-2.5 py-2 flex items-center gap-2">
         <span className="text-sm">{t.pinned ? '📌' : '💬'}</span>
         <span className="flex-1 min-w-0">
-          <span className={`block text-[11px] font-semibold truncate ${activeThread === t.id ? 'text-blue-300' : t.pinned ? 'text-amber-200' : 'text-slate-300'}`}>
+          <span className={`block text-[11px] font-semibold truncate ${activeThread === t.id ? 'text-[var(--accent)]' : t.pinned ? 'text-amber-200' : 'text-[var(--text-secondary)]'}`}>
             {renameOpenId === t.id ? (
               <input
                 value={renameDraft}
                 onChange={(e) => setRenameDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameThread(t); if (e.key === 'Escape') setRenameOpenId(null); }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full bg-slate-900 border border-blue-500/40 rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                className="w-full bg-[var(--bg-surface)] border border-[rgba(139,92,246,0.4)] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
                 autoFocus
               />
             ) : t.title}
           </span>
-          <span className="block text-[9px] text-slate-600" title={t.last_message_at || t.updated_at || ''}>{timeShort(t.last_message_at || t.updated_at)}</span>
+          <span className="block text-[9px] text-[var(--text-muted)]" title={t.last_message_at || t.updated_at || ''}>{timeShort(t.last_message_at || t.updated_at)}</span>
         </span>
       </button>
-      <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5 opacity-0 group-hover:opacity-100 transition">
+      <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition">
         {renameOpenId !== t.id && (
           <button
             type="button"
             onClick={() => { setRenameOpenId(t.id); setRenameDraft(t.title); }}
-            className="p-1 text-slate-500 hover:text-blue-300 transition cursor-pointer"
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
             title="Rename chat"
           >
             <Pencil className="w-3 h-3" />
@@ -858,7 +862,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         <button
           type="button"
           onClick={() => togglePin(t)}
-          className={`p-1 transition cursor-pointer ${t.pinned ? 'text-amber-300' : 'text-slate-500 hover:text-blue-300'}`}
+          className={`p-1 transition cursor-pointer ${t.pinned ? 'text-amber-300' : 'text-[var(--text-muted)] hover:text-[var(--accent)]'}`}
           title={t.pinned ? 'Unpin' : 'Pin chat'}
         >
           <Pin className="w-3 h-3" />
@@ -866,7 +870,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         <button
           type="button"
           onClick={() => deleteThread(t)}
-          className="p-1 text-slate-500 hover:text-red-400 transition cursor-pointer"
+          className="p-1 text-[var(--text-muted)] hover:text-red-400 transition cursor-pointer"
           title="Delete chat"
         >
           <Trash2 className="w-3 h-3" />
@@ -885,7 +889,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
 
   return (
     <div className="space-y-5">
-      {/* ── Identity header ──────────────────────────────────────────────── */}
+      {/* ── Identity header: avatar + agent name (08-28) ── */}
       <SectionCard id="myagent-identity" header={
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="flex items-center gap-4">
@@ -901,18 +905,20 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   value={agentName}
                   onChange={(e) => set('ai.aiName', e.target.value)}
                   aria-label="Agent name"
-                  className="bg-transparent text-lg font-bold text-white outline-none border-b border-transparent focus:border-blue-500/50 w-36"
+                  className="bg-transparent text-lg font-bold text-[var(--text-primary)] outline-none border-b border-transparent focus:border-[var(--accent)] w-36"
                 />
-                <Badge color="blue">YOUR AGENT</Badge>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="aurora-chip">YOUR AGENT</span>
+                <span className="aurora-chip" aria-label="Agent online"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /></span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                One agent for everything — ask it to do anything. · effort <span className="text-blue-300 font-mono">{Math.max(1, Math.round(effort / 100))}/10</span> ({effortBucket(effort)})
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                One agent for everything — ask it to do anything. · effort <span className="text-[var(--accent)] font-mono">{Math.max(1, Math.round(effort / 100))}/10</span> ({effortBucket(effort)})
               </p>
             </div>
           </div>
+          {/* Control toolbar (IA 08-28): segmented mode picker (primary) +
+           * auto-approve toggle + Manage — two secondaries max on this row. */}
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/40 border border-white/8">
+            <div className="flex items-center gap-0.5 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
               {Object.entries(MODE_META).map(([k, m]) => {
                 const Icon = m.icon;
                 return (
@@ -920,55 +926,63 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     key={k}
                     type="button"
                     onClick={() => handleSwitchMode(k)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 border transition cursor-pointer ${mode === k ? m.cls : 'text-slate-400 hover:text-slate-200 border-transparent'}`}
+                    className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-[10px] font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
+                      mode === k
+                        ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border-transparent'
+                    }`}
                   >
                     <Icon className="w-3 h-3" /> {m.label}
                   </button>
                 );
               })}
             </div>
-            <label className="flex items-center gap-2 pl-2 cursor-pointer">
+            <label className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={autoApprove}
                 onChange={(e) => handleAutoApprove(e.target.checked)}
-                className="accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
               />
-              <span className="text-[10px] text-slate-400">Auto-approve routine actions</span>
+              <span className="text-[10px] text-[var(--text-secondary)]">Auto-approve routine</span>
             </label>
             <button
               type="button"
               onClick={() => setListOpen(!listOpen)}
-              className="px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 transition cursor-pointer"
+              className={`px-3 py-1.5 rounded-full border text-[10px] font-semibold transition cursor-pointer ${
+                listOpen
+                  ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
+                  : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)]'
+              }`}
               aria-expanded={listOpen}
             >
               {listOpen ? 'Done' : `Manage (${autoList.length})`}
             </button>
           </div>
           {listOpen && (
-            <div className="mt-3 p-3 rounded-xl bg-slate-950/50 border border-white/8 space-y-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="w-full mt-2 p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Auto-approved actions — the agent doesn't ask for these
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {autoList.map((a) => (
                   <span
                     key={a}
-                    className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300"
+                    className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300"
                   >
                     {a}
                     <button
                       type="button"
                       aria-label={`Remove ${a}`}
                       onClick={() => saveAutoList(autoList.filter((x) => x !== a))}
-                      className="w-4 h-4 flex items-center justify-center rounded-md text-slate-500 hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
+                      className="w-4 h-4 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
                     >
                       ✕
                     </button>
                   </span>
                 ))}
                 {autoList.length === 0 && (
-                  <span className="text-[10px] text-slate-600 italic">Nothing auto-approved — the agent asks before every action.</span>
+                  <span className="text-[10px] text-[var(--text-muted)] italic">Nothing auto-approved — the agent asks before every action.</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -994,7 +1008,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     }
                   }}
                   disabled={!newAction.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>
@@ -1005,13 +1019,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       }>
 
         {/* Effort scale — quick override for this agent (wins over main Settings) */}
-        <div className="mt-5 pt-4 border-t border-white/8">
+        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-blue-400" /> Effort (1–10)
+            <span className="text-[11px] font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-[var(--accent)]" /> Effort (1–10)
             </span>
-            <span className="text-[11px] font-mono font-bold text-blue-300">
-              {Math.max(1, Math.round(effort / 100))} <span className="text-[10px] text-slate-500">/ 10 · {effortBucket(effort)}</span>
+            <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
+              {Math.max(1, Math.round(effort / 100))} <span className="text-[10px] text-[var(--text-muted)]">/ 10 · {effortBucket(effort)}</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -1023,7 +1037,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               value={Math.max(1, Math.round(effort / 100))}
               onChange={(e) => handleEffort(e.target.value)}
               aria-label="Agent effort score between 1 and 10"
-              className="flex-1 accent-blue-500 cursor-pointer"
+              className="flex-1 accent-[var(--accent)] cursor-pointer"
             />
             <div className="flex gap-1.5">
               {['Low', 'Balanced', 'High'].map((b) => (
@@ -1031,8 +1045,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   key={b}
                   type="button"
                   onClick={() => handleEffort(b === 'Low' ? 1 : b === 'Balanced' ? 5 : 9)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer border ${
-                    effortBucket(effort) === b ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-slate-500 border-white/8 hover:text-slate-300'
+                  className={`px-2.5 py-1 rounded-[var(--radius-sm)] text-[10px] font-medium transition cursor-pointer border ${
+                    effortBucket(effort) === b
+                      ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)]'
+                      : 'text-[var(--text-muted)] border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {b}
@@ -1040,7 +1056,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               ))}
             </div>
           </div>
-          <p className="text-[10px] text-slate-600 mt-2">
+          <p className="text-[10px] text-[var(--text-muted)] mt-2">
             Quick override — sets your agent's effort here, and it wins over the AI effort in main Settings.
             Low = cheap engines do mechanical work, high = flagship engines handle deep reasoning.
           </p>
@@ -1050,15 +1066,15 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       {/* ── Assignment bubbles — per-assignment chat + file drop ────────── */}
       <SectionCard id="myagent-assignment-bubbles" padding="p-4" header={
         <div className="flex items-center justify-between w-full">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
             Assignment bubbles
           </span>
-          <span className="text-[10px] text-slate-500">
+          <span className="text-[10px] text-[var(--text-muted)]">
             {assignments.length} assignment{assignments.length === 1 ? '' : 's'}
           </span>
         </div>
       }>
-        <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
+        <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
           Each assignment has its own bubble: message the agent team about it, or drop a file in —
           it gets extracted and attached to that assignment.
         </p>
@@ -1067,7 +1083,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           <EmptyState
             icon="📘"
             title="No assignments yet"
-            body="Create or dump an assignment first — each one gets its own bubble to chat with the agent team and drop files into."
+            body="Create or dump an assignment first — each one gets its own bubble."
             actionLabel="Open Assignment Dump"
             onAction={() => onGoTo('dump')}
           />
@@ -1079,44 +1095,46 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               const open = !!bubbleOpen[a.id];
               const chat = bubbleChats[a.id] || [];
               return (
-                <div key={a.id} className="rounded-xl border border-white/8 bg-slate-950/40 overflow-hidden">
+                <div key={a.id} className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
                   <button
                     type="button"
                     onClick={() => toggleBubble(a.id)}
                     aria-expanded={open}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-white/4 transition cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
                   >
                     <span className="text-base leading-none">📘</span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-semibold text-white truncate">{a.name || `Assignment #${a.id}`}</span>
+                      <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{a.name || `Assignment #${a.id}`}</span>
                       {/* Ghost guard (08-28): scrape pipelines can leave
                           subject/class/due empty — never render a bare
                           separator line. */}
-                      <span className="block text-[10px] text-slate-500 truncate">
+                      <span className="block text-[10px] text-[var(--text-muted)] truncate">
                         {[a.subject, a.class_code].filter(Boolean).join(' · ') || 'uncategorized'} · due {a.due_date || 'No deadline'}
                       </span>
                     </span>
                     <Badge color={a.status === 'In Progress' ? 'blue' : a.status === 'Submitted' ? 'green' : 'slate'}>
                       {a.status}
                     </Badge>
-                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
                   </button>
 
                   {open && (
-                    <div className="border-t border-white/8 p-3">
+                    <div className="border-t border-[var(--border-subtle)] p-3">
                       <div className="max-h-56 overflow-y-auto space-y-2 mb-2.5 pr-1">
                         {chat.length === 0 && (
-                          <p className="text-[11px] text-slate-600">
+                          <p className="text-[11px] text-[var(--text-muted)]">
                             This bubble is fresh — message the team about the assignment, or add its materials with 📎.
                           </p>
                         )}
                         {chat.map((m) => {
                           const isUser = m.sender === 'user';
-                          
+
   return (
                             <div key={m.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[80%] rounded-xl px-3 py-2 text-[11px] leading-relaxed ${
-                                isUser ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800/80 border border-white/5 text-slate-200'
+                              <div className={`max-w-[72ch] min-w-0 break-words rounded-2xl px-3.5 py-2 text-[12px] leading-relaxed border ${
+                                isUser
+                                  ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-[var(--text-primary)]'
+                                  : 'bg-[var(--bg-surface-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
                               }`}>
                                 {m.text}
                               </div>
@@ -1124,19 +1142,19 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                           );
                         })}
                         {bubbleBusy[a.id] && (
-                          <div className="flex items-center gap-2 text-[11px] text-blue-400 bg-slate-800/40 p-2 rounded-xl border border-white/5 w-fit">
-                            <RefreshCw className="w-3 h-3 animate-spin" /> {agentName} is working…
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] w-fit">
+                            <RefreshCw className="w-3 h-3 animate-spin text-[var(--accent-2)]" /> {agentName} is working…
                           </div>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 focus-within:border-blue-500 transition">
+                      <div className="flex items-center gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-2.5 py-1 focus-within:border-[rgba(139,92,246,0.45)] transition">
                         <button
                           type="button"
                           onClick={() => { bubbleFileTarget.current = a.id; bubbleFileRef.current?.click(); }}
                           aria-label={`Add a file to ${a.name || `assignment ${a.id}`}`}
                           title="Attach a file — extracted and added to this assignment"
-                          className="text-slate-400 hover:text-blue-400 transition cursor-pointer p-1"
+                          className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1"
                         >
                           <Paperclip className="w-4 h-4" />
                         </button>
@@ -1147,14 +1165,14 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBubbleMessage(a.id); } }}
                           placeholder={`Message ${agentName} about this assignment…`}
                           aria-label={`Message the ${a.name || `assignment ${a.id}`} team`}
-                          className="flex-1 bg-transparent border-none text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none"
+                          className="flex-1 bg-transparent border-none text-[16px] sm:text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => sendBubbleMessage(a.id)}
                           disabled={!bubbleInputs[a.id]?.trim() || bubbleBusy[a.id]}
                           aria-label={`Send message to the ${a.name || `assignment ${a.id}`} team`}
-                          className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 transition cursor-pointer"
+                          className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
                         >
                           <Send className="w-3.5 h-3.5" />
                         </button>
@@ -1171,41 +1189,43 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
 
       {/* ── Pending permission strip ─────────────────────────────────────── */}
       {pending && (
-        <SectionCard id="myagent-pending-permission" padding="p-4" className="border-amber-500/30 bg-amber-500/8" header={
+        <SectionCard id="myagent-pending-permission" padding="p-4" className="border-amber-500/35" header={
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
               ⚠️ Action pending approval — {pending.action_type}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5 truncate">Assignment #{pending.assignment_id} · {pending.description || 'the agent wants to act on your behalf'}</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">Assignment #{pending.assignment_id} · {pending.description || 'the agent wants to act on your behalf'}</p>
           </div>
         }>
           <div className="space-y-2.5">
+            {/* Approve (primary) + Reject (danger); the two alternate-action
+                variants are row-level ghosts so the strip reads as 2 actions. */}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve')}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
               >
                 Approve
               </button>
               <button
                 type="button"
                 onClick={() => { setFeedbackFor(feedbackFor === 'approve' ? '' : 'approve'); setApprovalFeedback(''); }}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-600/25 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/40 text-[11px] font-semibold transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/15 text-[11px] font-semibold transition cursor-pointer"
               >
                 Approve with feedback…
               </button>
               <button
                 type="button"
                 onClick={() => handlePermissionAction(pending.id, 'reject')}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer"
               >
                 Reject
               </button>
               <button
                 type="button"
                 onClick={() => { setFeedbackFor(feedbackFor === 'reject' ? '' : 'reject'); setApprovalFeedback(''); }}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600/25 border border-rose-500/40 text-rose-300 hover:bg-rose-600/40 text-[11px] font-semibold transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] border border-rose-500/35 text-rose-300 hover:bg-rose-500/15 text-[11px] font-semibold transition cursor-pointer"
               >
                 Reject with feedback…
               </button>
@@ -1215,9 +1235,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 type="checkbox"
                 checked={autoApproveThis}
                 onChange={(e) => setAutoApproveThis(e.target.checked)}
-                className="accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
               />
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-[var(--text-muted)]">
                 Also auto-approve this action type ({pending.action_type}) from now on
               </span>
             </label>
@@ -1230,7 +1250,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   placeholder={feedbackFor === 'approve'
                     ? 'Optional instructions to run alongside the action…'
                     : 'Optional note for the agent…'}
-                  className="w-full bg-slate-950/60 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-slate-200 outline-none placeholder:text-slate-600"
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-2 text-[11px] text-[var(--text-secondary)] outline-none placeholder:text-[var(--text-muted)]"
                   aria-label="Feedback to send with your decision"
                 />
                 <div className="flex gap-2">
@@ -1238,14 +1258,14 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     type="button"
                     onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : feedbackFor, approvalFeedback)}
                     disabled={!approvalFeedback.trim()}
-                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer disabled:cursor-not-allowed"
+                    className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer disabled:cursor-not-allowed"
                   >
                     Send {feedbackFor === 'approve' ? 'approve' : 'reject'} with feedback
                   </button>
                   <button
                     type="button"
                     onClick={() => { setFeedbackFor(''); setApprovalFeedback(''); }}
-                    className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+                    className="px-3 py-1.5 rounded-[var(--radius-sm)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -1264,7 +1284,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
        * pinch it below the available room. */}
       <div className={`grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px] ${configsOpen && isXL ? 'xl:grid-cols-[220px_minmax(0,1fr)_300px]' : ''}`}>
         {configsOpen && isXL && (
-          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] min-w-0">
+          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)] min-w-0">
             <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
           </div>
         )}
@@ -1284,49 +1304,40 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           document.body
         )}
         {configsOpen && !isLG && (
-          <div className="h-[clamp(480px,calc(100vh-16rem),760px)]">
+          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)]">
             <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
           </div>
         )}
         {/* Chat */}
-        <SectionCard id="myagent-chat" padding="p-0" className="min-w-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-16rem),760px)]" header={
-          <div className="px-4 sm:px-5 py-3.5 border-b border-white/8 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <SectionCard id="myagent-chat" padding="p-0" className="min-w-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)]" header={
+          <div className="px-4 sm:px-5 py-3.5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex items-center gap-2.5 min-w-0 shrink">
               <AgentAvatar
                 size="sm"
                 status={busy ? 'working' : 'ready'}
                 src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
               />
-              <span className="text-xs font-semibold text-white truncate">Chat with {agentName}</span>
+              <span className="text-xs font-semibold text-[var(--text-primary)] truncate">Chat with {agentName}</span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap shrink">
-              <span className="text-[10px] text-slate-600 hidden 2xl:block">{agentName}</span>
+              <span className="hidden 2xl:block"><span className="aurora-chip">{agentName}</span></span>
               <button
                 type="button"
                 onClick={() => setConfigsOpen(!configsOpen)}
                 aria-pressed={configsOpen}
                 title={configsOpen ? 'Hide the Configs sidebar' : 'Show the Configs sidebar'}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-[10px] font-semibold transition cursor-pointer ${
                   configsOpen
-                    ? 'bg-blue-600/20 border-blue-500/40 text-blue-300'
-                    : 'bg-white/4 border-white/8 text-slate-400 hover:text-white hover:bg-white/8'
+                    ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)]'
                 }`}
               >
                 <Settings2 className="w-3 h-3" /> Configs
               </button>
               <button
                 type="button"
-                onClick={() => setPromptMinimized((v) => !v)}
-                title={promptMinimized ? 'Expand the prompt box' : 'Minimize the prompt box'}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white transition cursor-pointer"
-              >
-                {promptMinimized ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                {promptMinimized ? 'Prompt' : 'Minimize'}
-              </button>
-              <button
-                type="button"
                 onClick={newChat}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-semibold transition cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-[10px] font-semibold transition cursor-pointer hover:bg-[var(--accent-hover)]"
                 title="Start a new conversation"
               >
                 <Plus className="w-3 h-3" /> New chat
@@ -1335,7 +1346,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 type="button"
                 onClick={handleCompact}
                 disabled={!!compactMsg}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[10px] text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${compactMsg ? 'animate-spin' : ''}`} />
                 {compactMsg || 'Compact'}
@@ -1357,27 +1368,25 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     {/* Assignment bubble (operator 08-28): lifecycle events from the
                         assignment watcher render as own card-style bubble — label,
                         headline, detail and a jump to the dashboard. */}
-                    <div className="w-full sm:max-w-[92%] rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-slate-900/70 to-slate-950/50 p-3.5 shadow-sm">
+                    <div className="w-full sm:max-w-[92%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.16)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.12)] p-3.5">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-base leading-none" aria-hidden="true">{evtMeta.icon}</span>
-                        <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25">
-                          {evtMeta.label}
-                        </span>
-                        <span className="ml-auto text-[9px] text-slate-500 font-mono">{m.time}</span>
+                        <span className="aurora-chip font-mono font-bold tracking-wider">{evtMeta.label}</span>
+                        <span className="ml-auto text-[9px] text-[var(--text-muted)] font-mono">{m.time}</span>
                       </div>
-                      <div className="text-[12px] font-semibold text-slate-100 leading-relaxed">{m.text}</div>
-                      {m.detail && <div className="text-[10px] text-slate-400 mt-0.5">{m.detail}</div>}
+                      <div className="text-[12px] font-semibold text-[var(--text-primary)] leading-relaxed">{m.text}</div>
+                      {m.detail && <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{m.detail}</div>}
                       <div className="flex items-center gap-2 mt-2.5">
                         <button
                           type="button"
                           onClick={() => onGoTo('overview')}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
                           title="Open the assignment dashboard"
                         >
                           <ArrowUpRight className="w-3 h-3" aria-hidden="true" /> Open in dashboard
                         </button>
                         {m.assignment && (
-                          <span className="text-[9px] text-slate-500 font-mono truncate max-w-[50%]">
+                          <span className="text-[9px] text-[var(--text-muted)] font-mono truncate max-w-[50%]">
                             Assignment #{m.assignment.id}
                           </span>
                         )}
@@ -1388,8 +1397,11 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               }
               return (
                 <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
-                    isUser ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800/80 border border-white/5 text-slate-200'
+                  {/* Shared aurora bubble language — matches AdminAgentChat exactly */}
+                  <div className={`max-w-[72ch] min-w-0 break-words rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed border ${
+                    isUser
+                      ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-surface-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
                   }`}>
                     {m.text}
                   </div>
@@ -1397,44 +1409,45 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     <button
                       type="button"
                       onClick={() => speakText(m.text)}
-                      className="text-[10px] text-slate-400 hover:text-blue-300 mt-1 transition cursor-pointer"
+                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] mt-1 transition cursor-pointer"
                       title="Hear this reply (Voicebox TTS)"
                     >
                       🔊 hear
                     </button>
                   )}
-                  <span className="text-[10px] text-slate-500 mt-1 px-1">{m.time}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] mt-1 px-1">{m.time}</span>
                 </div>
               );
             })}
             {busy && (
-              <div className="flex items-center gap-2 text-xs text-blue-400 bg-slate-800/40 p-2.5 rounded-xl border border-white/5 w-fit">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] w-fit">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
                 <span>{agentName} is working…</span>
               </div>
             )}
           </div>
 
-          {/* Composer (operator 08-28: minimize toggle in the chat header) */}
-          <div className="p-4 border-t border-white/8 bg-slate-950/30">
+          {/* Composer (operator 08-28: minimize toggle lives in this bar so the
+              chat header stays at 1 primary + 2 secondary) */}
+          <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
             {promptMinimized ? (
               <button
                 type="button"
                 onClick={() => { setPromptMinimized(false); setTimeout(() => chatInputRef.current?.focus(), 0); }}
-                className="w-full py-2.5 rounded-xl bg-slate-900 border border-white/10 text-[11px] text-slate-500 hover:text-slate-300 hover:border-blue-500/40 transition cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer flex items-center justify-center gap-2"
               >
                 <ChevronUp className="w-3.5 h-3.5" /> Prompt box minimized — click to expand
               </button>
             ) : (
             <form
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-              className="flex items-end gap-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition"
+              className="flex items-end gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-1.5 focus-within:border-[rgba(139,92,246,0.45)] transition"
             >
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach a file for the agent"
-                className="text-slate-400 hover:text-blue-400 transition cursor-pointer p-1"
+                className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
@@ -1442,7 +1455,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 type="button"
                 onClick={toggleRecord}
                 aria-label={recording ? 'Stop recording' : 'Record a voice message'}
-                className={`text-slate-400 hover:text-blue-400 transition cursor-pointer p-1 ${recording ? 'text-red-400 animate-pulse' : ''}`}
+                className={`text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1 ${recording ? 'text-red-400 animate-pulse' : ''}`}
                 title={recording ? 'Stop recording' : 'Dictate a message (Voicebox)'}
               >
                 <Mic className="w-4 h-4" />
@@ -1470,15 +1483,24 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 }}
                 placeholder={`Ask ${agentName} to do anything…`}
                 aria-label="Agent prompt input"
-                className="flex-1 bg-transparent border-none text-[13px] text-slate-100 placeholder-slate-500 focus:outline-none resize-none leading-relaxed py-1.5 max-h-[240px] overflow-y-auto"
+                className="flex-1 min-w-0 bg-transparent border-none text-[16px] sm:text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none leading-relaxed py-1.5 max-h-[240px] overflow-y-auto"
               />
               <button
                 type="submit"
                 disabled={!input.trim()}
                 aria-label="Send message to agent"
-                className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 transition cursor-pointer"
+                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromptMinimized(true)}
+                aria-label="Minimize the prompt box"
+                title="Minimize the prompt box"
+                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition cursor-pointer p-1"
+              >
+                <ChevronDown className="w-4 h-4" />
               </button>
             </form>
             )}
@@ -1490,13 +1512,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Chat history (operator 08-26): timestamps, rename, pin */}
           <SectionCard id="myagent-chats" padding="p-3" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
                 <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Chats</span>
               </span>
               <button
                 type="button"
                 onClick={newChat}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                className="flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
               >
                 <Plus className="w-3 h-3" /> New
               </button>
@@ -1514,7 +1536,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               )}
               {threads.some((t) => !t.pinned) && (
                 <>
-                  <div className="text-[9px] text-slate-600 uppercase tracking-wider px-1 pt-1.5">Earlier</div>
+                  <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider px-1 pt-1.5">Earlier</div>
                   {threads.filter((t) => !t.pinned).map((t) => renderThreadRow(t))}
                 </>
               )}
@@ -1524,7 +1546,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Identity controls */}
           <SectionCard id="myagent-identity-controls" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
                 <UserIcon className="w-3 h-3 shrink-0" /> <span className="truncate">Identity</span>
               </span>
             </div>
@@ -1536,13 +1558,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 label="your avatar"
                 onUpload={(f) => handleAvatarUpload(f, 'user')}
               />
-              <div className="text-[11px] text-slate-500">
-                <div className="text-xs font-semibold text-white">{settings.profile?.displayName || userId}</div>
+              <div className="text-[11px] text-[var(--text-muted)]">
+                <div className="text-xs font-semibold text-[var(--text-primary)]">{settings.profile?.displayName || userId}</div>
                 <div className="text-[10px]">Upload PNG/JPG for your profile picture.</div>
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-300 mb-1.5">Personality</div>
+              <div className="text-[11px] font-medium text-[var(--text-secondary)] mb-1.5">Personality</div>
               <input
                 value={ai.personality || ''}
                 onChange={(e) => set('ai.personality', e.target.value)}
@@ -1550,10 +1572,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 aria-label="Agent personality"
                 className="clean-input w-full px-3 py-2 text-[11px] outline-none"
               />
-              <div className="text-[9px] text-slate-600 mt-1">Free text — how the agent should act, in your own words.</div>
+              <div className="text-[9px] text-[var(--text-muted)] mt-1">Free text — how the agent should act, in your own words.</div>
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-300 mb-1.5">Instructions</div>
+              <div className="text-[11px] font-medium text-[var(--text-secondary)] mb-1.5">Instructions</div>
               <textarea
                 value={ai.instructions || ''}
                 onChange={(e) => set('ai.instructions', e.target.value)}
@@ -1569,25 +1591,27 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {ledger.length > 0 && (
             <SectionCard id="myagent-ledger" padding="p-4" header={
               <div className="flex items-center justify-between w-full">
-                <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Undo2 className="w-3.5 h-3.5 text-blue-400" /> Recent actions
+                <div className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <Undo2 className="w-3.5 h-3.5 text-[var(--accent)]" /> Recent actions
                 </div>
-                <span className="text-[10px] text-slate-500">{ledger.filter((a) => a.status === 'done').length} active</span>
+                <span className="text-[10px] text-[var(--text-muted)]">{ledger.filter((a) => a.status === 'done').length} active</span>
               </div>
             }>
               <div className="space-y-1.5">
                 {ledger.slice(0, 8).map((a) => (
                   <div
                     key={a.id}
-                    className={`flex items-center justify-between gap-2 p-2 rounded-lg border ${
-                      a.status === 'undone' ? 'border-white/5 bg-white/2 opacity-60' : 'border-white/8 bg-slate-950/40'
+                    className={`flex items-center justify-between gap-2 p-2 rounded-[var(--radius-md)] border ${
+                      a.status === 'undone'
+                        ? 'border-[var(--border-subtle)] bg-[var(--bg-surface)] opacity-60'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
                     }`}
                   >
                     <div className="min-w-0">
-                      <div className="text-[11px] text-slate-200 truncate font-medium">
+                      <div className="text-[11px] text-[var(--text-secondary)] truncate font-medium">
                         {a.action_type.replace(/_/g, ' ')}
                       </div>
-                      <div className="text-[10px] text-slate-500 truncate">
+                      <div className="text-[10px] text-[var(--text-muted)] truncate">
                         {a.summary || `#${a.id}`}
                         {a.status === 'undone' && <span className="text-emerald-400"> · rolled back</span>}
                       </div>
@@ -1596,7 +1620,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                       <button
                         type="button"
                         onClick={() => undoAction(a.id)}
-                        className="shrink-0 px-2 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
+                        className="shrink-0 px-2 py-1 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
                       >
                         Undo
                       </button>
@@ -1604,7 +1628,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   </div>
                 ))}
               </div>
-              <div className="text-[10px] text-slate-600 mt-2 leading-relaxed">
+              <div className="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed">
                 Every agent action is recorded with an undo snapshot — creations, deletes, settings changes, reads.
                 Undoing a read revokes that content: the agent treats it as unseen.
               </div>
@@ -1614,35 +1638,35 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Permanent memory */}
           <SectionCard id="myagent-memory" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
                 <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Permanent memory</span>
               </span>
               <Badge color={memory.length ? 'blue' : 'slate'}>{memory.length} entries</Badge>
             </div>
           }>
-            <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
+            <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
               The agent always reads this. Add facts about yourself, preferences, deadlines — and it stays forever until you delete it.
               Click any entry (or its arrow) to load it into your prompt box.
             </p>
             <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
-              {memory.length === 0 && <div className="text-[11px] text-slate-600 py-2">No memories yet — teach your agent something.</div>}
+              {memory.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No memories yet — teach your agent something.</div>}
               {memory.map((m) => (
                 <div
                   key={m.id}
                   onClick={() => useMemory(m)}
                   title="Select this memory — loads into your prompt"
-                  className="group flex items-start gap-2 p-3 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 hover:bg-slate-950/70 transition cursor-pointer"
+                  className="group flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
-                    <div className="text-[9px] text-slate-600 mt-1">{timeAgo(m.created_at)}</div>
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{m.text}</p>
+                    <div className="text-[9px] text-[var(--text-muted)] mt-1">{timeAgo(m.created_at)}</div>
                   </div>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); useMemory(m); }}
                     aria-label="Load this memory into the prompt"
                     title="Load into prompt box"
-                    className="p-1 text-slate-500 hover:text-blue-400 transition cursor-pointer"
+                    className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
@@ -1650,7 +1674,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     type="button"
                     onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
                     aria-label="Delete memory entry"
-                    className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
+                    className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1670,7 +1694,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 type="button"
                 onClick={addMemory}
                 aria-label="Save memory"
-                className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition cursor-pointer"
+                className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -1680,13 +1704,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           {/* Files */}
           <SectionCard id="myagent-files" header={
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
                 <FileText className="w-3 h-3 shrink-0" /> <span className="truncate">Files</span>
               </span>
               <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
             </div>
           }>
-            <p className="text-[10px] text-slate-600 mb-3 leading-relaxed">
+            <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
               Upload skills, rules, automations or personality files — the agent loads them and follows them.
             </p>
             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -1695,29 +1719,31 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   key={k.key}
                   type="button"
                   onClick={() => setFileKind(k.key)}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] transition cursor-pointer border ${
-                    fileKind === k.key ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold' : 'text-slate-400 border-white/8 hover:text-slate-200'
+                  className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-[10px] transition cursor-pointer border ${
+                    fileKind === k.key
+                      ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold'
+                      : 'text-[var(--text-muted)] border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {k.icon} {k.label}
                 </button>
               ))}
             </div>
-            <p className="text-[9px] text-slate-600 mb-2">{fileKindMeta.hint}</p>
+            <p className="text-[9px] text-[var(--text-muted)] mb-2">{fileKindMeta.hint}</p>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-2 rounded-lg bg-white/4 border border-dashed border-white/15 text-[11px] text-slate-400 hover:text-white hover:bg-white/8 transition cursor-pointer flex items-center justify-center gap-2 mb-3"
+              className="w-full py-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer flex items-center justify-center gap-2 mb-3"
             >
               <Upload className="w-3.5 h-3.5" /> Upload {fileKindMeta.label.toLowerCase()} file
             </button>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadFile} />
             <div className="space-y-2 max-h-52 overflow-y-auto">
-              {files.length === 0 && <div className="text-[11px] text-slate-600 py-2">No files loaded yet.</div>}
+              {files.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No files loaded yet.</div>}
               {files.map((f) => {
                 const km = FILE_KINDS.find((k) => k.key === f.kind) || FILE_KINDS[0];
                 return (
-                  <div key={f.id} className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-950/40 border border-white/6">
+                  <div key={f.id} className="group flex items-center gap-2.5 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] transition">
                     <span className="text-sm leading-none">{km.icon}</span>
                     <button
                       type="button"
@@ -1725,14 +1751,14 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                       className="flex-1 min-w-0 text-left cursor-pointer"
                       title={`Read ${f.file_name}`}
                     >
-                      <div className="text-[11px] text-slate-200 truncate hover:text-blue-300 transition">{f.file_name}</div>
-                      <div className="text-[9px] text-slate-600">{km.label} · {fmt(f.size_bytes)} B · tap to read</div>
+                      <div className="text-[11px] text-[var(--text-secondary)] truncate hover:text-[var(--accent)] transition">{f.file_name}</div>
+                      <div className="text-[9px] text-[var(--text-muted)]">{km.label} · {fmt(f.size_bytes)} B · tap to read</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteFile(f.id)}
                       aria-label={`Delete file ${f.file_name}`}
-                      className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
+                      className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1747,27 +1773,27 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       {/* File content viewer (operator 08-26) */}
       {viewFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setViewFile(null)}>
-          <div className="clean-card w-full max-w-xl max-h-[80vh] flex flex-col bg-slate-950 border border-white/20 rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
-              <div className="text-sm font-bold text-white flex items-center gap-2 truncate">
-                <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+          <div className="clean-card surface-glass-strong w-full max-w-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
+              <div className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 truncate">
+                <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
                 <span className="truncate">{viewFile.file_name}</span>
-                <span className="text-[10px] text-slate-500 font-mono">{viewFile.kind}</span>
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">{viewFile.kind}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {/* operator 08-28: SELECT this file's content into the prompt box */}
                 <button
                   type="button"
                   onClick={() => { selectConfig(`📎 ${viewFile.file_name}\n\n${viewFile.content}`); setViewFile(null); }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
                   title="Load this file into the prompt box"
                 >
                   <Send className="w-3 h-3" /> Prompt
                 </button>
-                <button type="button" onClick={() => setViewFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+                <button type="button" onClick={() => setViewFile(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer">✕</button>
               </div>
             </div>
-            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">
+            <div className="overflow-y-auto px-5 py-4 text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap font-mono">
               {viewFile.content}
             </div>
           </div>

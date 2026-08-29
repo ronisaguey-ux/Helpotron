@@ -145,8 +145,9 @@ export default function TwoFactorSetup({ s, set }) {
           <div className="space-y-1.5">
             <label htmlFor="two-factor-setup-code" className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
             <input id="two-factor-setup-code" type="text" maxLength={6} placeholder="123456" value={code}
+              inputMode="numeric" autoComplete="one-time-code"
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-blue-500" />
+              className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-base tracking-widest text-white outline-none focus:border-blue-500" />
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" disabled={loading || code.length < 6} onClick={verifySetup}
@@ -165,8 +166,9 @@ export default function TwoFactorSetup({ s, set }) {
         <div className="space-y-3 pt-2 border-t border-white/10">
           <p className="text-xs text-slate-300">Enter your current 6-digit 2FA security code to confirm turning off 2FA:</p>
           <input type="text" maxLength={6} placeholder="123456" value={code} aria-label="6-digit security code to confirm turning off 2FA"
+            inputMode="numeric" autoComplete="one-time-code"
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-rose-500" />
+            className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-base tracking-widest text-white outline-none focus:border-rose-500" />
           <div className="flex gap-2 pt-1">
             <button type="button" disabled={loading || code.length < 6} onClick={disable}
               className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer">

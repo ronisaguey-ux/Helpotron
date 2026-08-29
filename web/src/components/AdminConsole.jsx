@@ -22,18 +22,27 @@ export function AdminConsole({ telemetry, isMockMode = false, onExecuteOperatorA
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-6 text-slate-200">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-[var(--border-subtle)] pb-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Shield className="w-6 h-6 text-emerald-400" /> Roni's Mission Control
+            <Shield className="w-6 h-6 text-[var(--accent)]" /> Roni's Mission Control
           </h1>
-          <p className="text-sm text-slate-400">Autonomous operating system • Solo-developer command center</p>
+          <p className="text-sm text-[var(--text-muted)]">Autonomous operating system • Solo-developer command center</p>
         </div>
-        <div className="flex items-center gap-3">
-          {isMockMode && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800">MOCK PREVIEW MODE ON</span>}
-          <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
+        <div className="flex items-center gap-3 flex-wrap">
+          {isMockMode && (
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+              MOCK PREVIEW MODE ON
+            </span>
+          )}
+          <div className="flex gap-1 p-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/4">
             {ADMIN_DOMAINS.map(d => (
-              <button key={d.id} onClick={() => setActiveDomain(d.id)} className={`px-3 py-1 text-xs rounded font-medium ${activeDomain === d.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+              <button key={d.id} onClick={() => setActiveDomain(d.id)} aria-pressed={activeDomain === d.id} className={`px-3 py-1.5 text-xs rounded-[var(--radius-sm)] font-medium transition cursor-pointer ${
+                activeDomain === d.id
+                  ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
+              }`}>
                 {d.label}
               </button>
             ))}
@@ -42,34 +51,44 @@ export function AdminConsole({ telemetry, isMockMode = false, onExecuteOperatorA
       </div>
 
       {/* Platform Pulse Telemetry Strip */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-          <div className="text-slate-400 flex items-center justify-between">
-            System Status 
-            <button onClick={() => onExplainWhy && onExplainWhy('system_status')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3 h-3" /></button>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="glass-panel p-4 rounded-[var(--radius-lg)] text-xs">
+          <div className="text-[var(--text-muted)] flex items-center justify-between">
+            System Status
+            <button onClick={() => onExplainWhy && onExplainWhy('system_status')} className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer" aria-label="Explain system status" title="Explain"><HelpCircle className="w-3 h-3" /></button>
           </div>
-          <div className={`text-sm font-bold mt-1 ${sysStatus === 'Operational' ? 'text-emerald-400' : 'text-slate-300'}`}>● {sysStatus}</div>
+          <span className={`inline-flex items-center gap-1.5 mt-2 rounded-full px-2.5 py-0.5 text-sm font-bold border ${
+            sysStatus === 'Operational'
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+              : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${sysStatus === 'Operational' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} aria-hidden="true" />
+            {sysStatus}
+          </span>
         </div>
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-          <div className="text-slate-400 flex items-center justify-between">
-            AI Dispatcher 
-            <button onClick={() => onExplainWhy && onExplainWhy('ai_dispatcher')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3 h-3" /></button>
+        <div className="glass-panel p-4 rounded-[var(--radius-lg)] text-xs">
+          <div className="text-[var(--text-muted)] flex items-center justify-between">
+            AI Dispatcher
+            <button onClick={() => onExplainWhy && onExplainWhy('ai_dispatcher')} className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer" aria-label="Explain AI dispatcher" title="Explain"><HelpCircle className="w-3 h-3" /></button>
           </div>
-          <div className="text-sm font-bold text-emerald-400 mt-1">● {aiSuccess}</div>
+          <span className="inline-flex items-center gap-1.5 mt-2 rounded-full px-2.5 py-0.5 text-sm font-bold border bg-emerald-500/15 border-emerald-500/30 text-emerald-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+            {aiSuccess}
+          </span>
         </div>
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-          <div className="text-slate-400 flex items-center justify-between">
-            Active Users 
-            <button onClick={() => onExplainWhy && onExplainWhy('active_users')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3 h-3" /></button>
+        <div className="glass-panel p-4 rounded-[var(--radius-lg)] text-xs">
+          <div className="text-[var(--text-muted)] flex items-center justify-between">
+            Active Users
+            <button onClick={() => onExplainWhy && onExplainWhy('active_users')} className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer" aria-label="Explain active users count" title="Explain"><HelpCircle className="w-3 h-3" /></button>
           </div>
-          <div className="text-sm font-bold text-white mt-1">{userCount}</div>
+          <div className="text-sm font-bold text-white mt-2">{userCount}</div>
         </div>
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-          <div className="text-slate-400 flex items-center justify-between">
-            Daily AI Spend 
-            <button onClick={() => onExplainWhy && onExplainWhy('daily_spend')} className="text-slate-500 hover:text-blue-400"><HelpCircle className="w-3 h-3" /></button>
+        <div className="glass-panel p-4 rounded-[var(--radius-lg)] text-xs">
+          <div className="text-[var(--text-muted)] flex items-center justify-between">
+            Daily AI Spend
+            <button onClick={() => onExplainWhy && onExplainWhy('daily_spend')} className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer" aria-label="Explain daily AI spend" title="Explain"><HelpCircle className="w-3 h-3" /></button>
           </div>
-          <div className="text-sm font-bold text-white mt-1">{spendUsd}</div>
+          <div className="text-sm font-bold text-white mt-2">{spendUsd}</div>
         </div>
       </div>
     </div>

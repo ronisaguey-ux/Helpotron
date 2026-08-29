@@ -38,8 +38,12 @@ const PLAN_BADGE = {
   elite: ['Elite', 'purple', ''],
 };
 
-function AccountSection({ s, set, userId, plan }) {
-  const [planLabel, planColor] = PLAN_BADGE[plan] || PLAN_BADGE.none;
+function AccountSection({ s, set, userId, plan, isAdmin }) {
+  /* Operator (08-28): the account owner is an ADMIN, not a customer — show
+   * the role badge instead of a plan badge on their own account. */
+  const [planLabel, planColor] = isAdmin
+    ? ['Admin', 'amber', 'account owner — full system access']
+    : (PLAN_BADGE[plan] || PLAN_BADGE.none);
   const [pwOpen, setPwOpen] = useState(false);
   const [pwCur, setPwCur] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -1060,10 +1064,10 @@ function AdvancedSection({ s, set, onGoTo }) {
 }
 
 /* ── Dispatcher ──────────────────────────────────────────────────────────── */
-export function SettingsSections({ section, s, set, scoped, setVariants, subjectRefs, userId, onGoTo, plan, credits, tokenBalance }) {
+export function SettingsSections({ section, s, set, scoped, setVariants, subjectRefs, userId, onGoTo, plan, credits, tokenBalance, isAdmin }) {
   const scopeProps = { scoped, setVariants, subjectRefs };
   switch (section) {
-    case 'account': return <AccountSection s={s} set={set} userId={userId} plan={plan} />;
+    case 'account': return <AccountSection s={s} set={set} userId={userId} plan={plan} isAdmin={isAdmin} />;
     case 'academic': return <AcademicSection s={s} set={set} />;
     case 'writing': return <WritingSection s={s} set={set} {...scopeProps} />;
     case 'automation': return <AutomationSection s={s} set={set} {...scopeProps} />;

@@ -8,10 +8,11 @@
 import React, { forwardRef } from 'react';
 
 const VARIANTS = {
-  primary: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-active)]',
+  primary: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-active)] shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_4px_18px_rgba(139,92,246,0.30)] hover:shadow-[0_0_0_1px_rgba(139,92,246,0.5),0_4px_26px_rgba(139,92,246,0.45)]',
   secondary: 'bg-[var(--color-surface-raised)] text-[var(--color-text-primary)] border border-[var(--color-border-soft)] hover:border-[var(--color-primary)]',
   ghost: 'bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]',
   danger: 'bg-[oklch(0.6_0.2_25)] text-white hover:bg-[oklch(0.55_0.21_25)]',
+  aurora: 'bg-[var(--accent-mix)] text-white hover:opacity-95 shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_4px_24px_rgba(99,102,241,0.4)]',
 };
 
 const SIZES = {
@@ -45,11 +46,11 @@ const Button = forwardRef(function Button(
       aria-label={label}
       aria-busy={loading || undefined}
       className={[
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium',
+        'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] font-medium',
         'select-none whitespace-nowrap',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        'transition-colors duration-150',
+        'transition-all duration-150',
         VARIANTS[variant] || VARIANTS.primary,
         SIZES[size] || SIZES.md,
         className,

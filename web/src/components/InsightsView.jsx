@@ -25,7 +25,7 @@ export default function InsightsView({ userId, onGoTo, initialTab }) {
       />
       {tab === 'overview'
         ? <AnalyticsDashboard userId={userId} onExplainWithAgent={() => onGoTo('agent')} />
-        : <IntelligenceView userId={userId} onGoTo={onGoTo} initialTab={tab} embedded onApplyRecommendation={(r) => onGoTo(r.target)} />}
+        : <IntelligenceView userId={userId} onGoTo={onGoTo} initialTab={tab} embedded onApplyRecommendation={() => onGoTo('recommendations')} />}
     </div>
   );
 }

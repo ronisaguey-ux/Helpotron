@@ -8,16 +8,18 @@
  * them; the user then redeems code + new password (old one NOT needed).
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Mail, Phone, UserCog, KeyRound } from 'lucide-react';
 import api from '../api.js';
 
-const CARD = 'p-3.5 rounded-xl border text-left transition cursor-pointer w-full';
-const CARD_OFF = `${CARD} bg-white/4 border-white/8 opacity-55 cursor-not-allowed`;
-const CARD_ON = `${CARD} bg-blue-600/15 border-blue-500/40 text-white hover:bg-blue-600/25`;
-const CARD_DEV = `${CARD} bg-violet-600/15 border-violet-500/40 text-white hover:bg-violet-600/25`;
-const INPUT = 'clean-input w-full px-3 py-2 text-xs outline-none';
-const BTN = 'px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer';
-const BTN_SUB = 'px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer';
+const CARD = 'p-3.5 rounded-[var(--radius-md)] border text-left transition cursor-pointer w-full';
+const CARD_OFF = `${CARD} bg-[var(--bg-surface)] border-[var(--border-subtle)] opacity-55 cursor-not-allowed`;
+const CARD_ON = `${CARD} recovery-card-on text-[var(--text-primary)]`;
+const CARD_DEV = `${CARD} recovery-card-dev text-[var(--text-primary)]`;
+// text-base (>= 16px computed) so iOS/Safari never auto-zooms the field on focus.
+const INPUT = 'clean-input w-full px-3 py-2 text-base outline-none';
+const BTN = 'px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer';
+const BTN_SUB = 'px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer';
 
 export default function RecoveryFlowModal({ open, onClose, publicId }) {
   const [step, setStep] = useState('options'); // options | enter | done
@@ -83,6 +85,20 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
     }
   };
 
+  // WebKit replay (08-29): pointer-events must NOT ride the CSS animation clock
+  // (WebKit can stall the fade for seconds+; a keyframe-carried flip could leave
+  // the modal permanently non-hit-testable). Flip on the animation's end event
+  // with a hard-timer safety net — same contract as AuthModal/PrivacyPolicyModal.
+  const [peReady, setPeReady] = useState(false);
+  useEffect(() => {
+    if (!open) { setPeReady(false); return; }
+    const t = setTimeout(() => setPeReady(true), 4500);
+    return () => clearTimeout(t);
+  }, [open]);
+  const onPanelAnimEnd = (e) => {
+    if (e.animationName === 'aurora-panel-in') setPeReady(true);
+  };
+
   const submitRedeem = async () => {
     setMsg(null);
     if (!code.trim()) { setMsg({ ok: false, text: 'Enter the recovery code from your email/phone/developer.' }); return; }
@@ -101,18 +117,42 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+  // Portal (08-29): this modal lives inside SettingsSections, whose Account
+  // section is a .clean-card with a backdrop-filter — a backdrop-filter turns
+  // the section into the CONTAINING BLOCK for `fixed` descendants, so the
+  // backdrop's inset-0 resolved against the section ([436,1427] at 390×844)
+  // instead of the viewport: the overlay covered only the settings card, the
+  // bottom nav rendered over the modal, and its content sat mid-page.
+  // Portal to <body> so the modal always covers the real viewport.
+  return createPortal(
+    <div className={`fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 aurora-modal-backdrop ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`} onClick={onClose}>
+      {/* Aurora modal chrome (scoped; index.css owns the design system).
+          pointer-events is state-driven (see peReady above), never keyframe-driven. */}
+      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
+.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }
+.recovery-card-on {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.recovery-card-on:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.recovery-card-dev {
+  background: color-mix(in srgb, var(--accent-2) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-2) 40%, transparent);
+}
+.recovery-card-dev:hover { background: color-mix(in srgb, var(--accent-2) 25%, transparent); }`}</style>
       <div
-        className="w-full max-w-md bg-slate-950/95 border border-white/10 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto"
+        className={`w-full max-w-md surface-glass-strong rounded-[var(--radius-lg)] max-h-[85vh] overflow-y-auto aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onPanelAnimEnd}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-blue-400" />
-            <h2 className="text-sm font-bold text-white">Recover your password</h2>
+            <KeyRound className="w-4 h-4 text-[var(--accent)]" />
+            <h2 className="text-sm font-bold text-[var(--text-primary)]">Recover your password</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-white transition">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -120,7 +160,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
         <div className="px-5 py-4 space-y-4">
           {step === 'options' && (
             <>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                 Pick how to get a 6-digit recovery code. It stays valid 30 minutes and
                 works <b>without your current password</b>.
               </p>
@@ -135,10 +175,10 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
                 <div className="flex items-center gap-2.5">
                   <Mail className="w-3.5 h-3.5 shrink-0" />
                   <span className="text-xs font-semibold flex-1">
-                    {status?.email_set ? <>Send code <span className="text-blue-300 font-mono">to {status.email_masked}</span></> : 'Email not set'}
+                    {status?.email_set ? <>Send code <span className="text-[var(--accent)] font-mono">to {status.email_masked}</span></> : 'Email not set'}
                   </span>
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
                   {status?.email_set
                     ? 'We email you a 6-digit code.'
                     : 'No email is on file for this account. Save one below, or ask the developer for a code (option C).'}
@@ -170,10 +210,10 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
                 <div className="flex items-center gap-2.5">
                   <Phone className="w-3.5 h-3.5 shrink-0" />
                   <span className="text-xs font-semibold flex-1">
-                    {status?.phone_set ? <>Send code <span className="text-blue-300 font-mono">to {status.phone_masked}</span></> : 'Phone not set'}
+                    {status?.phone_set ? <>Send code <span className="text-[var(--accent)] font-mono">to {status.phone_masked}</span></> : 'Phone not set'}
                   </span>
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
                   {status?.phone_set
                     ? 'We text you a 6-digit code.'
                     : 'No phone number is on file for this account. Save one below, or ask the developer for a code (option C).'}
@@ -201,7 +241,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
                   <UserCog className="w-3.5 h-3.5 shrink-0" />
                   <span className="text-xs font-semibold flex-1">Ask the developer to give you one</span>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
                   Pings the developer on Telegram with your name and a fresh code — they hand it
                   to you and you redeem it below. Always available.
                 </div>
@@ -210,7 +250,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
               {msg && <p className={`text-[11px] ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</p>}
 
               {!msg && (
-                <p className="text-[10px] text-slate-600 leading-relaxed">
+                <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
                   Didn't set email or phone? You can add either right here — used only for
                   recovery codes, stored on your account.
                 </p>
@@ -220,12 +260,12 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
 
           {step === 'enter' && (
             <>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                 {method === 'dev'
                   ? 'The developer was pinged — fetch your code from them, then enter it with your new password.'
                   : `Code sent (valid 30 minutes). Enter it with your new password — the old one is NOT needed.`}
               </p>
-              <label className="block text-[11px] text-slate-500" htmlFor="recovery-code">Recovery code</label>
+              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-code">Recovery code</label>
               <input
                 id="recovery-code"
                 value={code}
@@ -236,7 +276,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
                 autoFocus
                 className={`${INPUT} font-mono tracking-widest`}
               />
-              <label className="block text-[11px] text-slate-500" htmlFor="recovery-new-pw">New password</label>
+              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-new-pw">New password</label>
               <input
                 id="recovery-new-pw"
                 type="password"
@@ -246,7 +286,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
                 placeholder="min 8 chars, letter + number"
                 className={INPUT}
               />
-              <label className="block text-[11px] text-slate-500" htmlFor="recovery-new-pw2">Repeat new password</label>
+              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-new-pw2">Repeat new password</label>
               <input
                 id="recovery-new-pw2"
                 type="password"
@@ -271,8 +311,8 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
               <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
                 <KeyRound className="w-5 h-5 text-emerald-400" />
               </div>
-              <p className="text-sm font-bold text-white">Password updated!</p>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-sm font-bold text-[var(--text-primary)]">Password updated!</p>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                 Sign in with your new password. Any other open sessions were signed out for security.
               </p>
               <button type="button" onClick={onClose} className={`${BTN} mx-auto`}>Done</button>
@@ -280,6 +320,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

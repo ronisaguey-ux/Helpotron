@@ -26,7 +26,7 @@ export default function DemoModeToggle() {
       className={`hidden md:flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-xl border text-[10px] font-mono font-bold transition cursor-pointer select-none ${
         on
           ? 'bg-amber-500/15 border-amber-400/40 text-amber-300 hover:bg-amber-500/25 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
-          : 'bg-white/5 border-white/15 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+          : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-secondary)]'
       }`}
     >
       {/* Mock switch */}

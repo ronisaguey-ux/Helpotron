@@ -4,9 +4,10 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion';
-import { TrendingUp, TrendingDown, ChevronDown, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronDown, Info, Coins } from 'lucide-react';
 import { WALLET, demoEnabled } from '../demoData.js';
-import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
+import { Badge, timeAgo } from './ui/os.jsx';
+import Button from './Button.jsx';
 import SectionCard from './SectionCard.jsx';
 
 export default function CreditWallet({ onGoToBilling }) {
@@ -16,13 +17,18 @@ export default function CreditWallet({ onGoToBilling }) {
 
   if (!wallet) {
     return (
-      <EmptyState
-        icon="🪙"
-        title="Your wallet is empty"
-        body="Credits are spent automatically when Helpotron does work for you — study guides, flashcards, transcription, drafts."
-        actionLabel="View plans"
-        onAction={onGoToBilling}
-      />
+      <div className="clean-card p-10 text-center space-y-4">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] flex items-center justify-center">
+          <Coins className="w-8 h-8 text-[var(--accent-2)]" aria-hidden="true" />
+        </div>
+        <div className="text-base font-semibold text-[var(--text-primary)]">Your wallet is empty</div>
+        <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+          Credits are spent automatically when Helpotron does work for you — study guides, flashcards, transcription, drafts.
+        </p>
+        <div className="pt-1">
+          <Button variant="primary" onClick={onGoToBilling}>View plans</Button>
+        </div>
+      </div>
     );
   }
 
@@ -36,7 +42,6 @@ export default function CreditWallet({ onGoToBilling }) {
         animate={{ opacity: 1, y: 0 }}
       >
         <SectionCard id="creditwallet-balance" padding="p-6" className="overflow-hidden" header={<div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Credit wallet</div>}>
-        <div className="absolute -top-20 -right-10 w-56 h-56 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
         <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <div className="text-5xl font-black text-white mt-2 tabular-nums">
@@ -47,11 +52,11 @@ export default function CreditWallet({ onGoToBilling }) {
               {' '}· <span className="text-rose-400">− {wallet.usedThisMonth.toLocaleString()}</span> used
             </div>
           </div>
-          <div className="clean-card p-4 bg-slate-950/40 min-w-[180px]">
+          <div className="rounded-[var(--radius-md)] bg-white/4 border border-white/8 p-4 min-w-[180px]">
             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Projected month-end</div>
-            <div className="text-xl font-bold text-blue-300 tabular-nums mt-1">{wallet.projected.toLocaleString()}</div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: `${projectedPct}%` }} />
+            <div className="text-xl font-bold text-[var(--accent)] tabular-nums mt-1">{wallet.projected.toLocaleString()}</div>
+            <div className="h-1.5 w-full bg-white/10 rounded-full mt-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full" style={{ width: `${projectedPct}%` }} />
             </div>
           </div>
         </div>
@@ -95,11 +100,11 @@ export default function CreditWallet({ onGoToBilling }) {
 
         <div className="space-y-2">
           {wallet.usage.map((u) => (
-            <div key={u.id} className="rounded-xl border border-white/6 bg-slate-950/40 overflow-hidden">
+            <div key={u.id} className="rounded-xl border border-white/8 bg-white/4 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setExpanded(expanded === u.id ? null : u.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left transition hover:bg-white/3 cursor-pointer"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left transition hover:bg-white/5 cursor-pointer"
                 aria-expanded={expanded === u.id}
               >
                 <span className="text-[11px] font-mono text-rose-400 shrink-0 w-10">{u.amount}</span>
@@ -119,9 +124,9 @@ export default function CreditWallet({ onGoToBilling }) {
                     className="overflow-hidden"
                   >
                     <div className="px-4 pb-4 pt-1">
-                      <div className="rounded-lg bg-slate-950/60 border border-white/6 p-3 text-[11px] space-y-2">
+                      <div className="rounded-lg bg-white/4 border border-white/8 p-3 text-[11px] space-y-2">
                         <div className="flex items-center gap-1.5 text-slate-400">
-                          <Info className="w-3 h-3 text-blue-400" />
+                          <Info className="w-3 h-3 text-[var(--accent)]" />
                           Why did this cost {u.amount} credits?
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-slate-400">
@@ -131,7 +136,7 @@ export default function CreditWallet({ onGoToBilling }) {
                           <div><span className="text-slate-600">Rate</span><div className="text-slate-300 mt-0.5">~{u.tokens ? Math.max(1, Math.round(-u.amount / u.tokens * 10000) / 100) : '—'} cr / 1k tokens</div></div>
                         </div>
                         <div className="text-[10px] text-slate-600">
-                          Effort-based routing: complex work (research, reasoning) uses the flagship engine; mechanical work (OCR, transcription) uses the fast engine. You control this with the <span className="text-blue-300">AI Effort</span> setting.
+                          Effort-based routing: complex work (research, reasoning) uses the flagship engine; mechanical work (OCR, transcription) uses the fast engine. You control this with the <span className="text-[var(--accent)]">AI Effort</span> setting.
                         </div>
                       </div>
                     </div>

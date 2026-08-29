@@ -57,7 +57,7 @@ function getBaseUrl() {
   return getServer();
 }
 
-function getCsrfToken() {
+export function getCsrfToken() {
   // The COOKIE is the authority — the server rotates it on login/session, so
   // the localStorage copy goes stale and every POST/ PATCH with it bounces
   // 403 ("CSRF token invalid"). Cookie-first (operator 08-26).
@@ -368,6 +368,7 @@ export const api = {
   generateReferralCode: () => request('/api/referrals/generate', { method: 'POST' }),
   redeemReferralCode: (code) => request('/api/referrals/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
   getReferralStats: () => request('/api/referrals/stats', { method: 'GET' }),
+  deleteReferralCode: (id) => request(`/api/referrals/${id}`, { method: 'DELETE' }),
 
   // Mandatory 2FA Purchase Authentication
   sendPurchaseChallenge: (data) => request('/api/auth/2fa/purchase-challenge', { method: 'POST', body: JSON.stringify(data) }),
@@ -419,10 +420,12 @@ export const api = {
   adminKickUser: (userId) => request(`/api/admin/user/${userId}/kick`, { method: 'POST' }),
   adminDeleteUser: (userId) => request(`/api/admin/user/${userId}`, { method: 'DELETE' }),
   adminActAsUser: (userId) => request(`/api/admin/user/${userId}/act`, { method: 'POST' }),
+  // Control Center: admin → user direct notice (pops on their screen, 08-28)
+  adminNotifyUser: (publicId, message, subject = 'Message from Admin') => request('/api/admin/notify-user', { method: 'POST', body: JSON.stringify({ public_id: publicId, subject, message }) }),
+  // User side: poll + dismiss admin notices
+  myAdminNotices: () => request('/api/user/admin-notices', { method: 'GET' }),
+  markAdminNoticesRead: (noticeIds) => request('/api/user/admin-notices/read', { method: 'POST', body: JSON.stringify({ notice_ids: noticeIds }) }),
   adminSearch: (q) => request(`/api/admin/search?q=${encodeURIComponent(q)}`, { method: 'GET' }),
-  adminGenerateToken: (durationDays, maxUses) => request('/api/admin/tokens/generate', { method: 'POST', body: JSON.stringify({ duration_days: durationDays, max_uses: maxUses }) }),
-  adminDeactivateToken: (token) => request(`/api/admin/tokens/deactivate?token=${token}`, { method: 'POST' }),
-  adminListTokens: () => request('/api/admin/tokens', { method: 'GET' }),
   // Control Center · System Map: live subsystem node health + p95 latency.
   adminSystemMapNodes: () => request('/api/admin/system-map/nodes', { method: 'GET' }),
 

@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
-import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff, X } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
 export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false }) {
-  if (!isOpen) return null;
-
   const [tab, setTab] = useState('signup'); // 'signup' | 'login'
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -36,6 +34,36 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, isMandatory]);
+
+  // WebKit replay (08-28): on a small phone the sign-in submit can sit below the
+  // first fold; bring the form into view by focusing the active tab's first field
+  // when the modal opens or the tab switches (Enter still submits).
+  // NOTE: must stay above the `if (!isOpen) return null` — hooks run unconditionally.
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = tab === 'signup' ? 'signup-username' : 'login-username';
+    const el = document.getElementById(id);
+    if (el) {
+      el.focus({ preventScroll: false });
+    }
+  }, [isOpen, tab]);
+
+  // WebKit replay (08-29): pointer-events must NOT ride the CSS animation clock.
+  // WebKit can stall the animation for 2s+ (observed up to a full lockout) so a
+  // keyframe-carried pointer-events flip either traps taps in the invisible
+  // fade forever or never arms the modal. Flip on the animation's own end event,
+  // with a hard timer as a clock-independent safety net.
+  const [peReady, setPeReady] = useState(false);
+  useEffect(() => {
+    if (!isOpen) { setPeReady(false); return; }
+    const t = setTimeout(() => setPeReady(true), 4500);
+    return () => clearTimeout(t);
+  }, [isOpen]);
+  const onPanelAnimEnd = (e) => {
+    if (e.animationName === 'aurora-panel-in') setPeReady(true);
+  };
+
+  if (!isOpen) return null;
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -109,45 +137,68 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     }
   };
 
+  // text-base (16px → 17.6px at the 110% root): computed >= 16px so iOS/Safari
+  // does NOT auto-zoom when the field is focused. text-sm (15.4px computed)
+  // triggered the zoom every time a student tapped a field on a phone.
+  const INPUT = 'clean-input w-full pl-9 pr-10 py-2.5 text-base';
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+      className={`fixed inset-0 z-[100] flex p-4 bg-black/60 backdrop-blur-sm overflow-y-auto aurora-modal-backdrop ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
       aria-label="Helpotron Authentication"
+      onClick={() => { if (!isMandatory) onClose?.(); }}
     >
+      {/* Aurora modal chrome (scoped; index.css owns the design system).
+          pointer-events is state-driven (see peReady above), never keyframe-driven. */}
+      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
+.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
       <div
-        className="w-full max-w-md bg-[#0c1220] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 relative overflow-hidden"
+        className={`w-full max-w-md m-auto surface-glass-strong rounded-[var(--radius-lg)] p-6 sm:p-8 text-[var(--text-primary)] relative overflow-hidden aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         data-modal-container
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onPanelAnimEnd}
       >
+        {!isMandatory && onClose && (
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="absolute top-4 right-4 z-10 p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         {/* Top Brand Banner */}
-        <div className="text-center space-y-2 pb-5 border-b border-white/10">
+        <div className="text-center space-y-2 pb-5 border-b border-[var(--border-subtle)]">
           <div className="flex justify-center">
             <AnimatedLogo size="lg" />
           </div>
-          <h2 className="text-xl font-extrabold text-white tracking-tight">
+          <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
             {tab === 'signup' ? 'Create Student Account' : 'Sign in to Helpotron'}
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[var(--text-muted)]">
             {tab === 'signup'
               ? 'Join the autonomous academic operating system & study copilot'
               : 'Enter your credentials to access your autonomous study workspace'}
           </p>
           {tab === 'signup' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30">
+            <span className="aurora-chip text-[11px] uppercase tracking-wider">
               Step 1 of 2 · Legal consent
             </span>
           )}
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex bg-slate-950 p-1 rounded-2xl border border-white/10 my-5">
+        <div className="flex bg-[var(--bg-surface)] p-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] my-5">
           <button
             type="button"
             onClick={() => { setTab('signup'); setLoginError(''); }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              tab === 'signup' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              tab === 'signup' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             Create Account
@@ -156,7 +207,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             type="button"
             onClick={() => { setTab('login'); setLoginError(''); }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              tab === 'login' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              tab === 'login' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             Sign In
@@ -165,7 +216,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 
         {/* Error Notification */}
         {loginError && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+          <div className="mb-4 p-3 rounded-[var(--radius-md)] bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{loginError}</span>
           </div>
@@ -175,7 +226,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
         {tab === 'signup' && (
           <form onSubmit={handleSignup} method="post" action="#" className="space-y-4" autoComplete="on">
             <div className="space-y-1">
-              <label htmlFor="signup-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+              <label htmlFor="signup-username" className="text-xs font-semibold text-[var(--text-secondary)]">Public ID / Username</label>
               <div className="relative">
                 <input
                   id="signup-username"
@@ -186,14 +237,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   placeholder="e.g. alex_student24"
                   value={signupUser}
                   onChange={(e) => setSignupUser(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className={INPUT}
                 />
-                <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="signup-password" className="text-xs font-semibold text-slate-300">Password</label>
+              <label htmlFor="signup-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
               <div className="relative">
                 <input
                   id="signup-password"
@@ -204,17 +255,17 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   placeholder="Min 8 chars, 1 letter & 1 number"
                   value={signupPass}
                   onChange={(e) => setSignupPass(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className={INPUT}
                 />
-                <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
+                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="signup-confirm-password" className="text-xs font-semibold text-slate-300">Confirm Password</label>
+              <label htmlFor="signup-confirm-password" className="text-xs font-semibold text-[var(--text-secondary)]">Confirm Password</label>
               <div className="relative">
                 <input
                   id="signup-confirm-password"
@@ -225,10 +276,10 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   placeholder="Re-enter your password"
                   value={signupPassConfirm}
                   onChange={(e) => setSignupPassConfirm(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                  className={INPUT}
                 />
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
+                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   {showSignupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -240,9 +291,9 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                 required
                 checked={consentAgreed}
                 onChange={(e) => setConsentAgreed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-white/20 bg-slate-900 text-blue-600 focus:ring-blue-500"
+                className="mt-0.5 w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
               />
-              <span className="text-[11px] text-slate-400 leading-tight">
+              <span className="text-[11px] text-[var(--text-muted)] leading-tight">
                 I agree to the <strong>Academic Honor Code</strong> and <strong>FERPA / GDPR Terms</strong>.
                 {!consentAgreed && (
                   <em className="not-italic block text-[10px] mt-0.5 text-amber-300/90">
@@ -255,7 +306,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             <button
               type="submit"
               disabled={loading || !signupUser || !signupPass || !consentAgreed}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
             >
               {loading ? 'Creating Account…' : 'Create Free Account →'}
             </button>
@@ -268,7 +319,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             {!requires2FA ? (
               <>
                 <div className="space-y-1">
-                  <label htmlFor="login-username" className="text-xs font-semibold text-slate-300">Public ID / Username</label>
+                  <label htmlFor="login-username" className="text-xs font-semibold text-[var(--text-secondary)]">Public ID / Username</label>
                   <div className="relative">
                     <input
                       id="login-username"
@@ -279,14 +330,14 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       placeholder="Enter your username"
                       value={loginUser}
                       onChange={(e) => setLoginUser(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                      className={INPUT}
                     />
-                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                    <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label htmlFor="login-password" className="text-xs font-semibold text-slate-300">Password</label>
+                  <label htmlFor="login-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
                   <div className="relative">
                     <input
                       id="login-password"
@@ -297,26 +348,26 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       placeholder="Enter your password"
                       value={loginPass}
                       onChange={(e) => setLoginPass(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-xs text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+                      className={INPUT}
                     />
-                    <Key className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
+                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                       {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="space-y-3 bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4">
-                <div className="flex items-center gap-2 text-blue-400">
+              <div className="space-y-3 bg-[var(--accent-subtle)] border border-[var(--accent-subtle)] rounded-[var(--radius-md)] p-4">
+                <div className="flex items-center gap-2 text-[var(--accent)]">
                   <ShieldCheck className="w-5 h-5" />
                   <span className="text-xs font-bold uppercase tracking-wider">Two-Factor Authentication</span>
                 </div>
-                <p className="text-xs text-slate-300">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Enter the 6-digit verification code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} to continue.
                 </p>
                 <div className="space-y-1">
-                  <label htmlFor="two-factor-code" className="text-xs font-semibold text-slate-300">Security Code</label>
+                  <label htmlFor="two-factor-code" className="text-xs font-semibold text-[var(--text-secondary)]">Security Code</label>
                   <div className="relative">
                     <input
                       id="two-factor-code"
@@ -327,15 +378,15 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       placeholder="123456"
                       value={twoFactorCode}
                       onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-slate-900 border border-blue-500/40 rounded-xl px-3.5 py-2.5 pl-9 text-base text-center tracking-widest font-mono text-white placeholder:text-slate-600 focus:border-blue-400 outline-none"
+                      className="clean-input w-full pl-9 text-base text-center tracking-widest font-mono"
                     />
-                    <Lock className="w-4 h-4 text-blue-400 absolute left-3 top-3.5" />
+                    <Lock className="w-4 h-4 text-[var(--accent)] absolute left-3 top-3.5" />
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => { setRequires2FA(false); setTwoFactorCode(''); }}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline cursor-pointer"
                 >
                   ← Back to password sign in
                 </button>
@@ -345,7 +396,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             <button
               type="submit"
               disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 6)}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
             >
               {loading ? 'Verifying…' : (requires2FA ? 'Verify Code & Sign In →' : 'Sign in to Workspace →')}
             </button>
@@ -353,7 +404,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
         )}
 
         {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-white/8 text-center text-[11px] text-slate-500">
+        <div className="mt-6 pt-4 border-t border-[var(--border-subtle)] text-center text-xs text-[var(--text-muted)]">
           Encrypted with TLS 1.3 &bull; Enterprise Zero Data Retention (ZDR)
         </div>
       </div>

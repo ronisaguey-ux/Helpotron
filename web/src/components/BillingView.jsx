@@ -10,6 +10,7 @@ import SectionCard from './SectionCard.jsx';
 
 export default function BillingView({ userId }) {
   const [balance, setBalance] = useState(0);
+  const [tokens, setTokens] = useState(0);
   const [plan, setPlan] = useState('');
   const [msg, setMsg] = useState('');
   const [transactions, setTransactions] = useState([]);
@@ -18,6 +19,8 @@ export default function BillingView({ userId }) {
     api.dashboard(userId).then((d) => {
       /* Real balance only — 0 is a valid balance, never fall back to a demo number. */
       setBalance(typeof d.credits === 'number' ? d.credits : 0);
+      /* Task balance is the token budget (operator 08-28) — tokens, not credits. */
+      setTokens(Number(d.settings?.token_balance ?? 0));
       setPlan(typeof d.plan === 'string' ? d.plan : '');
       setTransactions(d.recent_transactions || []);
     }).catch(() => {});
@@ -37,7 +40,7 @@ export default function BillingView({ userId }) {
   return (
     <div className="space-y-6">
       {/* Prototype notice (08-26): payments NOT available rn — free beta test run. */}
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+      <div className="rounded-[var(--radius-md)] border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
         <p className="text-sm font-semibold text-amber-100">Payments not available yet — prototype only</p>
         <p className="mt-1 text-amber-200/90">
           We're running a free beta test right now: you're testing for free, the
@@ -46,11 +49,11 @@ export default function BillingView({ userId }) {
         </p>
       </div>
       {msg && (
-        <div className="clean-card p-4 border border-blue-500/30 text-xs text-blue-300">
+        <div className="clean-card p-4 text-xs text-[var(--text-secondary)]">
           {msg}
         </div>
       )}
-      <CreditsPricingDashboard currentCredits={balance} plan={plan} onTopUp={handleTopUp} userId={userId} />
+      <CreditsPricingDashboard currentCredits={balance} currentTokens={tokens} plan={plan} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
       <SectionCard id="billing-transactions" title="Receipts & Credit Activity">
@@ -61,7 +64,7 @@ export default function BillingView({ userId }) {
             {transactions.map((tx, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs font-mono"
+                className="flex items-center justify-between p-3 rounded-xl bg-white/4 border border-white/8 text-xs font-mono"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>

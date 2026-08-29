@@ -8,32 +8,34 @@ export const AIWorkspace = ({ user, activeScope, onExecuteAction, onRollbackActi
   const [activeArtifacts, setActiveArtifacts] = useState([]);
 
   return (
-    <div className="h-full flex flex-col max-w-6xl mx-auto p-6 space-y-6">
+    <div className="h-full flex flex-col max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Agent Header & Autonomy Controller */}
-      <div className="flex items-center justify-between border-b pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--border-subtle)] pb-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+          <div className="h-10 w-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] flex items-center justify-center text-[var(--accent)]">
             <Bot className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold">My Agent</h2>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">● Ready</span>
+              <h2 className="text-xl font-bold text-aurora">My Agent</h2>
+              <span className="aurora-chip"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Ready</span>
             </div>
-            <p className="text-xs text-muted-foreground">Universal Natural Language Control Plane for Helpotron</p>
+            <p className="text-xs text-[var(--text-muted)]">Universal Natural Language Control Plane for Helpotron</p>
           </div>
         </div>
 
         {/* Autonomy Level Spectrum */}
-        <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-lg border">
-          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">Autonomy:</span>
+        <div className="flex flex-wrap items-center gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-1.5 rounded-[var(--radius-md)]">
+          <ShieldCheck className="h-4 w-4 text-[var(--text-muted)]" />
+          <span className="text-xs font-medium text-[var(--text-muted)]">Autonomy:</span>
           {['suggestion', 'ask', 'routine', 'autonomous'].map((level) => (
             <button
               key={level}
               onClick={() => setAutonomyLevel(level)}
-              className={`text-xs px-2.5 py-1 rounded-md capitalize transition-colors ${
-                autonomyLevel === level ? 'bg-primary text-primary-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              className={`text-xs px-2.5 py-1 rounded-[var(--radius-sm)] capitalize transition-colors border ${
+                autonomyLevel === level
+                  ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border-transparent'
               }`}
             >
               {level === 'routine' ? 'Trusted' : level}
@@ -44,15 +46,15 @@ export const AIWorkspace = ({ user, activeScope, onExecuteAction, onRollbackActi
 
       {/* Action Ledger & Undo Ribbon */}
       {actionLedger.length > 0 && (
-        <div className="bg-muted/30 border rounded-lg p-3 flex items-center justify-between">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] p-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs">
-            <History className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-foreground">Latest Agent Action:</span>
-            <span className="text-muted-foreground">{actionLedger[0].description}</span>
+            <History className="h-4 w-4 text-[var(--accent)]" />
+            <span className="font-semibold text-[var(--text-primary)]">Latest Agent Action:</span>
+            <span className="text-[var(--text-muted)]">{actionLedger[0].description}</span>
           </div>
           <button
             onClick={() => onRollbackAction(actionLedger[0].id)}
-            className="flex items-center gap-1 text-xs font-medium text-destructive hover:underline"
+            className="flex items-center gap-1 text-xs font-medium text-rose-400 hover:text-rose-300 hover:underline"
           >
             <Undo2 className="h-3.5 w-3.5" /> Undo Action
           </button>

@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from .database import get_db, User
+from .database import get_db, User, Referral
 from .security import get_current_user
 from .referral import get_or_create_referral, create_new_referral_code, redeem_referral, get_referral_stats
 
@@ -65,3 +65,22 @@ async def get_stats(
 ):
     """Fetches user referral metrics and list of issued 40-digit codes with redemption status."""
     return get_referral_stats(db, user)
+
+
+@router.delete("/{code_id}")
+async def delete_code(
+    code_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Deletes one of the user's own UNREDEEMED referral codes (operator 08-28)."""
+    ref = db.query(Referral).filter(
+        Referral.id == code_id, Referral.referrer_id == user.id
+    ).first()
+    if not ref:
+        raise HTTPException(404, "Referral code not found")
+    if ref.referee_id is not None:
+        raise HTTPException(400, "This code was already redeemed — it can't be deleted.")
+    db.delete(ref)
+    db.commit()
+    return {"status": "success", "message": "Referral code deleted."}

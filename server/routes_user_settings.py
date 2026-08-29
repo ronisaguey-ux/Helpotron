@@ -842,6 +842,51 @@ async def update_presentation_gemini_config(
     return {"status": "success", "config": updated.get("presentation_gemini_config")}
 
 
+@router.get("/admin-notices")
+async def get_my_admin_notices_route(request: Request, db: Session = Depends(get_db)):
+    """Unread admin → user notices (operator 08-28). The client polls this and
+    pops the newest unread on screen; dismissing marks it read."""
+    from .database import AdminNotice
+    user = _get_current_user(request, db)
+    notices = (
+        db.query(AdminNotice)
+        .filter(AdminNotice.user_id == user.public_id, AdminNotice.read_at.is_(None))
+        .order_by(AdminNotice.id.asc())
+        .all()
+    )
+    return {
+        "status": "success",
+        "unread": [
+            {
+                "id": n.id,
+                "subject": n.subject,
+                "message": n.message,
+                "created_at": n.created_at.isoformat() if hasattr(n.created_at, "isoformat") else str(n.created_at),
+            }
+            for n in notices
+        ],
+    }
+
+
+class AdminNoticeReadPayload(BaseModel):
+    notice_ids: List[int] = Field(..., min_length=1)
+
+
+@router.post("/admin-notices/read")
+async def mark_admin_notices_read_route(payload: AdminNoticeReadPayload, request: Request, db: Session = Depends(get_db)):
+    """Marks dismissed admin notices as read (scoped to the caller's own notices)."""
+    from .database import AdminNotice
+    user = _get_current_user(request, db)
+    from datetime import datetime, timezone
+    db.query(AdminNotice).filter(
+        AdminNotice.user_id == user.public_id,
+        AdminNotice.id.in_(payload.notice_ids),
+        AdminNotice.read_at.is_(None),
+    ).update({AdminNotice.read_at: datetime.now(timezone.utc)}, synchronize_session=False)
+    db.commit()
+    return {"status": "success", "marked_read": len(payload.notice_ids)}
+
+
 # ─── GDPR Article 17: Account Deletion ────────────────────────────────────────
 #
 # Cascading cleanup across every user-scoped table. NOTE: the remediation plan
