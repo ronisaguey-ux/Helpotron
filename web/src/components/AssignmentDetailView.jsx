@@ -3,7 +3,7 @@
 // mock was removed — everything renders from the real card payload and the
 // /api/assignment/{id}/full-view response, with honest empty states.)
 import React, { useEffect, useRef, useState } from 'react';
-import { Users, CheckCircle2, Circle, Clock, MessageSquare, Paperclip, BookOpen, Brain, Sparkles, EyeOff, Send, RefreshCw } from 'lucide-react';
+import { Users, Circle, Clock, Paperclip, BookOpen, Brain, Sparkles, EyeOff, Send, RefreshCw, AlertCircle } from 'lucide-react';
 import api from '../api.js';
 
 const SUBAGENT_STATUS_LABEL = {
@@ -13,6 +13,15 @@ const SUBAGENT_STATUS_LABEL = {
   pending: 'WAITING',
   failed: 'FAILED',
 };
+
+/* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
+   base from index.css; these modifiers recolor it for status semantics. */
+const AURORA_CHIP_TINTS = `
+.aurora-chip.ok      { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.32); color: #6ee7b7; }
+.aurora-chip.info    { background: rgba(34,211,238,0.13); border-color: rgba(34,211,238,0.30); color: #67e8f9; }
+.aurora-chip.danger  { background: rgba(244,63,94,0.14); border-color: rgba(244,63,94,0.32); color: #fda4af; }
+.aurora-chip.tight   { padding: 0.15rem 0.6rem; font-size: 0.75rem; }
+`;
 
 export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
   const [full, setFull] = useState(null);
@@ -65,8 +74,20 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
 
   if (!assignment) {
     return (
-      <div className="max-w-7xl mx-auto p-6 text-center text-xs text-slate-400">
-        No assignment selected. <button className="text-blue-300 cursor-pointer" onClick={onBack}>Go back</button>
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="clean-card p-12 text-center space-y-3">
+          <AlertCircle className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">No assignment selected</h3>
+          <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
+            Pick an assignment from the dashboard to open its workspace.
+          </p>
+          <button
+            className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-1.5 text-xs font-semibold transition cursor-pointer"
+            onClick={onBack}
+          >
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
@@ -122,35 +143,37 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
 
   return (
     <div className="h-full flex flex-col max-w-7xl mx-auto p-6 space-y-6">
+      <style>{AURORA_CHIP_TINTS}</style>
+
       {/* Workspace Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold">{title}</h2>
-            <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold">{course}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold text-[var(--text-primary)]">{title}</h2>
+            <span className="aurora-chip info font-mono">{course}</span>
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="text-[11px] font-mono text-slate-400 hover:text-white transition cursor-pointer underline underline-offset-2"
+                className="text-[11px] font-mono text-[var(--text-muted)] hover:text-white transition cursor-pointer underline underline-offset-2"
               >
                 ← Back to dashboard
               </button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-[var(--text-muted)]">
             Due: {due} • Teacher: {teacher} • Status: {status}
           </p>
         </div>
       </div>
 
       {/* Subagent Team Live Ribbon — REAL progress from the assignment row */}
-      <div>
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-          <Users className="w-4 h-4 text-primary shrink-0" /> Subagent Team
+      <div className="glass-panel p-5">
+        <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4 text-[var(--accent)] shrink-0" /> Subagent Team
         </h3>
         {subagents.length === 0 ? (
-          <div className="p-4 rounded-lg border bg-card/40 text-xs text-muted-foreground space-y-2">
+          <div className="space-y-2 text-xs text-[var(--text-muted)]">
             {loading ? (
               <div className="flex items-center gap-2">
                 <EyeOff className="w-4 h-4 shrink-0" /> Loading sub-agent activity…
@@ -158,28 +181,28 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
             ) : (
               <>
                 <div className="flex items-center gap-2">
-                  <EyeOff className="w-4 h-4 shrink-0 text-primary" />
+                  <EyeOff className="w-4 h-4 shrink-0 text-[var(--accent)]" />
                   {/* Honest empty state (operator 08-28): a fresh auto-routed
                       assignment has ZERO real activity — say why, and show the
                       dump provenance instead of a bug-looking bare line. */}
                   <span>
                     No sub-agent activity recorded for this assignment yet
                     {dumpInfo
-                      ? <span className="text-muted-foreground/80"> — {dumpRouteLabel} your Assignment Dump (id {dumpInfo.id}){subject ? ` · ${subject}` : ''}, and no study tool has been generated for it.</span>
+                      ? <span className="opacity-80"> — {dumpRouteLabel} your Assignment Dump (id {dumpInfo.id}){subject ? ` · ${subject}` : ''}, and no study tool has been generated for it.</span>
                       : subject
-                        ? <span className="text-muted-foreground/80"> ({subject}) — nothing has been generated for it yet.</span>
+                        ? <span className="opacity-80"> ({subject}) — nothing has been generated for it yet.</span>
                         : '.'}
                   </span>
                 </div>
                 {dumpInfo && (
-                  <div className="text-[10px] font-mono text-muted-foreground/80 leading-relaxed">
+                  <div className="text-[10px] font-mono text-[var(--text-muted)]/80 leading-relaxed">
                     {dumpInfo.file_name || `Dump #${dumpInfo.id}`} · {dumpInfo.file_type || 'document'} · status: {dumpInfo.status}{' '}
-                    {dumpInfo.status === 'auto_routed' && <span className="text-muted-foreground/60">(auto-routed — no action requested yet)</span>}
+                    {dumpInfo.status === 'auto_routed' && <span className="opacity-70">(auto-routed — no action requested yet)</span>}
                   </div>
                 )}
                 <div className="text-[11px] leading-relaxed">
                   {dumpInfo && dumpInfo.requested_action
-                    ? <>You requested <span className="font-mono text-primary">{dumpInfo.requested_action}</span> — it shows up here the moment the team finishes it.</>
+                    ? <>You requested <span className="font-mono text-[var(--accent)]">{dumpInfo.requested_action}</span> — it shows up here the moment the team finishes it.</>
                     : <>Next steps: finalize your dump — flashcards / study guide / summary / do-it — or ask your agent in this bubble to start. Progress and tools appear here the moment they really happen.</>}
                 </div>
               </>
@@ -191,21 +214,21 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
               const statusLabel = SUBAGENT_STATUS_LABEL[agent.status] || String(agent.status || 'PENDING').toUpperCase();
               const progress = Math.max(0, Math.min(100, Number(agent.progress) || 0));
               return (
-                <div key={i} className="p-3 rounded-lg border bg-card/60 space-y-1.5">
+                <div key={i} className="p-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold">{agent.agent || 'Agent'}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
-                      statusLabel === 'COMPLETE' ? 'bg-emerald-500/10 text-emerald-500' :
-                      statusLabel === 'WORKING' ? 'bg-blue-500/10 text-blue-500' :
-                      statusLabel === 'FAILED' ? 'bg-rose-500/10 text-rose-500' : 'bg-muted text-muted-foreground'
+                    <span className="font-semibold text-[var(--text-primary)]">{agent.agent || 'Agent'}</span>
+                    <span className={`aurora-chip tight font-mono font-medium ${
+                      statusLabel === 'COMPLETE' ? 'ok' :
+                      statusLabel === 'WORKING' ? 'info' :
+                      statusLabel === 'FAILED' ? 'danger' : ''
                     }`}>
                       {statusLabel}
                     </span>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-1">
-                    <div className="bg-primary h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  <div className="w-full bg-white/10 rounded-full h-1">
+                    <div className="bg-[var(--accent)] h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                   </div>
-                  <div className="text-[10px] text-muted-foreground font-mono">{progress}% complete</div>
+                  <div className="text-[10px] text-[var(--text-muted)] font-mono">{progress}% complete</div>
                 </div>
               );
             })}
@@ -215,13 +238,13 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
         {/* Talk to the sub-agent team (operator 08-28): the same composer
             pattern as MyAgentView's assignment bubbles — real thread history,
             real reply from the agent, no fabricated messages. */}
-        <div className="mt-3" ref={teamChatRef}>
+        <div className="mt-4" ref={teamChatRef}>
           {teamChat.length > 0 ? (
             <div className="max-h-44 overflow-y-auto space-y-1.5 mb-2 pr-1">
               {teamChat.map((m) => (
                 <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-lg px-3 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap ${
-                    m.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-800/80 border border-white/5 text-slate-200'
+                  <div className={`max-w-[85%] rounded-[var(--radius-md)] px-3 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap break-words ${
+                    m.sender === 'user' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]'
                   }`}>
                     {m.text}
                   </div>
@@ -229,9 +252,9 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
               ))}
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground/70 mb-2">This bubble is fresh — ask the agent team to start, or finalize your dump.</p>
+            <p className="text-[10px] text-[var(--text-muted)] mb-2">This bubble is fresh — ask the agent team to start, or finalize your dump.</p>
           )}
-          <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/40 px-2.5 py-1 focus-within:border-primary/50 transition">
+          <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] px-2.5 py-1 focus-within:border-[var(--accent)] transition">
             <input
               ref={teamInputRef}
               type="text"
@@ -240,20 +263,20 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTeamMessage(); } }}
               placeholder="Message the agent team about this assignment…"
               aria-label={`Message the ${title || `assignment ${assignment.id}`} team`}
-              className="flex-1 bg-transparent border-none text-[11px] text-slate-100 placeholder-muted-foreground focus:outline-none"
+              className="flex-1 bg-transparent border-none text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
             />
             <button
               type="button"
               onClick={sendTeamMessage}
               disabled={!teamInput.trim() || teamBusy}
               aria-label={`Send message to the ${title || `assignment ${assignment.id}`} team`}
-              className="p-1.5 rounded-md bg-primary text-white hover:bg-primary/80 disabled:opacity-30 transition cursor-pointer"
+              className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>
           {teamBusy && (
-            <div className="flex items-center gap-1.5 text-[10px] text-blue-400 mt-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-[var(--accent)] mt-1.5">
               <RefreshCw className="w-3 h-3 animate-spin" /> Agent team is working…
             </div>
           )}
@@ -265,57 +288,57 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
 
       {/* Assignment details — real prompt/rubric/files or honest empty states */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section>
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-            <BookOpen className="w-4 h-4 text-primary shrink-0" /> Prompt
+        <section className="glass-panel p-5">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <BookOpen className="w-4 h-4 text-[var(--accent)] shrink-0" /> Prompt
           </h3>
-          <div className="p-4 rounded-lg border bg-card/40 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap min-h-[80px]">
+          <div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
             {prompt || 'No prompt recorded for this assignment yet.'}
           </div>
         </section>
-        <section>
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-            <Circle className="w-4 h-4 text-primary shrink-0" /> Rubric
+        <section className="glass-panel p-5">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Circle className="w-4 h-4 text-[var(--accent)] shrink-0" /> Rubric
           </h3>
-          <div className="p-4 rounded-lg border bg-card/40 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap min-h-[80px]">
+          <div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
             {full && full.rubric ? full.rubric : 'No rubric attached yet.'}
           </div>
         </section>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section>
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-            <Paperclip className="w-4 h-4 text-primary shrink-0" /> Attached Files
+        <section className="glass-panel p-5">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Paperclip className="w-4 h-4 text-[var(--accent)] shrink-0" /> Attached Files
           </h3>
           {attachedFiles.length === 0 ? (
-            <div className="p-4 rounded-lg border bg-card/40 text-xs text-muted-foreground">
+            <div className="text-xs text-[var(--text-muted)]">
               No files attached to this assignment yet.
             </div>
           ) : (
             <ul className="space-y-1.5">
               {attachedFiles.map((f, i) => (
-                <li key={i} className="p-2.5 rounded-lg border bg-card/40 text-xs text-muted-foreground font-mono flex items-center gap-2">
+                <li key={i} className="p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] text-xs text-[var(--text-secondary)] font-mono flex items-center gap-2">
                   <Paperclip className="w-3.5 h-3.5 shrink-0" /> {f}
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <section>
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-2">
-            <Brain className="w-4 h-4 text-primary shrink-0" /> Saved Materials
+        <section className="glass-panel p-5">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Brain className="w-4 h-4 text-[var(--accent)] shrink-0" /> Saved Materials
           </h3>
           {materials.length === 0 ? (
-            <div className="p-4 rounded-lg border bg-card/40 text-xs text-muted-foreground">
+            <div className="text-xs text-[var(--text-muted)]">
               No study materials generated for this assignment yet.
             </div>
           ) : (
             <ul className="space-y-1.5">
               {materials.map((m) => (
-                <li key={m.id} className="p-2.5 rounded-lg border bg-card/40 text-xs font-mono text-muted-foreground flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 shrink-0 text-primary" /> {m.kind}
-                  <span className="text-[10px] text-muted-foreground/70 ml-auto">
+                <li key={m.id} className="p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] text-xs font-mono text-[var(--text-muted)] flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" /> {m.kind}
+                  <span className="text-[10px] opacity-70 ml-auto">
                     {m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}
                   </span>
                 </li>
@@ -325,7 +348,7 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
         </section>
       </div>
 
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
         <Sparkles className="w-3.5 h-3.5" />
         Sub-agent, rubric, dump and chat data is loaded live from the server — it reflects only activity that was really recorded. (operator 08-28)
       </div>

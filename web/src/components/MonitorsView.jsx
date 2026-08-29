@@ -20,7 +20,7 @@ function Sparkline({ values, height = 36 }) {
       {values.map((v, i) => (
         <div
           key={i}
-          className="bg-blue-500/70 rounded-sm flex-1 min-w-[4px]"
+          className="bg-[var(--accent)]/60 rounded-sm flex-1 min-w-[4px]"
           style={{ height: `${Math.max(6, (v / max) * height)}px` }}
           title={fmt(v)}
         />
@@ -78,15 +78,15 @@ export default function MonitorsView({ userId = '' }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Gauge className="w-5 h-5 text-blue-400" />
+          <Gauge className="w-5 h-5 text-[var(--accent)]" />
           <h2 className="text-lg font-semibold">Monitors</h2>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-[var(--text-muted)]">
             persistent collectors · traffic · activity · data lake · cost
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
           {updatedAt && (
             <span>
               updated {updatedAt.toLocaleTimeString()} · refreshes every {REFRESH_MS / 1000}s
@@ -95,8 +95,9 @@ export default function MonitorsView({ userId = '' }) {
           <button
             type="button"
             onClick={load}
-            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition cursor-pointer"
+            className="p-2 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
             aria-label="Refresh now"
+            title="Refresh now"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -104,7 +105,7 @@ export default function MonitorsView({ userId = '' }) {
       </div>
 
       {error && (
-        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-lg text-xs">
+        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-[var(--radius-md)] text-xs">
           {error}
         </div>
       )}
@@ -115,20 +116,20 @@ export default function MonitorsView({ userId = '' }) {
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <div className="text-2xl font-bold">{fmt(traff.total_requests)}</div>
-              <div className="text-[11px] text-gray-500">reqs total</div>
+              <div className="text-xs text-[var(--text-muted)]">reqs total</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(traff.requests_last_window)}</div>
-              <div className="text-[11px] text-gray-500">last 60s</div>
+              <div className="text-xs text-[var(--text-muted)]">last 60s</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{traff.requests_per_min || 0}/m</div>
-              <div className="text-[11px] text-gray-500">rate</div>
+              <div className="text-xs text-[var(--text-muted)]">rate</div>
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Status codes</div>
-            <div className="flex h-3 rounded overflow-hidden">
+            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Status codes</div>
+            <div className="flex h-3 rounded overflow-hidden bg-white/4">
               {['2', '3', '4', '5'].map((c) => {
                 const n = Object.entries(status)
                   .filter(([k]) => k.startsWith(c))
@@ -145,32 +146,32 @@ export default function MonitorsView({ userId = '' }) {
                 );
               })}
               {Object.keys(status).length === 0 && (
-                <div className="bg-gray-700 flex-1" />
+                <div className="bg-white/10 flex-1" />
               )}
             </div>
-            <div className="flex gap-3 mt-2 text-[11px] text-gray-500">
-              <span><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/80 mr-1" />2xx</span>
-              <span><span className="inline-block w-2 h-2 rounded-sm bg-sky-500/80 mr-1" />3xx</span>
-              <span><span className="inline-block w-2 h-2 rounded-sm bg-amber-500/80 mr-1" />4xx</span>
-              <span><span className="inline-block w-2 h-2 rounded-sm bg-rose-500/80 mr-1" />5xx</span>
+            <div className="flex gap-3 mt-2 text-xs text-[var(--text-muted)]">
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" />2xx</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-sky-400" />3xx</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" />4xx</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400" />5xx</span>
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Top endpoints</div>
+            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Top endpoints</div>
             {(traff.top_endpoints || []).slice(0, 6).map((e) => {
               const pct = Math.min(100, (e.count / (traff.total_requests || 1)) * 100);
               return (
                 <div key={e.endpoint} className="flex items-center gap-2 text-xs py-1">
-                  <code className="text-gray-400 truncate max-w-[220px]">{e.endpoint}</code>
-                  <div className="flex-1 h-2 bg-gray-800 rounded overflow-hidden">
-                    <div className="bg-blue-500/70 h-full rounded" style={{ width: `${pct}%` }} />
+                  <code className="text-[var(--text-secondary)] truncate max-w-[220px]">{e.endpoint}</code>
+                  <div className="flex-1 h-2 bg-white/6 rounded overflow-hidden">
+                    <div className="bg-[var(--accent)]/70 h-full rounded" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-gray-500 w-14 text-right">{fmt(e.count)}</span>
+                  <span className="text-[var(--text-muted)] w-14 text-right">{fmt(e.count)}</span>
                 </div>
               );
             })}
             {(!traff.top_endpoints || traff.top_endpoints.length === 0) && (
-              <div className="text-xs text-gray-600">waiting for traffic…</div>
+              <div className="text-xs text-[var(--text-muted)]">waiting for traffic…</div>
             )}
           </div>
         </SectionCard>
@@ -180,30 +181,30 @@ export default function MonitorsView({ userId = '' }) {
           <div className="grid grid-cols-2 gap-3 text-center">
             <div>
               <div className="text-2xl font-bold">{fmt(act.study_sessions_24h)}</div>
-              <div className="text-[11px] text-gray-500">study sessions 24h</div>
+              <div className="text-xs text-[var(--text-muted)]">study sessions 24h</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(act.study_sessions)}</div>
-              <div className="text-[11px] text-gray-500">sessions all-time</div>
+              <div className="text-xs text-[var(--text-muted)]">sessions all-time</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(act.assignments_24h)}</div>
-              <div className="text-[11px] text-gray-500">assignments 24h</div>
+              <div className="text-xs text-[var(--text-muted)]">assignments 24h</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(act.assignments)}</div>
-              <div className="text-[11px] text-gray-500">assignments all-time</div>
+              <div className="text-xs text-[var(--text-muted)]">assignments all-time</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(act.study_materials)}</div>
-              <div className="text-[11px] text-gray-500">study materials</div>
+              <div className="text-xs text-[var(--text-muted)]">study materials</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(act.transcripts)}</div>
-              <div className="text-[11px] text-gray-500">transcripts</div>
+              <div className="text-xs text-[var(--text-muted)]">transcripts</div>
             </div>
           </div>
-          <div className="mt-4 text-[11px] text-gray-500 flex items-center gap-1">
+          <div className="mt-4 text-xs text-[var(--text-muted)] flex items-center gap-1">
             <Server className="w-3 h-3" /> uptime {Math.floor((overview?.uptime_seconds || 0) / 3600)}h {Math.floor(((overview?.uptime_seconds || 0) % 3600) / 60)}m
           </div>
         </SectionCard>
@@ -212,11 +213,11 @@ export default function MonitorsView({ userId = '' }) {
         <SectionCard title="Data Lake" icon={<Database className="w-4 h-4" />}>
           <div className="space-y-2">
             {dlRows.map((r) => (
-              <div key={r.label} className="flex items-center justify-between text-xs py-1 border-b border-gray-800/60 last:border-0">
-                <span className="text-gray-400">{r.label}</span>
+              <div key={r.label} className="flex items-center justify-between text-xs py-1 border-b border-[var(--border-subtle)] last:border-0">
+                <span className="text-[var(--text-secondary)]">{r.label}</span>
                 <span className="flex items-center gap-2">
                   {r.delta > 0 && (
-                    <span className="text-emerald-400 text-[11px]">+{fmt(r.delta)}</span>
+                    <span className="text-emerald-400 text-xs">+{fmt(r.delta)}</span>
                   )}
                   <span className="font-semibold">{r.value}</span>
                 </span>
@@ -224,7 +225,7 @@ export default function MonitorsView({ userId = '' }) {
             ))}
           </div>
           <div className="mt-4">
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1">
+            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2 flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> Total entries over time
             </div>
             <Sparkline values={dlSeries} />
@@ -236,22 +237,22 @@ export default function MonitorsView({ userId = '' }) {
           <div className="grid grid-cols-2 gap-3 text-center">
             <div>
               <div className="text-2xl font-bold">${(cost.cost_usd_24h ?? 0).toFixed(4)}</div>
-              <div className="text-[11px] text-gray-500">spent 24h</div>
+              <div className="text-xs text-[var(--text-muted)]">spent 24h</div>
             </div>
             <div>
               <div className="text-2xl font-bold">${(cost.cost_usd ?? 0).toFixed(4)}</div>
-              <div className="text-[11px] text-gray-500">spent all-time</div>
+              <div className="text-xs text-[var(--text-muted)]">spent all-time</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(cost.calls_24h)}</div>
-              <div className="text-[11px] text-gray-500">API calls 24h</div>
+              <div className="text-xs text-[var(--text-muted)]">API calls 24h</div>
             </div>
             <div>
               <div className="text-2xl font-bold">{fmt(cost.calls)}</div>
-              <div className="text-[11px] text-gray-500">calls all-time</div>
+              <div className="text-xs text-[var(--text-muted)]">calls all-time</div>
             </div>
           </div>
-          <div className="mt-4 flex justify-between text-[11px] text-gray-500">
+          <div className="mt-4 flex justify-between text-xs text-[var(--text-muted)]">
             <span>{fmt(cost.input_tokens)} in-tokens</span>
             <span>{fmt(cost.output_tokens)} out-tokens</span>
           </div>

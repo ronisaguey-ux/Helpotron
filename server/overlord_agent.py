@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, Transcript, User
+from .security import is_admin_user
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
 from .engine.sandbox import sandbox_manager
@@ -1089,8 +1090,7 @@ print(f"Active files: {os.listdir('.')}")
             }
 
         elif action_type == "admin_lookup_user":
-            admin_id = getattr(config, "admin_public_id", None)
-            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
+            if not is_admin_user(user):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()
@@ -1107,8 +1107,7 @@ print(f"Active files: {os.listdir('.')}")
                 _db.close()
 
         elif action_type == "admin_adjust_credits":
-            admin_id = getattr(config, "admin_public_id", None)
-            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
+            if not is_admin_user(user):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()
@@ -1124,8 +1123,7 @@ print(f"Active files: {os.listdir('.')}")
                 _db.close()
 
         elif action_type == "admin_system_status":
-            admin_id = getattr(config, "admin_public_id", None)
-            if not getattr(user, "is_admin", False) and not (bool(admin_id) and user.public_id == admin_id):
+            if not is_admin_user(user):
                 return {"action": action_type, "status": "failed", "message": "Not an admin caller."}
             from .database import SessionLocal as _SL
             _db = _SL()

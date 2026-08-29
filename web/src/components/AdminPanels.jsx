@@ -28,7 +28,7 @@ export function SystemMapPanel({ telemetryData }) {
   }, []);
 
   return (
-    <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+    <div className="clean-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-white">System Map &amp; Subsystem Nodes</h3>
@@ -37,7 +37,7 @@ export function SystemMapPanel({ telemetryData }) {
         <button
           type="button"
           onClick={loadNodes}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition cursor-pointer"
+          className="p-2 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-raised)] border border-transparent transition cursor-pointer"
           aria-label="Refresh node telemetry"
           title="Refresh"
         >
@@ -45,22 +45,42 @@ export function SystemMapPanel({ telemetryData }) {
         </button>
       </div>
       {state === 'loading' ? (
-        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">Loading live node telemetry…</div>
+        <div className="clean-card p-8 text-center text-xs text-[var(--text-muted)]">
+          Loading live node telemetry…
+        </div>
       ) : state === 'error' ? (
-        <div className="p-6 text-center text-xs text-rose-400 border border-dashed border-rose-500/30 rounded-lg">
-          Could not reach the node telemetry endpoint. <button type="button" onClick={loadNodes} className="underline hover:text-rose-300 cursor-pointer">Retry</button>
+        <div className="clean-card p-8 text-center text-xs space-y-2">
+          <div className="text-rose-400">Could not reach the node telemetry endpoint.</div>
+          <button type="button" onClick={loadNodes} className="text-[var(--accent)] hover:text-[var(--accent-hover)] underline cursor-pointer">Retry</button>
         </div>
       ) : nodes.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">No subsystem nodes reported.</div>
+        <div className="clean-card p-8 text-center text-xs text-[var(--text-muted)]">
+          No subsystem nodes reported yet.
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {nodes.map((n) => (
-            <div key={n.name} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-semibold text-white">{n.name}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">Latency: {n.p95_latency_ms != null ? `${n.p95_latency_ms}ms` : 'N/A'}</div>
+            <div key={n.name} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-white truncate">{n.name}</div>
+                <div className="text-xs text-slate-400 mt-0.5">Latency: {n.p95_latency_ms != null ? `${n.p95_latency_ms}ms` : 'N/A'}</div>
               </div>
-              <span className={`text-xs font-bold ${n.status === 'operational' ? 'text-emerald-400' : 'text-amber-400'}`}>● {n.status}</span>
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border shrink-0 ${
+                  n.status === 'operational'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                }`}
+                title={`Node status: ${n.status}`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    n.status === 'operational' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                  aria-hidden="true"
+                />
+                {n.status}
+              </span>
             </div>
           ))}
         </div>
@@ -70,8 +90,8 @@ export function SystemMapPanel({ telemetryData }) {
 }
 
 const TABS = [
-  { key: 'users', label: 'Users & Credits Management', Icon: Users },
-  { key: 'system_map', label: 'System Map & Nodes', Icon: Cpu },
+  { key: 'users', label: 'Users & Credits', Icon: Users },
+  { key: 'system_map', label: 'System Map', Icon: Cpu },
   { key: 'agent', label: 'Admin Agent', Icon: Bot },
 ];
 
@@ -80,24 +100,27 @@ export default function AdminPanels({ userId = '' }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap bg-slate-900/60 p-3 rounded-2xl border border-white/10">
+      <div className="clean-card p-5 flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Shield className="w-4 h-4 text-blue-400" />
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Shield className="w-5 h-5 text-[var(--accent)]" />
             Helpotron Platform Admin Control Center
           </h2>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-[var(--text-muted)]">
             Manage user subscription plans, grant credits, inspect live node telemetry, and drive the platform with the admin agent.
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1 rounded-xl border border-white/10">
+        <div className="flex flex-wrap gap-1.5 p-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/4">
           {TABS.map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => setActiveTab(key)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5 ${
-                activeTab === key ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              aria-pressed={activeTab === key}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer inline-flex items-center gap-1.5 ${
+                activeTab === key
+                  ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

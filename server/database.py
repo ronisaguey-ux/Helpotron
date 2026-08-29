@@ -428,6 +428,25 @@ class AdminMessage(Base):
     replied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class AdminNotice(Base):
+    """Admin → user direct notice (operator 08-28): the admin sends a message
+    from the Control Center per-user row; the user's client polls unread rows
+    and pops the newest one on screen (dismissed → read_at set).
+
+    Mirrors AdminMessage (user → admin) but with the direction reversed:
+    recipient is `user_id`, and read tracking is per-recipient, not a reply
+    thread.
+    """
+    __tablename__ = "admin_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    subject: Mapped[str] = mapped_column(String(256), default="Message from Admin")
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class PasswordReset(Base):
     """Password recovery requests (operator 08-28): one row per request.
 

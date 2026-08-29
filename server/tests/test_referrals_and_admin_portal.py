@@ -165,13 +165,16 @@ def test_admin_endpoints_and_messages_inbox():
     admin_headers = {"Authorization": f"Bearer {create_jwt_token(user_id=roni.id, role='admin')}"}
     s.close()
 
-    # Test admin token generation
+    # Test admin token generation (DB-backed TokenManager — the in-memory hlp_
+    # stub was removed 08-28; the real route returns the token string itself)
     token_gen = client.post(
         "/api/admin/tokens/generate",
         json={"duration_days": 14, "max_uses": 5},
         headers=admin_headers,
     )
     assert token_gen.status_code == 200
-    token_data = token_gen.json()["token"]
-    assert token_data["max_uses"] == 5
-    assert token_data["is_active"] is True
+    token_str = token_gen.json()["token"]
+    assert isinstance(token_str, str) and len(token_str) > 10
+    listed = client.get("/api/admin/tokens", headers=admin_headers)
+    assert listed.status_code == 200
+    assert any(t["token"] == token_str for t in listed.json()["tokens"])

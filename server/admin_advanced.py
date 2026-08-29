@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 try:
     from .database import Assignment, CreditTransaction, StudyMaterial, User
@@ -145,34 +145,57 @@ class AdminAdvancedService:
 
     # ─── 4. Model Performance Metrics ───────────────────────────────────────
 
-    def get_model_metrics(self) -> Dict[str, Any]:
+    def get_model_metrics(self, db: Optional[Session] = None) -> Dict[str, Any]:
+        """REAL model scorecard (operator 08-28): per-model aggregates straight
+        from api_usage_logs. The old version shipped hardcoded accuracy/latency
+        numbers AND the frontend read key `scorecard` while we returned
+        `models` — hence "No model scorecards yet". Accuracy can't be measured
+        without an eval harness, so the card shows what is actually real:
+        calls, tokens, spend, cost/1k, last used. Latency is not logged, so it
+        is omitted rather than faked."""
+        scorecard: List[Dict[str, Any]] = []
+        if db is not None:
+            from .database import ApiUsageLog
+
+            rows = (
+                db.query(
+                    ApiUsageLog.category,
+                    ApiUsageLog.tool_or_model,
+                    func.count(ApiUsageLog.id),
+                    func.sum(ApiUsageLog.input_tokens),
+                    func.sum(ApiUsageLog.output_tokens),
+                    func.sum(ApiUsageLog.charged_cost_usd),
+                    func.max(ApiUsageLog.created_at),
+                )
+                .group_by(ApiUsageLog.category, ApiUsageLog.tool_or_model)
+                .all()
+            )
+            for category, tool_or_model, calls, tin, tout, cost, last_used in rows:
+                # Model id lives in tool_or_model for llm rows
+                # (e.g. qwen/qwen-2.5-72b-instruct) and in category for
+                # tool rows (e.g. deepseek/deepseek-chat). Prefer the one
+                # that looks like a model path.
+                nm = str(tool_or_model or '')
+                model_id = nm if ('/' in nm and not nm.startswith('/')) else str(category or nm or 'unknown')
+                tokens_in = int(tin or 0)
+                tokens_out = int(tout or 0)
+                tokens_total = tokens_in + tokens_out
+                cost = float(cost or 0)
+                scorecard.append({
+                    "model_id": model_id,
+                    "display_name": model_id.split('/')[-1].replace('-', ' ').replace('_', ' ').title(),
+                    "calls": int(calls or 0),
+                    "input_tokens": tokens_in,
+                    "output_tokens": tokens_out,
+                    "total_tokens": tokens_total,
+                    "charged_cost_usd": round(cost, 6),
+                    "cost_per_1k_tokens_usd": round(cost / (tokens_total / 1000), 6) if tokens_total > 0 else 0,
+                    "last_used": str(last_used)[:19] if last_used else None,
+                })
+            scorecard.sort(key=lambda m: -(m["charged_cost_usd"] or 0))
         return {
-            "models": [
-                {
-                    "model_id": "deepseek-v4-flash",
-                    "display_name": "DeepSeek V4 Flash",
-                    "accuracy_score": 98.4,
-                    "avg_latency_ms": 320,
-                    "cost_per_1k_tokens_usd": 0.00014,
-                    "recommended_for": ["essays", "reasoning", "rubrics", "humanization"],
-                },
-                {
-                    "model_id": "mimo-v2.5",
-                    "display_name": "MIMO v2.5",
-                    "accuracy_score": 96.1,
-                    "avg_latency_ms": 280,
-                    "cost_per_1k_tokens_usd": 0.00020,
-                    "recommended_for": ["summaries", "flashcards"],
-                },
-                {
-                    "model_id": "nemotron-3",
-                    "display_name": "Nemotron-3 Fast",
-                    "accuracy_score": 95.0,
-                    "avg_latency_ms": 210,
-                    "cost_per_1k_tokens_usd": 0.00010,
-                    "recommended_for": ["practice_tests", "outlines"],
-                },
-            ],
+            "scorecard": scorecard,  # the frontend reads this key
+            "models": scorecard,     # legacy consumers read `models`
             "routing_overrides": self._model_routing_overrides,
         }
 

@@ -16,6 +16,20 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
   const [acceptedCheckbox, setAcceptedCheckbox] = useState(false);
   const [consentFromSignup, setConsentFromSignup] = useState(false);
 
+  // WebKit replay (08-29): pointer-events must NOT ride the CSS animation clock
+  // (WebKit can stall the fade for seconds+; a keyframe-carried flip could leave
+  // the gate permanently non-hit-testable — observed as a 30s Accept click
+  // timeout). Flip on the animation's own end event with a hard-timer fallback.
+  const [peReady, setPeReady] = useState(false);
+  useEffect(() => {
+    if (!isOpen) { setPeReady(false); return; }
+    const t = setTimeout(() => setPeReady(true), 4500);
+    return () => clearTimeout(t);
+  }, [isOpen]);
+  const onPanelAnimEnd = (e) => {
+    if (e.animationName === 'aurora-panel-in') setPeReady(true);
+  };
+
   /* Single-consent flow (legal-gate UX fix, 08-28): the signup modal records
    * `helpotron_signup_consent` when the user agreed to the Terms/FERPA/GDPR
    * conditions there (Step 1). When this gate (Step 2) opens, that consent is
@@ -40,25 +54,33 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+      className={`fixed inset-0 z-[100] flex p-3 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto aurora-modal-backdrop ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal="true"
       aria-label="Privacy Policy & Terms of Service"
     >
+      {/* Aurora modal chrome (scoped; index.css owns the design system).
+          pointer-events is state-driven (see peReady above), never keyframe-driven.
+          m-auto (not items-center) so a tall panel scrolls fully instead of top-clipping. */}
+      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
+.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
       <div
-        className="w-full max-w-4xl max-h-[90vh] bg-[#0c1220] border border-white/15 rounded-3xl p-5 sm:p-8 flex flex-col justify-between shadow-2xl text-slate-100 overflow-hidden relative"
+        className={`w-full max-w-4xl min-w-0 max-h-[90vh] m-auto surface-glass-strong rounded-[var(--radius-lg)] p-5 sm:p-8 flex flex-col justify-between text-[var(--text-primary)] overflow-hidden relative aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         data-modal-container
         onClick={(e) => e.stopPropagation()}
+        onAnimationEnd={onPanelAnimEnd}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
+        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4 shrink-0">
           <div className="min-w-0">
-            <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-base sm:text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
               📜 Helpotron Legal Agreement & Privacy Policy
             </h2>
-            <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-xs text-[var(--text-muted)] mt-1 flex flex-wrap items-center gap-2">
               {requireMandatoryAgreement && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30 whitespace-nowrap">
+                <span className="aurora-chip text-[11px] uppercase tracking-wider whitespace-nowrap">
                   Step 2 of 2 · Confirm consent
                 </span>
               )}
@@ -71,7 +93,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+              className="w-8 h-8 rounded-full bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition cursor-pointer"
               aria-label="Close"
             >
               ✕
@@ -80,7 +102,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 overflow-x-auto py-3 border-b border-white/8 shrink-0">
+        <div className="flex gap-2 overflow-x-auto py-3 border-b border-[var(--border-subtle)] shrink-0">
           {[
             { id: 'terms', label: '1. Terms of Service & Honor Code' },
             { id: 'ferpa', label: '2. FERPA & Student Privacy' },
@@ -94,8 +116,8 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               onClick={() => setTab(t.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 tab === t.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                  : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               {t.label}
@@ -105,18 +127,18 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
         {/* Scrollable Legal Body */}
         <div
-          className="flex-1 overflow-y-auto my-4 pr-2 space-y-4 text-xs text-slate-300 leading-relaxed max-h-[50vh] border border-white/5 p-4 rounded-2xl bg-slate-950/60"
+          className="flex-1 min-h-0 overflow-y-auto my-4 pr-2 space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed max-h-[50vh] border border-[var(--border-subtle)] p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)]"
           onScroll={() => setHasScrolledTerms(true)}
         >
           {tab === 'terms' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
+              <h3 className="text-sm font-bold text-[var(--accent)] uppercase tracking-wider">
                 1. Acceptance of Terms & Academic Integrity Standard
               </h3>
               <p>
                 By creating an account, accessing, or utilizing the Helpotron platform, Chrome Extension, API endpoints, or autonomous study agents (collectively, the "Services"), you enter into a legally binding agreement with Helpotron Automator Inc. ("Helpotron", "we", "our", or "us").
               </p>
-              <h4 className="font-semibold text-white">1.1 Academic Honor Code & Ethical Assistance</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">1.1 Academic Honor Code & Ethical Assistance</h4>
               <p>
                 Helpotron is designed strictly as an automated supplementary academic operating system, study accelerator, and research assistant. You expressly acknowledge and warrant that:
               </p>
@@ -125,11 +147,11 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 <li>You are solely responsible for verifying the factual accuracy, citations, calculations, and originality of all generated study guides, practice tests, and mathematical solutions.</li>
                 <li>You shall not misrepresent autonomous agent synthesis as unassisted independent human work in violation of proctored examinations or honor examinations.</li>
               </ul>
-              <h4 className="font-semibold text-white">1.2 Account Ownership & Authentication Safeguards</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">1.2 Account Ownership & Authentication Safeguards</h4>
               <p>
                 Each student account is strictly personal and non-transferable. You agree to safeguard your authentication credentials, session cookies, and 2FA tokens. Any unauthorized activity conducted through your authenticated session is your legal responsibility. Helpotron reserves the right to immediately terminate or suspend any account engaged in credential sharing, automated scraping, or security evasion attempts.
               </p>
-              <h4 className="font-semibold text-white">1.3 Limitation of Liability & Warranty Disclaimer</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">1.3 Limitation of Liability & Warranty Disclaimer</h4>
               <p>
                 THE SERVICES ARE PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. HELPOTRON DOES NOT WARRANT THAT STUDY MATERIALS OR GENERATED CALCULATIONS WILL BE ERROR-FREE OR THAT THE PLATFORM WILL MEET SPECIFIC GRADE OUTCOMES. IN NO EVENT SHALL HELPOTRON BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES.
               </p>
@@ -138,13 +160,13 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
           {tab === 'ferpa' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
+              <h3 className="text-sm font-bold text-[var(--accent)] uppercase tracking-wider">
                 2. FERPA & Student Educational Record Protection
               </h3>
               <p>
                 Helpotron adheres to the statutory guidelines set forth by the Family Educational Rights and Privacy Act (FERPA) (34 CFR Part 99) and state educational privacy standards.
               </p>
-              <h4 className="font-semibold text-white">2.1 Client-Side De-Identification & PII Scrubbing</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">2.1 Client-Side De-Identification & PII Scrubbing</h4>
               <p>
                 When you connect your Canvas LMS or upload coursework assignments, our automated intake filters execute deterministic redaction heuristics to strip Personally Identifiable Information (PII), including:
               </p>
@@ -153,7 +175,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 <li>Full student names in extracted assignment rubrics, replacing them with randomized cryptographic pseudonym tags.</li>
                 <li>Institutional directory emails and personal phone records.</li>
               </ul>
-              <h4 className="font-semibold text-white">2.2 Zero Data Sale & Non-Commercial Educational Mandate</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">2.2 Zero Data Sale & Non-Commercial Educational Mandate</h4>
               <p>
                 We do not sell, rent, monetize, or license student coursework, uploaded syllabi, lecture audio recordings, or grade records to any third-party data brokers or marketing networks. Coursework is processed solely to fulfill your active study requests and maintain your private workspace history.
               </p>
@@ -162,7 +184,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
           {tab === 'gdpr' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
+              <h3 className="text-sm font-bold text-[var(--accent)] uppercase tracking-wider">
                 3. GDPR (EU 2016/679) & Statutory Privacy Rights
               </h3>
               <p>
@@ -180,15 +202,15 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
           {tab === 'subprocessors' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
+              <h3 className="text-sm font-bold text-[var(--accent)] uppercase tracking-wider">
                 4. Third-Party AI Subprocessors & Zero Training Mandate
               </h3>
               <p>
                 To provide high-performance reasoning, mathematical verification, and lecture transcription, Helpotron interfaces with specialized, enterprise-grade AI cloud infrastructure:
               </p>
-              <div className="overflow-x-auto border border-white/10 rounded-xl my-2">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-900 border-b border-white/10 text-slate-400">
+              <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl my-2">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)] text-[var(--text-muted)]">
                     <tr>
                       <th className="p-2">Subprocessor</th>
                       <th className="p-2">Purpose</th>
@@ -196,14 +218,14 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                       <th className="p-2">Privacy Policy</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
                     {SUBPROCESSORS.map((sp) => (
-                      <tr key={sp.name} className="hover:bg-white/3">
-                        <td className="p-2 font-semibold text-white">{sp.name}</td>
-                        <td className="p-2 text-slate-300">{sp.purpose}</td>
-                        <td className="p-2 text-slate-400">{sp.country}</td>
+                      <tr key={sp.name} className="hover:bg-[var(--bg-surface-elevated)]">
+                        <td className="p-2 font-semibold text-[var(--text-primary)]">{sp.name}</td>
+                        <td className="p-2 text-[var(--text-secondary)]">{sp.purpose}</td>
+                        <td className="p-2 text-[var(--text-muted)]">{sp.country}</td>
                         <td className="p-2">
-                          <a href={sp.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">
+                          <a href={sp.link} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline hover:text-[var(--accent-hover)]">
                             Review
                           </a>
                         </td>
@@ -212,7 +234,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                   </tbody>
                 </table>
               </div>
-              <h4 className="font-semibold text-white">4.1 Enterprise Zero Data Retention (ZDR)</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">4.1 Enterprise Zero Data Retention (ZDR)</h4>
               <p>
                 All student prompts, mathematical formulas, and coursework sent to OpenRouter and DeepSeek are dispatched over encrypted TLS 1.3 channels under enterprise API agreements that prohibit the use of customer data for training foundation models.
               </p>
@@ -221,7 +243,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
           {tab === 'billing' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-blue-400">
+              <h3 className="text-sm font-bold text-[var(--accent)] uppercase tracking-wider">
                 5. Credits, Subscriptions & Billing Policy
               </h3>
               <p>
@@ -238,20 +260,25 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
         </div>
 
         {/* Mandatory Agreement Checkbox & Action Buttons */}
-        <div className="pt-3 border-t border-white/10 space-y-3 shrink-0">
+        <div className="pt-3 border-t border-[var(--border-subtle)] space-y-3 shrink-0">
           <label className="flex items-start gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={acceptedCheckbox}
               onChange={(e) => setAcceptedCheckbox(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-white/20 bg-slate-900 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
             />
-            <span className="text-xs text-slate-300">
+            <span className="text-xs text-[var(--text-secondary)]">
               I have read, understood, and solemnly agree to the <strong>Helpotron Terms of Service</strong>, <strong>Academic Honor Code</strong>, <strong>FERPA Student Privacy Standards</strong>, and <strong>GDPR Data Processing Terms</strong>.
               {consentFromSignup && (
-                <em className="not-italic flex items-center gap-1 mt-1 text-[11px] text-blue-300/90">
+                <em className="not-italic flex items-center gap-1 mt-1 text-[11px] text-[var(--accent)]">
                   <Check className="w-3 h-3 shrink-0" />
                   Consent carried over from signup (Step 1) — press Accept below to enter.
+                </em>
+              )}
+              {!acceptedCheckbox && (
+                <em className="not-italic block mt-1 text-[11px] text-[var(--text-muted)]">
+                  Check the box above to enable the accept button.
                 </em>
               )}
             </span>
@@ -262,7 +289,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               <button
                 type="button"
                 onClick={onDecline}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 text-xs font-semibold transition cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold transition cursor-pointer"
               >
                 Decline & Sign Out
               </button>
@@ -271,9 +298,9 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               type="button"
               disabled={!acceptedCheckbox}
               onClick={() => onAccept && onAccept()}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition cursor-pointer shadow-lg shadow-blue-900/40 whitespace-nowrap"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer glow-accent whitespace-nowrap"
             >
-              Accept & Enter Workspace →
+              Accept & Continue →
             </button>
           </div>
         </div>

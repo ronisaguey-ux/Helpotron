@@ -488,7 +488,14 @@ async def get_current_user_optional(request: Request = None, websocket: WebSocke
 
 
 def is_admin_user(user) -> bool:
-    return getattr(user, 'public_id', '') == ADMIN_PUBLIC_ID
+    """Admin = the owner account, or any account explicitly flagged admin
+    (role='admin' or is_admin=True). Mirrors require_admin's triple check so
+    the UI gate and the API gate can never disagree (operator 08-28)."""
+    return (
+        getattr(user, 'public_id', '') == ADMIN_PUBLIC_ID
+        or getattr(user, 'role', '') == 'admin'
+        or bool(getattr(user, 'is_admin', False))
+    )
 
 # ─── bot protection ──────────────────────────────────────────────────────
 

@@ -162,11 +162,11 @@ export function EmptyState({ icon = '✦', title, body, action, onAction, action
       <div className="text-3xl text-blue-400/60">{icon}</div>
       <div className="text-sm font-semibold text-white">{title}</div>
       {body && <p className="text-xs text-slate-500 max-w-sm mx-auto">{body}</p>}
-      {action && (
+      {(action || actionLabel) && (
         <button
           type="button"
           onClick={onAction}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer"
         >
           {actionLabel || action}
         </button>
