@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover (08-28): let env(safe-area-inset-*) work on notched
+         iPhones so the fixed bottom nav and sticky topbar pad correctly.
+         No user-scalable/maximum-scale: pinch zoom stays enabled (a11y). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Helpotron Automator — Autonomous AI Academic Automation Platform</title>
     <meta name="description" content="Autonomous AI study platform, lecture transcription, dynamic writing humanization, practice test generation, and intelligent study groups." />
     <meta name="theme-color" content="#090d16" />

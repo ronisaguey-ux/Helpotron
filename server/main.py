@@ -575,9 +575,9 @@ class SignupIn(BaseModel):
 # ─── auth endpoints ──────────────────────────────────────────────────────
 
 @app.get("/api/csrf")
-def get_csrf(response: Response):
+def get_csrf(response: Response, request: Request):
     """Retrieve/initialize a CSRF token cookie."""
-    token = set_csrf_cookie(response)
+    token = set_csrf_cookie(response, request)
     return {"csrf_token": token}
 
 
@@ -655,22 +655,25 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     # (operator 08-27, kaitylyn: without it the cookie is a browser-session
     # cookie and users re-login on every visit; the DB session already lives
     # 7 days). Same window as SessionStore._session_expiry.
-    # Secure is conditional (audit 08-28, LOW): over plain HTTP on this box a
-    # hard-Secure cookie is silently dropped by non-localhost HTTP clients,
-    # so login just breaks with no clue. Secure only once the connection is
-    # real HTTPS, or whenever production_mode forces it (HTTPS-terminated
-    # proxy deployments). HttpOnly / SameSite=lax / Max-Age stay as-is.
+    # Secure tracks the REAL transport (audit 08-28 LOW→FIXED): production_mode
+    # previously forced Secure unconditionally, and WebKit silently DROPS
+    # Secure cookies set from plain-HTTP pages — so a phone that landed on
+    # http://helpotron.dpdns.org (edge serves http with no redirect) logged
+    # straight back out (the mobile login bounce). uvicorn now runs with
+    # --proxy-headers, so request.url.is_secure mirrors X-Forwarded-Proto
+    # from cloudflared: Secure only when the browser is truly on https.
+    # The vite-preview 308 (vite.config.js) pushes http visitors onto https.
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=config.production_mode or request.url.is_secure,
+        secure=request.url.is_secure,
         samesite="lax",
         path="/",
         max_age=SessionStore._session_expiry,
     )
     # Set CSRF cookie (readable by JS)
-    csrf_token = set_csrf_cookie(response)
+    csrf_token = set_csrf_cookie(response, request)
     
     return {
         "message": "Logged in",
@@ -748,6 +751,11 @@ def me(request: Request, db: Session = Depends(get_db)):
     if token:
         session = SessionStore.get_session(token)
         if session:
+            # 08-29 (operator report): /api/me is the ONLY request an idle tab
+            # makes (25s balance poll) — slide the expiry here or sessions die
+            # at the fixed boundary while the tab sits open. This is the
+            # "logged out when I sat idle" fix.
+            SessionStore.refresh_session(token)
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
                 if is_user_banned(user):
@@ -755,7 +763,7 @@ def me(request: Request, db: Session = Depends(get_db)):
                 return {
                     "public_id": user.public_id,
                     "plan": user.plan or "none",
-                    "credits": user.credits,
+                    "credits": _wallet_display_credits(user),
                     "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
                     "authenticated": True,
                     "is_admin": is_admin_user(user),
@@ -892,13 +900,13 @@ async def admin_user_act(public_id: str, request: Request, db: Session = Depends
     if not user:
         raise HTTPException(404, "User not found")
     token = SessionStore.create_session(user.id, user.public_id)
-    response = JSONResponse({"ok": True, "acting_as": user.username})
-    # Same conditional Secure rule as the login cookie (audit 08-28, LOW).
+    response = JSONResponse({"ok": True, "acting_as": user.public_id})
+    # Same transport-derived Secure rule as the login cookie (audit 08-28).
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=config.production_mode or request.url.is_secure,
+        secure=request.url.is_secure,
         samesite="lax",
         path="/",
         max_age=SessionStore._session_expiry,
@@ -996,6 +1004,11 @@ async def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), c
     # "quick scrape did nothing" case) — only overwrite with real text.
     if body.prompt:
         assignment.prompt = body.prompt
+    elif assignment.prompt is None:
+        # 08-29 (A4): prompt is optional by design, but the DB column is
+        # NOT NULL — a title-only create INSERTed NULL and 500'd. Only fill
+        # never-set prompts; existing content stays protected.
+        assignment.prompt = ""
     assignment.file_urls = body.file_urls
     progress = {**(assignment.progress or {})}
     if body.source_url:
@@ -1307,6 +1320,15 @@ def materials(public_id: str, kind: str,
 
 # ─── dashboard / credits ───────────────────────────────────────────────────
 
+def _wallet_display_credits(user: User) -> float:
+    """Display balance for the UI: real credits + Data Lake micro-credits at
+    1000:1 (operator 08-28) — 1050 micro-credits shows as 1.05 credits.
+    Storage is untouched: micro-credits stay in settings until the operator
+    redeems them into spendable credits."""
+    micro = (user.settings or {}).get("micro_credits_balance", 0) or 0
+    return round(float(getattr(user, "credits", 0) or 0) + micro / 1000, 3)
+
+
 def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: int = 0) -> dict:
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
@@ -1315,7 +1337,7 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
         credits.CreditTransaction.id.desc()).limit(20).all()
     monthly = credits.TIER_MONTHLY_CREDITS.get(user.plan, 2000)
-    bal = credits.get_balance(user)
+    bal = _wallet_display_credits(user)
 
     # Real usage aggregate (operator 08-27): tokens_processed used to be
     # fabricated as credits*10000. Pull REAL input+output tokens from the

@@ -8,20 +8,23 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Sparkles,
-  ArrowRight,
   FolderPlus,
   RefreshCw,
   Trash2,
-  ExternalLink,
   Bot,
-  Layers,
-  Search,
 } from 'lucide-react';
 import api from '../api';
 import SectionCard from './SectionCard.jsx';
 import { loadSettings } from '../demoData.js';
+
+/* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
+   base from index.css; these modifiers recolor it for status semantics. */
+const AURORA_CHIP_TINTS = `
+.aurora-chip.ok    { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.32); color: #6ee7b7; }
+.aurora-chip.warn  { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.32); color: #fcd34d; }
+.aurora-chip.tight { padding: 0.15rem 0.6rem; font-size: 0.75rem; }
+`;
 
 // Assignment type choices shown when a dumped item is finalized (user flow:
 // "what typa assignment the user wants to do, like a flashcard, practice quiz,
@@ -333,19 +336,21 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   });
 
   return (
-    <div className="space-y-6 text-slate-100 max-w-6xl mx-auto animate-fadeIn">
+    <div className="space-y-6 max-w-6xl mx-auto animate-fadeIn">
+      <style>{AURORA_CHIP_TINTS}</style>
+
       {/* Header Banner */}
-      <SectionCard id="dump-header" className="rounded-3xl bg-slate-950/80 border border-blue-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6" header={
+      <SectionCard id="dump-header" className="flex flex-col md:flex-row md:items-center justify-between gap-6" header={
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-2xl font-bold shrink-0">
+          <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] flex items-center justify-center text-[var(--accent)] shrink-0">
             <UploadCloud className="w-6 h-6" />
           </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] font-semibold mb-1">
+            <div className="aurora-chip mb-1.5">
               <Bot className="w-3.5 h-3.5" /> {agentName} AI Auto-Routing
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Universal Assignment Dump</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Universal Assignment Dump</h2>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Dump any document (PDF, Word), lecture audio (AI transcription), image, or video. {agentName} AI auto-pairs it to the right assignment or creates a bubble for it.
             </p>
           </div>
@@ -353,12 +358,12 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       }>
 
         {/* Live Audio Record Button */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
             type="button"
             onClick={dumpAll}
             disabled={dumpingAll}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/20"
+            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-xs font-semibold transition cursor-pointer shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_4px_24px_rgba(99,102,241,0.35)]"
             title="Finalize every dumped item as real work in one click"
           >
             {dumpingAll ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
@@ -368,26 +373,26 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             <button
               type="button"
               onClick={startRecording}
-              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-rose-600/20"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer"
             >
               <Mic className="w-4 h-4" />
-              <span>Record Lecture Live</span>
+              <span>Record Lecture</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={stopRecording}
-              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer animate-pulse"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition cursor-pointer animate-pulse"
             >
               <MicOff className="w-4 h-4" />
-              <span>Stop & Transcribe (AI)</span>
+              <span>Stop</span>
             </button>
           )}
         </div>
       </SectionCard>
 
       {/* Universal Upload Dropzone */}
-      <div className="clean-card rounded-3xl p-6 sm:p-8 bg-slate-950/60 border border-white/10 space-y-4">
+      <div className="clean-card p-6 sm:p-8 space-y-4">
         <input
           type="file"
           ref={fileInputRef}
@@ -403,21 +408,21 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             handleFileUpload(Array.from(e.dataTransfer.files || []));
           }}
           onClick={() => fileInputRef.current?.click()}
-          className="p-8 border-2 border-dashed border-white/15 hover:border-blue-500/60 rounded-2xl bg-slate-900/60 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition"
+          className="p-8 border-2 border-dashed border-[rgba(139,92,246,0.30)] hover:border-[rgba(139,92,246,0.60)] rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition"
         >
-          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-[var(--accent)]">
             <UploadCloud className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-white">
-              Drop any files here, or <span className="text-blue-400 underline">browse</span>
+            <div className="text-sm font-semibold text-[var(--text-primary)]">
+              Drop any files here, or <span className="text-[var(--accent)] underline">browse</span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-[var(--text-muted)] mt-1">
               Supports PDF, DOCX, TXT, MP3, WAV, M4A, FLAC, JPG, PNG, TIFF, MP4, MOV
             </p>
           </div>
           {uploading && (
-            <div className="flex items-center gap-2 text-xs text-blue-400 font-mono mt-2">
+            <div className="flex items-center gap-2 text-xs text-[var(--accent)] font-mono mt-2">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>{agentName} is parsing & transcribing with AI…</span>
             </div>
@@ -425,10 +430,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
         </div>
 
         {/* Paste-text dump */}
-        <div className="flex items-center gap-3 pt-4 border-t border-white/8">
-          <div className="h-px flex-1 bg-white/8" />
-          <span className="text-[10px] uppercase tracking-wider text-slate-600">or paste the assignment text</span>
-          <div className="h-px flex-1 bg-white/8" />
+        <div className="flex items-center gap-3 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="h-px flex-1 bg-[var(--border-subtle)]" />
+          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">or paste the assignment text</span>
+          <div className="h-px flex-1 bg-[var(--border-subtle)]" />
         </div>
         <div className="space-y-2.5">
           <textarea
@@ -436,15 +441,15 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             onChange={(e) => setPasteText(e.target.value)}
             placeholder={`Paste the full assignment / rubric / instructions here — ${agentName} will extract the details and match it to an assignment bubble…`}
             rows={5}
-            className="clean-input w-full px-3 py-2.5 text-xs rounded-xl bg-slate-900/70 border border-white/10 focus:border-blue-500/50 outline-none resize-y font-mono leading-relaxed"
+            className="clean-input w-full px-3 py-2.5 text-xs rounded-[var(--radius-md)] outline-none resize-y font-mono leading-relaxed"
           />
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] text-slate-600">{pasteText.length.toLocaleString()} characters</span>
+            <span className="text-[10px] text-[var(--text-muted)]">{pasteText.length.toLocaleString()} characters</span>
             <button
               type="button"
               onClick={handleTextDump}
               disabled={uploading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition cursor-pointer"
             >
               {uploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
               <span>Dump text</span>
@@ -455,29 +460,34 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
       {/* Filter Tabs & Content Grid */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
             {['all', 'matched', 'unmatched', 'audio'].map((tab) => (
               <button
                 key={tab}
                 type="button"
+                aria-pressed={activeTab === tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold capitalize transition cursor-pointer ${
                   activeTab === tab
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white bg-slate-900 border border-white/5'
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-white hover:bg-white/5'
                 }`}
               >
-                {tab === 'audio' ? '🎙️ Audio & Video' : tab}
+                {tab === 'audio' ? 'Audio & Video' : tab}
               </button>
             ))}
           </div>
-          <span className="text-xs text-slate-400 font-mono">{filteredItems.length} dumped items</span>
+          <span className="text-xs text-[var(--text-muted)] font-mono">{filteredItems.length} dumped items</span>
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="clean-card rounded-3xl p-10 text-center text-xs text-slate-500">
-            No items in this category. Dump a syllabus, lecture recording, or assignment doc above.
+          <div className="clean-card p-10 text-center space-y-2">
+            <FileText className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">No items in this category</h3>
+            <p className="text-xs text-[var(--text-muted)]">
+              Dump a syllabus, lecture recording, or assignment doc above.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -490,36 +500,28 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 <SectionCard
                   key={`dump-item-${item.id}`}
                   id={`dump-item-${item.id}`}
-                  className="rounded-2xl bg-slate-950/70 border border-white/10 flex flex-col justify-between gap-4 hover:border-blue-500/30 transition"
+                  className="flex flex-col justify-between gap-4 hover:border-[rgba(139,92,246,0.35)] transition"
                   header={
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-slate-900 border border-white/10 text-blue-400 shrink-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-2 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] shrink-0">
                           {item.file_type === 'audio' && <Mic className="w-4 h-4 text-rose-400" />}
                           {item.file_type === 'video' && <Video className="w-4 h-4 text-amber-400" />}
                           {item.file_type === 'image' && <ImageIcon className="w-4 h-4 text-emerald-400" />}
-                          {item.file_type === 'document' && <FileText className="w-4 h-4 text-blue-400" />}
-                          {item.file_type === 'text' && <FileText className="w-4 h-4 text-slate-400" />}
+                          {item.file_type === 'document' && <FileText className="w-4 h-4 text-[var(--accent)]" />}
+                          {item.file_type === 'text' && <FileText className="w-4 h-4 text-[var(--text-muted)]" />}
                         </div>
-                        <div>
-                          <h3 className="text-xs font-bold text-white truncate max-w-[220px] sm:max-w-[280px]">
+                        <div className="min-w-0">
+                          <h3 className="text-xs font-bold text-[var(--text-primary)] truncate max-w-[220px] sm:max-w-[280px]">
                             {item.file_name}
                           </h3>
-                          <span className="text-[10px] text-slate-400 uppercase font-mono">
+                          <span className="text-[10px] text-[var(--text-muted)] uppercase font-mono">
                             {item.file_type} • {(item.file_size_bytes / 1024).toFixed(1)} KB
                           </span>
                         </div>
                       </div>
 
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold border ${
-                          isFinalized
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : isMatched
-                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                              : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                        }`}
-                      >
+                      <span className={`aurora-chip tight shrink-0 ${isFinalized || isMatched ? 'ok' : 'warn'}`}>
                         {isFinalized ? '✅ Finalized' : item.status === 'auto_routed' ? `Auto-Routed (${confPct}%)` : isMatched ? `Auto-Paired (${confPct}%)` : 'Unmatched'}
                       </span>
                     </div>
@@ -527,20 +529,20 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 >
                   <div className="space-y-3">
                     {/* Extracted Preview / Markdown Snippet */}
-                    <div className="p-3 bg-slate-900/80 rounded-xl border border-white/5 text-[11px] text-slate-300 font-mono max-h-24 overflow-y-auto leading-relaxed">
+                    <div className="p-3 bg-[var(--bg-surface-elevated)] rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] font-mono max-h-24 overflow-y-auto leading-relaxed break-words">
                       {item.extracted_text || 'No textual content extracted.'}
                     </div>
 
                     {/* Overlord Routing Note */}
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                      <Bot className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
+                      <Bot className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
                       <span className="truncate">{item.overlord_notes}</span>
                     </div>
 
                     {/* Assignment Type Ask (finalize): not yet finalized → ask what the user wants */}
                     {needsTypeAsk(item) && (
-                      <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-2">
-                        <div className="text-[11px] font-semibold text-blue-200">
+                      <div className="p-3 rounded-[var(--radius-md)] bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.28)] space-y-2">
+                        <div className="text-[11px] font-semibold text-[var(--text-primary)]">
                           What do you want to do this assignment as?
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
@@ -550,14 +552,14 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                               type="button"
                               onClick={() => handleFinalize(item, opt.action)}
                               disabled={finalizingId === item.id}
-                              className="px-2 py-1.5 rounded-lg bg-slate-900/80 hover:bg-blue-600/30 border border-white/10 hover:border-blue-500/40 text-slate-200 text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                              className="px-2 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-subtle)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.4)] text-[var(--text-secondary)] text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
                             >
                               {opt.icon} {opt.label}
                             </button>
                           ))}
                         </div>
                         {finalizingId === item.id && (
-                          <div className="flex items-center gap-1.5 text-[11px] text-blue-300 font-mono">
+                          <div className="flex items-center gap-1.5 text-[11px] text-[var(--accent)] font-mono">
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             Generating with {agentName} AI…
                           </div>
@@ -567,14 +569,14 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                   </div>
 
                   {/* Action Bar */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-subtle)]">
                     {isFinalized ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 truncate max-w-[180px]">
+                      <span className="aurora-chip tight ok truncate max-w-[180px]">
                         {FINALIZE_BADGE[item.requested_action] || '✅ Finalized'}
                       </span>
                     ) : item.matched_assignment_id ? (
-                      <div className="text-xs text-emerald-400 font-semibold truncate flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      <div className="text-xs text-emerald-400 font-semibold truncate flex items-center gap-1 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">{item.matched_assignment_title || `Assignment #${item.matched_assignment_id}`}</span>
                       </div>
                     ) : (
@@ -583,12 +585,12 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                       </span>
                     )}
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {isFinalized && item.requested_action === 'do_it' && (
                         <button
                           type="button"
                           onClick={() => openWork(item)}
-                          className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          className="inline-flex items-center rounded-[var(--radius-sm)] px-2.5 py-1.5 bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-subtle)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.4)] text-[var(--text-secondary)] text-xs font-semibold transition cursor-pointer"
                         >
                           📄 View work
                         </button>
@@ -601,7 +603,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                           setNewAssignTitle(item.file_name.replace(/\.[^/.]+$/, ''));
                           setRouteModalOpen(true);
                         }}
-                        className="px-2.5 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 rounded-lg text-xs font-semibold transition cursor-pointer"
+                        className="inline-flex items-center rounded-[var(--radius-sm)] px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_2px_14px_rgba(139,92,246,0.22)] transition cursor-pointer"
                       >
                         {isMatched ? 'Re-Route' : 'Route Item'}
                       </button>
@@ -609,8 +611,9 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                         type="button"
                         onClick={() => handleDelete(item.id, item)}
                         disabled={deletingIds.has(item.id)}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[#fda4af] hover:bg-[rgba(244,63,94,0.12)] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title={deletingIds.has(item.id) ? 'Deleting…' : 'Delete dump item'}
+                        aria-label="Delete dump item"
                       >
                         {deletingIds.has(item.id)
                           ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -627,23 +630,24 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
       {/* Manual Routing Modal */}
       {routeModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="clean-card w-full max-w-md p-6 bg-slate-950 border border-white/20 rounded-3xl space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="surface-glass-strong w-full max-w-md p-6 rounded-[var(--radius-lg)] space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-blue-400" />
+              <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <FolderPlus className="w-4 h-4 text-[var(--accent)]" />
                 Route Dumped Material
               </h3>
               <button
                 type="button"
                 onClick={() => setRouteModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+                aria-label="Close route dialog"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-[var(--text-secondary)] break-words">
               Attach <strong>{selectedItem.file_name}</strong> to an existing assignment or generate a brand new assignment from its contents.
             </p>
 
@@ -652,10 +656,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 <button
                   type="button"
                   onClick={() => setCreateNew(false)}
-                  className={`flex-1 py-2 rounded-xl font-semibold transition cursor-pointer ${
+                  className={`flex-1 py-2 rounded-[var(--radius-md)] font-semibold transition cursor-pointer ${
                     !createNew
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-900 text-slate-400 border border-white/10'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
                   }`}
                 >
                   Existing Assignment
@@ -663,10 +667,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 <button
                   type="button"
                   onClick={() => setCreateNew(true)}
-                  className={`flex-1 py-2 rounded-xl font-semibold transition cursor-pointer ${
+                  className={`flex-1 py-2 rounded-[var(--radius-md)] font-semibold transition cursor-pointer ${
                     createNew
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-900 text-slate-400 border border-white/10'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
                   }`}
                 >
                   Create New
@@ -675,11 +679,11 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
               {!createNew ? (
                 <div>
-                  <label className="text-slate-400 block mb-1 text-[11px] font-semibold">Select Assignment</label>
+                  <label className="text-[var(--text-muted)] block mb-1 text-[11px] font-semibold">Select Assignment</label>
                   <select
                     value={selectedAssignId}
                     onChange={(e) => setSelectedAssignId(e.target.value)}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs"
+                    className="w-full clean-input rounded-[var(--radius-md)] px-3 py-2 text-white text-xs"
                     required
                   >
                     <option value="">-- Select from your assignments --</option>
@@ -692,13 +696,13 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 </div>
               ) : (
                 <div>
-                  <label className="text-slate-400 block mb-1 text-[11px] font-semibold">New Assignment Title</label>
+                  <label className="text-[var(--text-muted)] block mb-1 text-[11px] font-semibold">New Assignment Title</label>
                   <input
                     type="text"
                     value={newAssignTitle}
                     onChange={(e) => setNewAssignTitle(e.target.value)}
                     placeholder="e.g. Calculus Lecture & Homework 4"
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs"
+                    className="w-full clean-input rounded-[var(--radius-md)] px-3 py-2 text-white text-xs"
                     required
                   />
                 </div>
@@ -708,14 +712,14 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 <button
                   type="button"
                   onClick={() => setRouteModalOpen(false)}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold transition"
+                  className="flex-1 py-2 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-subtle)] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={routing}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition cursor-pointer"
+                  className="flex-1 py-2 rounded-[var(--radius-md)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold transition cursor-pointer"
                 >
                   {routing ? 'Saving…' : 'Save Routing'}
                 </button>
@@ -729,10 +733,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-6 right-6 z-[70] max-w-xs px-4 py-2.5 rounded-xl text-xs font-semibold shadow-2xl border animate-fadeIn ${
+          className={`fixed bottom-16 md:bottom-6 right-6 z-[70] max-w-[min(320px,calc(100vw-3rem))] px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-semibold shadow-2xl border animate-fadeIn surface-glass-strong ${
             toast.ok
-              ? 'bg-emerald-600/95 border-emerald-400/40 text-white'
-              : 'bg-rose-600/95 border-rose-400/40 text-white'
+              ? 'border-emerald-400/40 text-white'
+              : 'border-rose-400/40 text-white'
           }`}
         >
           {toast.msg}
@@ -741,28 +745,29 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
       {/* Finalized work drawer — shows the actual generated work right away */}
       {resultView && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setResultView(null)}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={() => setResultView(null)}>
           <div
-            className="clean-card w-full max-w-2xl max-h-[80vh] flex flex-col bg-slate-950 border border-emerald-500/30 rounded-3xl shadow-2xl"
+            className="surface-glass-strong w-full max-w-2xl max-h-[80vh] flex flex-col rounded-[var(--radius-lg)] shadow-2xl border-emerald-500/30"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
-              <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 Work ready — {resultView.title}
               </div>
               <button
                 type="button"
                 onClick={() => setResultView(null)}
-                className="text-slate-400 hover:text-white transition cursor-pointer"
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+                aria-label="Close work drawer"
               >
                 ✕
               </button>
             </div>
-            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">
+            <div className="overflow-y-auto px-5 py-4 text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap break-words font-sans">
               {resultView.work}
             </div>
-            <div className="px-5 py-3 border-t border-white/10 text-[10px] text-slate-500">
+            <div className="px-5 py-3 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)]">
               Also saved to your assignment bubble — open your agent → {agentName} to chat about it.
             </div>
           </div>

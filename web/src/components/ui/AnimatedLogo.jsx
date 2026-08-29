@@ -8,12 +8,14 @@
  * while `isWorking` is true, otherwise it lights up on hover.
  * ──────────────────────────────────────────────────────────────────────────── */
 import React from 'react';
+import { cn } from '@/lib/utils';
 
 export const AnimatedLogo = ({
   size = 'md', // 'sm' (24px), 'md' (36px), 'lg' (48px), 'xl' (64px)
   isWorking = false,
   videoSrc = null, // Optional path to animated WebM loop e.g. '/assets/HelpoTron_logo.webm'
   showWordmark = true,
+  wordmarkClassName = '', // extra classes on the wordmark column (e.g. 'hidden sm:flex' on tight top bars)
   className = '',
 }) => {
   const sizeClasses = {
@@ -58,12 +60,12 @@ export const AnimatedLogo = ({
 
       {/* Modern Wordmark */}
       {showWordmark && (
-        <div className="flex flex-col leading-tight">
+        <div className={cn('flex flex-col leading-tight', wordmarkClassName)}>
           <div className="flex items-center gap-1.5">
-            <span className="font-extrabold text-base tracking-tight text-slate-100">helpotron</span>
+            <span className="font-extrabold text-base tracking-tight text-slate-100 whitespace-nowrap">helpotron</span>
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
-          <span className="text-[9px] font-mono text-slate-400 tracking-widest uppercase font-semibold">Academic OS</span>
+          <span className="text-[9px] font-mono text-slate-400 tracking-widest uppercase font-semibold whitespace-nowrap">Academic OS</span>
         </div>
       )}
     </div>

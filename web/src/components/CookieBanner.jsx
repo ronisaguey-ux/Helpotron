@@ -36,7 +36,7 @@ export function CookieBanner() {
     <div
       role="region"
       aria-label="Cookie consent notice"
-      className="fixed bottom-16 md:bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0f172a]/95 backdrop-blur shadow-2xl"
+      className="fixed bottom-16 md:bottom-0 inset-x-0 z-50 border-t border-[var(--border-subtle)] surface-glass-strong shadow-2xl"
     >
       <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
         <p className="text-xs sm:text-sm text-slate-300 flex-1 text-center sm:text-left">
@@ -46,14 +46,14 @@ export function CookieBanner() {
           <button
             type="button"
             onClick={() => choose('rejected')}
-            className="px-4 py-2 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5 transition text-sm font-medium"
+            className="px-4 py-2 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/5 hover:text-white transition text-sm font-medium"
           >
             Reject
           </button>
           <button
             type="button"
             onClick={() => choose('accepted')}
-            className="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white transition text-sm font-semibold"
+            className="px-4 py-2 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition text-sm font-semibold"
           >
             Accept
           </button>

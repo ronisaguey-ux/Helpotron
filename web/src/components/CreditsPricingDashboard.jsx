@@ -30,6 +30,7 @@ import SectionCard from './SectionCard.jsx';
 
 export function CreditsPricingDashboard({
   currentCredits = 0,
+  currentTokens = 0,
   onTopUp = () => {},
   userId = '',
   plan = 'basic',
@@ -241,49 +242,54 @@ export function CreditsPricingDashboard({
       {/* Balance & Discount Credits Header */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Regular Compute Balance */}
-        <div className="clean-card rounded-2xl p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-medium">Available Task Balance</div>
-              <div className="text-2xl font-black text-blue-400 font-mono">
-                {Number(currentCredits).toLocaleString()} Credits
+        <div className="clean-card rounded-2xl p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-400 font-medium">Available Task Tokens</div>
+                <div className="text-2xl font-black text-[var(--accent)] font-mono whitespace-nowrap">
+                  {Number(currentTokens).toLocaleString()} tokens
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">usage budget for AI tasks</div>
               </div>
             </div>
-          </div>
-          <div className="text-right">
-            <span className="text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono">
-              Active Tier: {plan === 'none' || !plan ? 'No plan (activate via operator)' : plan}
-            </span>
+            <div className="text-left sm:text-right shrink-0">
+              <span className="inline-block text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono">
+                Active Tier: {plan === 'none' || !plan ? 'No plan (activate via operator)' : plan}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Referral Discount Credits Balance */}
-        <div className="clean-card rounded-2xl p-6 flex items-center justify-between bg-gradient-to-r from-emerald-950/20 to-teal-950/20 border border-emerald-500/20">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <Tag className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-medium">Referral Discount Credits</div>
-              <div className="text-2xl font-black text-emerald-400 font-mono">
-                ${userDiscountCredits}.00 USD
+        <div className="clean-card rounded-2xl p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <Tag className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-400 font-medium">Referral Discount Credits</div>
+                <div className="text-2xl font-black text-emerald-400 font-mono whitespace-nowrap">
+                  ${userDiscountCredits}.00 USD
+                </div>
               </div>
             </div>
-          </div>
-          <div className="text-right">
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useDiscountCredits}
-                onChange={(e) => setUseDiscountCredits(e.target.checked)}
-                className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
-              />
-              <span className="font-semibold text-emerald-300">Apply at Checkout</span>
-            </label>
-            <div className="text-[10px] text-slate-400 mt-1 font-mono">Up to 50% max purchase discount</div>
+            <div className="text-left sm:text-right shrink-0">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5 sm:py-0">
+                <input
+                  type="checkbox"
+                  checked={useDiscountCredits}
+                  onChange={(e) => setUseDiscountCredits(e.target.checked)}
+                  className="rounded accent-emerald-500 w-4 h-4 min-w-0 min-h-0 cursor-pointer"
+                />
+                <span className="font-semibold text-emerald-300">Apply at Checkout</span>
+              </label>
+              <div className="text-[10px] text-slate-400 mt-1 font-mono">Up to 50% max purchase discount</div>
+            </div>
           </div>
         </div>
       </div>
@@ -294,14 +300,14 @@ export function CreditsPricingDashboard({
       </div>
 
       {/* Billing Switch & Promo Section */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950/40 border border-white/5">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white/4 border border-white/8">
         {/* Monthly vs Annual */}
-        <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-white/5 text-xs font-semibold">
+        <div className="flex items-center p-1 rounded-xl bg-white/4 border border-white/8 text-xs font-semibold">
           <button
             type="button"
             onClick={() => setBillingCycle('monthly')}
             className={`px-4 py-2 rounded-lg transition cursor-pointer ${
-              billingCycle === 'monthly' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              billingCycle === 'monthly' ? 'bg-[var(--accent)] text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             Monthly Billing
@@ -310,7 +316,7 @@ export function CreditsPricingDashboard({
             type="button"
             onClick={() => setBillingCycle('annual')}
             className={`px-4 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              billingCycle === 'annual' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              billingCycle === 'annual' ? 'bg-[var(--accent)] text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             <span>Annual Billing</span>
@@ -331,7 +337,7 @@ export function CreditsPricingDashboard({
           />
           <button
             type="submit"
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 rounded-xl font-semibold transition shrink-0 cursor-pointer"
+            className="px-4 py-2 bg-white/4 hover:bg-white/8 text-slate-200 border border-white/8 rounded-[var(--radius-md)] font-semibold transition shrink-0 cursor-pointer"
           >
             Apply Code
           </button>
@@ -345,14 +351,14 @@ export function CreditsPricingDashboard({
       )}
 
       {/* All-Features-Unlocked Disclaimer Banner */}
-      <SectionCard id="credits-unlocked-banner" padding="p-4" className="rounded-2xl bg-gradient-to-r from-blue-950/40 via-purple-950/40 to-slate-950/40 border border-blue-500/30" header={
+      <SectionCard id="credits-unlocked-banner" padding="p-4" className="rounded-2xl" header={
         <div className="flex items-center gap-3.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] flex items-center justify-center text-[var(--accent)] shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div className="text-xs font-bold text-white flex items-center gap-1.5">
             <span>All Platform Features & Tools Are 100% Unlocked on Every Plan</span>
-            <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-mono font-semibold">NO FEATURE GATING</span>
+            <span className="text-[10px] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] text-[var(--accent-2)] px-2 py-0.5 rounded-full font-mono font-semibold">NO FEATURE GATING</span>
           </div>
         </div>
       }>
@@ -376,7 +382,7 @@ export function CreditsPricingDashboard({
               id={`credits-tier-${tier.name.toLowerCase()}`}
               padding="p-6"
               className={`rounded-3xl flex flex-col justify-between transition-all duration-300 relative ${
-                tier.popular ? 'border-blue-500/50 shadow-xl shadow-blue-500/10' : 'border-white/10'
+                tier.popular ? 'shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_16px_48px_rgba(139,92,246,0.14)]' : ''
               }`}
               header={
                 <div>
@@ -386,14 +392,14 @@ export function CreditsPricingDashboard({
               }
             >
               {tier.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-lg">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[var(--accent)] text-white font-bold text-[10px] uppercase tracking-wider shadow-lg">
                   Most Popular
                 </div>
               )}
 
               <div className="space-y-4">
 
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-1">
+                <div className="p-4 rounded-2xl bg-white/4 border border-white/8 space-y-1">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-3xl font-black text-white font-mono">${finalAmount}</span>
                     <span className="text-xs text-slate-400 font-mono">
@@ -409,8 +415,8 @@ export function CreditsPricingDashboard({
                   )}
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
-                  <div className="text-xs font-bold text-blue-300 font-mono flex items-center gap-1.5">
+                <div className="p-2.5 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] space-y-0.5">
+                  <div className="text-xs font-bold text-[var(--accent-2)] font-mono flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
                     <span>{tier.credits}</span>
                   </div>
@@ -435,14 +441,14 @@ export function CreditsPricingDashboard({
                 <button
                   type="button"
                   onClick={() => initiateCheckout(tier)}
-                  className={`w-full py-3 rounded-xl font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
+                  className={`w-full py-3 rounded-[var(--radius-md)] font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-2 ${
                     tier.popular
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                      ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white glow-accent'
                       : 'bg-white/10 hover:bg-white/20 text-white'
                   }`}
                 >
-                  <Lock className="w-3.5 h-3.5 text-blue-300" />
-                  <span>Secure 2FA Checkout</span>
+                  <Lock className="w-3.5 h-3.5 text-white/90" />
+                  <span>2FA Checkout</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <div className="text-center text-[10px] text-slate-500 mt-2 flex items-center justify-center gap-1">
@@ -458,20 +464,22 @@ export function CreditsPricingDashboard({
       {/* ─── MANDATORY 2FA PURCHASE CHECKOUT MODAL ─── */}
       {checkoutModalOpen && selectedTier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="clean-card rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-white/10 space-y-5 animate-fadeIn text-slate-100 relative">
+          <div className="clean-card surface-glass-strong rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-fadeIn text-slate-100 relative">
             
             {/* Close Button */}
             <button
               type="button"
               onClick={() => setCheckoutModalOpen(false)}
-              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer"
+              aria-label="Close checkout"
+              title="Close"
+              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Modal Header */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <div className="w-10 h-10 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] flex items-center justify-center text-[var(--accent)]">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
@@ -510,7 +518,7 @@ export function CreditsPricingDashboard({
             ) : (
               <form onSubmit={handleVerifyAndPurchase} className="space-y-4 text-xs">
                 {/* Order Summary Box */}
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
+                <div className="p-4 rounded-xl bg-white/4 border border-white/8 space-y-2">
                   <div className="flex items-center justify-between text-slate-300">
                     <span>Plan:</span>
                     <span className="font-bold text-white">{selectedTier.name} ({billingCycle})</span>
@@ -523,14 +531,14 @@ export function CreditsPricingDashboard({
                   )}
                   <div className="flex items-center justify-between pt-1 border-t border-white/5 text-sm font-bold text-white">
                     <span>Total Charged:</span>
-                    <span className="text-blue-400 font-mono">${calculatedAmount}.00 USD</span>
+                    <span className="text-[var(--accent)] font-mono">${calculatedAmount}.00 USD</span>
                   </div>
                 </div>
 
                 {/* Step 1: Account Credentials */}
                 <div className="space-y-2.5">
                   <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-blue-400" />
+                    <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" />
                     Step 1: Account Username & Password
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -539,7 +547,7 @@ export function CreditsPricingDashboard({
                       placeholder="Username / Public ID"
                       value={authUsername}
                       onChange={(e) => setAuthUsername(e.target.value)}
-                      className="bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white placeholder:text-slate-600"
+                      className="clean-input rounded-xl px-3 py-2 outline-none"
                     />
                     <div className="relative">
                       <input
@@ -547,7 +555,7 @@ export function CreditsPricingDashboard({
                         placeholder="Account Password"
                         value={authPassword}
                         onChange={(e) => setAuthPassword(e.target.value)}
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 pr-9 text-white placeholder:text-slate-600"
+                        className="clean-input w-full rounded-xl px-3 py-2 pr-9 outline-none"
                       />
                       <button
                         type="button"
@@ -568,13 +576,13 @@ export function CreditsPricingDashboard({
                   </label>
 
                   {/* Channel Switcher */}
-                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950 border border-white/5">
+                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-white/4 border border-white/8">
                     <button
                       type="button"
                       onClick={() => setTwoFactorMethod('email')}
                       className={`py-2 rounded-lg flex items-center justify-center gap-2 font-semibold transition cursor-pointer ${
                         twoFactorMethod === 'email'
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-[var(--accent)] text-white shadow-sm'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -586,7 +594,7 @@ export function CreditsPricingDashboard({
                       onClick={() => setTwoFactorMethod('sms')}
                       className={`py-2 rounded-lg flex items-center justify-center gap-2 font-semibold transition cursor-pointer ${
                         twoFactorMethod === 'sms'
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-[var(--accent)] text-white shadow-sm'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -602,7 +610,7 @@ export function CreditsPricingDashboard({
                       placeholder={twoFactorMethod === 'email' ? 'your-email@domain.com' : '+1 (555) 000-0000'}
                       value={destination}
                       onChange={(e) => setDestination(e.target.value)}
-                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white placeholder:text-slate-600 font-mono"
+                      className="clean-input flex-1 rounded-xl px-3 py-2 font-mono outline-none"
                     />
                     <button
                       type="button"
@@ -634,7 +642,7 @@ export function CreditsPricingDashboard({
                       placeholder="• • • • • •"
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-slate-950 border border-emerald-500/40 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] font-mono text-white focus:outline-none focus:border-emerald-400"
+                      className="w-full bg-white/4 border border-emerald-500/40 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] font-mono text-white focus:outline-none focus:border-emerald-400"
                     />
                   </div>
                 )}
@@ -651,7 +659,7 @@ export function CreditsPricingDashboard({
                 <button
                   type="submit"
                   disabled={verifying || !codeSent || verificationCode.length !== 6}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                  className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-[var(--radius-md)] font-semibold text-xs transition cursor-pointer flex items-center justify-center gap-2 glow-accent"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>{verifying ? 'Authenticating & Processing...' : 'Verify 2FA & Complete Purchase'}</span>
@@ -694,7 +702,7 @@ export const CostIntelligenceSection = ({ costData, loading, onSetSpendingLimit 
         </div>
         <div className="p-4 rounded-xl border border-white/8 bg-white/4 space-y-1">
           <span className="text-xs text-slate-500">Most Used Effort Tier</span>
-          <p className="text-xl font-bold text-blue-400">{costData?.most_used_effort_tier || '—'}</p>
+          <p className="text-xl font-bold text-[var(--accent)]">{costData?.most_used_effort_tier || '—'}</p>
         </div>
         <div className="p-4 rounded-xl border border-white/8 bg-white/4 space-y-1">
           <span className="text-xs text-slate-500">Spent vs Spending Limit</span>

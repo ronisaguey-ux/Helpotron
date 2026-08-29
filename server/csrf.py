@@ -37,14 +37,14 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def set_csrf_cookie(response: Response) -> str:
+def set_csrf_cookie(response: Response, request: Request | None = None) -> str:
     """Set a CSRF cookie and return the token."""
     token = generate_csrf_token()
     response.set_cookie(
         key=CSRF_COOKIE_NAME,
         value=token,
         httponly=False,   # Must be readable by JavaScript to send back
-        secure=getattr(config, 'production_mode', False),
+        secure=request.url.is_secure if request is not None else getattr(config, 'production_mode', False),
         samesite="lax",
         path="/",
     )

@@ -73,8 +73,8 @@ class TokenManager:
         admin = db.query(User).filter(User.public_id.in_(ADMIN_IDS)).first()
         if not admin:
             raise HTTPException(404, "Admin user not found")
-        settings = admin.settings or {}
-        tokens = settings.get("tokens", [])
+        new_settings = dict(admin.settings or {})
+        tokens = list(new_settings.get("tokens", []))
         tokens.append({
             "token": token,
             "duration_days": duration_days,
@@ -84,8 +84,11 @@ class TokenManager:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "active": True,
         })
-        settings["tokens"] = tokens
-        admin.settings = settings
+        new_settings["tokens"] = tokens
+        # settings is a plain JSON column — in-place mutation is invisible to
+        # SQLAlchemy, so a fresh dict MUST be assigned (fix 08-28: tokens
+        # generated "successfully" but were never persisted).
+        admin.settings = new_settings
         db.commit()
         return token
 
@@ -94,14 +97,16 @@ class TokenManager:
         admin = db.query(User).filter(User.public_id.in_(ADMIN_IDS)).first()
         if not admin:
             return "Token system unavailable"
-        settings = admin.settings or {}
-        tokens = settings.get("tokens", [])
+        new_settings = dict(admin.settings or {})
+        tokens = list(new_settings.get("tokens", []))
+        idx = None
         token_data = None
-        for t in tokens:
+        for i, t in enumerate(tokens):
             if t["token"] == token:
+                idx = i
                 token_data = t
                 break
-        if not token_data:
+        if token_data is None:
             return "Invalid token"
         if not token_data.get("active", True):
             return "Token has been deactivated"
@@ -117,9 +122,9 @@ class TokenManager:
         else:
             credits = 10
         user.credits += credits
-        token_data["uses"] += 1
-        token_data["used_by"].append(user.public_id)
-        admin.settings = settings
+        tokens[idx] = {**token_data, "uses": token_data["uses"] + 1, "used_by": [*token_data["used_by"], user.public_id]}
+        new_settings["tokens"] = tokens
+        admin.settings = new_settings  # fresh dict — see generate_token
         db.commit()
         return f"Token redeemed! You received {credits} credits."
 
@@ -135,12 +140,13 @@ class TokenManager:
         admin = db.query(User).filter(User.public_id.in_(ADMIN_IDS)).first()
         if not admin:
             return False
-        settings = admin.settings or {}
-        tokens = settings.get("tokens", [])
-        for t in tokens:
+        new_settings = dict(admin.settings or {})
+        tokens = list(new_settings.get("tokens", []))
+        for i, t in enumerate(tokens):
             if t["token"] == token:
-                t["active"] = False
-                admin.settings = settings
+                tokens[i] = {**t, "active": False}
+                new_settings["tokens"] = tokens
+                admin.settings = new_settings  # fresh dict — see generate_token
                 db.commit()
                 return True
         return False

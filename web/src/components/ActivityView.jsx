@@ -8,6 +8,13 @@ import { EVENTS, ADMIN_EVENTS, demoEnabled } from '../demoData.js';
 import { Timeline, eventIcon, timeAgo, clockTime, EmptyState } from './ui/os.jsx';
 import NotificationsView from './NotificationsView.jsx';
 
+/* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
+   base from index.css; these modifiers recolor it for status semantics. */
+const AURORA_CHIP_TINTS = `
+.aurora-chip.info  { background: rgba(34,211,238,0.13); border-color: rgba(34,211,238,0.30); color: #67e8f9; }
+.aurora-chip.warn  { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.32); color: #fcd34d; }
+`;
+
 const CATEGORIES = [
   { key: 'all', label: 'All' },
   { key: 'assignment', label: 'Assignments' },
@@ -57,14 +64,15 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
   /* Mode + category controls: single clean-card toolbar */
   const controls = (
     <div className="clean-card p-3 flex flex-wrap items-center gap-2">
-      <div className="flex gap-1">
+      <div className="flex gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
         {[['timeline', '⚡ Timeline'], ['notifications', '🔔 Notifications']].map(([k, label]) => (
           <button
             key={k}
             type="button"
+            aria-pressed={mode === k}
             onClick={() => setMode(k)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition cursor-pointer border ${
-              mode === k ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+            className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-medium transition cursor-pointer ${
+              mode === k ? 'bg-[var(--accent)] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-white'
             }`}
           >
             {label}
@@ -77,9 +85,12 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
             <button
               key={c.key}
               type="button"
+              aria-pressed={filter === c.key}
               onClick={() => setFilter(c.key)}
-              className={`px-2.5 py-1 rounded-lg text-[10px] transition cursor-pointer ${
-                filter === c.key ? 'bg-white/12 text-white font-semibold' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              className={`rounded-full px-3 py-1 text-[11px] transition cursor-pointer ${
+                filter === c.key
+                  ? 'aurora-chip px-3 py-1'
+                  : 'text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
               {c.label}
@@ -93,6 +104,7 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
   if (mode === 'notifications') {
     return (
       <div className="space-y-5">
+        <style>{AURORA_CHIP_TINTS}</style>
         {controls}
         <NotificationsView />
       </div>
@@ -102,6 +114,7 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
   if (Object.keys(byDay).length === 0) {
     return (
       <div className="space-y-5">
+        <style>{AURORA_CHIP_TINTS}</style>
         {controls}
         <EmptyState
           title={events.length === 0 ? 'No activity yet' : 'Nothing in this category'}
@@ -115,10 +128,11 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
 
   return (
     <div className="space-y-6">
+      <style>{AURORA_CHIP_TINTS}</style>
       {controls}
       {Object.entries(byDay).map(([day, dayEvents]) => (
         <div key={day}>
-          <div className="text-[10px] font-bold tracking-widest text-slate-500 mb-3">{day}</div>
+          <div className="text-[10px] font-bold tracking-widest text-[var(--text-muted)] mb-3">{day}</div>
           <div className="clean-card p-5">
             <Timeline
               items={dayEvents}
@@ -128,20 +142,20 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
               }}
               renderTitle={(e) => (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-slate-200 font-medium">{e.metadata?.title || e.type}</span>
-                  <span className="text-[10px] font-mono text-slate-600">{clockTime(e.timestamp)}</span>
-                  {e.status === 'open' && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25">OPEN</span>}
-                  {e.status === 'running' && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/25 animate-pulse">RUNNING</span>}
+                  <span className="text-xs text-[var(--text-secondary)] font-medium">{e.metadata?.title || e.type}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">{clockTime(e.timestamp)}</span>
+                  {e.status === 'open' && <span className="aurora-chip warn">OPEN</span>}
+                  {e.status === 'running' && <span className="aurora-chip info animate-pulse">RUNNING</span>}
                 </div>
               )}
               renderMeta={(e) => (
-                <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                <div className="text-[10px] text-[var(--text-muted)] mt-0.5 flex items-center gap-2 flex-wrap">
                   <span>{e.type.replace('.', ' · ')}</span>
-                  {e.metadata?.course && <span className="text-slate-600">{e.metadata.course}</span>}
-                  {e.metadata?.sources && <span className="text-slate-600">{e.metadata.sources} sources found</span>}
-                  {e.metadata?.amount && <span className="font-mono text-slate-500">{e.metadata.amount > 0 ? '+' : ''}{e.metadata.amount}</span>}
-                  {e.metadata?.user && <span className="text-slate-600">{e.metadata.user}</span>}
-                  <span className="ml-auto text-slate-700">{timeAgo(e.timestamp)}</span>
+                  {e.metadata?.course && <span className="opacity-70">{e.metadata.course}</span>}
+                  {e.metadata?.sources && <span className="opacity-70">{e.metadata.sources} sources found</span>}
+                  {e.metadata?.amount && <span className="font-mono text-[var(--text-secondary)]">{e.metadata.amount > 0 ? '+' : ''}{e.metadata.amount}</span>}
+                  {e.metadata?.user && <span className="opacity-70">{e.metadata.user}</span>}
+                  <span className="ml-auto opacity-60">{timeAgo(e.timestamp)}</span>
                 </div>
               )}
             />

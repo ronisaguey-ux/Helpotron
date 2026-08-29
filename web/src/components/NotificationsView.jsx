@@ -94,7 +94,7 @@ export default function NotificationsView() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-xs ${isRead ? 'text-slate-400' : 'text-white font-semibold'}`}>{n.title}</span>
-                    {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                    {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />}
                     <Badge color="slate" className="ml-auto">{n.channel}</Badge>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">{n.body}</p>
@@ -108,7 +108,7 @@ export default function NotificationsView() {
 
       {unread > 0 && (
         <div className="text-[11px] text-slate-500 px-1">
-          {unread} unread · preferences live in <span className="text-blue-300">Settings → Notifications</span>
+          {unread} unread · preferences live in <span className="text-[var(--accent)]">Settings → Notifications</span>
         </div>
       )}
     </div>

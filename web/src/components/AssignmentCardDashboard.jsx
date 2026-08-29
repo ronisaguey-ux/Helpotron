@@ -2,35 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
 import SectionCard from './SectionCard';
+import Button from './Button';
 import api from '../api';
 import { normalizeCards } from '../lib/assignmentEvents';
 import {
   Layers,
-  Sparkles,
   Bot,
   Video,
-  CheckCircle2,
-  Clock,
-  Zap,
   ArrowLeft,
   ArrowRight,
-  Filter,
-  Flame,
-  AlertCircle,
-  Play,
-  RotateCcw,
   Plus,
   Minus,
-  Trash2,
-  Download,
-  ShieldAlert,
-  Archive,
-  History as HistoryIcon,
-  Search,
-  Check,
-  Bell,
   X,
 } from 'lucide-react';
+
+/* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
+   base from index.css; these modifiers recolor it for status semantics. */
+const AURORA_CHIP_TINTS = `
+.aurora-chip.ok    { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.32); color: #6ee7b7; }
+.aurora-chip.info  { background: rgba(34,211,238,0.13); border-color: rgba(34,211,238,0.30); color: #67e8f9; }
+.aurora-chip.warn  { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.32); color: #fcd34d; }
+.aurora-chip.tight { padding: 0 0.5rem; font-size: 0.75rem; }
+`;
 
 const DEFAULT_SUBJECT_BUBBLES = [
   { id: 'subj_math', title: 'Mathematics', description: 'Calculus, linear algebra, statistics & formal proofs', color: 'blue', icon: '📐' },
@@ -301,45 +294,50 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
   return (
     <div className="space-y-6">
+      <style>{AURORA_CHIP_TINTS}</style>
+
       {/* LEVEL 1: BUBBLE GRID (NO ASSIGNMENTS SHOWN BY DEFAULT) */}
       {!activeBubble ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-400" />
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-[var(--accent)]" />
                     <span>Curriculum Assignment Bubbles</span>
                     {/* Count + noun live in one visual text (08-28): no "(7)"
                         split label, correct pluralization */}
-                    <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                    <span className="aurora-chip tight">
                       {`${allBubblesList.length} ${allBubblesList.length === 1 ? 'bubble' : 'bubbles'}`}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
                     Click any bubble to enter its workspace and view organized assignments and sub-agent teams.
                   </p>
                 </div>
 
                 {/* + Button for Custom Bubble */}
-                <button
+                <Button
                   onClick={() => setIsCreatingBubble(true)}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                  variant="primary"
+                  size="sm"
+                  className="shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Create Custom Bubble</span>
-                </button>
+                  <span>New Bubble</span>
+                </Button>
               </div>
 
               {/* Create Custom Bubble Modal */}
               {isCreatingBubble && (
-                <div className="p-5 rounded-2xl bg-slate-950/90 border border-blue-500/40 space-y-3.5 text-xs animate-fadeIn shadow-2xl">
+                <div className="p-6 rounded-[var(--radius-lg)] surface-glass-strong border border-[rgba(139,92,246,0.30)] space-y-3.5 text-xs animate-fadeIn shadow-2xl">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-white flex items-center gap-2">
+                    <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <span>🫧</span> Add a New Custom Assignment Bubble
                     </h3>
                     <button
                       onClick={() => setIsCreatingBubble(false)}
-                      className="text-slate-400 hover:text-white"
+                      className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+                      aria-label="Close create bubble dialog"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -352,12 +350,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         placeholder="Bubble Title (e.g. Dr. Miller Lab Reports, Exam 2 Prep)..."
                         value={newBubbleTitle}
                         onChange={(e) => setNewBubbleTitle(e.target.value)}
-                        className="sm:col-span-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white placeholder:text-slate-600"
+                        className="sm:col-span-2 clean-input px-3 py-2 text-white"
                       />
                       <select
                         value={newBubbleIcon}
                         onChange={(e) => setNewBubbleIcon(e.target.value)}
-                        className="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white"
+                        className="clean-input px-3 py-2 text-white"
                       >
                         <option value="🫧">🫧 Bubble</option>
                         <option value="🔬">🔬 Lab Science</option>
@@ -372,21 +370,21 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       placeholder="Describe what goes inside this bubble so AI auto-organizes your scraped assignments into it..."
                       value={newBubbleDesc}
                       onChange={(e) => setNewBubbleDesc(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white placeholder:text-slate-600"
+                      className="w-full clean-input px-3 py-2.5 text-white resize-y"
                     />
 
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setIsCreatingBubble(false)}
-                        className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl cursor-pointer"
+                        className="rounded-[var(--radius-sm)] px-4 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] transition cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={!newBubbleTitle.trim() || !newBubbleDesc.trim()}
-                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl font-semibold cursor-pointer"
+                        className="rounded-[var(--radius-sm)] px-4 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white font-semibold transition cursor-pointer"
                       >
                         Save Bubble
                       </button>
@@ -406,16 +404,16 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                     <div
                       key={bubble.id}
                       onClick={() => setActiveBubble(bubble)}
-                      className="group p-5 rounded-3xl bg-slate-950/60 hover:bg-slate-900/80 border border-white/10 hover:border-blue-500/40 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 hover:shadow-xl hover:-translate-y-0.5 relative overflow-hidden"
+                      className="group glass-panel p-5 flex flex-col justify-between space-y-4 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative overflow-hidden"
                     >
                       {/* Top Header */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl">
+                        <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-xl">
                           {bubble.icon || '🫧'}
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                          <span className="aurora-chip tight">
                             {`${count} ${count === 1 ? 'Assignment' : 'Assignments'}`}
                           </span>
 
@@ -424,8 +422,9 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             <button
                               type="button"
                               onClick={(e) => handleDeleteBubble(bubble.id, e)}
-                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                              className="p-1 text-[var(--text-muted)] hover:text-[#fda4af] hover:bg-[rgba(244,63,94,0.12)] rounded-lg transition cursor-pointer"
                               title="Delete custom bubble"
+                              aria-label="Delete custom bubble"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -437,25 +436,23 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                           legacy data renders an honest placeholder, never an
                           empty bubble shell) */}
                       <div>
-                        <div className="font-bold text-sm text-white group-hover:text-blue-300 transition-colors flex items-center gap-1.5">
+                        <div className="font-semibold text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
                           <span>{(bubble.title || '').trim() || 'Untitled Bubble'}</span>
                           {bubble.is_custom && (
-                            <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-mono">
-                              Custom
-                            </span>
+                            <span className="aurora-chip tight">Custom</span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                        <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
                           {(bubble.description || '').trim() || 'No description provided.'}
                         </p>
                       </div>
 
                       {/* Footer Info */}
-                      <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                      <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
                         <span className="flex items-center gap-1 text-emerald-400">
                           <Bot className="w-3.5 h-3.5" /> {count > 0 ? `${count} Teams Active` : 'Idle'}
                         </span>
-                        <span className="text-blue-400 group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                        <span className="text-[var(--accent-2)] group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
                           Open Bubble <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
@@ -468,30 +465,30 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
             /* LEVEL 2: ACTIVE BUBBLE WORKSPACE VIEW (ASSIGNMENTS ONLY VISIBLE HERE) */
             <div className="space-y-5 animate-fadeIn">
               {/* Back Bar & Bubble Info */}
-              <div className="p-5 rounded-3xl bg-slate-950/70 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+              <div className="glass-panel p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setActiveBubble(null)}
-                    className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-white/10 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
                   >
-                    <ArrowLeft className="w-4 h-4 text-blue-400" />
+                    <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
                     <span>Back to All Bubbles</span>
                   </button>
 
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{activeBubble.icon || '🫧'}</span>
-                      <h2 className="text-base font-bold text-white">{activeBubble.title}</h2>
-                      <span className="text-xs font-mono bg-blue-500/15 text-blue-300 border border-blue-500/25 px-2 py-0.5 rounded-full">
+                      <h2 className="text-base font-bold text-[var(--text-primary)] truncate">{activeBubble.title}</h2>
+                      <span className="aurora-chip tight shrink-0">
                         {`${currentBubbleCards.length} ${currentBubbleCards.length === 1 ? 'Assignment' : 'Assignments'}`}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{activeBubble.description}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{activeBubble.description}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs font-mono">
-                  <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl">
+                <div className="flex items-center gap-2 text-xs font-mono shrink-0">
+                  <span className="aurora-chip ok">
                     🤖 {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
                   </span>
                 </div>
@@ -499,9 +496,14 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
               {/* Assignments Inside Active Bubble */}
               {currentBubbleCards.length === 0 ? (
-                <SectionCard id="assignment-empty-bubble" padding="p-12" className="rounded-2xl text-center border-dashed border-white/10" title={`No assignments currently inside "${activeBubble.title}"`}>
-                  <span className="text-4xl">🫧</span>
-                  <p className="text-xs text-slate-400 mt-1">
+                <SectionCard
+                  id="assignment-empty-bubble"
+                  padding="p-12"
+                  className="text-center space-y-3"
+                  title={`No assignments currently inside "${activeBubble.title}"`}
+                >
+                  <span className="text-4xl opacity-80">🫧</span>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
                     Scraped assignments matching this bubble&apos;s description will be automatically organized here.
                   </p>
                 </SectionCard>
@@ -534,9 +536,11 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
                         {/* AI Multimodal Attachment */}
                         {hasVideoOrMedia && (
-                          <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono pointer-events-none">
-                            <Video className="w-3 h-3 text-indigo-400" />
-                            <span>AI Multimodal</span>
+                          <div className="absolute top-3 right-3 z-10 pointer-events-none">
+                            <span className="aurora-chip info">
+                              <Video className="w-3.5 h-3.5" />
+                              <span>AI Multimodal</span>
+                            </span>
                           </div>
                         )}
                       </div>

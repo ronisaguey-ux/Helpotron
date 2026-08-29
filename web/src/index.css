@@ -7,24 +7,27 @@
 
 @layer base {
   :root {
-    --bg-base: #090d16;
-    --bg-surface: #0f172a;
-    --bg-surface-elevated: #182238;
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-hover: rgba(255, 255, 255, 0.15);
+    /* Aurora design system (overhaul 08-28): deep-space base, glass surfaces */
+    --bg-base: #05060e;
+    --bg-surface: rgba(17, 20, 40, 0.58);      /* glass fill — blur lives on .glass-panel */
+    --bg-surface-elevated: rgba(27, 31, 58, 0.66);
+    --border-subtle: rgba(255, 255, 255, 0.10);
+    --border-hover: rgba(255, 255, 255, 0.22);
 
-    /* Subtle, modern accent palette */
-    --accent: #3b82f6; /* Slate/Blue */
-    --accent-hover: #2563eb;
-    --accent-subtle: rgba(59, 130, 246, 0.12);
+    /* Aurora accent palette — violet primary, cyan secondary */
+    --accent: #8b5cf6; /* Violet-500 */
+    --accent-hover: #7c3aed; /* Violet-600 */
+    --accent-subtle: rgba(139, 92, 246, 0.16);
+    --accent-2: #22d3ee; /* Cyan-400 — secondary aurora hue */
+    --accent-mix: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 45%, #22d3ee 100%);
 
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1; /* High contrast Slate-300 (5.8:1) */
-    --text-muted: #94a3b8; /* WCAG AA Slate-400 (4.5:1) */
+    --text-primary: #f4f5ff;
+    --text-secondary: #c9cde6;
+    --text-muted: #9aa1c4; /* AA on deep space */
 
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
   }
 
   body {
@@ -38,46 +41,66 @@
 
   /* Accessible focus rings across all interactive elements (WCAG 2.4.7) */
   :focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 }
 
-/* Clean, non-distracting background */
+/* Deep-space base with aurora orbs (default canvas; appearance engine's
+   html[data-bg="flat|aurora|mesh"] still overrides via .app-canvas rules) */
 .app-background {
   background-color: var(--bg-base);
-  background-image: radial-gradient(at 50% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 60%);
+  background-image:
+    radial-gradient(ellipse 55% 45% at 12% -5%, rgba(139, 92, 246, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 40% at 88% 8%, rgba(34, 211, 238, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 50% 110%, rgba(99, 102, 241, 0.12) 0%, transparent 60%);
 }
 
-/* Subtle, elevated card surface */
+/* Frosted glass card surface — the app's signature surface */
 .clean-card,
 .glass-panel {
   background: var(--bg-surface);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 32px rgba(2, 4, 14, 0.45);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .clean-card:hover,
 .glass-panel:hover {
   border-color: var(--border-hover);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 32px rgba(2, 4, 14, 0.5),
+    0 0 24px rgba(139, 92, 246, 0.08);
 }
 
-/* Clean Inputs */
+/* Glass inputs */
 .clean-input,
 .glass-input {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(9, 11, 26, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   border-radius: var(--radius-md);
   transition: all 0.15s ease;
 }
 
+.clean-input::placeholder,
+.glass-input::placeholder {
+  color: var(--text-muted);
+}
+
 .clean-input:focus,
 .glass-input:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 /* Smooth custom scrollbars */
@@ -114,21 +137,28 @@
     min-height: 44px;
     min-width: 44px;
   }
+  /* 08-29 (A6): checkboxes/radios were being inflated to 44x44, wrecking
+     inline control rows; they already render 16-20px boxes with 44px-ish
+     tappable area via label hit-boxes — keep the bare box at its class size. */
+  input[type="checkbox"], input[type="radio"] {
+    min-height: 0;
+    min-width: 0;
+  }
 }
 
 :root {
   /* Design system tokens (WCAG 2.1 AA — BATCH-07). Primary action color
      with accessible hover/active states and on-primary contrast pair. */
-  --color-primary: oklch(0.62 0.16 230);
-  --color-primary-hover: oklch(0.56 0.17 230);
-  --color-primary-active: oklch(0.5 0.17 230);
-  --color-primary-foreground: oklch(0.99 0.005 240);
-  --color-focus-ring: oklch(0.7 0.19 235);
-  --color-surface: oklch(0.16 0.02 260);
-  --color-surface-raised: oklch(0.21 0.025 260);
-  --color-border-soft: oklch(0.32 0.03 255);
-  --color-text-primary: oklch(0.92 0.02 210);
-  --color-text-muted: oklch(0.65 0.03 250);
+  --color-primary: oklch(0.62 0.19 292);
+  --color-primary-hover: oklch(0.56 0.20 292);
+  --color-primary-active: oklch(0.50 0.21 292);
+  --color-primary-foreground: oklch(0.99 0.005 300);
+  --color-focus-ring: oklch(0.70 0.15 292);
+  --color-surface: oklch(0.15 0.025 285);
+  --color-surface-raised: oklch(0.21 0.03 285);
+  --color-border-soft: oklch(0.34 0.045 285);
+  --color-text-primary: oklch(0.94 0.015 285);
+  --color-text-muted: oklch(0.68 0.04 275);
   /* Neon chart tokens matching the app's cyan/indigo glass theme
      (Bklit registry charts render against these). */
   --chart-1: oklch(0.72 0.16 210);
@@ -334,7 +364,7 @@ html { font-size: 110%; } /* 17.6px base */
   position: absolute;
   inset: 0 0 auto 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.35), rgba(45, 212, 191, 0.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.40), rgba(34, 211, 238, 0.28), transparent);
   pointer-events: none;
 }
 .clean-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
@@ -348,17 +378,19 @@ html { font-size: 110%; } /* 17.6px base */
  * remaining migration surface (tracked; next sweep converts them to vars).
  * ───────────────────────────────────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-base: #eef2f7;
-  --bg-surface: #ffffff;
-  --bg-surface-elevated: #f2f5fa;
-  --border-subtle: rgba(15, 23, 42, 0.10);
-  --border-hover: rgba(15, 23, 42, 0.22);
-  --text-primary: #0f172a;
-  --text-secondary: #1e293b;
-  --text-muted: #526071;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-subtle: rgba(59, 130, 246, 0.14);
+  /* Dimmed light (08-28): pure #fff/#eef2f7 was blinding — a soft
+   * blue-gray light that tops out around #d4d9e2 instead of white. */
+  --bg-base: #d4d9e2;
+  --bg-surface: #e8ecf3;
+  --bg-surface-elevated: #eef1f7;
+  --border-subtle: rgba(20, 26, 38, 0.14);
+  --border-hover: rgba(20, 26, 38, 0.30);
+  --text-primary: #161c28;
+  --text-secondary: #2e3949;
+  --text-muted: #5c6577;
+  --accent: #6d5ae6;
+  --accent-hover: #5b48d6;
+  --accent-subtle: rgba(109, 90, 230, 0.16);
 }
 [data-theme="oled"] {
   --bg-base: #000000;
@@ -398,14 +430,16 @@ html { font-size: 110%; } /* 17.6px base */
 }
 @media (prefers-color-scheme: light) {
   [data-theme="system"] {
-    --bg-base: #eef2f7;
-    --bg-surface: #ffffff;
-    --bg-surface-elevated: #f2f5fa;
-    --border-subtle: rgba(15, 23, 42, 0.10);
-    --border-hover: rgba(15, 23, 42, 0.22);
-    --text-primary: #0f172a;
-    --text-secondary: #1e293b;
-    --text-muted: #526071;
+    /* Same dimmed light as [data-theme="light"] (08-28): system-light no
+     * longer resolves to blinding near-white. */
+    --bg-base: #d4d9e2;
+    --bg-surface: #e8ecf3;
+    --bg-surface-elevated: #eef1f7;
+    --border-subtle: rgba(20, 26, 38, 0.14);
+    --border-hover: rgba(20, 26, 38, 0.30);
+    --text-primary: #161c28;
+    --text-secondary: #2e3949;
+    --text-muted: #5c6577;
   }
 }
 
@@ -428,14 +462,13 @@ html { font-size: 110%; } /* 17.6px base */
 [data-theme="light"] .app-background { background-color: var(--bg-base); }
 [data-theme="light"] .clean-card,
 [data-theme="light"] .glass-panel { background: var(--bg-surface); border-color: var(--border-subtle); }
-[data-theme="light"] .clean-input { background: #f5f7fb; color: var(--text-primary); border-color: var(--border-subtle); }
-[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.25); }
+[data-theme="light"] .clean-input { background: #e3e7ef; color: var(--text-primary); border-color: var(--border-subtle); }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(20, 26, 38, 0.30); }
 
 /* Font-scale smoothing: rem scaling w/o layout jarring */
 html { scroll-behavior: smooth; }
 
-generated lines: 106
-──────────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────────────────────────────────
  * Appearance compliance sweep (operator 08-26)
  * The app hardcodes Tailwind slate/white/blue utilities; these layers map
  * those stems onto the theme variables so the appearance controls
@@ -471,6 +504,20 @@ html[data-bg="mesh"] .app-canvas {
     linear-gradient(120deg, rgba(16,185,129,0.08) 0%, transparent 50%),
     radial-gradient(at 50% 100%, rgba(99,102,241,0.12) 0px, transparent 60%);
 }
+html[data-bg="gradient"] .app-canvas {
+  background-image:
+    linear-gradient(135deg, rgba(109,90,230,0.14) 0%, transparent 45%),
+    linear-gradient(315deg, rgba(56,189,248,0.11) 0%, transparent 50%),
+    radial-gradient(at 70% 30%, rgba(139,92,246,0.10) 0px, transparent 55%);
+}
+html[data-bg="glass"] .app-canvas {
+  background-image:
+    linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 45%, rgba(255,255,255,0.05) 100%),
+    radial-gradient(at 15% 10%, rgba(139,92,246,0.07) 0px, transparent 45%);
+}
+html[data-bg="noise"] .app-canvas {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
 html[data-ui="minimal"] .clean-card,
 html[data-ui="minimal"] .glass-panel { box-shadow: none !important; }
 html[data-ui="minimal"] .shadow-lg,
@@ -478,8 +525,35 @@ html[data-ui="minimal"] .shadow-xl,
 html[data-ui="minimal"] .shadow-2xl,
 html[data-ui="minimal"] .shadow-sm,
 html[data-ui="minimal"] .shadow-md { box-shadow: none !important; }
+html[data-ui="glass"] .clean-card,
+html[data-ui="glass"] .glass-panel,
 html[data-ui="blur"] .clean-card,
-html[data-ui="blur"] .glass-panel { backdrop-filter: blur(18px); }
+html[data-ui="blur"] .glass-panel {
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+html[data-ui="dense"] .clean-card,
+html[data-ui="dense"] .glass-panel {
+  padding: 0.875rem !important;
+  border-radius: 0.875rem !important;
+}
+html[data-ui="dense"] .gap-4,
+html[data-ui="dense"] .gap-5,
+html[data-ui="dense"] .gap-6 { gap: 0.625rem !important; }
+html[data-ui="soft"] .clean-card,
+html[data-ui="soft"] .glass-panel {
+  border-radius: 1.25rem !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18) !important;
+}
+html[data-ui="terminal"] body {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  letter-spacing: -0.01em;
+}
+html[data-ui="terminal"] .clean-card,
+html[data-ui="terminal"] .glass-panel {
+  border-radius: 0.5rem !important;
+  border-color: rgba(134, 239, 172, 0.16) !important;
+}
 
 /* 3. APPEARANCE: ACCENT (blue stem -> selected accent) -------------------- */
 /* SOLID fills only — :not([class*="./"]) keeps translucent chips (/10,/20…)
@@ -658,3 +732,170 @@ html[data-screenreader="on"] :focus-visible {
   outline: 3px solid var(--accent) !important;
   outline-offset: 2px;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AURORA DESIGN SYSTEM (overhaul 08-28) — deep-space glass language.
+   Rules: use tokens, never hardcode colors; glow is a signature, not a
+   confetti — headers and primary CTAs only. All appearance-engine layers
+   above still win via attribute specificity.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Aurora orbs on the root canvas when no explicit background pick is stored */
+html:not([data-bg]) .app-canvas {
+  background-image:
+    radial-gradient(ellipse 55% 45% at 12% -5%, rgba(139, 92, 246, 0.14) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 40% at 88% 8%, rgba(34, 211, 238, 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 50% 112%, rgba(99, 102, 241, 0.11) 0%, transparent 62%);
+}
+
+/* Slow aurora drift for decorative orbs (always respects data-anim/motion:
+   those layers kill animation with !important above) */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate3d(-3%, -2%, 0) scale(1); }
+  50%      { transform: translate3d(3%, 2%, 0) scale(1.06); }
+}
+.animate-aurora-drift { animation: aurora-drift 26s ease-in-out infinite; }
+
+/* fadeIn — referenced app-wide (was a dead utility with no definition) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fadeIn { animation: fadeIn 0.3s ease-out both; }
+
+/* Gradient text — headings/logo wordmarks only */
+.text-aurora {
+  background: var(--accent-mix);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Accent glow — primary CTAs, active nav items */
+.glow-accent {
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 4px 24px rgba(139, 92, 246, 0.28);
+}
+
+/* Stronger glass for modals/drawers (solid enough to read over orbs) */
+.surface-glass-strong {
+  background: rgba(13, 15, 32, 0.86);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Aurora chip — status/feature pills */
+.aurora-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--accent-subtle);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+}
+
+/* Scrollbar — violet-tinted on dark default */
+::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.30);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(167, 139, 250, 0.45);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE HARDENING (A9, 08-28) — global layer. Additive & scoped:
+   (1) safe-area tokens + utilities (viewport-fit=cover in index.html),
+   (2) iOS focus-zoom guard: form controls never below 16px on phones,
+   (3) touch-action + safe-area insets for the two fixed chrome elements
+       (mobile bottom nav / sticky topbar — attribute-scoped, no component
+       edits needed, and they compose with any component-side fix),
+   (4) print: minimal ink pass (no print styles existed; the dark-only UI
+       otherwise prints white text on white paper).
+   NONE of these rules target a component's own container — the only
+   property forced here is font-size on form controls (mobile only, and any
+   component-side override lands at the same >=16px outcome, so there is
+   nothing to fight).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Safe-area tokens — with viewport-fit=cover these are non-zero on notched
+   iPhones; without cover (or on desktop) they resolve to 0px and are no-ops. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* Safe-area utilities for fixed/full-bleed elements. These REPLACE the
+   corresponding padding side, so use them with the same padding that side
+   already has (e.g. py-2 + .pt-safe → padding-top becomes the inset; if the
+   element also needs its base padding, compose in a small local rule). */
+.pt-safe { padding-top: var(--safe-top); }
+.pr-safe { padding-right: var(--safe-right); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+.pl-safe { padding-left: var(--safe-left); }
+
+/* iOS Safari auto-zooms the page when a form control under 16px receives
+   focus — a top mobile complaint. Ensure every input/select/textarea is
+   >=16px on phones (checkboxes/radios included: focusing them zooms too).
+   max(16px, 1em) never shrinks a control that already renders larger (most
+   inherit the 17.6px root), and 1em resolves against the PARENT so text-sm/
+   text-xs contexts are lifted to exactly 16px — no visual rhythm change on
+   desktop, none beyond 16px on phones.
+   !important + the :not([type]) class-level specificity are required to beat
+   the readability pass's rem floors and the .text-xs/.text-sm utilities
+   (.text-[11px]/etc. are !important too and compute to 15px at the 16px
+   root the appearance engine sets post-login — still under the threshold).
+   The height clause catches landscape phones (320-440px tall) which the
+   640px width clause misses on landscape iPhones. */
+@media (max-width: 640px), (max-height: 500px) {
+  :is(input, select, textarea):not([type="range"]):not([type="hidden"]) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* ALL touch devices (no width gate — tablets/landscape included): interactive
+   elements react on the first tap, killing the 300ms double-tap-zoom stall,
+   while pinch zoom stays available (touch-action: manipulation only removes
+   the double-tap gesture, never pinch). Range inputs excluded — they need
+   pan gestures on their track. Pointer-only input is unaffected. */
+button, a, select, textarea, [role="button"], input:not([type="range"]) {
+  touch-action: manipulation;
+}
+
+/* Mobile bottom nav (AppShell.jsx: `md:hidden fixed bottom-0 ... px-2 py-1.5`)
+   sits on top of the iPhone home indicator once viewport-fit=cover is set.
+   Attribute-scoped to that exact landmark; py-1.5 (0.375rem) is retained
+   and the inset is ADDED, so the bar grows instead of losing its padding. */
+nav[aria-label="Mobile Bottom Navigation"] {
+  padding-bottom: calc(0.375rem + var(--safe-bottom));
+}
+
+/* Sticky app topbar (AppShell.jsx: `sticky top-0 ... h-14`): with
+   viewport-fit=cover the content column starts under the status bar/notch.
+   Adding the inset above the (unchanged) h-14 row pushes it clear. */
+header.sticky {
+  padding-top: var(--safe-top);
+}
+
+/* Print — dark-only UI previously printed light text on white paper.
+   Minimal ink pass, fully scoped to @media print. */
+@media print {
+  html { font-size: 100%; }
+  body { background: #ffffff !important; }
+  body, body * { color: #16181d !important; }
+  .app-background, .app-canvas { background-image: none !important; }
+  .clean-card, .glass-panel {
+    background: #ffffff !important;
+    border-color: #c9ccd4 !important;
+    box-shadow: none !important;
+  }
+  nav[aria-label="Mobile Bottom Navigation"] { display: none !important; }
+  ::-webkit-scrollbar { display: none; }
+}
+/* A9 end-marker 08-28: mobile hardening section complete (safe-area tokens,
+   iOS focus-zoom guard, global touch-action, fixed-chrome insets, print). */

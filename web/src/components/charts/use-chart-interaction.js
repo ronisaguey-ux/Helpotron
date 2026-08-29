@@ -29,6 +29,15 @@ export function useChartInteraction(
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const lastHoveredXRef = useRef(null);
+  // Tap gesture state (touch): a short, still single-finger touch PINS the
+  // tooltip on screen (hover is unavailable on phones — finger-lift would
+  // otherwise erase the data instantly). Any drag or long press clears it.
+  const tapRef = useRef(null);
+  // Browsers replay a compat `mousedown` shortly after every completed tap
+  // (React attaches touch listeners passively so preventDefault cannot stop
+  // it). Without this guard that phantom mousedown clears the pinned tooltip
+  // milliseconds after the finger lifts — the tap pin would never be visible.
+  const lastTouchEndRef = useRef(0);
 
   const resolveTooltipFromX = useCallback(pixelX => {
     const x0 = xScale.invert(pixelX);
@@ -136,6 +145,12 @@ export function useChartInteraction(
   }, [getChartX, resolveTooltipFromX, resolveIndexFromX, scheduleTooltip]);
 
   const handleMouseLeave = useCallback(() => {
+    // Browsers synthesize a compat mouseleave shortly after a tap on a chart
+    // (pinch of "pointerleave" events in Chromium). Without this guard the
+    // phantom leave clears the pinned tooltip ~200ms after mount.
+    if (Date.now() - lastTouchEndRef.current < 600) {
+      return;
+    }
     lastHoveredXRef.current = null;
     clearTooltip();
     if (isDraggingRef.current) {
@@ -145,6 +160,11 @@ export function useChartInteraction(
   }, [clearTooltip]);
 
   const handleMouseDown = useCallback((event) => {
+    // Ignore the compat mousedown the browser synthesizes ~100ms after a
+    // touch tap (it would wipe the pinned tooltip / open a bogus brush).
+    if (Date.now() - lastTouchEndRef.current < 600) {
+      return;
+    }
     const chartX = getChartX(event);
     if (chartX === null) {
       return;
@@ -169,6 +189,7 @@ export function useChartInteraction(
       if (chartX === null) {
         return;
       }
+      tapRef.current = { startTime: Date.now(), startX: chartX, moved: false };
       lastHoveredXRef.current = chartX;
       const tooltip = resolveTooltipFromX(chartX);
       if (tooltip) {
@@ -209,6 +230,12 @@ export function useChartInteraction(
       if (chartX === null) {
         return;
       }
+      if (
+        tapRef.current &&
+        Math.abs(chartX - tapRef.current.startX) > 12
+      ) {
+        tapRef.current.moved = true;
+      }
       lastHoveredXRef.current = chartX;
       const tooltip = resolveTooltipFromX(chartX);
       if (tooltip) {
@@ -234,6 +261,14 @@ export function useChartInteraction(
   }, [getChartX, resolveTooltipFromX, resolveIndexFromX, scheduleTooltip]);
 
   const handleTouchEnd = useCallback(() => {
+    lastTouchEndRef.current = Date.now();
+    const tap = tapRef.current;
+    tapRef.current = null;
+    // A short, still single-finger tap PINS the tooltip so a phone user can
+    // read it after lifting their finger; a swipe or long press clears it.
+    if (tap && !tap.moved && Date.now() - tap.startTime < 550) {
+      return;
+    }
     clearTooltip();
     setSelection(null);
   }, [clearTooltip]);
@@ -264,12 +299,15 @@ export function useChartInteraction(
         onTouchStart: handleTouchStart,
         onTouchMove: handleTouchMove,
         onTouchEnd: handleTouchEnd,
+        onTouchCancel: handleTouchEnd,
       }
     : {};
 
   const interactionStyle = {
     cursor: canInteract ? "crosshair" : "default",
-    touchAction: "none",
+    // pan-y keeps vertical page scrolling alive when a finger starts on the
+    // chart (touch-action: none was previously trapping whole-page scrolls).
+    touchAction: "pan-y",
   };
 
   return {

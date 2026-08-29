@@ -131,7 +131,7 @@ async def action_moderation_item_endpoint(
 async def get_model_metrics_endpoint(request: Request, db: Session = Depends(get_db)):
     """Returns scorecard per model (accuracy, speed, cost) and routing overrides."""
     require_admin(request)
-    return admin_advanced_service.get_model_metrics()
+    return admin_advanced_service.get_model_metrics(db=db)
 
 
 @router.post("/model-metrics/override")
@@ -199,54 +199,6 @@ async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPa
     }
 
 
-# ─── Tokens & Access Keys Management ──────────────────────────────────────────
-
-class GenerateTokenPayload(BaseModel):
-    duration_days: int = Field(30, ge=1, le=365)
-    max_uses: int = Field(1, ge=1, le=1000)
-
-
-_in_memory_tokens: List[Dict[str, Any]] = []
-
-
-@router.post("/tokens/generate")
-async def generate_admin_token(payload: GenerateTokenPayload, request: Request):
-    """Admin endpoint: generates a platform access token or coupon key."""
-    require_admin(request)
-    import secrets
-    from datetime import datetime, timezone, timedelta
-
-    tok = {
-        "token": f"hlp_{secrets.token_hex(16)}",
-        "duration_days": payload.duration_days,
-        "max_uses": payload.max_uses,
-        "uses_count": 0,
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=payload.duration_days)).isoformat(),
-    }
-    _in_memory_tokens.append(tok)
-    return {"status": "success", "token": tok}
-
-
-@router.get("/tokens")
-async def list_admin_tokens(request: Request):
-    """Admin endpoint: lists all platform tokens and coupon keys."""
-    require_admin(request)
-    return {"status": "success", "tokens": _in_memory_tokens}
-
-
-@router.post("/tokens/deactivate")
-async def deactivate_admin_token(request: Request, token: str = ""):
-    """Admin endpoint: deactivates an active token."""
-    require_admin(request)
-    for t in _in_memory_tokens:
-        if t["token"] == token:
-            t["is_active"] = False
-            return {"status": "success", "message": f"Token {token} deactivated"}
-    return {"status": "error", "message": "Token not found"}
-
-
 # ─── Cost Monitoring & Per-User Token Multipliers ─────────────────────────────
 
 class SetMultiplierPayload(BaseModel):
@@ -263,6 +215,36 @@ class CostEstimatePayload(BaseModel):
     word_count: int = Field(500, ge=10, le=50000)
     effort_level: int = Field(5, ge=1, le=10)
     detectors: Optional[List[str]] = None
+
+
+class AdminNoticePayload(BaseModel):
+    public_id: str = Field(..., min_length=1, max_length=64)
+    subject: str = Field("Message from Admin", min_length=1, max_length=256)
+    message: str = Field(..., min_length=1, max_length=10000)
+
+
+@router.post("/notify-user")
+async def notify_user_endpoint(payload: AdminNoticePayload, request: Request, db: Session = Depends(get_db)):
+    """Admin → user direct message (operator 08-28). Stored as an AdminNotice;
+    the recipient's client polls /api/user/admin-notices and pops it on screen."""
+    require_admin(request)
+    from .database import AdminNotice
+    target = db.query(User).filter(User.public_id == payload.public_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    notice = AdminNotice(
+        user_id=target.public_id,
+        subject=payload.subject,
+        message=payload.message,
+    )
+    db.add(notice)
+    db.commit()
+    db.refresh(notice)
+    return {
+        "status": "success",
+        "notice_id": notice.id,
+        "message": f"Notice sent to {target.public_id} — it will pop up in their next session.",
+    }
 
 
 @router.get("/costs/summary")

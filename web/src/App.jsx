@@ -28,9 +28,9 @@ import ExtensionInstallView from './components/ExtensionInstallView.jsx';
 import AppShell from './components/AppShell.jsx';
 import AnonymousLanding from './components/AnonymousLanding.jsx';
 import CookieBanner from './components/CookieBanner.jsx';
+import AdminNoticePopup from './components/ui/AdminNoticePopup.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
-import TodayView from './components/TodayView.jsx';
 import ActivityView from './components/ActivityView.jsx';
 import AutomationCenter from './components/AutomationCenter.jsx';
 import LibraryView from './components/LibraryView.jsx';
@@ -55,16 +55,16 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#090d16] text-white flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-white/10 rounded-3xl max-w-lg w-full p-8 text-center space-y-4 shadow-2xl">
+        <div className="app-background min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center p-4">
+          <div className="clean-card max-w-lg w-full p-8 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
               ⚠️
             </div>
             <h2 className="text-lg font-semibold">Something went wrong</h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--text-muted)]">
               An unexpected error occurred during rendering. You can reset session state below.
             </p>
-            <div className="p-3 bg-slate-950/80 rounded-xl text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-white/5">
+            <div className="p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-[var(--border-subtle)]">
               {this.state.error?.message || 'Unknown runtime error'}
             </div>
             <button
@@ -73,7 +73,7 @@ class ErrorBoundary extends React.Component {
                 try { localStorage.clear(); } catch (e) {}
                 window.location.reload();
               }}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-xs transition cursor-pointer"
+              className="w-full py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium rounded-[var(--radius-sm)] text-xs transition cursor-pointer"
             >
               Reset Session Cache & Reload
             </button>
@@ -89,11 +89,11 @@ class ErrorBoundary extends React.Component {
  * is in flight. The dashboard never mounts before the auth state is known. */
 function SessionBootScreen() {
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-5">
         <AnimatedLogo size="lg" />
-        <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
-          <span className="w-3 h-3 rounded-full border-2 border-blue-500/60 border-t-transparent animate-spin" />
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-mono">
+          <span className="w-3 h-3 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
           Checking session…
         </div>
       </div>
@@ -175,7 +175,7 @@ export default function App() {
     }
   });
 
-  const checkSession = async () => {
+  const checkSession = async (retryOnce = true) => {
     try {
       const data = await api.me();
       if (data && data.authenticated) {
@@ -195,7 +195,38 @@ export default function App() {
         return;
       }
     } catch (e) {
-      // 401 etc. — session did not verify; fall through to signed-out state.
+      // 401 etc. — session did not verify; fall through to the retry below.
+    }
+    /* Cookie-store race (08-28, operator report): right after a 200 login the
+     * session cookie can land a frame AFTER the client's first /api/me probe
+     * (Safari/WebKit is the classic case) — the immediate `me()` 401s, the
+     * gate flips to signedOut, and the user is bounced off the shell while
+     * the session is actually valid. Retry ONCE after a short delay before
+     * accepting the signed-out verdict. Misses add ~1.2s to the rare stale
+     * case; the verified-401 path is unchanged. */
+    if (retryOnce) {
+      await new Promise((r) => setTimeout(r, 1200));
+      try {
+        const data = await api.me();
+        if (data && data.authenticated) {
+          setIsLoggedIn(true);
+          setIsGuest(false);
+          setAuthStatus('authed');
+          setUserIdState(data.public_id || data.user_id || 'Student');
+          setUserId(data.public_id || data.user_id || 'Student');
+          setCredits(data.credits ?? 0);
+          setTokenBalance(Number(data.token_balance ?? 0) || 0);
+          setUserPlan(data.plan || 'none');
+          setIsAdmin(Boolean(data.is_admin));
+          const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
+          if (!accepted) {
+            setShowPrivacyModal(true);
+          }
+          return;
+        }
+      } catch (e) {
+        // still not there — a genuinely signed-out/stale session; fall through.
+      }
     }
 
     // Unauthenticated state
@@ -245,6 +276,13 @@ export default function App() {
     checkSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Auth modal: auto-open on first visit (signed-out) but stay DISMISSABLE —
+   * Escape, the ✕ or a backdrop click reveals the landing instead of
+   * trapping anonymous visitors behind an unclosable overlay. */
+  useEffect(() => {
+    if (authStatus === 'signedOut') setAuthModalOpen(true);
+  }, [authStatus]);
 
   /* Live token balance polling (08-27): /api/me every 25s while logged in —
    * the top-bar widget stays fresh without a page refresh. Stops on 403
@@ -384,11 +422,11 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-slate-100 font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
+      <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-blue-600 focus:text-white focus:font-semibold focus:rounded-xl focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-white focus:font-semibold focus:rounded-[var(--radius-sm)] focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
         >
           Skip to main content
         </a>
@@ -406,8 +444,8 @@ export default function App() {
             over the ANONYMOUS landing (confirmed signed-out state) or the
             dialog-on-demand handle — never while the probe is in flight. */}
         <AuthModal
-          isOpen={authStatus === 'signedOut' || authModalOpen}
-          isMandatory={authStatus === 'signedOut'}
+          isOpen={authModalOpen}
+          isMandatory={false}
           onClose={() => setAuthModalOpen(false)}
           onLoginSuccess={(u) => {
             handleLoginSuccess(u);
@@ -432,6 +470,9 @@ export default function App() {
 
         {authStatus === 'authed' && (
           <>
+        {/* Admin → user direct notices: poll + pop on screen (operator 08-28) */}
+        <AdminNoticePopup isLoggedIn={isLoggedIn} />
+
         {/* Global command palette */}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
 
@@ -454,17 +495,20 @@ export default function App() {
           </div>
         )}
 
-        {/* Low Credit Warning Banner */}
-        {isLoggedIn && credits > 0 && (() => {
+        {/* Low Credit Warning Banner — never nags the operator (operator 08-28) */}
+        {isLoggedIn && !effectiveIsAdmin && credits > 0 && (() => {
           const planLimit = { basic: 30, pro: 100, elite: 280 }[userPlan] || 30;
           const pct = (credits / planLimit) * 100;
           if (pct < 15) {
+            const display = credits < 1
+              ? credits.toLocaleString(undefined, { maximumFractionDigits: 3 })
+              : Math.floor(credits);
             return (
               <div className="bg-rose-500/15 border-b border-rose-500/30 text-rose-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span>⚠️</span>
                   <span>
-                    <strong>Low Credit Balance:</strong> You have {Math.floor(credits)} credits remaining.
+                    <strong>Low Credit Balance:</strong> You have {display} credits remaining.
                   </span>
                 </div>
                 <button
@@ -505,8 +549,8 @@ export default function App() {
           )}
 
           {/* Main column + Study Buddy dock */}
-          <div className="flex gap-6 items-start">
-            <div className="flex-1 min-w-0">
+          <div className="flex gap-6 items-start min-w-0">
+            <div className="flex-1 min-w-0 w-full">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={viewKey}
@@ -525,7 +569,6 @@ export default function App() {
                       />
                     ) : (
                       <>
-                        <TodayView onGoTo={handleSelectView} user={{ credits, public_id: userId }} />
                         <div className="mt-5">
                           <AssignmentCardDashboard
                             userId={userId}
@@ -555,7 +598,7 @@ export default function App() {
                     />
                   )}
                   {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
-                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} />}
+                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} onOpenWorkspace={() => setActiveView('ai-workspace')} />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
 
                   {/* AUTOMATION */}
@@ -591,8 +634,8 @@ export default function App() {
                   {activeView === 'admin' && !effectiveIsAdmin && (
                     <div className="p-10 text-center">
                       <div className="text-3xl mb-3">🔒</div>
-                      <div className="text-sm font-bold text-white mb-1">Access denied</div>
-                      <div className="text-xs text-slate-500">The Control Center requires administrative privileges. If you need help, use the ❓ chat.</div>
+                      <div className="text-sm font-bold text-[var(--text-primary)] mb-1">Access denied</div>
+                      <div className="text-xs text-[var(--text-muted)]">The Control Center requires administrative privileges. If you need help, use the ❓ chat.</div>
                     </div>
                   )}
                 </motion.div>

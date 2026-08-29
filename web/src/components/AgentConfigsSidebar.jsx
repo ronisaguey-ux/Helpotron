@@ -59,14 +59,14 @@ function CollapsibleSection({ name, icon, right, defaultOpen = true, children })
         aria-label={open ? `Minimize ${name} section` : `Expand ${name} section`}
         className="w-full flex items-center justify-between gap-2 group cursor-pointer"
       >
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 min-w-0 truncate group-hover:text-slate-300 transition">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0 truncate group-hover:text-[var(--text-secondary)] transition">
           {icon}
           <span className="truncate">{name}</span>
         </span>
         <span className="flex items-center gap-1.5 shrink-0">
           {right}
           <ChevronDown
-            className={`w-3 h-3 text-slate-600 group-hover:text-slate-300 transition-transform ${open ? '' : '-rotate-90'}`}
+            className={`w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-transform ${open ? '' : '-rotate-90'}`}
           />
         </span>
       </button>
@@ -113,11 +113,11 @@ export default function AgentConfigsSidebar({
   const totalConfigs = memory.length + files.length + 2; // + personality + instructions
 
   return (
-    <div className="clean-card rounded-3xl border border-white/10 h-full flex flex-col overflow-hidden">
+    <div className="clean-card h-full flex flex-col overflow-hidden">
       {/* Header (sticky — body scrolls below) */}
-      <div className="px-4 py-3.5 border-b border-white/8 flex items-center justify-between shrink-0">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-          <SlidersHorizontal className="w-3 h-3 text-blue-400" /> Configs
+      <div className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+          <SlidersHorizontal className="w-3 h-3 text-[var(--accent)]" /> Configs
         </span>
         <span className="flex items-center gap-2 shrink-0">
           <Badge color="blue">{totalConfigs} items</Badge>
@@ -126,7 +126,7 @@ export default function AgentConfigsSidebar({
             onClick={onCollapse}
             aria-label="Minimize configs panel"
             title="Minimize configs panel"
-            className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/6 transition cursor-pointer"
+            className="p-1 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -141,7 +141,7 @@ export default function AgentConfigsSidebar({
           name="Identity"
           icon={<UserIcon className="w-3 h-3 shrink-0" />}
           right={identityActive
-            ? <span className="text-[9px] text-emerald-400 flex items-center gap-1 shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active</span>
+            ? <span className="aurora-chip shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active</span>
             : <Badge color="amber">Unsaved</Badge>}
         >
 
@@ -150,25 +150,25 @@ export default function AgentConfigsSidebar({
             type="button"
             onClick={() => selectConfig(ai.personality)}
             title="Load personality into the prompt box"
-            className="w-full group flex items-start gap-2 p-2.5 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 hover:bg-slate-950/70 transition cursor-pointer text-left"
+            className="w-full group flex items-start gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer text-left"
           >
             <span className="flex-1 min-w-0">
-              <span className="block text-[9px] uppercase tracking-wider text-slate-600">Personality</span>
-              <span className="block text-[11px] text-slate-200 leading-relaxed truncate">{ai.personality || '(none set)'}</span>
+              <span className="block text-[9px] uppercase tracking-wider text-[var(--text-muted)]">Personality</span>
+              <span className="block text-[11px] text-[var(--text-secondary)] leading-relaxed truncate">{ai.personality || '(none set)'}</span>
             </span>
-            <Send className="w-3 h-3 self-center shrink-0 text-slate-500 group-hover:text-blue-400 transition" />
+            <Send className="w-3 h-3 self-center shrink-0 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition" />
           </button>
           <button
             type="button"
             onClick={() => selectConfig(ai.instructions ? `instructions: ${ai.instructions}` : '')}
             title="Load instructions into the prompt box"
-            className="w-full group flex items-start gap-2 p-2.5 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 hover:bg-slate-950/70 transition cursor-pointer text-left"
+            className="w-full group flex items-start gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer text-left"
           >
             <span className="flex-1 min-w-0">
-              <span className="block text-[9px] uppercase tracking-wider text-slate-600">Instructions</span>
-              <span className="block text-[11px] text-slate-200 leading-relaxed truncate">{ai.instructions ? `instructions: ${ai.instructions}` : '(none set)'}</span>
+              <span className="block text-[9px] uppercase tracking-wider text-[var(--text-muted)]">Instructions</span>
+              <span className="block text-[11px] text-[var(--text-secondary)] leading-relaxed truncate">{ai.instructions ? `instructions: ${ai.instructions}` : '(none set)'}</span>
             </span>
-            <Send className="w-3 h-3 self-center shrink-0 text-slate-500 group-hover:text-blue-400 transition" />
+            <Send className="w-3 h-3 self-center shrink-0 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition" />
           </button>
 
           {/* Inline editor — small textareas + Save (mirrors the Identity section path) */}
@@ -184,12 +184,12 @@ export default function AgentConfigsSidebar({
               />
               <div className="flex items-center justify-end mt-1.5">
                 {personalityActive ? (
-                  <span className="text-[9px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
+                  <span className="aurora-chip"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => savePersonality(personalityDraft)}
-                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
                   >
                     Save personality
                   </button>
@@ -207,12 +207,12 @@ export default function AgentConfigsSidebar({
               />
               <div className="flex items-center justify-end mt-1.5">
                 {instructionsActive ? (
-                  <span className="text-[9px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
+                  <span className="aurora-chip"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => saveInstructions(instructionsDraft)}
-                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
                   >
                     Save instructions
                   </button>
@@ -228,28 +228,28 @@ export default function AgentConfigsSidebar({
           icon={<Database className="w-3 h-3 shrink-0" />}
           right={<Badge color={memory.length ? 'blue' : 'slate'}>{memory.length}</Badge>}
         >
-          <p className="text-[10px] text-slate-600 leading-relaxed">
+          <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
             The agent always reads this. Click an entry to load it into your prompt box.
           </p>
           <div className="space-y-2">
-            {memory.length === 0 && <div className="text-[11px] text-slate-600 py-2">No memories yet — teach your agent something.</div>}
+            {memory.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No memories yet — teach your agent something.</div>}
             {memory.map((m) => (
               <div
                 key={m.id}
                 onClick={() => useMemory(m)}
                 title="Select this memory — loads into your prompt"
-                className="group flex items-start gap-2 p-3 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 hover:bg-slate-950/70 transition cursor-pointer"
+                className="group flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
-                  <div className="text-[9px] text-slate-600 mt-1">{timeAgo(m.created_at)}</div>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{m.text}</p>
+                  <div className="text-[9px] text-[var(--text-muted)] mt-1">{timeAgo(m.created_at)}</div>
                 </div>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); useMemory(m); }}
                   aria-label="Load this memory into the prompt"
                   title="Load into prompt box"
-                  className="p-1 text-slate-500 hover:text-blue-400 transition cursor-pointer"
+                  className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -257,7 +257,7 @@ export default function AgentConfigsSidebar({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
                   aria-label="Delete memory entry"
-                  className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
+                  className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -278,7 +278,7 @@ export default function AgentConfigsSidebar({
               type="button"
               onClick={addMemory}
               aria-label="Save memory"
-              className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition cursor-pointer"
+              className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -297,7 +297,7 @@ export default function AgentConfigsSidebar({
             return (
               <div key={k.key} className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5 min-w-0 truncate">
+                  <span className="text-[10px] font-semibold text-[var(--text-secondary)] flex items-center gap-1.5 min-w-0 truncate">
                     <span className="text-xs leading-none">{k.icon}</span>
                     <span className="truncate">{FILE_GROUP_LABELS[k.key] || `${k.label}s`}</span>
                   </span>
@@ -306,7 +306,7 @@ export default function AgentConfigsSidebar({
                     <button
                       type="button"
                       onClick={() => addFileRefs.current[k.key]?.click()}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/4 border border-white/8 text-[9px] text-slate-400 hover:text-white hover:bg-white/8 transition cursor-pointer"
+                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[9px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)] transition cursor-pointer"
                       title={`Upload a ${k.label.toLowerCase()} file (.md/.txt/.json)`}
                     >
                       <Upload className="w-2.5 h-2.5" /> Add
@@ -320,26 +320,26 @@ export default function AgentConfigsSidebar({
                   onChange={(e) => handleUploadFile(e, k.key)}
                 />
                 {empty ? (
-                  <div className="text-[10px] text-slate-600 py-1.5 leading-relaxed">{k.hint}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] py-1.5 leading-relaxed">{k.hint}</div>
                 ) : (
                   <div className="space-y-1.5">
                     {kindFiles.map((f) => (
-                      <div key={f.id} className="group flex items-center gap-1.5 p-2 rounded-xl bg-slate-950/40 border border-white/6 hover:border-blue-500/40 transition">
+                      <div key={f.id} className="group flex items-center gap-1.5 p-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition">
                         <button
                           type="button"
                           onClick={() => openFile(f)}
                           className="flex-1 min-w-0 text-left cursor-pointer"
                           title={`Read ${f.file_name}`}
                         >
-                          <div className="text-[10px] text-slate-200 truncate hover:text-blue-300 transition">{f.file_name}</div>
-                          <div className="text-[9px] text-slate-600">{fmt(f.size_bytes)} B · tap to read</div>
+                          <div className="text-[10px] text-[var(--text-secondary)] truncate hover:text-[var(--accent)] transition">{f.file_name}</div>
+                          <div className="text-[9px] text-[var(--text-muted)]">{fmt(f.size_bytes)} B · tap to read</div>
                         </button>
                         <button
                           type="button"
                           onClick={() => useFileInPrompt(f)}
                           aria-label={`Load ${f.file_name} into the prompt`}
                           title="Load this file into the prompt box (SELECT)"
-                          className="p-1 text-slate-500 hover:text-blue-400 transition cursor-pointer"
+                          className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
                         >
                           <Send className="w-3 h-3" />
                         </button>
@@ -347,7 +347,7 @@ export default function AgentConfigsSidebar({
                           type="button"
                           onClick={() => deleteFile(f.id)}
                           aria-label={`Delete file ${f.file_name}`}
-                          className="p-1 text-slate-600 hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
+                          className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
