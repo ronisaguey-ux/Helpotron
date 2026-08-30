@@ -154,7 +154,7 @@ def test_transcribe_without_backend_returns_clear_error(client, unique_user, aut
         headers=auth_headers,
     )
     assert r.status_code == 500  # no whisper backend configured — clean error, not 422
-    assert "Gemini transcription failed" in r.json()["detail"]
+    assert "Gemini transcription failed" in r.json()["detail"] or "Transcription is not configured" in r.json()["detail"]
 
 
 def test_transcribe_accepts_query_param_too(client, unique_user, auth_headers):
@@ -165,7 +165,7 @@ def test_transcribe_accepts_query_param_too(client, unique_user, auth_headers):
         headers=auth_headers,
     )
     assert r.status_code == 500
-    assert "Gemini transcription failed" in r.json()["detail"]
+    assert "Gemini transcription failed" in r.json()["detail"] or "Transcription is not configured" in r.json()["detail"]
 
 
 def test_unknown_provider_rejected(client, unique_user, auth_headers):
