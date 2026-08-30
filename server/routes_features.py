@@ -180,22 +180,109 @@ class TelegramConfigModel(BaseModel):
     chat_id: str
 
 
+def _telegram_status_payload(user) -> dict:
+    """Connection state for the settings UI — never returns the bot token."""
+    token, chat_id = TelegramNotifier.credentials(user)
+    return {
+        "connected": bool(token and chat_id),
+        "chat_id": chat_id,
+        # Enough to recognise which bot is wired up, not enough to use it.
+        "bot_hint": f"…{token[-4:]}" if token and len(token) >= 4 else None,
+    }
+
+
+@router.get("/telegram/status")
+async def telegram_status(request: Request, db: Session = Depends(get_db)):
+    """Whether this account has a working Telegram bot attached.
+
+    Audit 08-29: the settings page hardcoded Telegram (and Canvas) as
+    "connected" for every account. This is the read path that lets the UI show
+    the truth instead.
+    """
+    user = await _get_feature_user(request, db)
+    return _telegram_status_payload(user)
+
+
+class TelegramTokenModel(BaseModel):
+    bot_token: str
+
+
+@router.post("/telegram/inspect")
+async def inspect_telegram_bot(req: TelegramTokenModel, request: Request, db: Session = Depends(get_db)):
+    """Step 2 of setup: confirm the pasted BotFather token names a real bot."""
+    await _get_feature_user(request, db)
+    result = await TelegramNotifier.describe_bot(req.bot_token)
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["detail"])
+    return result
+
+
+@router.post("/telegram/find-chat")
+async def find_telegram_chat(req: TelegramTokenModel, request: Request, db: Session = Depends(get_db)):
+    """Step 3 of setup: read the chat ID out of the user's own first message.
+
+    Telegram will not reveal a chat ID until the human messages the bot, and
+    making students dig for a numeric ID is where this integration normally
+    dies. They say hi to their bot; we read it back.
+    """
+    await _get_feature_user(request, db)
+    result = await TelegramNotifier.resolve_chats(req.bot_token)
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["detail"])
+    return result
+
+
 @router.post("/telegram/configure")
 async def configure_telegram(req: TelegramConfigModel, request: Request, db: Session = Depends(get_db)):
+    """Attach a Telegram bot after verifying the credentials actually work.
+
+    The previous version stored whatever was posted and replied "configured
+    successfully", so a typo in the token produced a connected-looking account
+    that could never deliver a message. Credentials are only persisted once
+    Telegram itself has accepted them.
+    """
     user = await _get_feature_user(request, db)
-    settings = user.settings or {}
-    settings["telegram_bot_token"] = req.bot_token
-    settings["telegram_chat_id"] = req.chat_id
+    bot_token = (req.bot_token or "").strip()
+    chat_id = (req.chat_id or "").strip()
+    if not bot_token or not chat_id:
+        raise HTTPException(status_code=400, detail="Both a bot token and a chat ID are required.")
+
+    probe = User(settings={"telegram_bot_token": bot_token, "telegram_chat_id": chat_id})
+    result = await TelegramNotifier.send_message(
+        probe, "✅ Helpotron is connected. Notifications will arrive here."
+    )
+    if not result["sent"]:
+        raise HTTPException(status_code=400, detail=result["detail"])
+
+    settings = dict(user.settings or {})
+    settings["telegram_bot_token"] = bot_token
+    settings["telegram_chat_id"] = chat_id
     user.settings = settings
     db.commit()
-    return {"message": "Telegram configured successfully"}
+    db.refresh(user)
+    return {"message": "Telegram connected. A confirmation was sent to your chat.", **_telegram_status_payload(user)}
+
+
+@router.post("/telegram/disconnect")
+async def disconnect_telegram(request: Request, db: Session = Depends(get_db)):
+    """Remove the stored bot credentials for this account."""
+    user = await _get_feature_user(request, db)
+    settings = dict(user.settings or {})
+    settings.pop("telegram_bot_token", None)
+    settings.pop("telegram_chat_id", None)
+    user.settings = settings
+    db.commit()
+    db.refresh(user)
+    return {"message": "Telegram disconnected.", **_telegram_status_payload(user)}
 
 
 @router.post("/telegram/test")
 async def test_telegram(request: Request, db: Session = Depends(get_db)):
     user = await _get_feature_user(request, db)
-    result = TelegramNotifier.send_message(user, "✅ Helpotron test notification!")
-    return {"message": result}
+    result = await TelegramNotifier.send_message(user, "✅ Helpotron test notification!")
+    if not result["sent"]:
+        raise HTTPException(status_code=400, detail=result["detail"])
+    return {"message": result["detail"]}
 
 
 # ─── 6. AI RECOMMENDATIONS ───────────────────────────────────────────────

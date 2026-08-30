@@ -3,7 +3,7 @@
  * Toggling an automation actually updates its state (session-persisted).
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useMemo, useState } from 'react';
-import { Play, Clock, Copy, Zap } from 'lucide-react';
+import { Clock, Zap } from 'lucide-react';
 import { AUTOMATIONS, RUNS, SCHEDULES, TEMPLATES, RECIPES, demoEnabled } from '../demoData.js';
 import { Badge, StatusBadge, Tabs, Toggle, EmptyState, timeAgo, SectionHeader } from './ui/os.jsx';
 import SectionCard from './SectionCard.jsx';
@@ -22,7 +22,6 @@ export default function AutomationCenter() {
   const [tab, setTab] = useState('automations');
   const demo = demoEnabled();
   const [autoState, setAutoState] = useState(loadAutoState);
-  const [ran, setRan] = useState(false);
 
   const automations = useMemo(
     () => (demo ? AUTOMATIONS.map((a) => ({ ...a, enabled: autoState[a.id] ?? a.enabled })) : []),
@@ -33,11 +32,6 @@ export default function AutomationCenter() {
     const next = { ...autoState, [id]: enabled };
     setAutoState(next);
     try { localStorage.setItem(AUTOS_KEY, JSON.stringify(next)); } catch (e) { /* ignore */ }
-  };
-
-  const runNow = () => {
-    setRan(true);
-    setTimeout(() => setRan(false), 1600);
   };
 
   const tabBtn = (key, label) => (
@@ -62,14 +56,6 @@ export default function AutomationCenter() {
         {tabBtn('schedules', 'Schedules')}
         {tabBtn('templates', 'Templates')}
         {tabBtn('recipes', 'Recipes')}
-        <button
-          type="button"
-          onClick={runNow}
-          className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer"
-        >
-          <Play className="w-3.5 h-3.5" />
-          {ran ? 'Run started…' : 'Run all'}
-        </button>
       </div>
 
       {/* ── AUTOMATIONS ─────────────────────────────────────────────────── */}
@@ -160,12 +146,6 @@ export default function AutomationCenter() {
                 <div className="text-xs font-semibold text-white">{t.name}</div>
                 <p className="text-[11px] text-slate-500 mt-1">{t.description}</p>
               </div>
-              <button
-                type="button"
-                className="mt-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent-subtle)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] transition cursor-pointer"
-              >
-                <Copy className="w-3 h-3" /> Use template
-              </button>
               <div className="text-[10px] text-slate-600 text-center">used {t.uses}× by the community</div>
             </SectionCard>
           ))}
@@ -192,7 +172,6 @@ export default function AutomationCenter() {
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[10px] text-[var(--text-muted)]">{r.popularity} cooks using this</span>
-                <button type="button" className="text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] transition cursor-pointer">Apply recipe →</button>
               </div>
             </SectionCard>
           ))}
