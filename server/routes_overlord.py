@@ -974,6 +974,15 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
     config, never My Agent's), plus the assignment grounding when present.
     """
     from .llm import call_llm
+    settings = dict(user.settings or {})
+    effort = settings.get("effort_score")
+    if effort is None and isinstance(settings.get("ai"), dict):
+        effort = settings["ai"].get("effortScore") or settings["ai"].get("effort_score")
+    try:
+        effort = int(effort) if effort is not None else 500
+    except (TypeError, ValueError):
+        effort = 500
+
     try:
         raw = await call_llm(
             system_prompt=(
@@ -987,7 +996,7 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
             user_prompt=(text or "")[:2000],
             temperature=0.4,
             max_tokens=300,
-            effort_score=20,
+            effort_score=effort,
             db=db, user_id=user.public_id,
         )
         return (raw or "").strip()[:1000]
