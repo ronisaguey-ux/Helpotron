@@ -1316,8 +1316,10 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         + f"User said: {text[:3000]}"
     )
     effort = settings.get("effort_score")
+    if effort is None and isinstance(settings.get("ai"), dict):
+        effort = settings["ai"].get("effortScore") or settings["ai"].get("effort_score")
     try:
-        effort = int(effort) if isinstance(effort, (int, float)) else 500
+        effort = int(effort) if effort is not None else 500
     except (TypeError, ValueError):
         effort = 500
 
