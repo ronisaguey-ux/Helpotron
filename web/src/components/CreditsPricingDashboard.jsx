@@ -174,8 +174,7 @@ export function CreditsPricingDashboard({
       maxDiscount: 5, // 50% of $10
       credits: '300 Task Tokens / mo',
       creditsAward: 300,
-      standardTokens: '$3.00 Tool Usage Budget',
-      capacity: '300 Task Tokens ($3.00 tool budget) · 1 token = $0.01 API cost',
+      capacity: '300 Task Tokens · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'basic',
@@ -187,8 +186,7 @@ export function CreditsPricingDashboard({
       maxDiscount: 10, // 50% of $20
       credits: '1,000 Task Tokens / mo',
       creditsAward: 1000,
-      standardTokens: '$10.00 Tool Usage Budget',
-      capacity: '1,000 Task Tokens ($10.00 tool budget) · 1 token = $0.01 API cost',
+      capacity: '1,000 Task Tokens · 1 token = $0.01 API cost',
       popular: true,
       features: ALL_PLATFORM_FEATURES,
       plan: 'pro',
@@ -200,8 +198,7 @@ export function CreditsPricingDashboard({
       maxDiscount: 20, // 50% of $40
       credits: '2,700 Task Tokens / mo',
       creditsAward: 2700,
-      standardTokens: '$27.00 Tool Usage Budget',
-      capacity: '2,700 Task Tokens ($27.00 tool budget) · 1 token = $0.01 API cost',
+      capacity: '2,700 Task Tokens · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'elite',
@@ -477,7 +474,7 @@ export function CreditsPricingDashboard({
                     </span>
                   </h3>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    Includes 100 Task Tokens ($1.00 compute value) with 100% features unlocked. Single-use per phone number.
+                    Includes 100 Task Tokens with 100% features unlocked. Single-use per phone number.
                   </p>
                 </div>
               </div>
@@ -601,9 +598,6 @@ export function CreditsPricingDashboard({
                   <div className="text-xs font-bold text-[var(--accent-2)] font-mono flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
                     <span>{tier.credits}</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Equivalent to {tier.standardTokens}
                   </div>
                 </div>
 
