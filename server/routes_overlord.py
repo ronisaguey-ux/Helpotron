@@ -1181,7 +1181,9 @@ def _is_model_query(text: str) -> bool:
         r"\b(what|which)\s+(model|llm)\s+(is this|is it)\b",
         r"\b(who|what)\s+(made|created|trained)\s+(you|your model)\b",
         r"\bare you\s+(a\s+)?(claude|anthropic|chatgpt|gpt|gemini|qwen|deepseek|llama|nemo|nemotron)\b",
-        r"\bwhat\s+(ai\s+)?model\s+are\s+u\b",
+        r"\b(what|what's|whats)\s+(ai\s+)?model\s+(are\s+)?(u|you)\b",
+        r"\bwhat\s+model\b",
+        r"\bwhich\s+model\b",
     ]
     return any(re.search(p, t) for p in patterns)
 
@@ -1213,6 +1215,20 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
     shell_cmd = _extract_shell_query(text)
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
+
+    # Deterministic model identity quick-path: immediately identify the exact OpenRouter model
+    if _is_model_query(text):
+        from .llm import resolve_model_routing
+        route = resolve_model_routing(effort=settings.get("effort", "auto"))
+        curr_model = route.get("model", "google/gemini-3.7-flash")
+        clean_name = curr_model.split("/")[-1]
+        provider = curr_model.split("/")[0] if "/" in curr_model else "OpenRouter"
+        
+        reply = (
+            f"I am powered by the **{clean_name}** AI model (`{curr_model}`) via OpenRouter "
+            f"(provider: {provider}). How can I help you today?"
+        )
+        return {"action": "plain_answer", "payload": {}, "reply": reply}
 
     # Deterministic greeting quick-path (operator 08-28): a PURE greeting /
     # thanks / small talk must never be gated into a study-scope refusal (the
