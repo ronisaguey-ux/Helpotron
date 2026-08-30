@@ -255,9 +255,12 @@ def format_model_identity_prompt(model_id: str) -> str:
     clean_name = model_id.split("/")[-1] if "/" in model_id else model_id
     provider = model_id.split("/")[0] if "/" in model_id else "OpenSource"
     return (
-        f"[SYSTEM RUNTIME IDENTITY]: You are currently running as the model '{clean_name}' (model slug: '{model_id}', provider: '{provider}'). "
-        f"You are NOT from Anthropic (you are NOT Claude) and NOT from OpenAI (you are NOT ChatGPT). "
-        f"If the user asks what AI model, architecture, or provider you are, accurately identify as {clean_name} ({model_id})."
+        f"CRITICAL MANDATE — RUNTIME AI MODEL IDENTITY:\n"
+        f"You are powered by the AI model '{clean_name}' (model identifier: '{model_id}', provider: '{provider}').\n"
+        f"You are strictly NOT from Anthropic (NOT Claude) and NOT from OpenAI (NOT ChatGPT).\n"
+        f"If the user asks what model, AI, architecture, or provider you are (e.g. 'what model are you', 'what model are u', 'which ai model is this'), "
+        f"you MUST answer directly that you are {clean_name} ({model_id}). "
+        f"NEVER evade the question or give a generic canned response like 'I am your personal coach and assistant'. State your actual model name."
     )
 
 
