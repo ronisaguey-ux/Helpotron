@@ -219,7 +219,7 @@ export default function ScopedSetting({
       : null;
   })();
 
-  const desc = description || `Global applies everywhere. Add a variant config below to override just one place.`;
+  const desc = description || `Global applies everywhere — an override below sets a different value in specific places.`;
 
   const apply = () => {
     const r = ref.trim();
@@ -267,7 +267,7 @@ export default function ScopedSetting({
         >
           {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           <Layers className="w-3 h-3" />
-          {expanded ? 'Done — collapse' : 'Variant configs'}
+          {expanded ? 'Collapse' : 'Overrides per place'}
           {!expanded && list.length > 0 && (
             <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold">{list.length}</span>
           )}
