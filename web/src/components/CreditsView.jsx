@@ -14,18 +14,30 @@ export default function CreditsView({ userId, initialTab, userCredits }) {
   const [tab, setTab] = useState(initialTab && initialTab !== 'balance' ? initialTab : 'plans');
 
   return (
-    <div className="space-y-5">
-      <Tabs
-        tabs={[
-          { key: 'plans', label: 'Plans & Top-ups' },
-          { key: 'earn', label: 'Earn Credits' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+    <div className="space-y-6">
+      <div className="segmented max-w-fit" role="tablist" aria-label="Credits navigation">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'plans'}
+          onClick={() => setTab('plans')}
+          className="seg-item"
+        >
+          Plans &amp; Top-ups
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'earn'}
+          onClick={() => setTab('earn')}
+          className="seg-item"
+        >
+          Earn Credits
+        </button>
+      </div>
       {tab === 'plans' && <BillingView userId={userId} />}
       {tab === 'earn' && (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <ReferralSection userId={userId} />
           <CreditLeaderboard userId={userId} userCredits={userCredits} />
         </div>

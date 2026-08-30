@@ -4,9 +4,8 @@
  * so it can live inside the merged Credits view.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import api from '../api.js';
 import CreditsPricingDashboard from './CreditsPricingDashboard.jsx';
-import SectionCard from './SectionCard.jsx';
 
 export default function BillingView({ userId }) {
   const [balance, setBalance] = useState(0);
@@ -40,46 +39,54 @@ export default function BillingView({ userId }) {
   return (
     <div className="space-y-6">
       {/* Prototype notice (08-26): payments NOT available rn — free beta test run. */}
-      <div className="rounded-[var(--radius-md)] border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+      <div className="panel p-4 border-amber-500/30 bg-amber-500/10 text-xs text-amber-200">
         <p className="text-sm font-semibold text-amber-100">Payments not available yet — prototype only</p>
-        <p className="mt-1 text-amber-200/90">
+        <p className="mt-1 text-amber-200/90 leading-relaxed">
           We're running a free beta test right now: you're testing for free, the
           product isn't fully launched, and Stripe payments aren't wired up yet.
           Credits are test-only and settle when the real product launches.
         </p>
       </div>
       {msg && (
-        <div className="clean-card p-4 text-xs text-[var(--text-secondary)]">
+        <div className="panel p-4 text-xs text-[var(--text-secondary)]">
           {msg}
         </div>
       )}
       <CreditsPricingDashboard currentCredits={balance} currentTokens={tokens} plan={plan} onTopUp={handleTopUp} userId={userId} />
 
       {/* Credit Transaction History */}
-      <SectionCard id="billing-transactions" title="Receipts & Credit Activity">
-        {transactions.length === 0 ? (
-          <p className="text-xs text-slate-500 py-4">No credit transactions yet.</p>
-        ) : (
-          <div className="space-y-2 max-h-80 overflow-y-auto">
-            {transactions.map((tx, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 rounded-xl bg-white/4 border border-white/8 text-xs font-mono"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {tx.delta >= 0 ? '+' : ''}{tx.delta.toFixed(2)}
+      <div className="panel space-y-4">
+        <div className="panel-head flex items-center justify-between">
+          <span className="panel-head__title">Receipts &amp; credit activity</span>
+          <span className="chip chip-neutral font-mono">{transactions.length} records</span>
+        </div>
+        <div className="panel-body">
+          {transactions.length === 0 ? (
+            <div className="empty-state">
+              <p>No credit transactions yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {transactions.map((tx, idx) => (
+                <div
+                  key={idx}
+                  className="group flex items-center justify-between p-3 text-xs font-mono"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`shrink-0 font-bold ${tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {tx.delta >= 0 ? '+' : ''}{tx.delta.toFixed(2)}
+                    </span>
+                    <span className="text-[var(--text-secondary)] truncate">{tx.reason}</span>
+                  </div>
+                  <span className="shrink-0 text-[var(--text-muted)] text-[10px]">
+                    {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : ''}
                   </span>
-                  <span className="text-slate-400 truncate">{tx.reason}</span>
                 </div>
-                <span className="shrink-0 text-slate-500 text-[10px]">
-                  {tx.created_at ? new Date(tx.created_at).toLocaleDateString() : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -118,7 +118,7 @@ function AccountSection({ s, set, userId, plan, isAdmin }) {
             <button
               type="button"
               onClick={() => pfpRef.current?.click()}
-              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+              className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
             >
               {s.profile.avatarUrl ? 'Change photo' : 'Upload photo'}
             </button>
@@ -126,7 +126,7 @@ function AccountSection({ s, set, userId, plan, isAdmin }) {
               <button
                 type="button"
                 onClick={() => set('profile.avatarUrl', '')}
-                className="px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-rose-300 transition cursor-pointer"
+                className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-rose-300 transition cursor-pointer"
               >
                 Remove
               </button>
@@ -165,7 +165,7 @@ function AccountSection({ s, set, userId, plan, isAdmin }) {
             <button
               type="button"
               onClick={() => setPwOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-sm)] bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white hover:bg-white/8 transition cursor-pointer"
             >
               <KeyRound className="w-3.5 h-3.5" /> Change password
             </button>
@@ -173,7 +173,7 @@ function AccountSection({ s, set, userId, plan, isAdmin }) {
               type="button"
               onClick={() => setForgotOpen(true)}
               title="Reset via email or phone code — or ask the developer for one. No current password needed."
-              className="px-3 py-2 rounded-xl bg-blue-600/15 border border-blue-500/40 text-[11px] text-blue-300 hover:bg-blue-600/25 hover:text-white transition cursor-pointer"
+              className="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] text-[11px] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition cursor-pointer"
             >
               Forgot password?
             </button>
@@ -215,14 +215,14 @@ function AccountSection({ s, set, userId, plan, isAdmin }) {
               <button
                 type="submit"
                 disabled={pwBusy}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white text-[11px] font-semibold transition cursor-pointer"
               >
                 {pwBusy ? 'Saving…' : 'Save new password'}
               </button>
               <button
                 type="button"
                 onClick={() => { setPwOpen(false); setPwMsg(null); setPwCur(''); setPwNew(''); setPwNew2(''); }}
-                className="px-3 py-2 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-3 py-2 rounded-[var(--radius-sm)] bg-white/4 border border-white/8 text-[11px] text-slate-400 hover:text-white transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -381,8 +381,8 @@ function WritingSection({ s, set, scoped, setVariants, subjectRefs }) {
                 key={p}
                 type="button"
                 onClick={() => set('writing.profile', p)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
-                  s.writing.profile === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] transition cursor-pointer border ${
+                  s.writing.profile === p ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
                 }`}
               >
                 {p}
@@ -634,7 +634,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
               <button
                 type="button"
                 onClick={() => setSetupStep('method_select')}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-blue-900/30"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_4px_18px_rgba(139,92,246,0.30)]"
               >
                 Enable 2FA Protection
               </button>
@@ -642,7 +642,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
               <button
                 type="button"
                 onClick={() => { setSetupStep('disabling'); setCode(''); setMsg2FA({ text: '', type: '' }); }}
-                className="px-3.5 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold transition cursor-pointer"
               >
                 Disable 2FA
               </button>
@@ -663,7 +663,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
                   key={m.key}
                   type="button"
                   onClick={() => setMethod(m.key)}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${method === m.key ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-white/4 border-white/8 text-slate-400 hover:text-slate-200'}`}
+                  className={`p-2.5 rounded-[var(--radius-sm)] border text-left transition cursor-pointer ${method === m.key ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.40)] text-white' : 'bg-white/4 border-white/8 text-slate-400 hover:text-slate-200'}`}
                 >
                   <div className="text-xs font-bold">{m.label}</div>
                   <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{m.desc}</div>
@@ -675,14 +675,14 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
                 type="button"
                 disabled={loading2FA}
                 onClick={handleStartSetup}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
               >
                 {loading2FA ? 'Setting up…' : 'Continue Setup →'}
               </button>
               <button
                 type="button"
                 onClick={() => setSetupStep('idle')}
-                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -697,7 +697,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
                 <p className="text-xs text-slate-300">
                   Scan this QR code in your Authenticator app (Google Authenticator, Microsoft Authenticator, Authy), or enter the key manually:
                 </p>
-                <div className="p-3 bg-slate-950 rounded-xl border border-white/10 text-center font-mono text-xs text-blue-400 select-all break-all">
+                <div className="p-3 bg-slate-950 rounded-[var(--radius-sm)] border border-white/10 text-center font-mono text-xs text-[var(--accent)] select-all break-all">
                   {secret}
                 </div>
               </div>
@@ -716,7 +716,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
                 placeholder="123456"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-white/15 rounded-[var(--radius-sm)] px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-[var(--accent)]"
               />
             </div>
             <div className="flex gap-2 pt-1">
@@ -724,14 +724,14 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
                 type="button"
                 disabled={loading2FA || code.length < 6}
                 onClick={handleVerifySetup}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
               >
                 {loading2FA ? 'Verifying…' : 'Activate 2FA'}
               </button>
               <button
                 type="button"
                 onClick={() => { setSetupStep('idle'); setCode(''); }}
-                className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -870,7 +870,7 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
         </div>
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer">Open plans & top-ups</button>
+        <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer">Open plans &amp; top-ups</button>
       </div>
       <div className="text-[10px] text-slate-600">1 Task Token = $0.01 in tool API execution (LLMs, audio, vision). Credits are applied as dollar discounts at checkout.</div>
     </div>
@@ -1469,7 +1469,7 @@ function AdvancedSection({ s, set, onGoTo }) {
         <button
           type="button"
           onClick={() => onGoTo && onGoTo('datalake')}
-          className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+          className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
         >
           Open →
         </button>
