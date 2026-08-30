@@ -199,7 +199,6 @@ function Pricing({ onOpenAuth }) {
             </div>
             <div className="text-xs text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-3">
               <div className="font-semibold text-[var(--text-primary)] font-mono">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
-              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">1 token = $0.01 API tool cost</div>
             </div>
             <button
               type="button"
