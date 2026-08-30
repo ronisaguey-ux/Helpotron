@@ -70,86 +70,9 @@ class AutoApprovedRuleRequest(BaseModel):
     rule: str
 
 
-# ─── Claude Code bridge (My Agent → Claude Code) ────────────────────────────
-# When HELPOTRON_CLAUDE_BRIDGE=1, agent-chat messages from the site are
-# forwarded to a headless `claude -p` session that IS the My Agent: it can
-# use the helpotron-admin MCP server (mcp/server.js) to look up users, adjust
-# credits, check health and run platform operations. Its reply is stored in
-# the normal chat history and returned to the site. Admin-only by default
-# (HELPOTRON_CLAUDE_BRIDGE_ADMIN_ONLY=1). Any failure falls back to the
-# local intent pipeline — the bridge never breaks the chat.
-
-def _claude_bridge_enabled() -> bool:
-    # Disabled: Anthropic/Claude models are strictly prohibited by ModelPolicy.
-    return False
-
-
-def _claude_bridge_allowed(is_admin: bool) -> bool:
-    return False
-
-
-def _claude_bridge_call(public_id: str, persona_block: str, user_text: str, assignment_context: str = "") -> Optional[str]:
-    """Forward one agent-chat message to headless Claude Code. Returns the
-    reply text, or None on any failure (caller falls back to the local
-    pipeline). Never shells out — argv array only. Pure-stdlib arguments
-    (the persona block is materialized by the async caller before the
-    executor thread — no ORM access off the session).
-
-    08-28 fix: the bridge previously spoke with a GENERIC "You are Helpotron's
-    My Agent" prompt — the user's identity never reached the model at all
-    whenever the bridge was enabled. The canonical persona block is now
-    embedded into the prompt; assignment_context ("" for the main chat) adds
-    the real assignment-bubble grounding when present.
-    """
-    try:
-        mcp_cfg = Path(__file__).resolve().parent.parent / "mcp" / "claude_bridge_config.json"
-        if not mcp_cfg.exists():
-            return None
-        prompt = (
-            "You are Helpotron's My Agent, responding to a user on the helpotron "
-            f"website (public_id: {public_id}). The user sent this message:\n\n"
-            f"{user_text}\n\n"
-            f"You are that user's personal agent, and their configured identity is BINDING on how you speak and act:\n\n"
-            f"{persona_block}"
-            f"{assignment_context}"
-            "If the user asks to do anything on the platform — look up a user, "
-            "adjust credits, check system health, platform operations — use the "
-            "helpotron-admin MCP tools to resolve it. Reply to the user directly "
-            "and concisely (a few sentences max), reporting what you actually did."
-        )
-        proc = subprocess.run(
-            [
-                "claude", "-p", prompt,
-                "--mcp-config", str(mcp_cfg),
-                "--dangerously-skip-permissions",
-                "--output-format", "json",
-                "--model", "sonnet",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if proc.returncode != 0:
-            return None
-        out = json.loads(proc.stdout)
-        if out.get("type") != "result" or not out.get("result"):
-            return None
-        candidate = str(out["result"]).strip() or None
-        if candidate is None or _is_degenerate_reply(candidate):
-            return None
-        return candidate
-    except Exception:
-        return None
-
-
 def _is_degenerate_reply(text: str) -> bool:
     """True when a reply carries no substance: empty, or punctuation/emoji-
-    only (a lone '👍' has NO word characters). The claude bridge — and
-    occasionally the local LLM — can hand back exactly this when the model
-    decides the message needs no words; sending it verbatim looks like a
-    broken bare reaction. Callers treat a degenerate reply as 'no reply' and
-    fall back to a real answer.
-    """
+    only (a lone '👍' has NO word characters)."""
     t = (text or "").strip()
     return (not t) or (re.fullmatch(r"[\W_]+", t, re.UNICODE) is not None)
 
@@ -1557,48 +1480,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     except Exception:
         pass
 
-    # 0b. Claude Code bridge: when enabled, this message goes to Claude Code,
-    # which answers (and can act) as the My Agent. Fallback to the local
-    # pipeline if the bridge is unavailable. Requests that already come FROM
-    # the bridge (X-Helpotron-MCP marker, set by mcp/server.js) are exempt —
-    # otherwise claude -p -> MCP admin_chat -> bridge would recurse.
-    if _claude_bridge_allowed(is_admin) and not request.headers.get("X-Helpotron-MCP"):
-        # Run in a thread: subprocess.run blocks the event loop, and the
-        # spawned claude's MCP server calls back into THIS server — a blocking
-        # call would deadlock the event loop until the 120s timeout. The
-        # identity block is materialized HERE (async context) so the executor
-        # thread never touches the request-scoped ORM session.
-        public_id = user.public_id
-        try:
-            # Canonical prompt (gated edu block + identity + memory + files)
-            # — same config the local pipeline injects. The bridge is the My
-            # Agent surface, so node stays "my_agent" (explicit — operator
-            # 08-28); the assignment context rides separately so an
-            # assignment-bubble message still reaches Claude Code grounded.
-            persona_block = agent_system_prompt(user, node="my_agent")
-        except Exception:
-            persona_block = ""  # never let identity IO break the bridge
-        reply = await asyncio.to_thread(_claude_bridge_call, public_id, persona_block, payload.text, assignment_ctx)
-        if reply:
-            agent_reply = overlord_agent.add_chat_message(
-                thread_key,
-                sender="overlord",
-                text=reply, user_id=user.id)
-            try:
-                from .overlord_agent import persist_chat_message
-                persist_chat_message(db, user.id, thread_key, "overlord", reply)
-            except Exception:
-                pass
-            await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
-            return {
-                "status": "success",
-                "message": agent_reply,
-                "execution": {"action": "claude_bridge", "status": "completed", "bridge": True},
-                "reply": reply,
-                "token_balance": _tk_balance(user),
-            }
-
-    # 1. LLM decides the intent (strict JSON contract, regex fallback)
+    # 1. LLM decides the intent via OpenRouter (strict JSON contract, regex fallback)
     intent = await _resolve_agent_intent(
         user, settings, payload.text, is_admin, db=db, target_key=thread_key,
         node=agent_node, assignment_context=assignment_ctx,
