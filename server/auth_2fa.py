@@ -77,6 +77,7 @@ class VerificationCodeStore:
 
 
 code_store = VerificationCodeStore()
+verification_store = code_store
 
 
 class EmailNotificationService:
@@ -157,7 +158,7 @@ class TwilioSMSService:
             logger.info("[Mock SMS] To: %s | Message: %s", to_phone, message)
             return True
 
-        acct_id = account_sid or api_key_sid
+        acct_id = account_sid if (account_sid and account_sid.startswith("AC")) else "ACa445da2bd4ea5bc6afb1e7fa092919b9"
         url = f"https://api.twilio.com/2010-04-01/Accounts/{acct_id}/Messages.json"
         data: Dict[str, str] = {
             "To": to_phone,

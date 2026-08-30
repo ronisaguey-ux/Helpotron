@@ -23,12 +23,26 @@ TASK_COSTS: Dict[str, int] = {
 
 BASE_TASK_COSTS = TASK_COSTS
 
-TIER_MONTHLY_CREDITS: Dict[str, int] = {
-    'free': 500,
-    'basic': 2000,
-    'pro': 6000,
-    'elite': 25000,
+import math
+
+TIER_MONTHLY_TASK_TOKENS: Dict[str, int] = {
+    'trial': 100,
+    'basic': 300,
+    'pro': 1000,
+    'elite': 2700,
+    'free': 100,
 }
+TIER_MONTHLY_CREDITS: Dict[str, int] = TIER_MONTHLY_TASK_TOKENS
+
+
+def calculate_task_token_cost(cost_usd: float) -> int:
+    """Calculate task tokens from dollar cost of tools/APIs.
+    1 Task Token = 1 cent ($0.01) of tool/API expenditure.
+    """
+    if cost_usd <= 0:
+        return 0
+    return max(1, int(math.ceil(cost_usd * 100.0)))
+
 
 def get_balance(user: User) -> int:
     """Retrieve available credit balance for user."""

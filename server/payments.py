@@ -22,7 +22,7 @@ STRIPE_PRICE_IDS = {
     "elite": os.getenv("STRIPE_PRICE_ELITE", ""),
 }
 
-TIER_CREDITS = {"basic": 500, "pro": 2000, "elite": 6000}
+TIER_CREDITS = {"trial": 100, "basic": 300, "pro": 1000, "elite": 2700}
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
 
 
