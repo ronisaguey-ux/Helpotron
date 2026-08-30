@@ -1,7 +1,6 @@
 // export target: web/src/components/AssignmentCardDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
-import SectionCard from './SectionCard';
 import Button from './Button';
 import api from '../api';
 import { normalizeCards } from '../lib/assignmentEvents';
@@ -408,7 +407,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                     <div
                       key={bubble.id}
                       onClick={() => setActiveBubble(bubble)}
-                      className="group glass-panel p-5 flex flex-col justify-between space-y-4 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative overflow-hidden"
+                      className="panel p-5 flex flex-col justify-between space-y-4 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative overflow-hidden group"
                     >
                       {/* Top Header */}
                       <div className="flex items-start justify-between gap-2">
@@ -417,7 +416,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <span className="aurora-chip tight">
+                          <span className="chip chip-neutral text-xs">
                             {`${count} ${count === 1 ? 'Assignment' : 'Assignments'}`}
                           </span>
 
@@ -436,14 +435,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         </div>
                       </div>
 
-                      {/* Content (ghost guard 08-28: blank title/description from
-                          legacy data renders an honest placeholder, never an
-                          empty bubble shell) */}
+                      {/* Content */}
                       <div>
                         <div className="font-semibold text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
                           <span>{(bubble.title || '').trim() || 'Untitled Bubble'}</span>
                           {bubble.is_custom && (
-                            <span className="aurora-chip tight">Custom</span>
+                            <span className="chip chip-accent text-[10px]">Custom</span>
                           )}
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
@@ -456,7 +453,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         <span className="flex items-center gap-1 text-emerald-400">
                           <Bot className="w-3.5 h-3.5" /> {count > 0 ? `${count} Teams Active` : 'Idle'}
                         </span>
-                        <span className="text-[var(--accent-2)] group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                        <span className="text-[var(--accent-2)] group-hover:translate-x-1 transition-transform flex items-center gap-0.5 font-semibold">
                           Open Bubble <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
@@ -469,7 +466,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
             /* LEVEL 2: ACTIVE BUBBLE WORKSPACE VIEW (ASSIGNMENTS ONLY VISIBLE HERE) */
             <div className="space-y-5 animate-fadeIn">
               {/* Back Bar & Bubble Info */}
-              <div className="glass-panel p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="panel p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setActiveBubble(null)}
@@ -482,8 +479,8 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{activeBubble.icon || '🫧'}</span>
-                      <h2 className="text-base font-bold text-[var(--text-primary)] truncate">{activeBubble.title}</h2>
-                      <span className="aurora-chip tight shrink-0">
+                      <h2 className="text-base font-bold text-white truncate">{activeBubble.title}</h2>
+                      <span className="chip chip-neutral text-xs shrink-0">
                         {`${currentBubbleCards.length} ${currentBubbleCards.length === 1 ? 'Assignment' : 'Assignments'}`}
                       </span>
                     </div>
@@ -492,7 +489,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                 </div>
 
                 <div className="flex items-center gap-2 text-xs font-mono shrink-0">
-                  <span className="aurora-chip ok">
+                  <span className="chip chip-emerald">
                     🤖 {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
                   </span>
                 </div>
@@ -500,17 +497,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
               {/* Assignments Inside Active Bubble */}
               {currentBubbleCards.length === 0 ? (
-                <SectionCard
-                  id="assignment-empty-bubble"
-                  padding="p-12"
-                  className="text-center space-y-3"
-                  title={`No assignments currently inside "${activeBubble.title}"`}
-                >
-                  <span className="text-4xl opacity-80">🫧</span>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">
-                    Scraped assignments matching this bubble&apos;s description will be automatically organized here.
-                  </p>
-                </SectionCard>
+                <div className="panel">
+                  <div className="empty-state">
+                    <span className="empty-state__icon">🫧</span>
+                    <p>No assignments currently inside “{activeBubble.title}”. Scraped assignments matching this bubble&apos;s description will be automatically organized here.</p>
+                  </div>
+                </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {currentBubbleCards.map((card) => {

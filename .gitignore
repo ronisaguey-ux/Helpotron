@@ -33,7 +33,11 @@ uploads/
 mcp/.env
 .agents/*.json
 .agents/mcp_config.json
+.agents/skills/
 shots/*.zip
 exports/sandboxes/
-datalake_storage/
-*.db.gz
+.superdesign
+.superdesign/tmp/
+graphify-out/
+helpotron_audit/
+data/logs/

@@ -676,19 +676,25 @@ export default function AppShell({
               const isCollapsed = collapsed[group.group];
               return (
                 <div key={group.group}>
-                  <div className="flex items-center gap-2 px-2 pt-2 pb-1">
-                    <span className="flex-1 h-px bg-white/6" />
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.group)}
-                      aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.group} section`}
-                      aria-expanded={!isCollapsed}
-                      className={`w-5 h-5 flex items-center justify-center rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/5 transition cursor-pointer ${
-                        isCollapsed ? '' : 'opacity-0 hover:opacity-100'
-                      }`}
-                    >
-                      <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? 'rotate-90' : ''}`} />
-                    </button>
+                  <div className="pt-3 pb-1">
+                    {sidebarOpen ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.group)}
+                        aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.group} section`}
+                        aria-expanded={!isCollapsed}
+                        className="nav-group-label flex items-center gap-2 w-full py-1 transition cursor-pointer hover:text-[var(--text-secondary)]"
+                      >
+                        <span>{group.group}</span>
+                        <span className="flex-1 h-px bg-white/10" />
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ) : (
+                      <span className="block h-px bg-white/10 mx-2" aria-hidden="true" />
+                    )}
                   </div>
                   {!isCollapsed && (
                     <div className="space-y-0.5">
@@ -699,17 +705,11 @@ export default function AppShell({
                             key={item.key}
                             type="button"
                             onClick={() => onNavigate(item.key)}
-                            className={`relative w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
-                              sidebarOpen ? 'px-2.5' : 'justify-center px-0'
-                            } ${
-                              selected
-                                ? 'glow-accent bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.4)] font-medium'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                            }`}
+                            className={`nav-item ${sidebarOpen ? '' : 'justify-center px-0'}`}
                             aria-label={item.label}
                             aria-current={selected ? 'page' : undefined}
                           >
-                            {item.Icon && <item.Icon className={`w-5 h-5 shrink-0 ${selected ? 'text-[var(--accent)]' : 'text-slate-400'}`} aria-hidden="true" />}
+                            {item.Icon && <item.Icon className={`w-[18px] h-[18px] shrink-0 ${selected ? 'text-[var(--accent)]' : ''}`} aria-hidden="true" />}
                             {sidebarOpen && <span className="truncate">{item.label}</span>}
                           </button>
                         );
@@ -728,18 +728,18 @@ export default function AppShell({
             with min-w-0 so this flex child can shrink below its content width. */}
         <main id="main-content" className="flex-1 min-w-0 w-full overflow-x-hidden pb-24 md:pb-12">
           {/* View header */}
-          <div className="clean-card px-4 sm:px-6 py-3 sm:py-4 mb-4 sm:mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
+          <header className="page-head">
+            <div className="flex items-end gap-3 min-w-0">
               {activeView !== 'agent' && (
-                <div className="p-2 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.3)] flex items-center justify-center shrink-0">
+                <div className="page-head__icon">
                   {current?.logo
-                    ? <img src={current.logo} alt="" className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover" />
-                    : <span className="text-base sm:text-lg leading-none">{current?.icon ?? '✦'}</span>}
+                    ? <img src={current.logo} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                    : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-[var(--text-primary)] truncate">{current?.label ?? 'Helpotron'}</h1>
-                <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+                <h1 className="page-head__title truncate">{current?.label ?? 'Helpotron'}</h1>
+                <p className="page-head__sub truncate">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
                   {activeView === 'monitors' && 'Live traffic, activity, data lake & cost'}
@@ -747,8 +747,8 @@ export default function AppShell({
                   {activeView === 'library' && 'Files, saved materials and your calendar'}
                   {activeView === 'insights' && 'Analytics, progress and recommendations'}
                   {activeView === 'credits' && 'Balance, plans, top-ups and earnings — free beta, payments not available yet'}
-                  {activeView === 'settings' && 'Your complete configuration workspace'}
-                  {activeView === 'admin' && isAdmin && 'Helpotron Control Center'}
+                  {activeView === 'settings' && 'Appearance, agent behaviour, privacy and account'}
+                  {activeView === 'admin' && isAdmin && 'Users, credits, model health and moderation'}
                 </p>
               </div>
             </div>
@@ -757,7 +757,7 @@ export default function AppShell({
                 <GraduationCap className="w-3.5 h-3.5" /> Capture → Understand → Execute → Improve
               </span>
             )}
-          </div>
+          </header>
 
           {/* Page body */}
           <div className="space-y-4 sm:space-y-5">

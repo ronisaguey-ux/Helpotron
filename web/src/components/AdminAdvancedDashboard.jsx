@@ -3,6 +3,7 @@ import api from '../api';
 import {
   ShieldAlert,
   Users,
+  CircleDollarSign,
   MessageSquare,
   Activity,
   Send,
@@ -21,7 +22,6 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import SectionCard from './SectionCard.jsx';
 
 export default function AdminAdvancedDashboard({ userId = '' }) {
   const [activeTab, setActiveTab] = useState('bulk_users');
@@ -401,64 +401,67 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
 
   return (
     <div className="space-y-6 text-[var(--text-primary)] max-w-6xl mx-auto">
-      {/* Header */}
-      <SectionCard id="adminadv-header" header={
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] flex items-center justify-center text-[var(--accent)] shrink-0">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">Helpotron Master Admin Panel</h2>
+      {/* Section switch + admin identity.
+          08-30 overhaul: this used to be an entire empty SectionCard whose only
+          content was the heading "Helpotron Master Admin Panel" — the third
+          near-identical title on one screen (page header → section card →
+          panel), directly above a second full-width card holding seven tabs.
+          Both cards are gone. The page header already says "Control Center",
+          so this is one control row: a recessed segmented track with a single
+          raised thumb, plus the admin identity chip. Emoji were standing in for
+          icons; real icons carry the meaning and counts became chips. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="os-scroll overflow-x-auto max-w-full">
+          <div className="segmented" role="tablist" aria-label="Admin sections">
+            {[
+              ['bulk_users', 'User Operations', Users, listUsers.length],
+              ['costs', 'Cost & Usage', CircleDollarSign, null],
+              ['inbox', 'Inquiries Inbox', MessageSquare, safeAdminMessages.length],
+              ['models', 'Model Scorecards', Zap, null],
+              ['moderation', 'Moderation', AlertCircle, safeModQueue.length],
+              ['health', 'System Health', Activity, null],
+              ['system_control', 'Storage Control', ShieldCheck, null],
+            ].map(([key, label, Icon, count]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                role="tab"
+                aria-selected={activeTab === key}
+                className="seg-item"
+              >
+                <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                {label}
+                {count != null && <span className="seg-count">{count}</span>}
+              </button>
+            ))}
           </div>
         </div>
-      } headerRight={
-        /* hidden on phones (<sm): this shrink-0 pill starved the header column
-           to ~0 width at 390px, wrapping the h2 to 4 lines (A7 audit row 1).
-           The panel title already identifies the admin context on mobile. */
-        <span className="hidden sm:inline-flex items-center rounded-full px-3 py-1 text-[11px] font-mono font-semibold bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] shrink-0">
+        <span className="chip chip-accent font-mono shrink-0">
+          <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
           ADMIN: {userId || 'anonymous'}
         </span>
-      }>
-      </SectionCard>
-
-      {/* Tab Navigation */}
-      <div className="clean-card p-1.5 flex overflow-x-auto text-xs font-semibold gap-1">
-        {[
-          ['bulk_users', `👥 User Operations (${listUsers.length})`],
-          ['costs', '💰 Cost & Usage'],
-          ['inbox', `💬 Inquiries Inbox (${safeAdminMessages.length})`],
-          ['models', '⚡ Model Scorecards'],
-          ['moderation', `🚨 Moderation (${safeModQueue.length})`],
-          ['health', '🩺 System Health'],
-          ['system_control', '🛡️ Storage Control'],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            aria-pressed={activeTab === key}
-            className={`px-4 py-2.5 rounded-[var(--radius-sm)] whitespace-nowrap transition cursor-pointer font-medium ${
-              activeTab === key
-                ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
       </div>
 
       {/* TAB 1: BULK USERS */}
       {activeTab === 'bulk_users' && (
         <div className="space-y-4">
-          <div className="clean-card p-5 space-y-4">
-            <h3 className="font-semibold text-sm text-white">Bulk User Operations ({selectedUserIds.length} selected)</h3>
+          <div className="panel">
+            <div className="panel-head">
+              <span className="panel-head__title">Bulk user operations</span>
+              <span className={`chip ${selectedUserIds.length ? 'chip-accent' : 'chip-neutral'}`}>
+                {selectedUserIds.length} selected
+              </span>
+            </div>
+            <div className="panel-body space-y-4">
             {selectedUserIds.length === 0 ? (
               /* 08-30 de-clunk: with nothing selected this box used to render
                  the whole control grid plus a huge disabled "Apply to 0"
                  button — an empty-operations wall. One honest hint instead. */
-              <p className="text-xs text-[var(--text-muted)]">
-                Select users from the table below to change their plan, adjust credits in bulk, or assign a tag together.
-              </p>
+              <div className="empty-state">
+                <span className="empty-state__icon"><Users className="w-4 h-4" aria-hidden="true" /></span>
+                <p>Select users in the table below to change their plan, adjust credits, or tag them together.</p>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
@@ -521,6 +524,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                     )}
               </>
             )}
+          </div>
           </div>
 
           {/* User Table */}
@@ -981,91 +985,79 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {/* TAB 2: INQUIRIES INBOX */}
       {activeTab === 'inbox' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
-              Incoming Student & User Inquiries ({safeAdminMessages.length})
-            </h3>
+          <div className="flex items-center justify-between gap-3">
+            <span className="section-label">Incoming user inquiries</span>
             <button
               type="button"
               onClick={fetchAdminMessages}
-              className="px-3 py-2 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-raised)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Refresh Inbox
             </button>
           </div>
 
           {safeAdminMessages.length === 0 ? (
-            <div className="clean-card p-10 text-center space-y-2">
-              <MessageSquare className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
-              <p className="text-sm font-medium text-[var(--text-secondary)]">No incoming messages yet</p>
-              <p className="text-xs text-[var(--text-muted)]">Student and user inquiries addressed to Admin will appear here.</p>
+            <div className="panel">
+              <div className="empty-state">
+                <span className="empty-state__icon"><MessageSquare className="w-4 h-4" aria-hidden="true" /></span>
+                <p>No incoming messages yet. Student inquiries addressed to Admin will appear here.</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
               {safeAdminMessages.map((msg) => (
-                <SectionCard
-                  key={msg.id}
-                  id={`adminadv-message-${msg.id}`}
-                  className="space-y-3 text-xs"
-                  header={
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[rgba(139,92,246,0.28)] font-semibold mr-2">
-                          {msg.category}
-                        </span>
-                        <strong className="text-white text-sm">{msg.subject}</strong>
-                        <span className="text-[var(--text-muted)] text-xs ml-2 font-mono">from: {msg.user_id}</span>
-                      </div>
-
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                          msg.status === 'replied'
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'replied' ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
-                        {msg.status === 'replied' ? 'Replied' : 'Pending Reply'}
+                <div key={msg.id} className="panel space-y-3">
+                  <div className="panel-head flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="chip chip-accent uppercase text-[10px] font-mono">
+                        {msg.category}
                       </span>
+                      <strong className="text-white text-sm font-semibold">{msg.subject}</strong>
+                      <span className="text-[var(--text-muted)] text-xs font-mono">from: {msg.user_id}</span>
                     </div>
-                  }
-                >
 
-                  <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-sans">
-                    {msg.message}
+                    <span className={`chip ${msg.status === 'replied' ? 'chip-emerald' : 'chip-amber'} shrink-0`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'replied' ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
+                      {msg.status === 'replied' ? 'Replied' : 'Pending Reply'}
+                    </span>
                   </div>
 
-                  {msg.admin_reply && (
-                    <div className="p-3 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--text-primary)]">
-                      <strong className="text-[var(--accent)]">Admin Reply:</strong> {msg.admin_reply}
+                  <div className="panel-body space-y-3 text-xs">
+                    <div className="group p-3.5 text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-sans">
+                      {msg.message}
                     </div>
-                  )}
 
-                  {/* Reply Box */}
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="Type admin response to student..."
-                      aria-label="Type admin response to student"
-                      value={replyTextMap[msg.id] || ''}
-                      onChange={(e) => setReplyTextMap({ ...replyTextMap, [msg.id]: e.target.value })}
-                      className="clean-input flex-1 px-3 py-2 text-white text-xs outline-none placeholder:text-[var(--text-muted)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleSendAdminReply(msg.id)}
-                      className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] font-semibold transition cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Reply</span>
-                    </button>
+                    {msg.admin_reply && (
+                      <div className="group-strong p-3.5 text-[var(--text-primary)]">
+                        <strong className="text-[var(--accent)] font-semibold">Admin Reply:</strong> {msg.admin_reply}
+                      </div>
+                    )}
+
+                    {/* Reply Box */}
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Type admin response to student..."
+                        aria-label="Type admin response to student"
+                        value={replyTextMap[msg.id] || ''}
+                        onChange={(e) => setReplyTextMap({ ...replyTextMap, [msg.id]: e.target.value })}
+                        className="clean-input flex-1 px-3 py-2 text-white text-xs outline-none placeholder:text-[var(--text-muted)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSendAdminReply(msg.id)}
+                        className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] font-semibold transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Reply</span>
+                      </button>
+                    </div>
+
+                    {replyStatusMap[msg.id] && (
+                      <div className="text-[11px] font-mono text-[var(--accent)]">{replyStatusMap[msg.id]}</div>
+                    )}
                   </div>
-
-                  {replyStatusMap[msg.id] && (
-                    <div className="text-[11px] font-mono text-[var(--accent)]">{replyStatusMap[msg.id]}</div>
-                  )}
-                </SectionCard>
+                </div>
               ))}
             </div>
           )}
@@ -1075,59 +1067,86 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {/* TAB 3: MODEL METRICS */}
       {activeTab === 'models' && (
         <div className="space-y-4">
-          {safeScorecards.length === 0 && (
-            <div className="clean-card p-10 text-center space-y-2">
-              <Gauge className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
-              <p className="text-sm font-medium text-[var(--text-secondary)]">No model scorecards yet</p>
-              <p className="text-xs text-[var(--text-muted)]">Live per-model stats from API usage logs will appear here as calls are made.</p>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            {safeScorecards.map((m) => (
-              <div key={m.model_id} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-2">
-                <div className="font-semibold text-white text-sm">{m.display_name || m.model_id}</div>
-                <div className="text-[10px] font-mono text-[var(--text-muted)]">{m.model_id}</div>
-                <div className="space-y-1 font-mono text-[11px] text-[var(--text-secondary)]">
-                  <div>Calls: <span className="text-white">{Number(m.calls ?? 0).toLocaleString()}</span></div>
-                  <div>
-                    Tokens: <span className="text-white">{Number(m.total_tokens ?? 0).toLocaleString()}</span>{' '}
-                    <span className="text-[var(--text-muted)]">({Number(m.input_tokens ?? 0).toLocaleString()} in / {Number(m.output_tokens ?? 0).toLocaleString()} out)</span>
-                  </div>
-                  <div>Cost / 1k: <span className="text-amber-400">${Number(m.cost_per_1k_tokens_usd ?? 0).toFixed(6)}</span></div>
-                  <div>Total charged: <span className="text-rose-400">${Number(m.charged_cost_usd ?? 0).toFixed(6)}</span></div>
-                  {m.last_used && <div>Last used: <span className="text-white">{String(m.last_used).slice(0, 10)}</span></div>}
-                </div>
+          <span className="section-label">Model performance scorecards</span>
+          {safeScorecards.length === 0 ? (
+            <div className="panel">
+              <div className="empty-state">
+                <span className="empty-state__icon"><Gauge className="w-4 h-4" aria-hidden="true" /></span>
+                <p>No model scorecards yet. Live per-model stats from API usage logs will appear here as calls are made.</p>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: MODERATION */}
-      {activeTab === 'moderation' && (
-        <SectionCard id="adminadv-moderation" className="space-y-3" header={
-          <h3 className="text-sm font-bold text-white">Content Moderation Queue ({safeModQueue.length})</h3>
-        }>
-          {safeModQueue.length === 0 ? (
-            <div className="clean-card p-10 text-center space-y-2">
-              <ShieldCheck className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
-              <p className="text-sm font-medium text-[var(--text-secondary)]">No flagged content</p>
-              <p className="text-xs text-[var(--text-muted)]">The moderation queue is clear — flagged items will appear here for review.</p>
             </div>
           ) : (
-            <div className="space-y-2 text-xs">
-              {safeModQueue.map((item) => (
-                <div key={item.id} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">{item.type}: {item.title || item.id}</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleModerationAction(item.id, 'approved')} className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[var(--radius-sm)] transition cursor-pointer">Approve</button>
-                    <button type="button" onClick={() => handleModerationAction(item.id, 'rejected')} className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-[var(--radius-sm)] transition cursor-pointer">Reject</button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              {safeScorecards.map((m) => (
+                <div key={m.model_id} className="panel p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-white text-sm">{m.display_name || m.model_id}</div>
+                      <div className="text-[10px] font-mono text-[var(--text-muted)]">{m.model_id}</div>
+                    </div>
+                    <span className="chip chip-neutral font-mono text-[10px]">{Number(m.calls ?? 0).toLocaleString()} calls</span>
+                  </div>
+                  <div className="group p-3 space-y-1.5 font-mono text-[11px] text-[var(--text-secondary)]">
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Total tokens:</span>
+                      <span className="text-white font-semibold">{Number(m.total_tokens ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                      <span>In / Out:</span>
+                      <span>{Number(m.input_tokens ?? 0).toLocaleString()} / {Number(m.output_tokens ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Cost / 1k:</span>
+                      <span className="text-amber-300 font-semibold">${Number(m.cost_per_1k_tokens_usd ?? 0).toFixed(6)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Charged:</span>
+                      <span className="text-rose-400 font-semibold">${Number(m.charged_cost_usd ?? 0).toFixed(6)}</span>
+                    </div>
+                    {m.last_used && (
+                      <div className="flex justify-between text-[10px] pt-1 border-t border-[var(--border-subtle)]">
+                        <span className="text-[var(--text-muted)]">Last used:</span>
+                        <span className="text-[var(--text-secondary)]">{String(m.last_used).slice(0, 10)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </SectionCard>
+        </div>
+      )}
+
+      {/* TAB 5: MODERATION */}
+      {activeTab === 'moderation' && (
+        <div className="panel space-y-4">
+          <div className="panel-head flex items-center justify-between">
+            <span className="panel-head__title">Content moderation queue</span>
+            <span className={`chip ${safeModQueue.length ? 'chip-amber' : 'chip-emerald'}`}>
+              {safeModQueue.length} flagged
+            </span>
+          </div>
+          <div className="panel-body">
+            {safeModQueue.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-state__icon"><ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" /></span>
+                <p>The moderation queue is clear — flagged items will appear here for review.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs">
+                {safeModQueue.map((item) => (
+                  <div key={item.id} className="group p-3 flex items-center justify-between gap-3">
+                    <span className="text-[var(--text-primary)] font-medium truncate">{item.type}: {item.title || item.id}</span>
+                    <div className="flex gap-2 shrink-0">
+                      <button type="button" onClick={() => handleModerationAction(item.id, 'approved')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer">Approve</button>
+                      <button type="button" onClick={() => handleModerationAction(item.id, 'rejected')} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* TAB: COST & USAGE MONITORING */}
@@ -1142,47 +1161,43 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           {/* Top Platform Metrics */}
           {costsSummary && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
-                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total API Cost</span>
+              <div className="group p-4 space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase tracking-wider font-semibold">Total API Cost</span>
                 <strong className="text-rose-400 text-lg">${costsSummary.total_cost_usd || '0.00'}</strong>
-                <span className="text-[10px] text-[var(--text-muted)] block">Baseline Provider Expense</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Provider Expense</span>
               </div>
-              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
-                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total Charged (w/ Multipliers)</span>
+              <div className="group p-4 space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase tracking-wider font-semibold">Total Charged</span>
                 <strong className="text-[var(--accent)] text-lg">${costsSummary.total_charged_usd || '0.00'}</strong>
-                <span className="text-[10px] text-[var(--text-muted)] block">User Token Equivalent</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Token Equivalent</span>
               </div>
-              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
-                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Est. Platform Profit</span>
+              <div className="group p-4 space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase tracking-wider font-semibold">Platform Profit</span>
                 <strong className="text-emerald-400 text-lg">${costsSummary.platform_profit_summary?.estimated_profit_usd || '0.00'}</strong>
                 <span className="text-[10px] text-emerald-400/80 block">{costsSummary.platform_profit_summary?.profit_margin_pct}% Margin</span>
               </div>
-              <div className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1">
-                <span className="text-[var(--text-muted)] block text-[10px] uppercase">Total API Calls</span>
+              <div className="group p-4 space-y-1">
+                <span className="text-[var(--text-muted)] block text-[10px] uppercase tracking-wider font-semibold">Total API Calls</span>
                 <strong className="text-[var(--text-primary)] text-lg">{costsSummary.total_logs || 0}</strong>
-                <span className="text-[10px] text-[var(--text-muted)] block">LLM, Audio, Vision, Detectors</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">LLM / Vision / Audio</span>
               </div>
             </div>
           )}
 
           {/* Per-User Token Cost Multiplier Adjustment */}
-          <SectionCard id="adminadv-multiplier" padding="p-6" className="space-y-4" header={
-            <div className="flex items-center justify-between">
+          <div className="panel space-y-4">
+            <div className="panel-head flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" />
-                  Per-User Token Multiplier & Pricing Control
-                </h3>
+                <span className="panel-head__title">Per-user token multiplier &amp; pricing control</span>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  Adjust individual user multipliers (e.g. 0.5x for beta testers, 1.0x standard, 1.5x premium, 2.0x heavy usage).
+                  Adjust individual multipliers (0.5x beta, 1.0x standard, 1.5x premium, 2.0x heavy compute).
                 </p>
               </div>
-              <span className="text-[11px] text-[var(--text-muted)] font-mono">{usersCosts.length} Users</span>
+              <span className="chip chip-neutral font-mono">{usersCosts.length} Users</span>
             </div>
-          }>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="panel-body overflow-x-auto">
+              <table className="w-full min-w-[580px] text-left text-xs">
                 <thead>
                   <tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider">
                     <th className="pb-3">User</th>
@@ -1240,21 +1255,20 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 </tbody>
               </table>
             </div>
-          </SectionCard>
+          </div>
 
           {/* Model & Tool Breakdown + Usage Trends */}
           {costsSummary && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Tool / Model Cost Breakdown */}
-              <SectionCard id="adminadv-tool-breakdown" className="space-y-3" header={
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                  Cost Breakdown by Tool / Model
-                </h4>
-              }>
-                <div className="space-y-2 text-xs font-mono">
+              <div className="panel space-y-3">
+                <div className="panel-head">
+                  <span className="panel-head__title">Cost breakdown by tool / model</span>
+                </div>
+                <div className="panel-body space-y-2 text-xs font-mono">
                   {costsSummary.tool_breakdown?.length ? (
                     costsSummary.tool_breakdown.map((tool, i) => (
-                      <div key={i} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] flex items-center justify-between border border-[var(--border-subtle)]">
+                      <div key={i} className="group p-3 flex items-center justify-between">
                         <div>
                           <span className="font-bold text-white block">{tool.tool_or_model}</span>
                           <span className="text-[10px] text-[var(--text-muted)]">{tool.call_count} invocations</span>
@@ -1266,23 +1280,22 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       </div>
                     ))
                   ) : (
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center text-[11px] text-[var(--text-muted)]">
+                    <div className="group p-4 text-center text-[11px] text-[var(--text-muted)]">
                       No usage data yet — API calls will populate this breakdown.
                     </div>
                   )}
                 </div>
-              </SectionCard>
+              </div>
 
               {/* 7-Day Usage & Cost Trends */}
-              <SectionCard id="adminadv-usage-trends" className="space-y-3" header={
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                  Usage Trends (Last 7 Days)
-                </h4>
-              }>
-                <div className="space-y-2 text-xs font-mono">
+              <div className="panel space-y-3">
+                <div className="panel-head">
+                  <span className="panel-head__title">Usage trends (last 7 days)</span>
+                </div>
+                <div className="panel-body space-y-2 text-xs font-mono">
                   {costsSummary.trends?.length ? (
                     costsSummary.trends.map((day, i) => (
-                      <div key={i} className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] flex items-center justify-between border border-[var(--border-subtle)]">
+                      <div key={i} className="group p-3 flex items-center justify-between">
                         <div>
                           <span className="font-bold text-white">{day.date} ({day.day_name})</span>
                           <span className="text-[10px] text-[var(--text-muted)] block">{day.calls} API calls</span>
@@ -1291,12 +1304,12 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       </div>
                     ))
                   ) : (
-                    <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center text-[11px] text-[var(--text-muted)]">
+                    <div className="group p-4 text-center text-[11px] text-[var(--text-muted)]">
                       No usage in the last 7 days.
                     </div>
                   )}
                 </div>
-              </SectionCard>
+              </div>
             </div>
           )}
         </div>
@@ -1304,66 +1317,87 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
 
       {/* TAB 6: HEALTH */}
       {activeTab === 'health' && (
-        healthData ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px]">API Status</span>
-              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-                {healthData.api || 'operational'}
-              </strong>
-            </div>
-            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px]">Database</span>
-              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-                {healthData.database || 'connected'}
-              </strong>
-            </div>
-            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px]">Sandbox Daemon</span>
-              <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-                {healthData.sandbox || 'active'}
-              </strong>
-            </div>
-            <div className="p-4 rounded-[var(--radius-md)] glass-panel border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px]">System Latency</span>
-              <strong className="text-white text-base">{healthData.latency_ms || 12}ms</strong>
-            </div>
-          </div>
-        ) : (
-          <div className="clean-card p-10 text-center space-y-2">
-            <Activity className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
-            <p className="text-sm font-medium text-[var(--text-secondary)]">Health telemetry unavailable</p>
-            <p className="text-xs text-[var(--text-muted)]">System health data will appear here once the backend responds.</p>
+        <div className="panel space-y-4">
+          <div className="panel-head flex items-center justify-between">
+            <span className="panel-head__title">System health status</span>
             <button
               type="button"
               onClick={fetchHealth}
-              className="mx-auto mt-1 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
+              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+              title="Refresh health"
             >
-              Retry
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
-        )
+          <div className="panel-body">
+            {healthData ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="group p-4">
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">API Status</span>
+                  <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                    {healthData.api || 'operational'}
+                  </strong>
+                </div>
+                <div className="group p-4">
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Database</span>
+                  <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                    {healthData.database || 'connected'}
+                  </strong>
+                </div>
+                <div className="group p-4">
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Sandbox Daemon</span>
+                  <strong className="text-emerald-400 text-base inline-flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
+                    {healthData.sandbox || 'active'}
+                  </strong>
+                </div>
+                <div className="group p-4">
+                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">System Latency</span>
+                  <strong className="text-white text-base block mt-1">{healthData.latency_ms || 12}ms</strong>
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <span className="empty-state__icon"><Activity className="w-4 h-4" aria-hidden="true" /></span>
+                <p>Health telemetry unavailable. System health data will appear here once the backend responds.</p>
+                <button
+                  type="button"
+                  onClick={fetchHealth}
+                  className="mx-auto mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* TAB 7: SYSTEM CONTROL */}
       {activeTab === 'system_control' && (
-        <div className="clean-card p-5 space-y-4 text-xs">
-          <h3 className="text-sm font-bold text-white">Temporary Storage & Cache Control</h3>
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                localStorage.removeItem('helpotron_cached_cards');
-              } catch (e) {}
-              alert('Temporary cache cleared.');
-            }}
-            className="px-4 py-2 bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-[var(--radius-sm)] transition cursor-pointer"
-          >
-            Clear Local Runtime Cache
-          </button>
+        <div className="panel space-y-4 text-xs">
+          <div className="panel-head">
+            <span className="panel-head__title">Temporary storage &amp; cache control</span>
+          </div>
+          <div className="panel-body space-y-3">
+            <p className="text-[var(--text-muted)] leading-relaxed">
+              Flush local in-memory card caches and client session storage keys across all active browser windows.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  localStorage.removeItem('helpotron_cached_cards');
+                } catch (e) {}
+                alert('Temporary cache cleared.');
+              }}
+              className="px-4 py-2 bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-[var(--radius-sm)] font-semibold transition cursor-pointer"
+            >
+              Clear Local Runtime Cache
+            </button>
+          </div>
         </div>
       )}
 

@@ -71,13 +71,13 @@ function ProductPreview() {
     { subject: 'Calculus II', count: 3, tone: '#a78bfa' },
   ];
   return (
-    <div aria-hidden="true" className="clean-card p-4 sm:p-5 space-y-4 select-none">
+    <div aria-hidden="true" className="panel p-4 sm:p-5 space-y-4 select-none">
       {/* window chrome */}
       <div className="flex items-center gap-2 pb-3 border-b border-[var(--border-subtle)]">
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-hover)]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-subtle)]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-subtle)]" />
-        <span className="ml-2 text-[11px] font-mono text-[var(--text-muted)]">workspace</span>
+        <span className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
+        <span className="ml-2 text-[11px] font-mono text-[var(--text-muted)]">helpotron.workspace</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1.05fr_1fr]">
@@ -89,10 +89,10 @@ function ProductPreview() {
           {bubbles.map(({ subject, count, tone }) => (
             <div
               key={subject}
-              className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]"
+              className="group flex items-center gap-3 p-2.5"
             >
               <span
-                className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center"
+                className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] flex items-center justify-center"
                 style={{ background: 'color-mix(in srgb, ' + tone + ' 18%, transparent)' }}
               >
                 <Layers className="w-4 h-4" style={{ color: tone }} />
@@ -111,7 +111,7 @@ function ProductPreview() {
           <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
             Assignment agent
           </div>
-          <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
+          <div className="group p-3 space-y-2.5">
             <div className="flex items-start gap-2">
               <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[var(--text-muted)]" />
               <span className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
@@ -128,7 +128,7 @@ function ProductPreview() {
               <span className="text-[10px] font-mono text-[var(--text-muted)]">drafting…</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+          <div className="group flex items-center gap-2 p-2.5">
             <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
             <span className="text-[11px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
               Essay draft — turned in
@@ -175,15 +175,15 @@ function Pricing({ onOpenAuth }) {
         {plans.map((p) => (
           <div
             key={p.id}
-            className={`clean-card p-5 flex flex-col gap-4 relative ${
-              p.popular ? 'border-[var(--accent)]/50 glow-accent' : ''
+            className={`panel p-5 flex flex-col gap-4 relative ${
+              p.popular ? 'border-[rgba(139,92,246,0.4)] shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_12px_40px_rgba(139,92,246,0.18)]' : ''
             }`}
           >
             {p.popular && (
-              <span className="absolute -top-2.5 left-5 aurora-chip text-[10px] py-0.5">Most popular</span>
+              <span className="absolute -top-2.5 left-5 chip chip-accent text-[10px] py-0.5 shadow-md">Most popular</span>
             )}
             {p.requires_sms && (
-              <span className="absolute -top-2.5 right-5 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">
+              <span className="absolute -top-2.5 right-5 chip chip-emerald text-[10px] py-0.5 font-mono shadow-md">
                 1-Time · SMS
               </span>
             )}
@@ -203,7 +203,7 @@ function Pricing({ onOpenAuth }) {
             <button
               type="button"
               onClick={onOpenAuth}
-              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 mt-auto cursor-pointer`}
+              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-sm)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 mt-auto cursor-pointer`}
             >
               {p.is_trial ? 'Start Free Trial (SMS)' : p.price_cents === 0 ? 'Start Free' : `Choose ${p.name}`}
             </button>
@@ -211,8 +211,8 @@ function Pricing({ onOpenAuth }) {
         ))}
       </div>
 
-      <div className="mt-4 text-center text-xs text-slate-400 font-mono">
-        💡 Task tokens cover raw tool execution (LLMs, Audio Transcription, Multi-Agent passes). Credits are discount dollars ($1.00 off per credit).
+      <div className="mt-4 text-center text-xs text-[var(--text-muted)] font-mono">
+        💡 1 Task Token = $0.01 in usage (transcription, multi-agent passes, vision). Credits apply as $1.00 off at checkout.
       </div>
 
       <ul className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-w-[900px] mx-auto">
@@ -320,13 +320,11 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
         <div className="grid gap-4 md:grid-cols-3">
           {FEATURES.map(({ Icon, title, body }) => (
-            <div key={title} className="clean-card p-5 space-y-3">
-              {/* One icon. The old card rendered the same glyph twice — once in
-                  a decorative header box, once above the title. */}
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] border border-[var(--accent-subtle)]">
+            <div key={title} className="panel p-5 space-y-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)]">
                 <Icon className="w-5 h-5 text-[var(--accent)]" />
               </span>
-              <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
+              <h3 className="text-base font-semibold text-white">{title}</h3>
               <p className="text-sm text-[var(--text-muted)] leading-relaxed">{body}</p>
             </div>
           ))}
@@ -338,13 +336,13 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
 
       {/* ── How it works + closing CTA ──────────────────────────────────────── */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-20 sm:pb-24">
-        <div className="clean-card p-6 sm:p-10 text-center space-y-7">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Three steps to a self-driving coursework pipeline</h2>
+        <div className="panel p-6 sm:p-10 text-center space-y-7">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Three steps to a self-driving coursework pipeline</h2>
           <ol className="grid gap-3 sm:grid-cols-3 text-left">
             {STEPS.map(({ n, title, body }) => (
-              <li key={n} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-1.5">
+              <li key={n} className="group p-4 space-y-1.5">
                 <span className="inline-block text-xs font-mono font-bold text-[var(--accent)] bg-[var(--accent-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">{n}</span>
-                <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
+                <div className="text-sm font-semibold text-white">{title}</div>
                 <div className="text-xs text-[var(--text-muted)] leading-relaxed">{body}</div>
               </li>
             ))}
