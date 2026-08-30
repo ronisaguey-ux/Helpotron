@@ -281,10 +281,47 @@ def test_custom_bubbles_crud_and_data_export_purge():
     assert "generated_materials" in export_data
     assert "datalake_contributions" in export_data
 
-    # 3. Soft Reset
+    # 3. Soft Reset — must actually change state, not just report success.
+    # The previous assertion here only checked for the phrase "reset
+    # successfully" in the response, which passed while the endpoint was a
+    # no-op that touched nothing (audit 08-29).
+    from server.database import SessionLocal, UniversalDumpItem, User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "trio_test_user").one()
+        settings = dict(user.settings or {})
+        settings["academic_level"] = "__drifted__"
+        # Security-bearing keys a reset must never clear.
+        settings["2fa_enabled"] = True
+        settings["token_balance"] = 777
+        user.settings = settings
+        db.add(UniversalDumpItem(
+            user_id=user.id, file_name="staged.pdf", file_type="document",
+            status="pending_analysis",
+        ))
+        db.commit()
+        user_pk = user.id
+    finally:
+        db.close()
+
     soft_resp = client.post("/api/user/data/soft-reset")
     assert soft_resp.status_code == 200
-    assert "reset successfully" in soft_resp.json()["message"]
+    body = soft_resp.json()
+    assert body["settings_restored"] >= 1
+    assert body["dump_items_archived"] >= 1
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_pk).one()
+        assert user.settings["academic_level"] != "__drifted__"
+        # A reset must not drop 2FA or move a balance.
+        assert user.settings["2fa_enabled"] is True
+        assert user.settings["token_balance"] == 777
+        staged = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user_pk).all()
+        assert all(item.status == "archived" for item in staged) and len(staged) >= 1
+    finally:
+        db.close()
 
     # 4. Permanent Delete Request with invalid confirmation
     bad_purge = client.post(
@@ -471,6 +508,12 @@ def _authed_client(app):
         if user is None:
             user = User(public_id="trio_test_user", plan="basic", credits=50.0, settings={})
             db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif user.settings and user.settings.get("banned"):
+            s = dict(user.settings)
+            s.pop("banned", None)
+            user.settings = s
             db.commit()
             db.refresh(user)
         token = create_jwt_token(user_id=user.id, role="user")

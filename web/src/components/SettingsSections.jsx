@@ -4,7 +4,7 @@
  * Appearance and AI, which live in SettingsApp.jsx). Each section is a real
  * form bound to the OS settings store.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Trash2, KeyRound, ExternalLink, Camera } from 'lucide-react';
 import { Toggle, Slider, Badge, Progress } from './ui/os.jsx';
 import api from '../api.js';
@@ -866,9 +866,11 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
         </div>
         <div className="mt-2 text-[10px] text-slate-600 font-mono">{cr.toLocaleString()} discount credits</div>
       </div>
+      {/* "View invoices" removed (audit 08-29): it had no handler and no
+        * invoice backend — payments are manual allocations, and the payment
+        * history already lives one click away in Plans & Credits. */}
       <div className="flex gap-2">
         <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer">Open plans & top-ups</button>
-        <button type="button" className="px-4 py-2.5 rounded-xl bg-white/4 border border-white/8 text-[11px] text-slate-300 hover:text-white transition cursor-pointer">View invoices</button>
       </div>
       <div className="text-[10px] text-slate-600">Payments process through your chosen provider (cashapp / zelle / venmo) as manual allocations — see Plans & Credits for the full history.</div>
     </div>
@@ -876,31 +878,385 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
 }
 
 /* ── INTEGRATIONS ────────────────────────────────────────────────────────── */
-function IntegrationsSection({ s, set }) {
+/* Audit 08-29: this section used to render a hardcoded five-row array whose
+ * last column was `connected` — Canvas and Telegram were literally `true` for
+ * every account on the platform. Canvas has no backend at all; Telegram had
+ * endpoints, but TelegramNotifier.send_message returned "(simulated)" without
+ * making a network call, so "Test" reported success for a message nobody got.
+ * The other three rows offered a "Connect" button wired to nothing.
+ *
+ * Telegram is now a real integration end to end (features.py performs the
+ * actual Bot API call) and this is the guided setup for it. Everything else is
+ * listed as what it is: not built yet, with no button pretending otherwise. */
+
+const TG_BLUE = '#229ED9';
+
+/** Telegram's own glyph — the one place this section uses a non-system colour,
+ *  so the card is recognisable as Telegram before a word is read. */
+function TelegramMark({ className = 'w-5 h-5' }) {
   return (
-    <div className="space-y-4 max-w-lg">
-      {[
-        ['canvas', 'Canvas', '🔴', 'Sync assignments, rubrics and grades from your LMS.', true],
-        ['gdrive', 'Google Drive', '🟢', 'Import files directly from Drive.', false],
-        ['notion', 'Notion', '⚫', 'Push study notes to your Notion workspace.', false],
-        ['telegram', 'Telegram', '🔵', 'Get notifications and quick answers in Telegram.', true],
-        ['calendar', 'Calendar', '📅', 'Mirror deadlines into your calendar.', false],
-      ].map(([key, label, icon, desc, connected]) => (
-        <div key={key} className="flex items-center gap-4 p-4 rounded-xl bg-slate-950/40 border border-white/6">
-          <span className="text-lg">{icon}</span>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white">{label}</div>
-            <div className="text-[10px] text-slate-500 mt-0.5 truncate">{desc}</div>
-          </div>
-          {connected ? (
-            <Badge color="green">connected</Badge>
-          ) : (
-            <button type="button" className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-300 hover:bg-blue-600 hover:text-white transition cursor-pointer">
-              Connect
-            </button>
-          )}
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  );
+}
+
+/** One row of the setup rail. Numbering is used because these steps have a
+ *  real dependency order: no chat ID can exist before the bot does. */
+function SetupStep({ index, title, state, isLast = false, children }) {
+  const done = state === 'done';
+  const active = state === 'active';
+  return (
+    <li className={`relative pl-11 ${isLast ? '' : 'pb-6'} ${active || done ? '' : 'opacity-45'}`}>
+      {!isLast && (
+        <span className="absolute left-[13px] top-7 bottom-0 w-px bg-white/10" aria-hidden="true" />
+      )}
+      <span
+        className={`absolute left-0 top-0 grid place-items-center w-[27px] h-[27px] rounded-full border text-[11px] font-semibold transition ${
+          done
+            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+            : active
+              ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.45)] text-[var(--accent)]'
+              : 'bg-white/4 border-white/10 text-slate-500'
+        }`}
+      >
+        {done ? '✓' : index}
+      </span>
+      <h4 className="text-xs font-semibold text-white leading-[27px]">{title}</h4>
+      <div className="mt-2 space-y-2.5">{children}</div>
+    </li>
+  );
+}
+
+/** The exact exchange the user is about to have with @BotFather, drawn as the
+ *  chat it actually is, so the Telegram screen looks like this screen. */
+function BotFatherScript() {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText('/newbot');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="rounded-[var(--radius-md)] border border-white/8 bg-black/30 p-3 space-y-2">
+      <div className="flex justify-end">
+        <span className="inline-flex items-center gap-2 max-w-full rounded-2xl rounded-br-sm px-3 py-1.5 text-[11px] font-mono text-white" style={{ background: TG_BLUE }}>
+          /newbot
+          <button
+            type="button"
+            onClick={copy}
+            className="text-[10px] font-sans font-semibold underline underline-offset-2 opacity-90 hover:opacity-100 cursor-pointer"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </span>
+      </div>
+      <div className="flex justify-start">
+        <span className="inline-block max-w-[85%] rounded-2xl rounded-bl-sm bg-white/8 px-3 py-1.5 text-[11px] text-slate-300">
+          Alright, a new bot. How are we going to call it?
+        </span>
+      </div>
+      <div className="flex justify-end">
+        <span className="inline-block rounded-2xl rounded-br-sm px-3 py-1.5 text-[11px] text-white/95" style={{ background: TG_BLUE }}>
+          My Helpotron
+        </span>
+      </div>
+      <div className="flex justify-start">
+        <span className="inline-block max-w-[85%] rounded-2xl rounded-bl-sm bg-white/8 px-3 py-1.5 text-[11px] text-slate-300">
+          Done! Use this token to access the HTTP API:
+          <br />
+          <span className="font-mono text-[10px] text-slate-400">8123456789:AAH…</span>
+        </span>
+      </div>
+      <p className="text-[10px] text-slate-500 pt-0.5">
+        BotFather asks for a display name, then a username ending in <span className="font-mono">bot</span>. The token is the long line it sends last.
+      </p>
+    </div>
+  );
+}
+
+function TelegramIntegration() {
+  const [status, setStatus] = useState({ loading: true, connected: false, chat_id: null, bot_hint: null });
+  const [token, setToken] = useState('');
+  const [bot, setBot] = useState(null);          // { username, name } once verified
+  const [chats, setChats] = useState([]);        // candidates from getUpdates
+  const [chatId, setChatId] = useState('');
+  const [busy, setBusy] = useState('');          // which action is in flight
+  const [msg, setMsg] = useState(null);          // { ok, text }
+
+  const load = useCallback(() => {
+    api.get('/api/features/telegram/status')
+      .then((r) => setStatus({ loading: false, connected: !!r.connected, chat_id: r.chat_id, bot_hint: r.bot_hint }))
+      .catch(() => setStatus({ loading: false, connected: false, chat_id: null, bot_hint: null }));
+  }, []);
+
+  useEffect(load, [load]);
+
+  const run = async (key, fn) => {
+    setBusy(key);
+    setMsg(null);
+    try {
+      await fn();
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Something went wrong. Try again.' });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const verifyToken = () => run('verify', async () => {
+    const r = await api.post('/api/features/telegram/inspect', { bot_token: token.trim() });
+    setBot(r);
+    setChats([]);
+    setChatId('');
+  });
+
+  const findChat = () => run('find', async () => {
+    const r = await api.post('/api/features/telegram/find-chat', { bot_token: token.trim() });
+    setChats(r.chats || []);
+    if ((r.chats || []).length === 1) setChatId(r.chats[0].chat_id);
+  });
+
+  const connect = () => run('connect', async () => {
+    await api.post('/api/features/telegram/configure', { bot_token: token.trim(), chat_id: chatId });
+    setToken('');
+    setBot(null);
+    setChats([]);
+    setChatId('');
+    setMsg({ ok: true, text: 'Connected. Check Telegram for the confirmation message.' });
+    load();
+  });
+
+  const sendTest = () => run('test', async () => {
+    const r = await api.post('/api/features/telegram/test', {});
+    setMsg({ ok: true, text: r.message || 'Test message sent.' });
+  });
+
+  const disconnect = () => run('disconnect', async () => {
+    await api.post('/api/features/telegram/disconnect', {});
+    setMsg({ ok: true, text: 'Telegram disconnected.' });
+    load();
+  });
+
+  const btn = 'px-3.5 py-2 rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+  const primary = `${btn} bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white`;
+  const ghost = `${btn} bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10`;
+
+  const header = (
+    <div className="flex items-center gap-3">
+      <span className="grid place-items-center w-9 h-9 rounded-[var(--radius-md)] shrink-0" style={{ background: `${TG_BLUE}1f`, color: TG_BLUE }}>
+        <TelegramMark />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-semibold text-white">Telegram</div>
+        <div className="text-[10px] text-slate-500 mt-0.5">
+          {status.connected
+            ? `Sending to chat ${status.chat_id}${status.bot_hint ? ` · bot ${status.bot_hint}` : ''}`
+            : 'Get deadline reminders and agent updates in your own chat.'}
         </div>
-      ))}
+      </div>
+      {status.loading
+        ? <Badge color="slate">checking…</Badge>
+        : status.connected
+          ? <Badge color="green">connected</Badge>
+          : <Badge color="slate">not connected</Badge>}
+    </div>
+  );
+
+  return (
+    <div className="rounded-[var(--radius-lg)] bg-slate-950/40 border border-white/6 p-4 space-y-4">
+      {header}
+
+      {msg && (
+        <p className={`text-[11px] ${msg.ok ? 'text-emerald-300' : 'text-rose-300'}`} role="status">
+          {msg.text}
+        </p>
+      )}
+
+      {!status.loading && status.connected && (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={sendTest} disabled={!!busy} className={primary}>
+            {busy === 'test' ? 'Sending…' : 'Send a test message'}
+          </button>
+          <button type="button" onClick={disconnect} disabled={!!busy} className={ghost}>
+            {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
+      )}
+
+      {!status.loading && !status.connected && (
+        <>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Telegram bots belong to the person who creates them, so you make your
+            own in about two minutes. It stays yours — Helpotron only uses it to
+            message you.
+          </p>
+
+          <ol className="mt-1">
+            <SetupStep index={1} title="Create your bot with @BotFather" state={bot ? 'done' : 'active'}>
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold hover:underline"
+                style={{ color: TG_BLUE }}
+              >
+                Open @BotFather in Telegram <ExternalLink className="w-3 h-3" />
+              </a>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                BotFather is Telegram&apos;s official bot for making bots. In that
+                chat:
+              </p>
+              <ul className="text-[11px] text-slate-400 space-y-1 leading-relaxed">
+                <li className="flex gap-2">
+                  <span className="text-slate-600 shrink-0">a.</span>
+                  <span>Send <span className="font-mono text-slate-300">/newbot</span>.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-slate-600 shrink-0">b.</span>
+                  <span>Give it a display name — anything you like, such as <span className="text-slate-300">My Helpotron</span>.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-slate-600 shrink-0">c.</span>
+                  <span>
+                    Give it a username. It has to be unused and end in{' '}
+                    <span className="font-mono text-slate-300">bot</span> — if BotFather
+                    says it&apos;s taken, add a number and try again.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-slate-600 shrink-0">d.</span>
+                  <span>Copy the long token from BotFather&apos;s last message.</span>
+                </li>
+              </ul>
+              <BotFatherScript />
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Treat the token like a password — anyone who has it can post as
+                your bot. If it leaks, send <span className="font-mono">/revoke</span> to
+                BotFather for a new one.
+              </p>
+            </SetupStep>
+
+            <SetupStep index={2} title="Paste the token here" state={bot ? 'done' : 'active'}>
+              {bot ? (
+                <p className="text-[11px] text-emerald-300">
+                  Verified: @{bot.username}{bot.name ? ` (${bot.name})` : ''}
+                </p>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    id="settings-telegram-token"
+                    type="password"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    placeholder="8123456789:AAH…"
+                    autoComplete="off"
+                    spellCheck="false"
+                    aria-label="Telegram bot token"
+                    className={inputCls + ' font-mono flex-1'}
+                  />
+                  <button type="button" onClick={verifyToken} disabled={!token.trim() || !!busy} className={primary}>
+                    {busy === 'verify' ? 'Checking…' : 'Verify'}
+                  </button>
+                </div>
+              )}
+            </SetupStep>
+
+            <SetupStep index={3} title="Say hi to your bot, then find the chat" state={!bot ? 'idle' : chats.length ? 'done' : 'active'}>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Telegram only shares a chat ID after you message the bot first.
+                {bot && (
+                  <>
+                    {' '}Open{' '}
+                    <a
+                      href={`https://t.me/${bot.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold hover:underline"
+                      style={{ color: TG_BLUE }}
+                    >
+                      @{bot.username}
+                    </a>
+                    , send it anything, then come back.
+                  </>
+                )}
+              </p>
+              <button type="button" onClick={findChat} disabled={!bot || !!busy} className={ghost}>
+                {busy === 'find' ? 'Looking…' : 'Find my chat'}
+              </button>
+              {chats.length > 1 && (
+                <div className="space-y-1.5 pt-1">
+                  {chats.map((c) => (
+                    <label key={c.chat_id} className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tg-chat"
+                        value={c.chat_id}
+                        checked={chatId === c.chat_id}
+                        onChange={() => setChatId(c.chat_id)}
+                        className="accent-[var(--accent)] cursor-pointer"
+                      />
+                      {c.label} <span className="font-mono text-slate-500">{c.chat_id}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {chats.length === 1 && (
+                <p className="text-[11px] text-emerald-300">
+                  Found {chats[0].label} <span className="font-mono text-slate-500">{chats[0].chat_id}</span>
+                </p>
+              )}
+            </SetupStep>
+
+            <SetupStep index={4} title="Connect" state={chatId ? 'active' : 'idle'} isLast>
+              <p className="text-[11px] text-slate-400">
+                Helpotron sends a confirmation message to prove it works before saving anything.
+              </p>
+              <button type="button" onClick={connect} disabled={!chatId || !!busy} className={primary}>
+                {busy === 'connect' ? 'Connecting…' : 'Connect Telegram'}
+              </button>
+            </SetupStep>
+          </ol>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* Everything here has a UI concept but no working backend. Listing them
+ * without a button is the honest version — a "Connect" control that does
+ * nothing costs more trust than an empty roadmap. */
+const PLANNED_INTEGRATIONS = [
+  ['canvas', 'Canvas', 'Pull assignments, rubrics and grades straight from your LMS.'],
+  ['gdrive', 'Google Drive', 'Import coursework files without downloading them first.'],
+  ['notion', 'Notion', 'Push generated study notes into your workspace.'],
+];
+
+function IntegrationsSection() {
+  return (
+    <div className="space-y-6 max-w-lg">
+      <TelegramIntegration />
+
+      <div>
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+          Not built yet
+        </h3>
+        <div className="space-y-2">
+          {PLANNED_INTEGRATIONS.map(([key, label, desc]) => (
+            <div key={key} className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] bg-white/2 border border-white/5">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-400">{label}</div>
+                <div className="text-[10px] text-slate-600 mt-0.5">{desc}</div>
+              </div>
+              <span className="text-[10px] text-slate-600 shrink-0">Planned</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1025,6 +1381,26 @@ function LanguageSection({ s, set }) {
 /* ── ADVANCED ────────────────────────────────────────────────────────────── */
 function AdvancedSection({ s, set, onGoTo }) {
   const [showJson, setShowJson] = useState(false);
+  // Reset is confirm-then-act and reports the server's real counts. It was a
+  // button with no handler until the audit (08-29).
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetMsg, setResetMsg] = useState(null); // { ok, text }
+
+  const doReset = async () => {
+    setResetBusy(true);
+    setResetMsg(null);
+    try {
+      const res = await api.softResetData();
+      setResetMsg({ ok: true, text: res?.message || 'Settings restored to defaults.' });
+      setConfirmReset(false);
+    } catch (err) {
+      setResetMsg({ ok: false, text: err?.message || 'Reset failed. Try again.' });
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-lg">
       <div className="space-y-3">
@@ -1043,9 +1419,48 @@ function AdvancedSection({ s, set, onGoTo }) {
           {JSON.stringify(s, null, 2)}
         </pre>
       )}
-      <button type="button" className="px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-300 hover:bg-rose-500/20 transition cursor-pointer">
-        Reset all settings to defaults
-      </button>
+      <div className="space-y-2">
+        {!confirmReset ? (
+          <button
+            type="button"
+            onClick={() => { setConfirmReset(true); setResetMsg(null); }}
+            className="px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-300 hover:bg-rose-500/20 transition cursor-pointer"
+          >
+            Reset all settings to defaults
+          </button>
+        ) : (
+          <div className="p-3.5 rounded-xl bg-rose-500/8 border border-rose-500/25 space-y-2.5">
+            <p className="text-[11px] text-rose-200 leading-relaxed">
+              This restores every preference to its default and archives your
+              unfinished staged files and drafts. Your assignments, credits and
+              sign-in stay as they are, and archived items can be restored.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={doReset}
+                disabled={resetBusy}
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-rose-500/20 border border-rose-500/40 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {resetBusy ? 'Resetting…' : 'Reset settings'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmReset(false)}
+                disabled={resetBusy}
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-white/5 border border-white/10 text-[11px] text-slate-300 hover:text-white transition cursor-pointer disabled:opacity-40"
+              >
+                Keep my settings
+              </button>
+            </div>
+          </div>
+        )}
+        {resetMsg && (
+          <p className={`text-[11px] ${resetMsg.ok ? 'text-emerald-300' : 'text-rose-300'}`} role="status">
+            {resetMsg.text}
+          </p>
+        )}
+      </div>
       <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/40 border border-white/6">
         <div>
           <div className="text-xs text-slate-200 font-medium">Data Lake</div>
@@ -1074,7 +1489,7 @@ export function SettingsSections({ section, s, set, scoped, setVariants, subject
     case 'notifications': return <NotificationsSection s={s} set={set} {...scopeProps} />;
     case 'privacy': return <PrivacySection s={s} set={set} {...scopeProps} onGoTo={onGoTo} />;
     case 'billing': return <BillingSection onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} />;
-    case 'integrations': return <IntegrationsSection s={s} set={set} />;
+    case 'integrations': return <IntegrationsSection />;
     case 'extension': return <ExtensionSection s={s} set={set} />;
     case 'shortcuts': return <ShortcutsSection s={s} set={set} />;
     case 'data': return <DataSection s={s} set={set} {...scopeProps} />;

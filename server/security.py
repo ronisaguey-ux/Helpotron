@@ -379,7 +379,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = self.PERMISSIONS_POLICY
-        if request.url.path not in self.CSP_EXEMPT_PATHS:
+        if request.url.path not in self.CSP_EXEMPT_PATHS and "Content-Security-Policy" not in response.headers:
             response.headers["Content-Security-Policy"] = self.CSP
         if request.url.is_secure:
             response.headers["Strict-Transport-Security"] = self.HSTS_VALUE

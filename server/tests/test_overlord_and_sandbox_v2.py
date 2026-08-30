@@ -119,8 +119,15 @@ def test_api_overlord_nlp_settings_update():
     assert data2["mode"] == "yolo"
 
 
-def test_api_sandbox_execution_and_listing():
-    """Test the /api/agent/sandbox/execute and /api/agent/sandbox/active endpoints."""
+def test_api_sandbox_execute_is_admin_only():
+    """Regression test for audit 08-29 C1.
+
+    ``/api/agent/sandbox/execute`` runs caller-supplied ``script_code``. Signup
+    is open, so before the fix any account could reach arbitrary execution.
+    A non-admin must now be refused. Sandbox execution itself is still covered
+    end-to-end by test_sandbox_python_script_execution() via the manager API,
+    which is the path the agent pipeline actually uses.
+    """
     res = client.post(
         "/api/agent/sandbox/execute",
         headers=_auth_headers("test_overlord_user"),
@@ -130,12 +137,14 @@ def test_api_sandbox_execution_and_listing():
             "subagent_name": "api_test_worker",
         },
     )
-    assert res.status_code == 200
-    data = res.json()
-    assert data["status"] == "success"
-    assert "Sandbox Python test success" in data["sandbox_result"]["stdout"]
+    assert res.status_code == 403, (
+        f"non-admin reached the sandbox executor (got {res.status_code}) — "
+        "the C1 admin gate has regressed"
+    )
 
-    # Active sandboxes endpoint
+
+def test_api_sandbox_active_listing():
+    """The read-only active-sandbox listing stays available to signed-in users."""
     res_active = client.get(
         "/api/agent/sandbox/active",
         headers=_auth_headers("test_overlord_user"),

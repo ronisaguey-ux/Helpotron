@@ -205,15 +205,19 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   };
 
   // Soft Reset (Restorable)
+  // Reports what the server actually did — the old copy claimed the workspace
+  // had been cleared while the endpoint was a no-op that changed nothing.
   const handleSoftReset = async () => {
     try {
-      await api.softResetData();
+      const res = await api.softResetData();
       setShowSoftResetModal(false);
-      setExportNotice('✅ Local cached workspace and staging cleared. Account data safely archived on server.');
+      setExportNotice(`✅ ${res?.message || 'Reset complete.'}`);
       fetchDashboardData();
-      setTimeout(() => setExportNotice(''), 4000);
+      setTimeout(() => setExportNotice(''), 6000);
     } catch (e) {
-      alert('Reset failed.');
+      setShowSoftResetModal(false);
+      setExportNotice(`❌ ${e?.message || 'Reset failed.'}`);
+      setTimeout(() => setExportNotice(''), 6000);
     }
   };
 

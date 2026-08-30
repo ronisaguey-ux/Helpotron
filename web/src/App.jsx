@@ -6,40 +6,58 @@
  * ADMIN (Control Center). Legacy views map onto merged destinations
  * (see LEGACY_VIEWS). All existing capabilities preserved.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { WifiOff } from 'lucide-react';
 import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } from './api.js';
-import AssignmentCardDashboard from './components/AssignmentCardDashboard.jsx';
-import AssignmentTurnInView from './components/AssignmentTurnInView.jsx';
-import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
-import AuthModal from './components/AuthModal.jsx';
-import AssignmentDetailView from './components/AssignmentDetailView.jsx';
-import AssignmentHistoryView from './components/AssignmentHistoryView.jsx';
-import MessageAdminView from './components/MessageAdminView.jsx';
-import PrivacyPolicyView from './components/PrivacyPolicyView.jsx';
-import TermsOfServiceView from './components/TermsOfServiceView.jsx';
-import DataLakeView from './components/DataLakeView.jsx';
-import MonitorsView from './components/MonitorsView.jsx';
-import AssignmentDumpView from './components/AssignmentDumpView.jsx';
-import ExtensionInstallView from './components/ExtensionInstallView.jsx';
 
-/* OS chrome + new views */
-import AppShell from './components/AppShell.jsx';
+/* ── EAGER: the signed-out critical path only ────────────────────────────────
+ * Perf audit 08-29: App.jsx used to statically import all 30 views, so an
+ * anonymous visitor downloaded and parsed the entire authenticated product
+ * — admin control center included — to render a marketing page. That was
+ * 667 KB of app JS before a single pixel. Only what a logged-out visitor can
+ * actually see stays eager; everything behind the auth gate is lazy() below
+ * and lands in its own chunk, fetched the moment the session resolves. */
 import AnonymousLanding from './components/AnonymousLanding.jsx';
-import CookieBanner from './components/CookieBanner.jsx';
-import AdminNoticePopup from './components/ui/AdminNoticePopup.jsx';
+import AuthModal from './components/AuthModal.jsx';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
-import CommandPalette from './components/CommandPalette.jsx';
-import ActivityView from './components/ActivityView.jsx';
-import AutomationCenter from './components/AutomationCenter.jsx';
-import LibraryView from './components/LibraryView.jsx';
-import AIWorkspace from './components/AIWorkspace.jsx';
-import SettingsApp from './components/SettingsApp.jsx';
-import AdminPanels from './components/AdminPanels.jsx';
-import InsightsView from './components/InsightsView.jsx';
-import CreditsView from './components/CreditsView.jsx';
-import MyAgentView from './components/MyAgentView.jsx';
+
+/* ── LAZY: everything behind the auth gate ───────────────────────────────── */
+const AppShell = lazy(() => import('./components/AppShell.jsx'));
+const CookieBanner = lazy(() => import('./components/CookieBanner.jsx'));
+const AdminNoticePopup = lazy(() => import('./components/ui/AdminNoticePopup.jsx'));
+const CommandPalette = lazy(() => import('./components/CommandPalette.jsx'));
+
+const AssignmentCardDashboard = lazy(() => import('./components/AssignmentCardDashboard.jsx'));
+const AssignmentTurnInView = lazy(() => import('./components/AssignmentTurnInView.jsx'));
+const AssignmentDetailView = lazy(() => import('./components/AssignmentDetailView.jsx'));
+const AssignmentHistoryView = lazy(() => import('./components/AssignmentHistoryView.jsx'));
+const AssignmentDumpView = lazy(() => import('./components/AssignmentDumpView.jsx'));
+const MessageAdminView = lazy(() => import('./components/MessageAdminView.jsx'));
+const PrivacyPolicyView = lazy(() => import('./components/PrivacyPolicyView.jsx'));
+const TermsOfServiceView = lazy(() => import('./components/TermsOfServiceView.jsx'));
+const DataLakeView = lazy(() => import('./components/DataLakeView.jsx'));
+const MonitorsView = lazy(() => import('./components/MonitorsView.jsx'));
+const ExtensionInstallView = lazy(() => import('./components/ExtensionInstallView.jsx'));
+const ActivityView = lazy(() => import('./components/ActivityView.jsx'));
+const AutomationCenter = lazy(() => import('./components/AutomationCenter.jsx'));
+const LibraryView = lazy(() => import('./components/LibraryView.jsx'));
+const AIWorkspace = lazy(() => import('./components/AIWorkspace.jsx'));
+const SettingsApp = lazy(() => import('./components/SettingsApp.jsx'));
+const AdminPanels = lazy(() => import('./components/AdminPanels.jsx'));
+const InsightsView = lazy(() => import('./components/InsightsView.jsx'));
+const CreditsView = lazy(() => import('./components/CreditsView.jsx'));
+const MyAgentView = lazy(() => import('./components/MyAgentView.jsx'));
+
+/* Shown while a lazy view chunk is in flight. Deliberately quiet — a spinner
+ * that flashes for 80ms reads as jank, a dimmed placeholder does not. */
+function ViewSuspenseFallback() {
+  return (
+    <div className="py-20 text-center text-xs text-[var(--text-muted)] animate-pulse">
+      Loading…
+    </div>
+  );
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -277,11 +295,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Auth modal: auto-open on first visit (signed-out) but stay DISMISSABLE —
-   * Escape, the ✕ or a backdrop click reveals the landing instead of
-   * trapping anonymous visitors behind an unclosable overlay. */
+  /* Auth modal: never auto-opens (conversion audit 08-29).
+   * It used to fire on EVERY signed-out load, so a first-time visitor met a
+   * password form before a single line of value prop — the highest-bounce
+   * pattern there is. The landing page now gets to do its job; the modal is
+   * opened only by an explicit CTA click, or by an intent-carrying URL
+   * (?signup=1 / ?signin=1 / #signup) so marketing links still deep-link
+   * straight into the form. */
   useEffect(() => {
-    if (authStatus === 'signedOut') setAuthModalOpen(true);
+    if (authStatus !== 'signedOut') return;
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.toLowerCase();
+    const wantsAuth = params.has('signup') || params.has('signin')
+      || hash === '#signup' || hash === '#signin';
+    if (wantsAuth) setAuthModalOpen(true);
   }, [authStatus]);
 
   /* Live token balance polling (08-27): /api/me every 25s while logged in —
@@ -426,7 +453,7 @@ export default function App() {
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-white focus:font-semibold focus:rounded-[var(--radius-sm)] focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[10000] focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-white focus:font-semibold focus:rounded-[var(--radius-sm)] focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
         >
           Skip to main content
         </a>
@@ -469,7 +496,7 @@ export default function App() {
         )}
 
         {authStatus === 'authed' && (
-          <>
+          <Suspense fallback={<SessionBootScreen />}>
         {/* Admin → user direct notices: poll + pop on screen (operator 08-28) */}
         <AdminNoticePopup isLoggedIn={isLoggedIn} />
 
@@ -551,14 +578,15 @@ export default function App() {
           {/* Main column + Study Buddy dock */}
           <div className="flex gap-6 items-start min-w-0">
             <div className="flex-1 min-w-0 w-full">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={viewKey}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                >
+              {/* View transition (08-29): was AnimatePresence + motion.div.
+                  That single decorative fade was the only reason `motion`
+                  (140 KB) sat in the entry chunk. The keyed div below gets
+                  the identical 180ms ease-out enter from CSS — remounting on
+                  viewKey replays the animation — for zero JS. `exit` is not
+                  reproducible without the library and was never perceptible
+                  at 180ms with mode="wait". */}
+              <div key={viewKey} className="view-enter">
+                <Suspense fallback={<ViewSuspenseFallback />}>
                   {/* HOME */}
                   {activeView === 'overview' && (
                     openAssignment ? (
@@ -638,15 +666,17 @@ export default function App() {
                       <div className="text-xs text-[var(--text-muted)]">The Control Center requires administrative privileges. If you need help, use the ❓ chat.</div>
                     </div>
                   )}
-                </motion.div>
-              </AnimatePresence>
+                </Suspense>
+              </div>
             </div>
 
           </div>
         </AppShell>
-          </>
+          </Suspense>
         )}
-        {isLoggedIn && termsAccepted && <CookieBanner />}
+        {isLoggedIn && termsAccepted && (
+          <Suspense fallback={null}><CookieBanner /></Suspense>
+        )}
       </div>
     </ErrorBoundary>
   );

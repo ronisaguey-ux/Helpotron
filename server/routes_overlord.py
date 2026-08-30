@@ -1886,8 +1886,17 @@ async def execute_sandbox_script_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Executes a sub-agent script inside an isolated virtual sandbox with resource limits."""
-    user = _get_current_user(request, db)
+    """Executes a sub-agent script inside an isolated virtual sandbox with resource limits.
+
+    Admin-only (audit 08-29). This route takes attacker-supplied ``script_code``
+    and runs it; before the gate any signed-up account could reach it, and
+    signup is open. The agent pipeline does not depend on this route — both
+    internal callers (overlord_agent.py) invoke ``execute_subagent_task``
+    directly — so restricting it removes the surface without changing product
+    behaviour.
+    """
+    from .admin import require_admin
+    user = require_admin(request, db)
     from .engine.sandbox import sandbox_manager
     res = await sandbox_manager.execute_subagent_task(
         subagent_name=payload.subagent_name,

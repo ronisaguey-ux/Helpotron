@@ -1,6 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -33,7 +30,15 @@
   body {
     background-color: var(--bg-base);
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    /* Native UI stack: renders on first paint with no network request. The
+       previous stack listed "Inter" third, after -apple-system, so the webfont
+       downloaded from Google on every load and then never rendered on Apple
+       devices. Dropping it removed three render-blocking third-party requests
+       (and a third-party dependency in the CSP) for no visual change on macOS
+       or iOS. To ship true Inter, self-host @fontsource-variable/inter and put
+       it first here — never re-add the cross-origin <link>. */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, "Helvetica Neue", Arial, sans-serif;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -762,6 +767,18 @@ html:not([data-bg]) .app-canvas {
   to   { opacity: 1; }
 }
 .animate-fadeIn { animation: fadeIn 0.3s ease-out both; }
+
+/* view-enter — main-column view transition (08-29).
+   Replaces the AnimatePresence + motion.div wrapper in App.jsx: that one
+   decorative fade was the only import pinning `motion` (140 KB) into the
+   entry chunk. React remounts on key change, which replays this animation.
+   Matches the old timing exactly (180ms, ease-out, 10px rise). The global
+   prefers-reduced-motion rule above already neutralizes it. */
+@keyframes view-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.view-enter { animation: view-enter 0.18s ease-out both; }
 
 /* Gradient text — headings/logo wordmarks only */
 .text-aurora {

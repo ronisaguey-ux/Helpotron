@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import httpx
 from sqlalchemy.orm import Session
 
 from .database import User, Assignment, StudyMaterial
@@ -151,18 +152,136 @@ class CalendarSync:
 # ─── 5. TELEGRAM NOTIFICATIONS ──────────────────────────────────────────
 
 class TelegramNotifier:
-    """Send notifications via user's own Telegram bot."""
+    """Send notifications through the user's own Telegram bot.
+
+    Audit 08-29: this used to return "Notification sent to Telegram
+    (simulated)" without ever making a network call — the settings page showed
+    a success toast for a message that was never delivered. It now performs the
+    real Bot API ``sendMessage`` call, using the same transport as
+    ``recovery.notify_developer_via_telegram`` and ``telegram_bot.py``, and
+    reports the actual outcome including Telegram's own error description.
+    """
+
+    API_TIMEOUT_SECONDS = 15
+
     @staticmethod
-    def send_message(user: User, message: str) -> str:
-        bot_token = user.settings.get("telegram_bot_token") if user.settings else None
-        chat_id = user.settings.get("telegram_chat_id") if user.settings else None
+    def credentials(user: User) -> tuple[Optional[str], Optional[str]]:
+        settings = user.settings or {}
+        token = (settings.get("telegram_bot_token") or "").strip() or None
+        chat_id = (settings.get("telegram_chat_id") or "").strip() or None
+        return token, chat_id
+
+    @staticmethod
+    def is_configured(user: User) -> bool:
+        token, chat_id = TelegramNotifier.credentials(user)
+        return bool(token and chat_id)
+
+    @staticmethod
+    async def describe_bot(bot_token: str) -> Dict[str, Any]:
+        """Resolve a BotFather token to the bot it belongs to.
+
+        Lets the settings page confirm "this is @your_bot" the moment a token
+        is pasted, instead of waiting for a delivery failure to reveal a typo.
+        """
+        token = (bot_token or "").strip()
+        if not token:
+            return {"ok": False, "detail": "Paste the token BotFather gave you."}
+        try:
+            async with httpx.AsyncClient(timeout=TelegramNotifier.API_TIMEOUT_SECONDS) as client:
+                resp = await client.get(f"https://api.telegram.org/bot{token}/getMe")
+        except httpx.HTTPError as exc:
+            return {"ok": False, "detail": f"Could not reach Telegram ({type(exc).__name__})."}
+
+        if resp.status_code != 200:
+            return {"ok": False, "detail": "Telegram does not recognise that token. Copy it again from BotFather."}
+        result = (resp.json() or {}).get("result") or {}
+        return {
+            "ok": True,
+            "username": result.get("username"),
+            "name": result.get("first_name"),
+        }
+
+    @staticmethod
+    async def resolve_chats(bot_token: str) -> Dict[str, Any]:
+        """Find the chats that have already messaged this bot.
+
+        Telegram only exposes a chat ID once the human has spoken to the bot
+        first, so asking a student to hunt down their own numeric ID is the
+        step that makes most self-hosted bot setups fail. Instead the user
+        sends any message to their new bot and we read it back from
+        ``getUpdates``.
+        """
+        token = (bot_token or "").strip()
+        if not token:
+            return {"ok": False, "detail": "Paste the token BotFather gave you.", "chats": []}
+        try:
+            async with httpx.AsyncClient(timeout=TelegramNotifier.API_TIMEOUT_SECONDS) as client:
+                resp = await client.get(
+                    f"https://api.telegram.org/bot{token}/getUpdates",
+                    params={"limit": 20, "allowed_updates": '["message"]'},
+                )
+        except httpx.HTTPError as exc:
+            return {"ok": False, "detail": f"Could not reach Telegram ({type(exc).__name__}).", "chats": []}
+
+        if resp.status_code != 200:
+            return {"ok": False, "detail": "Telegram does not recognise that token.", "chats": []}
+
+        seen: Dict[str, Dict[str, Any]] = {}
+        for update in (resp.json() or {}).get("result") or []:
+            chat = ((update.get("message") or {}).get("chat")) or {}
+            chat_id = chat.get("id")
+            if chat_id is None:
+                continue
+            label = chat.get("username") or " ".join(
+                part for part in (chat.get("first_name"), chat.get("last_name")) if part
+            ) or chat.get("title")
+            # Later updates win, so the freshest label for a chat is kept.
+            seen[str(chat_id)] = {"chat_id": str(chat_id), "label": label or str(chat_id)}
+
+        chats = list(seen.values())
+        if not chats:
+            return {
+                "ok": False,
+                "detail": "No messages yet. Open your bot in Telegram, send it any message, then try again.",
+                "chats": [],
+            }
+        return {"ok": True, "chats": chats}
+
+    @staticmethod
+    async def send_message(user: User, message: str) -> Dict[str, Any]:
+        """Deliver ``message`` to the user's chat. Never raises."""
+        bot_token, chat_id = TelegramNotifier.credentials(user)
         if not bot_token or not chat_id:
-            return "Telegram bot not configured. Use /settings to set token and chat ID."
-        # Placeholder — real implementation would call Telegram API
-        # import requests
-        # url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        # requests.post(url, json={"chat_id": chat_id, "text": message})
-        return f"📱 Notification sent to Telegram (simulated): {message[:50]}..."
+            return {
+                "sent": False,
+                "detail": "Telegram is not connected. Add your bot token and chat ID first.",
+            }
+
+        try:
+            async with httpx.AsyncClient(timeout=TelegramNotifier.API_TIMEOUT_SECONDS) as client:
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": chat_id, "text": message},
+                )
+        except httpx.HTTPError as exc:
+            # Network/timeout — the token is never included in the message.
+            return {
+                "sent": False,
+                "detail": f"Could not reach Telegram ({type(exc).__name__}). Check your connection and try again.",
+            }
+
+        if resp.status_code == 200:
+            return {"sent": True, "detail": "Message delivered to your Telegram chat."}
+
+        # Telegram returns a human-readable reason; surface it so the user can act.
+        try:
+            reason = (resp.json() or {}).get("description") or ""
+        except ValueError:
+            reason = ""
+        return {
+            "sent": False,
+            "detail": reason or f"Telegram rejected the message (HTTP {resp.status_code}).",
+        }
 
 
 # ─── 6. AI RECOMMENDATIONS ───────────────────────────────────────────────
