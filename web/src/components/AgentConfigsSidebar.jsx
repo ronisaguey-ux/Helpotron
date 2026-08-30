@@ -25,18 +25,21 @@ export default function AgentConfigsSidebar({
   activeIdentityId = null,
   onSelectIdentity = () => {},
   onAddIdentity = () => {},
+  onUpdateIdentity = () => {},
   onDeleteIdentity = () => {},
   onSaveAgentName = () => {},
   skills = [],
   activeSkillIds = [],
   onToggleSkill = () => {},
   onAddSkill = () => {},
+  onUpdateSkill = () => {},
   onDeleteSkill = () => {},
   onSelectSkill = () => {},
   memory = [],
   memoryText = '',
   setMemoryText = () => {},
   addMemory = () => {},
+  onUpdateMemory = () => {},
   deleteMemory = () => {},
   useMemory = () => {},
   files = [],
@@ -55,6 +58,12 @@ export default function AgentConfigsSidebar({
   const [agentNameInput, setAgentNameInput] = useState(ai.aiName || 'Atlas');
   const [nameSavedFeedback, setNameSavedFeedback] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
+
+  // Editing state for existing items
+  const [editingIdentity, setEditingIdentity] = useState(null); // { id, name, icon, persona, instructions }
+  const [editingSkill, setEditingSkill] = useState(null); // { id, name, icon, category, description, promptTemplate }
+  const [editingMemoryId, setEditingMemoryId] = useState(null);
+  const [editingMemoryText, setEditingMemoryText] = useState('');
 
   const toggleExpand = (id) => {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -94,6 +103,19 @@ export default function AgentConfigsSidebar({
     setShowNewIdentityModal(false);
   };
 
+  const handleSaveEditIdentity = (e) => {
+    e?.preventDefault();
+    if (!editingIdentity?.id || !editingIdentity.name.trim()) return;
+    onUpdateIdentity({
+      ...editingIdentity,
+      name: editingIdentity.name.trim(),
+      icon: editingIdentity.icon || '🧠',
+      persona: editingIdentity.persona.trim(),
+      instructions: editingIdentity.instructions.trim(),
+    });
+    setEditingIdentity(null);
+  };
+
   const handleCreateSkill = (e) => {
     e?.preventDefault();
     if (!newSkillName.trim()) return;
@@ -111,6 +133,19 @@ export default function AgentConfigsSidebar({
     setNewSkillDesc('');
     setNewSkillTemplate('');
     setShowNewSkillModal(false);
+  };
+
+  const handleSaveEditSkill = (e) => {
+    e?.preventDefault();
+    if (!editingSkill?.id || !editingSkill.name.trim()) return;
+    onUpdateSkill({
+      ...editingSkill,
+      name: editingSkill.name.trim(),
+      icon: editingSkill.icon || '⚡',
+      description: editingSkill.description.trim(),
+      promptTemplate: editingSkill.promptTemplate.trim(),
+    });
+    setEditingSkill(null);
   };
 
   const allIdentities = identities || [];
@@ -287,6 +322,15 @@ export default function AgentConfigsSidebar({
                         </button>
                         <button
                           type="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingIdentity({ ...item }); }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                          title="Edit identity"
+                          aria-label={`Edit ${item.name}`}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteIdentity(item.id); }}
                           className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
                           title="Delete identity"
@@ -314,6 +358,15 @@ export default function AgentConfigsSidebar({
                             </div>
                           </div>
                         )}
+                        <div className="pt-1 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingIdentity({ ...item })}
+                            className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                          >
+                            <Edit3 className="w-3 h-3" /> Edit Identity
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -329,7 +382,7 @@ export default function AgentConfigsSidebar({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-white">Skills & Capabilities</h3>
-                <p className="text-[11px] text-[var(--text-muted)]">Select, apply to prompt, or expand to view blueprint.</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Select, apply to prompt, or expand to edit blueprint.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -411,6 +464,15 @@ export default function AgentConfigsSidebar({
                         </button>
                         <button
                           type="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingSkill({ ...sk }); }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                          title="Edit skill"
+                          aria-label={`Edit ${sk.name}`}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteSkill(sk.id); }}
                           className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
                           title="Delete skill"
@@ -438,6 +500,15 @@ export default function AgentConfigsSidebar({
                             </div>
                           </div>
                         )}
+                        <div className="pt-1 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingSkill({ ...sk })}
+                            className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                          >
+                            <Edit3 className="w-3 h-3" /> Edit Blueprint
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -483,56 +554,112 @@ export default function AgentConfigsSidebar({
               )}
 
               {memory.map((m) => {
+                const isEditing = editingMemoryId === m.id;
                 const isExpanded = !!expandedIds[m.id];
                 return (
                   <div
                     key={m.id}
                     className="rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-white/20 transition overflow-hidden"
                   >
-                    {/* Compact Header Row */}
-                    <div className="p-3 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleExpand(m.id)}
-                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
-                      >
-                        <span className="text-[var(--text-muted)] hover:text-white transition">
-                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        </span>
-                        <span className="text-base">🧠</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs text-slate-200 truncate">{m.text}</p>
-                          <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(m.created_at)}</span>
+                    {isEditing ? (
+                      <div className="p-3 space-y-2.5 bg-black/30">
+                        <textarea
+                          rows={2}
+                          value={editingMemoryText}
+                          onChange={(e) => setEditingMemoryText(e.target.value)}
+                          placeholder="Edit memory content..."
+                          className="clean-input w-full p-2.5 text-xs outline-none rounded-[var(--radius-sm)] resize-none text-white leading-relaxed"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingMemoryId(null)}
+                            className="px-3 py-1 text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdateMemory(m.id, editingMemoryText);
+                              setEditingMemoryId(null);
+                            }}
+                            disabled={!editingMemoryText.trim()}
+                            className="px-3.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer disabled:opacity-40"
+                          >
+                            Save Memory
+                          </button>
                         </div>
-                      </button>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => useMemory(m)}
-                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 text-[10px] font-semibold border border-white/10 transition cursor-pointer flex items-center gap-1"
-                          title="Load memory into prompt box"
-                        >
-                          <Send className="w-3 h-3" /> Select
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
-                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 rounded transition cursor-pointer border border-transparent hover:border-rose-500/20"
-                          title="Delete memory"
-                          aria-label="Delete memory"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                        </button>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Compact Header Row */}
+                        <div className="p-3 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(m.id)}
+                            className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                          >
+                            <span className="text-[var(--text-muted)] hover:text-white transition">
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="text-base">🧠</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-slate-200 truncate">{m.text}</p>
+                              <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(m.created_at)}</span>
+                            </div>
+                          </button>
 
-                    {/* Expanded view */}
-                    {isExpanded && (
-                      <div className="px-3.5 pb-3.5 pt-1 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
-                        <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Full Memory</span>
-                        <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{m.text}</p>
-                      </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => useMemory(m)}
+                              className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 text-[10px] font-semibold border border-white/10 transition cursor-pointer flex items-center gap-1"
+                              title="Load memory into prompt box"
+                            >
+                              <Send className="w-3 h-3" /> Select
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingMemoryId(m.id); setEditingMemoryText(m.text); }}
+                              className="p-1.5 text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 rounded transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                              title="Edit memory"
+                              aria-label="Edit memory"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
+                              className="p-1.5 text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 rounded transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                              title="Delete memory"
+                              aria-label="Delete memory"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded view */}
+                        {isExpanded && (
+                          <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                            <div>
+                              <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Full Memory</span>
+                              <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{m.text}</p>
+                            </div>
+                            <div className="pt-1 flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingMemoryId(m.id); setEditingMemoryText(m.text); }}
+                                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                              >
+                                <Edit3 className="w-3 h-3" /> Edit Memory
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -816,6 +943,166 @@ export default function AgentConfigsSidebar({
                   className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
                 >
                   Save & Add Skill
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Identity Modal ───────────────────────────────────────── */}
+      {editingIdentity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✏️</span>
+                <h3 className="text-sm font-bold text-white">Edit Identity</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingIdentity(null)}
+                className="text-[var(--text-muted)] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditIdentity} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Name</label>
+                <div className="flex gap-2">
+                  <input
+                    value={editingIdentity.icon || '🧠'}
+                    onChange={(e) => setEditingIdentity({ ...editingIdentity, icon: e.target.value })}
+                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    title="Emoji Icon"
+                  />
+                  <input
+                    value={editingIdentity.name || ''}
+                    onChange={(e) => setEditingIdentity({ ...editingIdentity, name: e.target.value })}
+                    placeholder="e.g. History Professor"
+                    required
+                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Persona Summary</label>
+                <input
+                  value={editingIdentity.persona || ''}
+                  onChange={(e) => setEditingIdentity({ ...editingIdentity, persona: e.target.value })}
+                  placeholder="e.g. Rigorous, analytical, direct"
+                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
+                <textarea
+                  rows={3}
+                  value={editingIdentity.instructions || ''}
+                  onChange={(e) => setEditingIdentity({ ...editingIdentity, instructions: e.target.value })}
+                  placeholder="Specific rules for how this identity must behave and answer coursework..."
+                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => setEditingIdentity(null)}
+                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editingIdentity.name?.trim()}
+                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Skill Modal ──────────────────────────────────────────── */}
+      {editingSkill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✏️</span>
+                <h3 className="text-sm font-bold text-white">Edit Skill</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSkill(null)}
+                className="text-[var(--text-muted)] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSkill} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Name</label>
+                <div className="flex gap-2">
+                  <input
+                    value={editingSkill.icon || '⚡'}
+                    onChange={(e) => setEditingSkill({ ...editingSkill, icon: e.target.value })}
+                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    title="Emoji Icon"
+                  />
+                  <input
+                    value={editingSkill.name || ''}
+                    onChange={(e) => setEditingSkill({ ...editingSkill, name: e.target.value })}
+                    placeholder="e.g. Lab Report Formatter"
+                    required
+                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Short Description</label>
+                <input
+                  value={editingSkill.description || ''}
+                  onChange={(e) => setEditingSkill({ ...editingSkill, description: e.target.value })}
+                  placeholder="e.g. Formats physics and chem lab reports"
+                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Template</label>
+                <textarea
+                  rows={3}
+                  value={editingSkill.promptTemplate || ''}
+                  onChange={(e) => setEditingSkill({ ...editingSkill, promptTemplate: e.target.value })}
+                  placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
+                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => setEditingSkill(null)}
+                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editingSkill.name?.trim()}
+                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
