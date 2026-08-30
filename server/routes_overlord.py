@@ -1176,14 +1176,16 @@ def _is_model_query(text: str) -> bool:
     if not t:
         return False
     patterns = [
-        r"\b(what|which)\b.{0,30}\b(model|llm|ai model|architecture|engine)\b",
-        r"\b(what|which)\s+(model|llm)\s+(are|r)\s+(you|u)\b",
-        r"\b(what|which)\s+(model|llm)\s+(is this|is it)\b",
-        r"\b(who|what)\s+(made|created|trained)\s+(you|your model)\b",
+        r"\b(what|which|whats|what's|tell me)\b.{0,40}\b(model|llm|ai model|architecture|engine)\b",
+        r"\b(what|which)\s+(model|llm)\s+(are|r|is)\s+(you|u|this|it)\b",
+        r"\b(what|what's|whats|what is)\s+(your|ur)?\s*(ai\s+)?(model|llm|architecture)\b",
+        r"\b(who|what)\s+(made|created|trained)\s+(you|your model|ur model)\b",
         r"\bare you\s+(a\s+)?(claude|anthropic|chatgpt|gpt|gemini|qwen|deepseek|llama|nemo|nemotron)\b",
         r"\b(what|what's|whats)\s+(ai\s+)?model\s+(are\s+)?(u|you)\b",
         r"\bwhat\s+model\b",
         r"\bwhich\s+model\b",
+        r"\bwhat\s+llm\b",
+        r"\bwhich\s+llm\b",
     ]
     return any(re.search(p, t) for p in patterns)
 
