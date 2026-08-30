@@ -1,8 +1,21 @@
 """Test fixtures — temp SQLite DB, env pinned BEFORE server imports."""
 import os
+import tempfile
+from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_helpotron.db"
 os.environ["OMNIROUTE_API_BASE"] = "http://localhost:9"  # never reachable in tests
+
+_SESSION_TEST_LAKE = Path(tempfile.mkdtemp(prefix="helpotron_test_lake_"))
+os.environ["DATA_LAKE_DIR"] = str(_SESSION_TEST_LAKE)
+
+import server.datalake as dl_module
+dl_module.DATALAKE_DIR = _SESSION_TEST_LAKE
+dl_module.TELEMETRY_DIR = _SESSION_TEST_LAKE / "telemetry"
+dl_module.FEEDBACK_DIR = _SESSION_TEST_LAKE / "feedback"
+dl_module.INSIGHTS_DIR = _SESSION_TEST_LAKE / "insights"
+dl_module.CORPUS_DIR = _SESSION_TEST_LAKE / "training_corpus"
+dl_module.datalake_manager.rebind(_SESSION_TEST_LAKE)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,6 +49,33 @@ def clear_ratelimiter(client):
     ratelimit.limiter._hits.clear()
     auth_limiter._failures.clear()
     client.cookies.clear()
+
+
+@pytest.fixture(autouse=True)
+def isolate_datalake(tmp_path, monkeypatch):
+    """Isolate DataLakeManager files to a per-test temp directory so tests never
+    pollute the production data_lake/ directory."""
+    import server.datalake as dl_module
+    from server.datalake import datalake_manager
+
+    fake_lake = tmp_path / "data_lake"
+    fake_telemetry = fake_lake / "telemetry"
+    fake_feedback = fake_lake / "feedback"
+    fake_insights = fake_lake / "insights"
+    fake_corpus = fake_lake / "training_corpus"
+
+    monkeypatch.setattr(dl_module, "DATALAKE_DIR", fake_lake)
+    monkeypatch.setattr(dl_module, "TELEMETRY_DIR", fake_telemetry)
+    monkeypatch.setattr(dl_module, "FEEDBACK_DIR", fake_feedback)
+    monkeypatch.setattr(dl_module, "INSIGHTS_DIR", fake_insights)
+    monkeypatch.setattr(dl_module, "CORPUS_DIR", fake_corpus)
+
+    orig_base = getattr(datalake_manager, "base_dir", dl_module.DATALAKE_DIR)
+    datalake_manager.rebind(fake_lake)
+
+    yield
+
+    datalake_manager.rebind(orig_base)
 
 
 @pytest.fixture()
