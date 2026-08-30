@@ -73,13 +73,11 @@ export default function AgentConfigsSidebar({
   const [showNewIdentityModal, setShowNewIdentityModal] = useState(false);
   const [newIdName, setNewIdName] = useState('');
   const [newIdIcon, setNewIdIcon] = useState('🧠');
-  const [newIdPersona, setNewIdPersona] = useState('');
   const [newIdInstructions, setNewIdInstructions] = useState('');
 
   const [showNewSkillModal, setShowNewSkillModal] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillIcon, setNewSkillIcon] = useState('⚡');
-  const [newSkillDesc, setNewSkillDesc] = useState('');
   const [newSkillTemplate, setNewSkillTemplate] = useState('');
 
   const fileInputRef = useRef(null);
@@ -92,13 +90,12 @@ export default function AgentConfigsSidebar({
       id: `custom_id_${Date.now()}`,
       name: newIdName.trim(),
       icon: newIdIcon || '🧠',
-      persona: newIdPersona.trim() || newIdName.trim(),
+      persona: newIdName.trim(),
       instructions: newIdInstructions.trim() || 'Provide helpful and customized assistance.',
       isBuiltin: false,
     };
     onAddIdentity(newId);
     setNewIdName('');
-    setNewIdPersona('');
     setNewIdInstructions('');
     setShowNewIdentityModal(false);
   };
@@ -110,7 +107,7 @@ export default function AgentConfigsSidebar({
       ...editingIdentity,
       name: editingIdentity.name.trim(),
       icon: editingIdentity.icon || '🧠',
-      persona: editingIdentity.persona.trim(),
+      persona: editingIdentity.name.trim(),
       instructions: editingIdentity.instructions.trim(),
     });
     setEditingIdentity(null);
@@ -124,13 +121,12 @@ export default function AgentConfigsSidebar({
       name: newSkillName.trim(),
       icon: newSkillIcon || '⚡',
       category: 'skill',
-      description: newSkillDesc.trim() || 'Custom user capability.',
+      description: newSkillName.trim(),
       promptTemplate: newSkillTemplate.trim() || `${newSkillName}:\n`,
       isBuiltin: false,
     };
     onAddSkill(newSk);
     setNewSkillName('');
-    setNewSkillDesc('');
     setNewSkillTemplate('');
     setShowNewSkillModal(false);
   };
@@ -142,7 +138,7 @@ export default function AgentConfigsSidebar({
       ...editingSkill,
       name: editingSkill.name.trim(),
       icon: editingSkill.icon || '⚡',
-      description: editingSkill.description.trim(),
+      description: editingSkill.name.trim(),
       promptTemplate: editingSkill.promptTemplate.trim(),
     });
     setEditingSkill(null);
@@ -344,15 +340,9 @@ export default function AgentConfigsSidebar({
                     {/* Expandable Details */}
                     {isExpanded && (
                       <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
-                        {item.persona && (
-                          <div>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Persona Description</span>
-                            <p className="text-xs text-slate-200 leading-relaxed">{item.persona}</p>
-                          </div>
-                        )}
                         {item.instructions && (
                           <div>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Instructions & Rules</span>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">System Instructions</span>
                             <div className="p-2 rounded bg-black/30 border border-white/5 text-[10px] text-slate-300 font-mono whitespace-pre-wrap">
                               {item.instructions}
                             </div>
@@ -486,12 +476,6 @@ export default function AgentConfigsSidebar({
                     {/* Expandable Details */}
                     {isExpanded && (
                       <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
-                        {sk.description && (
-                          <div>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Description</span>
-                            <p className="text-xs text-slate-200 leading-relaxed">{sk.description}</p>
-                          </div>
-                        )}
                         {sk.promptTemplate && (
                           <div>
                             <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Prompt Blueprint</span>
@@ -810,7 +794,7 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleCreateIdentity} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Name</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Title</label>
                 <div className="flex gap-2">
                   <input
                     value={newIdIcon}
@@ -829,19 +813,9 @@ export default function AgentConfigsSidebar({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Persona Summary</label>
-                <input
-                  value={newIdPersona}
-                  onChange={(e) => setNewIdPersona(e.target.value)}
-                  placeholder="e.g. Rigorous, analytical, direct"
-                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
-                />
-              </div>
-
-              <div>
                 <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={newIdInstructions}
                   onChange={(e) => setNewIdInstructions(e.target.value)}
                   placeholder="Specific rules for how this identity must behave and answer coursework..."
@@ -890,7 +864,7 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleCreateSkill} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Name</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Title</label>
                 <div className="flex gap-2">
                   <input
                     value={newSkillIcon}
@@ -909,19 +883,9 @@ export default function AgentConfigsSidebar({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Short Description</label>
-                <input
-                  value={newSkillDesc}
-                  onChange={(e) => setNewSkillDesc(e.target.value)}
-                  placeholder="e.g. Formats physics and chem lab reports"
-                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Template</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Blueprint / Template</label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={newSkillTemplate}
                   onChange={(e) => setNewSkillTemplate(e.target.value)}
                   placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
@@ -970,7 +934,7 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleSaveEditIdentity} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Name</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Title</label>
                 <div className="flex gap-2">
                   <input
                     value={editingIdentity.icon || '🧠'}
@@ -989,19 +953,9 @@ export default function AgentConfigsSidebar({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Persona Summary</label>
-                <input
-                  value={editingIdentity.persona || ''}
-                  onChange={(e) => setEditingIdentity({ ...editingIdentity, persona: e.target.value })}
-                  placeholder="e.g. Rigorous, analytical, direct"
-                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
-                />
-              </div>
-
-              <div>
                 <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={editingIdentity.instructions || ''}
                   onChange={(e) => setEditingIdentity({ ...editingIdentity, instructions: e.target.value })}
                   placeholder="Specific rules for how this identity must behave and answer coursework..."
@@ -1050,7 +1004,7 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleSaveEditSkill} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Name</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Title</label>
                 <div className="flex gap-2">
                   <input
                     value={editingSkill.icon || '⚡'}
@@ -1069,19 +1023,9 @@ export default function AgentConfigsSidebar({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Short Description</label>
-                <input
-                  value={editingSkill.description || ''}
-                  onChange={(e) => setEditingSkill({ ...editingSkill, description: e.target.value })}
-                  placeholder="e.g. Formats physics and chem lab reports"
-                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Template</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Blueprint / Template</label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={editingSkill.promptTemplate || ''}
                   onChange={(e) => setEditingSkill({ ...editingSkill, promptTemplate: e.target.value })}
                   placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
