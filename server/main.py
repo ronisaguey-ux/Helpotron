@@ -25,7 +25,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 try:
     from . import agent_session, credits, detectors, ratelimit, study_tools, transcription
-    from .user_settings_service import user_settings_service
+    from .user_settings_service import user_settings_service, filter_user_settings_payload
     from .agent_session import manager as agent_manager
     from .config import config
     from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment, utcnow
@@ -40,7 +40,7 @@ try:
     from .monitors import MonitorMiddleware, run_monitors_loop
 except (ImportError, ValueError):
     from server import agent_session, credits, detectors, ratelimit, study_tools, transcription
-    from server.user_settings_service import user_settings_service
+    from server.user_settings_service import user_settings_service, filter_user_settings_payload
     from server.agent_session import manager as agent_manager
     from server.config import config
     from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
@@ -965,9 +965,15 @@ def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     if user.public_id != public_id and not getattr(user, "is_admin", False):
         raise HTTPException(403, "Cannot modify another user's settings")
-    user.settings = {**(user.settings or {}), **body.settings}
+    accepted, rejected = filter_user_settings_payload(body.settings)
+    if rejected:
+        logger.warning(
+            "users PATCH from user=%s dropped non-writable keys: %s",
+            getattr(user, "public_id", "?"), ", ".join(sorted(rejected)),
+        )
+    user.settings = {**(user.settings or {}), **accepted}
     db.commit()
-    return {"settings": user.settings}
+    return {"settings": user.settings, "ignored_fields": sorted(rejected)}
 
 
 # ─── assignments (from extension) ──────────────────────────────────────────
@@ -1784,9 +1790,21 @@ _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (_REPO_ROOT / "exports").mkdir(parents=True, exist_ok=True)
 (_REPO_ROOT / "data_lake").mkdir(parents=True, exist_ok=True)
 
+class HardenedUploadsStaticFiles(StaticFiles):
+    """StaticFiles subclass that hardens file serving against stored XSS."""
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        content_type = response.headers.get("content-type", "").lower()
+        safe_inline = ("image/png", "image/jpeg", "image/gif", "image/webp", "image/avif")
+        if not any(content_type.startswith(t) for t in safe_inline):
+            response.headers["Content-Disposition"] = "attachment"
+        return response
+
 # User uploads (avatars, agent files) served statically — mounted before the
 # SPA catch-all below so /uploads/* resolves to files, not index.html.
-app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
+app.mount("/uploads", HardenedUploadsStaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
 
 if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
     if (_WEB_DIST / "assets").exists():

@@ -48,24 +48,38 @@ def _request_user(request, db: Session) -> User:
 @router.get("/options")
 async def recovery_options(public_id: str = Query(..., max_length=100), db: Session = Depends(get_db)):
     """Which recovery channels are available for this account (values masked).
-    Works pre-login (forgot-password UX) — only the mask/capability, never the
-    full address."""
+    Works pre-login (forgot-password UX).
+    Mitigates user enumeration: returns default availability schema rather than 404
+    when the account is not found."""
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
-        raise HTTPException(404, "No account matches that public_id.")
+        return {
+            "status": "success",
+            "has_email": False,
+            "email_masked": None,
+            "has_phone": False,
+            "phone_masked": None,
+            "dev": True,
+        }
     return {"status": "success", **contact_status(user)}
 
 
 @router.post("/request")
 async def recovery_request(payload: RecoveryRequestIn, db: Session = Depends(get_db)):
     """Mint + deliver a recovery code. method=dev pings the developer on
-    Telegram (plus AdminMessage row) so they can hand the user a code."""
+    Telegram (plus AdminMessage row) so they can hand the user a code.
+    Mitigates user enumeration: non-existent accounts receive a generic 200 response."""
     try:
         result = await request_recovery(db, payload.public_id, payload.method)
     except ValueError as exc:
         msg = str(exc)
-        http = 404 if msg == "No account matches that public_id." else 400
-        raise HTTPException(http, msg)
+        if msg == "No account matches that public_id.":
+            return {
+                "status": "success",
+                "message": f"If an account exists matching '{payload.public_id}', a recovery code has been sent.",
+                "method": payload.method,
+            }
+        raise HTTPException(400, msg)
     return {"status": "success", **result}
 
 

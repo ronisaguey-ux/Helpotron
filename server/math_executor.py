@@ -5,8 +5,20 @@ Plan section: AST-whitelist `safe_eval_math_expr` — the ONLY way the
 Legacy-compat section: run_python_math_bash / solve_deterministic_math /
 sanitize_math_hallucinations_in_text kept for the app surface (humanizer,
 routes_math /solve + /verify-text, test_humanizer_kimhons); they run via
-array-based subprocess (no shell) and are not reachable for arbitrary code
-execution from the API.
+array-based subprocess (no shell).
+
+SECURITY (08-29) — this docstring previously asserted the legacy path was
+"not reachable for arbitrary code execution from the API". That was false.
+`solve_deterministic_math` embeds the caller's expression with repr(), which
+stops script injection, but then hands it to `sympy.sympify()`, and sympify
+EVALUATES its argument. `sympify("__import__('os').system('…')")` runs the
+command; `sympify("().__class__.__bases__[0].__subclasses__()")` reaches the
+full gadget chain. `POST /api/math/solve` exposed that to any logged-in user,
+and signup is open. `assert_math_expression_safe()` below is now the gate in
+front of every sympify call: a strict AST whitelist that keeps symbolic
+algebra working (solve/diff/integrate need real sympy) while rejecting
+attribute access, subscripts, dunders, lambdas, comprehensions and calls to
+anything outside the math function whitelist.
 """
 from __future__ import annotations
 
@@ -120,6 +132,97 @@ def safe_eval_math_expr(expr: str) -> Union[int, float]:
 # server/routes_math.py and server/tests/test_humanizer_kimhons.py import
 # them. Kept verbatim from the pre-plan implementation.
 
+class UnsafeMathExpression(ValueError):
+    """Raised when an expression is not provably safe to hand to sympify."""
+
+
+# Names sympify/solve legitimately need. Symbolic math uses arbitrary variable
+# names, so bare identifiers are allowed — but only as symbols, never as call
+# targets outside this set.
+_SYMPY_CALL_WHITELIST = frozenset({
+    'sqrt', 'exp', 'log', 'ln', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos',
+    'atan', 'sinh', 'cosh', 'tanh', 'abs', 'Abs', 'floor', 'ceiling', 'round',
+    'factorial', 'gcd', 'lcm', 'binomial', 'simplify', 'expand', 'factor',
+    'diff', 'integrate', 'limit', 'solve', 'Eq', 'Matrix', 'Sum', 'Product',
+    'Rational', 'Integer', 'Float', 'Symbol', 'symbols', 'pi', 'E', 'oo',
+    'sec', 'csc', 'cot', 'root', 'sign', 'Max', 'Min', 'deg', 'rad',
+})
+
+_MAX_MATH_EXPR_LEN = 500
+
+# Node types that can never appear in a mathematical expression but are the
+# building blocks of every sympify escape (attribute walks, subscript into
+# __subclasses__, lambdas, comprehensions, f-strings, walrus, ...).
+_FORBIDDEN_NODES = (
+    ast.Attribute, ast.Subscript, ast.Lambda, ast.ListComp, ast.SetComp,
+    ast.DictComp, ast.GeneratorExp, ast.JoinedStr, ast.FormattedValue,
+    ast.Starred, ast.Await, ast.Yield, ast.YieldFrom, ast.NamedExpr,
+    ast.Import, ast.ImportFrom, ast.Dict, ast.Set,
+)
+
+
+def assert_math_expression_safe(expression: str) -> str:
+    """Validate an expression before it reaches ``sympy.sympify``.
+
+    sympify evaluates its argument, so anything reaching it must first be
+    proven to contain only arithmetic. Raises UnsafeMathExpression otherwise.
+    Returns the stripped expression on success.
+    """
+    if not isinstance(expression, str):
+        raise UnsafeMathExpression('Expression must be a string')
+
+    expr = expression.strip()
+    if not expr:
+        raise UnsafeMathExpression('Empty expression')
+    if len(expr) > _MAX_MATH_EXPR_LEN:
+        raise UnsafeMathExpression(
+            f'Expression exceeds {_MAX_MATH_EXPR_LEN} characters'
+        )
+    # Belt-and-braces: no dunder can survive the AST walk below either, but a
+    # raw-substring check also covers anything sympify's own tokenizer might
+    # accept that Python's parser normalises away.
+    if '__' in expr:
+        raise UnsafeMathExpression('Double-underscore names are not permitted')
+
+    # An equation "lhs = rhs" is not valid Python expression syntax; validate
+    # each side independently, mirroring how solve_deterministic_math splits.
+    if '=' in expr and '==' not in expr and '<=' not in expr and '>=' not in expr:
+        left, right = expr.split('=', 1)
+        parts = [left, right]
+    else:
+        parts = [expr]
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            raise UnsafeMathExpression('Equation side is empty')
+        try:
+            tree = ast.parse(part, mode='eval')
+        except SyntaxError:
+            raise UnsafeMathExpression('Not a valid mathematical expression') from None
+
+        for node in ast.walk(tree):
+            if isinstance(node, _FORBIDDEN_NODES):
+                raise UnsafeMathExpression(
+                    f'Disallowed construct: {type(node).__name__}'
+                )
+            if isinstance(node, ast.Call):
+                if not isinstance(node.func, ast.Name):
+                    raise UnsafeMathExpression('Only direct function calls are allowed')
+                if node.func.id not in _SYMPY_CALL_WHITELIST:
+                    raise UnsafeMathExpression(
+                        f'Disallowed function: {node.func.id}'
+                    )
+            if isinstance(node, ast.Constant) and not isinstance(
+                node.value, (int, float, complex)
+            ):
+                raise UnsafeMathExpression('Only numeric literals are allowed')
+            if isinstance(node, ast.Name) and node.id.startswith('_'):
+                raise UnsafeMathExpression('Underscore-prefixed names are not permitted')
+
+    return expr
+
+
 def run_python_math_bash(code: str, timeout: float = 5.0) -> Tuple[bool, str]:
     """Executes Python math code via bash subprocess with safety constraints and timeout."""
     # Prepend standard safe mathematical imports
@@ -154,8 +257,21 @@ def run_python_math_bash(code: str, timeout: float = 5.0) -> Tuple[bool, str]:
 
 
 def solve_deterministic_math(expression: str) -> Dict[str, Any]:
-    """Solves mathematical expressions, equations, or calculus symbolically and numerically."""
-    clean_expr = expression.strip()
+    """Solves mathematical expressions, equations, or calculus symbolically and numerically.
+
+    The expression is validated by assert_math_expression_safe() before it is
+    embedded in the sympify script — sympify evaluates its argument, so an
+    unvalidated expression here is remote code execution (see module docstring).
+    """
+    try:
+        clean_expr = assert_math_expression_safe(expression)
+    except UnsafeMathExpression as exc:
+        logger.warning("rejected unsafe math expression: %s", exc)
+        return {
+            "success": False,
+            "error": f"Rejected: {exc}",
+            "expression": str(expression)[:200],
+        }
 
     # Build evaluation script
     script = f"""

@@ -426,7 +426,7 @@ export default function App() {
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-white focus:font-semibold focus:rounded-[var(--radius-sm)] focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[10000] focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-white focus:font-semibold focus:rounded-[var(--radius-sm)] focus:shadow-xl focus:ring-2 focus:ring-white/40 transition"
         >
           Skip to main content
         </a>

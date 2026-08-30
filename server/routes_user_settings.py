@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ try:
     )
     from .routes_features import get_current_authenticated_user
     from .datalake import datalake_manager
-    from .user_settings_service import user_settings_service, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
+    from .user_settings_service import user_settings_service, filter_user_settings_payload, user_writable_settings_keys, UserSettingsService, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
     from .default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES, SELECTED_BOOK_STYLES, get_default_style
     from .humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
 except (ImportError, ValueError):
@@ -31,7 +32,7 @@ except (ImportError, ValueError):
     )
     from server.routes_features import get_current_authenticated_user
     from server.datalake import datalake_manager
-    from server.user_settings_service import user_settings_service, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
+    from server.user_settings_service import user_settings_service, filter_user_settings_payload, user_writable_settings_keys, UserSettingsService, PUBLIC_TIERS, AVAILABLE_MODELS, resolve_effort_tier
     from server.default_styles import ACADEMIC_LEVELS, DEFAULT_STYLES, SELECTED_BOOK_STYLES, get_default_style
     from server.humanizer import AIHumanizerPipeline, KimhonsHumanizeEngine
 
@@ -180,10 +181,23 @@ async def get_settings_route(request: Request, db: Session = Depends(get_db)):
 
 @router.patch("/settings")
 async def update_settings_route(payload: Dict[str, Any], request: Request, db: Session = Depends(get_db)):
-    """Updates user settings preferences."""
+    """Updates user settings preferences.
+
+    Only declared preference keys are accepted (audit 08-29, H1): the settings
+    blob also carries ban state, spendable balances and 2FA state, so an
+    unfiltered merge here let any account credit itself or lift its own ban.
+    Unknown keys are dropped and reported rather than 400-ing, so a client
+    sending a stale field still saves the rest of the form.
+    """
     user = _get_current_user(request, db)
-    updated = user_settings_service.update_user_settings(db, user, payload)
-    return {"status": "success", "settings": updated}
+    accepted, rejected = filter_user_settings_payload(payload)
+    if rejected:
+        logger.warning(
+            "settings PATCH from user=%s dropped non-writable keys: %s",
+            getattr(user, "public_id", "?"), ", ".join(sorted(rejected)),
+        )
+    updated = user_settings_service.update_user_settings(db, user, accepted)
+    return {"status": "success", "settings": updated, "ignored_fields": sorted(rejected)}
 
 
 @router.get("/academic-levels")
@@ -520,11 +534,60 @@ async def export_all_user_data_route(request: Request, db: Session = Depends(get
 
 @router.post("/data/soft-reset")
 async def soft_reset_local_data_route(request: Request, db: Session = Depends(get_db)):
-    """Soft reset: Clears local cached session assignments and staging without deleting permanent account record."""
+    """Return preferences to their defaults and archive unfinished staging.
+
+    Audit 08-29: this route previously looked the user up, changed nothing, and
+    replied "Local workspace and cached staging reset successfully" — the
+    dashboard then told the user their workspace had been cleared. It now does
+    the work and reports the real counts.
+
+    Nothing is deleted. Staging rows are moved to ``archived`` so the reset is
+    reversible, matching what the UI promises. Preference keys are restored
+    from the declared defaults; server-owned and security-bearing keys
+    (balances, ban state, 2FA, Telegram credentials) are never touched, so a
+    reset cannot be used to clear a ban or drop a second factor.
+    """
     user = _get_current_user(request, db)
+
+    defaults = UserSettingsService.get_user_settings(SimpleNamespace(settings=None))
+    writable = user_writable_settings_keys()
+    settings = dict(user.settings or {})
+    restored = 0
+    for key in writable:
+        if key in defaults and settings.get(key) != defaults[key]:
+            settings[key] = defaults[key]
+            restored += 1
+    user.settings = settings
+
+    dumps_archived = (
+        db.query(UniversalDumpItem)
+        .filter(UniversalDumpItem.user_id == user.id)
+        .filter(UniversalDumpItem.status.notin_(["finalized", "archived"]))
+        .update({UniversalDumpItem.status: "archived"}, synchronize_session=False)
+    )
+    drafts_archived = (
+        db.query(Draft)
+        .filter(Draft.user_id == user.id)
+        .filter(Draft.status.in_(["pending", "failed"]))
+        .update({Draft.status: "archived"}, synchronize_session=False)
+    )
+    db.commit()
+
+    parts = []
+    if restored:
+        parts.append(f"{restored} setting{'s' if restored != 1 else ''} back to default")
+    if dumps_archived:
+        parts.append(f"{dumps_archived} staged file{'s' if dumps_archived != 1 else ''} archived")
+    if drafts_archived:
+        parts.append(f"{drafts_archived} unfinished draft{'s' if drafts_archived != 1 else ''} archived")
+
     return {
         "status": "success",
-        "message": "Local workspace and cached staging reset successfully. Can be restored from server archive anytime.",
+        "message": ("Reset complete: " + ", ".join(parts) + ". Your assignments and account are untouched.")
+        if parts else "Nothing to reset — your settings are already at their defaults.",
+        "settings_restored": restored,
+        "dump_items_archived": dumps_archived,
+        "drafts_archived": drafts_archived,
         "user_id": user.public_id,
     }
 
@@ -628,7 +691,8 @@ class ChangePasswordPayload(BaseModel):
 async def change_password(payload: ChangePasswordPayload, request: Request, db: Session = Depends(get_db)):
     """Self-service password change (operator 08-26): verify current, enforce
     strength, rotate hash, invalidate other sessions."""
-    from .security import hash_password, validate_password_strength, verify_password, SessionStore
+    from .security import hash_password, validate_password_strength, verify_password, SessionStore, SESSION_COOKIE_NAME
+    from .database import UserSession
     user = _get_current_user(request, db)
     if not user.password_hash or not verify_password(payload.current_password, user.password_hash, user.password_salt):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
@@ -636,6 +700,14 @@ async def change_password(payload: ChangePasswordPayload, request: Request, db: 
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters and include a letter and a number")
     h, s = hash_password(payload.new_password)
     user.password_hash, user.password_salt = h, s
+
+    # Invalidate all other active sessions for this account
+    current_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if current_token:
+        db.query(UserSession).filter(UserSession.user_id == user.id, UserSession.token != current_token).delete()
+    else:
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+
     db.commit()
     return {"status": "success", "message": "Password updated. Other sessions have been signed out."}
 
