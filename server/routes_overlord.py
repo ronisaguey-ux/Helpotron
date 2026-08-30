@@ -1171,25 +1171,6 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
-def _is_model_query(text: str) -> bool:
-    t = _normalize_chat_text(text)
-    if not t:
-        return False
-    patterns = [
-        r"\b(what|which|whats|what's|tell me)\b.{0,40}\b(model|llm|ai model|architecture|engine)\b",
-        r"\b(what|which)\s+(model|llm)\s+(are|r|is)\s+(you|u|this|it)\b",
-        r"\b(what|what's|whats|what is)\s+(your|ur)?\s*(ai\s+)?(model|llm|architecture)\b",
-        r"\b(who|what)\s+(made|created|trained)\s+(you|your model|ur model)\b",
-        r"\bare you\s+(a\s+)?(claude|anthropic|chatgpt|gpt|gemini|qwen|deepseek|llama|nemo|nemotron)\b",
-        r"\b(what|what's|whats)\s+(ai\s+)?model\s+(are\s+)?(u|you)\b",
-        r"\bwhat\s+model\b",
-        r"\bwhich\s+model\b",
-        r"\bwhat\s+llm\b",
-        r"\bwhich\s+llm\b",
-    ]
-    return any(re.search(p, t) for p in patterns)
-
-
 async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
@@ -1217,20 +1198,6 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
     shell_cmd = _extract_shell_query(text)
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
-
-    # Deterministic model identity quick-path: immediately identify the exact OpenRouter model
-    if _is_model_query(text):
-        from .llm import resolve_model_routing
-        route = resolve_model_routing(effort=settings.get("effort", "auto"))
-        curr_model = route.get("model", "google/gemini-3.7-flash")
-        clean_name = curr_model.split("/")[-1]
-        provider = curr_model.split("/")[0] if "/" in curr_model else "OpenRouter"
-        
-        reply = (
-            f"I am powered by the **{clean_name}** AI model (`{curr_model}`) via OpenRouter "
-            f"(provider: {provider}). How can I help you today?"
-        )
-        return {"action": "plain_answer", "payload": {}, "reply": reply}
 
     # Deterministic greeting quick-path (operator 08-28): a PURE greeting /
     # thanks / small talk must never be gated into a study-scope refusal (the
@@ -1348,13 +1315,6 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         (f"CONVERSATION SO FAR (most recent last):\n{history_block}\n\n" if history_block else "")
         + f"User said: {text[:3000]}"
     )
-    if _is_model_query(text):
-        user_prompt += (
-            f"\n\n[MANDATORY INSTRUCTION FOR THIS TURN]: The user is asking what AI model/architecture you are. "
-            f"You MUST directly state your exact model in your reply (e.g. Qwen 2.5 / Gemini Flash / Nemotron / DeepSeek). "
-            f"Do NOT deflect with generic filler like 'I am here to support you as your personal coach and assistant'."
-        )
-
     effort = settings.get("effort_score")
     try:
         effort = int(effort) if isinstance(effort, (int, float)) else 500
