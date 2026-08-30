@@ -73,7 +73,7 @@ export default function PrivacyPolicy({ onBack }) {
           Coursework synthesis and model routing are processed through audited enterprise cloud partners:
         </p>
         <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl my-2">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[500px] text-left text-xs">
             <thead className="bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
               <tr>
                 <th className="p-2.5">Provider</th>

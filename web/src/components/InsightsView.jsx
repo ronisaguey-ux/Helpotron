@@ -1,8 +1,9 @@
 /* ────────────────────────────────────────────────────────────────────────────
  * InsightsView.jsx — merged INTELLIGENCE destination (Experience Rewrite, 08-22).
- * Overview = AnalyticsDashboard; Academic Progress / Recommendations /
- * Cost Intelligence = the IntelligenceView panels, embedded without their
- * own tab bar.
+ * Overview = AnalyticsDashboard; Academic Progress / Recommendations =
+ * IntelligenceView panels, selected via `panel` (08-29: previous wiring passed
+ * initialTab/embedded/onApplyRecommendation that IntelligenceView ignored — the
+ * two tabs rendered identical content, i.e. zombie buttons).
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState } from 'react';
 import AnalyticsDashboard from './AnalyticsDashboard.jsx';
@@ -25,7 +26,7 @@ export default function InsightsView({ userId, onGoTo, initialTab }) {
       />
       {tab === 'overview'
         ? <AnalyticsDashboard userId={userId} onExplainWithAgent={() => onGoTo('agent')} />
-        : <IntelligenceView userId={userId} onGoTo={onGoTo} initialTab={tab} embedded onApplyRecommendation={() => onGoTo('recommendations')} />}
+        : <IntelligenceView userId={userId} onGoTo={onGoTo} panel={tab} />}
     </div>
   );
 }

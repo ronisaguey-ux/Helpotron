@@ -67,25 +67,25 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 .aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
 .aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
       <div
-        className={`w-full max-w-4xl min-w-0 max-h-[90vh] m-auto surface-glass-strong rounded-[var(--radius-lg)] p-5 sm:p-8 flex flex-col justify-between text-[var(--text-primary)] overflow-hidden relative aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`w-full max-w-4xl min-w-0 h-[92dvh] sm:h-auto sm:max-h-[90vh] m-auto surface-glass-strong rounded-[var(--radius-lg)] p-4 sm:p-7 flex flex-col justify-between text-[var(--text-primary)] overflow-hidden relative aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         data-modal-container
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onPanelAnimEnd}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-4 shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-base sm:text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-              📜 Helpotron Legal Agreement & Privacy Policy
+        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 shrink-0">
+          <div className="min-w-0 pr-2">
+            <h2 className="text-sm sm:text-lg font-bold text-[var(--text-primary)] flex items-center gap-2 truncate">
+              <span>📜</span> <span>Helpotron Legal Agreement & Privacy Policy</span>
             </h2>
-            <p className="text-xs text-[var(--text-muted)] mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-[11px] sm:text-xs text-[var(--text-muted)] mt-0.5 flex flex-wrap items-center gap-1.5">
               {requireMandatoryAgreement && (
-                <span className="aurora-chip text-[11px] uppercase tracking-wider whitespace-nowrap">
+                <span className="aurora-chip text-[10px] py-0.5 uppercase tracking-wider whitespace-nowrap">
                   Step 2 of 2 · Confirm consent
                 </span>
               )}
-              <span>
-                Governing Academic Terms of Service, FERPA Compliance, GDPR Article 17, and AI Data Processing.
+              <span className="truncate">
+                FERPA, GDPR Article 17, and AI Data Processing.
               </span>
             </p>
           </div>
@@ -93,7 +93,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition cursor-pointer"
+              className="w-8 h-8 rounded-full bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center transition cursor-pointer shrink-0"
               aria-label="Close"
             >
               ✕
@@ -102,21 +102,21 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 overflow-x-auto py-3 border-b border-[var(--border-subtle)] shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto py-2.5 border-b border-[var(--border-subtle)] shrink-0 no-scrollbar">
           {[
-            { id: 'terms', label: '1. Terms of Service & Honor Code' },
-            { id: 'ferpa', label: '2. FERPA & Student Privacy' },
-            { id: 'gdpr', label: '3. GDPR & Statutory Rights' },
-            { id: 'subprocessors', label: '4. AI Subprocessors & Models' },
-            { id: 'billing', label: '5. Credits, Payments & Billing' },
+            { id: 'terms', label: '1. Terms of Service' },
+            { id: 'ferpa', label: '2. FERPA Privacy' },
+            { id: 'gdpr', label: '3. GDPR Rights' },
+            { id: 'subprocessors', label: '4. AI Subprocessors' },
+            { id: 'billing', label: '5. Tokens & Billing' },
           ].map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 tab === t.id
-                  ? 'bg-[var(--accent)] text-white'
+                  ? 'bg-[var(--accent)] text-white shadow-sm'
                   : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -127,7 +127,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 
         {/* Scrollable Legal Body */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto my-4 pr-2 space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed max-h-[50vh] border border-[var(--border-subtle)] p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)]"
+          className="flex-1 min-h-0 overflow-y-auto my-3 pr-1 space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed border border-[var(--border-subtle)] p-3.5 sm:p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)]"
           onScroll={() => setHasScrolledTerms(true)}
         >
           {tab === 'terms' && (
@@ -209,7 +209,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 To provide high-performance reasoning, mathematical verification, and lecture transcription, Helpotron interfaces with specialized, enterprise-grade AI cloud infrastructure:
               </p>
               <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl my-2">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[500px] text-left text-xs">
                   <thead className="bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)] text-[var(--text-muted)]">
                     <tr>
                       <th className="p-2">Subprocessor</th>

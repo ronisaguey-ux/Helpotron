@@ -91,6 +91,66 @@ export function CreditsPricingDashboard({
     return () => clearTimeout(timer);
   }, [sendCooldown]);
 
+  // Free Trial & SMS Verification State
+  const [trialStatus, setTrialStatus] = useState(null);
+  const [trialPhone, setTrialPhone] = useState('');
+  const [trialCode, setTrialCode] = useState('');
+  const [trialCodeSent, setTrialCodeSent] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(false);
+  const [trialError, setTrialError] = useState('');
+  const [trialSuccess, setTrialSuccess] = useState('');
+
+  const fetchTrialStatus = () => {
+    api.getTrialStatus()
+      .then((d) => setTrialStatus(d))
+      .catch(() => setTrialStatus(null));
+  };
+
+  useEffect(() => {
+    fetchTrialStatus();
+  }, []);
+
+  const handleRequestTrialSms = async (e) => {
+    e?.preventDefault();
+    if (!trialPhone.trim()) {
+      setTrialError('Please enter your mobile phone number.');
+      return;
+    }
+    setTrialLoading(true);
+    setTrialError('');
+    setTrialSuccess('');
+    try {
+      const res = await api.requestTrialSms(trialPhone.trim());
+      setTrialCodeSent(true);
+      setTrialSuccess(res?.message || 'Verification code sent via SMS.');
+    } catch (err) {
+      setTrialError(err?.message || 'Failed to send SMS code. Please check your number.');
+    } finally {
+      setTrialLoading(false);
+    }
+  };
+
+  const handleVerifyTrialSms = async (e) => {
+    e?.preventDefault();
+    if (!trialCode.trim()) {
+      setTrialError('Please enter the 6-digit SMS code.');
+      return;
+    }
+    setTrialLoading(true);
+    setTrialError('');
+    setTrialSuccess('');
+    try {
+      const res = await api.verifyTrialSms(trialPhone.trim(), trialCode.trim());
+      setTrialSuccess(res?.message || 'Free trial activated! 100 task tokens added.');
+      fetchTrialStatus();
+      onTopUp(100);
+    } catch (err) {
+      setTrialError(err?.message || 'Verification failed. Please check the code.');
+    } finally {
+      setTrialLoading(false);
+    }
+  };
+
   const ALL_PLATFORM_FEATURES = [
     'Universal Assignment Dump (PDF, DOCX, Audio, Video, Image OCR)',
     'AI Audio Transcription (Timestamps & Speaker Labels)',
@@ -112,10 +172,10 @@ export function CreditsPricingDashboard({
       basePrice: 10,
       annualBasePrice: 100,
       maxDiscount: 5, // 50% of $10
-      credits: '500 Task Tokens / mo',
-      creditsAward: 500,
-      standardTokens: '~3,000,000 LLM Tokens',
-      capacity: '500 Complete Assignment, Lecture & Study Workflows',
+      credits: '300 Task Tokens / mo',
+      creditsAward: 300,
+      standardTokens: '$3.00 Tool Usage Budget',
+      capacity: '300 Task Tokens ($3.00 tool budget) · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'basic',
@@ -125,10 +185,10 @@ export function CreditsPricingDashboard({
       basePrice: 20,
       annualBasePrice: 200,
       maxDiscount: 10, // 50% of $20
-      credits: '2,000 Task Tokens / mo',
-      creditsAward: 2000,
-      standardTokens: '~12,000,000 LLM Tokens',
-      capacity: '2,000 Multimodal Workflows, Audio Transcriptions & Evasion Passes',
+      credits: '1,000 Task Tokens / mo',
+      creditsAward: 1000,
+      standardTokens: '$10.00 Tool Usage Budget',
+      capacity: '1,000 Task Tokens ($10.00 tool budget) · 1 token = $0.01 API cost',
       popular: true,
       features: ALL_PLATFORM_FEATURES,
       plan: 'pro',
@@ -138,10 +198,10 @@ export function CreditsPricingDashboard({
       basePrice: 40,
       annualBasePrice: 400,
       maxDiscount: 20, // 50% of $40
-      credits: '6,000 Task Tokens / mo',
-      creditsAward: 6000,
-      standardTokens: '~40,000,000 LLM Tokens',
-      capacity: '6,000 Heavy Multi-Agent, Full Audio Lectures & Deep Research Passes',
+      credits: '2,700 Task Tokens / mo',
+      creditsAward: 2700,
+      standardTokens: '$27.00 Tool Usage Budget',
+      capacity: '2,700 Task Tokens ($27.00 tool budget) · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'elite',
@@ -396,6 +456,98 @@ export function CreditsPricingDashboard({
           Every plan includes full access to Universal Assignment Dump, AI Audio Transcription, AI Cognitive Vision & Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines your monthly compute capacity.
         </p>
       </SectionCard>
+
+      {/* Free Trial SMS Verification Section (1-time per account & phone) */}
+      {(!trialStatus || trialStatus?.eligible || !trialStatus?.trial_claimed) && (
+        <SectionCard
+          id="free-trial-activation-card"
+          padding="p-6"
+          className="rounded-3xl border-emerald-500/30 bg-emerald-950/10 relative overflow-hidden"
+          header={
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Claim 7-Day Free Trial</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono border border-emerald-500/30">
+                      1-TIME · SMS VERIFIED
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Includes 100 Task Tokens ($1.00 compute value) with 100% features unlocked. Single-use per phone number.
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+        >
+          {trialSuccess && (
+            <div className="p-3.5 mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-mono">
+              {trialSuccess}
+            </div>
+          )}
+          {trialError && (
+            <div className="p-3.5 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono">
+              {trialError}
+            </div>
+          )}
+
+          {!trialCodeSent ? (
+            <form onSubmit={handleRequestTrialSms} className="flex flex-col sm:flex-row gap-3 pt-2">
+              <div className="relative flex-1">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={trialPhone}
+                  onChange={(e) => setTrialPhone(e.target.value)}
+                  className="clean-input pl-10 pr-3.5 py-2.5 w-full text-xs font-mono"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={trialLoading}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {trialLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                <span>Send SMS Code</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyTrialSms} className="flex flex-col sm:flex-row gap-3 pt-2">
+              <div className="relative flex-1">
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit SMS code"
+                  value={trialCode}
+                  onChange={(e) => setTrialCode(e.target.value)}
+                  maxLength={6}
+                  className="clean-input pl-10 pr-3.5 py-2.5 w-full text-xs font-mono tracking-widest uppercase"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={trialLoading}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {trialLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>Verify & Activate Trial</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTrialCodeSent(false); setTrialCode(''); }}
+                className="px-3 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl transition"
+              >
+                Change Number
+              </button>
+            </form>
+          )}
+        </SectionCard>
+      )}
 
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
