@@ -1250,6 +1250,21 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
+def _is_model_query(text: str) -> bool:
+    t = _normalize_chat_text(text)
+    if not t:
+        return False
+    patterns = [
+        r"\b(what|which)\b.{0,30}\b(model|llm|ai model|architecture|engine)\b",
+        r"\b(what|which)\s+(model|llm)\s+(are|r)\s+(you|u)\b",
+        r"\b(what|which)\s+(model|llm)\s+(is this|is it)\b",
+        r"\b(who|what)\s+(made|created|trained)\s+(you|your model)\b",
+        r"\bare you\s+(a\s+)?(claude|anthropic|chatgpt|gpt|gemini|qwen|deepseek|llama|nemo|nemotron)\b",
+        r"\bwhat\s+(ai\s+)?model\s+are\s+u\b",
+    ]
+    return any(re.search(p, t) for p in patterns)
+
+
 async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
@@ -1394,6 +1409,12 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         (f"CONVERSATION SO FAR (most recent last):\n{history_block}\n\n" if history_block else "")
         + f"User said: {text[:3000]}"
     )
+    if _is_model_query(text):
+        user_prompt += (
+            f"\n\n[MANDATORY INSTRUCTION FOR THIS TURN]: The user is asking what AI model/architecture you are. "
+            f"You MUST directly state your exact model in your reply (e.g. Qwen 2.5 / Gemini Flash / Nemotron / DeepSeek). "
+            f"Do NOT deflect with generic filler like 'I am here to support you as your personal coach and assistant'."
+        )
 
     effort = settings.get("effort_score")
     try:
