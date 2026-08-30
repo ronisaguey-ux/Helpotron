@@ -87,13 +87,25 @@ def anonymize_student_submission(text: str) -> str:
 class DataLakeManager:
     """Handles structured I/O for telemetry, user feedback, and training artifacts."""
 
-    def __init__(self) -> None:
-        _ensure_directories()
-        self.telemetry_file = TELEMETRY_DIR / "operational_events.jsonl"
-        self.feedback_file = FEEDBACK_DIR / "user_feedback.jsonl"
-        self.insights_file = INSIGHTS_DIR / "latest_insights.json"
-        self.corpus_file = CORPUS_DIR / "humanized_samples.jsonl"
-        self.microcredits_file = DATALAKE_DIR / "microcredit_submissions.jsonl"
+    def __init__(self, base_dir: Optional[Path] = None) -> None:
+        import server.datalake as _dl
+        target = base_dir or getattr(_dl, "DATALAKE_DIR", DATALAKE_DIR)
+        self.rebind(target)
+
+    def rebind(self, base_dir: Path) -> None:
+        """Repoint storage paths to base_dir and ensure subdirectories exist."""
+        self.base_dir = Path(base_dir)
+        self.telemetry_dir = self.base_dir / "telemetry"
+        self.feedback_dir = self.base_dir / "feedback"
+        self.insights_dir = self.base_dir / "insights"
+        self.corpus_dir = self.base_dir / "training_corpus"
+        for d in [self.base_dir, self.telemetry_dir, self.feedback_dir, self.insights_dir, self.corpus_dir]:
+            d.mkdir(parents=True, exist_ok=True)
+        self.telemetry_file = self.telemetry_dir / "operational_events.jsonl"
+        self.feedback_file = self.feedback_dir / "user_feedback.jsonl"
+        self.insights_file = self.insights_dir / "latest_insights.json"
+        self.corpus_file = self.corpus_dir / "humanized_samples.jsonl"
+        self.microcredits_file = self.base_dir / "microcredit_submissions.jsonl"
 
     def log_telemetry(self, event_type: str, data: Dict[str, Any]) -> None:
         """Appends an anonymized operational event record."""
@@ -554,7 +566,11 @@ class DataLakeIntelligenceAgent:
     """Autonomous agent that analyzes telemetry and feedback to produce system insights."""
 
     def __init__(self, manager: Optional[DataLakeManager] = None) -> None:
-        self.manager = manager or datalake_manager
+        self._manager = manager
+
+    @property
+    def manager(self) -> DataLakeManager:
+        return self._manager if self._manager is not None else datalake_manager
 
     async def analyze_lake(self) -> Dict[str, Any]:
         """Runs pattern discovery, feedback correlation, and performance synthesis."""
