@@ -151,6 +151,20 @@ class CalendarSync:
 
 # ─── 5. TELEGRAM NOTIFICATIONS ──────────────────────────────────────────
 
+def _telegram_error(resp, fallback: str) -> str:
+    """Telegram's own explanation for a failed call, or ``fallback``.
+
+    The Bot API answers failures with a human-readable ``description`` ("Unauthorized",
+    "chat not found", "terminated by other getUpdates request"). Passing it through
+    tells the user which of those actually happened instead of guessing.
+    """
+    try:
+        description = (resp.json() or {}).get("description") or ""
+    except ValueError:
+        description = ""
+    return description or f"{fallback} (HTTP {resp.status_code})"
+
+
 class TelegramNotifier:
     """Send notifications through the user's own Telegram bot.
 
@@ -193,7 +207,8 @@ class TelegramNotifier:
             return {"ok": False, "detail": f"Could not reach Telegram ({type(exc).__name__})."}
 
         if resp.status_code != 200:
-            return {"ok": False, "detail": "Telegram does not recognise that token. Copy it again from BotFather."}
+            return {"ok": False, "detail": _telegram_error(
+                resp, "Telegram does not recognise that token. Copy it again from BotFather.")}
         result = (resp.json() or {}).get("result") or {}
         return {
             "ok": True,
@@ -224,7 +239,9 @@ class TelegramNotifier:
             return {"ok": False, "detail": f"Could not reach Telegram ({type(exc).__name__}).", "chats": []}
 
         if resp.status_code != 200:
-            return {"ok": False, "detail": "Telegram does not recognise that token.", "chats": []}
+            # 401 really is a bad token; 409 means a webhook owns this bot's
+            # updates. Telegram explains which, so pass its wording through.
+            return {"ok": False, "detail": _telegram_error(resp, "Telegram would not return this bot's messages."), "chats": []}
 
         seen: Dict[str, Dict[str, Any]] = {}
         for update in (resp.json() or {}).get("result") or []:
@@ -273,15 +290,7 @@ class TelegramNotifier:
         if resp.status_code == 200:
             return {"sent": True, "detail": "Message delivered to your Telegram chat."}
 
-        # Telegram returns a human-readable reason; surface it so the user can act.
-        try:
-            reason = (resp.json() or {}).get("description") or ""
-        except ValueError:
-            reason = ""
-        return {
-            "sent": False,
-            "detail": reason or f"Telegram rejected the message (HTTP {resp.status_code}).",
-        }
+        return {"sent": False, "detail": _telegram_error(resp, "Telegram rejected the message.")}
 
 
 # ─── 6. AI RECOMMENDATIONS ───────────────────────────────────────────────
@@ -300,16 +309,6 @@ def recommend_next_study(user: User, db: Session) -> str:
 
 
 # ─── 7. SETTINGS: THEMES ────────────────────────────────────────────────
-
-def set_theme(user: User, theme: str) -> str:
-    """Set theme: dark, light, auto."""
-    if theme not in ["dark", "light", "auto"]:
-        return "Invalid theme. Choose dark, light, or auto."
-    settings = user.settings or {}
-    settings["theme"] = theme
-    user.settings = settings
-    return f"Theme set to {theme}"
-
 
 def get_theme(user: User) -> str:
     return (user.settings or {}).get("theme", "light")
