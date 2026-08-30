@@ -243,27 +243,27 @@ function AppearanceSection({ s, set, scoped, setVariants }) {
   return (
     <div className="space-y-6">
       <ScopedSetting title="Theme" levels={PLACE_LEVELS} refs={APP_PLACES} values={THEMES} currentValue={a.theme}
-        description="Pick the theme that runs app-wide, or add a variant config to run a different theme in specific places." {...scopedFor('appearance.theme')}>
+        description="Pick the theme that runs app-wide — or set a different theme in specific places." {...scopedFor('appearance.theme')}>
         <ChipRow label="Theme" options={THEMES} value={a.theme} onChange={(v) => set('appearance.theme', v)} />
       </ScopedSetting>
       <ScopedSetting title="Accent" levels={PLACE_LEVELS} refs={APP_PLACES} values={ACCENTS} currentValue={a.accent}
-        description="The accent color used for highlights and active states — or per-place variant configs." {...scopedFor('appearance.accent')}>
+        description="The accent color used for highlights and active states — override it per place if you want." {...scopedFor('appearance.accent')}>
         <ChipRow label="Accent" options={ACCENTS} value={a.accent} onChange={(v) => set('appearance.accent', v)} />
       </ScopedSetting>
       <ScopedSetting title="Interface density" levels={PLACE_LEVELS} refs={APP_PLACES} values={DENSITIES} currentValue={a.density}
-        description="How much breathing room the interface gives you — or per-place variant configs." {...scopedFor('appearance.density')}>
+        description="How much breathing room the interface gives you — override it per place if you want." {...scopedFor('appearance.density')}>
         <ChipRow label="Interface density" options={DENSITIES} value={a.density} onChange={(v) => set('appearance.density', v)} />
       </ScopedSetting>
       <ScopedSetting title="Animation" levels={PLACE_LEVELS} refs={APP_PLACES} values={ANIMATIONS} currentValue={a.animation}
-        description="Motion level of the interface — or per-place variant configs." {...scopedFor('appearance.animation')}>
+        description="Motion level of the interface — override it per place if you want." {...scopedFor('appearance.animation')}>
         <ChipRow label="Animation" options={ANIMATIONS} value={a.animation} onChange={(v) => set('appearance.animation', v)} />
       </ScopedSetting>
       <ScopedSetting title="Background" levels={PLACE_LEVELS} refs={APP_PLACES} values={BACKGROUNDS} currentValue={a.background}
-        description="The canvas behind the app — flat, gradient, aurora, mesh, glass or noise — or per-place variant configs." {...scopedFor('appearance.background')}>
+        description="The canvas behind the app — flat, gradient, aurora, mesh, glass or noise, overridable per place." {...scopedFor('appearance.background')}>
         <ChipRow label="Background" options={BACKGROUNDS} value={a.background} onChange={(v) => set('appearance.background', v)} />
       </ScopedSetting>
       <ScopedSetting title="UI style" levels={PLACE_LEVELS} refs={APP_PLACES} values={UI_STYLES} currentValue={a.uiStyle}
-        description="Minimal, glass, dense, soft or terminal — or per-place variant configs." {...scopedFor('appearance.uiStyle')}>
+        description="Minimal, glass, dense, soft or terminal — overridable per place." {...scopedFor('appearance.uiStyle')}>
         <ChipRow label="UI style" options={UI_STYLES} value={a.uiStyle} onChange={(v) => set('appearance.uiStyle', v)} />
       </ScopedSetting>
       <div>
@@ -947,9 +947,63 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
     if (key === 'control-center') return <AdminPanels userId={userId} />;
     if (key === 'appearance') return <AppearanceSection s={settings} set={set} scoped={scoped} setVariants={setVariants} />;
     if (key === 'accessibility') return <AccessibilitySection s={settings} set={set} />;
-    if (key === 'ai') return <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />;
+    if (key === 'ai') return (
+      <div className="space-y-4">
+        <div className="clean-card p-4">{quickPresets}</div>
+        <AISection s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} />
+      </div>
+    );
     return <SettingsSections section={key} s={settings} set={set} scoped={scoped} setVariants={setVariants} subjectRefs={subjectRefs} userId={userId} onGoTo={onGoTo} plan={plan} credits={credits} tokenBalance={tokenBalance} isAdmin={isAdmin} />;
   };
+
+  /* One-click behavioral presets — rendered inside the AI section with the
+   * engine config (08-30 de-clunk: they used to be the first block on the
+   * Settings page, above Account, reading as theme chooser buttons). */
+  const quickPresets = (
+    <>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-600 mr-1">Quick presets</span>
+        {Object.entries(PROFILE_PRESETS).map(([k, p]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setPresetConfirm(k)}
+            title={p.tagline}
+            className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition cursor-pointer bg-white/4 text-slate-300 hover:text-slate-100 hover:bg-white/10"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[9px] text-slate-600 mt-1.5 leading-relaxed">
+        Budget = cheapest possible. Balanced = cost & performance middle. Power = max quality, burns tokens.
+      </p>
+      {presetConfirm && (
+        <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
+          <div className="text-[10px] text-rose-200 leading-relaxed">
+            Reset ALL settings to <b>{PROFILE_PRESETS[presetConfirm].label}</b>? Every custom value and scoped
+            override gets replaced by the preset. Your name, subjects and saved writing profiles stay.
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => applyPreset(presetConfirm)}
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+            >
+              Yes, reset everything
+            </button>
+            <button
+              type="button"
+              onClick={() => setPresetConfirm(null)}
+              className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="max-w-3xl mx-auto space-y-3">
@@ -977,47 +1031,9 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
           </AnimatePresence>
         </div>
       }>
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-600 mr-1">Quick presets</span>
-          {Object.entries(PROFILE_PRESETS).map(([k, p]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setPresetConfirm(k)}
-              title={p.tagline}
-              className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition cursor-pointer bg-white/4 text-slate-300 hover:text-slate-100 hover:bg-white/10"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[9px] text-slate-600 mt-1.5 leading-relaxed">
-          Budget = cheapest possible. Balanced = cost & performance middle. Power = max quality, burns tokens.
-        </p>
-        {presetConfirm && (
-          <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
-            <div className="text-[10px] text-rose-200 leading-relaxed">
-              Reset ALL settings to <b>{PROFILE_PRESETS[presetConfirm].label}</b>? Every custom value and scoped
-              override gets replaced by the preset. Your name, subjects and saved writing profiles stay.
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => applyPreset(presetConfirm)}
-                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
-              >
-                Yes, reset everything
-              </button>
-              <button
-                type="button"
-                onClick={() => setPresetConfirm(null)}
-                className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Quick presets relocated to the AI section (08-30 de-clunk): they
+            reset ENGINE behavior, so they belong with the model config — not
+            pinned above Account where they read as theme choices. */}
       </SectionCard>
 
       {/* The settings themselves: a simple name, maximize to the whole menu. */}
