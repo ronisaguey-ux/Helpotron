@@ -22,32 +22,52 @@ import AuthModal from './components/AuthModal.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
 
-/* ── LAZY: everything behind the auth gate ───────────────────────────────── */
-const AppShell = lazy(() => import('./components/AppShell.jsx'));
-const CookieBanner = lazy(() => import('./components/CookieBanner.jsx'));
-const AdminNoticePopup = lazy(() => import('./components/ui/AdminNoticePopup.jsx'));
-const CommandPalette = lazy(() => import('./components/CommandPalette.jsx'));
+/* ── LAZY: with automatic chunk retry for seamless zero-downtime updates ── */
+function lazyWithRetry(componentImport) {
+  return lazy(async () => {
+    try {
+      const component = await componentImport();
+      sessionStorage.removeItem('helpotron.chunk_retry');
+      return component;
+    } catch (error) {
+      console.warn('Lazy chunk load failed, checking for deployment update...', error);
+      const hasRefreshed = sessionStorage.getItem('helpotron.chunk_retry');
+      if (!hasRefreshed) {
+        sessionStorage.setItem('helpotron.chunk_retry', 'true');
+        window.location.reload();
+        return new Promise(() => {}); // Wait for reload
+      }
+      sessionStorage.removeItem('helpotron.chunk_retry');
+      throw error;
+    }
+  });
+}
 
-const AssignmentCardDashboard = lazy(() => import('./components/AssignmentCardDashboard.jsx'));
-const AssignmentTurnInView = lazy(() => import('./components/AssignmentTurnInView.jsx'));
-const AssignmentDetailView = lazy(() => import('./components/AssignmentDetailView.jsx'));
-const AssignmentHistoryView = lazy(() => import('./components/AssignmentHistoryView.jsx'));
-const AssignmentDumpView = lazy(() => import('./components/AssignmentDumpView.jsx'));
-const MessageAdminView = lazy(() => import('./components/MessageAdminView.jsx'));
-const PrivacyPolicyView = lazy(() => import('./components/PrivacyPolicyView.jsx'));
-const TermsOfServiceView = lazy(() => import('./components/TermsOfServiceView.jsx'));
-const DataLakeView = lazy(() => import('./components/DataLakeView.jsx'));
-const MonitorsView = lazy(() => import('./components/MonitorsView.jsx'));
-const ExtensionInstallView = lazy(() => import('./components/ExtensionInstallView.jsx'));
-const ActivityView = lazy(() => import('./components/ActivityView.jsx'));
-const AutomationCenter = lazy(() => import('./components/AutomationCenter.jsx'));
-const LibraryView = lazy(() => import('./components/LibraryView.jsx'));
-const AIWorkspace = lazy(() => import('./components/AIWorkspace.jsx'));
-const SettingsApp = lazy(() => import('./components/SettingsApp.jsx'));
-const AdminPanels = lazy(() => import('./components/AdminPanels.jsx'));
-const InsightsView = lazy(() => import('./components/InsightsView.jsx'));
-const CreditsView = lazy(() => import('./components/CreditsView.jsx'));
-const MyAgentView = lazy(() => import('./components/MyAgentView.jsx'));
+const AppShell = lazyWithRetry(() => import('./components/AppShell.jsx'));
+const CookieBanner = lazyWithRetry(() => import('./components/CookieBanner.jsx'));
+const AdminNoticePopup = lazyWithRetry(() => import('./components/ui/AdminNoticePopup.jsx'));
+const CommandPalette = lazyWithRetry(() => import('./components/CommandPalette.jsx'));
+
+const AssignmentCardDashboard = lazyWithRetry(() => import('./components/AssignmentCardDashboard.jsx'));
+const AssignmentTurnInView = lazyWithRetry(() => import('./components/AssignmentTurnInView.jsx'));
+const AssignmentDetailView = lazyWithRetry(() => import('./components/AssignmentDetailView.jsx'));
+const AssignmentHistoryView = lazyWithRetry(() => import('./components/AssignmentHistoryView.jsx'));
+const AssignmentDumpView = lazyWithRetry(() => import('./components/AssignmentDumpView.jsx'));
+const MessageAdminView = lazyWithRetry(() => import('./components/MessageAdminView.jsx'));
+const PrivacyPolicyView = lazyWithRetry(() => import('./components/PrivacyPolicyView.jsx'));
+const TermsOfServiceView = lazyWithRetry(() => import('./components/TermsOfServiceView.jsx'));
+const DataLakeView = lazyWithRetry(() => import('./components/DataLakeView.jsx'));
+const MonitorsView = lazyWithRetry(() => import('./components/MonitorsView.jsx'));
+const ExtensionInstallView = lazyWithRetry(() => import('./components/ExtensionInstallView.jsx'));
+const ActivityView = lazyWithRetry(() => import('./components/ActivityView.jsx'));
+const AutomationCenter = lazyWithRetry(() => import('./components/AutomationCenter.jsx'));
+const LibraryView = lazyWithRetry(() => import('./components/LibraryView.jsx'));
+const AIWorkspace = lazyWithRetry(() => import('./components/AIWorkspace.jsx'));
+const SettingsApp = lazyWithRetry(() => import('./components/SettingsApp.jsx'));
+const AdminPanels = lazyWithRetry(() => import('./components/AdminPanels.jsx'));
+const InsightsView = lazyWithRetry(() => import('./components/InsightsView.jsx'));
+const CreditsView = lazyWithRetry(() => import('./components/CreditsView.jsx'));
+const MyAgentView = lazyWithRetry(() => import('./components/MyAgentView.jsx'));
 
 /* Shown while a lazy view chunk is in flight. Deliberately quiet — a spinner
  * that flashes for 80ms reads as jank, a dimmed placeholder does not. */
@@ -69,18 +89,35 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, errorInfo) {
     console.error('App Error caught by boundary:', error, errorInfo);
+    if (
+      error?.message?.includes('Failed to fetch dynamically imported module') ||
+      error?.message?.includes('ChunkLoadError') ||
+      error?.message?.includes('Loading chunk')
+    ) {
+      const hasReloaded = sessionStorage.getItem('helpotron.chunk_reload');
+      if (!hasReloaded) {
+        sessionStorage.setItem('helpotron.chunk_reload', 'true');
+        window.location.reload();
+      }
+    }
   }
   render() {
     if (this.state.hasError) {
+      const isChunkError = this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
+        this.state.error?.message?.includes('ChunkLoadError');
       return (
         <div className="app-background min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center p-4">
           <div className="clean-card max-w-lg w-full p-8 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
               ⚠️
             </div>
-            <h2 className="text-lg font-semibold">Something went wrong</h2>
+            <h2 className="text-lg font-semibold">
+              {isChunkError ? 'New Version Available' : 'Something went wrong'}
+            </h2>
             <p className="text-xs text-[var(--text-muted)]">
-              An unexpected error occurred during rendering. You can reset session state below.
+              {isChunkError
+                ? 'A newer version of the web app was published. Please reload to load the latest components.'
+                : 'An unexpected error occurred during rendering. You can reset session state below.'}
             </p>
             <div className="p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-[var(--border-subtle)]">
               {this.state.error?.message || 'Unknown runtime error'}
@@ -88,12 +125,13 @@ class ErrorBoundary extends React.Component {
             <button
               type="button"
               onClick={() => {
-                try { localStorage.clear(); } catch (e) {}
+                sessionStorage.removeItem('helpotron.chunk_reload');
+                sessionStorage.removeItem('helpotron.chunk_retry');
                 window.location.reload();
               }}
               className="w-full py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium rounded-[var(--radius-sm)] text-xs transition cursor-pointer"
             >
-              Reset Session Cache & Reload
+              Reload Latest App Version
             </button>
           </div>
         </div>
@@ -640,8 +678,8 @@ export default function App() {
                       }}
                     />
                   )}
-                  {activeView === 'ai-workspace' && <AIWorkspace userId={userId} />}
-                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} onOpenWorkspace={() => setActiveView('ai-workspace')} />}
+                  {activeView === 'ai-workspace' && <MyAgentView userId={userId} onGoTo={handleSelectView} onTokenBalance={setTokenBalance} />}
+                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} onOpenAssignmentBubble={() => setActiveView('agent')} onOpenWorkspace={() => setActiveView('agent')} />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
 
                   {/* AUTOMATION */}
