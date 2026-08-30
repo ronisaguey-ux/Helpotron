@@ -142,7 +142,7 @@ AVAILABLE_MODELS = [
         "min_effort": 250,
     },
     {
-        "id": "deepseek_v4_flash",
+        "id": "deepseek_v4_flash_vision",
         "name": "DeepSeek-V4 Flash Vision",
         "pricing": "$0.14 / $0.28 per 1M tokens",
         "context_window": 128000,
@@ -150,10 +150,11 @@ AVAILABLE_MODELS = [
         "description": "Effort Levels 4 through 7 core balanced reasoning engine.",
         "category": "instruction_following",
         "provider": "DeepSeek",
+        "is_multimodal": True,
         "min_effort": 350,
     },
     {
-        "id": "deepseek_v4_pro",
+        "id": "deepseek_v4_pro_vision",
         "name": "DeepSeek-V4 Pro Vision",
         "pricing": "$0.87 / $1.74 per 1M tokens",
         "context_window": 128000,
@@ -161,6 +162,7 @@ AVAILABLE_MODELS = [
         "description": "Effort Levels 8 through 10 flagship deep reasoning and formal synthesis specialist.",
         "category": "deep_reasoning",
         "provider": "DeepSeek",
+        "is_multimodal": True,
         "min_effort": 750,
     },
     {
@@ -254,27 +256,27 @@ def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
         }
     elif lvl <= 7:
         return {
-            "tier": "effort_4_7_deepseek_v4_flash",
+            "tier": "effort_4_7_deepseek_v4_flash_vision",
             "tier_label": f"Levels 4–7: DeepSeek V4 Flash Vision (Lvl {lvl})",
             "score": score,
             "level": lvl,
             "description": "Balanced multi-step reasoning, rubric compliance, and vision analysis with DeepSeek V4 Flash Vision.",
-            "summary_model": "deepseek_v4_flash",
-            "flashcard_model": "deepseek_v4_flash",
-            "draft_model": "deepseek_v4_flash",
-            "humanizer_model": "deepseek_v4_flash",
+            "summary_model": "deepseek_v4_flash_vision",
+            "flashcard_model": "deepseek_v4_flash_vision",
+            "draft_model": "deepseek_v4_flash_vision",
+            "humanizer_model": "deepseek_v4_flash_vision",
         }
     else:
         return {
-            "tier": "effort_8_10_deepseek_v4_pro",
+            "tier": "effort_8_10_deepseek_v4_pro_vision",
             "tier_label": f"Levels 8–10 (7+): DeepSeek V4 Pro Vision (Lvl {lvl})",
             "score": score,
             "level": lvl,
             "description": "Flagship cognitive depth, research, and rigorous synthesis with DeepSeek V4 Pro Vision (Gemini 3.7 Flash for Gemini-exclusive tasks).",
-            "summary_model": "deepseek_v4_pro",
-            "flashcard_model": "deepseek_v4_pro",
-            "draft_model": "deepseek_v4_pro",
-            "humanizer_model": "deepseek_v4_pro",
+            "summary_model": "deepseek_v4_pro_vision",
+            "flashcard_model": "deepseek_v4_pro_vision",
+            "draft_model": "deepseek_v4_pro_vision",
+            "humanizer_model": "deepseek_v4_pro_vision",
         }
 
 
