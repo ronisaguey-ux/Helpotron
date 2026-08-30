@@ -888,147 +888,149 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   };
 
   return (
-    <div className="space-y-5">
-      {/* ── Identity header: avatar + agent name (08-28) ── */}
-      <SectionCard id="myagent-identity" header={
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <AvatarUpload
-              url={ai.avatarUrl || '/My_Agent_logo.jpeg'}
-              initial="🧠"
-              label="agent avatar"
-              onUpload={(f) => handleAvatarUpload(f, 'agent')}
-            />
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <input
-                  value={agentName}
-                  onChange={(e) => set('ai.aiName', e.target.value)}
-                  aria-label="Agent name"
-                  className="bg-transparent text-lg font-bold text-[var(--text-primary)] outline-none border-b border-transparent focus:border-[var(--accent)] w-36"
-                />
-                <span className="aurora-chip">YOUR AGENT</span>
-                <span className="aurora-chip" aria-label="Agent online"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /></span>
-              </div>
-              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                One agent for everything — ask it to do anything. · effort <span className="text-[var(--accent)] font-mono">{Math.max(1, Math.round(effort / 100))}/10</span> ({effortBucket(effort)})
-              </p>
-            </div>
-          </div>
-          {/* Control toolbar (IA 08-28): segmented mode picker (primary) +
-           * auto-approve toggle + Manage — two secondaries max on this row. */}
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <div className="flex items-center gap-0.5 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-              {Object.entries(MODE_META).map(([k, m]) => {
-                const Icon = m.icon;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => handleSwitchMode(k)}
-                    className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-[10px] font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
-                      mode === k
-                        ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
-                        : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border-transparent'
-                    }`}
-                  >
-                    <Icon className="w-3 h-3" /> {m.label}
-                  </button>
-                );
-              })}
-            </div>
-            <label className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
+    <div className="space-y-4">
+      {/* ── Top Bar Panel: Identity + Mode + Quick Actions ── */}
+      <div className="panel p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <AvatarUpload
+            url={ai.avatarUrl || '/My_Agent_logo.jpeg'}
+            initial="🧠"
+            label="agent avatar"
+            onUpload={(f) => handleAvatarUpload(f, 'agent')}
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <input
-                type="checkbox"
-                checked={autoApprove}
-                onChange={(e) => handleAutoApprove(e.target.checked)}
-                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
+                value={agentName}
+                onChange={(e) => set('ai.aiName', e.target.value)}
+                aria-label="Agent name"
+                className="bg-transparent text-base font-bold text-white outline-none border-b border-transparent focus:border-[var(--accent)] w-32"
               />
-              <span className="text-[10px] text-[var(--text-secondary)]">Auto-approve routine</span>
-            </label>
+              <span className="chip chip-emerald text-[11px] flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Ready
+              </span>
+              <span className="chip chip-neutral text-[11px]">
+                ⚡ {Math.max(1, Math.round(effort / 100))}/10 ({effortBucket(effort)})
+              </span>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
+              Autonomous study & coursework partner · ask anything, draft papers, transcribe lectures
+            </p>
+          </div>
+        </div>
+
+        {/* Execution Mode + Drawer Trigger + New Chat */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className="segmented p-0.5">
+            {Object.entries(MODE_META).map(([k, m]) => {
+              const Icon = m.icon;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => handleSwitchMode(k)}
+                  className={`seg-item text-xs flex items-center gap-1.5 ${mode === k ? 'active' : ''}`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {m.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setConfigsOpen(!configsOpen)}
+            aria-pressed={configsOpen}
+            className={`px-3 py-1.5 rounded-[var(--radius-sm)] border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+              configsOpen
+                ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
+                : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" /> Memory & Skills ({memory.length + files.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={newChat}
+            className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Chat
+          </button>
+        </div>
+      </div>
+
+      {/* ── Pending Permission Banner (if any action requires confirmation) ── */}
+      {pending && (
+        <div className="panel p-4 border-amber-500/40 bg-amber-500/10 space-y-3 animate-fadeIn">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+              ⚠️ Action pending approval: <span className="font-mono">{pending.action_type}</span>
+            </div>
+            <span className="text-[11px] text-[var(--text-muted)]">Assignment #{pending.assignment_id}</span>
+          </div>
+          <p className="text-xs text-slate-200 leading-relaxed">{pending.description || 'The agent requested permission to perform this action on your behalf.'}</p>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
-              onClick={() => setListOpen(!listOpen)}
-              className={`px-3 py-1.5 rounded-full border text-[10px] font-semibold transition cursor-pointer ${
-                listOpen
-                  ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
-                  : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)]'
-              }`}
-              aria-expanded={listOpen}
+              onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve')}
+              className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer"
             >
-              {listOpen ? 'Done' : `Manage (${autoList.length})`}
+              Approve
             </button>
+            <button
+              type="button"
+              onClick={() => handlePermissionAction(pending.id, 'reject')}
+              className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer"
+            >
+              Reject
+            </button>
+            <label className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoApproveThis}
+                onChange={(e) => setAutoApproveThis(e.target.checked)}
+                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>Always auto-approve {pending.action_type}</span>
+            </label>
           </div>
-          {listOpen && (
-            <div className="w-full mt-2 p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Auto-approved actions — the agent doesn't ask for these
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {autoList.map((a) => (
-                  <span
-                    key={a}
-                    className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300"
-                  >
-                    {a}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${a}`}
-                      onClick={() => saveAutoList(autoList.filter((x) => x !== a))}
-                      className="w-4 h-4 flex items-center justify-center rounded-md text-[var(--text-muted)] hover:text-rose-300 hover:bg-rose-500/10 transition cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-                {autoList.length === 0 && (
-                  <span className="text-[10px] text-[var(--text-muted)] italic">Nothing auto-approved — the agent asks before every action.</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  value={newAction}
-                  onChange={(e) => setNewAction(e.target.value)}
-                  placeholder="e.g. draft_section, submit, send_message…"
-                  className="clean-input flex-1 px-3 py-1.5 text-[11px] outline-none"
-                  aria-label="New auto-approved action"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newAction.trim()) {
-                      saveAutoList([...new Set([...autoList, newAction.trim()])]);
-                      setNewAction('');
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (newAction.trim()) {
-                      saveAutoList([...new Set([...autoList, newAction.trim()])]);
-                      setNewAction('');
-                    }
-                  }}
-                  disabled={!newAction.trim()}
-                  className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-      }>
+      )}
 
-        {/* Effort scale — quick override for this agent (wins over main Settings) */}
-        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-[var(--accent)]" /> Effort (1–10)
-            </span>
-            <span className="text-[11px] font-mono font-bold text-[var(--accent)]">
-              {Math.max(1, Math.round(effort / 100))} <span className="text-[10px] text-[var(--text-muted)]">/ 10 · {effortBucket(effort)}</span>
-            </span>
+      {/* ── Main Workspace Grid: Threads Rail + Chat Canvas ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4 h-[calc(100vh-14rem)] min-h-[580px]">
+        {/* Left Rail: Threads List & Quick Effort Slider */}
+        <div className="panel p-3 flex flex-col justify-between overflow-hidden">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] px-2 py-1 flex items-center justify-between">
+              <span>Conversations</span>
+              <span className="text-[10px] font-mono">{threads.length}</span>
+            </div>
+
+            <div className="space-y-1">
+              {threads.length === 0 && (
+                <div className="text-xs text-[var(--text-muted)] p-3 text-center italic">
+                  No previous chats. Start a new topic!
+                </div>
+              )}
+              {threads.some((t) => t.pinned) && (
+                <>
+                  <div className="text-[10px] text-amber-400 font-semibold uppercase px-2 pt-1">📌 Pinned</div>
+                  {threads.filter((t) => t.pinned).map((t) => renderThreadRow(t))}
+                </>
+              )}
+              {threads.filter((t) => !t.pinned).map((t) => renderThreadRow(t))}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Quick Effort Slider at Bottom of Rail */}
+          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--text-muted)] font-medium">Model Effort</span>
+              <span className="font-mono font-bold text-[var(--accent)]">{Math.max(1, Math.round(effort / 100))}/10</span>
+            </div>
             <input
               type="range"
               min={1}
@@ -1036,417 +1038,118 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               step={1}
               value={Math.max(1, Math.round(effort / 100))}
               onChange={(e) => handleEffort(e.target.value)}
-              aria-label="Agent effort score between 1 and 10"
-              className="flex-1 accent-[var(--accent)] cursor-pointer"
+              aria-label="Effort level"
+              className="w-full accent-[var(--accent)] cursor-pointer"
             />
-            <div className="flex gap-1.5">
-              {['Low', 'Balanced', 'High'].map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => handleEffort(b === 'Low' ? 1 : b === 'Balanced' ? 5 : 9)}
-                  className={`px-2.5 py-1 rounded-[var(--radius-sm)] text-[10px] font-medium transition cursor-pointer border ${
-                    effortBucket(effort) === b
-                      ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)]'
-                      : 'text-[var(--text-muted)] border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
           </div>
-          <p className="text-[10px] text-[var(--text-muted)] mt-2">
-            Quick override — sets your agent's effort here, and it wins over the AI effort in main Settings.
-            Low = cheap engines do mechanical work, high = flagship engines handle deep reasoning.
-          </p>
         </div>
-      </SectionCard>
 
-      {/* ── Assignment bubbles — per-assignment chat + file drop ────────── */}
-      <SectionCard id="myagent-assignment-bubbles" padding="p-4" header={
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-            Assignment bubbles
-          </span>
-          <span className="text-[10px] text-[var(--text-muted)]">
-            {assignments.length} assignment{assignments.length === 1 ? '' : 's'}
-          </span>
-        </div>
-      }>
-        <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
-          Each assignment has its own bubble: message the agent team about it, or drop a file in —
-          it gets extracted and attached to that assignment.
-        </p>
-
-        {assignments.length === 0 && (
-          <EmptyState
-            icon="📘"
-            title="No assignments yet"
-            body="Create or dump an assignment first — each one gets its own bubble."
-            actionLabel="Open Assignment Dump"
-            onAction={() => onGoTo('dump')}
-          />
-        )}
-
-        {assignments.length > 0 && (
-          <div className="space-y-2.5">
-            {assignments.map((a) => {
-              const open = !!bubbleOpen[a.id];
-              const chat = bubbleChats[a.id] || [];
-              return (
-                <div key={a.id} className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleBubble(a.id)}
-                    aria-expanded={open}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-                  >
-                    <span className="text-base leading-none">📘</span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{a.name || `Assignment #${a.id}`}</span>
-                      {/* Ghost guard (08-28): scrape pipelines can leave
-                          subject/class/due empty — never render a bare
-                          separator line. */}
-                      <span className="block text-[10px] text-[var(--text-muted)] truncate">
-                        {[a.subject, a.class_code].filter(Boolean).join(' · ') || 'uncategorized'} · due {a.due_date || 'No deadline'}
-                      </span>
-                    </span>
-                    <Badge color={a.status === 'In Progress' ? 'blue' : a.status === 'Submitted' ? 'green' : 'slate'}>
-                      {a.status}
-                    </Badge>
-                    <ChevronDown className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {open && (
-                    <div className="border-t border-[var(--border-subtle)] p-3">
-                      <div className="max-h-56 overflow-y-auto space-y-2 mb-2.5 pr-1">
-                        {chat.length === 0 && (
-                          <p className="text-[11px] text-[var(--text-muted)]">
-                            This bubble is fresh — message the team about the assignment, or add its materials with 📎.
-                          </p>
-                        )}
-                        {chat.map((m) => {
-                          const isUser = m.sender === 'user';
-
-  return (
-                            <div key={m.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[72ch] min-w-0 break-words rounded-2xl px-3.5 py-2 text-[12px] leading-relaxed border ${
-                                isUser
-                                  ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-[var(--text-primary)]'
-                                  : 'bg-[var(--bg-surface-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
-                              }`}>
-                                {m.text}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {bubbleBusy[a.id] && (
-                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] w-fit">
-                            <RefreshCw className="w-3 h-3 animate-spin text-[var(--accent-2)]" /> {agentName} is working…
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-2.5 py-1 focus-within:border-[rgba(139,92,246,0.45)] transition">
-                        <button
-                          type="button"
-                          onClick={() => { bubbleFileTarget.current = a.id; bubbleFileRef.current?.click(); }}
-                          aria-label={`Add a file to ${a.name || `assignment ${a.id}`}`}
-                          title="Attach a file — extracted and added to this assignment"
-                          className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1"
-                        >
-                          <Paperclip className="w-4 h-4" />
-                        </button>
-                        <input
-                          type="text"
-                          value={bubbleInputs[a.id] || ''}
-                          onChange={(e) => setBubbleInputs((p) => ({ ...p, [a.id]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBubbleMessage(a.id); } }}
-                          placeholder={`Message ${agentName} about this assignment…`}
-                          aria-label={`Message the ${a.name || `assignment ${a.id}`} team`}
-                          className="flex-1 bg-transparent border-none text-[16px] sm:text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => sendBubbleMessage(a.id)}
-                          disabled={!bubbleInputs[a.id]?.trim() || bubbleBusy[a.id]}
-                          aria-label={`Send message to the ${a.name || `assignment ${a.id}`} team`}
-                          className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <input ref={bubbleFileRef} type="file" className="hidden" onChange={handleBubbleFile} />
-          </div>
-        )}
-      </SectionCard>
-
-      {/* ── Pending permission strip ─────────────────────────────────────── */}
-      {pending && (
-        <SectionCard id="myagent-pending-permission" padding="p-4" className="border-amber-500/35" header={
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-              ⚠️ Action pending approval — {pending.action_type}
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">Assignment #{pending.assignment_id} · {pending.description || 'the agent wants to act on your behalf'}</p>
-          </div>
-        }>
-          <div className="space-y-2.5">
-            {/* Approve (primary) + Reject (danger); the two alternate-action
-                variants are row-level ghosts so the strip reads as 2 actions. */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve')}
-                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => { setFeedbackFor(feedbackFor === 'approve' ? '' : 'approve'); setApprovalFeedback(''); }}
-                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/15 text-[11px] font-semibold transition cursor-pointer"
-              >
-                Approve with feedback…
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePermissionAction(pending.id, 'reject')}
-                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition cursor-pointer"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => { setFeedbackFor(feedbackFor === 'reject' ? '' : 'reject'); setApprovalFeedback(''); }}
-                className="px-3.5 py-1.5 rounded-[var(--radius-sm)] border border-rose-500/35 text-rose-300 hover:bg-rose-500/15 text-[11px] font-semibold transition cursor-pointer"
-              >
-                Reject with feedback…
-              </button>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer w-fit">
-              <input
-                type="checkbox"
-                checked={autoApproveThis}
-                onChange={(e) => setAutoApproveThis(e.target.checked)}
-                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
-              />
-              <span className="text-[10px] text-[var(--text-muted)]">
-                Also auto-approve this action type ({pending.action_type}) from now on
-              </span>
-            </label>
-            {feedbackFor && (
-              <div className="space-y-2">
-                <textarea
-                  value={approvalFeedback}
-                  onChange={(e) => setApprovalFeedback(e.target.value)}
-                  rows={2}
-                  placeholder={feedbackFor === 'approve'
-                    ? 'Optional instructions to run alongside the action…'
-                    : 'Optional note for the agent…'}
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-2 text-[11px] text-[var(--text-secondary)] outline-none placeholder:text-[var(--text-muted)]"
-                  aria-label="Feedback to send with your decision"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : feedbackFor, approvalFeedback)}
-                    disabled={!approvalFeedback.trim()}
-                    className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    Send {feedbackFor === 'approve' ? 'approve' : 'reject'} with feedback
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setFeedbackFor(''); setApprovalFeedback(''); }}
-                    className="px-3 py-1.5 rounded-[var(--radius-sm)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* ── Chat + side panels ───────────────────────────────────────────── */}
-      {/* CONFIGS panel: xl+ = fixed column (chat+rail+configs on one row),
-       * lg (1024-1279) = slide-over drawer so the chat keeps its width,
-       * below lg = inline stacked block (toggled via ⚙ Configs). The chat
-       * column is always minmax(0,1fr) so fixed side columns can never
-       * pinch it below the available room. */}
-      <div className={`grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px] ${configsOpen && isXL ? 'xl:grid-cols-[220px_minmax(0,1fr)_300px]' : ''}`}>
-        {configsOpen && isXL && (
-          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)] min-w-0">
-            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
-          </div>
-        )}
-        {configsOpen && !isXL && isLG && createPortal(
-          <div className="fixed inset-0 z-50">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-fadeIn"
-              onClick={() => setConfigsOpen(false)}
-              aria-hidden="true"
-            />
-            <div className="absolute inset-y-0 left-0 w-[min(320px,85vw)] p-3 sm:p-4 flex flex-col" role="dialog" aria-label="Agent configs">
-              <div className="flex-1 min-h-0">
-                <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-        {configsOpen && !isLG && (
-          <div className="h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)]">
-            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
-          </div>
-        )}
-        {/* Chat */}
-        <SectionCard id="myagent-chat" padding="p-0" className="min-w-0 overflow-hidden flex flex-col h-[clamp(480px,calc(100vh-16rem),760px)] supports-[height:100dvh]:h-[clamp(480px,calc(100dvh-16rem),760px)]" header={
-          <div className="px-4 sm:px-5 py-3.5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <div className="flex items-center gap-2.5 min-w-0 shrink">
+        {/* Right Canvas: Message Stream + Floating Composer */}
+        <div className="panel p-0 flex flex-col overflow-hidden">
+          {/* Active Chat Header */}
+          <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
               <AgentAvatar
                 size="sm"
                 status={busy ? 'working' : 'ready'}
                 src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
               />
-              <span className="text-xs font-semibold text-[var(--text-primary)] truncate">Chat with {agentName}</span>
+              <span className="text-xs font-semibold text-white truncate">
+                {activeThread ? threads.find((t) => t.id === activeThread)?.title || 'Current Chat' : `Chat with ${agentName}`}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap shrink">
-              <span className="hidden 2xl:block"><span className="aurora-chip">{agentName}</span></span>
-              <button
-                type="button"
-                onClick={() => setConfigsOpen(!configsOpen)}
-                aria-pressed={configsOpen}
-                title={configsOpen ? 'Hide the Configs sidebar' : 'Show the Configs sidebar'}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-[10px] font-semibold transition cursor-pointer ${
-                  configsOpen
-                    ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
-                    : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)]'
-                }`}
-              >
-                <Settings2 className="w-3 h-3" /> Configs
-              </button>
-              <button
-                type="button"
-                onClick={newChat}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-[10px] font-semibold transition cursor-pointer hover:bg-[var(--accent-hover)]"
-                title="Start a new conversation"
-              >
-                <Plus className="w-3 h-3" /> New chat
-              </button>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleCompact}
                 disabled={!!compactMsg}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition cursor-pointer disabled:opacity-50"
+                className="px-2.5 py-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer flex items-center gap-1.5"
+                title="Compact conversation history"
               >
                 <RefreshCw className={`w-3 h-3 ${compactMsg ? 'animate-spin' : ''}`} />
-                {compactMsg || 'Compact'}
+                <span>{compactMsg || 'Compact'}</span>
               </button>
             </div>
           </div>
-        }>
 
-
-          {/* Messages */}
-          <div ref={listRef} className="flex-1 min-h-0 p-5 overflow-y-auto space-y-3">
+          {/* Messages Stream */}
+          <div ref={listRef} className="flex-1 min-h-0 p-5 overflow-y-auto space-y-3.5">
             {messages.map((m) => {
               const isUser = m.sender === 'user';
               const isAssignmentBubble = m.kind === 'assignment';
               const evtMeta = EVENT_META[m.eventType] || EVENT_META.created;
+
               if (isAssignmentBubble) {
                 return (
                   <div key={m.id} className="w-full flex flex-col items-start">
-                    {/* Assignment bubble (operator 08-28): lifecycle events from the
-                        assignment watcher render as own card-style bubble — label,
-                        headline, detail and a jump to the dashboard. */}
-                    <div className="w-full sm:max-w-[92%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.16)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.12)] p-3.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-base leading-none" aria-hidden="true">{evtMeta.icon}</span>
-                        <span className="aurora-chip font-mono font-bold tracking-wider">{evtMeta.label}</span>
-                        <span className="ml-auto text-[9px] text-[var(--text-muted)] font-mono">{m.time}</span>
+                    <div className="w-full sm:max-w-[85%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.14)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.10)] p-3.5 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{evtMeta.icon}</span>
+                        <span className="chip chip-accent text-[10px] font-mono">{evtMeta.label}</span>
+                        <span className="ml-auto text-[10px] text-[var(--text-muted)] font-mono">{m.time}</span>
                       </div>
-                      <div className="text-[12px] font-semibold text-[var(--text-primary)] leading-relaxed">{m.text}</div>
-                      {m.detail && <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{m.detail}</div>}
-                      <div className="flex items-center gap-2 mt-2.5">
+                      <div className="text-xs font-semibold text-white leading-relaxed">{m.text}</div>
+                      {m.detail && <div className="text-xs text-[var(--text-muted)]">{m.detail}</div>}
+                      <div className="pt-1">
                         <button
                           type="button"
                           onClick={() => onGoTo('overview')}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
-                          title="Open the assignment dashboard"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer"
                         >
-                          <ArrowUpRight className="w-3 h-3" aria-hidden="true" /> Open in dashboard
+                          <ArrowUpRight className="w-3.5 h-3.5" /> View in Dashboard
                         </button>
-                        {m.assignment && (
-                          <span className="text-[9px] text-[var(--text-muted)] font-mono truncate max-w-[50%]">
-                            Assignment #{m.assignment.id}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
                 );
               }
+
               return (
                 <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                  {/* Shared aurora bubble language — matches AdminAgentChat exactly */}
-                  <div className={`max-w-[72ch] min-w-0 break-words rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed border ${
+                  <div className={`max-w-[80ch] min-w-0 break-words rounded-[var(--radius-lg)] px-4 py-3 text-xs leading-relaxed border ${
                     isUser
-                      ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-[var(--text-primary)]'
-                      : 'bg-[var(--bg-surface-elevated)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                      ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-white'
+                      : 'panel text-slate-200'
                   }`}>
                     {m.text}
                   </div>
-                  {!isUser && m.text && m.text.length <= 1200 && (
-                    <button
-                      type="button"
-                      onClick={() => speakText(m.text)}
-                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] mt-1 transition cursor-pointer"
-                      title="Hear this reply (Voicebox TTS)"
-                    >
-                      🔊 hear
-                    </button>
-                  )}
-                  <span className="text-[10px] text-[var(--text-muted)] mt-1 px-1">{m.time}</span>
+                  <div className="flex items-center gap-2 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
+                    <span>{m.time}</span>
+                    {!isUser && m.text && m.text.length <= 1200 && (
+                      <button
+                        type="button"
+                        onClick={() => speakText(m.text)}
+                        className="hover:text-[var(--accent)] transition cursor-pointer flex items-center gap-1"
+                        title="Listen to this reply"
+                      >
+                        🔊 Listen
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
+
             {busy && (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] w-fit">
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] w-fit animate-pulse">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
-                <span>{agentName} is working…</span>
+                <span>{agentName} is thinking & generating…</span>
               </div>
             )}
           </div>
 
-          {/* Composer (operator 08-28: minimize toggle lives in this bar so the
-              chat header stays at 1 primary + 2 secondary) */}
+          {/* Bottom Floating Composer */}
           <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-            {promptMinimized ? (
-              <button
-                type="button"
-                onClick={() => { setPromptMinimized(false); setTimeout(() => chatInputRef.current?.focus(), 0); }}
-                className="w-full py-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer flex items-center justify-center gap-2"
-              >
-                <ChevronUp className="w-3.5 h-3.5" /> Prompt box minimized — click to expand
-              </button>
-            ) : (
             <form
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-              className="flex items-end gap-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-1.5 focus-within:border-[rgba(139,92,246,0.45)] transition"
+              className="flex items-end gap-2 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-2 focus-within:border-[rgba(139,92,246,0.45)] transition"
             >
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach a file for the agent"
+                aria-label="Attach file"
+                title="Attach document or media"
                 className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1"
               >
                 <Paperclip className="w-4 h-4" />
@@ -1454,9 +1157,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               <button
                 type="button"
                 onClick={toggleRecord}
-                aria-label={recording ? 'Stop recording' : 'Record a voice message'}
+                aria-label={recording ? 'Stop recording' : 'Record voice'}
                 className={`text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1 ${recording ? 'text-red-400 animate-pulse' : ''}`}
-                title={recording ? 'Stop recording' : 'Dictate a message (Voicebox)'}
+                title={recording ? 'Stop voice recording' : 'Dictate message'}
               >
                 <Mic className="w-4 h-4" />
               </button>
@@ -1481,319 +1184,65 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                     if (input.trim()) sendMessage();
                   }
                 }}
-                placeholder={`Ask ${agentName} to do anything…`}
+                placeholder={`Message ${agentName} (Enter to send, Shift+Enter for newline)…`}
                 aria-label="Agent prompt input"
-                className="flex-1 min-w-0 bg-transparent border-none text-[16px] sm:text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none leading-relaxed py-1.5 max-h-[240px] overflow-y-auto"
+                className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none resize-none leading-relaxed py-1 max-h-[160px] overflow-y-auto"
               />
               <button
                 type="submit"
-                disabled={!input.trim()}
-                aria-label="Send message to agent"
-                className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
+                disabled={!input.trim() || busy}
+                aria-label="Send prompt"
+                className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
-              <button
-                type="button"
-                onClick={() => setPromptMinimized(true)}
-                aria-label="Minimize the prompt box"
-                title="Minimize the prompt box"
-                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition cursor-pointer p-1"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
             </form>
-            )}
           </div>
-        </SectionCard>
-
-        {/* Right rail */}
-        <div className="space-y-5 min-w-0">
-          {/* Chat history (operator 08-26): timestamps, rename, pin */}
-          <SectionCard id="myagent-chats" padding="p-3" header={
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
-                <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Chats</span>
-              </span>
-              <button
-                type="button"
-                onClick={newChat}
-                className="flex items-center gap-1 px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
-              >
-                <Plus className="w-3 h-3" /> New
-              </button>
-            </div>
-          }>
-            <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {/* No hardcoded "Main chat" entry (operator 08-27): the current
-                  conversation (id 0) comes from /api/agent/threads as a regular
-                  chat row — rename/pin/delete affordances included. */}
-              {threads.some((t) => t.pinned) && (
-                <>
-                  <div className="text-[9px] text-amber-400/90 uppercase tracking-wider px-1 pt-1.5">📌 Pinned</div>
-                  {threads.filter((t) => t.pinned).map((t) => renderThreadRow(t))}
-                </>
-              )}
-              {threads.some((t) => !t.pinned) && (
-                <>
-                  <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider px-1 pt-1.5">Earlier</div>
-                  {threads.filter((t) => !t.pinned).map((t) => renderThreadRow(t))}
-                </>
-              )}
-            </div>
-          </SectionCard>
-
-          {/* Identity controls */}
-          <SectionCard id="myagent-identity-controls" header={
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
-                <UserIcon className="w-3 h-3 shrink-0" /> <span className="truncate">Identity</span>
-              </span>
-            </div>
-          }>
-            <div className="flex items-center gap-3">
-              <AvatarUpload
-                url={settings.profile?.avatarUrl}
-                initial="👤"
-                label="your avatar"
-                onUpload={(f) => handleAvatarUpload(f, 'user')}
-              />
-              <div className="text-[11px] text-[var(--text-muted)]">
-                <div className="text-xs font-semibold text-[var(--text-primary)]">{settings.profile?.displayName || userId}</div>
-                <div className="text-[10px]">Upload PNG/JPG for your profile picture.</div>
-              </div>
-            </div>
-            <div>
-              <div className="text-[11px] font-medium text-[var(--text-secondary)] mb-1.5">Personality</div>
-              <input
-                value={ai.personality || ''}
-                onChange={(e) => set('ai.personality', e.target.value)}
-                placeholder='Type it — e.g. "Calm tutor who checks understanding" or "Sarcastic"'
-                aria-label="Agent personality"
-                className="clean-input w-full px-3 py-2 text-[11px] outline-none"
-              />
-              <div className="text-[9px] text-[var(--text-muted)] mt-1">Free text — how the agent should act, in your own words.</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-medium text-[var(--text-secondary)] mb-1.5">Instructions</div>
-              <textarea
-                value={ai.instructions || ''}
-                onChange={(e) => set('ai.instructions', e.target.value)}
-                rows={3}
-                placeholder="How should the agent behave? What do you want it to always remember about how you work?"
-                aria-label="Agent instructions"
-                className="clean-input w-full px-3 py-2 text-[11px] outline-none resize-none"
-              />
-            </div>
-          </SectionCard>
-
-          {/* Recent agent actions — rollback surface */}
-          {ledger.length > 0 && (
-            <SectionCard id="myagent-ledger" padding="p-4" header={
-              <div className="flex items-center justify-between w-full">
-                <div className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <Undo2 className="w-3.5 h-3.5 text-[var(--accent)]" /> Recent actions
-                </div>
-                <span className="text-[10px] text-[var(--text-muted)]">{ledger.filter((a) => a.status === 'done').length} active</span>
-              </div>
-            }>
-              <div className="space-y-1.5">
-                {ledger.slice(0, 8).map((a) => (
-                  <div
-                    key={a.id}
-                    className={`flex items-center justify-between gap-2 p-2 rounded-[var(--radius-md)] border ${
-                      a.status === 'undone'
-                        ? 'border-[var(--border-subtle)] bg-[var(--bg-surface)] opacity-60'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[11px] text-[var(--text-secondary)] truncate font-medium">
-                        {a.action_type.replace(/_/g, ' ')}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-muted)] truncate">
-                        {a.summary || `#${a.id}`}
-                        {a.status === 'undone' && <span className="text-emerald-400"> · rolled back</span>}
-                      </div>
-                    </div>
-                    {a.undoable && (
-                      <button
-                        type="button"
-                        onClick={() => undoAction(a.id)}
-                        className="shrink-0 px-2 py-1 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
-                      >
-                        Undo
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed">
-                Every agent action is recorded with an undo snapshot — creations, deletes, settings changes, reads.
-                Undoing a read revokes that content: the agent treats it as unseen.
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Permanent memory */}
-          <SectionCard id="myagent-memory" header={
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
-                <Database className="w-3 h-3 shrink-0" /> <span className="truncate">Permanent memory</span>
-              </span>
-              <Badge color={memory.length ? 'blue' : 'slate'}>{memory.length} entries</Badge>
-            </div>
-          }>
-            <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
-              The agent always reads this. Add facts about yourself, preferences, deadlines — and it stays forever until you delete it.
-              Click any entry (or its arrow) to load it into your prompt box.
-            </p>
-            <div className="space-y-2 max-h-56 overflow-y-auto mb-3">
-              {memory.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No memories yet — teach your agent something.</div>}
-              {memory.map((m) => (
-                <div
-                  key={m.id}
-                  onClick={() => useMemory(m)}
-                  title="Select this memory — loads into your prompt"
-                  className="group flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{m.text}</p>
-                    <div className="text-[9px] text-[var(--text-muted)] mt-1">{timeAgo(m.created_at)}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); useMemory(m); }}
-                    aria-label="Load this memory into the prompt"
-                    title="Load into prompt box"
-                    className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
-                    aria-label="Delete memory entry"
-                    className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={memoryText}
-                onChange={(e) => setMemoryText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addMemory()}
-                placeholder="Add a memory…"
-                aria-label="New memory entry"
-                className="clean-input flex-1 px-3 py-2 text-[11px] outline-none"
-              />
-              <button
-                type="button"
-                onClick={addMemory}
-                aria-label="Save memory"
-                className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </SectionCard>
-
-          {/* Files */}
-          <SectionCard id="myagent-files" header={
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
-                <FileText className="w-3 h-3 shrink-0" /> <span className="truncate">Files</span>
-              </span>
-              <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
-            </div>
-          }>
-            <p className="text-[10px] text-[var(--text-muted)] mb-3 leading-relaxed">
-              Upload skills, rules, automations or personality files — the agent loads them and follows them.
-            </p>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {FILE_KINDS.map((k) => (
-                <button
-                  key={k.key}
-                  type="button"
-                  onClick={() => setFileKind(k.key)}
-                  className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-[10px] transition cursor-pointer border ${
-                    fileKind === k.key
-                      ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold'
-                      : 'text-[var(--text-muted)] border-[var(--border-subtle)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  {k.icon} {k.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[9px] text-[var(--text-muted)] mb-2">{fileKindMeta.hint}</p>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full py-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-dashed border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer flex items-center justify-center gap-2 mb-3"
-            >
-              <Upload className="w-3.5 h-3.5" /> Upload {fileKindMeta.label.toLowerCase()} file
-            </button>
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadFile} />
-            <div className="space-y-2 max-h-52 overflow-y-auto">
-              {files.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No files loaded yet.</div>}
-              {files.map((f) => {
-                const km = FILE_KINDS.find((k) => k.key === f.kind) || FILE_KINDS[0];
-                return (
-                  <div key={f.id} className="group flex items-center gap-2.5 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] transition">
-                    <span className="text-sm leading-none">{km.icon}</span>
-                    <button
-                      type="button"
-                      onClick={() => openFile(f)}
-                      className="flex-1 min-w-0 text-left cursor-pointer"
-                      title={`Read ${f.file_name}`}
-                    >
-                      <div className="text-[11px] text-[var(--text-secondary)] truncate hover:text-[var(--accent)] transition">{f.file_name}</div>
-                      <div className="text-[9px] text-[var(--text-muted)]">{km.label} · {fmt(f.size_bytes)} B · tap to read</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteFile(f.id)}
-                      aria-label={`Delete file ${f.file_name}`}
-                      className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionCard>
-
         </div>
       </div>
-      {/* File content viewer (operator 08-26) */}
+
+      {/* ── Slide-Over Drawer for Memory & Skills ── */}
+      {configsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setConfigsOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-md bg-[var(--bg-canvas)] border-l border-[var(--border-subtle)] p-5 h-full flex flex-col shadow-2xl z-10">
+            <div className="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧠</span>
+                <h3 className="text-sm font-bold text-white">Agent Memory & Skills</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfigsOpen(false)}
+                className="text-[var(--text-muted)] hover:text-white p-1 rounded-md transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-4">
+              <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File viewer modal */}
       {viewFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setViewFile(null)}>
-          <div className="clean-card surface-glass-strong w-full max-w-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
-              <div className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 truncate">
+          <div className="panel w-full max-w-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
+              <div className="text-sm font-bold text-white flex items-center gap-2 truncate">
                 <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
                 <span className="truncate">{viewFile.file_name}</span>
-                <span className="text-[10px] text-[var(--text-muted)] font-mono">{viewFile.kind}</span>
+                <span className="chip chip-neutral text-[10px]">{viewFile.kind}</span>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {/* operator 08-28: SELECT this file's content into the prompt box */}
-                <button
-                  type="button"
-                  onClick={() => { selectConfig(`📎 ${viewFile.file_name}\n\n${viewFile.content}`); setViewFile(null); }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
-                  title="Load this file into the prompt box"
-                >
-                  <Send className="w-3 h-3" /> Prompt
-                </button>
-                <button type="button" onClick={() => setViewFile(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer">✕</button>
-              </div>
+              <button type="button" onClick={() => setViewFile(null)} className="text-[var(--text-muted)] hover:text-white transition cursor-pointer">✕</button>
             </div>
-            <div className="overflow-y-auto px-5 py-4 text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap font-mono">
+            <div className="overflow-y-auto p-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">
               {viewFile.content}
             </div>
           </div>
