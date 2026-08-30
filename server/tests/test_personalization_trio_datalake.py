@@ -165,32 +165,38 @@ def test_models_catalog_and_effort_score_tiers():
     """Verify functional model tiers, Gemini 3.7 Flash multimodal, and effort tier resolution."""
     from server.user_settings_service import AVAILABLE_MODELS, resolve_effort_tier
 
-    # 1. Models catalog contains functional tiers and Gemini 3.7 Flash
+    # 1. Models catalog contains new verified models
     model_ids = {m["id"] for m in AVAILABLE_MODELS}
-    assert "moe_high_throughput" in model_ids
-    assert "fast_utility_worker" in model_ids
-    assert "instruction_parser" in model_ids
-    assert "deep_cognitive_engine" in model_ids
-    assert "elite_humanizer_tier" in model_ids
-    assert "fast_draft_tier" in model_ids
+    assert "nemotron_nano" in model_ids
+    assert "qwen_72b" in model_ids
+    assert "gemini_31_flash_lite" in model_ids
+    assert "deepseek_v4_flash" in model_ids
+    assert "deepseek_v4_pro" in model_ids
     assert "gemini_37_flash" in model_ids
 
-    # 2. Low effort score (1 - 350) -> routes to cheap/fast utility models
-    low = resolve_effort_tier(200)
-    assert low["tier"] == "low_effort"
-    assert low["flashcard_model"] == "fast_utility_worker"
-    assert low["summary_model"] == "moe_high_throughput"
+    # 2. Effort Level 1 & 2 -> routes to Nemotron Nano & Qwen 72B
+    eff1 = resolve_effort_tier(100)
+    assert eff1["level"] == 1
+    assert eff1["draft_model"] == "nemotron_nano"
 
-    # 3. Medium effort score (351 - 750) -> routes to balanced orchestration
-    med = resolve_effort_tier(500)
-    assert med["tier"] == "medium_effort"
-    assert med["draft_model"] == "instruction_parser"
+    eff2 = resolve_effort_tier(200)
+    assert eff2["level"] == 2
+    assert eff2["draft_model"] == "qwen_72b"
 
-    # 4. High effort score (751 - 1000) -> routes to deep reasoning flagship models
-    high = resolve_effort_tier(900)
-    assert high["tier"] == "high_effort"
-    assert high["draft_model"] == "deep_cognitive_engine"
-    assert high["humanizer_model"] == "elite_humanizer_tier"
+    # 3. Effort Level 3 -> routes to Gemini 3.1 Flash Lite
+    eff3 = resolve_effort_tier(300)
+    assert eff3["level"] == 3
+    assert eff3["draft_model"] == "gemini_31_flash_lite"
+
+    # 4. Effort Levels 4-7 -> routes to DeepSeek-V4 Flash Vision
+    eff5 = resolve_effort_tier(500)
+    assert eff5["level"] == 5
+    assert eff5["draft_model"] == "deepseek_v4_flash"
+
+    # 5. Effort Levels 8-10 -> routes to DeepSeek-V4 Pro Vision
+    eff9 = resolve_effort_tier(900)
+    assert eff9["level"] == 9
+    assert eff9["draft_model"] == "deepseek_v4_pro"
 
 
 def test_auto_start_and_effort_trio_scoping():
