@@ -1,50 +1,222 @@
 /* ────────────────────────────────────────────────────────────────────────────
- * AnonymousLanding.jsx — signed-out marketing state (auth-gate audit 08-28).
- * Shown when the session probe confirms no active session (or skips it).
- * Deliberately contains NO authenticated data and NO dashboard internals:
- * the authenticated shell and every data view live behind the auth gate,
- * so anonymous visitors only ever see this page.
+ * AnonymousLanding.jsx — signed-out marketing state.
+ *
+ * Auth gate (08-28): contains NO authenticated data and NO dashboard
+ * internals. Anonymous visitors only ever see this page.
+ *
+ * Conversion + perf rewrite (08-29). What changed and why:
+ *
+ *  · Zero `motion` imports. The old page pulled TypewriterEffect,
+ *    BackgroundBeams and MovingBorderButton, which dragged framer-motion
+ *    (140 KB) into the anonymous critical path to animate decoration. The
+ *    typewriter also withheld the headline for ~1.5s — the single most
+ *    important sentence on the site arrived last. Everything here is CSS.
+ *
+ *  · The three feature cards used to render a large empty bordered box
+ *    containing a duplicate copy of the card's own icon and a meaningless
+ *    gradient bar. That box occupied the most valuable space on the page and
+ *    said nothing. It is now a real depiction of the product.
+ *
+ *  · Pricing exists. There was previously no price anywhere in the signed-out
+ *    experience — visitors were asked to create an account before learning
+ *    what the thing costs. Numbers come from GET /api/plans (server/plans.py),
+ *    never hardcoded here, so marketing copy cannot drift from billing.
+ *
+ *  · One brand lockup instead of three, and one primary action per section.
  * ────────────────────────────────────────────────────────────────────────── */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Layers, Brain, History as HistoryIcon,
-  ArrowRight, ShieldCheck, GraduationCap, Puzzle, Sparkles,
+  Layers, Brain, History as HistoryIcon, ArrowRight, ShieldCheck,
+  Puzzle, Sparkles, Check, FileText,
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
-import { TypewriterEffect } from './ui/typewriter-effect.jsx';
-import { MovingBorderButton } from './ui/moving-border.jsx';
-import { BentoGrid, BentoGridItem } from './ui/bento-grid.jsx';
-import { BackgroundBeams } from './ui/background-beams.jsx';
 
 const FEATURES = [
   {
     Icon: Layers,
-    title: 'Assignment Bubbles & Sub-Agent Teams',
-    body: 'Scraped and imported assignments organize themselves into subject bubbles, each with its own AI sub-agent workspace.',
+    title: 'Subject bubbles',
+    body: 'Imported coursework sorts itself into per-subject bubbles, each with its own agent workspace — instead of one undifferentiated pile.',
   },
   {
     Icon: Brain,
-    title: 'My Agent Workspace',
-    body: 'A per-assignment AI agent with its own chat thread, files and permanent memory — capture, understand, execute.',
+    title: 'An agent per assignment',
+    body: 'Every assignment gets a dedicated thread with its own files and memory, so context never bleeds between a lab report and an essay.',
   },
   {
     Icon: HistoryIcon,
-    title: 'Turn-In Ledger & Credits',
-    body: 'Mark assignments turned in and keep a real historical ledger of everything submitted, with timestamps and undo. Track usage and credits at a glance, and manage your plan from one clear account view.',
+    title: 'An honest turn-in ledger',
+    body: 'Mark work turned in and keep a timestamped record of what you actually submitted, with undo. Your own audit trail.',
   },
 ];
 
 const STEPS = [
-  { n: '01', title: 'Create your free account', body: 'Pick a public ID and a password — that is all you need to unlock the workspace.' },
-  { n: '02', title: 'Import your coursework', body: 'Paste an assignment dump or let the browser extension capture scraped assignments.' },
-  { n: '03', title: 'Generate, organize and turn in', body: 'Bubbles group your work by subject; your agent drafts, and the ledger keeps everything honest.' },
+  { n: '01', title: 'Create an account', body: 'A public ID and a password. No email, no card.' },
+  { n: '02', title: 'Bring your coursework', body: 'Paste an assignment dump, or let the browser extension capture it.' },
+  { n: '03', title: 'Work and turn in', body: 'Bubbles group it, your agent drafts, the ledger records it.' },
 ];
 
-/* Aurora glass button primitives (login-page scope only — Button.jsx owns the
- * app chrome; this page predates it and is consumed by the appearance engine
- * through var(--…) tokens). */
 const BTN_PRIMARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold transition cursor-pointer glow-accent';
-const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm font-semibold transition cursor-pointer';
+const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] text-[var(--text-primary)] text-sm font-semibold transition cursor-pointer';
+
+/* ── Product depiction ───────────────────────────────────────────────────────
+ * A faithful, static rendering of the real workspace built from the same
+ * design tokens as the app — not a screenshot. Screenshots of this product
+ * would contain real student coursework, so shipping one publicly is a
+ * privacy problem; the course names below are generic by construction.
+ * Decorative: the surrounding copy carries the meaning for screen readers. */
+function ProductPreview() {
+  const bubbles = [
+    { subject: 'Organic Chemistry', count: 4, tone: 'var(--accent)' },
+    { subject: 'US History', count: 2, tone: 'var(--accent-2)' },
+    { subject: 'Calculus II', count: 3, tone: '#a78bfa' },
+  ];
+  return (
+    <div aria-hidden="true" className="clean-card p-4 sm:p-5 space-y-4 select-none">
+      {/* window chrome */}
+      <div className="flex items-center gap-2 pb-3 border-b border-[var(--border-subtle)]">
+        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-hover)]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-subtle)]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-[var(--border-subtle)]" />
+        <span className="ml-2 text-[11px] font-mono text-[var(--text-muted)]">workspace</span>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-[1.05fr_1fr]">
+        {/* left: subject bubbles */}
+        <div className="space-y-2.5">
+          <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+            Bubbles
+          </div>
+          {bubbles.map(({ subject, count, tone }) => (
+            <div
+              key={subject}
+              className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]"
+            >
+              <span
+                className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center"
+                style={{ background: 'color-mix(in srgb, ' + tone + ' 18%, transparent)' }}
+              >
+                <Layers className="w-4 h-4" style={{ color: tone }} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{subject}</span>
+                <span className="block text-[11px] text-[var(--text-muted)]">{count} open</span>
+              </span>
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} />
+            </div>
+          ))}
+        </div>
+
+        {/* right: agent thread + ledger */}
+        <div className="space-y-2.5">
+          <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+            Assignment agent
+          </div>
+          <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
+            <div className="flex items-start gap-2">
+              <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[var(--text-muted)]" />
+              <span className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                Lab report — reaction mechanisms
+              </span>
+            </div>
+            <div className="space-y-1.5 pl-5">
+              <span className="block h-1.5 rounded-full bg-[var(--border-subtle)] w-[92%]" />
+              <span className="block h-1.5 rounded-full bg-[var(--border-subtle)] w-[78%]" />
+              <span className="block h-1.5 rounded-full bg-[var(--border-subtle)] w-[85%]" />
+            </div>
+            <div className="flex items-center gap-1.5 pt-0.5 pl-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">drafting…</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+            <span className="text-[11px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
+              Essay draft — turned in
+            </span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">14:02</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Pricing ─────────────────────────────────────────────────────────────────
+ * Reads GET /api/plans. Renders nothing at all if the call fails: quoting a
+ * stale hardcoded price is worse than quoting none, and a visitor who sees no
+ * pricing block is strictly better off than one who is quoted a number the
+ * checkout will contradict. */
+function Pricing({ onOpenAuth }) {
+  const [plans, setPlans] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/plans', { credentials: 'omit' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.plans?.length) setPlans(d.plans); })
+      .catch(() => { /* offline or backend down — section stays hidden */ });
+    return () => { alive = false; };
+  }, []);
+
+  if (!plans) return null;
+
+  const fmt = (n) => n.toLocaleString();
+
+  return (
+    <section id="pricing" className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+      <div className="text-center space-y-2 mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Start free. Upgrade only for volume.</h2>
+        <p className="text-sm text-[var(--text-muted)]">
+          Every plan includes every feature. The only difference is how much you can run each month.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {plans.map((p) => (
+          <div
+            key={p.id}
+            className={`clean-card p-5 flex flex-col gap-4 relative ${
+              p.popular ? 'border-[var(--accent)]/50 glow-accent' : ''
+            }`}
+          >
+            {p.popular && (
+              <span className="absolute -top-2.5 left-5 aurora-chip text-[10px] py-0.5">Most popular</span>
+            )}
+            <div className="space-y-1">
+              <div className="text-sm font-semibold text-[var(--text-primary)]">{p.name}</div>
+              <div className="text-xs text-[var(--text-muted)] leading-relaxed min-h-[2.5rem]">{p.tagline}</div>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
+                ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
+              </span>
+              <span className="text-xs text-[var(--text-muted)]">/mo</span>
+            </div>
+            <div className="text-xs text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-3">
+              <span className="font-semibold text-[var(--text-primary)]">{fmt(p.monthly_credits)}</span> credits / month
+            </div>
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className={`${p.popular ? BTN_PRIMARY : BTN_SECONDARY} w-full px-4 py-2.5 mt-auto`}
+            >
+              {p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <ul className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-w-[900px] mx-auto">
+        {(plans[0]?.capabilities || []).map((c) => (
+          <li key={c} className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
+            <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-400" />
+            <span>{c}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = null }) {
   const openAuth = () => { if (onOpenAuth) onOpenAuth(); };
@@ -54,18 +226,22 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       {/* Mobile perf (08-28): backdrop-blur-xl repaints the underlying canvas
           on every scroll frame (~5ms/frame on low-end phones). Above sm the
-          background is already 76% opaque color-mix, so blur adds little — use
-          it only on larger screens. */}
+          background is already 76% opaque color-mix, so blur adds little. */}
       <header
         className="sticky top-0 z-40 border-b border-[var(--border-subtle)] sm:backdrop-blur-xl"
         style={{ backgroundColor: 'color-mix(in srgb, var(--bg-base) 76%, transparent)' }}
       >
-        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 h-14 flex items-center gap-3">
-          <div className="flex items-center gap-2 cursor-pointer select-none" aria-label="helpotron ACADEMIC OS">
-            <AnimatedLogo size="md" wordmarkClassName="hidden sm:flex" />
-            <span className="hidden sm:inline text-[10px] font-bold tracking-wider text-[var(--text-muted)]">HELPOTRON</span>
-          </div>
+        <div className="max-w-[1100px] mx-auto px-3 sm:px-6 h-14 flex items-center gap-3">
+          {/* One lockup. AnimatedLogo already renders the wordmark — the page
+              used to print "HELPOTRON" a second time right beside it. */}
+          <AnimatedLogo size="md" wordmarkClassName="hidden sm:flex" />
           <div className="ml-auto flex items-center gap-2">
+            <a
+              href="#pricing"
+              className="hidden sm:inline-flex px-3 py-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold transition"
+            >
+              Pricing
+            </a>
             <button
               type="button"
               onClick={openAuth}
@@ -78,131 +254,107 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               onClick={openAuth}
               className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer glow-accent whitespace-nowrap"
             >
-              Create free account
+              Start free
             </button>
           </div>
         </div>
       </header>
 
-      {/* ── Hero (Aceternity background beams behind the copy, 08-28) ───────── */}
-      <section className="relative max-w-[900px] mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-16 sm:pb-24 text-center space-y-7 overflow-hidden">
-        <BackgroundBeams className="[mask-size:80px] opacity-70" />
-        <div className="relative z-10 space-y-7">
-        <span className="aurora-chip text-xs">
-          <Sparkles className="w-3.5 h-3.5 text-[var(--accent-2)]" /> Your autonomous academic operating system
-        </span>
-        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight max-w-3xl mx-auto">
-          Every assignment, organized.{' '}
-          <TypewriterEffect
-            words={[
-              { text: 'Every', className: 'text-aurora' },
-              { text: 'deadline,', className: 'text-aurora' },
-              { text: 'handled.', className: 'text-aurora' },
-            ]}
-            className="inline-block text-3xl sm:text-5xl font-extrabold tracking-tight"
-            cursorClassName="bg-[var(--accent)]"
-          />
-        </h1>
-        <p className="text-sm sm:text-base text-[var(--text-muted)] max-w-xl mx-auto leading-relaxed">
-          Helpotron captures your coursework, organizes it into subject bubbles, and turns
-          in assignment work with a per-assignment AI agent — while keeping a real,
-          honest ledger of what you submitted.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <MovingBorderButton
-            type="button"
-            onClick={openAuth}
-            borderRadius="0.75rem"
-            duration={2600}
-            containerClassName="h-11 w-auto px-6"
-            className="h-full w-auto bg-[var(--accent-subtle)]/[0.15] text-xs sm:text-sm font-semibold text-white"
-            borderClassName="bg-[radial-gradient(var(--accent)_40%,transparent_60%)]"
-          >
-            <span className="inline-flex items-center gap-2">Create free account <ArrowRight className="w-4 h-4" /></span>
-          </MovingBorderButton>
-          <button
-            type="button"
-            onClick={openAuth}
-            className={`${BTN_SECONDARY} px-6 py-3`}
-          >
-            Sign in <GraduationCap className="w-4 h-4" />
-          </button>
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-12 sm:pb-16">
+        <div className="max-w-[760px] mx-auto text-center space-y-6">
+          <span className="aurora-chip text-xs">
+            <Sparkles className="w-3.5 h-3.5 text-[var(--accent-2)]" /> Your autonomous academic operating system
+          </span>
+          {/* Static headline: readable on first paint. The previous typewriter
+              revealed this line a word at a time and delayed the page's whole
+              value proposition behind an animation. */}
+          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05]">
+            Every assignment, organized.<br />
+            <span className="text-aurora">Every deadline, handled.</span>
+          </h1>
+          <p className="text-base sm:text-lg text-[var(--text-muted)] max-w-xl mx-auto leading-relaxed">
+            Helpotron captures your coursework, sorts it into subject bubbles, and gives
+            every assignment its own AI agent — while keeping an honest ledger of what
+            you actually turned in.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
+            <button type="button" onClick={openAuth} className={`${BTN_PRIMARY} px-7 py-3.5 text-base w-full sm:w-auto`}>
+              Start free <ArrowRight className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={openAuth} className={`${BTN_SECONDARY} px-6 py-3.5 w-full sm:w-auto`}>
+              Sign in
+            </button>
+          </div>
+          {/* Honest and unusually strong: signup genuinely collects only a
+              public ID and a password — no email field, no card. */}
+          <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-[var(--text-muted)]">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> No credit card
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> No email required
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Nothing personal shown before sign-in
+            </span>
+          </p>
         </div>
-        <p className="flex items-center justify-center gap-1.5 text-xs text-[var(--text-muted)]">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          Your workspace unlocks after a one-time sign-in — nothing personal is shown before that.
-        </p>
+
+        {/* Show the product instead of describing it. */}
+        <div className="mt-12 sm:mt-16 max-w-[900px] mx-auto">
+          <ProductPreview />
         </div>
       </section>
 
-      {/* ── Features (Aceternity bento grid, 08-28) ─────────────────────────── */}
-      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-        {/* 08-29 mobile audit: fixed `md:auto-rows-[13rem]` clipped the third
-            feature card (222-char body) at every md+ width — 229px box vs
-            336–402px content at 768. minmax lets the row grow; 3 columns now
-            only claim space where they actually fit (lg+), so the md tablet
-            range stacks the cards like mobile instead of squeezing them. */}
-        <BentoGrid className="max-w-[1200px] md:auto-rows-[minmax(13rem,auto)] lg:grid-cols-3">
+      {/* ── Features ────────────────────────────────────────────────────────── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+        <div className="grid gap-4 md:grid-cols-3">
           {FEATURES.map(({ Icon, title, body }) => (
-            <BentoGridItem
-              key={title}
-              title={title}
-              description={body}
-              icon={<Icon className="w-5 h-5 text-[var(--accent)]" />}
-              header={
-                <div className="flex flex-1 items-start justify-between rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-base)]/60 p-3">
-                  <div className="w-11 h-11 rounded-xl bg-[var(--accent-subtle)] border border-[var(--accent-subtle)] flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-[var(--accent)]" />
-                  </div>
-                  <div className="h-1.5 w-16 rounded-full bg-gradient-to-r from-[var(--accent)] via-transparent to-[var(--accent-2)] opacity-70" />
-                </div>
-              }
-            />
+            <div key={title} className="clean-card p-5 space-y-3">
+              {/* One icon. The old card rendered the same glyph twice — once in
+                  a decorative header box, once above the title. */}
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] border border-[var(--accent-subtle)]">
+                <Icon className="w-5 h-5 text-[var(--accent)]" />
+              </span>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
+              <p className="text-sm text-[var(--text-muted)] leading-relaxed">{body}</p>
+            </div>
           ))}
-        </BentoGrid>
+        </div>
       </section>
 
-      {/* ── Final CTA (how-it-works steps grouped into the closing panel) ──── */}
+      {/* ── Pricing (real numbers, from the billing table) ──────────────────── */}
+      <Pricing onOpenAuth={openAuth} />
+
+      {/* ── How it works + closing CTA ──────────────────────────────────────── */}
       <section className="max-w-[900px] mx-auto px-4 sm:px-6 pb-20 sm:pb-24">
         <div className="clean-card p-6 sm:p-10 text-center space-y-7">
-          <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-            Three steps to a self-driving coursework pipeline
-          </h2>
-          <ol className="space-y-3 text-left">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Three steps to a self-driving coursework pipeline</h2>
+          <ol className="grid gap-3 sm:grid-cols-3 text-left">
             {STEPS.map(({ n, title, body }) => (
-              <li key={n} className="flex gap-4 items-start p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-                <span className="text-sm font-mono font-bold text-[var(--accent)] bg-[var(--accent-subtle)] px-2.5 py-1 rounded-[var(--radius-sm)]">{n}</span>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5 leading-relaxed">{body}</div>
-                </div>
+              <li key={n} className="p-4 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-1.5">
+                <span className="inline-block text-xs font-mono font-bold text-[var(--accent)] bg-[var(--accent-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">{n}</span>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
+                <div className="text-xs text-[var(--text-muted)] leading-relaxed">{body}</div>
               </li>
             ))}
           </ol>
-          <div className="border-t border-[var(--border-subtle)] pt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={openAuth}
-              className={`${BTN_PRIMARY} px-6 py-3`}
-            >
-              Create free account <ArrowRight className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={openAuth}
-              className={`${BTN_SECONDARY} px-6 py-3`}
-            >
-              Sign in <GraduationCap className="w-4 h-4" />
+          {/* One action. This block previously offered two buttons that both
+              opened the same dialog. */}
+          <div className="border-t border-[var(--border-subtle)] pt-7">
+            <button type="button" onClick={openAuth} className={`${BTN_PRIMARY} px-7 py-3.5 text-base`}>
+              Start free <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <footer className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-8 pt-4 border-t border-[var(--border-subtle)]">
+      <footer className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-8 pt-4 border-t border-[var(--border-subtle)]">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
           <div className="flex items-center gap-2">
-            <AnimatedLogo size="sm" wordmarkClassName="hidden sm:flex" />
+            <AnimatedLogo size="sm" showWordmark={false} />
             <span>© 2026 Helpotron Automator · Built for students</span>
           </div>
           <div className="flex items-center gap-4">

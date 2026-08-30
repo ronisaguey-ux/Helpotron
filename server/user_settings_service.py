@@ -19,6 +19,7 @@ import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -1021,6 +1022,68 @@ class UserSettingsService:
 
 
 user_settings_service = UserSettingsService()
+
+
+# ─── Settings write-authorisation (audit 08-29, finding H1) ──────────────────
+#
+# The settings JSON blob is not just preferences: ban state, spendable balances
+# and 2FA state are stored in it too, and are read as authority elsewhere —
+#
+#   settings["banned"] / ["banned_until"]  -> security.is_user_banned()
+#   settings["token_balance"]              -> routes_overlord.py budget deduct
+#   settings["2fa_enabled"]                -> main.py login second factor
+#   settings["tokens"]                     -> admin.py redeemable grants
+#
+# PATCH /api/settings merged its request body into that blob key-by-key with no
+# field authorisation, so any signed-up account (signup is open) could send
+# {"token_balance": 1e9} or {"banned": false} and grant itself unlimited paid
+# usage or lift its own ban.
+#
+# The allowlist is derived from the defaults schema rather than hand-listed, so
+# a new preference added to get_user_settings() is writable automatically and
+# cannot be forgotten here, while any key that is *not* a declared preference —
+# every field above — is refused by construction.
+
+#: Declared in the defaults schema but written by the server, never the user.
+_SERVER_OWNED_SETTINGS_KEYS = frozenset({
+    "micro_credits_balance",  # granted only by admin-reviewed Data Lake payouts
+    "credits_used_total",     # usage accounting, written by the metering path
+})
+
+_WRITABLE_KEYS_CACHE: Optional[frozenset] = None
+
+
+def user_writable_settings_keys() -> frozenset:
+    """Top-level settings keys a user may set on themselves via the API."""
+    global _WRITABLE_KEYS_CACHE
+    if _WRITABLE_KEYS_CACHE is None:
+        blank = SimpleNamespace(settings=None)
+        declared = set(UserSettingsService.get_user_settings(blank).keys())
+        _WRITABLE_KEYS_CACHE = frozenset(declared - _SERVER_OWNED_SETTINGS_KEYS)
+    return _WRITABLE_KEYS_CACHE
+
+
+def filter_user_settings_payload(
+    payload: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Split an untrusted settings payload into (accepted, rejected_keys).
+
+    Apply at every HTTP boundary that forwards a user-supplied body into
+    update_user_settings(). The service itself stays unrestricted because
+    trusted internal callers legitimately write server-owned fields (e.g.
+    routes_datalake.py crediting micro_credits_balance).
+    """
+    if not isinstance(payload, dict):
+        return {}, []
+    allowed = user_writable_settings_keys()
+    accepted: Dict[str, Any] = {}
+    rejected: List[str] = []
+    for key, value in payload.items():
+        if key in allowed:
+            accepted[key] = value
+        else:
+            rejected.append(str(key))
+    return accepted, rejected
 
 
 

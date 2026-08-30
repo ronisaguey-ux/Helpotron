@@ -39,6 +39,7 @@ export function CreditsPricingDashboard({
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoMsg, setPromoMsg] = useState('');
+  const [promoPending, setPromoPending] = useState(false);
   const [userDiscountCredits, setUserDiscountCredits] = useState(0); // no free discount credits (08-26: fresh accounts get nothing)
   const [useDiscountCredits, setUseDiscountCredits] = useState(true);
 
@@ -147,11 +148,33 @@ export function CreditsPricingDashboard({
     },
   ];
 
-  const handleApplyPromo = (e) => {
+  /* Referral redemption (audit 08-29).
+   * This used to accept ANY string, call no API, and print a green
+   * "✅ activated! Rewards will be credited upon checkout" — so an invalid
+   * code looked identical to a valid one and no credits were ever granted.
+   * It now calls the real endpoint (POST /api/referrals/redeem), which
+   * credits the redeemer 10 and the referrer 40 immediately, and surfaces
+   * the server's actual rejection reason for invalid / already-used /
+   * self-redeemed codes. `promoApplied` was dead state; it now drives the
+   * success-vs-error styling of the message. */
+  const handleApplyPromo = async (e) => {
     e.preventDefault();
-    if (!promoCode.trim()) return;
-    setPromoApplied(true);
-    setPromoMsg(`✅ Referral code "${promoCode.trim()}" activated! Rewards will be credited upon checkout.`);
+    const code = promoCode.trim();
+    if (!code || promoPending) return;
+    setPromoPending(true);
+    setPromoMsg('');
+    try {
+      const res = await api.redeemReferralCode(code);
+      const granted = res?.credits_awarded ?? res?.reward ?? 10;
+      setPromoApplied(true);
+      setPromoMsg(`Referral code accepted — ${granted} credits added to your balance.`);
+      setPromoCode('');
+    } catch (err) {
+      setPromoApplied(false);
+      setPromoMsg(err?.message || 'That referral code could not be redeemed.');
+    } finally {
+      setPromoPending(false);
+    }
   };
 
   const initiateCheckout = (tier) => {
@@ -345,7 +368,14 @@ export function CreditsPricingDashboard({
       </div>
 
       {promoMsg && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 font-mono animate-fadeIn">
+        <div
+          className={`p-3.5 rounded-xl border text-xs font-mono animate-fadeIn ${
+            promoApplied
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+          }`}
+          role="status"
+        >
           {promoMsg}
         </div>
       )}

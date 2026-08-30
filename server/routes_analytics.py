@@ -62,14 +62,13 @@ async def get_insights_snapshot(
     db: Session = Depends(get_db)
 ):
     """Consolidated InsightsSnapshot endpoint eliminating request waterfalls."""
+    from .analytics import compute_next_best_action
+
     analytics = get_user_analytics(db, user)
     return {
         "status": "success",
         "study_activity": analytics,
-        "next_best_action": {
-            "title": "Review Due Flashcards",
-            "progress_percent": 75,
-            "rationale": "Spaced repetition scheduler identified cards due for review"
-        }
+        # Real earliest-due open assignment, or null when nothing is pending.
+        "next_best_action": compute_next_best_action(db, user.id),
     }
 
