@@ -778,6 +778,20 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     }
   }
 
+  function handleUpdateIdentity(updatedId) {
+    if (!updatedId?.id) return;
+    setIdentities((prev) => {
+      const next = prev.map((item) => (item.id === updatedId.id ? { ...item, ...updatedId } : item));
+      try { localStorage.setItem('helpotron.agent.custom_identities', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    if (activeIdentityId === updatedId.id) {
+      set('ai.personality', updatedId.persona);
+      set('ai.instructions', updatedId.instructions);
+    }
+    pushAssistant(`🎭 Updated identity **${updatedId.name}**.`);
+  }
+
   function handleToggleSkill(skillId) {
     setActiveSkillIds((prev) => {
       const next = prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId];
@@ -803,6 +817,16 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       return next;
     });
     handleToggleSkill(newSkill.id);
+  }
+
+  function handleUpdateSkill(updatedSkill) {
+    if (!updatedSkill?.id) return;
+    setSkills((prev) => {
+      const next = prev.map((item) => (item.id === updatedSkill.id ? { ...item, ...updatedSkill } : item));
+      try { localStorage.setItem('helpotron.agent.custom_skills', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    pushAssistant(`⚡ Updated skill **${updatedSkill.name}**.`);
   }
 
   function handleDeleteSkill(skillId) {
@@ -832,6 +856,19 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       setMemory((prev) => [...prev, entry]);
       pushAssistant(`🧠 Remembered: “${text.slice(0, 80)}${text.length > 80 ? '…' : ''}”`);
     } catch (e) { /* keep input */ }
+  }
+
+  async function handleUpdateMemory(id, newText) {
+    const text = (newText || '').trim();
+    if (!text) return;
+    setMemory((prev) => prev.map((m) => (m.id === id ? { ...m, text } : m)));
+    try {
+      await api.deleteAgentMemory(id);
+      const res = await api.appendAgentMemory(text);
+      if (res?.entry) {
+        setMemory((prev) => prev.map((m) => (m.id === id ? res.entry : m)));
+      }
+    } catch (e) { /* keep local update */ }
   }
 
   async function deleteMemory(id) {
@@ -1031,16 +1068,19 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     onAddIdentity: handleAddIdentity,
     onDeleteIdentity: handleDeleteIdentity,
     onSaveAgentName: handleSaveAgentName,
+    onUpdateIdentity: handleUpdateIdentity,
     skills,
     activeSkillIds,
     onToggleSkill: handleToggleSkill,
     onAddSkill: handleAddSkill,
+    onUpdateSkill: handleUpdateSkill,
     onDeleteSkill: handleDeleteSkill,
     onSelectSkill: handleSelectSkill,
     memory,
     memoryText,
     setMemoryText,
     addMemory,
+    onUpdateMemory: handleUpdateMemory,
     deleteMemory,
     useMemory,
     files,
