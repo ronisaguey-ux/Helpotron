@@ -14,7 +14,6 @@ import { SettingsSections } from './SettingsSections.jsx';
 import AdminPanels from './AdminPanels.jsx';
 import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
-import ScopedSetting, { SCOPE_LEVELS, APP_PLACES, PLACE_LEVELS } from './ScopedSetting.jsx';
 
 const SECTIONS = [
   { key: 'account', label: 'Account', icon: User, desc: 'Name, avatar, plan', tier: 'simple' },
@@ -222,85 +221,78 @@ function ChipRow({ label, options, value, onChange }) {
   );
 }
 
-/* ── Section: Appearance (the "insane" one) ─────────────────────────────── */
-/* Every field is wrapped in a ScopedSetting so it can get VARIANT CONFIGS
- * applied to different app places (e.g. dark on Dashboard, light on Settings).
- * The whole panel is the "expand into the full menu" view (operator 08-28). */
-function AppearanceSection({ s, set, scoped, setVariants }) {
-  const a = s.appearance;
-  /* Each field's ScopedSetting gets the Global row wired to the real base
-   * value, so editing Global here == using the main control (operator 08-28). */
-  const scopedFor = (path) => {
-    const field = path.split('.')[1];
-    return {
-      path,
-      variants: scoped?.[path],
-      setVariants,
-      globalValue: a[field],
-      onGlobalChange: (v) => set(`appearance.${field}`, v),
-    };
-  };
+/* ── Section: Appearance ─────────────────────────────────────────────────── */
+function AppearanceSection({ s, set }) {
+  const a = s.appearance || {};
+
   return (
     <div className="space-y-6">
-      <ScopedSetting title="Theme" levels={PLACE_LEVELS} refs={APP_PLACES} values={THEMES} currentValue={a.theme}
-        description="Pick the theme that runs app-wide — or set a different theme in specific places." {...scopedFor('appearance.theme')}>
-        <ChipRow label="Theme" options={THEMES} value={a.theme} onChange={(v) => set('appearance.theme', v)} />
-      </ScopedSetting>
-      <ScopedSetting title="Accent" levels={PLACE_LEVELS} refs={APP_PLACES} values={ACCENTS} currentValue={a.accent}
-        description="The accent color used for highlights and active states — override it per place if you want." {...scopedFor('appearance.accent')}>
-        <ChipRow label="Accent" options={ACCENTS} value={a.accent} onChange={(v) => set('appearance.accent', v)} />
-      </ScopedSetting>
-      <ScopedSetting title="Interface density" levels={PLACE_LEVELS} refs={APP_PLACES} values={DENSITIES} currentValue={a.density}
-        description="How much breathing room the interface gives you — override it per place if you want." {...scopedFor('appearance.density')}>
-        <ChipRow label="Interface density" options={DENSITIES} value={a.density} onChange={(v) => set('appearance.density', v)} />
-      </ScopedSetting>
-      <ScopedSetting title="Animation" levels={PLACE_LEVELS} refs={APP_PLACES} values={ANIMATIONS} currentValue={a.animation}
-        description="Motion level of the interface — override it per place if you want." {...scopedFor('appearance.animation')}>
-        <ChipRow label="Animation" options={ANIMATIONS} value={a.animation} onChange={(v) => set('appearance.animation', v)} />
-      </ScopedSetting>
-      <ScopedSetting title="Background" levels={PLACE_LEVELS} refs={APP_PLACES} values={BACKGROUNDS} currentValue={a.background}
-        description="The canvas behind the app — flat, gradient, aurora, mesh, glass or noise, overridable per place." {...scopedFor('appearance.background')}>
-        <ChipRow label="Background" options={BACKGROUNDS} value={a.background} onChange={(v) => set('appearance.background', v)} />
-      </ScopedSetting>
-      <ScopedSetting title="UI style" levels={PLACE_LEVELS} refs={APP_PLACES} values={UI_STYLES} currentValue={a.uiStyle}
-        description="Minimal, glass, dense, soft or terminal — overridable per place." {...scopedFor('appearance.uiStyle')}>
-        <ChipRow label="UI style" options={UI_STYLES} value={a.uiStyle} onChange={(v) => set('appearance.uiStyle', v)} />
-      </ScopedSetting>
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="text-xs font-medium text-slate-300">Font size</div>
-          <div className="text-xs font-mono font-bold text-[var(--accent)]">
-            {a.fontScale ?? 50} <span className="text-[10px] text-slate-500">/ 100</span>
+      <div className="panel p-5 space-y-5">
+        <ChipRow
+          label="Theme"
+          options={THEMES}
+          value={a.theme || 'dark'}
+          onChange={(v) => set('appearance.theme', v)}
+        />
+        <ChipRow
+          label="Accent Color"
+          options={ACCENTS}
+          value={a.accent || 'purple'}
+          onChange={(v) => set('appearance.accent', v)}
+        />
+        <ChipRow
+          label="Interface Density"
+          options={DENSITIES}
+          value={a.density || 'comfortable'}
+          onChange={(v) => set('appearance.density', v)}
+        />
+        <ChipRow
+          label="Animations"
+          options={ANIMATIONS}
+          value={a.animation || 'full'}
+          onChange={(v) => set('appearance.animation', v)}
+        />
+        <ChipRow
+          label="UI Style"
+          options={UI_STYLES}
+          value={a.uiStyle || 'glass'}
+          onChange={(v) => set('appearance.uiStyle', v)}
+        />
+
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-xs font-medium text-slate-200">Font Scale</div>
+            <div className="text-xs font-mono font-bold text-[var(--accent)]">
+              {a.fontScale ?? 50} <span className="text-[10px] text-slate-500">/ 100</span>
+            </div>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={100}
+            step={1}
+            value={a.fontScale ?? 50}
+            onChange={(e) => set('appearance.fontScale', Number(e.target.value))}
+            className="w-full accent-[var(--accent)] cursor-pointer"
+            aria-label="Font size scale between 1 and 100"
+          />
+          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+            <span>Compact (1)</span>
+            <span className="text-slate-400">Default (50)</span>
+            <span>Large (100)</span>
           </div>
         </div>
-        <input
-          type="range"
-          min={1}
-          max={100}
-          step={1}
-          value={a.fontScale ?? 50}
-          onChange={(e) => set('appearance.fontScale', Number(e.target.value))}
-          className="w-full accent-[var(--accent)] cursor-pointer"
-          aria-label="Font size score between 1 and 100"
-        />
-        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-          <span>1 — tiny asf</span>
-          <span className="text-slate-400">50 — default</span>
-          <span>100 — massive</span>
-        </div>
-        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-          Scales every text size proportionally — nothing gets flattened to the same size.
-        </p>
       </div>
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">Live preview</div>
+
+      <div className="panel p-5 space-y-3">
+        <div className="text-xs font-medium text-slate-200">Appearance Preview</div>
         <AppearancePreview a={a} />
       </div>
     </div>
   );
 }
 
-/* ── Section: AI & Intelligence (control center) ────────────────────────── */
+/* ── Section: AI & Intelligence ─────────────────────────────────────────── */
 const INTELLIGENCE = [
   { key: 'creativity', label: 'Creativity' },
   { key: 'reasoning', label: 'Reasoning' },
@@ -310,20 +302,17 @@ const INTELLIGENCE = [
   { key: 'originality', label: 'Originality' },
 ];
 
-const PERSONALITIES = ['Professional', 'Friendly', 'Strict', 'Socratic', 'Coach', 'Researcher', 'Tutor', 'Minimalist'];
+const PERSONALITIES = ['Tutor', 'Strict Grader', 'Socratic Coach', 'Researcher', 'Professional', 'Minimalist'];
 
 function EffortSlider({ value, onChange, locked }) {
-  // UI scale 1–10 (operator 08-26); backend contract stays 1–1000 (×100).
-  // locked (operator 08-27, demo mode): server forces effort="auto" — the
-  // slider is disabled and the stored/user-set score is ignored entirely.
   const n = Math.max(1, Math.min(10, Math.round(Number(value || 500) / 100)));
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <div className="text-xs font-medium text-slate-300">AI Effort</div>
-        {locked
-          ? <div className="text-xs font-mono font-bold text-amber-300">AUTO <span className="text-[10px] text-slate-500">(demo)</span></div>
-          : <div className="text-xs font-mono font-bold text-[var(--accent)]">{n} <span className="text-[10px] text-slate-500">/ 10</span></div>}
+        <div className="text-xs font-medium text-slate-200">Model Effort Level</div>
+        <div className="text-xs font-mono font-bold text-[var(--accent)]">
+          {n} <span className="text-[10px] text-slate-500">/ 10 · {n <= 3 ? 'Economical' : n <= 7 ? 'Balanced' : 'Flagship'}</span>
+        </div>
       </div>
       <input
         type="range"
@@ -331,470 +320,109 @@ function EffortSlider({ value, onChange, locked }) {
         max={10}
         step={1}
         value={n}
-        disabled={locked}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={`w-full accent-[var(--accent)] ${locked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+        onChange={(e) => onChange(Number(e.target.value) * 100)}
+        className="w-full accent-[var(--accent)] cursor-pointer"
         aria-label="AI effort score between 1 and 10"
       />
       <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-        <span>1 — cheap & fast</span>
+        <span>1 — fast & economical</span>
         <span className="text-slate-400">5 — balanced</span>
-        <span>10 — flagship research</span>
+        <span>10 — deep reasoning flagship</span>
       </div>
     </div>
   );
 }
 
-
-/* ── Agent Hierarchy (operator 08-28) — per-surface educational-mode &
- * identity scope. Stored as settings.ai.hierarchy = {node: {mode: 'edu'|
- * 'open', personality, instructions, memories[]}}. Each node is independent,
- * default 'edu'; non-my_agent nodes default to NO own identity — My Agent's
- * personality/instructions/memory/files never apply to them. The my_agent
- * node keeps using the per-user educationalMode switch (My Agent page) so
- * both agree; its identity/memory/files live in the My Agent page. */
-const AGENT_HIERARCHY_NODES = [
-  { key: 'my_agent', label: 'My Agent', desc: 'The main personal agent (My Agent page & main chat)' },
-  { key: 'assignment_team', label: 'Assignment team', desc: 'Per-assignment subagent teams (assignment bubbles)' },
-  { key: 'study_tools', label: 'Study tools', desc: 'Flashcards, practice tests, study guides' },
-  { key: 'dump_agent', label: 'Dump agent', desc: 'Assignment Dump extraction & routing' },
-  { key: 'qa_chat', label: 'Q&A chat', desc: 'Student Q&A chat' },
-  { key: 'extensions', label: 'Extensions', desc: 'Browser extension flows' },
-];
-
-function AgentHierarchy({ s, set }) {
+function AISection({ s, set }) {
   const ai = s.ai || {};
-  const hierarchy = ai.hierarchy || {};
-  const legacyEdu = s.educationalMode !== false ? 'edu' : 'open';
-
-  const nodeCfg = (key) => {
-    const c = hierarchy[key];
-    return c && typeof c === 'object' ? c : {};
-  };
-  const nodeMode = (key) => nodeCfg(key).mode || (key === 'my_agent' ? legacyEdu : 'edu');
-
-  const updateNode = (key, patch) => {
-    const nextHierarchy = JSON.parse(JSON.stringify(hierarchy || {}));
-    nextHierarchy[key] = { ...(nextHierarchy[key] || {}), ...patch };
-    set('ai.hierarchy', nextHierarchy);
-    // Server (mode_for_node/agent_prompt) reads settings.ai.hierarchy — mirror
-    // immediately; PATCH /api/settings merges one level (ai.update).
-    api.updateSettings({ ai: { hierarchy: nextHierarchy } }).catch(() => {});
-  };
-
-  const setNodeMode = (key, mode) => {
-    if (key === 'my_agent') {
-      // The per-user switch lives on the My Agent node — keep one source of
-      // truth so the My Agent page toggle and this control never disagree.
-      const edu = mode === 'edu';
-      set('educationalMode', edu);
-      api.updateSettings({ educationalMode: edu }).catch(() => {});
-      return;
-    }
-    updateNode(key, { mode });
-  };
-
-  const addMemory = (key) => {
-    const cfg = nodeCfg(key);
-    const text = (cfg._memInput || '').trim();
-    if (!text) return;
-    const memories = Array.isArray(cfg.memories) ? [...cfg.memories, text] : [text];
-    updateNode(key, { memories });
-  };
-  const delMemory = (key, idx) => {
-    const memories = Array.isArray(nodeCfg(key).memories) ? nodeCfg(key).memories.slice() : [];
-    memories.splice(idx, 1);
-    updateNode(key, { memories });
-  };
-  const onMemInput = (key, value) => {
-    // stash the pending input on the node cfg so it survives re-renders
-    updateNode(key, { _memInput: value });
-  };
 
   return (
-    <div className="px-4 py-4 rounded-2xl bg-white/4 border border-white/8 space-y-3">
-      <div>
-        <div className="text-xs font-semibold text-white flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[10px] flex items-center justify-center">🧭</span>
-          Agent Hierarchy
-        </div>
-        <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-          Which surfaces are in educational mode (school questions only) and how each surface speaks.
-          Every node starts <b>Educational</b>; each one is configured independently, and a surface never
-          inherits My Agent's identity, memory or files.
-        </div>
-      </div>
-
-      {AGENT_HIERARCHY_NODES.map((n) => {
-        const cfg = nodeCfg(n.key);
-        const mode = nodeMode(n.key);
-        return (
-          <div key={n.key} className="rounded-xl bg-white/4 border border-white/8 p-3 space-y-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-200 truncate">{n.label}</div>
-                <div className="text-[10px] text-slate-500 truncate">{n.desc}</div>
-              </div>
-              <div className="flex rounded-lg overflow-hidden border border-white/8 bg-white/4 text-[10px] font-semibold shrink-0">
-                {[['edu', 'Educational'], ['open', 'Open']].map(([mk, ml]) => (
-                  <button
-                    key={mk}
-                    type="button"
-                    onClick={() => setNodeMode(n.key, mk)}
-                    className={`px-3 py-1.5 transition cursor-pointer ${
-                      mode === mk
-                        ? (mk === 'edu' ? 'bg-emerald-600/25 text-emerald-300' : 'bg-amber-600/25 text-amber-300')
-                        : 'bg-white/4 text-slate-500 hover:text-slate-200'
-                    }`}
-                  >
-                    {ml}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {n.key === 'my_agent' ? (
-              <p className="text-[10px] text-slate-500 leading-relaxed">
-                My Agent's identity, instructions, memory and files live on the <b>My Agent page</b> —
-                no duplication here. This switch also mirrors the Educational-only mode toggle above.
-              </p>
-            ) : (
-              <>
-                <label className="block text-[10px] text-slate-500">Personality (this surface)</label>
-                <input
-                  value={cfg.personality || ''}
-                  onChange={(e) => updateNode(n.key, { personality: e.target.value })}
-                  placeholder="e.g. Socratic, peer tutor, concise…"
-                  aria-label={`${n.label} personality`}
-                  className="clean-input w-full px-2.5 py-1.5 text-[11px] outline-none"
-                />
-                <label className="block text-[10px] text-slate-500">Instructions (this surface)</label>
-                <textarea
-                  value={cfg.instructions || ''}
-                  onChange={(e) => updateNode(n.key, { instructions: e.target.value })}
-                  rows={2}
-                  placeholder="How this surface's agent should behave for the student…"
-                  aria-label={`${n.label} instructions`}
-                  className="clean-input w-full px-2.5 py-1.5 text-[11px] outline-none resize-none"
-                />
-                <div>
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[10px] text-slate-500">Inline memory (this surface)</label>
-                    <span className="text-[10px] text-slate-600">{Array.isArray(cfg.memories) ? cfg.memories.length : 0}</span>
-                  </div>
-                  <div className="space-y-1 mt-1 mb-1.5">
-                    {(Array.isArray(cfg.memories) ? cfg.memories : []).map((m, i) => (
-                      <div key={i} className="flex items-start gap-2 p-1.5 rounded-lg bg-white/4 border border-white/8">
-                        <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m}</p>
-                        <button
-                          type="button"
-                          onClick={() => delMemory(n.key, i)}
-                          className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer"
-                          aria-label={`Remove memory ${i + 1} for ${n.label}`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-1.5">
-                    <input
-                      value={cfg._memInput || ''}
-                      onChange={(e) => onMemInput(n.key, e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addMemory(n.key)}
-                      placeholder="Add a memory for this surface…"
-                      aria-label={`${n.label} memory`}
-                      className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => addMemory(n.key)}
-                      className="px-2.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* Agent data manager inside AI & Intelligence (operator 08-26): permanent
- * memory + loaded files, with per-hierarchy scope hints. Uses the same
- * memory/file endpoints as My Agent. */
-function AIAgentData() {
-  const [mem, setMem] = useState([]);
-  const [memText, setMemText] = useState('');
-  const [files, setFiles] = useState([]);
-  const [openFile, setOpenFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const load = async () => {
-    try {
-      const m = await api.request('/api/agent/memory', { method: 'GET' });
-      setMem(m?.entries || []);
-      const f = await api.request('/api/agent/files', { method: 'GET' });
-      setFiles(f?.files || []);
-    } catch { /* auth-gated; hidden naturally */ }
-  };
-  useEffect(() => { load(); }, []);
-  const addMem = async () => {
-    const t = memText.trim(); if (!t) return;
-    setBusy(true);
-    try {
-      await api.request('/api/agent/memory', { method: 'POST', body: JSON.stringify({ text: t }) });
-      setMemText('');
-      await load();
-    } catch (e) { alert(e.message || 'Failed to add memory'); }
-    finally { setBusy(false); }
-  };
-  const delMem = async (id) => {
-    try { await api.request(`/api/agent/memory/${id}`, { method: 'DELETE' }); await load(); } catch {}
-  };
-  const delFile = async (id) => {
-    try { await api.deleteAgentFile(id); await load(); } catch {}
-  };
-  const readFile = async (f) => {
-    try {
-      const res = await api.get(`/api/agent/files/${f.id}`);
-      setOpenFile(res?.file || f);
-    } catch (e) { alert(e.message || 'Could not read file'); }
-  };
-  const kindIcon = { skill: '🧩', rule: '📏', automation: '⚙️', personality: '🎭' };
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-2.5">
-        <div className="text-xs font-semibold text-white flex items-center justify-between">
-          <span>🧠 Permanent memory</span>
-          <Badge color={mem.length ? 'blue' : 'slate'}>{mem.length}</Badge>
-        </div>
-        <p className="text-[10px] text-slate-500">Always read by the agent. Applies globally — per-hierarchy scoping is on the AI knobs above.</p>
-        <div className="space-y-1.5 max-h-44 overflow-y-auto">
-          {mem.length === 0 && <div className="text-[11px] text-slate-600 py-1">No memories yet.</div>}
-          {mem.map((m) => (
-            <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white/4 border border-white/8">
-              <p className="flex-1 text-[11px] text-slate-300 leading-relaxed">{m.text}</p>
-              <button type="button" onClick={() => delMem(m.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input value={memText} onChange={(e) => setMemText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addMem()}
-            placeholder="Add a memory…" aria-label="Add a memory" className="clean-input flex-1 px-2.5 py-1.5 text-[11px] outline-none" />
-          <button type="button" onClick={addMem} disabled={busy}
-            className="px-2.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50">
-            Add
-          </button>
-        </div>
-      </div>
-      <div className="rounded-2xl bg-white/4 border border-white/8 p-4 space-y-2.5">
-        <div className="text-xs font-semibold text-white flex items-center justify-between">
-          <span>📂 Skills, rules & personality</span>
-          <Badge color={files.length ? 'green' : 'slate'}>{files.length} loaded</Badge>
-        </div>
-        <p className="text-[10px] text-slate-500">Files the agent loads and follows. Tap to read, 🗑 to remove.</p>
-        <div className="space-y-1.5 max-h-44 overflow-y-auto">
-          {files.length === 0 && <div className="text-[11px] text-slate-600 py-1">No files loaded.</div>}
-          {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/4 border border-white/8">
-              <span className="text-sm">{kindIcon[f.kind] || '📄'}</span>
-              <button type="button" onClick={() => readFile(f)} className="flex-1 min-w-0 text-left cursor-pointer">
-                <span className="block text-[11px] text-slate-200 truncate hover:text-[var(--accent-2)]">{f.file_name}</span>
-                <span className="block text-[9px] text-slate-600">{f.kind} · {Number(f.size_bytes || 0).toLocaleString()} B · tap to read</span>
-              </button>
-              <button type="button" onClick={() => delFile(f.id)} className="p-0.5 text-slate-600 hover:text-rose-400 transition cursor-pointer">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-      {openFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setOpenFile(null)}>
-          <div className="clean-card surface-glass-strong w-full max-w-xl max-h-[80vh] flex flex-col rounded-3xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10">
-              <div className="text-sm font-bold text-white truncate">{openFile.file_name}</div>
-              <button type="button" onClick={() => setOpenFile(null)} className="text-slate-400 hover:text-white transition cursor-pointer">✕</button>
-            </div>
-            <div className="overflow-y-auto px-5 py-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">{openFile.content}</div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-function AISection({ s, set, scoped, setVariants, subjectRefs }) {
-  const ai = s.ai;
-  const rawEffort = Number(ai.effortScore ?? EFFORT_SCORES[ai.effort] ?? 500);
-  const aiEffort = Math.max(1, Math.min(10, Math.round(rawEffort / 100)));
-  const setEffort = (v) => {
-    // v is 1–10 on the UI; store ×100 for the backend 1–1000 contract.
-    set('ai.effortScore', v * 100);
-    set('ai.effort', v <= 3 ? 'low' : v <= 7 ? 'balanced' : 'high');
-  };
-  return (
-    <div className="space-y-7">
-      {/* DEMO MODE (operator 08-27): effort is non-overridable during testing.
-       * Auto routing is applied as the default for all users — junk prompts
-       * drop to the cheap engines, hard problems still escalate. */}
-      <div className="flex items-start gap-4 px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
-        <div>
-          <div className="text-xs font-semibold text-white flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🧪</span>
-            Demo mode
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            Auto mode is being applied as the non-overridable default for testing purposes. Every request is routed by difficulty: junk prompts get the cheap-and-fast engines, genuinely hard problems still escalate.
-          </div>
-        </div>
-      </div>
-
-      {/* Educational-only mode (operator 08-26) — guarded behavior via the
-       * agent's system prompt; OFF = unrestricted, zero guidance. */}
-      <div className="flex items-start justify-between gap-4 px-4 py-3 rounded-2xl bg-white/4 border border-white/8">
-        <div>
-          <div className="text-xs font-semibold text-white flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center">🎓</span>
-            Educational-only mode
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            On (default): the agent is prompted to decline slurs, insults and abusive roleplay and stick to studying. Off: zero guidance, fully unrestricted.
-          </div>
-        </div>
-        <Toggle
-          checked={s.educationalMode !== false}
-          onChange={(v) => {
-            set('educationalMode', v);
-            // Server reads this on every agent call — mirror it immediately.
-            api.updateSettings({ educationalMode: v }).catch(() => {});
-          }}
-        />
-      </div>
-
-      {/* Agent Hierarchy (operator 08-28): per-surface edu-mode + identity
-       * scope — one card per node, saved through the normal settings path. */}
-      <AgentHierarchy s={s} set={set} />
-
-      {/* Agent data: memory + skills/rules/personality (operator 08-26) */}
-      <AIAgentData />
-
-      {/* Effort — the one control that matters. Locked during demo mode
-       * (operator 08-27); the server ignores stored/per-subject scores and
-       * forces auto routing in llm.call_llm. */}
-      <div className="px-4 py-3.5 rounded-2xl bg-white/4 border border-white/8">
-        <EffortSlider value={aiEffort} onChange={setEffort} locked />
-        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-          Locked during demo mode. Requests auto-route by difficulty: junk prompts go to the cheap-and-fast engines, hard problems escalate to the flagship ones. Per-subject effort overrides are suspended too.
-        </p>
-      </div>
-
-      <ScopedSetting
-        path="ai.autoRouting"
-        title="Auto routing"
-        variants={scoped['ai.autoRouting']}
-        setVariants={setVariants}
-        values={[{ key: true, label: 'On' }, { key: false, label: 'Off' }]}
-        refs={subjectRefs}
-        globalValue={s.ai?.autoRouting}
-        onGlobalChange={(v) => set('ai.autoRouting', v)}
-        description="Lets Helpotron route each task to the engine its difficulty deserves. Override per subject if a particular course always needs one."
-      >
-        <div className="flex items-center justify-between p-3 rounded-xl bg-white/4 border border-white/8">
-          <div>
-            <div className="text-xs text-slate-200 font-medium">Auto routing</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Let Helpotron select the optimal engine based on task complexity.</div>
-          </div>
-          <Toggle checked={ai.autoRouting} onChange={(v) => set('ai.autoRouting', v)} label="Auto routing" />
-        </div>
-      </ScopedSetting>
-
-      {/* Intelligence profile */}
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-3">Intelligence profile</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 p-4 rounded-xl bg-white/4 border border-white/8">
-          {INTELLIGENCE.map((f) => (
-            <Slider key={f.key} label={f.label} value={ai[f.key]} onChange={(v) => set(`ai.${f.key}`, v)} format={(v) => v} />
-          ))}
-        </div>
-      </div>
-
-      {/* Routing by task (tier labels, never model names) — demo mode (08-27):
-       * routing is auto, so Research/Reasoning show "by difficulty". */}
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">Task routing</div>
-        <p className="text-[11px] text-slate-500 mb-3">How each task type is routed during demo mode (auto, by difficulty).</p>
-        <div className="rounded-xl overflow-hidden border border-white/8">
-          {[
-            ['OCR', 'Fast tier', 'green'],
-            ['Transcription', 'Fast tier', 'green'],
-            ['Summarization', 'Fast tier', 'green'],
-            ['Writing', 'Balanced tier', 'blue'],
-            ['Image analysis', 'Balanced tier', 'blue'],
-            ['Research', 'By difficulty', 'purple'],
-            ['Reasoning', 'By difficulty', 'purple'],
-          ].map(([task, tier, color], i) => (
-            <div key={task} className={`flex items-center justify-between px-4 py-2.5 ${i % 2 ? 'bg-white/4' : ''} text-xs`}>
-              <span className="text-slate-300">{task}</span>
-              <Badge color={color}>{tier}</Badge>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* AI personality */}
-      <ScopedSetting
-        path="ai.personality"
-        title="AI personality"
-        variants={scoped['ai.personality']}
-        setVariants={setVariants}
-        values={PERSONALITIES}
-        refs={subjectRefs}
-      >
-        <div>
-          <div className="text-xs font-medium text-slate-300 mb-2">My AI</div>
-          <div className="flex items-center gap-3 mb-3">
+    <div className="space-y-6">
+      {/* Identity & Personality */}
+      <div className="panel p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-slate-200 mb-1.5">AI Assistant Name</label>
             <input
-              value={ai.aiName}
+              value={ai.aiName || 'Helpotron'}
               onChange={(e) => set('ai.aiName', e.target.value)}
-              className="clean-input px-3 py-2 text-xs w-32 outline-none"
+              className="clean-input w-full px-3 py-2 text-xs text-white"
               aria-label="AI name"
             />
-            <span className="text-[11px] text-slate-500">is your personal AI.</span>
           </div>
-          <div className="flex flex-wrap gap-1.5 mb-3">
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-200 mb-2">Persona & Tone</label>
+          <div className="flex flex-wrap gap-1.5">
             {PERSONALITIES.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => set('ai.personality', p)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] transition cursor-pointer border ${
-                  ai.personality === p ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border-[var(--accent)] font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition cursor-pointer border ${
+                  ai.personality === p
+                    ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold'
+                    : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
                 }`}
               >
                 {p}
               </button>
             ))}
           </div>
-          <label className="block text-[11px] text-slate-500 mb-1.5">How should {ai.aiName} interact with you?</label>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-slate-200 mb-1.5">Custom Instructions</label>
           <textarea
-            value={ai.instructions}
+            value={ai.instructions || ''}
             onChange={(e) => set('ai.instructions', e.target.value)}
             rows={3}
-            className="clean-input w-full px-3 py-2 text-xs outline-none resize-none"
-            placeholder="Describe how your AI should behave…"
+            className="clean-input w-full px-3 py-2 text-xs text-white resize-y"
+            placeholder="Describe how your AI should interact with you and format output…"
             aria-label="AI interaction instructions"
           />
         </div>
-      </ScopedSetting>
+      </div>
+
+      {/* Model Effort & Routing */}
+      <div className="panel p-5 space-y-4">
+        <EffortSlider
+          value={ai.effortScore ?? 500}
+          onChange={(v) => {
+            set('ai.effortScore', v);
+            set('ai.effort', v <= 300 ? 'low' : v <= 700 ? 'balanced' : 'high');
+          }}
+        />
+
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
+          <div>
+            <div className="text-xs text-slate-200 font-medium">Automatic Task Routing</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Dynamically routes simple queries to fast models and complex assignments to flagship models.</div>
+          </div>
+          <Toggle
+            checked={ai.autoRouting !== false}
+            onChange={(v) => set('ai.autoRouting', v)}
+            label="Auto routing"
+          />
+        </div>
+      </div>
+
+      {/* Intelligence Profile Sliders */}
+      <div className="panel p-5 space-y-4">
+        <div className="text-xs font-medium text-slate-200">Intelligence Tuning</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          {INTELLIGENCE.map((f) => (
+            <Slider
+              key={f.key}
+              label={f.label}
+              value={ai[f.key] ?? 70}
+              onChange={(v) => set(`ai.${f.key}`, v)}
+              format={(v) => v}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
