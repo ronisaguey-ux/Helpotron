@@ -13,7 +13,7 @@ import { resolveScopedValue } from './ScopedSetting.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
-  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge,
+  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge, X,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
@@ -269,15 +269,37 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
 /* ── Notification bell dropdown ───────────────────────────────────────────── */
 function NotificationBell({ onOpenAll }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
   const recent = NOTIFICATIONS.slice(0, 5);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications (${unread} unread)`}
+        aria-expanded={open}
         className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[var(--accent-subtle)] transition cursor-pointer"
       >
         <Bell className="w-4.5 h-4.5" width={18} height={18} />
@@ -289,40 +311,59 @@ function NotificationBell({ onOpenAll }) {
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.12 }}
-            className="fixed left-3 right-3 top-[calc(3.5rem+var(--safe-top))] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 clean-card p-0 overflow-hidden shadow-2xl shadow-black/50 z-50"
-          >
-            <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
-              <span className="text-xs font-semibold text-white">Notifications</span>
-              <Badge color={unread > 0 ? 'red' : 'slate'}>{unread} unread</Badge>
-            </div>
-            <div className="max-h-72 overflow-y-auto">
-              {recent.length === 0 && (
-                <div className="px-4 py-8 text-center text-xs text-slate-500">You’re all caught up ✦</div>
-              )}
-              {recent.map((n) => (
-                <div key={n.id} className="flex gap-3 px-4 py-3 border-b border-white/5 hover:bg-white/3 transition">
-                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.read ? 'bg-slate-600' : 'bg-blue-400'}`} />
-                  <div className="min-w-0">
-                    <div className={`text-xs ${n.read ? 'text-slate-400' : 'text-slate-100 font-medium'}`}>{n.title}</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.body}</div>
-                    <div className="text-[10px] text-slate-600 mt-1">{timeAgo(n.timestamp)} · {n.channel}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => { setOpen(false); onOpenAll(); }}
-              className="w-full py-2.5 text-center text-[11px] font-medium text-[var(--accent)] hover:bg-white/3 transition cursor-pointer border-t border-[var(--border-subtle)]"
+          <>
+            {/* Mobile backdrop for easy tap-to-dismiss */}
+            <div
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs sm:hidden z-40"
+              onClick={() => setOpen(false)}
+              aria-hidden="true"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.12 }}
+              className="fixed left-3 right-3 top-[calc(3.5rem+var(--safe-top))] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 clean-card p-0 overflow-hidden shadow-2xl shadow-black/50 z-50"
             >
-              View all notifications →
-            </button>
-          </motion.div>
+              <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-white">Notifications</span>
+                  <Badge color={unread > 0 ? 'red' : 'slate'}>{unread} unread</Badge>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-md transition cursor-pointer"
+                  title="Close notifications"
+                  aria-label="Close notifications"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {recent.length === 0 && (
+                  <div className="px-4 py-8 text-center text-xs text-slate-500">You’re all caught up ✦</div>
+                )}
+                {recent.map((n) => (
+                  <div key={n.id} className="flex gap-3 px-4 py-3 border-b border-white/5 hover:bg-white/3 transition">
+                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.read ? 'bg-slate-600' : 'bg-blue-400'}`} />
+                    <div className="min-w-0">
+                      <div className={`text-xs ${n.read ? 'text-slate-400' : 'text-slate-100 font-medium'}`}>{n.title}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.body}</div>
+                      <div className="text-[10px] text-slate-600 mt-1">{timeAgo(n.timestamp)} · {n.channel}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onOpenAll(); }}
+                className="w-full py-2.5 text-center text-[11px] font-medium text-[var(--accent)] hover:bg-white/3 transition cursor-pointer border-t border-[var(--border-subtle)]"
+              >
+                View all notifications →
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
