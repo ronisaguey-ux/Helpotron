@@ -829,9 +829,10 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
  * (operator 08-27: that card told every user they were on an Elite plan). */
 const BILLING_META = {
   none: { label: 'No plan', sub: 'Dev / beta account — no subscription', badge: 'slate', limit: 0 },
-  basic: { label: 'Basic', sub: 'Allocations settle at product launch', badge: 'blue', limit: 30 },
-  pro: { label: 'Pro', sub: 'Allocations settle at product launch', badge: 'amber', limit: 100 },
-  elite: { label: 'Elite', sub: 'Allocations settle at product launch', badge: 'purple', limit: 300 },
+  trial: { label: 'Free Trial', sub: '7-day trial (SMS verified) — 100 task tokens ($1.00 compute)', badge: 'emerald', limit: 100 },
+  basic: { label: 'Basic', sub: '300 task tokens / mo ($3.00 tool compute budget)', badge: 'blue', limit: 300 },
+  pro: { label: 'Pro', sub: '1,000 task tokens / mo ($10.00 tool compute budget)', badge: 'amber', limit: 1000 },
+  elite: { label: 'Elite', sub: '2,700 task tokens / mo ($27.00 tool compute budget)', badge: 'purple', limit: 2700 },
 };
 
 function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
@@ -852,27 +853,26 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
         </div>
         <div className="mt-3">
           {limit > 0 ? (
-            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-              <span>Usage tokens left</span>
-              <span className="font-mono">{tk.toLocaleString()} / {limit.toLocaleString()}</span>
+            <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+              <span>Task tokens balance (1 token = $0.01 compute)</span>
+              <span className="font-mono text-emerald-400 font-bold">{tk.toLocaleString()} / {limit.toLocaleString()}</span>
             </div>
           ) : (
-            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-              <span>Usage tokens left</span>
-              <span className="font-mono">{tk.toLocaleString()}</span>
+            <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+              <span>Task tokens balance (1 token = $0.01 compute)</span>
+              <span className="font-mono text-emerald-400 font-bold">{tk.toLocaleString()} tokens</span>
             </div>
           )}
           <Progress value={limit > 0 ? pct : 0} color={limit > 0 ? 'from-amber-500 to-orange-400' : 'from-slate-600 to-slate-500'} />
         </div>
-        <div className="mt-2 text-[10px] text-slate-600 font-mono">{cr.toLocaleString()} discount credits</div>
+        <div className="mt-2 text-[10px] text-slate-400 font-mono">
+          Discount balance: <span className="text-emerald-400 font-bold">${cr}.00 USD</span> ($1.00 discount per credit)
+        </div>
       </div>
-      {/* "View invoices" removed (audit 08-29): it had no handler and no
-        * invoice backend — payments are manual allocations, and the payment
-        * history already lives one click away in Plans & Credits. */}
       <div className="flex gap-2">
         <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer">Open plans & top-ups</button>
       </div>
-      <div className="text-[10px] text-slate-600">Payments process through your chosen provider (cashapp / zelle / venmo) as manual allocations — see Plans & Credits for the full history.</div>
+      <div className="text-[10px] text-slate-600">1 Task Token = $0.01 in tool API execution (LLMs, audio, vision). Credits are applied as dollar discounts at checkout.</div>
     </div>
   );
 }

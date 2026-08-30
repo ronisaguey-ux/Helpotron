@@ -470,6 +470,11 @@ export const api = {
   getExtensionVersion: () => request('/api/extension/version', { method: 'GET' }),
   checkExtensionUpdate: (currentVersion) => request('/api/extension/check-update', { method: 'POST', body: JSON.stringify({ current_version: currentVersion }) }),
 
+  // Free Trial & SMS Verification
+  getTrialStatus: () => request('/api/trial/status', { method: 'GET' }),
+  requestTrialSms: (phoneNumber) => request('/api/trial/sms/request', { method: 'POST', body: JSON.stringify({ phone_number: phoneNumber }) }),
+  verifyTrialSms: (phoneNumber, code) => request('/api/trial/sms/verify', { method: 'POST', body: JSON.stringify({ phone_number: phoneNumber, code }) }),
+
   // FERPA / GDPR Self-Service Account Deletion
   deleteAccount: () => request('/api/user/account', { method: 'DELETE' }),
 };

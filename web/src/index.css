@@ -383,19 +383,18 @@ html { font-size: 110%; } /* 17.6px base */
  * remaining migration surface (tracked; next sweep converts them to vars).
  * ───────────────────────────────────────────────────────────────────────────── */
 [data-theme="light"] {
-  /* Dimmed light (08-28): pure #fff/#eef2f7 was blinding — a soft
-   * blue-gray light that tops out around #d4d9e2 instead of white. */
-  --bg-base: #d4d9e2;
-  --bg-surface: #e8ecf3;
-  --bg-surface-elevated: #eef1f7;
-  --border-subtle: rgba(20, 26, 38, 0.14);
-  --border-hover: rgba(20, 26, 38, 0.30);
-  --text-primary: #161c28;
-  --text-secondary: #2e3949;
-  --text-muted: #5c6577;
-  --accent: #6d5ae6;
-  --accent-hover: #5b48d6;
-  --accent-subtle: rgba(109, 90, 230, 0.16);
+  /* Low-luminance eye-comfortable slate (no blinding white light) */
+  --bg-base: #181d27;
+  --bg-surface: #222938;
+  --bg-surface-elevated: #2c364a;
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-subtle: rgba(129, 140, 248, 0.16);
 }
 [data-theme="oled"] {
   --bg-base: #000000;
@@ -433,18 +432,27 @@ html { font-size: 110%; } /* 17.6px base */
   --accent-hover: #64748b;
   --accent-subtle: rgba(148, 163, 184, 0.14);
 }
+[data-theme="system"] {
+  --bg-base: #030712;
+  --bg-surface: #0b0f19;
+  --bg-surface-elevated: #111827;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+}
 @media (prefers-color-scheme: light) {
   [data-theme="system"] {
-    /* Same dimmed light as [data-theme="light"] (08-28): system-light no
-     * longer resolves to blinding near-white. */
-    --bg-base: #d4d9e2;
-    --bg-surface: #e8ecf3;
-    --bg-surface-elevated: #eef1f7;
-    --border-subtle: rgba(20, 26, 38, 0.14);
-    --border-hover: rgba(20, 26, 38, 0.30);
-    --text-primary: #161c28;
-    --text-secondary: #2e3949;
-    --text-muted: #5c6577;
+    /* Soft comfortable slate when OS prefers light (no glare) */
+    --bg-base: #181d27;
+    --bg-surface: #222938;
+    --bg-surface-elevated: #2c364a;
+    --border-subtle: rgba(255, 255, 255, 0.10);
+    --border-hover: rgba(255, 255, 255, 0.22);
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
   }
 }
 
@@ -593,42 +601,12 @@ html[data-accent] [class*="bg-purple-500"][class*="text-purple-200"],
 html[data-accent] [class*="bg-purple-600"][class*="text-purple-300"] {
   color: #ffffff !important;
 }
-/* 4. APPEARANCE: LIGHT THEME (hardcoded slate stems -> light tokens) ------ */
-html[data-theme="light"] [class*="bg-slate-950"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-950/80"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-950/60"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-950/40"] { background-color: var(--bg-surface-elevated) !important; }
-html[data-theme="light"] [class*="bg-slate-900"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-900/80"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-900/60"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="bg-slate-900/40"] { background-color: var(--bg-surface-elevated) !important; }
-html[data-theme="light"] [class*="bg-slate-800"] { background-color: var(--bg-surface-elevated) !important; }
-html[data-theme="light"] [class*="bg-slate-800/60"] { background-color: var(--bg-surface-elevated) !important; }
-html[data-theme="light"] [class*="bg-slate-700"] { background-color: var(--bg-surface-elevated) !important; }
-html[data-theme="light"] [class*="text-slate-100"] { color: var(--text-primary) !important; }
-html[data-theme="light"] [class*="text-slate-200"] { color: var(--text-primary) !important; }
-html[data-theme="light"] [class*="text-slate-300"] { color: var(--text-secondary) !important; }
-html[data-theme="light"] [class*="text-slate-400"] { color: var(--text-muted) !important; }
-html[data-theme="light"] [class*="text-slate-500"] { color: var(--text-muted) !important; }
-html[data-theme="light"] [class*="text-slate-600"] { color: var(--text-muted) !important; }
-html[data-theme="light"] [class*="border-white/10"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="border-white/8"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="border-white/5"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="border-white/20"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="border-slate-800"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="border-slate-700"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="divide-white/5"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="divide-white/10"] { border-color: var(--border-subtle) !important; }
-html[data-theme="light"] [class*="bg-white/4"], html[data-theme="light"] [class*="bg-white/5"], html[data-theme="light"] [class*="bg-white/8"] { background-color: rgba(15,23,42,0.04) !important; }
-html[data-theme="light"] [class*="hover:bg-white/8"] { background-color: rgba(15,23,42,0.08) !important; }
-html[data-theme="light"] .clean-input, html[data-theme="light"] [class*="bg-slate-950/"] { background-color: var(--bg-surface) !important; }
-html[data-theme="light"] [class*="text-slate-9999"] { color: var(--text-primary); }
-
-
+/* 4. APPEARANCE: THEME VAR HARMONIZATION -------------------------------- */
+html[data-theme="light"] .clean-input { background-color: var(--bg-surface-elevated); color: var(--text-primary); }
 
 /* 5. APPEARANCE: DENSITY (common spacing stems scaled) ------------------- */
-html[data-density="compact"] .gap-1.5 { gap: calc(0.375rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-1.5 { gap: calc(0.375rem * var(--density-gap)); }
+html[data-density="compact"] .gap-1\.5 { gap: calc(0.375rem * var(--density-gap)); }
+html[data-density="spacious"] .gap-1\.5 { gap: calc(0.375rem * var(--density-gap)); }
 html[data-density="compact"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
 html[data-density="spacious"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
 html[data-density="compact"] .gap-3 { gap: calc(0.75rem * var(--density-gap)); }
@@ -651,18 +629,18 @@ html[data-density="compact"] .px-2 { padding-left: calc(0.5rem * var(--density-g
 html[data-density="spacious"] .px-2 { padding-left: calc(0.5rem * var(--density-gap)); padding-right: calc(0.5rem * var(--density-gap)); }
 html[data-density="compact"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
 html[data-density="spacious"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .px-3.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
-html[data-density="spacious"] .px-3.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
+html[data-density="compact"] .px-3\.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
+html[data-density="spacious"] .px-3\.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
 html[data-density="compact"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
 html[data-density="spacious"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
 html[data-density="compact"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
 html[data-density="spacious"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
-html[data-density="compact"] .py-1.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
-html[data-density="spacious"] .py-1.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
+html[data-density="compact"] .py-1\.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
+html[data-density="spacious"] .py-1\.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
 html[data-density="compact"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
 html[data-density="spacious"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .py-2.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
-html[data-density="spacious"] .py-2.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
+html[data-density="compact"] .py-2\.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
+html[data-density="spacious"] .py-2\.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
 html[data-density="compact"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
 html[data-density="spacious"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
 html[data-density="compact"] .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.5rem * var(--density-gap)); }

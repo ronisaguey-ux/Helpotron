@@ -445,6 +445,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus]);
 
+  useEffect(() => {
+    window.__helpotron_nav = handleSelectView;
+    const onNav = (e) => {
+      if (e && e.detail) {
+        if (typeof e.detail === 'string') handleSelectView(e.detail);
+        else if (e.detail.view) handleSelectView(e.detail.view, e.detail.tab, e.detail.assignment);
+      }
+    };
+    window.addEventListener('helpotron_nav', onNav);
+    return () => {
+      window.removeEventListener('helpotron_nav', onNav);
+      delete window.__helpotron_nav;
+    };
+  }, [activeView, viewTab, openAssignment]);
+
   const effectiveIsAdmin = isAdmin;
 
   return (

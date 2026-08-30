@@ -465,9 +465,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   onChange={(e) => setBulkPlan(e.target.value)}
                 >
                   <option value="">— No Plan Change —</option>
-                  <option value="basic">Basic (30 Tokens)</option>
-                  <option value="pro">Pro (100 Tokens)</option>
-                  <option value="elite">Elite (300 Tokens)</option>
+                  <option value="trial">Trial (100 Tokens)</option>
+                  <option value="basic">Basic (300 Tokens)</option>
+                  <option value="pro">Pro (1,000 Tokens)</option>
+                  <option value="elite">Elite (2,700 Tokens)</option>
                 </select>
               </div>
 
@@ -544,7 +545,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 </button>
               </div>
             </div>
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[640px] text-left text-xs">
               <thead>
                 <tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider">
                   <th className="pb-3">
