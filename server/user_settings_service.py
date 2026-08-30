@@ -109,219 +109,172 @@ DEFAULT_PERSONAS = [
 
 AVAILABLE_MODELS = [
     {
+        "id": "nemotron_nano",
+        "name": "NVIDIA Nemotron-3 Nano 30B",
+        "pricing": "$0.05 / $0.20 per 1M tokens",
+        "context_window": 32768,
+        "recommended_use": "Effort 1: Ultra-Fast Utility & Rapid Keyword Extraction",
+        "description": "Effort Level 1 worker for low-latency tasks and instant drafting.",
+        "category": "utility_fast",
+        "provider": "NVIDIA",
+        "min_effort": 1,
+    },
+    {
+        "id": "qwen_72b",
+        "name": "Qwen 2.5 72B Instruct",
+        "pricing": "$0.09 / $0.18 per 1M tokens",
+        "context_window": 131072,
+        "recommended_use": "Effort 2: Economical Drafting & Summary Generation",
+        "description": "Effort Level 2 high-capacity open-weight engine for fast text creation.",
+        "category": "fast_draft",
+        "provider": "Qwen",
+        "min_effort": 150,
+    },
+    {
         "id": "gemini_31_flash_lite",
         "name": "Google Gemini 3.1 Flash-Lite",
-        "pricing": "$0.50 / $1.50 per 1M tokens",
+        "pricing": "$0.075 / $0.30 per 1M tokens",
         "context_window": 1000000,
-        "recommended_use": "Ultra-Fast Audio Transcription, OCR & Rapid Summaries",
-        "description": "Primary high-throughput workhorse for lecture transcription and fast study tools.",
+        "recommended_use": "Effort 3: Audio Transcription, OCR & Massive Context",
+        "description": "Effort Level 3 workhorse for lecture audio and long multi-modal documents.",
         "category": "bulk_throughput",
         "provider": "Google",
-        "min_effort": 1,
+        "min_effort": 250,
+    },
+    {
+        "id": "deepseek_v4_flash",
+        "name": "DeepSeek-V4 Flash Vision",
+        "pricing": "$0.14 / $0.28 per 1M tokens",
+        "context_window": 128000,
+        "recommended_use": "Effort 4–7: Balanced Rigor, Multi-Step Problem Solving & Vision",
+        "description": "Effort Levels 4 through 7 core balanced reasoning engine.",
+        "category": "instruction_following",
+        "provider": "DeepSeek",
+        "min_effort": 350,
+    },
+    {
+        "id": "deepseek_v4_pro",
+        "name": "DeepSeek-V4 Pro Vision",
+        "pricing": "$0.87 / $1.74 per 1M tokens",
+        "context_window": 128000,
+        "recommended_use": "Effort 7+ (8–10): Flagship Cognitive Synthesis & Deep Research",
+        "description": "Effort Levels 8 through 10 flagship deep reasoning and formal synthesis specialist.",
+        "category": "deep_reasoning",
+        "provider": "DeepSeek",
+        "min_effort": 750,
     },
     {
         "id": "gemini_37_flash",
         "name": "Google Gemini 3.7 Flash",
-        "pricing": "$2.50 / $10.00 per 1M tokens",
+        "pricing": "$0.25 / $1.00 per 1M tokens",
         "context_window": 1000000,
-        "recommended_use": "Multimodal Vision, Presentations & Flagship Synthesis",
-        "description": "Flagship multimodal engine. Automatically spawned for image/video analysis and 100% pure Gemini slide generation.",
+        "recommended_use": "Max Effort Gemini-Exclusive: Audio, Video, Google Slides & Doc History",
+        "description": "Exclusively engaged when max effort is requested on Gemini-only tasks.",
         "category": "multimodal_vision",
         "provider": "Google",
         "is_multimodal": True,
-        "min_effort": 1,
-    },
-    {
-        "id": "deepseek_v4_flash",
-        "name": "DeepSeek-V4 Flash",
-        "pricing": "$0.14 / $0.28 per 1M tokens",
-        "context_window": 128000,
-        "recommended_use": "Rapid Outlining, Fast Flashcards & Terminology",
-        "description": "High-throughput, ultra-low latency reasoning model for initial scaffolds and quick study aids.",
-        "category": "utility_fast",
-        "provider": "DeepSeek",
-        "min_effort": 1,
-    },
-    {
-        "id": "deepseek_v4_pro",
-        "name": "DeepSeek-V4 Pro",
-        "pricing": "$0.55 / $2.19 per 1M tokens",
-        "context_window": 128000,
-        "recommended_use": "Cognitive Deep Reasoning, Proofs & Research",
-        "description": "Flagship multi-step reasoning specialist with deep chain-of-thought verification.",
-        "category": "deep_reasoning",
-        "provider": "DeepSeek",
-        "min_effort": 750,
-    },
-    {
-        "id": "nemotron_3_super",
-        "name": "NVIDIA Nemotron-3 Super",
-        "pricing": "$0.20 / $0.80 per 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Strict Rubric Compliance & Practice Test Generation",
-        "description": "High-precision instruction adherence engine for strict institutional assignment rubrics.",
-        "category": "instruction_following",
-        "provider": "NVIDIA",
-        "min_effort": 350,
-    },
-    {
-        "id": "nemotron_nano",
-        "name": "NVIDIA Nemotron Nano",
-        "pricing": "$0.05 / $0.20 per 1M tokens",
-        "context_window": 32768,
-        "recommended_use": "Low-Latency Keyword & Flashcard Worker",
-        "description": "Compact, efficient subagent for high-frequency active recall question extraction.",
-        "category": "utility_fast",
-        "provider": "NVIDIA",
-        "min_effort": 1,
-    },
-    {
-        "id": "llama_33_nemotron_70b",
-        "name": "Meta Llama 3.3 Nemotron 70B",
-        "pricing": "$0.35 / $1.40 per 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Few-Shot Style Mimicry & Humanized Drafting",
-        "description": "Advanced stylistic synthesis engine calibrated to replicate authentic student writing cadence.",
-        "category": "elite_synthesis",
-        "provider": "NVIDIA/Meta",
-        "min_effort": 750,
-    },
-    {
-        "id": "llama_31_8b",
-        "name": "Meta Llama 3.1 8B",
-        "pricing": "$0.08 / $0.30 per 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Fast Scaffolding & Summary Drafting",
-        "description": "High-speed helper model for preliminary notes and conceptual outlines.",
-        "category": "fast_draft",
-        "provider": "Meta",
-        "min_effort": 1,
-    },
-    # Compatibility aliases for functional tiers
-    {
-        "id": "moe_high_throughput",
-        "name": "High-Throughput MoE Tier (Gemini 3.1 Flash-Lite / DeepSeek-V4 Flash)",
-        "pricing": "$0.085 – $0.50 / 1M tokens",
-        "context_window": 1000000,
-        "recommended_use": "Bulk Lecture Summaries & Long Transcripts",
-        "description": "Massive context throughput for audio transcripts and comprehensive multi-week syllabus summaries.",
-        "category": "bulk_throughput",
-        "min_effort": 1,
-    },
-    {
-        "id": "fast_utility_worker",
-        "name": "Ultra-Fast Utility Engine (Nemotron Nano / DeepSeek-V4 Flash)",
-        "pricing": "$0.04 – $0.14 / 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Fast Flashcards & Term Extraction",
-        "description": "Low-latency worker optimized for active recall cards and repetitive keyword extraction.",
-        "category": "utility_fast",
-        "min_effort": 1,
-    },
-    {
-        "id": "instruction_parser",
-        "name": "Instruction-Tuned Rubric Engine (Nemotron-3 Super)",
-        "pricing": "$0.20 – $0.80 / 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Grading Rubrics & Practice Test Generation",
-        "description": "High-precision instruction adherence for strict institutional rubrics and diagnostic test banks.",
-        "category": "instruction_following",
-        "min_effort": 350,
-    },
-    {
-        "id": "deep_cognitive_engine",
-        "name": "Deep Cognitive Synthesis Engine (DeepSeek-V4 Pro)",
-        "pricing": "$0.55 – $2.19 / 1M tokens",
-        "context_window": 128000,
-        "recommended_use": "Cognitive Deep Reasoning & Academic Research",
-        "description": "Flagship multi-step reasoning engine with chain-of-thought verification.",
-        "category": "deep_reasoning",
-        "min_effort": 750,
-    },
-    {
-        "id": "elite_humanizer_tier",
-        "name": "Elite Style & Humanization Tier (Llama 3.3 Nemotron 70B)",
-        "pricing": "$0.35 – $1.40 / 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "High-Stakes Multi-Pass Evasion & Complex Synthesis",
-        "description": "Elite stylistic synthesis and institutional detector defense engine.",
-        "category": "elite_synthesis",
-        "min_effort": 750,
-    },
-    {
-        "id": "fast_draft_tier",
-        "name": "High-Speed Drafting Engine (Llama 3.1 8B)",
-        "pricing": "$0.08 – $0.30 / 1M tokens",
-        "context_window": 131072,
-        "recommended_use": "Sub-Second Outline Structuring",
-        "description": "Ultra high-speed execution tier for preliminary assignment scaffolding.",
-        "category": "fast_draft",
-        "min_effort": 1,
+        "min_effort": 800,
     },
 ]
 
 
-# User-facing tier catalog. The user directive (2026-08-22) is that model
-# names appear NOWHERE user-facing — /api/user/models returns this generic
-# effort-tier catalog instead of AVAILABLE_MODELS. Internal routing keeps
-# using AVAILABLE_MODELS / resolve_effort_tier / the llm.py cascade.
 PUBLIC_TIERS = [
     {
         "id": "fast_economical",
-        "name": "Fast & Economical",
-        "recommended_use": "Transcription, OCR, rapid drafts",
+        "name": "Fast & Economical (Effort 1–3)",
+        "recommended_use": "Rapid transcription, OCR, keyword extraction, and drafts",
         "min_effort": 1,
     },
     {
         "id": "balanced",
-        "name": "Balanced",
-        "recommended_use": "Standard coursework synthesis",
+        "name": "Balanced Rigor (Effort 4–7)",
+        "recommended_use": "Standard coursework synthesis, multi-step problem solving, and vision",
         "min_effort": 350,
     },
     {
         "id": "flagship",
-        "name": "Flagship",
-        "recommended_use": "Deep reasoning and final-quality writing",
+        "name": "Flagship Cognitive Synthesis (Effort 8–10)",
+        "recommended_use": "Deep reasoning, rigorous research, and thesis-level drafting",
         "min_effort": 750,
     },
 ]
 
 
 def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
-    """Calculates model workload distribution based on effort score (1 - 1000)."""
-    score = max(1, min(1000, int(effort_score if effort_score is not None else 500)))
-    if score <= 350:
+    """Calculates model workload distribution based on effort score (1 - 1000 or 1 - 10)."""
+    if effort_score is None:
+        score = 500
+    else:
+        score = int(effort_score)
+    
+    if score <= 10:
+        lvl = max(1, min(10, score))
+        score = lvl * 100
+    elif score <= 150: lvl = 1
+    elif score <= 250: lvl = 2
+    elif score <= 350: lvl = 3
+    elif score <= 750: lvl = 5
+    else: lvl = 9
+
+    if lvl == 1:
         return {
-            "tier": "low_effort",
-            "tier_label": "High Speed / Cost-Saving (1–350)",
+            "tier": "effort_1_nemotron_nano",
+            "tier_label": "Level 1: Nemotron 3 Nano",
             "score": score,
-            "description": "Bulk work and term extraction are heavily offloaded to ultra-efficient high-speed utility tiers.",
-            "summary_model": "moe_high_throughput",
-            "flashcard_model": "fast_utility_worker",
-            "draft_model": "fast_draft_tier",
-            "humanizer_model": "instruction_parser",
+            "level": 1,
+            "description": "Ultra-fast utility and rapid token extraction using NVIDIA Nemotron 3 Nano.",
+            "summary_model": "nemotron_nano",
+            "flashcard_model": "nemotron_nano",
+            "draft_model": "nemotron_nano",
+            "humanizer_model": "nemotron_nano",
         }
-    elif score <= 750:
+    elif lvl == 2:
         return {
-            "tier": "medium_effort",
-            "tier_label": "Balanced Rigor & Evasion (351–750)",
+            "tier": "effort_2_qwen_72b",
+            "tier_label": "Level 2: Qwen 2.5 72B",
             "score": score,
-            "description": "Balanced orchestration pairing instruction-tuned engines for rubrics with high-speed drafting and elite synthesis.",
-            "summary_model": "moe_high_throughput",
-            "flashcard_model": "fast_utility_worker",
-            "draft_model": "instruction_parser",
-            "humanizer_model": "elite_humanizer_tier",
+            "level": 2,
+            "description": "Economical high-capacity open-weight drafting using Qwen 2.5 72B Instruct.",
+            "summary_model": "qwen_72b",
+            "flashcard_model": "qwen_72b",
+            "draft_model": "qwen_72b",
+            "humanizer_model": "qwen_72b",
+        }
+    elif lvl == 3:
+        return {
+            "tier": "effort_3_gemini_lite",
+            "tier_label": "Level 3: Gemini 3.1 Flash Lite",
+            "score": score,
+            "level": 3,
+            "description": "Fast OCR, audio transcription, and long-context processing with Gemini 3.1 Flash Lite.",
+            "summary_model": "gemini_31_flash_lite",
+            "flashcard_model": "gemini_31_flash_lite",
+            "draft_model": "gemini_31_flash_lite",
+            "humanizer_model": "gemini_31_flash_lite",
+        }
+    elif lvl <= 7:
+        return {
+            "tier": "effort_4_7_deepseek_v4_flash",
+            "tier_label": f"Levels 4–7: DeepSeek V4 Flash Vision (Lvl {lvl})",
+            "score": score,
+            "level": lvl,
+            "description": "Balanced multi-step reasoning, rubric compliance, and vision analysis with DeepSeek V4 Flash Vision.",
+            "summary_model": "deepseek_v4_flash",
+            "flashcard_model": "deepseek_v4_flash",
+            "draft_model": "deepseek_v4_flash",
+            "humanizer_model": "deepseek_v4_flash",
         }
     else:
         return {
-            "tier": "high_effort",
-            "tier_label": "Flagship Cognitive Synthesis (751–1000)",
+            "tier": "effort_8_10_deepseek_v4_pro",
+            "tier_label": f"Levels 8–10 (7+): DeepSeek V4 Pro Vision (Lvl {lvl})",
             "score": score,
-            "description": "Maximum cognitive depth, rigorous multi-pass research, and deep reasoning passes offloaded to flagship cognitive engines.",
-            "summary_model": "deep_cognitive_engine",
-            "flashcard_model": "instruction_parser",
-            "draft_model": "deep_cognitive_engine",
-            "humanizer_model": "elite_humanizer_tier",
+            "level": lvl,
+            "description": "Flagship cognitive depth, research, and rigorous synthesis with DeepSeek V4 Pro Vision (Gemini 3.7 Flash for Gemini-exclusive tasks).",
+            "summary_model": "deepseek_v4_pro",
+            "flashcard_model": "deepseek_v4_pro",
+            "draft_model": "deepseek_v4_pro",
+            "humanizer_model": "deepseek_v4_pro",
         }
 
 

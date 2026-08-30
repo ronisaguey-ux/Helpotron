@@ -29,19 +29,19 @@ class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
     
     PRIMARY_MODELS = {
-        "deepseek_v4_flash_vision": "google/gemini-3.1-flash-lite",  # v4-flash-vision-exp slug dead on OpenRouter (404 guardrails for BOTH keys 08-27); lite = verified 08-27; NEVER deepseek-chat (V3) — user rule 08-26
+        "nemotron_nano": "nvidia/nemotron-3-nano-30b-a3b",
+        "qwen_72b": "qwen/qwen-2.5-72b-instruct",
+        "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
+        "deepseek_v4_flash": "deepseek/deepseek-v4-flash",
+        "deepseek_v4_pro": "deepseek/deepseek-v4-pro",
+        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash",
         "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro",
-        "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",  # verified live 08-26
         "gemini_37_flash": "google/gemini-3.7-flash",
     }
     
     GRUNT_CANDIDATES = [
-        # all verified live 08-27; old IDs were retired/renamed on OpenRouter:
-        # nvidia/nemotron-mini-4b-instruct (retired → nemotron-3-nano), qwen/qwen-2.5-coder-32b (→ -instruct), mistral/mistral-nemo-12b (→ mistralai/mistral-nemo)
-        # NOTE 08-27: mistralai/mistral-nemo dropped — returns blank 200 bodies on this account (data-policy); use qwen/nemotron instead.
         "nvidia/nemotron-3-nano-30b-a3b",
-        "qwen/qwen-2.5-coder-32b-instruct",
-        "qwen/qwen-2.5-72b-instruct"
+        "qwen/qwen-2.5-72b-instruct",
     ]
     
     PROHIBITED_PREFIXES = [
@@ -49,17 +49,14 @@ class ModelPolicy:
     ]
     
     PRICING = {
-        # live OpenRouter pricing (08-26): per-1M-token figures ×1e6 of payload values
-        "deepseek/deepseek-v4-flash-vision-exp": {"input": 0.22, "output": 0.66, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
-        "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
-        "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        # live OpenRouter pricing per 1M tokens
         "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
-        "qwen/qwen-2.5-coder-32b-instruct": {"input": 0.66, "output": 1.00, "modalities": ["text"], "reliability": 0.98},
-        # Candidate Grunt Models (Dynamic Economic Evaluation)
-        "nvidia/nemotron-mini-4b-instruct": {"input": 0.04, "output": 0.08, "modalities": ["text"], "capabilities": ["bulk_text", "format", "extract"], "reliability": 0.98},
-        "mistralai/mistral-nemo": {"input": 0.06, "output": 0.12, "modalities": ["text"], "capabilities": ["bulk_text", "rewrite", "extract", "summarize"], "reliability": 0.985},
-        "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "capabilities": ["bulk_text", "drafting", "summarize", "reasoning"], "reliability": 0.99}
+        "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "reliability": 0.99},
+        "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "deepseek/deepseek-v4-flash": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
+        "deepseek/deepseek-v4-flash-vision-exp": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
+        "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
+        "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
     }
 
 PRIMARY_MODELS = ModelPolicy.PRIMARY_MODELS
@@ -78,10 +75,6 @@ def calculate_effective_task_cost(model_id: str, modality: str = "text", input_t
     return token_cost + image_cost + audio_cost
 
 def get_deepseek_baseline_cost(modality: str = "text", input_tokens: int = 1000, output_tokens: int = 500, num_images: int = 0, audio_minutes: float = 0.0) -> float:
-    """
-    Resolve modality-specific DeepSeek baseline cost.
-    Policy Exception: For audio modality where DeepSeek has no model, the baseline is defined as Gemini 3.1 Flash Lite.
-    """
     if modality == "audio":
         return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
     return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
@@ -95,30 +88,13 @@ def evaluate_grunt_candidate(
     output_tokens: int = 500,
     audio_minutes: float = 0.0
 ) -> Dict[str, Any]:
-    """
-    Hard Economic Invariant:
-    Candidate eligible ONLY if modality supported, capability tags satisfied, reliability >= min_reliability,
-    and effective cost strictly less than the modality DeepSeek baseline. Equality or higher strictly rejects.
-    """
     meta = ModelPolicy.PRICING.get(candidate_id)
     if not meta:
         return {"eligible": False, "reason": "model_not_in_registry"}
     if modality not in meta.get("modalities", []):
         return {"eligible": False, "reason": f"modality_{modality}_unsupported"}
-    if meta.get("reliability", 0.0) < min_reliability:
-        return {"eligible": False, "reason": f"reliability_{meta.get('reliability')}_below_threshold_{min_reliability}"}
-    
-    cand_caps = meta.get("capabilities", [])
-    missing_caps = [c for c in required_capabilities if c not in cand_caps]
-    if missing_caps:
-        return {"eligible": False, "reason": f"missing_capabilities_{missing_caps}"}
-    
     cand_cost = calculate_effective_task_cost(candidate_id, modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
     baseline_cost = get_deepseek_baseline_cost(modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    
-    if cand_cost >= baseline_cost:
-        return {"eligible": False, "reason": f"cost_{cand_cost}_exceeds_or_equals_baseline_{baseline_cost}"}
-        
     return {"eligible": True, "cand_cost": cand_cost, "baseline_cost": baseline_cost, "savings": baseline_cost - cand_cost}
 
 def resolve_model_routing(
@@ -130,102 +106,103 @@ def resolve_model_routing(
     output_tokens: int = 500,
     complexity_score: float = 3.0,
     num_images: int = 0,
-    audio_minutes: float = 0.0
+    audio_minutes: float = 0.0,
+    effort_score: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    Autonomous Multi-Model Routing Engine.
-    Distinct modality branches: text, vision/multimodal, audio.
-    True Auto-Routing evaluates task complexity, modality, and capabilities.
+    Tiered Model Hierarchy:
+    - Level 1: nvidia/nemotron-3-nano-30b-a3b
+    - Level 2: qwen/qwen-2.5-72b-instruct
+    - Level 3: google/gemini-3.1-flash-lite
+    - Levels 4-7: deepseek/deepseek-v4-flash
+    - Levels 8-10 (7+): deepseek/deepseek-v4-pro
+    - Gemini 3.7 Flash: ONLY used when effort is maxed out (>=8) on Gemini-exclusive tasks
+      (audio, image/video generation/analysis, google slides, fake google doc history).
     """
     required_capabilities = required_capabilities or []
-    effort = effort.lower()
     
-    # 1. Dynamic Auto-Routing Logic (True autonomous effort selection based on task complexity)
-    if effort == "auto":
-        if modality == "audio":
-            effort = "advanced" if complexity_score > 6.0 else "medium"
-        elif modality in ["vision", "multimodal"]:
-            effort = "advanced" if (complexity_score > 6.0 or "academic_rigor" in required_capabilities) else ("low" if complexity_score <= 3.5 else "medium")
-        else:
-            if complexity_score <= 3.5 and not any(c in required_capabilities for c in ["multi_step_calc", "academic_rigor"]):
-                effort = "low"
-            elif complexity_score > 7.0 or "academic_rigor" in required_capabilities:
-                effort = "advanced"
-            else:
-                effort = "medium"
+    # 1. Resolve effort level (1 to 10)
+    level = 5
+    if effort_score is not None:
+        try:
+            es = int(effort_score)
+            if es <= 10:
+                level = max(1, min(10, es))
+            elif es <= 150: level = 1
+            elif es <= 250: level = 2
+            elif es <= 350: level = 3
+            elif es <= 450: level = 4
+            elif es <= 550: level = 5
+            elif es <= 650: level = 6
+            elif es <= 750: level = 7
+            elif es <= 850: level = 8
+            elif es <= 950: level = 9
+            else: level = 10
+        except (TypeError, ValueError):
+            pass
+    elif isinstance(effort, (int, float)):
+        level = max(1, min(10, int(effort)))
+    elif isinstance(effort, str):
+        eff_str = effort.strip().lower()
+        if eff_str.isdigit():
+            level = max(1, min(10, int(eff_str)))
+        elif eff_str in ("low", "fast", "grunt"):
+            level = 1
+        elif eff_str in ("medium", "balanced"):
+            level = 5
+        elif eff_str in ("advanced", "high", "flagship"):
+            level = 9
+        elif eff_str == "auto":
+            if complexity_score <= 2.0: level = 1
+            elif complexity_score <= 3.5: level = 2
+            elif complexity_score <= 5.0: level = 3
+            elif complexity_score <= 7.5: level = 5
+            else: level = 9
 
-    # 2. Audio Modality Branch (Strictly routes to audio-capable models only)
-    if modality == "audio":
-        if effort == "advanced":
+    # 2. Check for Gemini-exclusive tasks
+    gemini_caps = ("audio", "video", "image_gen", "video_gen", "google_slides", "fake_doc_history", "slide_deck", "doc_history")
+    is_gemini_exclusive = (modality in ("audio", "video") or any(c in required_capabilities for c in gemini_caps))
+
+    if is_gemini_exclusive:
+        if level >= 8:
             selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]
+            tier = "gemini_exclusive_flagship"
+            reason = "Maxed effort on Gemini-exclusive task (audio/video/slides/fake doc history)"
         else:
             selected = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-        return {
-            "model": selected,
-            "tier": "primary_audio",
-            "escalated": False,
-            "reason": f"Audio modality routed to audio-capable {selected}",
-            "estimated_cost": calculate_effective_task_cost(selected, modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-        }
-
-    # 3. Vision & Multimodal Branch (Follows approved vision specializations)
-    if modality in ["vision", "multimodal"]:
-        if effort == "low":
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
-        elif effort == "advanced":
-            selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]
-        else:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
-        return {
-            "model": selected,
-            "tier": "primary_multimodal",
-            "escalated": False,
-            "reason": f"Multimodal task routed to {selected} at {effort} effort",
-            "estimated_cost": calculate_effective_task_cost(selected, modality="vision", input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
-        }
-
-    # 4. Text Modality Branch with Dynamic Grunt Gate
-    rejection_reasons = []
-    if allow_grunt and effort == "low":
-        eligible_models = []
-        for m in ModelPolicy.GRUNT_CANDIDATES:
-            eval_res = evaluate_grunt_candidate(m, required_capabilities, modality="text", input_tokens=input_tokens, output_tokens=output_tokens)
-            if eval_res["eligible"]:
-                eligible_models.append((m, eval_res["cand_cost"], eval_res["baseline_cost"], eval_res["savings"]))
-            else:
-                rejection_reasons.append(f"{m}: {eval_res['reason']}")
-                
-        if eligible_models:
-            eligible_models.sort(key=lambda x: x[1])  # Sort by cost ascending
-            best_m, cand_c, base_c, sav = eligible_models[0]
-            return {
-                "model": best_m,
-                "tier": "cheap_grunt_worker",
-                "escalated": False,
-                "reason": "Passed Dynamic Grunt Cost Gate (< DeepSeek baseline)",
-                "baseline_cost": base_c,
-                "model_cost": cand_c,
-                "savings": sav
-            }
-        else:
-            logger.info(f"Grunt qualification failed ({'; '.join(rejection_reasons)}). Escalating to primary text tier.")
-
-    # Primary Text Allocation
-    if effort == "low":
-        selected = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-    elif effort == "advanced":
-        selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
+            tier = "gemini_exclusive_lite"
+            reason = "Gemini-exclusive task routed to fast lite engine"
     else:
-        selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]  # medium: v4-flash-vision-exp dead (08-27) → verified gemini-3.7-flash
-    
-    is_escalated = bool(allow_grunt and effort == "low" and rejection_reasons)
+        # Standard Text / Multimodal Vision / Reasoning Hierarchy
+        if level == 1:
+            selected = ModelPolicy.PRIMARY_MODELS["nemotron_nano"]
+            tier = "level_1_nemotron_nano"
+            reason = "Effort level 1 (Nemotron 3 Nano)"
+        elif level == 2:
+            selected = ModelPolicy.PRIMARY_MODELS["qwen_72b"]
+            tier = "level_2_qwen_72b"
+            reason = "Effort level 2 (Qwen 2.5 72B Instruct)"
+        elif level == 3:
+            selected = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
+            tier = "level_3_gemini_lite"
+            reason = "Effort level 3 (Gemini 3.1 Flash Lite)"
+        elif level <= 7:
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash"]
+            tier = "level_4_7_deepseek_v4_flash"
+            reason = f"Effort level {level} (DeepSeek V4 Flash Vision)"
+        else:
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro"]
+            tier = "level_8_10_deepseek_v4_pro"
+            reason = f"Effort level {level} (DeepSeek V4 Pro Vision)"
+
+    cost = calculate_effective_task_cost(selected, modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images, audio_minutes=audio_minutes)
     return {
         "model": selected,
-        "tier": "primary_text",
-        "escalated": is_escalated,
-        "escalation_reasons": rejection_reasons if is_escalated else [],
-        "reason": f"Primary text effort {effort}" + (" (escalated from grunt)" if is_escalated else ""),
-        "estimated_cost": calculate_effective_task_cost(selected, modality="text", input_tokens=input_tokens, output_tokens=output_tokens)
+        "tier": tier,
+        "level": level,
+        "escalated": False,
+        "reason": reason,
+        "estimated_cost": cost
     }
 
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
@@ -280,18 +257,6 @@ async def call_llm(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
 ) -> str:
-    if effort_score is not None:
-        try:
-            es = int(effort_score)
-        except (TypeError, ValueError):
-            es = 500
-        if es <= 3 or (es > 10 and es <= 350):
-            effort = "low"
-        elif es <= 7 or (es > 10 and es <= 750):
-            effort = "medium"
-        else:
-            effort = "advanced"
-
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
 
@@ -299,7 +264,8 @@ async def call_llm(
         effort=effort,
         modality=modality,
         required_capabilities=required_capabilities,
-        complexity_score=complexity_score
+        complexity_score=complexity_score,
+        effort_score=effort_score,
     )
     model_id = MODELS.get(model, model) if model else route["model"]  # short names (flash/pro/...) → real slug 08-28
     
@@ -443,12 +409,14 @@ def extract_json(content: str) -> Any:
 
 # --- Compatibility Wrappers ---
 MODELS = {
-    "flash": "google/gemini-3.1-flash-lite",  # v4-flash-vision-exp dead on OR (08-27); lite verified
+    "flash": "deepseek/deepseek-v4-flash",
     "pro": "deepseek/deepseek-v4-pro",
-    "math": "deepseek/deepseek-r1",
     "lite": "google/gemini-3.1-flash-lite",
+    "gemini": "google/gemini-3.7-flash",
+    "nano": "nvidia/nemotron-3-nano-30b-a3b",
+    "qwen": "qwen/qwen-2.5-72b-instruct",
     "grunt": "nvidia/nemotron-3-nano-30b-a3b",
-    "cheapest": "google/gemini-3.1-flash-lite",
+    "cheapest": "nvidia/nemotron-3-nano-30b-a3b",
 }
 
 class TaskCategory:
