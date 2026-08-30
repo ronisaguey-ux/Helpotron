@@ -18,20 +18,6 @@ const weekMinutes = (a) => {
   return Object.values(days).reduce((sum, m) => sum + (Number(m) || 0), 0);
 };
 
-/* Demo fallback — shown when live analytics can't load (no session token
- * on localhost or the backend is unreachable). */
-const DEMO_ANALYTICS = {
-  total_study_time_hours: 42.5, materials_studied: 38, session_count: 21, average_score: 88,
-  recent_activity: { today: 60, '1d_ago': 40, '2d_ago': 75, '3d_ago': 30 },
-  material_breakdown: { 'Study guides': 14, Flashcards: 12, 'Practice quizzes': 8, Summaries: 4 },
-};
-const DEMO_ACTIVITY = [
-  { date: '2026-08-16', time_minutes: 75 }, { date: '2026-08-18', time_minutes: 40 },
-  { date: '2026-08-20', time_minutes: 60 }, { date: '2026-08-21', time_minutes: 95 },
-  { date: '2026-08-23', time_minutes: 55 },
-];
-const DEMO_VALUE_METRICS = { study_hours: 34, monthly_cost: 12, cost_per_hour: 0.35, tutor_savings: 320 };
-
 const Stat = ({ label, value, sub = '', icon: Icon, iconColor = 'text-[var(--accent)]' }) => (
   <div className="glass-panel rounded-[var(--radius-lg)] p-5">
     <div className="flex items-center justify-between text-[var(--text-muted)] mb-1 text-xs">
@@ -49,7 +35,6 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
   const [analytics, setAnalytics] = useState(null);
   const [activity, setActivity] = useState([]);
   const [valueMetrics, setValueMetrics] = useState(null);
-  const [demoMode, setDemoMode] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -63,15 +48,18 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
       setAnalytics(a);
       setActivity(act || []);
       setValueMetrics(vm);
-      setDemoMode(false);
     } catch (e) {
-      // No session token / offline (e.g. localhost without auth): show the
-      // demo view rather than a raw API error.
-      if (e.status === 401 || e.name === 'TypeError' || /Not authenticated|Failed to fetch|network error/i.test(e.message || '')) {
-        setDemoMode(true);
-        setAnalytics(DEMO_ANALYTICS);
-        setActivity(DEMO_ACTIVITY);
-        setValueMetrics(DEMO_VALUE_METRICS);
+      if (e.status === 401 || /Not authenticated|Failed to fetch|network error/i.test(e.message || '')) {
+        setAnalytics({
+          total_study_time_hours: 0,
+          materials_studied: 0,
+          session_count: 0,
+          average_score: null,
+          recent_activity: {},
+          material_breakdown: {},
+        });
+        setActivity([]);
+        setValueMetrics({ study_hours: 0, monthly_cost: 0, cost_per_hour: 0, tutor_savings: 0 });
         setError('');
       } else {
         setError(e.message || 'Failed to load analytics');
@@ -85,17 +73,22 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
     loadData();
   }, [loadData]);
 
-  if (loading) return <GlassCard className="text-center text-[var(--accent)] text-xs py-8">Loading Neural Analytics & Telemetry…</GlassCard>;
+  if (loading) return <GlassCard className="text-center text-[var(--accent)] text-xs py-8">Loading live analytics…</GlassCard>;
   if (error) return <GlassCard className="text-rose-400 text-xs">{error}</GlassCard>;
-  if (!analytics) return <GlassCard className="text-xs text-[var(--text-muted)]">No analytics data yet. Start studying to see insights!</GlassCard>;
+  if (!analytics || (analytics.session_count === 0 && analytics.total_study_time_hours === 0)) {
+    return (
+      <div className="clean-card p-10 text-center space-y-3">
+        <Activity className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">No Study Activity Recorded Yet</h3>
+        <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+          Complete an assignment, study flashcards, or generate practice tests with your agent to see your real study hours and performance metrics.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {demoMode && (
-        <div className="rounded-[var(--radius-md)] px-4 py-3 bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 leading-relaxed">
-          Live analytics unavailable (no session token on this browser) — showing demo data. Sign in to see your own numbers.
-        </div>
-      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Total Study Time" value={`${(analytics.total_study_time_hours ?? 0).toFixed(1)}h`} sub={`${weekMinutes(analytics)}m in the last 7 days`} icon={Clock} iconColor="text-[var(--accent)]" />
         <Stat label="Materials Studied" value={analytics.materials_studied ?? 0} sub={`${analytics.total_materials_generated ?? 0} generated total`} icon={BookOpen} iconColor="text-indigo-400" />

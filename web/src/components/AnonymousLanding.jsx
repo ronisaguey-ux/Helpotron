@@ -182,6 +182,11 @@ function Pricing({ onOpenAuth }) {
             {p.popular && (
               <span className="absolute -top-2.5 left-5 aurora-chip text-[10px] py-0.5">Most popular</span>
             )}
+            {p.requires_sms && (
+              <span className="absolute -top-2.5 right-5 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">
+                1-Time · SMS
+              </span>
+            )}
             <div className="space-y-1">
               <div className="text-sm font-semibold text-[var(--text-primary)]">{p.name}</div>
               <div className="text-xs text-[var(--text-muted)] leading-relaxed min-h-[2.5rem]">{p.tagline}</div>
@@ -190,20 +195,25 @@ function Pricing({ onOpenAuth }) {
               <span className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
                 ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
               </span>
-              <span className="text-xs text-[var(--text-muted)]">/mo</span>
+              <span className="text-xs text-[var(--text-muted)]">/{p.is_trial ? '7 days' : 'mo'}</span>
             </div>
             <div className="text-xs text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-3">
-              <span className="font-semibold text-[var(--text-primary)]">{fmt(p.monthly_credits)}</span> credits / month
+              <div className="font-semibold text-[var(--text-primary)] font-mono">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">1 token = $0.01 API tool cost</div>
             </div>
             <button
               type="button"
               onClick={onOpenAuth}
-              className={`${p.popular ? BTN_PRIMARY : BTN_SECONDARY} w-full px-4 py-2.5 mt-auto`}
+              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-md)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 mt-auto cursor-pointer`}
             >
-              {p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
+              {p.is_trial ? 'Start Free Trial (SMS)' : p.price_cents === 0 ? 'Start Free' : `Choose ${p.name}`}
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 text-center text-xs text-slate-400 font-mono">
+        💡 Task tokens cover raw tool execution (LLMs, Audio Transcription, Multi-Agent passes). Credits are discount dollars ($1.00 off per credit).
       </div>
 
       <ul className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-w-[900px] mx-auto">
