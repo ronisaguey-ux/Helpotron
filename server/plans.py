@@ -32,24 +32,24 @@ from .credits import TIER_MONTHLY_CREDITS
 from .payments import TIER_CREDITS as _PURCHASE_GRANT, TIER_PRICE_CENTS
 
 # Ordered cheapest → richest; drives display order everywhere.
-PLAN_ORDER: List[str] = ["free", "basic", "pro", "elite"]
+PLAN_ORDER: List[str] = ["trial", "basic", "pro", "elite"]
 
 PLAN_COPY: Dict[str, Dict[str, str]] = {
-    "free": {
-        "name": "Free",
-        "tagline": "Everything working, on a starter balance.",
+    "trial": {
+        "name": "Free Trial",
+        "tagline": "7-day starter trial with 100 task tokens ($1.00 tool budget) — SMS verification required (1 per number).",
     },
     "basic": {
         "name": "Basic",
-        "tagline": "For one steady course load.",
+        "tagline": "300 task tokens / month ($3.00 tool budget) for steady coursework.",
     },
     "pro": {
         "name": "Pro",
-        "tagline": "For a full semester across every subject.",
+        "tagline": "1,000 task tokens / month ($10.00 tool budget) for a full semester load.",
     },
     "elite": {
         "name": "Elite",
-        "tagline": "For heavy research and multi-agent work.",
+        "tagline": "2,700 task tokens / month ($27.00 tool budget) for heavy research and multi-agent work.",
     },
 }
 
@@ -65,7 +65,7 @@ SHARED_CAPABILITIES: List[str] = [
 
 
 def _price_cents(plan: str) -> int:
-    return 0 if plan == "free" else TIER_PRICE_CENTS.get(plan, 0)
+    return 0 if plan in ("trial", "free") else TIER_PRICE_CENTS.get(plan, 0)
 
 
 def get_plan_catalogue() -> List[Dict[str, Any]]:
@@ -74,6 +74,8 @@ def get_plan_catalogue() -> List[Dict[str, Any]]:
     for plan in PLAN_ORDER:
         copy = PLAN_COPY.get(plan, {})
         cents = _price_cents(plan)
+        is_trial = plan == "trial"
+        tokens = TIER_MONTHLY_CREDITS.get(plan, 300)
         catalogue.append(
             {
                 "id": plan,
@@ -81,10 +83,19 @@ def get_plan_catalogue() -> List[Dict[str, Any]]:
                 "tagline": copy.get("tagline", ""),
                 "price_cents": cents,
                 "price_monthly": cents / 100,
-                # The allowance the product promises and the dashboard displays.
-                "monthly_credits": TIER_MONTHLY_CREDITS.get(plan, 0),
+                # Task tokens for compute (1 task token = 1 cent = $0.01 tool cost)
+                "monthly_task_tokens": tokens,
+                "monthly_credits": tokens,  # backwards-compatible field
+                "usage_value_usd": round(tokens * 0.01, 2),
                 "popular": plan == "pro",
-                "capabilities": SHARED_CAPABILITIES,
+                "is_trial": is_trial,
+                "requires_sms": is_trial,
+                "badge": "1-Time Trial (SMS)" if is_trial else ("Most Popular" if plan == "pro" else None),
+                "capabilities": [
+                    f"{tokens:,} task tokens / month (1 token = $0.01 API tool cost)",
+                    "Credits are discount dollars ($1.00 off per credit)",
+                    *SHARED_CAPABILITIES,
+                ],
             }
         )
     return catalogue

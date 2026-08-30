@@ -85,13 +85,13 @@ def unique_user():
     return f"test-{uuid.uuid4().hex[:8]}"
 
 
-def _get_auth_headers_for_user(public_id: str) -> dict:
+def _get_auth_headers_for_user(public_id: str, plan: str = "none") -> dict:
     """Create or lookup a user and generate a JWT Bearer authorization header."""
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.public_id == public_id).first()
         if not user:
-            user = User(public_id=public_id, plan="basic", credits=0)
+            user = User(public_id=public_id, plan=plan, credits=100.0 if plan in ("basic", "pro", "elite") else 0.0)
             db.add(user)
             db.commit()
             db.refresh(user)

@@ -81,6 +81,7 @@ try:
     from .privacy import router as privacy_router
     from .admin import router as admin_router
     from .routes_features import router as features_router
+    from .routes_trial import router as trial_router
 except (ImportError, ValueError):
     from server.routes_analytics import router as analytics_router
     from server.routes_referral import router as referral_router
@@ -105,6 +106,7 @@ except (ImportError, ValueError):
     from server.privacy import router as privacy_router
     from server.admin import router as admin_router
     from server.routes_features import router as features_router
+    from server.routes_trial import router as trial_router
 
 
 logging.basicConfig(level=logging.INFO)
@@ -315,6 +317,7 @@ app.include_router(extension_router)
 app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
 app.include_router(assignments_router)
 app.include_router(privacy_router)
+app.include_router(trial_router)
 
 
 @app.get("/api/insights/snapshot")
@@ -1402,18 +1405,9 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
             "credits_formatted": f"{bal:,.1f}",
             "tokens_processed": tokens_used
         },
-        "telemetry": {
-            "health": "Nominal",
-            "uptime_pct": 100.0,
-            "active_worker": "Overlord Orchestrator",
-            "active_assignments": len(assignments),
-            "evasion_success_rate": "99.8%"
-        },
-        "roi_stats": {
-            "study_hours_saved": 48.5,
-            "estimated_tutor_savings_usd": 1450.0,
-            "hourly_cost_equivalent": 0.41
-        },
+        # 08-30 audit: telemetry/roi_stats were removed — the numbers
+        # (uptime 100.0%, "evasion success 99.8%", "$1,450 saved") were
+        # hardcoded and no UI component read them. Fabricated payload, gone.
         "assignments": [
             {
                 "id": a.id,

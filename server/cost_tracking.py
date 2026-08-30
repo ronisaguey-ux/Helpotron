@@ -74,14 +74,74 @@ class CostEngine:
         return entry
 
     def get_cost_summary(self, db) -> Dict[str, Any]:
-        """Admin analytics: totals, per-model breakdown, top users by spend."""
+        """Admin analytics: totals, per-model breakdown, top users by spend.
+
+        Returns the frontend contract consumed by AdminAdvancedDashboard's
+        Cost & Usage tab (total_cost_usd / total_charged_usd / total_logs /
+        platform_profit_summary / tool_breakdown / trends) PLUS the legacy
+        summary / per_model / top_users keys so older consumers keep working.
+        """
         from sqlalchemy import func
+        from datetime import datetime, timedelta
         rows = db.query(ApiUsageLog).all()
         total_base = sum(r.base_cost_usd for r in rows)
         total_charged = sum(r.charged_cost_usd for r in rows)
         total_calls = len(rows)
         total_input_tokens = sum(r.input_tokens for r in rows)
         total_output_tokens = sum(r.output_tokens for r in rows)
+
+        # Tool / model cost breakdown (frontend: tool_breakdown[])
+        bd: Dict[str, Dict[str, float]] = {}
+        for r in rows:
+            m = bd.setdefault(r.tool_or_model, {"call_count": 0, "total_base_cost": 0.0, "total_charged": 0.0, "input_tokens": 0, "output_tokens": 0})
+            m["call_count"] += 1
+            m["total_base_cost"] += r.base_cost_usd
+            m["total_charged"] += r.charged_cost_usd
+            m["input_tokens"] += r.input_tokens
+            m["output_tokens"] += r.output_tokens
+        tool_breakdown = [
+            {
+                "tool_or_model": m,
+                "call_count": v["call_count"],
+                "total_base_cost": round(v["total_base_cost"], 6),
+                "total_charged": round(v["total_charged"], 6),
+                "input_tokens": v["input_tokens"],
+                "output_tokens": v["output_tokens"],
+            }
+            for m, v in sorted(bd.items(), key=lambda kv: -kv[1]["total_base_cost"])
+        ]
+
+        # Last-7-days usage trends (frontend: trends[] = {date, day_name, calls, cost_usd})
+        since = datetime.utcnow() - timedelta(days=7)
+        by_day: Dict[str, Dict[str, float]] = {}
+        for r in rows:
+            if not r.created_at or r.created_at < since:
+                continue
+            d = r.created_at.date().isoformat()
+            day = by_day.setdefault(d, {"calls": 0, "cost_usd": 0.0, "charged_usd": 0.0})
+            day["calls"] += 1
+            day["cost_usd"] += r.base_cost_usd
+            day["charged_usd"] += r.charged_cost_usd
+        trends = [
+            {
+                "date": d,
+                "day_name": datetime.fromisoformat(d).strftime("%a"),
+                "calls": v["calls"],
+                "cost_usd": round(v["cost_usd"], 6),
+                "charged_usd": round(v["charged_usd"], 6),
+            }
+            for d, v in sorted(by_day.items())
+        ]
+
+        # Platform profit summary — mirrors the /costs/users plan_rev convention
+        plan_rev = sum(40.00 if u.plan == "elite" else (20.00 if u.plan == "pro" else 10.00) for u in db.query(User).all())
+        profit = plan_rev - total_base
+        platform_profit_summary = {
+            "estimated_revenue_usd": round(plan_rev, 2),
+            "total_cost_usd": round(total_base, 6),
+            "estimated_profit_usd": round(profit, 2),
+            "profit_margin_pct": round((profit / plan_rev) * 100, 1) if plan_rev > 0 else 0,
+        }
 
         per_model: Dict[str, Dict[str, float]] = {}
         for r in rows:
@@ -100,6 +160,14 @@ class CostEngine:
         )
 
         return {
+            # Frontend contract (AdminAdvancedDashboard Cost & Usage tab)
+            "total_cost_usd": round(total_base, 6),
+            "total_charged_usd": round(total_charged, 6),
+            "total_logs": total_calls,
+            "platform_profit_summary": platform_profit_summary,
+            "tool_breakdown": tool_breakdown,
+            "trends": trends,
+            # Legacy keys (older consumers)
             "summary": {
                 "total_calls": total_calls,
                 "total_base_cost_usd": round(total_base, 6),
