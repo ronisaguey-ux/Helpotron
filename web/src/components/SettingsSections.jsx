@@ -9,7 +9,6 @@ import { Download, Trash2, KeyRound, ExternalLink, Camera } from 'lucide-react';
 import { Toggle, Slider, Badge, Progress } from './ui/os.jsx';
 import api from '../api.js';
 import TwoFactorSetup from './TwoFactorSetup.jsx';
-import ScopedSetting from './ScopedSetting.jsx';
 import DemoModeToggle from './DemoModeToggle.jsx';
 import RecoveryFlowModal from './RecoveryFlowModal.jsx';
 
@@ -349,120 +348,115 @@ function AcademicSection({ s, set }) {
 }
 
 /* ── WRITING & OUTPUT (Writing DNA) ──────────────────────────────────────── */
-function WritingSection({ s, set, scoped, setVariants, subjectRefs }) {
+function WritingSection({ s, set }) {
   return (
-    <div className="space-y-7">
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">Writing DNA</div>
-        <p className="text-[11px] text-slate-500 mb-4">The five axes that define how Helpotron writes for you.</p>
-        <div className="space-y-5 max-w-md p-4 rounded-xl bg-slate-950/40 border border-white/6">
-          <Slider label="Tone — Academic → Casual" value={s.writing.tone} onChange={(v) => set('writing.tone', v)} format={(v) => (v < 40 ? 'Academic' : v < 70 ? 'Balanced' : 'Casual')} />
-          <Slider label="Vocabulary — Simple → Advanced" value={s.writing.vocabulary} onChange={(v) => set('writing.vocabulary', v)} format={(v) => (v < 40 ? 'Simple' : v < 70 ? 'Mixed' : 'Advanced')} />
-          <Slider label="Sentence complexity — Simple → Complex" value={s.writing.sentenceComplexity} onChange={(v) => set('writing.sentenceComplexity', v)} format={(v) => (v < 40 ? 'Simple' : v < 70 ? 'Mixed' : 'Complex')} />
-          <Slider label="Formality — Casual → Formal" value={s.writing.formality} onChange={(v) => set('writing.formality', v)} format={(v) => (v < 40 ? 'Casual' : v < 70 ? 'Standard' : 'Formal')} />
-          <Slider label="Voice — Passive → Active" value={s.writing.voice} onChange={(v) => set('writing.voice', v)} format={(v) => (v < 40 ? 'Passive' : v < 70 ? 'Mixed' : 'Active')} />
+    <div className="space-y-6">
+      <div className="panel p-5 space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-slate-200">Writing DNA</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">The five foundational axes that shape your generated essays and drafts.</p>
+        </div>
+        <div className="space-y-4 max-w-md">
+          <Slider label="Tone (Academic ↔ Casual)" value={s.writing.tone} onChange={(v) => set('writing.tone', v)} format={(v) => (v < 40 ? 'Academic' : v < 70 ? 'Balanced' : 'Casual')} />
+          <Slider label="Vocabulary (Simple ↔ Advanced)" value={s.writing.vocabulary} onChange={(v) => set('writing.vocabulary', v)} format={(v) => (v < 40 ? 'Simple' : v < 70 ? 'Mixed' : 'Advanced')} />
+          <Slider label="Sentence Complexity (Simple ↔ Complex)" value={s.writing.sentenceComplexity} onChange={(v) => set('writing.sentenceComplexity', v)} format={(v) => (v < 40 ? 'Simple' : v < 70 ? 'Mixed' : 'Complex')} />
+          <Slider label="Formality (Casual ↔ Formal)" value={s.writing.formality} onChange={(v) => set('writing.formality', v)} format={(v) => (v < 40 ? 'Casual' : v < 70 ? 'Standard' : 'Formal')} />
+          <Slider label="Voice (Passive ↔ Active)" value={s.writing.voice} onChange={(v) => set('writing.voice', v)} format={(v) => (v < 40 ? 'Passive' : v < 70 ? 'Mixed' : 'Active')} />
         </div>
       </div>
 
-      <ScopedSetting
-        path="writing.profile"
-        title="Saved writing profile"
-        variants={scoped['writing.profile']}
-        setVariants={setVariants}
-        values={s.writing.profiles}
-        refs={subjectRefs}
-      >
+      <div className="panel p-5 space-y-4">
         <div>
-          <div className="text-xs font-medium text-slate-300 mb-2">Saved profiles</div>
-          <p className="text-[11px] text-slate-500 mb-3">Switch per assignment — pick the voice that fits.</p>
-          <div className="flex flex-wrap gap-1.5">
-            {s.writing.profiles.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => set('writing.profile', p)}
-                className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] transition cursor-pointer border ${
-                  s.writing.profile === p ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold' : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          <div className="text-xs font-semibold text-slate-200">Saved Writing Profiles</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Switch voice preset per assignment.</p>
         </div>
-      </ScopedSetting>
+        <div className="flex flex-wrap gap-1.5">
+          {(s.writing.profiles || ['Standard Academic', 'My normal essay', 'Concise Technical']).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => set('writing.profile', p)}
+              className={`px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition cursor-pointer border ${
+                s.writing.profile === p
+                  ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[rgba(139,92,246,0.35)] font-semibold'
+                  : 'bg-white/4 text-slate-400 border-white/8 hover:text-slate-200'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
 
-      <ScopedSetting
-        path="writing.style"
-        title="Citation style"
-        variants={scoped['writing.style']}
-        setVariants={setVariants}
-        values={['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE']}
-        refs={subjectRefs}
-      >
-        <Field label="Citation style" id="settings-citation-style" hint="Applied to generated drafts and study materials.">
-          <select id="settings-citation-style" value={s.writing.style} onChange={(e) => set('writing.style', e.target.value)} className={inputCls + ' max-w-xs cursor-pointer'}>
-            {['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE'].map((st) => <option key={st} className="bg-slate-900">{st}</option>)}
-          </select>
-        </Field>
-      </ScopedSetting>
+        <div className="pt-3 border-t border-[var(--border-subtle)] max-w-xs">
+          <Field label="Preferred Citation Style" id="settings-citation-style" hint="Applied to citations, bibliography, and study references.">
+            <select
+              id="settings-citation-style"
+              value={s.writing.style || 'APA'}
+              onChange={(e) => set('writing.style', e.target.value)}
+              className={inputCls + ' cursor-pointer text-white'}
+            >
+              {['APA', 'MLA', 'Chicago', 'Harvard', 'IEEE'].map((st) => (
+                <option key={st} value={st} className="bg-slate-900 text-white">{st}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ── AUTOMATION ──────────────────────────────────────────────────────────── */
-function AutomationSection({ s, set, scoped, setVariants, subjectRefs }) {
+function AutomationSection({ s, set }) {
   return (
-    <div className="space-y-7 max-w-lg">
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-3">Automation permissions</div>
+    <div className="space-y-6">
+      <div className="panel p-5 space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-slate-200">Autonomous Pipeline Permissions</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Configure what tasks your AI agent executes automatically.</p>
+        </div>
         <div className="space-y-3">
           {[
-            ['autoRun', 'Auto-run assignments', 'Start the pipeline when an assignment is captured.'],
-            ['autoFetch', 'Auto-fetch materials', 'Find textbook excerpts and sources when materials are missing.'],
-            ['autoTranscribe', 'Auto-transcribe', 'New recordings are transcribed immediately.'],
-            ['autoDraft', 'Auto-generate drafts', 'Produce drafts as soon as materials are ready.'],
-            ['autoOrganize', 'Auto-organize files', 'Sort uploads into course folders.'],
-            ['autoNotify', 'Auto-notify', 'Tell you when something happens.'],
-            ['autoSubmit', 'Auto-submit', 'Submit completed work directly to your LMS.'],
+            ['autoRun', 'Auto-run captured assignments', 'Initiates processing when an assignment is dumped or scraped.'],
+            ['autoFetch', 'Auto-fetch sources & rubrics', 'Discovers relevant lecture notes and readings.'],
+            ['autoTranscribe', 'Auto-transcribe media', 'Converts lecture audio and video recordings to text.'],
+            ['autoDraft', 'Auto-generate drafts', 'Generates initial drafts when materials are loaded.'],
+            ['autoOrganize', 'Auto-organize into Bubbles', 'Sorts coursework into subject bubbles automatically.'],
+            ['autoNotify', 'Auto-notify on milestones', 'Alerts you when research or analysis completes.'],
           ].map(([key, label, desc]) => (
-            <ScopedSetting
+            <Toggle
               key={key}
-              path={`automation.${key}`}
-              title={label}
-              variants={scoped[`automation.${key}`]}
-              setVariants={setVariants}
-              values={ON_OFF}
-              refs={subjectRefs}
-            >
-              <Toggle checked={s.automation[key]} onChange={(v) => set('automation', { ...s.automation, [key]: v })} label={label} description={desc} />
-            </ScopedSetting>
+              checked={s.automation[key] !== false}
+              onChange={(v) => set('automation', { ...s.automation, [key]: v })}
+              label={label}
+              description={desc}
+            />
           ))}
         </div>
       </div>
 
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-2">Safety controls</div>
-        <p className="text-[11px] text-slate-500 mb-3">Require approval before:</p>
-        <div className="space-y-3 p-4 rounded-xl bg-slate-950/40 border border-white/6">
+      <div className="panel p-5 space-y-4">
+        <div>
+          <div className="text-xs font-semibold text-slate-200">Safety & Approval Gates</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Require manual human confirmation before executing critical actions.</p>
+        </div>
+        <div className="space-y-3">
           {[
-            ['submit', 'Submitting assignments'],
-            ['messages', 'Sending messages'],
-            ['bigSpend', 'Spending more than 100 credits'],
-            ['premium', 'Using flagship engines'],
-            ['modify', 'Modifying saved work'],
+            ['submit', 'Submitting coursework to LMS'],
+            ['messages', 'Sending external notifications/emails'],
+            ['bigSpend', 'Spending more than 100 task tokens'],
+            ['premium', 'Invoking flagship high-compute models'],
+            ['modify', 'Overwriting finalized document drafts'],
           ].map(([key, label]) => (
-            <ScopedSetting
+            <Toggle
               key={key}
-              path={`automation.requireApproval.${key}`}
-              title={label}
-              variants={scoped[`automation.requireApproval.${key}`]}
-              setVariants={setVariants}
-              values={ON_OFF}
-              refs={subjectRefs}
-            >
-              <Toggle checked={s.automation.requireApproval[key]} onChange={(v) => set('automation', { ...s.automation, requireApproval: { ...s.automation.requireApproval, [key]: v } })} label={label} />
-            </ScopedSetting>
+              checked={s.automation.requireApproval?.[key] !== false}
+              onChange={(v) => set('automation', {
+                ...s.automation,
+                requireApproval: { ...(s.automation.requireApproval || {}), [key]: v },
+              })}
+              label={label}
+            />
           ))}
         </div>
       </div>
@@ -471,43 +465,42 @@ function AutomationSection({ s, set, scoped, setVariants, subjectRefs }) {
 }
 
 /* ── NOTIFICATIONS ───────────────────────────────────────────────────────── */
-function NotificationsSection({ s, set, scoped, setVariants, subjectRefs }) {
+function NotificationsSection({ s, set }) {
   const groups = [
-    ['assignments', 'Assignments', [['assignment.completed', 'Assignment completed'], ['draft.ready', 'Draft ready'], ['materials.missing', 'Materials missing'], ['deadline.approaching', 'Deadline approaching']]],
-    ['automation', 'Automation', [['run.started', 'Run started'], ['run.completed', 'Run completed'], ['run.failed', 'Run failed']]],
-    ['credits', 'Credits', [['low.credits', 'Low credits'], ['large.spend', 'Large spend'], ['monthly.summary', 'Monthly summary']]],
-    ['study', 'Study', [['streak.reminder', 'Streak reminder'], ['study.recommendation', 'Study recommendation']]],
+    ['assignments', 'Assignments', [['assignment.completed', 'Assignment completed'], ['draft.ready', 'Draft ready'], ['deadline.approaching', 'Deadline approaching']]],
+    ['credits', 'Credits & Tokens', [['low.credits', 'Low token balance alert'], ['monthly.summary', 'Monthly statement summary']]],
+    ['study', 'Study & Reminders', [['streak.reminder', 'Daily review reminder'], ['study.recommendation', 'Spaced repetition prompts']]],
   ];
-  const setGroup = (group, key, v) => set('notifications', { ...s.notifications, [group]: { ...s.notifications[group], [key]: v } });
-  const setChannel = (ch, v) => set('notifications', { ...s.notifications, channels: { ...s.notifications.channels, [ch]: v } });
+  const setGroup = (group, key, v) => set('notifications', { ...s.notifications, [group]: { ...(s.notifications[group] || {}), [key]: v } });
+  const setChannel = (ch, v) => set('notifications', { ...s.notifications, channels: { ...(s.notifications.channels || {}), [ch]: v } });
 
   return (
-    <div className="space-y-7 max-w-lg">
+    <div className="space-y-6">
       {groups.map(([gkey, label, toggles]) => (
-        <div key={gkey}>
-          <div className="text-xs font-medium text-slate-300 mb-3">{label}</div>
-          <div className="space-y-3">
+        <div key={gkey} className="panel p-5 space-y-3">
+          <div className="text-xs font-semibold text-slate-200">{label}</div>
+          <div className="space-y-2.5">
             {toggles.map(([key, tlabel]) => (
-              <ScopedSetting
+              <Toggle
                 key={key}
-                path={`notifications.${gkey}.${key}`}
-                title={tlabel}
-                variants={scoped[`notifications.${gkey}.${key}`]}
-                setVariants={setVariants}
-                values={ON_OFF}
-                refs={subjectRefs}
-              >
-                <Toggle checked={s.notifications[gkey]?.[key]} onChange={(v) => setGroup(gkey, key, v)} label={tlabel} />
-              </ScopedSetting>
+                checked={s.notifications[gkey]?.[key] !== false}
+                onChange={(v) => setGroup(gkey, key, v)}
+                label={tlabel}
+              />
             ))}
           </div>
         </div>
       ))}
-      <div>
-        <div className="text-xs font-medium text-slate-300 mb-3">Delivery channels</div>
-        <div className="space-y-3">
-          {[['browser', 'Browser'], ['inapp', 'In-app'], ['email', 'Email'], ['telegram', 'Telegram']].map(([key, label]) => (
-            <Toggle key={key} checked={s.notifications.channels?.[key]} onChange={(v) => setChannel(key, v)} label={label} />
+      <div className="panel p-5 space-y-3">
+        <div className="text-xs font-semibold text-slate-200">Delivery Channels</div>
+        <div className="space-y-2.5">
+          {[['browser', 'Browser Push Notifications'], ['inapp', 'In-App Alerts'], ['email', 'Email Digests'], ['telegram', 'Telegram Bot Alerts']].map(([key, label]) => (
+            <Toggle
+              key={key}
+              checked={s.notifications.channels?.[key] !== false}
+              onChange={(v) => setChannel(key, v)}
+              label={label}
+            />
           ))}
         </div>
       </div>
@@ -778,16 +771,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
         <div className="text-xs font-medium text-slate-300 mb-3">Data usage</div>
         <div className="space-y-3">
           <Toggle checked={s.privacy.analytics} onChange={(v) => set('privacy', { ...s.privacy, analytics: v })} label="Usage analytics" description="Help us improve Helpotron with anonymized usage patterns." />
-          <ScopedSetting
-            path="privacy.dataLake"
-            title="Contribute to the Data Lake"
-            variants={scoped['privacy.dataLake']}
-            setVariants={setVariants}
-            values={ON_OFF}
-            refs={subjectRefs}
-          >
-            <Toggle checked={s.privacy.dataLake} onChange={(v) => set('privacy', { ...s.privacy, dataLake: v })} label="Contribute to the Data Lake" description="Anonymized materials that power the free training pool (you earn micro-credits)." />
-          </ScopedSetting>
+          <Toggle checked={s.privacy.dataLake} onChange={(v) => set('privacy', { ...s.privacy, dataLake: v })} label="Contribute to the Data Lake" description="Anonymized materials that power the free training pool (you earn micro-credits)." />
           <Toggle checked={s.privacy.anonymous} onChange={(v) => set('privacy', { ...s.privacy, anonymous: v })} label="Strict anonymity" description="Never attach your profile to contributed materials." />
         </div>
       </div>
@@ -1305,19 +1289,10 @@ function ShortcutsSection({ s, set }) {
 }
 
 /* ── DATA & ANALYTICS ────────────────────────────────────────────────────── */
-function DataSection({ s, set, scoped, setVariants, subjectRefs }) {
+function DataSection({ s, set }) {
   return (
     <div className="space-y-3 max-w-lg">
-      <ScopedSetting
-        path="data.weeklyDigest"
-        title="Weekly digest"
-        variants={scoped['data.weeklyDigest']}
-        setVariants={setVariants}
-        values={ON_OFF}
-        refs={subjectRefs}
-      >
-        <Toggle checked={s.data.weeklyDigest} onChange={(v) => set('data', { ...s.data, weeklyDigest: v })} label="Weekly digest" description="A Sunday summary of your week, delivered in-app." />
-      </ScopedSetting>
+      <Toggle checked={s.data.weeklyDigest} onChange={(v) => set('data', { ...s.data, weeklyDigest: v })} label="Weekly digest" description="A Sunday summary of your week, delivered in-app." />
       <Toggle checked={s.data.streakReminders} onChange={(v) => set('data', { ...s.data, streakReminders: v })} label="Streak reminders" description="A nudge when you haven't studied in a few days." />
       <Toggle checked={s.data.accuracyTracking} onChange={(v) => set('data', { ...s.data, accuracyTracking: v })} label="Accuracy tracking" description="Score practice results to tune recommendations." />
     </div>
