@@ -80,14 +80,12 @@ class AutoApprovedRuleRequest(BaseModel):
 # local intent pipeline — the bridge never breaks the chat.
 
 def _claude_bridge_enabled() -> bool:
-    return os.environ.get("HELPOTRON_CLAUDE_BRIDGE") == "1"
+    # Disabled: Anthropic/Claude models are strictly prohibited by ModelPolicy.
+    return False
 
 
 def _claude_bridge_allowed(is_admin: bool) -> bool:
-    if not _claude_bridge_enabled():
-        return False
-    admin_only = os.environ.get("HELPOTRON_CLAUDE_BRIDGE_ADMIN_ONLY", "1") != "0"
-    return (not admin_only) or is_admin
+    return False
 
 
 def _claude_bridge_call(public_id: str, persona_block: str, user_text: str, assignment_context: str = "") -> Optional[str]:
