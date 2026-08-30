@@ -76,6 +76,9 @@ class User(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     subscription_status: Mapped[str] = mapped_column(String(32), default="none")  # none, trialing, active, past_due, canceled
     is_student_verified: Mapped[bool] = mapped_column(default=False)
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    phone_verified: Mapped[bool] = mapped_column(default=False)
+    trial_claimed: Mapped[bool] = mapped_column(default=False)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     token_cost_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
     monthly_budget_usd: Mapped[float] = mapped_column(Float, default=50.0)
@@ -512,6 +515,18 @@ class UniversalDumpItem(Base):
     matched_assignment = relationship("Assignment")
 
 
+class ClaimedTrialPhone(Base):
+    """Tracks normalized phone numbers that have claimed the 1-time free trial to prevent multi-account abuse."""
+    __tablename__ = "claimed_trial_phones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phone_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    phone_masked: Mapped[str] = mapped_column(String(32))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 def get_db() -> Generator[Any, None, None]:
     db = SessionLocal()
     try:
@@ -552,6 +567,12 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN subscription_status VARCHAR(32) DEFAULT 'none'"))
                 if "is_student_verified" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_student_verified BOOLEAN DEFAULT 0"))
+                if "phone_number" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN phone_number VARCHAR(32)"))
+                if "phone_verified" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN phone_verified BOOLEAN DEFAULT 0"))
+                if "trial_claimed" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN trial_claimed BOOLEAN DEFAULT 0"))
                 if "last_active_at" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
                 if "token_cost_multiplier" not in columns_user:
