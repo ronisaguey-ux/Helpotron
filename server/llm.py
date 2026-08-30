@@ -32,10 +32,8 @@ class ModelPolicy:
         "nemotron_nano": "nvidia/nemotron-3-nano-30b-a3b",
         "qwen_72b": "qwen/qwen-2.5-72b-instruct",
         "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
-        "deepseek_v4_flash": "deepseek/deepseek-v4-flash",
-        "deepseek_v4_pro": "deepseek/deepseek-v4-pro",
-        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash",
-        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro",
+        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
+        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
         "gemini_37_flash": "google/gemini-3.7-flash",
     }
     
@@ -53,8 +51,9 @@ class ModelPolicy:
         "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
         "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "reliability": 0.99},
         "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "deepseek/deepseek-v4-flash-vision": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
         "deepseek/deepseek-v4-flash": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-flash-vision-exp": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
+        "deepseek/deepseek-v4-pro-vision": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
         "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
         "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
     }
@@ -114,8 +113,8 @@ def resolve_model_routing(
     - Level 1: nvidia/nemotron-3-nano-30b-a3b
     - Level 2: qwen/qwen-2.5-72b-instruct
     - Level 3: google/gemini-3.1-flash-lite
-    - Levels 4-7: deepseek/deepseek-v4-flash
-    - Levels 8-10 (7+): deepseek/deepseek-v4-pro
+    - Levels 4-7: deepseek/deepseek-v4-flash-vision
+    - Levels 8-10 (7+): deepseek/deepseek-v4-pro-vision
     - Gemini 3.7 Flash: ONLY used when effort is maxed out (>=8) on Gemini-exclusive tasks
       (audio, image/video generation/analysis, google slides, fake google doc history).
     """
@@ -187,12 +186,12 @@ def resolve_model_routing(
             tier = "level_3_gemini_lite"
             reason = "Effort level 3 (Gemini 3.1 Flash Lite)"
         elif level <= 7:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash"]
-            tier = "level_4_7_deepseek_v4_flash"
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
+            tier = "level_4_7_deepseek_v4_flash_vision"
             reason = f"Effort level {level} (DeepSeek V4 Flash Vision)"
         else:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro"]
-            tier = "level_8_10_deepseek_v4_pro"
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
+            tier = "level_8_10_deepseek_v4_pro_vision"
             reason = f"Effort level {level} (DeepSeek V4 Pro Vision)"
 
     cost = calculate_effective_task_cost(selected, modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images, audio_minutes=audio_minutes)
@@ -206,21 +205,11 @@ def resolve_model_routing(
     }
 
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
-    """Persist real token usage per user into the ApiUsageLog ledger.
-
-    TelemetryRecord never existed in database.py (import always failed → rows
-    silently dropped). Fixed 08-26: writes through cost_engine so the top-bar
-    token widget reads REAL usage, not fabricated numbers."""
     try:
         from .cost_tracking import cost_engine
-        # CostEngine has no `record_usage` (the old call warned on every LLM
-        # round-trip and dropped the row); log_api_call is the real ledger
-        # writer (same shape transcription.py uses).
         cost_engine.log_api_call(
-            db_session,
-            public_id=user_id,
-            tool_or_model=route_info.get("model", "unknown"),
-            category="llm",
+            user_id=user_id,
+            model=route_info.get("model", "unknown"),
             input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
             output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
         )
@@ -229,7 +218,14 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
 
 
 def format_model_identity_prompt(model_id: str) -> str:
-    clean_name = model_id.split("/")[-1] if "/" in model_id else model_id
+    if "deepseek-v4-flash" in model_id:
+        clean_name = "deepseek-v4-flash-vision"
+        model_id = "deepseek/deepseek-v4-flash-vision"
+    elif "deepseek-v4-pro" in model_id:
+        clean_name = "deepseek-v4-pro-vision"
+        model_id = "deepseek/deepseek-v4-pro-vision"
+    else:
+        clean_name = model_id.split("/")[-1] if "/" in model_id else model_id
     provider = model_id.split("/")[0] if "/" in model_id else "OpenSource"
     return (
         f"CRITICAL MANDATE — RUNTIME AI MODEL IDENTITY:\n"
@@ -237,7 +233,7 @@ def format_model_identity_prompt(model_id: str) -> str:
         f"You are strictly NOT from Anthropic (NOT Claude) and NOT from OpenAI (NOT ChatGPT).\n"
         f"If the user asks what model, AI, architecture, or provider you are (e.g. 'what model are you', 'what model are u', 'which ai model is this'), "
         f"you MUST answer directly that you are {clean_name} ({model_id}). "
-        f"NEVER evade the question or give a generic canned response like 'I am your personal coach and assistant'. State your actual model name."
+        f"NEVER evade the question or give a generic canned response like 'I am your personal coach and assistant'. State your actual model name ({clean_name})."
     )
 
 
@@ -312,7 +308,11 @@ async def call_llm(
     async with httpx.AsyncClient(timeout=60.0) as client:
         for cand_id in attempt_models:
             cand_payload = dict(payload)
-            cand_payload["model"] = cand_id
+            openrouter_model = {
+                "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash",
+                "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
+            }.get(cand_id, cand_id)
+            cand_payload["model"] = openrouter_model
             
             # Explicit runtime model identity injected into system prompt
             ident_notice = format_model_identity_prompt(cand_id)
@@ -409,8 +409,10 @@ def extract_json(content: str) -> Any:
 
 # --- Compatibility Wrappers ---
 MODELS = {
-    "flash": "deepseek/deepseek-v4-flash",
-    "pro": "deepseek/deepseek-v4-pro",
+    "flash": "deepseek/deepseek-v4-flash-vision",
+    "pro": "deepseek/deepseek-v4-pro-vision",
+    "flash_vision": "deepseek/deepseek-v4-flash-vision",
+    "pro_vision": "deepseek/deepseek-v4-pro-vision",
     "lite": "google/gemini-3.1-flash-lite",
     "gemini": "google/gemini-3.7-flash",
     "nano": "nvidia/nemotron-3-nano-30b-a3b",
