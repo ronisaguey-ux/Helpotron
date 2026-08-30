@@ -118,63 +118,90 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   /* operator 08-28: collapse the prompt composer to a slim bar (header toggle) */
   const [promptMinimized, setPromptMinimized] = useState(false);
 
-  /* ── voice (08-27): mic dictation + spoken replies via local Voicebox ── */
+  /* ── voice: native Web Speech API (reliable, zero-dependency, works everywhere) ── */
   const [recording, setRecording] = useState(false);
-  const mediaRef = useRef(null);
-  const recChunksRef = useRef([]);
+  const [speakingMessageId, setSpeakingMessageId] = useState(null);
+  const recognitionRef = useRef(null);
 
-  async function toggleRecord() {
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+    };
+  }, []);
+
+  function toggleRecord() {
     if (recording) {
-      mediaRef.current?.stop();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
       setRecording(false);
       return;
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      mediaRef.current = mr;
-      recChunksRef.current = [];
-      mr.ondataavailable = (e) => recChunksRef.current.push(e.data);
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(recChunksRef.current, { type: mr.mimeType || 'audio/webm' });
-        if (!blob.size) return;
-        try {
-          const fd = new FormData();
-          fd.append('file', blob, 'rec.webm');
-          const csrfHdr = getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {};
-          const r = await fetch('/api/voice/transcribe', { method: 'POST', headers: csrfHdr, body: fd });
-          const j = await r.json().catch(() => ({}));
-          if (r.ok && j.text) setInput((prev) => (prev ? `${prev} ${j.text}` : j.text));
-          else alert(`Voice: ${j.detail || 'transcription failed'}`);
-        } catch (err) {
-          alert(`Voicebox unavailable: ${err.message}`);
-        }
-      };
-      mr.start();
-      setRecording(true);
-    } catch (err) {
-      alert(`Mic unavailable: ${err.message}`);
+
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const sr = new SpeechRecognition();
+        sr.continuous = false;
+        sr.interimResults = false;
+        sr.lang = 'en-US';
+        sr.onresult = (e) => {
+          const transcript = e.results[0]?.[0]?.transcript || '';
+          if (transcript) {
+            setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+          }
+        };
+        sr.onerror = (e) => {
+          console.warn('SpeechRecognition error:', e);
+          setRecording(false);
+        };
+        sr.onend = () => setRecording(false);
+        recognitionRef.current = sr;
+        sr.start();
+        setRecording(true);
+        return;
+      } catch (err) {
+        console.warn('Speech recognition init failed:', err);
+      }
     }
+    alert('Voice dictation is not supported in this browser.');
   }
 
-  async function speakText(text) {
-    try {
-      const r = await fetch('/api/voice/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}),
-        },
-        body: JSON.stringify({ text: text.slice(0, 1200) }),
-      });
-      if (!r.ok) throw new Error(((await r.json().catch(() => ({})))?.detail) || r.statusText);
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      new Audio(url).play().catch(() => alert('Could not play the audio'));
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) {
-      alert(`Voicebox unavailable: ${err.message}`);
+  function speakText(messageId, text) {
+    if (!text || typeof window === 'undefined') return;
+
+    // If currently speaking this message, toggle stop
+    if (speakingMessageId === messageId) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const cleanText = text
+        .replace(/[*_#`[\]()]/g, ' ')
+        .replace(/https?:\/\/\S+/g, 'link')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const utterance = new SpeechSynthesisUtterance(cleanText.slice(0, 1200));
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = () => setSpeakingMessageId(null);
+      utterance.onerror = () => setSpeakingMessageId(null);
+      setSpeakingMessageId(messageId);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('Speech synthesis is not supported in this browser.');
     }
   }
   const [mode, setMode] = useState('auto');
@@ -1291,14 +1318,18 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   </div>
                   <div className="flex items-center gap-2 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
                     <span>{m.time}</span>
-                    {!isUser && m.text && m.text.length <= 1200 && (
+                    {!isUser && m.text && (
                       <button
                         type="button"
-                        onClick={() => speakText(m.text)}
-                        className="hover:text-[var(--accent)] transition cursor-pointer flex items-center gap-1"
-                        title="Listen to this reply"
+                        onClick={() => speakText(m.id, m.text)}
+                        className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
+                          speakingMessageId === m.id
+                            ? 'text-amber-400 font-semibold animate-pulse'
+                            : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
+                        }`}
+                        title={speakingMessageId === m.id ? 'Stop audio' : 'Listen to this reply'}
                       >
-                        🔊 Listen
+                        {speakingMessageId === m.id ? '⏹ Stop' : '🔊 Listen'}
                       </button>
                     )}
                   </div>
