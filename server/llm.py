@@ -280,19 +280,17 @@ async def call_llm(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
 ) -> str:
-    # EFFORT GATE (operator 08-27, DEMO MODE): user effort scores are
-    # NON-OVERRIDABLE — every request is forced through "auto" routing.
-    # resolve_model_routing's auto path picks the engine by task complexity:
-    # junk/low-value prompts land on the cheap-and-fast tier, hard problems
-    # still escalate to the flagship engines. Slider in the UI is locked +
-    # demo banner shown; remove this gate to restore per-user effort control.
     if effort_score is not None:
         try:
             es = int(effort_score)
         except (TypeError, ValueError):
             es = 500
-        # gate: user score is ignored entirely — auto routing (complexity-based)
-        effort = "auto"
+        if es <= 3 or (es > 10 and es <= 350):
+            effort = "low"
+        elif es <= 7 or (es > 10 and es <= 750):
+            effort = "medium"
+        else:
+            effort = "advanced"
 
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
