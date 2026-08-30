@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Shield, Cpu, Bot, RefreshCw } from 'lucide-react';
+import { Users, Cpu, Bot, RefreshCw } from 'lucide-react';
 import api from '../api.js';
 import AdminAdvancedDashboard from './AdminAdvancedDashboard.jsx';
 import AdminAgentChat from './AdminAgentChat.jsx';
@@ -98,36 +98,32 @@ const TABS = [
 export default function AdminPanels({ userId = '' }) {
   const [activeTab, setActiveTab] = useState('users');
 
+  /* 08-30 de-clunk: this card used to re-title the page ("Helpotron Platform
+   * Admin Control Center") right below the app's own "Control Center" header —
+   * three stacked near-identical headings (page → card → Master Admin Panel).
+   * The page header already carries the identity, so this is now just the
+   * section switch, one slim bar. */
   return (
     <div className="space-y-6">
-      <div className="clean-card p-5 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-[var(--accent)]" />
-            Helpotron Platform Admin Control Center
-          </h2>
-          <p className="text-xs text-[var(--text-muted)]">
-            Manage user subscription plans, grant credits, inspect live node telemetry, and drive the platform with the admin agent.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5 p-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/4">
-          {TABS.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveTab(key)}
-              aria-pressed={activeTab === key}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer inline-flex items-center gap-1.5 ${
-                activeTab === key
-                  ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className="clean-card px-2 py-1.5 flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Control Center sections">
+        {TABS.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            aria-pressed={activeTab === key}
+            role="tab"
+            aria-selected={activeTab === key}
+            className={`px-3.5 py-2 text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === key
+                ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)] border border-[rgba(139,92,246,0.35)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            {label}
+          </button>
+        ))}
       </div>
 
       {activeTab === 'users' && <AdminAdvancedDashboard userId={userId} />}

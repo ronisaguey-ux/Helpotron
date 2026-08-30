@@ -409,9 +409,6 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">Helpotron Master Admin Panel</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Exclusive platform controls: User Management, Inquiries Inbox, Access Keys, Model Scorecards & Health.
-            </p>
           </div>
         </div>
       } headerRight={
@@ -455,7 +452,16 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
         <div className="space-y-4">
           <div className="clean-card p-5 space-y-4">
             <h3 className="font-semibold text-sm text-white">Bulk User Operations ({selectedUserIds.length} selected)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+            {selectedUserIds.length === 0 ? (
+              /* 08-30 de-clunk: with nothing selected this box used to render
+                 the whole control grid plus a huge disabled "Apply to 0"
+                 button — an empty-operations wall. One honest hint instead. */
+              <p className="text-xs text-[var(--text-muted)]">
+                Select users from the table below to change their plan, adjust credits in bulk, or assign a tag together.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
               <div>
                 <label htmlFor="admin-bulk-plan" className="text-[var(--text-secondary)] block mb-1">Set Plan</label>
                 <select
@@ -508,10 +514,12 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               </div>
             </div>
 
-            {bulkStatus && (
-              <div className="p-3 bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
-                {bulkStatus}
-              </div>
+                    {bulkStatus && (
+                      <div className="p-3 bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
+                        {bulkStatus}
+                      </div>
+                    )}
+              </>
             )}
           </div>
 
