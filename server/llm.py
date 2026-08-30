@@ -251,6 +251,16 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
         logger.warning(f"Failed to persist routing telemetry: {e}")
 
 
+def format_model_identity_prompt(model_id: str) -> str:
+    clean_name = model_id.split("/")[-1] if "/" in model_id else model_id
+    provider = model_id.split("/")[0] if "/" in model_id else "OpenSource"
+    return (
+        f"[SYSTEM RUNTIME IDENTITY]: You are currently running as the model '{clean_name}' (model slug: '{model_id}', provider: '{provider}'). "
+        f"You are NOT from Anthropic (you are NOT Claude) and NOT from OpenAI (you are NOT ChatGPT). "
+        f"If the user asks what AI model, architecture, or provider you are, accurately identify as {clean_name} ({model_id})."
+    )
+
+
 async def call_llm(
     user_prompt: str,
     system_prompt: str = "",
@@ -309,14 +319,8 @@ async def call_llm(
         "X-Title": "Helpotron Study OS"
     }
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_prompt})
-
     payload = {
         "model": model_id,
-        "messages": messages,
         "temperature": temperature if temperature is not None else (0.2 if json_mode else 0.7),
     }
     if max_tokens:
@@ -342,6 +346,17 @@ async def call_llm(
         for cand_id in attempt_models:
             cand_payload = dict(payload)
             cand_payload["model"] = cand_id
+            
+            # Explicit runtime model identity injected into system prompt
+            ident_notice = format_model_identity_prompt(cand_id)
+            cand_messages = []
+            if system_prompt:
+                cand_messages.append({"role": "system", "content": f"{ident_notice}\n\n{system_prompt}"})
+            else:
+                cand_messages.append({"role": "system", "content": ident_notice})
+            cand_messages.append({"role": "user", "content": user_prompt})
+            cand_payload["messages"] = cand_messages
+
             try:
                 resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=cand_payload)
                 resp.raise_for_status()
@@ -366,6 +381,14 @@ async def call_llm(
     lp["model"] = "anymodel"
     lp.pop("response_format", None)  # gateways may reject json_object; JSON
     # extraction downstream (_safe_json_extract) tolerates plain text.
+    fallback_ident = format_model_identity_prompt(model_id)
+    fallback_messages = []
+    if system_prompt:
+        fallback_messages.append({"role": "system", "content": f"{fallback_ident}\n\n{system_prompt}"})
+    else:
+        fallback_messages.append({"role": "system", "content": fallback_ident})
+    fallback_messages.append({"role": "user", "content": user_prompt})
+    lp["messages"] = fallback_messages
     # Try BOTH lanes round-robin (deepseek can be saturated by the audit
     # engine; gemini stays free) before giving up.
     lane_errs = []
