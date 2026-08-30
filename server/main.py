@@ -1822,8 +1822,18 @@ if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
             raise HTTPException(404, "API route not found")
         target = _WEB_DIST / full_path
         if full_path and target.is_file():
+            # Immutable content-hashed assets
+            if full_path.startswith("assets/"):
+                return FileResponse(target, headers={"Cache-Control": "public, max-age=31536000, immutable"})
             return FileResponse(target)
-        return FileResponse(_WEB_DIST / "index.html")
+        return FileResponse(
+            _WEB_DIST / "index.html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 else:
     logger.warning("Vite distribution directory web/dist not found. Serving API fallback mode.")
 

@@ -1,366 +1,827 @@
 /* ────────────────────────────────────────────────────────────────────────────
- * AgentConfigsSidebar.jsx — CONFIGS sidebar (operator 08-28): one place to
- * SEE, ADD and SELECT every custom agent config — identity (personality +
- * instructions, editable inline with the same save path as the Identity
- * section), permanent memory entries, and files grouped by kind
- * (Personality / Rules / Skills / Automations).
- *
- * SELECT semantics everywhere: clicking a config (memory, file, identity)
- * loads it into the agent prompt box (via the handlers MyAgentView passes
- * in — useMemory / selectConfig / useFileInPrompt) so the user can
- * immediately talk to the agent about/with it.
- *
- * operator 08-28 (2nd pass):
- *  - header carries a visible Minimize control (onCollapse) that hides the
- *    whole panel — restore via the ⚙ Configs button in the chat header
- *  - each section (Identity / Memories / Files) has its own collapse
- *    header, persisted per section (same storage pattern as SectionCard)
- *
- * Pure presentation — all state and handlers live in MyAgentView
- * (thin integration, minimal risk).
+ * AgentConfigsSidebar.jsx — Comprehensive Agent Configuration Manager
+ * Provides full ADD, DELETE, and SELECT / ACTIVATE controls for:
+ *   1. Identities & Personas (Presets + Custom created personas)
+ *   2. Skills & Capabilities (Presets + Custom prompt templates + Uploads)
+ *   3. Permanent Memories (Facts, study goals, deadlines)
+ *   4. Rules & Automations (Uploaded rule files, automated triggers)
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  SlidersHorizontal, User as UserIcon, Database, FileText, Send, Trash2, Plus, Upload,
-  ChevronDown, ChevronLeft,
+  SlidersHorizontal, User as UserIcon, Database, FileText, Send, Trash2, Plus,
+  Upload, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, BookOpen, Cpu, Wand2, Edit3,
+  Layers, Bot, X
 } from 'lucide-react';
 import { Badge, timeAgo } from './ui/os.jsx';
 
-/* Group display names used for the FILE_KINDS groups (personality stays
- * singular, everything else plural). */
-const FILE_GROUP_LABELS = { skill: 'Skills', rule: 'Rules', automation: 'Automations', personality: 'Personality' };
+export const DEFAULT_IDENTITIES = [];
+export const DEFAULT_SKILLS = [];
 
 const fmt = (n) => Number(n || 0).toLocaleString();
 
-/* Small uppercase section header with its own collapse toggle — the app's
- * standard clean-card header styling, but collapsible inline. Collapse
- * state persists per section (localStorage, same shape as SectionCard). */
-function CollapsibleSection({ name, icon, right, defaultOpen = true, children }) {
-  const storageKey = `helpotron.collapse.agentcfg.${name}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      return saved === null ? defaultOpen : saved === '1';
-    } catch {
-      return defaultOpen;
-    }
-  });
-  const toggle = () => setOpen((o) => {
-    const next = !o;
-    try { localStorage.setItem(storageKey, next ? '1' : '0'); } catch {}
-    return next;
-  });
-  return (
-    <div className="space-y-2.5">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        aria-label={open ? `Minimize ${name} section` : `Expand ${name} section`}
-        className="w-full flex items-center justify-between gap-2 group cursor-pointer"
-      >
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 min-w-0 truncate group-hover:text-[var(--text-secondary)] transition">
-          {icon}
-          <span className="truncate">{name}</span>
-        </span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          {right}
-          <ChevronDown
-            className={`w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-transform ${open ? '' : '-rotate-90'}`}
-          />
-        </span>
-      </button>
-      {open && children}
-    </div>
-  );
-}
-
 export default function AgentConfigsSidebar({
-  ai,
-  memory,
-  memoryText,
-  setMemoryText,
-  addMemory,
-  deleteMemory,
-  useMemory,
-  files,
-  fileKinds,
-  handleUploadFile,
-  openFile,
-  deleteFile,
-  useFileInPrompt,
-  selectConfig,
-  savePersonality,
-  saveInstructions,
+  ai = {},
+  identities = [],
+  activeIdentityId = null,
+  onSelectIdentity = () => {},
+  onAddIdentity = () => {},
+  onDeleteIdentity = () => {},
+  onSaveAgentName = () => {},
+  skills = [],
+  activeSkillIds = [],
+  onToggleSkill = () => {},
+  onAddSkill = () => {},
+  onDeleteSkill = () => {},
+  onSelectSkill = () => {},
+  memory = [],
+  memoryText = '',
+  setMemoryText = () => {},
+  addMemory = () => {},
+  deleteMemory = () => {},
+  useMemory = () => {},
+  files = [],
+  fileKinds = [],
+  handleUploadFile = () => {},
+  openFile = () => {},
+  deleteFile = () => {},
+  useFileInPrompt = () => {},
+  selectConfig = () => {},
+  savePersonality = () => {},
+  saveInstructions = () => {},
   onCollapse = () => {},
 }) {
-  /* Draft editors for identity — saved explicitly via the Save button
-   * (same save path as the Identity section: set('ai.personality', …)).
-   * Drafts re-sync whenever the saved value changes elsewhere. */
-  const [personalityDraft, setPersonalityDraft] = useState(ai.personality || '');
-  const [instructionsDraft, setInstructionsDraft] = useState(ai.instructions || '');
-  useEffect(() => { setPersonalityDraft(ai.personality || ''); }, [ai.personality]);
-  useEffect(() => { setInstructionsDraft(ai.instructions || ''); }, [ai.instructions]);
+  const [activeTab, setActiveTab] = useState('identities'); // 'identities' | 'skills' | 'memories' | 'files'
 
-  const personalityActive = (personalityDraft || '') === (ai.personality || '');
-  const instructionsActive = (instructionsDraft || '') === (ai.instructions || '');
-  const identityActive = personalityActive && instructionsActive;
+  const [agentNameInput, setAgentNameInput] = useState(ai.aiName || 'Atlas');
+  const [nameSavedFeedback, setNameSavedFeedback] = useState(false);
+  const [expandedIds, setExpandedIds] = useState({});
 
-  /* One hidden file input per kind group — Add uploads AS that group's kind
-   * (kindOverride), independent of the main Files section's kind selector. */
-  const addFileRefs = useRef({});
+  const toggleExpand = (id) => {
+    setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const totalConfigs = memory.length + files.length + 2; // + personality + instructions
+  // Modal / Inline creator states
+  const [showNewIdentityModal, setShowNewIdentityModal] = useState(false);
+  const [newIdName, setNewIdName] = useState('');
+  const [newIdIcon, setNewIdIcon] = useState('🧠');
+  const [newIdPersona, setNewIdPersona] = useState('');
+  const [newIdInstructions, setNewIdInstructions] = useState('');
+
+  const [showNewSkillModal, setShowNewSkillModal] = useState(false);
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillIcon, setNewSkillIcon] = useState('⚡');
+  const [newSkillDesc, setNewSkillDesc] = useState('');
+  const [newSkillTemplate, setNewSkillTemplate] = useState('');
+
+  const fileInputRef = useRef(null);
+  const [uploadKind, setUploadKind] = useState('skill');
+
+  const handleCreateIdentity = (e) => {
+    e?.preventDefault();
+    if (!newIdName.trim()) return;
+    const newId = {
+      id: `custom_id_${Date.now()}`,
+      name: newIdName.trim(),
+      icon: newIdIcon || '🧠',
+      persona: newIdPersona.trim() || newIdName.trim(),
+      instructions: newIdInstructions.trim() || 'Provide helpful and customized assistance.',
+      isBuiltin: false,
+    };
+    onAddIdentity(newId);
+    setNewIdName('');
+    setNewIdPersona('');
+    setNewIdInstructions('');
+    setShowNewIdentityModal(false);
+  };
+
+  const handleCreateSkill = (e) => {
+    e?.preventDefault();
+    if (!newSkillName.trim()) return;
+    const newSk = {
+      id: `custom_sk_${Date.now()}`,
+      name: newSkillName.trim(),
+      icon: newSkillIcon || '⚡',
+      category: 'skill',
+      description: newSkillDesc.trim() || 'Custom user capability.',
+      promptTemplate: newSkillTemplate.trim() || `${newSkillName}:\n`,
+      isBuiltin: false,
+    };
+    onAddSkill(newSk);
+    setNewSkillName('');
+    setNewSkillDesc('');
+    setNewSkillTemplate('');
+    setShowNewSkillModal(false);
+  };
+
+  const allIdentities = identities || [];
+  const allSkills = skills || [];
 
   return (
-    <div className="clean-card h-full flex flex-col overflow-hidden">
-      {/* Header (sticky — body scrolls below) */}
+    <div className="panel h-full flex flex-col overflow-hidden bg-[var(--bg-canvas)]">
+      {/* Header */}
       <div className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-          <SlidersHorizontal className="w-3 h-3 text-[var(--accent)]" /> Configs
-        </span>
-        <span className="flex items-center gap-2 shrink-0">
-          <Badge color="blue">{totalConfigs} items</Badge>
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Minimize configs panel"
-            title="Minimize configs panel"
-            className="p-1 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        </span>
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4 text-[var(--accent)]" />
+          <h2 className="text-xs font-bold uppercase tracking-wider text-white">Agent Configurations</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="p-1 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition cursor-pointer"
+          title="Close panel"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Scrollable body */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-6">
-
-        {/* ── IDENTITY (personality + instructions) ─────────────────────── */}
-        <CollapsibleSection
-          name="Identity"
-          icon={<UserIcon className="w-3 h-3 shrink-0" />}
-          right={identityActive
-            ? <span className="aurora-chip shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active</span>
-            : <Badge color="amber">Unsaved</Badge>}
-        >
-
-          {/* Readable rows — click = SELECT (load into the prompt box) */}
+      {/* Navigation Tabs */}
+      <div className="flex items-center border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 pt-1 gap-1 shrink-0 overflow-x-auto">
+        {[
+          { key: 'identities', label: 'Identities', icon: '🎭', count: allIdentities.length },
+          { key: 'skills', label: 'Skills', icon: '⚡', count: allSkills.length },
+          { key: 'memories', label: 'Memories', icon: '🧠', count: memory.length },
+          { key: 'files', label: 'Rules & Files', icon: '📁', count: files.length },
+        ].map((t) => (
           <button
+            key={t.key}
             type="button"
-            onClick={() => selectConfig(ai.personality)}
-            title="Load personality into the prompt box"
-            className="w-full group flex items-start gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer text-left"
+            onClick={() => setActiveTab(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition cursor-pointer whitespace-nowrap ${
+              activeTab === t.key
+                ? 'border-[var(--accent)] text-white font-semibold'
+                : 'border-transparent text-[var(--text-muted)] hover:text-slate-200'
+            }`}
           >
-            <span className="flex-1 min-w-0">
-              <span className="block text-[9px] uppercase tracking-wider text-[var(--text-muted)]">Personality</span>
-              <span className="block text-[11px] text-[var(--text-secondary)] leading-relaxed truncate">{ai.personality || '(none set)'}</span>
-            </span>
-            <Send className="w-3 h-3 self-center shrink-0 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition" />
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+            <span className="text-[10px] opacity-70 px-1 py-0.2 rounded-full bg-white/5 font-mono">{t.count}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => selectConfig(ai.instructions ? `instructions: ${ai.instructions}` : '')}
-            title="Load instructions into the prompt box"
-            className="w-full group flex items-start gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer text-left"
-          >
-            <span className="flex-1 min-w-0">
-              <span className="block text-[9px] uppercase tracking-wider text-[var(--text-muted)]">Instructions</span>
-              <span className="block text-[11px] text-[var(--text-secondary)] leading-relaxed truncate">{ai.instructions ? `instructions: ${ai.instructions}` : '(none set)'}</span>
-            </span>
-            <Send className="w-3 h-3 self-center shrink-0 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition" />
-          </button>
+        ))}
+      </div>
 
-          {/* Inline editor — small textareas + Save (mirrors the Identity section path) */}
-          <div className="space-y-3 pt-1">
-            <div>
-              <textarea
-                rows={2}
-                value={personalityDraft}
-                onChange={(e) => setPersonalityDraft(e.target.value)}
-                placeholder='Type it — e.g. "Calm tutor who checks understanding" or "Sarcastic"'
-                aria-label="Agent personality (editable)"
-                className="clean-input w-full px-3 py-2 text-[11px] outline-none resize-none"
-              />
-              <div className="flex items-center justify-end mt-1.5">
-                {personalityActive ? (
-                  <span className="aurora-chip"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => savePersonality(personalityDraft)}
-                    className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
-                  >
-                    Save personality
-                  </button>
-                )}
-              </div>
-            </div>
-            <div>
-              <textarea
-                rows={3}
-                value={instructionsDraft}
-                onChange={(e) => setInstructionsDraft(e.target.value)}
-                placeholder="How should the agent behave? What should it always remember about how you work?"
-                aria-label="Agent instructions (editable)"
-                className="clean-input w-full px-3 py-2 text-[11px] outline-none resize-none"
-              />
-              <div className="flex items-center justify-end mt-1.5">
-                {instructionsActive ? (
-                  <span className="aurora-chip"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => saveInstructions(instructionsDraft)}
-                    className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[10px] font-semibold transition cursor-pointer"
-                  >
-                    Save instructions
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </CollapsibleSection>
-
-        {/* ── MEMORIES ───────────────────────────────────────────────────── */}
-        <CollapsibleSection
-          name="Memories"
-          icon={<Database className="w-3 h-3 shrink-0" />}
-          right={<Badge color={memory.length ? 'blue' : 'slate'}>{memory.length}</Badge>}
-        >
-          <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-            The agent always reads this. Click an entry to load it into your prompt box.
-          </p>
-          <div className="space-y-2">
-            {memory.length === 0 && <div className="text-[11px] text-[var(--text-muted)] py-2">No memories yet — teach your agent something.</div>}
-            {memory.map((m) => (
-              <div
-                key={m.id}
-                onClick={() => useMemory(m)}
-                title="Select this memory — loads into your prompt"
-                className="group flex items-start gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{m.text}</p>
-                  <div className="text-[9px] text-[var(--text-muted)] mt-1">{timeAgo(m.created_at)}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); useMemory(m); }}
-                  aria-label="Load this memory into the prompt"
-                  title="Load into prompt box"
-                  className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
-                  aria-label="Delete memory entry"
-                  className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-          {/* Add box (same as the permanent-memory card) */}
-          <div className="flex gap-2">
-            <input
-              value={memoryText}
-              onChange={(e) => setMemoryText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addMemory()}
-              placeholder="Add a memory…"
-              aria-label="New memory entry"
-              className="clean-input flex-1 px-3 py-2 text-[11px] outline-none"
-            />
-            <button
-              type="button"
-              onClick={addMemory}
-              aria-label="Save memory"
-              className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </CollapsibleSection>
-
-        {/* ── FILES, grouped by kind (Personality / Rules / Skills / Automations) */}
-        <CollapsibleSection
-          name="Files"
-          icon={<FileText className="w-3 h-3 shrink-0" />}
-          right={<Badge color={files.length ? 'green' : 'slate'}>{files.length}</Badge>}
-        >
-          {fileKinds.map((k) => {
-            const kindFiles = files.filter((f) => f.kind === k.key);
-            const empty = kindFiles.length === 0;
-            return (
-              <div key={k.key} className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-[var(--text-secondary)] flex items-center gap-1.5 min-w-0 truncate">
-                    <span className="text-xs leading-none">{k.icon}</span>
-                    <span className="truncate">{FILE_GROUP_LABELS[k.key] || `${k.label}s`}</span>
+      {/* Tab Contents */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+        {/* ── TAB 1: IDENTITIES ─────────────────────────────────────────── */}
+        {activeTab === 'identities' && (
+          <div className="space-y-4">
+            {/* Customize Agent Display Name */}
+            <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🏷️</span> Agent Display Name
+                </label>
+                {nameSavedFeedback && (
+                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 animate-fadeIn">
+                    <Check className="w-3 h-3" /> Saved
                   </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge color={kindFiles.length ? 'blue' : 'slate'}>{kindFiles.length}</Badge>
-                    <button
-                      type="button"
-                      onClick={() => addFileRefs.current[k.key]?.click()}
-                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[9px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.35)] transition cursor-pointer"
-                      title={`Upload a ${k.label.toLowerCase()} file (.md/.txt/.json)`}
-                    >
-                      <Upload className="w-2.5 h-2.5" /> Add
-                    </button>
-                  </div>
-                </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <input
-                  ref={(el) => { addFileRefs.current[k.key] = el; }}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => handleUploadFile(e, k.key)}
+                  type="text"
+                  value={agentNameInput}
+                  onChange={(e) => setAgentNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      onSaveAgentName(agentNameInput.trim() || 'Atlas');
+                      setNameSavedFeedback(true);
+                      setTimeout(() => setNameSavedFeedback(false), 2000);
+                    }
+                  }}
+                  placeholder="e.g. Atlas, Socrates, JARVIS"
+                  className="clean-input flex-1 px-3 py-1.5 text-xs text-white outline-none rounded-[var(--radius-sm)]"
                 />
-                {empty ? (
-                  <div className="text-[10px] text-[var(--text-muted)] py-1.5 leading-relaxed">{k.hint}</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {kindFiles.map((f) => (
-                      <div key={f.id} className="group flex items-center gap-1.5 p-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.40)] hover:bg-[var(--bg-surface-elevated)] transition">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveAgentName(agentNameInput.trim() || 'Atlas');
+                    setNameSavedFeedback(true);
+                    setTimeout(() => setNameSavedFeedback(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer shrink-0"
+                >
+                  Save Name
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <h3 className="text-xs font-bold text-white">Agent Identities</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">Select an active persona or expand to view details.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewIdentityModal(true)}
+                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Identity
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {allIdentities.length === 0 && (
+                <div className="p-8 text-center border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)] space-y-2">
+                  <div className="text-2xl">🎭</div>
+                  <div className="text-xs font-semibold text-white">No custom identities yet</div>
+                  <p className="text-[11px] text-[var(--text-muted)] max-w-xs mx-auto">
+                    Create your own agent persona with custom instructions, tone, and traits.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewIdentityModal(true)}
+                    className="mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer"
+                  >
+                    + Create Persona
+                  </button>
+                </div>
+              )}
+              {allIdentities.map((item) => {
+                const isActive = activeIdentityId === item.id || (ai.personality === item.persona && ai.instructions === item.instructions);
+                const isExpanded = !!expandedIds[item.id];
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-[var(--radius-md)] border transition overflow-hidden ${
+                      isActive
+                        ? 'border-[rgba(139,92,246,0.5)] bg-[var(--accent-subtle)] shadow-sm'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-white/20'
+                    }`}
+                  >
+                    {/* Compact Header Row */}
+                    <div className="p-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(item.id)}
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                      >
+                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
+                        <span className="text-lg">{item.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+                            {isActive && (
+                              <span className="chip chip-accent text-[9px] flex items-center gap-1 font-bold">
+                                <Check className="w-2.5 h-2.5" /> Active
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onSelectIdentity(item)}
+                          disabled={isActive}
+                          className={`px-2.5 py-1 rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer ${
+                            isActive
+                              ? 'bg-[var(--accent)] text-white opacity-80 cursor-default'
+                              : 'bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10'
+                          }`}
+                        >
+                          {isActive ? 'Active' : 'Select'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteIdentity(item.id); }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          title="Delete identity"
+                          aria-label={`Delete ${item.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable Details */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                        {item.persona && (
+                          <div>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Persona Description</span>
+                            <p className="text-xs text-slate-200 leading-relaxed">{item.persona}</p>
+                          </div>
+                        )}
+                        {item.instructions && (
+                          <div>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Instructions & Rules</span>
+                            <div className="p-2 rounded bg-black/30 border border-white/5 text-[10px] text-slate-300 font-mono whitespace-pre-wrap">
+                              {item.instructions}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2: SKILLS ─────────────────────────────────────────────── */}
+        {activeTab === 'skills' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-white">Skills & Capabilities</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">Select, apply to prompt, or expand to view blueprint.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewSkillModal(true)}
+                  className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Skill
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {allSkills.length === 0 && (
+                <div className="p-8 text-center border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)] space-y-2">
+                  <div className="text-2xl">⚡</div>
+                  <div className="text-xs font-semibold text-white">No custom skills yet</div>
+                  <p className="text-[11px] text-[var(--text-muted)] max-w-xs mx-auto">
+                    Build prompt blueprints and automated capabilities tailored to your workflow.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewSkillModal(true)}
+                    className="mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer"
+                  >
+                    + Create Skill
+                  </button>
+                </div>
+              )}
+              {allSkills.map((sk) => {
+                const isSelected = activeSkillIds.includes(sk.id);
+                const isExpanded = !!expandedIds[sk.id];
+                return (
+                  <div
+                    key={sk.id}
+                    className={`rounded-[var(--radius-md)] border transition overflow-hidden ${
+                      isSelected
+                        ? 'border-[rgba(139,92,246,0.4)] bg-[var(--accent-subtle)]'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-white/20'
+                    }`}
+                  >
+                    {/* Compact Header Row */}
+                    <div className="p-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(sk.id)}
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                      >
+                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
+                        <span className="text-lg">{sk.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-white truncate">{sk.name}</h4>
+                        </div>
+                      </button>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onSelectSkill(sk)}
+                          className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10 text-[11px] font-semibold transition cursor-pointer flex items-center gap-1"
+                          title="Inject this skill into the prompt box"
+                        >
+                          <Send className="w-3 h-3" /> Select
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onToggleSkill(sk.id)}
+                          className={`px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-semibold transition cursor-pointer border ${
+                            isSelected
+                              ? 'bg-[var(--accent)] text-white border-transparent'
+                              : 'bg-black/20 text-[var(--text-muted)] border-white/5 hover:text-white'
+                          }`}
+                          title={isSelected ? 'Disable skill' : 'Enable skill'}
+                        >
+                          {isSelected ? 'Enabled' : 'Enable'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteSkill(sk.id); }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          title="Delete skill"
+                          aria-label={`Delete ${sk.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable Details */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                        {sk.description && (
+                          <div>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Description</span>
+                            <p className="text-xs text-slate-200 leading-relaxed">{sk.description}</p>
+                          </div>
+                        )}
+                        {sk.promptTemplate && (
+                          <div>
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Prompt Blueprint</span>
+                            <div className="p-2 rounded bg-black/30 border border-white/5 text-[10px] text-slate-300 font-mono whitespace-pre-wrap">
+                              {sk.promptTemplate}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: MEMORIES ───────────────────────────────────────────── */}
+        {activeTab === 'memories' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-xs font-bold text-white">Permanent Memories</h3>
+              <p className="text-[11px] text-[var(--text-muted)]">Facts, preferences, and deadlines your agent always remembers.</p>
+            </div>
+
+            {/* Add memory form */}
+            <div className="flex gap-2">
+              <input
+                value={memoryText}
+                onChange={(e) => setMemoryText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addMemory()}
+                placeholder="Add a new memory or fact…"
+                aria-label="New memory entry"
+                className="clean-input flex-1 px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)]"
+              />
+              <button
+                type="button"
+                onClick={addMemory}
+                disabled={!memoryText.trim()}
+                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {memory.length === 0 && (
+                <div className="p-6 text-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)]">
+                  No memories yet. Add facts about your courses, style, or preferences.
+                </div>
+              )}
+
+              {memory.map((m) => {
+                const isExpanded = !!expandedIds[m.id];
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-white/20 transition overflow-hidden"
+                  >
+                    {/* Compact Header Row */}
+                    <div className="p-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(m.id)}
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                      >
+                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
+                        <span className="text-base">🧠</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-slate-200 truncate">{m.text}</p>
+                          <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(m.created_at)}</span>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => useMemory(m)}
+                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 text-[10px] font-semibold border border-white/10 transition cursor-pointer flex items-center gap-1"
+                          title="Load memory into prompt box"
+                        >
+                          <Send className="w-3 h-3" /> Select
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
+                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 rounded transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          title="Delete memory"
+                          aria-label="Delete memory"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded view */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3.5 pt-1 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                        <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Full Memory</span>
+                        <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{m.text}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 4: RULES & FILES ──────────────────────────────────────── */}
+        {activeTab === 'files' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-white">Rules, Automations & Files</h3>
+                <p className="text-[11px] text-[var(--text-muted)]">Upload custom `.md`, `.txt`, `.json` rule files.</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={uploadKind}
+                  onChange={(e) => setUploadKind(e.target.value)}
+                  className="clean-input text-[11px] px-2 py-1 outline-none rounded-[var(--radius-sm)]"
+                >
+                  <option value="rule">Rule</option>
+                  <option value="skill">Skill</option>
+                  <option value="automation">Automation</option>
+                  <option value="personality">Personality</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" /> Upload
+                </button>
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => handleUploadFile(e, uploadKind)}
+            />
+
+            <div className="space-y-2">
+              {files.length === 0 && (
+                <div className="p-6 text-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)]">
+                  No files uploaded yet. Upload custom `.md` rule or capability files.
+                </div>
+              )}
+
+              {files.map((f) => {
+                const isExpanded = !!expandedIds[f.id];
+                return (
+                  <div
+                    key={f.id}
+                    className="rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-white/20 transition overflow-hidden"
+                  >
+                    {/* Compact Header Row */}
+                    <div className="p-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(f.id)}
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                      >
+                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
+                        <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-white truncate">{f.file_name}</span>
+                            <span className="chip chip-neutral text-[9px] uppercase">{f.kind}</span>
+                          </div>
+                          <span className="text-[10px] text-[var(--text-muted)]">{fmt(f.size_bytes)} bytes</span>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => openFile(f)}
-                          className="flex-1 min-w-0 text-left cursor-pointer"
-                          title={`Read ${f.file_name}`}
+                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-white/10 text-slate-200 text-[10px] font-medium border border-white/10 transition cursor-pointer"
+                          title="Read file contents"
                         >
-                          <div className="text-[10px] text-[var(--text-secondary)] truncate hover:text-[var(--accent)] transition">{f.file_name}</div>
-                          <div className="text-[9px] text-[var(--text-muted)]">{fmt(f.size_bytes)} B · tap to read</div>
+                          View
                         </button>
                         <button
                           type="button"
                           onClick={() => useFileInPrompt(f)}
-                          aria-label={`Load ${f.file_name} into the prompt`}
-                          title="Load this file into the prompt box (SELECT)"
-                          className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
+                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10 text-[10px] font-semibold transition cursor-pointer flex items-center gap-1"
+                          title="Load file into prompt"
                         >
-                          <Send className="w-3 h-3" />
+                          <Send className="w-3 h-3" /> Select
                         </button>
                         <button
                           type="button"
-                          onClick={() => deleteFile(f.id)}
-                          aria-label={`Delete file ${f.file_name}`}
-                          className="p-1 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                          onClick={(e) => { e.stopPropagation(); deleteFile(f.id); }}
+                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          title="Delete file"
+                          aria-label={`Delete ${f.file_name}`}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </CollapsibleSection>
+                    </div>
 
+                    {/* Expanded Info */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                          <span>Kind: <strong className="text-white uppercase">{f.kind}</strong></span>
+                          <span>Size: <strong className="text-white">{fmt(f.size_bytes)} bytes</strong></span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openFile(f)}
+                          className="w-full py-1.5 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 font-medium transition cursor-pointer text-center"
+                        >
+                          Open Full Viewer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* ── Add Identity Modal ────────────────────────────────────────── */}
+      {showNewIdentityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎭</span>
+                <h3 className="text-sm font-bold text-white">Create Custom Identity</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewIdentityModal(false)}
+                className="text-[var(--text-muted)] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateIdentity} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Name</label>
+                <div className="flex gap-2">
+                  <input
+                    value={newIdIcon}
+                    onChange={(e) => setNewIdIcon(e.target.value)}
+                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    title="Emoji Icon"
+                  />
+                  <input
+                    value={newIdName}
+                    onChange={(e) => setNewIdName(e.target.value)}
+                    placeholder="e.g. History Professor"
+                    required
+                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Persona Summary</label>
+                <input
+                  value={newIdPersona}
+                  onChange={(e) => setNewIdPersona(e.target.value)}
+                  placeholder="e.g. Rigorous, analytical, direct"
+                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
+                <textarea
+                  rows={3}
+                  value={newIdInstructions}
+                  onChange={(e) => setNewIdInstructions(e.target.value)}
+                  placeholder="Specific rules for how this identity must behave and answer coursework..."
+                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => setShowNewIdentityModal(false)}
+                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newIdName.trim()}
+                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                >
+                  Save & Add Identity
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Skill Modal ───────────────────────────────────────────── */}
+      {showNewSkillModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <h3 className="text-sm font-bold text-white">Create Custom Skill</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewSkillModal(false)}
+                className="text-[var(--text-muted)] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSkill} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Name</label>
+                <div className="flex gap-2">
+                  <input
+                    value={newSkillIcon}
+                    onChange={(e) => setNewSkillIcon(e.target.value)}
+                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    title="Emoji Icon"
+                  />
+                  <input
+                    value={newSkillName}
+                    onChange={(e) => setNewSkillName(e.target.value)}
+                    placeholder="e.g. Lab Report Formatter"
+                    required
+                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Short Description</label>
+                <input
+                  value={newSkillDesc}
+                  onChange={(e) => setNewSkillDesc(e.target.value)}
+                  placeholder="e.g. Formats physics and chem lab reports"
+                  className="clean-input w-full px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Template</label>
+                <textarea
+                  rows={3}
+                  value={newSkillTemplate}
+                  onChange={(e) => setNewSkillTemplate(e.target.value)}
+                  placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
+                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => setShowNewSkillModal(false)}
+                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newSkillName.trim()}
+                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                >
+                  Save & Add Skill
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -20,7 +20,7 @@ import { Badge, EmptyState, timeAgo } from './ui/os.jsx';
 import { normalizeCards, computeAssignmentEvents, formatAssignmentEvent, EVENT_META } from '../lib/assignmentEvents.js';
 import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
-import AgentConfigsSidebar from './AgentConfigsSidebar.jsx';
+import AgentConfigsSidebar, { DEFAULT_IDENTITIES, DEFAULT_SKILLS } from './AgentConfigsSidebar.jsx';
 
 const FILE_KINDS = [
   { key: 'skill', label: 'Skill', icon: '🧩', hint: 'Teach the agent new abilities (.md/.txt)' },
@@ -185,10 +185,49 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [approvalFeedback, setApprovalFeedback] = useState('');
   const [autoApproveThis, setAutoApproveThis] = useState(false);
   const [listOpen, setListOpen] = useState(false);
-  const [newAction, setNewAction] = useState('');
   const [autoList, setAutoList] = useState(() =>
     settings.ai?.autoApprovedActions?.length ? [...settings.ai.autoApprovedActions] : ['humanize', 'analyze_rubric', 'draft_section']
   );
+  // Identities Management (Presets + User Custom Personas)
+  const [agentNameDraft, setAgentNameDraft] = useState(() => settings.ai?.aiName || 'Atlas');
+  useEffect(() => {
+    setAgentNameDraft(settings.ai?.aiName || 'Atlas');
+  }, [settings.ai?.aiName]);
+
+  const [identities, setIdentities] = useState(() => {
+    try {
+      const saved = localStorage.getItem('helpotron.agent.custom_identities');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeIdentityId, setActiveIdentityId] = useState(() => {
+    try {
+      return localStorage.getItem('helpotron.agent.active_identity_id') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Skills Management (Presets + User Custom Skills)
+  const [skills, setSkills] = useState(() => {
+    try {
+      const saved = localStorage.getItem('helpotron.agent.custom_skills');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeSkillIds, setActiveSkillIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('helpotron.agent.active_skill_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [memory, setMemory] = useState([]);
   const [memoryText, setMemoryText] = useState('');
   const [files, setFiles] = useState([]);
@@ -681,6 +720,80 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     }
   }
 
+  /* ── Identity & Skill Management Handlers (CRUD + Selection) ───────── */
+  function handleSelectIdentity(identity) {
+    if (!identity) return;
+    setActiveIdentityId(identity.id);
+    try { localStorage.setItem('helpotron.agent.active_identity_id', identity.id); } catch {}
+    set('ai.personality', identity.persona);
+    set('ai.instructions', identity.instructions);
+    pushAssistant(`🎭 Switched active persona to **${identity.name}** (${identity.icon}). Personality and instructions have been updated.`);
+  }
+
+  function handleAddIdentity(newId) {
+    setIdentities((prev) => {
+      const next = [...prev, newId];
+      try { localStorage.setItem('helpotron.agent.custom_identities', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    handleSelectIdentity(newId);
+  }
+
+  function handleDeleteIdentity(id) {
+    setIdentities((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      try { localStorage.setItem('helpotron.agent.custom_identities', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    if (activeIdentityId === id) {
+      setActiveIdentityId(null);
+      try { localStorage.removeItem('helpotron.agent.active_identity_id'); } catch {}
+    }
+  }
+
+  function handleToggleSkill(skillId) {
+    setActiveSkillIds((prev) => {
+      const next = prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId];
+      try { localStorage.setItem('helpotron.agent.active_skill_ids', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function handleSelectSkill(skill) {
+    if (skill.promptTemplate) {
+      setInput((prev) => (prev ? `${prev}\n\n${skill.promptTemplate}` : skill.promptTemplate));
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+        chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 50);
+    }
+  }
+
+  function handleAddSkill(newSkill) {
+    setSkills((prev) => {
+      const next = [...prev, newSkill];
+      try { localStorage.setItem('helpotron.agent.custom_skills', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    handleToggleSkill(newSkill.id);
+  }
+
+  function handleDeleteSkill(skillId) {
+    setSkills((prev) => {
+      const next = prev.filter((item) => item.id !== skillId);
+      try { localStorage.setItem('helpotron.agent.custom_skills', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setActiveSkillIds((prev) => prev.filter((id) => id !== skillId));
+  }
+
+  function handleSaveAgentName(name) {
+    const finalName = (name || '').trim() || 'Atlas';
+    setAgentNameDraft(finalName);
+    set('ai.aiName', finalName);
+    pushAssistant(`✨ Agent name updated to **${finalName}**.`);
+  }
+
   /* ── permanent memory ─────────────────────────────────────────────────── */
   async function addMemory() {
     const text = memoryText.trim();
@@ -879,12 +992,40 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     </div>
   );
 
-  /* Configs panel props — shared by the xl column, the lg drawer and the
-   * small-screen inline block so they always render identically. */
+  const allIdentitiesList = identities;
+  const currentIdentity = identities.find((id) => id.id === activeIdentityId) || null;
+
+  /* Configs panel props — shared by drawer and sidebar */
   const configsSidebarProps = {
-    ai, memory, memoryText, setMemoryText, addMemory, deleteMemory, useMemory,
-    files, fileKinds: FILE_KINDS, handleUploadFile, openFile, deleteFile,
-    useFileInPrompt, selectConfig, savePersonality, saveInstructions,
+    ai,
+    identities,
+    activeIdentityId,
+    onSelectIdentity: handleSelectIdentity,
+    onAddIdentity: handleAddIdentity,
+    onDeleteIdentity: handleDeleteIdentity,
+    onSaveAgentName: handleSaveAgentName,
+    skills,
+    activeSkillIds,
+    onToggleSkill: handleToggleSkill,
+    onAddSkill: handleAddSkill,
+    onDeleteSkill: handleDeleteSkill,
+    onSelectSkill: handleSelectSkill,
+    memory,
+    memoryText,
+    setMemoryText,
+    addMemory,
+    deleteMemory,
+    useMemory,
+    files,
+    fileKinds: FILE_KINDS,
+    handleUploadFile,
+    openFile,
+    deleteFile,
+    useFileInPrompt,
+    selectConfig,
+    savePersonality,
+    saveInstructions,
+    onCollapse: () => setConfigsOpen(false),
   };
 
   return (
@@ -900,12 +1041,21 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <input
-                value={agentName}
-                onChange={(e) => set('ai.aiName', e.target.value)}
-                aria-label="Agent name"
-                className="bg-transparent text-base font-bold text-white outline-none border-b border-transparent focus:border-[var(--accent)] w-32"
-              />
+              <div className="relative flex items-center">
+                <input
+                  value={agentNameDraft}
+                  onChange={(e) => setAgentNameDraft(e.target.value)}
+                  onBlur={() => handleSaveAgentName(agentNameDraft)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.target.blur();
+                    }
+                  }}
+                  aria-label="Agent name"
+                  title="Click to rename your agent (press Enter to save)"
+                  className="bg-white/5 hover:bg-white/10 focus:bg-slate-900 border border-white/10 focus:border-[var(--accent)] rounded px-2.5 py-0.5 text-base font-bold text-white outline-none min-w-[120px] max-w-[220px] transition cursor-text"
+                />
+              </div>
               <span className="chip chip-emerald text-[11px] flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Ready
               </span>
@@ -919,8 +1069,33 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           </div>
         </div>
 
-        {/* Execution Mode + Drawer Trigger + New Chat */}
+        {/* Active Identity Pill + Execution Mode + Drawer Trigger + New Chat */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* Quick Active Identity Selector */}
+          {currentIdentity ? (
+            <button
+              type="button"
+              onClick={() => setConfigsOpen(true)}
+              className="chip chip-accent px-3 py-1.5 flex items-center gap-1.5 cursor-pointer text-xs font-semibold hover:border-[var(--accent)] transition"
+              title="Active Agent Identity — Click to switch or customize"
+            >
+              <span>{currentIdentity.icon}</span>
+              <span className="truncate max-w-[140px]">{currentIdentity.name}</span>
+              <ChevronDown className="w-3 h-3 opacity-70" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfigsOpen(true)}
+              className="px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-dashed border-white/20 text-xs font-medium text-[var(--text-muted)] hover:text-white hover:border-white/40 flex items-center gap-1.5 transition cursor-pointer"
+              title="No custom identity active — click to configure"
+            >
+              <span>🎭</span>
+              <span>Set Identity</span>
+              <ChevronDown className="w-3 h-3 opacity-70" />
+            </button>
+          )}
+
           <div className="segmented p-0.5">
             {Object.entries(MODE_META).map(([k, m]) => {
               const Icon = m.icon;
@@ -947,7 +1122,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white'
             }`}
           >
-            <Settings2 className="w-3.5 h-3.5" /> Memory & Skills ({memory.length + files.length})
+            <Settings2 className="w-3.5 h-3.5" /> Configs ({allIdentitiesList.length + skills.length + memory.length + files.length})
           </button>
 
           <button
@@ -1209,23 +1384,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             onClick={() => setConfigsOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-md bg-[var(--bg-canvas)] border-l border-[var(--border-subtle)] p-5 h-full flex flex-col shadow-2xl z-10">
-            <div className="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🧠</span>
-                <h3 className="text-sm font-bold text-white">Agent Memory & Skills</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setConfigsOpen(false)}
-                className="text-[var(--text-muted)] hover:text-white p-1 rounded-md transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto py-4">
-              <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
-            </div>
+          <div className="relative w-full max-w-lg bg-[var(--bg-canvas)] border-l border-[var(--border-subtle)] h-full flex flex-col shadow-2xl z-10">
+            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
           </div>
         </div>
       )}
