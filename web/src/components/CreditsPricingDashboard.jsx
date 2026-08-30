@@ -174,7 +174,6 @@ export function CreditsPricingDashboard({
       maxDiscount: 5, // 50% of $10
       credits: '300 Task Tokens / mo',
       creditsAward: 300,
-      capacity: '300 Task Tokens · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'basic',
@@ -186,7 +185,6 @@ export function CreditsPricingDashboard({
       maxDiscount: 10, // 50% of $20
       credits: '1,000 Task Tokens / mo',
       creditsAward: 1000,
-      capacity: '1,000 Task Tokens · 1 token = $0.01 API cost',
       popular: true,
       features: ALL_PLATFORM_FEATURES,
       plan: 'pro',
@@ -198,7 +196,6 @@ export function CreditsPricingDashboard({
       maxDiscount: 20, // 50% of $40
       credits: '2,700 Task Tokens / mo',
       creditsAward: 2700,
-      capacity: '2,700 Task Tokens · 1 token = $0.01 API cost',
       popular: false,
       features: ALL_PLATFORM_FEATURES,
       plan: 'elite',
@@ -566,7 +563,6 @@ export function CreditsPricingDashboard({
               header={
                 <div>
                   <h3 className="text-lg font-bold text-white">{tier.name}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{tier.capacity}</p>
                 </div>
               }
             >
