@@ -1007,15 +1007,15 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
 
   return (
     <div className="max-w-3xl mx-auto space-y-3">
-      {/* Toolbar: search + quick presets + save flash */}
-      <SectionCard id="settings-toolbar" padding="p-4" className="h-fit" header={
+      {/* Toolbar: search + save flash */}
+      <div className="panel p-3.5">
         <div className="flex flex-wrap items-center gap-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search settings…"
             aria-label="Search settings"
-            className="clean-input flex-1 min-w-[180px] px-3 py-2 text-[11px] outline-none"
+            className="clean-input flex-1 min-w-[180px] px-3.5 py-2 text-xs outline-none"
           />
           <AnimatePresence>
             {savedFlash && (
@@ -1023,25 +1023,21 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[10px] font-semibold text-emerald-300"
+                className="chip chip-emerald shrink-0"
               >
-                <Check className="w-3 h-3" /> Saved
+                <Check className="w-3.5 h-3.5" /> Saved
               </motion.span>
             )}
           </AnimatePresence>
         </div>
-      }>
-        {/* Quick presets relocated to the AI section (08-30 de-clunk): they
-            reset ENGINE behavior, so they belong with the model config — not
-            pinned above Account where they read as theme choices. */}
-      </SectionCard>
+      </div>
 
       {/* The settings themselves: a simple name, maximize to the whole menu. */}
       {visibleSections.map((sec) => {
         const Icon = sec.icon;
         const open = section === sec.key;
         return (
-          <SectionCard key={sec.key} id={`settings-${sec.key}`} padding="p-0" className="overflow-hidden">
+          <div key={sec.key} className="panel overflow-hidden transition-all duration-150">
             <button
               type="button"
               onClick={() => setSection(open ? null : sec.key)}
@@ -1050,19 +1046,19 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
                 open ? 'bg-[var(--accent-subtle)]' : 'hover:bg-white/3'
               }`}
             >
-              <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center transition ${
-                open ? 'bg-[var(--accent)] text-white' : 'bg-white/6 text-slate-300'
+              <span className={`w-8 h-8 shrink-0 rounded-[var(--radius-sm)] flex items-center justify-center transition ${
+                open ? 'bg-[var(--accent)] text-white shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_2px_12px_rgba(139,92,246,0.35)]' : 'bg-white/6 text-slate-300'
               }`}>
                 <Icon className="w-4 h-4" />
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-sm font-semibold text-slate-100">{sec.label}</span>
-                <span className="block text-[11px] text-slate-500 truncate">{sec.desc}</span>
+                <span className="block text-sm font-semibold text-white">{sec.label}</span>
+                <span className="block text-xs text-[var(--text-muted)] truncate mt-0.5">{sec.desc}</span>
               </span>
-              <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180 text-[var(--accent)]' : ''}`} />
             </button>
             {open && (
-              <div className="px-5 pb-5 pt-4 border-t border-white/8">
+              <div className="px-5 pb-5 pt-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={sec.key}
@@ -1076,11 +1072,13 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
                 </AnimatePresence>
               </div>
             )}
-          </SectionCard>
+          </div>
         );
       })}
       {visibleSections.length === 0 && (
-        <div className="px-3 py-8 text-center text-[11px] text-slate-600">No settings match “{search}”</div>
+        <div className="empty-state">
+          <p>No settings match “{search}”</p>
+        </div>
       )}
     </div>
   );
