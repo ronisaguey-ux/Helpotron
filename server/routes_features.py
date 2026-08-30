@@ -69,7 +69,6 @@ try:
         CalendarSync,
         TelegramNotifier,
         recommend_next_study,
-        set_theme,
         get_theme,
     )
 except (ImportError, ValueError):
@@ -80,7 +79,6 @@ except (ImportError, ValueError):
         CalendarSync,
         TelegramNotifier,
         recommend_next_study,
-        set_theme,
         get_theme,
     )
 
@@ -180,6 +178,20 @@ class TelegramConfigModel(BaseModel):
     chat_id: str
 
 
+def _bind_to_session(db: Session, user: User) -> User:
+    """Re-fetch ``user`` inside ``db``.
+
+    ``_get_feature_user`` resolves identity through ``get_current_user``, which
+    opens and closes its own session, so the instance it returns is detached —
+    writing to it and calling ``db.commit()`` persists nothing, and
+    ``db.refresh()`` raises. Every write path below goes through this first.
+    """
+    bound = db.query(User).filter(User.id == user.id).first()
+    if bound is None:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    return bound
+
+
 def _telegram_status_payload(user) -> dict:
     """Connection state for the settings UI — never returns the bot token."""
     token, chat_id = TelegramNotifier.credentials(user)
@@ -254,26 +266,26 @@ async def configure_telegram(req: TelegramConfigModel, request: Request, db: Ses
     if not result["sent"]:
         raise HTTPException(status_code=400, detail=result["detail"])
 
-    settings = dict(user.settings or {})
+    bound = _bind_to_session(db, user)
+    settings = dict(bound.settings or {})
     settings["telegram_bot_token"] = bot_token
     settings["telegram_chat_id"] = chat_id
-    user.settings = settings
+    bound.settings = settings
     db.commit()
-    db.refresh(user)
-    return {"message": "Telegram connected. A confirmation was sent to your chat.", **_telegram_status_payload(user)}
+    return {"message": "Telegram connected. A confirmation was sent to your chat.", **_telegram_status_payload(bound)}
 
 
 @router.post("/telegram/disconnect")
 async def disconnect_telegram(request: Request, db: Session = Depends(get_db)):
     """Remove the stored bot credentials for this account."""
     user = await _get_feature_user(request, db)
-    settings = dict(user.settings or {})
+    bound = _bind_to_session(db, user)
+    settings = dict(bound.settings or {})
     settings.pop("telegram_bot_token", None)
     settings.pop("telegram_chat_id", None)
-    user.settings = settings
+    bound.settings = settings
     db.commit()
-    db.refresh(user)
-    return {"message": "Telegram disconnected.", **_telegram_status_payload(user)}
+    return {"message": "Telegram disconnected.", **_telegram_status_payload(bound)}
 
 
 @router.post("/telegram/test")
@@ -301,10 +313,24 @@ class ThemeModel(BaseModel):
 
 @router.post("/theme")
 async def set_user_theme(req: ThemeModel, request: Request, db: Session = Depends(get_db)):
+    """Persist the account's theme.
+
+    Audit 08-29: this wrote through the detached user returned by
+    ``_get_feature_user`` and committed an empty unit of work, so the theme
+    never actually saved. An unknown theme also came back as HTTP 200 with the
+    rejection buried in ``message``; it is a 400 now.
+    """
+    theme = (req.theme or "").strip().lower()
+    if theme not in ("dark", "light", "auto"):
+        raise HTTPException(status_code=400, detail="Choose dark, light, or auto.")
+
     user = await _get_feature_user(request, db)
-    result = set_theme(user, req.theme)
+    bound = _bind_to_session(db, user)
+    settings = dict(bound.settings or {})
+    settings["theme"] = theme
+    bound.settings = settings
     db.commit()
-    return {"message": result}
+    return {"message": f"Theme set to {theme}", "theme": theme}
 
 
 @router.get("/theme")

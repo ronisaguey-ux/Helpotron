@@ -295,6 +295,7 @@ def test_custom_bubbles_crud_and_data_export_purge():
         # Security-bearing keys a reset must never clear.
         settings["2fa_enabled"] = True
         settings["token_balance"] = 777
+        settings["telegram_bot_token"] = "secret-token"
         user.settings = settings
         db.add(UniversalDumpItem(
             user_id=user.id, file_name="staged.pdf", file_type="document",
@@ -315,9 +316,10 @@ def test_custom_bubbles_crud_and_data_export_purge():
     try:
         user = db.query(User).filter(User.id == user_pk).one()
         assert user.settings["academic_level"] != "__drifted__"
-        # A reset must not drop 2FA or move a balance.
+        # A reset must not drop 2FA, move a balance, or clear credentials.
         assert user.settings["2fa_enabled"] is True
         assert user.settings["token_balance"] == 777
+        assert user.settings["telegram_bot_token"] == "secret-token"
         staged = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user_pk).all()
         assert all(item.status == "archived" for item in staged) and len(staged) >= 1
     finally:
