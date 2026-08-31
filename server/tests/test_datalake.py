@@ -68,6 +68,25 @@ def test_log_telemetry_and_agent_analysis():
     assert insights["telemetry_summary"]["total_events_collected"] >= 2
 
 
+def test_microcredit_record_carries_raw_user_id(tmp_path):
+    """08-31 fix: the implement route pays the author via raw_user_id. The
+    newer record format dropped it (118 older records carry it), which would
+    credit the operator instead of the author on implement — assert new
+    records keep it."""
+    from server.datalake import DataLakeManager
+    mgr = DataLakeManager(tmp_path)
+    rec = mgr.evaluate_and_record_microcredit_submission(
+        user_id="masonx_test",
+        data_type="Lecture Notes & Audio Transcripts",
+        title="test slide deck",
+        data_content="photosynthesis converts light into chemical energy.",
+        metadata={},
+    )
+    assert rec["user_hash"].startswith("usr_")
+    assert rec["raw_user_id"] == "masonx_test"
+    assert rec["status"] == "pending_review"
+
+
 def test_api_feedback_and_datalake_routes():
     from server.database import SessionLocal, User
     from server.security import create_jwt_token
