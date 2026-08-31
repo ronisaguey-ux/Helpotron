@@ -63,23 +63,43 @@ function probe() {
 
   const label = (el) => `${el.tagName.toLowerCase()}"${(el.textContent || '').trim().slice(0, 44)}"`;
 
-  /* collisions: two text leaves whose rects intersect by >25% of the smaller */
+  /* Collisions: two text leaves whose painted areas intersect by >25% of the
+   * smaller. Compare per-LINE-BOX rects (getClientRects), never the single
+   * bounding rect — an inline element that wraps returns a bounding rect that
+   * is the UNION of its lines, i.e. a block covering column-width of mostly
+   * empty space. In the 08-31 extension view that reported 5 collisions
+   * between <b>/<code> runs that are visibly 45px apart: `about:config` paints
+   * at x835-932 and x701-726 on two lines, `xpinstall.signatures.required` at
+   * x771-931 on the line between them — no overlap, but their unions overlap
+   * almost completely. Line boxes are what the reader actually sees. */
+  const boxesOf = (el) => {
+    const rects = [...el.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+    return rects.length ? rects : [el.getBoundingClientRect()];
+  };
   const collisions = [];
   for (let i = 0; i < leaves.length; i++) {
-    const a = leaves[i].getBoundingClientRect();
+    const as = boxesOf(leaves[i]);
     for (let j = i + 1; j < leaves.length; j++) {
-      const b = leaves[j].getBoundingClientRect();
       if (leaves[i].contains(leaves[j]) || leaves[j].contains(leaves[i])) continue;
-      const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-      const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-      if (ox <= 1 || oy <= 1) continue;
-      const inter = ox * oy;
-      const smaller = Math.min(a.width * a.height, b.width * b.height);
-      if (smaller > 0 && inter / smaller > 0.25) {
+      const bs = boxesOf(leaves[j]);
+      let worst = 0, at = null;
+      for (const a of as) {
+        for (const b of bs) {
+          const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          if (ox <= 1 || oy <= 1) continue;
+          const smaller = Math.min(a.width * a.height, b.width * b.height);
+          if (smaller <= 0) continue;
+          const ratio = (ox * oy) / smaller;
+          if (ratio > worst) {
+            worst = ratio;
+            at = { x: Math.round(Math.max(a.left, b.left)), y: Math.round(Math.max(a.top, b.top)) };
+          }
+        }
+      }
+      if (worst > 0.25) {
         collisions.push({
-          a: label(leaves[i]), b: label(leaves[j]),
-          overlap: +(inter / smaller).toFixed(2),
-          at: { x: Math.round(Math.max(a.left, b.left)), y: Math.round(Math.max(a.top, b.top)) },
+          a: label(leaves[i]), b: label(leaves[j]), overlap: +worst.toFixed(2), at,
         });
       }
     }
