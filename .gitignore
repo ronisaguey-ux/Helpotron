@@ -46,3 +46,6 @@ data/sandboxes/
 
 # playwright-mcp screenshot staging (QA evidence, not source)
 .playwright-mcp/
+
+# runtime log rotation artifacts (winston-daily-rotate-file)
+logs/
