@@ -494,14 +494,12 @@ async function launchToDoc(payload) {
   await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ['content.js'] }).catch(() => {});
   await new Promise((r) => setTimeout(r, 400));
 
-  // Try optional Chrome Debugger API for OS-level input if supported
-  if (payload.useDebugger && chrome.debugger) {
-    try {
-      await chrome.debugger.attach({ tabId: targetTabId }, '1.3');
-    } catch (e) {
-      // Debugger attach optional, proceed with standard DOM engine
-    }
-  }
+  // NOTE: An earlier revision could optionally attach chrome.debugger here for
+  // "OS-level input", but nothing in the codebase ever set useDebugger and the
+  // engine always typed via the DOM event path anyway. The dead attach leaked:
+  // it was never detached, which locks DevTools on the tab until the tab
+  // closes. Removed entirely — if a real debugger-driven input path is ever
+  // implemented, it must pair attach with detach on complete/cancel/error.
 
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(targetTabId, {
