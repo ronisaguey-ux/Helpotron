@@ -638,6 +638,46 @@ const gdocsTypingBadge = document.getElementById('gdocsTypingBadge');
 let isTypingPaused = false;
 let activeGDocsTabId = null;
 
+
+const realismPresetSelect = document.getElementById('realismPreset');
+const chkTypos = document.getElementById('chkTypos');
+const chkFalseStarts = document.getElementById('chkFalseStarts');
+const chkPauses = document.getElementById('chkPauses');
+const chkJitter = document.getElementById('chkJitter');
+const chkBurst = document.getElementById('chkBurst');
+const chkFatigue = document.getElementById('chkFatigue');
+
+if (realismPresetSelect) {
+  realismPresetSelect.addEventListener('change', () => {
+    const val = realismPresetSelect.value;
+    if (val === 'gentle') {
+      if (wpmSlider) wpmSlider.value = 35;
+      if (wpmValue) wpmValue.innerText = '35 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkFatigue) chkFatigue.checked = true;
+    } else if (val === 'academic') {
+      if (wpmSlider) wpmSlider.value = 65;
+      if (wpmValue) wpmValue.innerText = '65 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkBurst) chkBurst.checked = true;
+    } else if (val === 'brisk') {
+      if (wpmSlider) wpmSlider.value = 95;
+      if (wpmValue) wpmValue.innerText = '95 WPM';
+      if (chkFalseStarts) chkFalseStarts.checked = false;
+      if (chkBurst) chkBurst.checked = true;
+    } else if (val === 'motor') {
+      if (wpmSlider) wpmSlider.value = 50;
+      if (wpmValue) wpmValue.innerText = '50 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkJitter) chkJitter.checked = true;
+      if (chkFatigue) chkFatigue.checked = true;
+    }
+  });
+}
+
 if (wpmSlider && wpmValue) {
   wpmSlider.addEventListener('input', () => {
     wpmValue.innerText = `${wpmSlider.value} WPM`;
@@ -646,7 +686,7 @@ if (wpmSlider && wpmValue) {
 
 async function refreshGDocsTabs() {
   if (!gdocsTabSelect) return;
-  chrome.runtime.sendMessage({ action: 'getGDocsTabs' }, (resp) => {
+  chrome.runtime.sendMessage({ action: 'getEditableTabs' }, (resp) => {
     gdocsTabSelect.innerHTML = '';
     const tabs = (resp && resp.tabs) || [];
     if (tabs.length === 0) {
@@ -656,7 +696,8 @@ async function refreshGDocsTabs() {
     tabs.forEach((t) => {
       const opt = document.createElement('option');
       opt.value = t.id;
-      opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || 'Google Doc').slice(0, 32)}`;
+      const appIcon = t.app === 'Google Docs' ? '📄' : t.app === 'Gmail' ? '✉️' : t.app === 'Notion' ? '📝' : '🌐';
+      opt.innerText = `${t.active ? '👉 ' : ''}${appIcon} [${t.app}] ${(t.title || 'Document').slice(0, 26)}`;
       if (t.active) opt.selected = true;
       gdocsTabSelect.appendChild(opt);
     });
@@ -676,12 +717,11 @@ if (btnStartLaunchToDoc) {
     // Get text from chat or recent prompt or clipboard
     let textToType = (chatInputEl && chatInputEl.value.trim()) || '';
     if (!textToType) {
-      // Fallback: check storage for last generated text or prompt
       const last = (await chrome.storage.local.get('helpotron_last_doc_payload'))['helpotron_last_doc_payload'];
       textToType = (last && last.text) || 'Helpotron Assistive Typing: Document ready for editing and review.';
     }
 
-    setStatus('⌨️ Launching assistive typing in Google Doc…');
+    setStatus('⌨️ Launching assistive typing engine…');
     if (typingProgressSection) typingProgressSection.style.display = 'block';
     if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
 
@@ -691,9 +731,11 @@ if (btnStartLaunchToDoc) {
         tabId: targetTabId,
         text: textToType,
         wpm,
-        naturalPauses: true,
-        jitter: true,
-        title: 'Assignment Work',
+        naturalPauses: chkPauses ? chkPauses.checked : true,
+        jitter: chkJitter ? chkJitter.checked : true,
+        typoRate: chkTypos && chkTypos.checked ? 0.02 : 0.0,
+        falseStartRate: chkFalseStarts && chkFalseStarts.checked ? 0.015 : 0.0,
+        title: 'Assignment Document',
       }
     }).catch((e) => ({ ok: false, error: String(e) }));
 
@@ -736,29 +778,26 @@ if (btnCancelTyping) {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'unparseable_report') {
     showUnparseable(msg.reason);
-  } else if (msg.action === 'TYPING_PROGRESS') {
+  } else if (msg.action === 'BROADCAST_TYPING_PROGRESS' || msg.action === 'TYPING_PROGRESS') {
+    const payload = msg.payload || msg;
     if (typingProgressSection) typingProgressSection.style.display = 'block';
     if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
-    const pct = msg.percentage || 0;
+    const pct = payload.progressPct || payload.percentage || 0;
     if (typingProgressBar) typingProgressBar.style.width = `${pct}%`;
-    if (typingPercentText) typingPercentText.innerText = `${pct}% (${msg.wordsTyped || 0}/${msg.totalWords || 0} w)`;
+    if (typingPercentText) typingPercentText.innerText = `${pct}% (${payload.wordsTyped || 0}/${payload.totalWords || 0} w)`;
     if (typingStatusText) {
-      if (msg.status === 'completed') {
+      if (!payload.isTyping && pct >= 100) {
         typingStatusText.innerText = 'Completed ✨';
         setTimeout(() => {
           if (typingProgressSection) typingProgressSection.style.display = 'none';
           if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
         }, 4000);
-      } else if (msg.status === 'paused') {
+      } else if (payload.isPaused) {
         typingStatusText.innerText = 'Paused';
-      } else if (msg.status === 'cancelled') {
-        typingStatusText.innerText = 'Cancelled';
-        setTimeout(() => {
-          if (typingProgressSection) typingProgressSection.style.display = 'none';
-          if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
-        }, 1500);
+      } else if (!payload.isTyping) {
+        typingStatusText.innerText = 'Stopped';
       } else {
-        typingStatusText.innerText = `Typing at ${msg.wpm || 65} WPM…`;
+        typingStatusText.innerText = `Typing at ${payload.wpm || 65} WPM…`;
       }
     }
   }
@@ -766,4 +805,5 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 refreshGDocsTabs();
 init();
+
 

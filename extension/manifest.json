@@ -1,21 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "Helpotron Academic OS Companion",
-  "version": "2.0.2",
+  "name": "Helpotron Academic OS Companion & Assistive Typing Engine",
+  "version": "2.2.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "helpotron-companion@ronisaguey-ux.dev",
       "strict_min_version": "121.0"
     }
   },
-  "description": "Autonomous Canvas LMS, Google Classroom, Blackboard & Moodle study companion and assignment solver.",
+  "description": "Autonomous study companion, LMS assignment solver, and humanized assistive typing engine for Google Docs, Gmail & Notion.",
   "permissions": [
     "storage",
     "activeTab",
     "tabs",
     "scripting",
     "alarms",
-    "downloads"
+    "downloads",
+    "debugger"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
@@ -26,10 +27,15 @@
     "https://*.moodle.com/*",
     "https://*.schoology.com/*",
     "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.google.com/*",
     "https://*.notion.so/*",
     "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
     "https://helpotron.dpdns.org/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -58,6 +64,7 @@
         "https://*.moodle.com/*",
         "https://*.schoology.com/*",
         "https://docs.google.com/*",
+        "https://mail.google.com/*",
         "https://*.notion.so/*",
         "https://*.notion.site/*",
         "https://helpotron.dpdns.org/*",
@@ -71,6 +78,8 @@
   "externally_connectable": {
     "matches": [
       "https://docs.google.com/*",
+      "https://mail.google.com/*",
+      "https://*.notion.so/*",
       "https://helpotron.dpdns.org/*",
       "http://localhost/*",
       "http://127.0.0.1/*"

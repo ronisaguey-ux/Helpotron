@@ -379,17 +379,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'getGDocsTabs') {
-    chrome.tabs.query({ url: '*://docs.google.com/*' }, (tabs) => {
+  if (message.action === 'getGDocsTabs' || message.action === 'getEditableTabs') {
+    chrome.tabs.query({}, (tabs) => {
+      const filtered = (tabs || []).filter((t) => {
+        if (!t.url) return false;
+        const u = t.url.toLowerCase();
+        return u.includes('docs.google.com') ||
+               u.includes('mail.google.com') ||
+               u.includes('notion.so') ||
+               u.includes('notion.site') ||
+               u.includes('office.com') ||
+               u.includes('live.com') ||
+               u.includes('blackboard') ||
+               u.includes('instructure.com') ||
+               u.includes('brightspace') ||
+               u.includes('moodle');
+      });
+
+      // Fallback: if no specific editor tabs found, include active tabs
+      const list = filtered.length > 0 ? filtered : (tabs || []).filter((t) => t.url && !t.url.startsWith('chrome://'));
+
       sendResponse({
         ok: true,
-        tabs: (tabs || []).map((t) => ({
-          id: t.id,
-          title: t.title || 'Google Doc',
-          url: t.url,
-          active: t.active,
-          windowId: t.windowId,
-        })),
+        tabs: list.map((t) => {
+          let app = 'Web Document';
+          const u = (t.url || '').toLowerCase();
+          if (u.includes('docs.google.com')) app = 'Google Docs';
+          else if (u.includes('mail.google.com')) app = 'Gmail';
+          else if (u.includes('notion.')) app = 'Notion';
+          else if (u.includes('office.com') || u.includes('live.com')) app = 'Word Online';
+          else if (u.includes('instructure') || u.includes('blackboard') || u.includes('moodle')) app = 'LMS Editor';
+
+          return {
+            id: t.id,
+            title: t.title || app,
+            url: t.url,
+            app: app,
+            active: t.active,
+            windowId: t.windowId,
+          };
+        }),
       });
     });
     return true;
@@ -423,9 +452,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'TYPING_PROGRESS') {
+  if (message.action === 'BROADCAST_TYPING_PROGRESS' || message.action === 'TYPING_PROGRESS') {
     // Broadcast progress to all open Helpotron web app tabs
-    broadcastTypingProgress(message);
+    broadcastTypingProgress(message.payload || message);
     sendResponse({ ok: true });
     return true;
   }
@@ -461,8 +490,18 @@ async function launchToDoc(payload) {
     }
   }
 
+  // Ensure content script is ready
   await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ['content.js'] }).catch(() => {});
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 400));
+
+  // Try optional Chrome Debugger API for OS-level input if supported
+  if (payload.useDebugger && chrome.debugger) {
+    try {
+      await chrome.debugger.attach({ tabId: targetTabId }, '1.3');
+    } catch (e) {
+      // Debugger attach optional, proceed with standard DOM engine
+    }
+  }
 
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(targetTabId, {
@@ -472,8 +511,11 @@ async function launchToDoc(payload) {
         wpm: payload.wpm || 65,
         naturalPauses: payload.naturalPauses !== false,
         jitter: payload.jitter !== false,
+        typoRate: payload.typoRate !== undefined ? payload.typoRate : 0.02,
+        falseStartRate: payload.falseStartRate !== undefined ? payload.falseStartRate : 0.015,
         title: payload.title || 'Assignment Document',
         assignmentId: payload.assignmentId || null,
+        targetApp: payload.targetApp || 'universal',
       },
     }, (resp) => {
       if (chrome.runtime.lastError) {
@@ -494,14 +536,14 @@ async function controlTypingInTabs(action, specificTabId) {
     });
   }
 
-  const docsTabs = await chrome.tabs.query({ url: '*://docs.google.com/*' });
-  for (const t of docsTabs) {
+  const tabs = await chrome.tabs.query({});
+  for (const t of tabs || []) {
     chrome.tabs.sendMessage(t.id, { action }).catch(() => {});
   }
   return { ok: true };
 }
 
-function broadcastTypingProgress(msg) {
+function broadcastTypingProgress(payload) {
   chrome.tabs.query({}, (tabs) => {
     for (const t of tabs || []) {
       if (
@@ -510,7 +552,10 @@ function broadcastTypingProgress(msg) {
           t.url.includes('127.0.0.1') ||
           t.url.includes('helpotron.dpdns.org'))
       ) {
-        chrome.tabs.sendMessage(t.id, msg).catch(() => {});
+        chrome.tabs.sendMessage(t.id, {
+          action: 'BROADCAST_TYPING_PROGRESS',
+          payload,
+        }).catch(() => {});
       }
     }
   });
