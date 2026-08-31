@@ -466,6 +466,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.action === 'storeSession') {
+    // 08-31: the web app can now log in with a Turnstile captcha, which the
+    // extension popup cannot render (MV3 bans remote scripts). After a web
+    // login the page posts HELPOTRON_SESSION_HANDOFF through the content
+    // script, landing here so the popup keeps working with the same account.
+    const p = message.payload || {};
+    const patch = {};
+    if (p.public_id) patch.public_id = p.public_id;
+    if (p.session_token) patch.session_token = p.session_token;
+    if (p.token) patch.token = p.token;
+    if (p.server) patch.server = p.server;
+    if (patch.public_id && patch.session_token) {
+      chrome.storage.local.set(patch).then(() => {
+        sendResponse({ ok: true });
+      }).catch((err) => {
+        sendResponse({ ok: false, error: String(err) });
+      });
+    } else {
+      sendResponse({ ok: false, error: 'Missing public_id or session_token' });
+    }
+    return true;
+  }
 });
 
 async function launchToDoc(payload) {
@@ -509,8 +532,8 @@ async function launchToDoc(payload) {
         wpm: payload.wpm || 65,
         naturalPauses: payload.naturalPauses !== false,
         jitter: payload.jitter !== false,
-        typoRate: payload.typoRate !== undefined ? payload.typoRate : 0.02,
-        falseStartRate: payload.falseStartRate !== undefined ? payload.falseStartRate : 0.015,
+        typoRate: payload.typoRate !== undefined ? payload.typoRate : 0,
+        falseStartRate: payload.falseStartRate !== undefined ? payload.falseStartRate : 0,
         title: payload.title || 'Assignment Document',
         assignmentId: payload.assignmentId || null,
         targetApp: payload.targetApp || 'universal',

@@ -65,12 +65,11 @@ Periodic deep cognitive pauses ($1.4\text{--}2.6\,\text{s}$) simulated every 60â
 ### 7. Gaussian Keystroke Jitter
 Uses the Box-Muller transform to introduce natural Gaussian variance ($\pm 35\%$) around the base cadence.
 
-### 8. Progressive Fatigue Curve
-Simulates gradual hand fatigue ($+2\%$ slowdown per 500 characters) with full recovery following cognitive breaks.
-
-### 9. Spatial Typos & False Starts
-- **Neighbor Typo Matrix**: Keys are mapped to their physical QWERTY neighbors (e.g. `'e' \to ['w', 'r', 's', 'd']`). When an authentic typo occurs, the engine types the neighbor, hesitates for $110\text{--}250\,\text{ms}$, dispatches `Backspace`, and resumes.
-- **False Starts**: Types 2â€“4 characters of a phrase, pauses with hesitation ($300\text{--}550\,\text{ms}$), backspaces them out with rapid cadence, and types the correct phrase.
+### 8. Timing Jitter (assistive only)
+Gaussian variance around the base cadence. The engine types **accurately**: it never
+injects typographical errors, false starts, or progressive-fatigue slowdowns. Those
+simulate an author's hand in the document's revision history, which is not an
+accessibility property, and are deliberately not part of the product (08-31).
 
 ---
 
@@ -83,8 +82,6 @@ External automation scripts, bookmarklets, and test harnesses can drive the typi
 window._dripwriter.start({
   text: "Assistive typing for students with disabilities.",
   wpm: 65,
-  typoRate: 0.02,          // 2% neighbor typo rate
-  falseStartRate: 0.015,   // 1.5% false start rate
   naturalPauses: true,     // Punctuation and thinking breaks
   jitter: true,            // Gaussian rhythm variance
   title: "Biology Lab Report"

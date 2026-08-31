@@ -227,13 +227,18 @@
       <span id="gdocsTypingBadge" style="display: none; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Typing</span>
     </div>
     
+    <label for="assignmentSelect">Assignment (from your Helpotron workspace):</label>
+    <select id="assignmentSelect" style="margin-bottom: 8px;">
+      <option value="">Select an assignment to type…</option>
+    </select>
+
     <label for="gdocsTabSelect">Target Editor Tab (Docs, Gmail, Notion, LMS):</label>
     <select id="gdocsTabSelect">
       <option value="">Detecting open editor tabs…</option>
     </select>
 
-    <label for="realismPreset">Accessibility Preset:</label>
-    <select id="realismPreset" style="margin-bottom: 8px;">
+    <label for="cadencePreset">Accessibility Preset:</label>
+    <select id="cadencePreset" style="margin-bottom: 8px;">
       <option value="academic">Natural Academic (65 WPM)</option>
       <option value="gentle">Gentle RSI Relief (35 WPM)</option>
       <option value="brisk">Brisk Pro (95 WPM)</option>
@@ -249,25 +254,13 @@
     </div>
 
     <details style="margin-bottom: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px;">
-      <summary style="font-size: 10px; color: #94a3b8; cursor: pointer; font-weight: 600;">⚙️ Realism & Cadence Controls (9 Dimensions)</summary>
+      <summary style="font-size: 10px; color: #94a3b8; cursor: pointer; font-weight: 600;">⏱️ Cadence Controls</summary>
       <div style="margin-top: 6px; font-size: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkTypos" checked> Typos & Fix
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkFalseStarts" checked> False Starts
-        </label>
         <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
           <input type="checkbox" id="chkPauses" checked> Punctuation Pauses
         </label>
         <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
           <input type="checkbox" id="chkJitter" checked> Timing Jitter
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkBurst" checked> Burst Rhythm
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkFatigue" checked> Fatigue Curve
         </label>
       </div>
     </details>
