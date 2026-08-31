@@ -70,7 +70,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     preferred_model: Mapped[str] = mapped_column(String(64), default="deepseek-v4-flash")
-    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id", use_alter=True, name="fk_users_org_id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(32), default="member")  # admin, moderator, member
     stripe_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
