@@ -100,6 +100,60 @@ export default function LaunchToDocModal({
     }
   };
 
+  /* QA 08-31 a11y: this dialog is `aria-modal`, but nothing moved focus into
+   * it, Escape did not dismiss it, and Tab walked straight out into the page
+   * behind the overlay — measured: on open, document.activeElement was still
+   * <body>. A keyboard or screen-reader user had no way in and no way out but
+   * the X button. Move focus in on open, keep Tab inside, close on Escape, and
+   * hand focus back to whatever opened the dialog. */
+  const panelRef = useRef(null);
+  const restoreFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    restoreFocusRef.current = document.activeElement;
+
+    const SELECTOR =
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),' +
+      'textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const focusables = () =>
+      [...(panelRef.current?.querySelectorAll(SELECTOR) || [])].filter(
+        (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement,
+      );
+
+    // land on the panel itself rather than the close button, so the dialog's
+    // heading is what a screen reader announces first
+    panelRef.current?.focus();
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose?.();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      const back = restoreFocusRef.current;
+      if (back && typeof back.focus === 'function' && document.contains(back)) back.focus();
+    };
+  }, [isOpen, onClose]);
+
   // 1. Detect Extension & Google Docs / Editor tabs via postMessage bridge
   useEffect(() => {
     if (!isOpen) return;
@@ -281,6 +335,29 @@ export default function LaunchToDocModal({
     reader.readAsText(file);
   };
 
+  /* ARIA radiogroup keyboard model. `role="radio"` promises arrow-key
+   * navigation with a roving tabindex — Tab enters the group once and lands on
+   * the checked option, arrows move between options. Declaring the role without
+   * this behaviour would be worse than plain buttons, so it is implemented for
+   * both choosers. */
+  const onRadioKeyDown = (e, ids, currentId, select) => {
+    const NEXT = ['ArrowRight', 'ArrowDown'];
+    const PREV = ['ArrowLeft', 'ArrowUp'];
+    if (![...NEXT, ...PREV, 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const i = ids.indexOf(currentId);
+    const at = e.key === 'Home' ? 0
+      : e.key === 'End' ? ids.length - 1
+      : NEXT.includes(e.key) ? (i + 1) % ids.length
+      : (i - 1 + ids.length) % ids.length;
+    const nextId = ids[at];
+    select(nextId);
+    e.currentTarget
+      .closest('[role="radiogroup"]')
+      ?.querySelector(`[data-radio-id="${nextId}"]`)
+      ?.focus();
+  };
+
   if (!isOpen) return null;
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -293,7 +370,11 @@ export default function LaunchToDocModal({
       aria-modal="true"
       aria-labelledby="launch-modal-title"
     >
-      <div className="relative w-full max-w-2xl bg-[var(--bg-surface)] border border-violet-500/30 rounded-2xl shadow-2xl shadow-violet-950/40 overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative w-full max-w-2xl bg-[var(--bg-surface)] border border-violet-500/30 rounded-2xl shadow-2xl shadow-violet-950/40 overflow-hidden flex flex-col max-h-[90vh] outline-none @container"
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] bg-gradient-to-r from-violet-950/40 to-transparent">
           <div className="flex items-center gap-3">
@@ -314,7 +395,7 @@ export default function LaunchToDocModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition"
+            className="p-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -324,7 +405,7 @@ export default function LaunchToDocModal({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
           {/* Assignment Context Banner */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.03] border border-[var(--border-subtle)] text-xs">
+          <div className="flex flex-col @sm:flex-row @sm:items-center @sm:justify-between gap-2 p-3.5 rounded-xl bg-white/[0.03] border border-[var(--border-subtle)] text-xs">
             <div className="flex items-center gap-2.5 min-w-0">
               <FileText className="w-4 h-4 text-violet-400 shrink-0" />
               <span className="font-semibold text-[var(--text-primary)] truncate">
@@ -341,10 +422,10 @@ export default function LaunchToDocModal({
           {/* Target App & Tab Selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+              <span id="launch-target-label" className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
                 <Keyboard className="w-3.5 h-3.5 text-violet-400" />
                 Target Editor &amp; Tab
-              </label>
+              </span>
               {extensionConnected ? (
                 <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
                   <CheckCircle2 className="w-3 h-3" /> Extension Ready (v2.2.0)
@@ -356,7 +437,11 @@ export default function LaunchToDocModal({
               )}
             </div>
 
-            <div className="grid grid-cols-4 gap-2 mb-2">
+            <div
+              role="radiogroup"
+              aria-labelledby="launch-target-label"
+              className="grid grid-cols-2 @sm:grid-cols-4 gap-2 mb-2"
+            >
               {[
                 { id: 'gdocs', label: 'Google Docs', icon: '📄' },
                 { id: 'gmail', label: 'Gmail', icon: '✉️' },
@@ -366,6 +451,12 @@ export default function LaunchToDocModal({
                 <button
                   key={item.id}
                   type="button"
+                  role="radio"
+                  aria-checked={targetApp === item.id}
+                  data-radio-id={item.id}
+                  tabIndex={targetApp === item.id ? 0 : -1}
+                  onKeyDown={(e) =>
+                    onRadioKeyDown(e, ['gdocs', 'gmail', 'notion', 'universal'], targetApp, setTargetApp)}
                   onClick={() => setTargetApp(item.id)}
                   className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition ${
                     targetApp === item.id
@@ -400,11 +491,15 @@ export default function LaunchToDocModal({
 
           {/* Realism Preset Switcher */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+            <span id="launch-preset-label" className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
               <Gauge className="w-3.5 h-3.5 text-violet-400" />
               Accessibility Cadence Preset
-            </label>
-            <div className="grid grid-cols-4 gap-2">
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="launch-preset-label"
+              className="grid grid-cols-2 @sm:grid-cols-4 gap-2"
+            >
               {[
                 { id: 'academic', label: 'Natural Academic', wpm: 65, desc: 'Balanced 65 WPM' },
                 { id: 'gentle', label: 'Gentle RSI Relief', wpm: 35, desc: 'Slow 35 WPM' },
@@ -414,6 +509,12 @@ export default function LaunchToDocModal({
                 <button
                   key={p.id}
                   type="button"
+                  role="radio"
+                  aria-checked={preset === p.id}
+                  data-radio-id={p.id}
+                  tabIndex={preset === p.id ? 0 : -1}
+                  onKeyDown={(e) =>
+                    onRadioKeyDown(e, ['academic', 'gentle', 'brisk', 'motor'], preset, applyPreset)}
                   onClick={() => applyPreset(p.id)}
                   className={`p-2.5 rounded-xl border text-left transition ${
                     preset === p.id
@@ -436,6 +537,8 @@ export default function LaunchToDocModal({
             </div>
             <input
               type="range"
+              aria-label="Typing speed in words per minute"
+              aria-valuetext={`${wpm} words per minute`}
               min="20"
               max="130"
               step="5"
@@ -523,6 +626,8 @@ export default function LaunchToDocModal({
                   </div>
                   <input
                     type="range"
+                    aria-label="Realistic neighbour typo rate, percent"
+                    aria-valuetext={`${typoRate} percent`}
                     min="0"
                     max="6"
                     step="0.5"
@@ -610,7 +715,7 @@ export default function LaunchToDocModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-black/20 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-black/20 flex flex-col @sm:flex-row @sm:items-center @sm:justify-between gap-3">
           <button
             type="button"
             onClick={handleCopyFallback}
