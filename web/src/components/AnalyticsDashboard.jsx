@@ -77,12 +77,19 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
   if (error) return <GlassCard className="text-rose-400 text-xs">{error}</GlassCard>;
   if (!analytics || (analytics.session_count === 0 && analytics.total_study_time_hours === 0)) {
     return (
-      <div className="clean-card p-10 text-center space-y-3">
-        <Activity className="w-9 h-9 text-[var(--text-muted)] mx-auto" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">No Study Activity Recorded Yet</h3>
+      <div className="panel px-5 py-6 text-center space-y-3">
+        <span className="empty-state__icon mx-auto"><Activity className="w-4 h-4" aria-hidden="true" /></span>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">No study activity yet</h3>
         <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
-          Complete an assignment, study flashcards, or generate practice tests with your agent to see your real study hours and performance metrics.
+          Study hours and performance metrics appear here once you complete an assignment or generate flashcards or practice tests.
         </p>
+        <button
+          type="button"
+          onClick={() => onExplainWithAgent?.('academic_progress_summary')}
+          className="seg-item mx-auto !bg-[var(--accent-subtle)] !text-[var(--text-primary)] border !border-[color-mix(in_srgb,var(--accent)_34%,transparent)]"
+        >
+          Start with your agent
+        </button>
       </div>
     );
   }

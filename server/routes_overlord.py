@@ -263,6 +263,40 @@ async def get_assignment_full_view(assignment_id: int, request: Request, db: Ses
     }
 
 
+@router.get("/assignment/{assignment_id}/launch-doc-payload")
+async def get_assignment_launch_doc_payload(assignment_id: int, request: Request, db: Session = Depends(get_db)):
+    """Returns cleaned, formatted text payload ready for assistive typing into Google Docs."""
+    user = _get_current_user(request, db)
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id, Assignment.user_id == user.id).first()
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+
+    progress = assignment.progress or {}
+    do_it_work = progress.get("do_it_work")
+    materials = _assignment_materials(db, assignment_id)
+
+    text_to_type = do_it_work or ""
+    if not text_to_type and materials:
+        for m in materials:
+            content = m.get("content_text") or m.get("content") or ""
+            if content:
+                text_to_type = content
+                break
+    if not text_to_type:
+        text_to_type = assignment.prompt or ""
+
+    word_count = len(text_to_type.split())
+    return {
+        "status": "success",
+        "assignment_id": assignment.id,
+        "title": assignment.title,
+        "text": text_to_type,
+        "word_count": word_count,
+        "estimated_minutes_at_65wpm": max(1, round(word_count / 65.0)),
+        "subject": progress.get("subject") or progress.get("course") or "",
+    }
+
+
 # ─── Chat threads (operator 08-26) ──────────────────────────────────────────
 @router.get("/agent/threads")
 async def list_chat_threads(request: Request, db: Session = Depends(get_db)):
@@ -961,7 +995,7 @@ def _tk_balance(user) -> float:
     return float((user.settings or {}).get("token_balance", 0) or 0)
 
 
-async def _conversational_fallback(user, text: str, db: Session = None, node: str = "my_agent", assignment_context: Optional[str] = None) -> str:
+async def _conversational_fallback(user, text: str, db: Session = None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None) -> str:
     """When an action executed silently, give a genuine answer to the user's
     question instead of a canned 'Task completed.' (operator 08-26).
 
@@ -986,7 +1020,7 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
     try:
         raw = await call_llm(
             system_prompt=(
-                agent_system_prompt(user, node=node)
+                agent_system_prompt(user, node=node, ctx=humanizer_ctx)
                 + (assignment_context or "")
                 + "The user sent a message and no specific tool action applied. "
                   "Answer helpfully and briefly: acknowledge what you can (or can't "
@@ -1002,6 +1036,22 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
         return (raw or "").strip()[:1000]
     except Exception:
         return ""
+
+
+async def _apply_detection_standard(settings: Dict[str, Any], user, text: str, node: str,
+                                    humanizer_ctx: Optional[dict], db) -> str:
+    """AI Detection Standard gate (operator 08-31): when the standard is on for
+    this chat (scoped global/subject/assignment), score the reply with the
+    enabled detectors and rewrite it until it meets the min-human% rate —
+    best-effort, capped at 2 rewrites, and it never breaks the chat."""
+    from .humanize_skill import ensure_human_standard
+    try:
+        final, _attempts = await ensure_human_standard(
+            text, settings, node=node, ctx=humanizer_ctx, db=db, user_id=user.public_id,
+        )
+        return final or text
+    except Exception:
+        return text
 
 
 def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
@@ -1180,7 +1230,7 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
-async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None) -> Dict[str, Any]:
+async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
     The model sees the surface's identity + personality + instructions, its
@@ -1240,7 +1290,7 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
     # block so identity/memory/files can never be lost or re-ordered out.
     # Node-scoped: assignment bubbles use the assignment_team surface config
     # (or none at all) — never My Agent's — plus the real assignment context.
-    system_prompt = agent_system_prompt(user, settings, node=node)
+    system_prompt = agent_system_prompt(user, settings, node=node, ctx=humanizer_ctx)
     if assignment_context:
         system_prompt += assignment_context
     system_prompt += (
@@ -1411,6 +1461,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
                             else None)
     agent_node = "assignment_team" if bubble_assignment_id else "my_agent"
     assignment_ctx = ""
+    humanizer_ctx = None
     if bubble_assignment_id:
         try:
             _assign_row = db.query(Assignment).filter(
@@ -1418,8 +1469,20 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             ).first()
             if _assign_row is not None:
                 assignment_ctx = _agent_assignment_context(db, user, _assign_row)
+                # Scoped-setting context (operator 08-31): subject/assignment
+                # humanizer overrides resolve against the REAL bubble — the
+                # names here are what the assignment bubble is grounded with.
+                _prog = _assign_row.progress or {}
+                humanizer_ctx = {
+                    "assignment": _assign_row.title,
+                    "subject": _prog.get("subject") or _prog.get("course") or "",
+                }
+                humanizer_ctx = {k: v for k, v in humanizer_ctx.items() if v}
+                if not humanizer_ctx:
+                    humanizer_ctx = None
         except Exception:
             assignment_ctx = ""  # context injection never breaks the chat
+            humanizer_ctx = None
     # Restore conversation context from the durable store (operator 08-26).
     try:
         from .overlord_agent import load_chat_history_from_db
@@ -1472,7 +1535,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     # 1. LLM decides the intent via OpenRouter (strict JSON contract, regex fallback)
     intent = await _resolve_agent_intent(
         user, settings, payload.text, is_admin, db=db, target_key=thread_key,
-        node=agent_node, assignment_context=assignment_ctx,
+        node=agent_node, assignment_context=assignment_ctx, humanizer_ctx=humanizer_ctx,
     )
 
     # 2. Plain conversational answer — no action needed (still costs tokens: every
@@ -1488,6 +1551,12 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         if _is_degenerate_reply(reply_text):
             reply_text = ("I didn't catch that — mind rephrasing? "
                           "(Reply generation came back empty.)")
+        # AI Detection Standard (operator 08-31): prose replies only — status
+        # markers and error text are never rewritten.
+        if reply_text and not reply_text.startswith(("⚠️", "✅", "❌")):
+            reply_text = await _apply_detection_standard(
+                settings, user, reply_text, node=agent_node, humanizer_ctx=humanizer_ctx, db=db,
+            )
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         return {"status": "success", "message": agent_reply, "execution": None, "reply": reply_text,
@@ -1579,6 +1648,18 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             reply_text = _LLM_EMPTY_HONEST
         else:
             reply_text = f"✅ {result_msg}"
+    # AI Detection Standard (operator 08-31): score/redo the prose body. The
+    # cosmetic ✅ prefix is re-attached; warning/error text is never rewritten.
+    _det_prefix = ""
+    _det_body = reply_text
+    if not reply_text.startswith(("⚠️", "❌")):
+        if reply_text.startswith("✅ "):
+            _det_prefix = "✅ "
+            _det_body = reply_text[2:]
+        _det_body = await _apply_detection_standard(
+            settings, user, _det_body, node=agent_node, humanizer_ctx=humanizer_ctx, db=db,
+        )
+        reply_text = _det_prefix + _det_body
     agent_reply = _chat_reply(
         db, user, thread_key,
         text=reply_text,

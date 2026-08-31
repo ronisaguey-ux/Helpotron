@@ -194,7 +194,22 @@ def agent_persona_block(user, settings: Optional[Dict[str, Any]] = None, node: s
     )
 
 
-def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: str = "my_agent") -> str:
+def _gptzero_assurance(ctx: Optional[Dict[str, Any]]) -> str:
+    """Operator 08-31: after each assignment delivery, tell the user to scan
+    the finished assignment for free at GPTZero for extra assurance. Only in
+    chats that carry an assignment context, once, at the final delivery."""
+    if not ctx or not ctx.get("assignment"):
+        return ""
+    return (
+        "\nASSIGNMENT EXTRA ASSURANCE (operator instruction): when you deliver "
+        "the FINISHED assignment (the final deliverable reply, not follow-up "
+        "questions), append ONE short line telling the user to scan it for free "
+        "at gptzero.me for extra assurance. Never add it to intermediate "
+        "explanations, drafts or follow-up answers.\n"
+    )
+
+
+def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: str = "my_agent", ctx: Optional[Dict[str, Any]] = None) -> str:
     """CANONICAL agent system prompt, node-scoped (operator 08-28): educational
     gate per surface + identity + memory + full loaded-file contents + today's
     real date.
@@ -212,6 +227,8 @@ def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: s
     identity/memory/files pieces.
     """
     settings = dict(user.settings or {}) if settings is None else dict(settings or {})
+    from .humanize_skill import humanizer_block as _humanizer_block  # lazy: no import cycle
+    from .humanize_skill import sample_voice_block as _sample_voice_block
     name = agent_name(user)
     today_label = datetime.now().strftime("%A, %B %-d, %Y")
     if node == "my_agent":
@@ -284,4 +301,4 @@ def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: s
         f"(the first-reply diagnostics rule above does not apply to a direct single question).\n"
         f"• This never weakens the educational-mode school-only scope or the assignment guard — "
         f"both stay fully in force.\n"
-    )
+    ) + _humanizer_block(settings, node, ctx) + _sample_voice_block(settings, node, ctx) + _gptzero_assurance(ctx)

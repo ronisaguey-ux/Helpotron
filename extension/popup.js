@@ -622,10 +622,148 @@ chatScrapeContextBtn.addEventListener('click', async () => {
   await cacheChat([...cur, { sender: 'agent', text: note }]);
 });
 
+// ── Launch to Doc Assistive Typing Controller ───────────────────────────────
+const gdocsTabSelect = document.getElementById('gdocsTabSelect');
+const wpmSlider = document.getElementById('wpmSlider');
+const wpmValue = document.getElementById('wpmValue');
+const btnStartLaunchToDoc = document.getElementById('btnStartLaunchToDoc');
+const typingProgressSection = document.getElementById('typingProgressSection');
+const typingStatusText = document.getElementById('typingStatusText');
+const typingPercentText = document.getElementById('typingPercentText');
+const typingProgressBar = document.getElementById('typingProgressBar');
+const btnPauseTyping = document.getElementById('btnPauseTyping');
+const btnCancelTyping = document.getElementById('btnCancelTyping');
+const gdocsTypingBadge = document.getElementById('gdocsTypingBadge');
+
+let isTypingPaused = false;
+let activeGDocsTabId = null;
+
+if (wpmSlider && wpmValue) {
+  wpmSlider.addEventListener('input', () => {
+    wpmValue.innerText = `${wpmSlider.value} WPM`;
+  });
+}
+
+async function refreshGDocsTabs() {
+  if (!gdocsTabSelect) return;
+  chrome.runtime.sendMessage({ action: 'getGDocsTabs' }, (resp) => {
+    gdocsTabSelect.innerHTML = '';
+    const tabs = (resp && resp.tabs) || [];
+    if (tabs.length === 0) {
+      gdocsTabSelect.innerHTML = '<option value="new">✨ Open New Google Doc (docs.new)</option>';
+      return;
+    }
+    tabs.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || 'Google Doc').slice(0, 32)}`;
+      if (t.active) opt.selected = true;
+      gdocsTabSelect.appendChild(opt);
+    });
+    const newOpt = document.createElement('option');
+    newOpt.value = 'new';
+    newOpt.innerText = '➕ Open New Google Doc (docs.new)';
+    gdocsTabSelect.appendChild(newOpt);
+  });
+}
+
+if (btnStartLaunchToDoc) {
+  btnStartLaunchToDoc.addEventListener('click', async () => {
+    const targetVal = gdocsTabSelect ? gdocsTabSelect.value : null;
+    const targetTabId = targetVal && targetVal !== 'new' ? Number(targetVal) : null;
+    const wpm = Number(wpmSlider ? wpmSlider.value : 65) || 65;
+
+    // Get text from chat or recent prompt or clipboard
+    let textToType = (chatInputEl && chatInputEl.value.trim()) || '';
+    if (!textToType) {
+      // Fallback: check storage for last generated text or prompt
+      const last = (await chrome.storage.local.get('helpotron_last_doc_payload'))['helpotron_last_doc_payload'];
+      textToType = (last && last.text) || 'Helpotron Assistive Typing: Document ready for editing and review.';
+    }
+
+    setStatus('⌨️ Launching assistive typing in Google Doc…');
+    if (typingProgressSection) typingProgressSection.style.display = 'block';
+    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
+
+    const resp = await chrome.runtime.sendMessage({
+      action: 'launchToDoc',
+      payload: {
+        tabId: targetTabId,
+        text: textToType,
+        wpm,
+        naturalPauses: true,
+        jitter: true,
+        title: 'Assignment Work',
+      }
+    }).catch((e) => ({ ok: false, error: String(e) }));
+
+    if (!resp?.ok) {
+      setStatus(`❌ ${resp?.error || 'Could not start assistive typing'}`);
+      if (typingProgressSection) typingProgressSection.style.display = 'none';
+      if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
+    } else {
+      activeGDocsTabId = resp.tabId;
+      setStatus(`⌨️ Assistive typing active at ${wpm} WPM.`);
+    }
+  });
+}
+
+if (btnPauseTyping) {
+  btnPauseTyping.addEventListener('click', async () => {
+    if (isTypingPaused) {
+      await chrome.runtime.sendMessage({ action: 'resumeTyping', tabId: activeGDocsTabId });
+      btnPauseTyping.innerText = '⏸ Pause';
+      isTypingPaused = false;
+      if (typingStatusText) typingStatusText.innerText = 'Typing…';
+    } else {
+      await chrome.runtime.sendMessage({ action: 'pauseTyping', tabId: activeGDocsTabId });
+      btnPauseTyping.innerText = '▶ Resume';
+      isTypingPaused = true;
+      if (typingStatusText) typingStatusText.innerText = 'Paused';
+    }
+  });
+}
+
+if (btnCancelTyping) {
+  btnCancelTyping.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ action: 'cancelTyping', tabId: activeGDocsTabId });
+    if (typingProgressSection) typingProgressSection.style.display = 'none';
+    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
+    setStatus('⏹ Assistive typing cancelled.');
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'unparseable_report') {
     showUnparseable(msg.reason);
+  } else if (msg.action === 'TYPING_PROGRESS') {
+    if (typingProgressSection) typingProgressSection.style.display = 'block';
+    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
+    const pct = msg.percentage || 0;
+    if (typingProgressBar) typingProgressBar.style.width = `${pct}%`;
+    if (typingPercentText) typingPercentText.innerText = `${pct}% (${msg.wordsTyped || 0}/${msg.totalWords || 0} w)`;
+    if (typingStatusText) {
+      if (msg.status === 'completed') {
+        typingStatusText.innerText = 'Completed ✨';
+        setTimeout(() => {
+          if (typingProgressSection) typingProgressSection.style.display = 'none';
+          if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
+        }, 4000);
+      } else if (msg.status === 'paused') {
+        typingStatusText.innerText = 'Paused';
+      } else if (msg.status === 'cancelled') {
+        typingStatusText.innerText = 'Cancelled';
+        setTimeout(() => {
+          if (typingProgressSection) typingProgressSection.style.display = 'none';
+          if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
+        }, 1500);
+      } else {
+        typingStatusText.innerText = `Typing at ${msg.wpm || 65} WPM…`;
+      }
+    }
   }
 });
 
+refreshGDocsTabs();
 init();
+

@@ -44,15 +44,15 @@ const FEATURES = [
   },
   {
     Icon: HistoryIcon,
-    title: 'An honest turn-in ledger',
-    body: 'Mark work turned in and keep a timestamped record of what you actually submitted, with undo. Your own audit trail.',
+    title: 'An honest completion ledger',
+    body: 'Mark work completed and keep a timestamped record of what you actually submitted, with undo. Your own audit trail.',
   },
 ];
 
 const STEPS = [
   { n: '01', title: 'Create an account', body: 'A public ID and a password. No email, no card.' },
   { n: '02', title: 'Bring your coursework', body: 'Paste an assignment dump, or let the browser extension capture it.' },
-  { n: '03', title: 'Work and turn in', body: 'Bubbles group it, your agent drafts, the ledger records it.' },
+  { n: '03', title: 'Work and mark complete', body: 'Bubbles group it, your agent drafts, the ledger records it.' },
 ];
 
 const BTN_PRIMARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold transition cursor-pointer glow-accent';
@@ -83,9 +83,7 @@ function ProductPreview() {
       <div className="grid gap-4 md:grid-cols-[1.05fr_1fr]">
         {/* left: subject bubbles */}
         <div className="space-y-2.5">
-          <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
-            Bubbles
-          </div>
+          <div className="section-label">Bubbles</div>
           {bubbles.map(({ subject, count, tone }) => (
             <div
               key={subject}
@@ -108,9 +106,7 @@ function ProductPreview() {
 
         {/* right: agent thread + ledger */}
         <div className="space-y-2.5">
-          <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
-            Assignment agent
-          </div>
+          <div className="section-label">Assignment agent</div>
           <div className="group p-3 space-y-2.5">
             <div className="flex items-start gap-2">
               <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[var(--text-muted)]" />
@@ -131,7 +127,7 @@ function ProductPreview() {
           <div className="group flex items-center gap-2 p-2.5">
             <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
             <span className="text-[11px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
-              Essay draft — turned in
+              Essay draft — completed
             </span>
             <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">14:02</span>
           </div>
@@ -179,41 +175,52 @@ function Pricing({ onOpenAuth }) {
               p.popular ? 'border-[rgba(139,92,246,0.4)] shadow-[0_0_0_1px_rgba(139,92,246,0.35),0_12px_40px_rgba(139,92,246,0.18)]' : ''
             }`}
           >
-            {p.popular && (
-              <span className="absolute -top-2.5 left-5 chip chip-accent text-[10px] py-0.5 shadow-md">Most popular</span>
-            )}
-            {p.requires_sms && (
-              <span className="absolute -top-2.5 right-5 chip chip-emerald text-[10px] py-0.5 font-mono shadow-md">
-                1-Time · SMS
-              </span>
-            )}
-            <div className="space-y-1">
+            {/* Badges sit IN the header row. They used to hang off the card at
+                -top-2.5, one on the left edge and one on the right, so the SMS
+                badge floated in the gutter between two cards and read as
+                belonging to neither (08-30). */}
+            <div className="flex items-start justify-between gap-2 min-h-[1.5rem]">
               <div className="text-sm font-semibold text-[var(--text-primary)]">{p.name}</div>
-              <div className="text-xs text-[var(--text-muted)] leading-relaxed min-h-[2.5rem]">{p.tagline}</div>
+              {p.popular && (
+                <span className="chip chip-accent text-[10px] py-0.5 shrink-0">Most popular</span>
+              )}
+              {p.requires_sms && (
+                <span className="chip chip-emerald text-[10px] py-0.5 shrink-0">SMS verified</span>
+              )}
             </div>
+            {/* Price directly under the name in every card. It previously sat
+                below a free-text tagline of wildly different lengths, so the
+                one number a visitor compares across the row was never on the
+                same baseline twice. */}
             <div className="flex items-baseline gap-1">
               <span className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
                 ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
               </span>
               <span className="text-xs text-[var(--text-muted)]">/{p.is_trial ? '7 days' : 'mo'}</span>
             </div>
-            <div className="text-xs text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-3">
+            <div className="text-xs text-[var(--text-muted)] leading-relaxed">{p.tagline}</div>
+            {/* mt-auto pins the differentiator + CTA to a common bottom edge. */}
+            <div className="text-xs text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-3 mt-auto">
               <div className="font-semibold text-[var(--text-primary)] font-mono">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
             </div>
             <button
               type="button"
               onClick={onOpenAuth}
-              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-sm)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 mt-auto cursor-pointer`}
+              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-sm)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 cursor-pointer`}
             >
-              {p.is_trial ? 'Start Free Trial (SMS)' : p.price_cents === 0 ? 'Start Free' : `Choose ${p.name}`}
+              {p.is_trial ? 'Start free trial' : p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
             </button>
           </div>
         ))}
       </div>
 
-      <div className="mt-4 text-center text-xs text-[var(--text-muted)] font-mono">
-        💡 1 Task Token = $0.01 in usage (transcription, multi-agent passes, vision). Credits apply as $1.00 off at checkout.
-      </div>
+      <p className="mt-4 flex items-start justify-center gap-2 text-xs text-[var(--text-muted)] max-w-[62ch] mx-auto">
+        <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--accent-2)]" aria-hidden="true" />
+        <span>
+          <span className="font-mono">1 task token = $0.01</span> of usage (transcription, multi-agent
+          passes, vision). Credits apply as <span className="font-mono">$1.00</span> off at checkout.
+        </span>
+      </p>
 
       <ul className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 max-w-[900px] mx-auto">
         {(plans[0]?.capabilities || []).map((c) => (
@@ -231,7 +238,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
   const openAuth = () => { if (onOpenAuth) onOpenAuth(); };
 
   return (
-    <div id="main-content" className="min-h-screen text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
+    <div id="main-content" className="landing-atmos min-h-screen text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       {/* Mobile perf (08-28): backdrop-blur-xl repaints the underlying canvas
           on every scroll frame (~5ms/frame on low-end phones). Above sm the
@@ -271,21 +278,23 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
 
       {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-12 sm:pb-16">
-        <div className="max-w-[760px] mx-auto text-center space-y-6">
-          <span className="aurora-chip text-xs">
-            <Sparkles className="w-3.5 h-3.5 text-[var(--accent-2)]" /> Your autonomous academic operating system
-          </span>
+        <div className="max-w-[980px] mx-auto text-center space-y-6">
           {/* Static headline: readable on first paint. The previous typewriter
               revealed this line a word at a time and delayed the page's whole
-              value proposition behind an animation. */}
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05]">
-            Every assignment, organized.<br />
-            <span className="text-aurora">Every deadline, handled.</span>
+              value proposition behind an animation. Size is fluid rather than a
+              step scale so neither clause can break mid-phrase between 768 and
+              1440 (08-30); inline because it is one deliberate override. */}
+          <h1
+            className="font-extrabold tracking-tight leading-[1.05]"
+            style={{ fontSize: 'clamp(2rem, 5.2vw, 3.75rem)', textWrap: 'balance' }}
+          >
+            <span className="block">Every assignment, organized.</span>
+            <span className="block text-aurora">Every deadline, handled.</span>
           </h1>
-          <p className="text-base sm:text-lg text-[var(--text-muted)] max-w-xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg text-[var(--text-muted)] max-w-[62ch] mx-auto leading-relaxed">
             Helpotron captures your coursework, sorts it into subject bubbles, and gives
             every assignment its own AI agent — while keeping an honest ledger of what
-            you actually turned in.
+            you actually completed.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
             <button type="button" onClick={openAuth} className={`${BTN_PRIMARY} px-7 py-3.5 text-base w-full sm:w-auto`}>
@@ -318,6 +327,9 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
 
       {/* ── Features ────────────────────────────────────────────────────────── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-8">
+          What you actually get
+        </h2>
         <div className="grid gap-4 md:grid-cols-3">
           {FEATURES.map(({ Icon, title, body }) => (
             <div key={title} className="panel p-5 space-y-3">
@@ -362,7 +374,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
           <div className="flex items-center gap-2">
             <AnimatedLogo size="sm" showWordmark={false} />
-            <span>© 2026 Helpotron Automator · Built for students</span>
+            <span>© 2026 Helpotron Automator</span>
           </div>
           <div className="flex items-center gap-4">
             {onOpenPrivacy && (

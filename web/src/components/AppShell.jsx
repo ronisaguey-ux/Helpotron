@@ -780,7 +780,7 @@ export default function AppShell({
               )}
               <div className="min-w-0">
                 <h1 className="page-head__title truncate">{current?.label ?? 'Helpotron'}</h1>
-                <p className="page-head__sub truncate">
+                <p className="page-head__sub line-clamp-2">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
                   {activeView === 'monitors' && 'Live traffic, activity, data lake & cost'}
@@ -812,22 +812,20 @@ export default function AppShell({
           full-page Privacy Policy / Terms of Service views — previously only
           reachable via ⌘K (demo-mode search index only) or a single Settings
           button, leaving the 'terms' route effectively unreachable. */}
-      <footer role="contentinfo" className="text-center text-[10px] text-slate-600 px-4 pt-2 pb-20 md:pb-4">
-        <div className="flex items-center justify-center gap-2 flex-wrap">
+      <footer role="contentinfo" className="text-center text-[11px] text-[var(--text-muted)] px-4 pt-2 pb-20 md:pb-4">
+        <div className="flex items-center justify-center gap-x-5 gap-y-1 flex-wrap">
           <span>© 2026 Helpotron Automator</span>
-          <span aria-hidden="true">·</span>
           <button
             type="button"
             onClick={() => onNavigate('privacy')}
-            className="hover:text-slate-300 underline underline-offset-2 transition cursor-pointer"
+            className="hover:text-[var(--text-primary)] underline underline-offset-2 transition cursor-pointer"
           >
             Privacy Policy
           </button>
-          <span aria-hidden="true">·</span>
           <button
             type="button"
             onClick={() => onNavigate('terms')}
-            className="hover:text-slate-300 underline underline-offset-2 transition cursor-pointer"
+            className="hover:text-[var(--text-primary)] underline underline-offset-2 transition cursor-pointer"
           >
             Terms of Service
           </button>

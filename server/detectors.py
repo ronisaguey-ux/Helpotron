@@ -309,10 +309,20 @@ _SCORE_CACHE: Dict[str, Tuple[float, float, List[DetectorResult], bool]] = {}
 CACHE_TTL_SECONDS = 86400  # 24 hours
 
 
-async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5) -> Tuple[float, List[DetectorResult], bool]:
-    """Score text using all detectors. Return average score, detailed results, and pass/fail."""
+async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5,
+                     detectors: Optional[List[str]] = None) -> Tuple[float, List[DetectorResult], bool]:
+    """Score text using all detectors. Return average score, detailed results, and pass/fail.
+
+    detectors: optional allow-list of registry names (operator 08-31, the AI
+    Detection Standard setting). The two in-process heuristic scorers always
+    run; API detectors outside the allow-list are skipped. None = all
+    registered detectors (existing behavior). The score cache keys on the
+    selection too, so toggling a detector never reuses a stale average.
+    """
     import hashlib
-    text_hash = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+    allowed = {str(n).lower() for n in detectors} if detectors is not None else None
+    select_tag = "|".join(sorted(allowed)) if allowed else ""
+    text_hash = hashlib.sha256(f"{text.strip()}|{select_tag}".encode("utf-8")).hexdigest()
     cached = _SCORE_CACHE.get(text_hash)
     if cached is not None:
         avg_score, ts, results, passed = cached
@@ -321,6 +331,9 @@ async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5) -
         del _SCORE_CACHE[text_hash]  # stale — recompute below
 
     results = await registry.detect_all(text)
+    if allowed is not None:
+        results = [r for r in results
+                   if r.name in allowed or r.name in ("perplexity_cadence", "burstiness_analyzer")]
     if not results:
         return 0.0, [], False
     avg_score = sum(r.score for r in results) / len(results)

@@ -1,10 +1,7 @@
-// Complete Assignment Workspace with Subagent Team, Task Graph & Context Dock
-// (operator 08-27: the hardcoded sample SUBAGENTS / TASKS / "next action"
-// mock was removed — everything renders from the real card payload and the
-// /api/assignment/{id}/full-view response, with honest empty states.)
 import React, { useEffect, useRef, useState } from 'react';
-import { Users, Circle, Clock, Paperclip, BookOpen, Brain, Sparkles, EyeOff, Send, RefreshCw, AlertCircle } from 'lucide-react';
+import { Users, Circle, Clock, Paperclip, BookOpen, Brain, Sparkles, EyeOff, Send, RefreshCw, AlertCircle, Keyboard } from 'lucide-react';
 import api from '../api.js';
+import LaunchToDocModal from './LaunchToDocModal.jsx';
 
 const SUBAGENT_STATUS_LABEL = {
   completed: 'COMPLETE',
@@ -27,6 +24,7 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
   const [full, setFull] = useState(null);
   const [fullMaterials, setFullMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showLaunchToDocModal, setShowLaunchToDocModal] = useState(false);
   // Team bubble chat (operator 08-28): the SAME thread MyAgentView's assignment
   // bubbles use (/api/agent/chat/{assignment_id} + POST /api/agent/chat with
   // assignment_id) — so a message sent here lands in the same conversation.
@@ -164,6 +162,17 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
           <p className="text-xs text-[var(--text-muted)]">
             Due: {due} • Teacher: {teacher} • Status: {status}
           </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLaunchToDocModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-violet-600/25 transition cursor-pointer border border-violet-400/30"
+          >
+            <Sparkles className="w-4 h-4 text-violet-200" />
+            <span>Launch to Doc</span>
+          </button>
         </div>
       </div>
 
@@ -352,6 +361,12 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack }) => {
         <Sparkles className="w-3.5 h-3.5" />
         Sub-agent, rubric, dump and chat data is loaded live from the server — it reflects only activity that was really recorded. (operator 08-28)
       </div>
+
+      <LaunchToDocModal
+        isOpen={showLaunchToDocModal}
+        assignment={{ ...(full || {}), ...assignment }}
+        onClose={() => setShowLaunchToDocModal(false)}
+      />
     </div>
   );
 };

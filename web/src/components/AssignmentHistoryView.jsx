@@ -261,7 +261,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           <Archive className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
           <div>
             <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto mt-1">
-              New assignments record into this archive once turned in; completed coursework appears here automatically.
+              New assignments record into this archive once completed; finished coursework lands here automatically.
             </p>
           </div>
         </SectionCard>
@@ -359,7 +359,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           onClose={() => { setShowNewAssignment(false); setCreateNotice(''); }}
           onCreated={({ assignment_id, rubric_saved }) => {
             setShowNewAssignment(false);
-            setCreateNotice(`✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once turned in.`);
+            setCreateNotice(`✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once completed.`);
             setTimeout(() => setCreateNotice(''), 6000);
             fetchHistory(subjectFilter);
           }}

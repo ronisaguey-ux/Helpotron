@@ -1,16 +1,17 @@
-// Turn In & Assignment History (feature 08-27)
-// "Mark assignments as turned in — when that happens, the assignment
+// Completed & Assignment History (feature 08-27; relabeled 08-31)
+// "Mark assignments as completed — when that happens, the assignment
 // automatically moves into the assignment history."
-// Self-contained section: active assignments with a "Turn in" button, and a
-// history list of turned-in assignments with their real turn-in timestamp.
-// Undo puts the assignment back in the active list. No grades are shown or
-// fabricated here — history only ever contains REAL turned-in assignments.
+// Self-contained section: active assignments with a "Mark as Completed"
+// button, and a history list of completed assignments with their real
+// completion timestamp. Undo puts the assignment back in the active list.
+// No grades are shown or fabricated here — history only ever contains REAL
+// completed assignments.
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api.js';
 import SectionCard from './SectionCard.jsx';
+import LaunchToDocModal from './LaunchToDocModal.jsx';
 import {
   History as HistoryIcon,
-  Send,
   RotateCcw,
   Calendar,
   BookOpen,
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 
 /* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
@@ -46,6 +48,7 @@ export default function AssignmentTurnInView({ userId }) {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);
   const [error, setError] = useState('');
+  const [launchDocItem, setLaunchDocItem] = useState(null);
 
   const fetchLists = useCallback(async () => {
     setLoading(true);
@@ -71,13 +74,13 @@ export default function AssignmentTurnInView({ userId }) {
 
   const handleTurnIn = async (assignment) => {
     const label = assignment.title || `assignment #${assignment.id}`;
-    if (!window.confirm(`Turn in "${label}"? It will move into your assignment history.`)) return;
+    if (!window.confirm(`Mark "${label}" as completed? It will move into your assignment history.`)) return;
     setActionId(assignment.id);
     try {
       await api.turnInAssignment(assignment.id, true);
       await fetchLists();
     } catch (e) {
-      setError('Turn-in failed — please try again.');
+      setError('Marking as completed failed — please try again.');
     } finally {
       setActionId(null);
     }
@@ -110,13 +113,13 @@ export default function AssignmentTurnInView({ userId }) {
             </div>
             <div>
               <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                Turn In &amp; Assignment History
+                Completed &amp; Assignment History
                 <span className="aurora-chip tight">
-                  {`${historyList.length} turned in`}
+                  {`${historyList.length} completed`}
                 </span>
               </h3>
               <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                Turn an assignment in to move it out of active and into your history ledger.
+                Mark an assignment as completed to move it out of active and into your history ledger.
               </p>
             </div>
           </div>
@@ -159,7 +162,7 @@ export default function AssignmentTurnInView({ userId }) {
               <div className="clean-card p-5 text-center space-y-2">
                 <BookOpen className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
                 <p className="text-xs text-[var(--text-muted)]">
-                  No active assignments — everything is either turned in or not on file yet.
+                  No active assignments — everything is either completed or not on file yet.
                 </p>
               </div>
             ) : (
@@ -186,26 +189,37 @@ export default function AssignmentTurnInView({ userId }) {
                         {a.status || 'tracked'}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleTurnIn(a)}
-                      disabled={actionId === a.id}
-                      className="self-end inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 text-[11px] font-semibold bg-[rgba(16,185,129,0.15)] hover:bg-[rgba(16,185,129,0.25)] text-emerald-300 border border-[rgba(16,185,129,0.32)] transition cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                    >
-                      {actionId === a.id ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5" />
-                      )}
-                      Turn in
-                    </button>
+                    <div className="self-end flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLaunchDocItem(a)}
+                        className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3 py-1.5 text-[11px] font-semibold bg-violet-500/10 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/25 transition cursor-pointer"
+                        title="Launch to Google Doc with assistive typing"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-violet-300" />
+                        Launch to Doc
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTurnIn(a)}
+                        disabled={actionId === a.id}
+                        className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 text-[11px] font-semibold bg-[rgba(16,185,129,0.15)] hover:bg-[rgba(16,185,129,0.25)] text-emerald-300 border border-[rgba(16,185,129,0.32)] transition cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        {actionId === a.id ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        Mark as Completed
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* ─── Assignment history (turned in) ─────────────────────── */}
+          {/* ─── Assignment history (completed) ─────────────────────── */}
           <div>
             <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <HistoryIcon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
@@ -215,9 +229,9 @@ export default function AssignmentTurnInView({ userId }) {
             {historyList.length === 0 ? (
               <div className="clean-card p-6 text-center space-y-2">
                 <Archive className="w-8 h-8 text-[var(--text-muted)] mx-auto" />
-                <p className="text-xs text-[var(--text-secondary)]">Nothing turned in yet</p>
+                <p className="text-xs text-[var(--text-secondary)]">Nothing completed yet</p>
                 <p className="text-[11px] text-[var(--text-muted)]">
-                  Assignments you turn in appear here with their turn-in timestamp.
+                  Assignments you mark as completed appear here with their completion timestamp.
                 </p>
               </div>
             ) : (
@@ -228,9 +242,9 @@ export default function AssignmentTurnInView({ userId }) {
                       <tr>
                         <th className="py-2.5 px-3">Assignment</th>
                         <th className="py-2.5 px-3">Due Date</th>
-                        <th className="py-2.5 px-3">Turned In</th>
+                        <th className="py-2.5 px-3">Completed</th>
                         <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">History Action</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -254,19 +268,30 @@ export default function AssignmentTurnInView({ userId }) {
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleUndo(h)}
-                              disabled={actionId === h.id}
-                              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[10px] font-medium border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] transition cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                            >
-                              {actionId === h.id ? (
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <RotateCcw className="w-3 h-3" />
-                              )}
-                              Move back
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setLaunchDocItem(h)}
+                                className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[10px] font-semibold bg-violet-500/10 hover:bg-violet-600 text-violet-300 hover:text-white border border-violet-500/25 transition cursor-pointer"
+                                title="Launch to Google Doc with assistive typing"
+                              >
+                                <Sparkles className="w-3 h-3 text-violet-300" />
+                                Launch to Doc
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUndo(h)}
+                                disabled={actionId === h.id}
+                                className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[10px] font-medium border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] transition cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                              >
+                                {actionId === h.id ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="w-3 h-3" />
+                                )}
+                                Move back
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -278,6 +303,13 @@ export default function AssignmentTurnInView({ userId }) {
           </div>
         </>
       )}
+
+      {/* Launch to Doc Accessibility Modal */}
+      <LaunchToDocModal
+        isOpen={!!launchDocItem}
+        assignment={launchDocItem}
+        onClose={() => setLaunchDocItem(null)}
+      />
     </SectionCard>
   );
 }

@@ -410,9 +410,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           so this is one control row: a recessed segmented track with a single
           raised thumb, plus the admin identity chip. Emoji were standing in for
           icons; real icons carry the meaning and counts became chips. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="os-scroll overflow-x-auto max-w-full">
-          <div className="segmented" role="tablist" aria-label="Admin sections">
+      <div className="flex items-center gap-3">
+        <div className="os-scroll overflow-x-auto min-w-0 flex-1">
+          <div className="segmented w-max" role="tablist" aria-label="Admin sections">
             {[
               ['bulk_users', 'User Operations', Users, listUsers.length],
               ['costs', 'Cost & Usage', CircleDollarSign, null],
@@ -437,7 +437,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
             ))}
           </div>
         </div>
-        <span className="chip chip-accent font-mono shrink-0">
+        <span className="chip chip-accent font-mono shrink-0 hidden lg:inline-flex">
           <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
           ADMIN: {userId || 'anonymous'}
         </span>
@@ -458,7 +458,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               /* 08-30 de-clunk: with nothing selected this box used to render
                  the whole control grid plus a huge disabled "Apply to 0"
                  button — an empty-operations wall. One honest hint instead. */
-              <div className="empty-state">
+              <div className="empty-state empty-state--compact">
                 <span className="empty-state__icon"><Users className="w-4 h-4" aria-hidden="true" /></span>
                 <p>Select users in the table below to change their plan, adjust credits, or tag them together.</p>
               </div>
@@ -528,7 +528,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           </div>
 
           {/* User Table */}
-          <div className="clean-card p-5 overflow-x-auto">
+          <div className="clean-card p-5">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <input
                 type="text"
@@ -557,10 +557,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 </button>
               </div>
             </div>
-            <table className="w-full min-w-[640px] text-left text-xs">
+            <div className="os-scroll overflow-x-auto -mx-5 px-5">
+            <table className="data-table w-full min-w-[720px]">
               <thead>
-                <tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)] text-[11px] uppercase tracking-wider">
-                  <th className="pb-3">
+                <tr>
+                  <th>
                     <input
                       type="checkbox"
                       aria-label="Select all users for bulk operation"
@@ -571,15 +572,15 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       checked={selectedUserIds.length === listUsers.length && listUsers.length > 0}
                     />
                   </th>
-                  <th className="pb-3">User ID</th>
-                  <th className="pb-3">Plan</th>
-                  <th className="pb-3">Credits</th>
-                  <th className="pb-3">Token Multiplier</th>
-                  <th className="pb-3 text-right">Actions</th>
+                  <th>User ID</th>
+                  <th>Plan</th>
+                  <th>Credits</th>
+                  <th>Token Multiplier</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
                 {listUsers.length === 0 ? (
-                  <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
+                  <tbody className="font-mono">
                     <tr>
                       <td colSpan={6} className="py-6 text-center text-[var(--text-muted)] text-xs">
                         {safeUsers.length <= 1
@@ -589,7 +590,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                     </tr>
                   </tbody>
                 ) : visibleUsers.length === 0 ? (
-                  <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
+                  <tbody className="font-mono">
                     <tr>
                       <td colSpan={6} className="py-6 text-center text-[var(--text-muted)] text-xs">
                         No users match “{userSearch}”.
@@ -600,7 +601,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   userGroups.map(({ key, users: groupUsers }) => {
                     const isCollapsed = isSearching ? false : !!collapsedGroups[key];
                     return (
-                      <tbody key={key} className={`divide-y divide-[var(--border-subtle)] font-mono ${isCollapsed ? 'border-b border-[var(--border-subtle)]' : ''}`}>
+                      <tbody key={key} className={`font-mono ${isCollapsed ? 'border-b border-[var(--border-subtle)]' : ''}`}>
                         {/* Group header — click to collapse/expand this letter */}
                         <tr className="bg-[var(--bg-surface-elevated)] border-y border-[var(--border-subtle)]">
                           <td colSpan={6} className="py-0">
@@ -665,7 +666,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                           </div>
                         </td>
                         <td className="py-3 uppercase text-[11px] font-bold text-[var(--accent)]">{u.plan || 'none'}</td>
-                        <td className="py-3 font-mono text-[11px]">
+                        <td className="py-3 font-mono text-[11px] whitespace-nowrap">
                           <span className="text-emerald-300 font-bold">{Number(u.token_balance ?? 0).toLocaleString()} tk</span>
                           <span className="mx-1.5 text-[var(--text-muted)]">·</span>
                           <span className="text-[var(--accent)] font-bold">{Number(u.credits ?? 0).toLocaleString()} cr</span>
@@ -813,7 +814,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </div>
                             )}
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] w-11 text-right">plan</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] w-[64px] text-right shrink-0">plan</span>
                               <select
                                 value={u.plan || 'none'}
                                 onChange={async (e) => {
@@ -833,7 +834,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </select>
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-emerald-400/80 w-11 text-right">tokens</span>
+                              <span className="text-[9px] uppercase tracking-wider text-emerald-400/80 w-[64px] text-right shrink-0">tokens</span>
                               <input
                                 type="number"
                                 step="1"
@@ -892,7 +893,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </button>
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-[var(--accent)]/80 w-11 text-right">credits</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--accent)]/80 w-[64px] text-right shrink-0">credits</span>
                               <input
                                 type="number"
                                 step="1"
@@ -948,7 +949,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                             </div>
                             {/* Admin → user message (operator 08-28): pops on their screen */}
                             <div className="flex items-center gap-1 w-full sm:w-auto sm:ml-11">
-                              <span className="text-[9px] uppercase tracking-wider text-cyan-400/80 w-11 text-right shrink-0">message</span>
+                              <span className="text-[9px] uppercase tracking-wider text-cyan-400/80 w-[64px] text-right shrink-0">message</span>
                               <input
                                 type="text"
                                 placeholder="Direct message… pops up on their screen"
@@ -978,6 +979,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   })
                 )}
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -1209,7 +1211,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                     <th className="pb-3 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
+                <tbody className="font-mono">
                   {usersCosts.map((u) => {
                     const currentVal = multiplierMap[u.public_id] !== undefined ? multiplierMap[u.public_id] : u.token_cost_multiplier;
 
