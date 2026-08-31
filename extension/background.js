@@ -379,6 +379,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'getGDocsTabs') {
+    chrome.tabs.query({ url: '*://docs.google.com/*' }, (tabs) => {
+      sendResponse({
+        ok: true,
+        tabs: (tabs || []).map((t) => ({
+          id: t.id,
+          title: t.title || 'Google Doc',
+          url: t.url,
+          active: t.active,
+          windowId: t.windowId,
+        })),
+      });
+    });
+    return true;
+  }
+
+  if (message.action === 'launchToDoc') {
+    launchToDoc(message.payload)
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+
+  if (message.action === 'pauseTyping') {
+    controlTypingInTabs('PAUSE_ASSISTIVE_TYPING', message.tabId)
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+
+  if (message.action === 'resumeTyping') {
+    controlTypingInTabs('RESUME_ASSISTIVE_TYPING', message.tabId)
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+
+  if (message.action === 'cancelTyping') {
+    controlTypingInTabs('CANCEL_ASSISTIVE_TYPING', message.tabId)
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+
+  if (message.action === 'TYPING_PROGRESS') {
+    // Broadcast progress to all open Helpotron web app tabs
+    broadcastTypingProgress(message);
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message.action === 'openDataLake') {
     getServer().then((srv) => {
       chrome.tabs.create({ url: srv });
@@ -387,6 +438,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+async function launchToDoc(payload) {
+  let targetTabId = payload && payload.tabId ? Number(payload.tabId) : null;
+
+  if (!targetTabId) {
+    const docsTabs = await chrome.tabs.query({ url: '*://docs.google.com/*' });
+    if (docsTabs.length > 0) {
+      targetTabId = docsTabs[0].id;
+    } else {
+      const newTab = await chrome.tabs.create({ url: 'https://docs.new' });
+      targetTabId = newTab.id;
+      await waitTabComplete(targetTabId, 15000);
+    }
+  }
+
+  const tab = await chrome.tabs.get(targetTabId).catch(() => null);
+  if (tab) {
+    await chrome.tabs.update(targetTabId, { active: true });
+    if (tab.windowId) {
+      await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    }
+  }
+
+  await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ['content.js'] }).catch(() => {});
+  await new Promise((r) => setTimeout(r, 500));
+
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(targetTabId, {
+      action: 'START_ASSISTIVE_TYPING',
+      payload: {
+        text: payload.text || '',
+        wpm: payload.wpm || 65,
+        naturalPauses: payload.naturalPauses !== false,
+        jitter: payload.jitter !== false,
+        title: payload.title || 'Assignment Document',
+        assignmentId: payload.assignmentId || null,
+      },
+    }, (resp) => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, error: chrome.runtime.lastError.message, tabId: targetTabId });
+      } else {
+        resolve({ ok: true, tabId: targetTabId, ...resp });
+      }
+    });
+  });
+}
+
+async function controlTypingInTabs(action, specificTabId) {
+  if (specificTabId) {
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(Number(specificTabId), { action }, (resp) => {
+        resolve({ ok: true, ...resp });
+      });
+    });
+  }
+
+  const docsTabs = await chrome.tabs.query({ url: '*://docs.google.com/*' });
+  for (const t of docsTabs) {
+    chrome.tabs.sendMessage(t.id, { action }).catch(() => {});
+  }
+  return { ok: true };
+}
+
+function broadcastTypingProgress(msg) {
+  chrome.tabs.query({}, (tabs) => {
+    for (const t of tabs || []) {
+      if (
+        t.url &&
+        (t.url.includes('localhost') ||
+          t.url.includes('127.0.0.1') ||
+          t.url.includes('helpotron.dpdns.org'))
+      ) {
+        chrome.tabs.sendMessage(t.id, msg).catch(() => {});
+      }
+    }
+  });
+}
 
 let agentSocket = null;
 let agentSessionId = null;

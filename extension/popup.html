@@ -220,6 +220,45 @@
     </div>
   </div>
 
+  <!-- Launch to Doc Assistive Typing Panel -->
+  <div id="launchToDocPanel" style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <label for="gdocsTabSelect" style="margin: 0; font-size: 11px; font-weight: 700; color: #a78bfa;">✨ Launch to Doc (Assistive Typing)</label>
+      <span id="gdocsTypingBadge" style="display: none; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Typing</span>
+    </div>
+    
+    <label for="gdocsTabSelect">Target Google Docs Tab:</label>
+    <select id="gdocsTabSelect">
+      <option value="">Detecting Google Docs tabs…</option>
+    </select>
+
+    <div style="margin-bottom: 6px;">
+      <label for="wpmSlider">Typing Speed: <span id="wpmValue" style="color: #c4b5fd; font-weight: 700;">65 WPM</span></label>
+      <input id="wpmSlider" type="range" min="30" max="120" value="65" style="padding: 0; margin-bottom: 6px;">
+    </div>
+
+    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+      <button id="btnStartLaunchToDoc" class="btn-primary" style="background: #7c3aed; border-color: rgba(139, 92, 246, 0.4);">
+        ⌨️ Start Assistive Typing in Doc
+      </button>
+    </div>
+
+    <!-- Active Typing Controls & Progress -->
+    <div id="typingProgressSection" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(167, 139, 250, 0.3); font-size: 11px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #ddd6fe; font-weight: 600;">
+        <span id="typingStatusText">Typing…</span>
+        <span id="typingPercentText">0%</span>
+      </div>
+      <div style="background: rgba(255,255,255,0.1); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+        <div id="typingProgressBar" style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: 0%; height: 100%; transition: width 0.2s;"></div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button id="btnPauseTyping" class="btn-secondary" style="padding: 4px; font-size: 10px; flex: 1;">⏸ Pause</button>
+        <button id="btnCancelTyping" class="btn-secondary" style="padding: 4px; font-size: 10px; flex: 1; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">⏹ Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Extension Update Alert Banner -->
   <div id="updateBanner" style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
     <div style="display: flex; align-items: center; justify-content: space-between;">

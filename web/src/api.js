@@ -147,7 +147,9 @@ export async function request(endpoint, options = {}) {
     } catch {
       // raw body is already a readable message — keep it
     }
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = response.status; // so callers can branch on 401 (session expiry) etc.
+    throw err;
   }
 
   const data = await response.json();
@@ -249,6 +251,7 @@ export const api = {
   // Assignment Cards & Overlord Dashboard
   assignmentCards: () => request('/api/assignments/cards', { method: 'GET' }),
   assignmentFullView: (id) => request(`/api/assignment/${id}/full-view`, { method: 'GET' }),
+  launchToDocPayload: (id) => request(`/api/assignment/${id}/launch-doc-payload`, { method: 'GET' }),
   materialsFor: (publicId, kind = 'all') => request(`/api/materials/${publicId}/${kind}`, { method: 'GET' }),
   agentMode: () => request('/api/agent/mode', { method: 'GET' }),
   setAgentMode: (mode) => request('/api/agent/mode', { method: 'POST', body: JSON.stringify({ mode, is_session_override: true }) }),

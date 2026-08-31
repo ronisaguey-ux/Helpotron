@@ -351,14 +351,17 @@ export default function App() {
 
   /* Live token balance polling (08-27): /api/me every 25s while logged in —
    * the top-bar widget stays fresh without a page refresh. Stops on 403
-   * (banned — the session UI already shows the suspension, no spam). */
+   * (banned — the session UI already shows the suspension) AND on 401
+   * (dead/expired session — a stale signed-out tab must not spam 401s into
+   * the access log forever; a fresh sign-in remounts and restarts, 08-30). */
   useEffect(() => {
     if (!isLoggedIn) return undefined;
     const pollBalance = async () => {
       try {
         const resp = await fetch(`${serverUrl}/api/me`, { credentials: 'include' });
-        if (resp.status === 403) {
-          // banned — stop polling; the session UI already shows the suspension
+        if (resp.status === 403 || resp.status === 401) {
+          // banned (403) or dead session (401) — stop polling; the session UI
+          // already shows the state, and a fresh sign-in remounts this effect
           clearInterval(timer);
           return;
         }

@@ -568,3 +568,464 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   return true; // keep the channel open for the (sync) response
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── "Launch to Doc" — Assistive Typing Engine for Students with Disabilities ──
+// ═════════════════════════════════════════════════════════════════════════════
+
+class GoogleDocsAssistiveTypingEngine {
+  constructor() {
+    this.state = {
+      isTyping: false,
+      isPaused: false,
+      text: '',
+      currentIndex: 0,
+      totalChars: 0,
+      totalWords: 0,
+      wordsTyped: 0,
+      wpm: 65,
+      naturalPauses: true,
+      jitter: true,
+      assignmentTitle: '',
+      assignmentId: null,
+      hudElement: null,
+    };
+    this.setupListeners();
+  }
+
+  setupListeners() {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (!msg) return;
+      if (msg.action === 'START_ASSISTIVE_TYPING') {
+        this.startTyping(msg.payload || {})
+          .then((res) => sendResponse({ success: true, ...res }))
+          .catch((err) => sendResponse({ success: false, error: String(err) }));
+        return true;
+      }
+      if (msg.action === 'PAUSE_ASSISTIVE_TYPING') {
+        this.pauseTyping();
+        sendResponse({ success: true, status: 'paused' });
+        return true;
+      }
+      if (msg.action === 'RESUME_ASSISTIVE_TYPING') {
+        this.resumeTyping();
+        sendResponse({ success: true, status: 'typing' });
+        return true;
+      }
+      if (msg.action === 'CANCEL_ASSISTIVE_TYPING') {
+        this.cancelTyping();
+        sendResponse({ success: true, status: 'cancelled' });
+        return true;
+      }
+      if (msg.action === 'GET_TYPING_STATUS') {
+        sendResponse({ success: true, ...this.getStatus() });
+        return true;
+      }
+    });
+  }
+
+  getStatus() {
+    const pct = this.state.totalChars > 0 
+      ? Math.min(100, Math.round((this.state.currentIndex / this.state.totalChars) * 100))
+      : 0;
+    return {
+      isTyping: this.state.isTyping,
+      isPaused: this.state.isPaused,
+      currentIndex: this.state.currentIndex,
+      totalChars: this.state.totalChars,
+      wordsTyped: this.state.wordsTyped,
+      totalWords: this.state.totalWords,
+      percentage: pct,
+      wpm: this.state.wpm,
+      assignmentTitle: this.state.assignmentTitle,
+      assignmentId: this.state.assignmentId,
+    };
+  }
+
+  getTargetElement() {
+    // 1. Google Docs hidden text event target iframe
+    const iframe = document.querySelector('iframe.docs-texteventtarget-iframe');
+    if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+      iframe.contentDocument.body.focus();
+      return iframe.contentDocument.body;
+    }
+    // 2. Generic contenteditable
+    const editable = document.querySelector('div[contenteditable="true"], [contenteditable="true"]');
+    if (editable) {
+      editable.focus();
+      return editable;
+    }
+    return document.activeElement || document.body;
+  }
+
+  async insertChar(target, char) {
+    if (char === '\n') {
+      const enterDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+      target.dispatchEvent(enterDown);
+      const enterPress = new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+      target.dispatchEvent(enterPress);
+      
+      try {
+        document.execCommand('insertParagraph', false);
+      } catch (e) {
+        try { document.execCommand('insertText', false, '\n'); } catch (err) {}
+      }
+      
+      const enterUp = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
+      target.dispatchEvent(enterUp);
+      return;
+    }
+
+    try {
+      const beforeInput = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: char,
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(beforeInput);
+    } catch (e) {}
+
+    const keyCode = char.charCodeAt(0);
+    const keydown = new KeyboardEvent('keydown', { key: char, code: `Key${char.toUpperCase()}`, keyCode, which: keyCode, bubbles: true, cancelable: true });
+    target.dispatchEvent(keydown);
+
+    const keypress = new KeyboardEvent('keypress', { key: char, code: `Key${char.toUpperCase()}`, keyCode, which: keyCode, bubbles: true, cancelable: true });
+    target.dispatchEvent(keypress);
+
+    try {
+      document.execCommand('insertText', false, char);
+    } catch (e) {}
+
+    try {
+      const inputEvent = new InputEvent('input', {
+        inputType: 'insertText',
+        data: char,
+        bubbles: true,
+      });
+      target.dispatchEvent(inputEvent);
+    } catch (e) {}
+
+    const keyup = new KeyboardEvent('keyup', { key: char, code: `Key${char.toUpperCase()}`, keyCode, which: keyCode, bubbles: true, cancelable: true });
+    target.dispatchEvent(keyup);
+  }
+
+  calculateDelay(char, nextChar, wpm, usePauses, useJitter) {
+    const baseDelay = Math.max(30, Math.round(12000 / Math.max(20, wpm)));
+    let delay = baseDelay;
+
+    if (useJitter) {
+      const jitterFactor = 0.65 + Math.random() * 0.70;
+      delay = Math.round(delay * jitterFactor);
+    }
+
+    if (usePauses) {
+      if (char === ' ') {
+        delay += Math.floor(70 + Math.random() * 110);
+      } else if (['.', '!', '?'].includes(char)) {
+        delay += Math.floor(350 + Math.random() * 400);
+      } else if ([',', ';', ':', '-'].includes(char)) {
+        delay += Math.floor(150 + Math.random() * 150);
+      } else if (char === '\n') {
+        delay += Math.floor(600 + Math.random() * 500);
+      }
+    }
+
+    return delay;
+  }
+
+  async startTyping(payload) {
+    if (this.state.isTyping) {
+      this.cancelTyping();
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    const text = String(payload.text || '').trim();
+    if (!text) throw new Error('No text to type');
+
+    const words = text.split(/\s+/).filter(Boolean);
+    this.state = {
+      isTyping: true,
+      isPaused: false,
+      text,
+      currentIndex: 0,
+      totalChars: text.length,
+      totalWords: words.length,
+      wordsTyped: 0,
+      wpm: Math.max(20, Math.min(150, Number(payload.wpm) || 65)),
+      naturalPauses: payload.naturalPauses !== false,
+      jitter: payload.jitter !== false,
+      assignmentTitle: payload.title || 'Assignment Document',
+      assignmentId: payload.assignmentId || null,
+      hudElement: null,
+    };
+
+    this.renderFloatingHUD();
+    this.broadcastProgress('started');
+
+    this.runTypingLoop();
+    return this.getStatus();
+  }
+
+  async runTypingLoop() {
+    const target = this.getTargetElement();
+    const chars = Array.from(this.state.text);
+
+    try {
+      for (let i = 0; i < chars.length; i++) {
+        if (!this.state.isTyping) break;
+
+        while (this.state.isPaused && this.state.isTyping) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        if (!this.state.isTyping) break;
+
+        const char = chars[i];
+        const nextChar = chars[i + 1] || '';
+
+        await this.insertChar(target, char);
+        this.state.currentIndex = i + 1;
+
+        if (char === ' ' || char === '\n' || i === chars.length - 1) {
+          const typedSoFar = chars.slice(0, i + 1).join('');
+          this.state.wordsTyped = typedSoFar.split(/\s+/).filter(Boolean).length;
+        }
+
+        if (this.state.naturalPauses && this.state.wordsTyped > 0 && this.state.wordsTyped % 75 === 0 && char === ' ') {
+          this.updateFloatingHUD('Thinking…');
+          await new Promise((r) => setTimeout(r, 1200 + Math.random() * 800));
+        }
+
+        if (i % 3 === 0 || char === ' ' || char === '\n' || i === chars.length - 1) {
+          this.updateFloatingHUD();
+          this.broadcastProgress('typing');
+        }
+
+        const delay = this.calculateDelay(char, nextChar, this.state.wpm, this.state.naturalPauses, this.state.jitter);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+
+      if (this.state.isTyping) {
+        this.state.isTyping = false;
+        this.state.isPaused = false;
+        this.updateFloatingHUD('Completed ✨');
+        this.broadcastProgress('completed');
+        setTimeout(() => this.removeFloatingHUD(), 5000);
+      }
+    } catch (err) {
+      console.error('[Helpotron Assistive Typing Error]', err);
+      this.state.isTyping = false;
+      this.updateFloatingHUD('Error occurred');
+      this.broadcastProgress('error', String(err));
+    }
+  }
+
+  pauseTyping() {
+    if (this.state.isTyping && !this.state.isPaused) {
+      this.state.isPaused = true;
+      this.updateFloatingHUD('Paused ⏸');
+      this.broadcastProgress('paused');
+    }
+  }
+
+  resumeTyping() {
+    if (this.state.isTyping && this.state.isPaused) {
+      this.state.isPaused = false;
+      this.updateFloatingHUD('Resuming… ▶');
+      this.broadcastProgress('resumed');
+    }
+  }
+
+  cancelTyping() {
+    this.state.isTyping = false;
+    this.state.isPaused = false;
+    this.updateFloatingHUD('Cancelled ⏹');
+    this.broadcastProgress('cancelled');
+    setTimeout(() => this.removeFloatingHUD(), 1500);
+  }
+
+  broadcastProgress(status, error = null) {
+    const data = {
+      action: 'TYPING_PROGRESS',
+      status,
+      error,
+      ...this.getStatus(),
+    };
+    try {
+      chrome.runtime.sendMessage(data).catch(() => {});
+    } catch (e) {}
+    try {
+      window.postMessage({ type: 'HELPOTRON_TYPING_PROGRESS', payload: data }, '*');
+    } catch (e) {}
+  }
+
+  renderFloatingHUD() {
+    this.removeFloatingHUD();
+    const hud = document.createElement('div');
+    hud.id = 'helpotron-assistive-hud';
+    hud.style.cssText = `
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 2147483647;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      border-radius: 14px;
+      padding: 14px 18px;
+      box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(139, 92, 246, 0.25);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      min-width: 280px;
+      max-width: 340px;
+      transition: all 0.25s ease;
+      user-select: none;
+    `;
+    this.state.hudElement = hud;
+    document.body.appendChild(hud);
+    this.updateFloatingHUD();
+  }
+
+  updateFloatingHUD(customStatus = null) {
+    const hud = this.state.hudElement || document.getElementById('helpotron-assistive-hud');
+    if (!hud) return;
+
+    const pct = this.state.totalChars > 0
+      ? Math.min(100, Math.round((this.state.currentIndex / this.state.totalChars) * 100))
+      : 0;
+    const statusText = customStatus || (this.state.isPaused ? 'Paused' : `Typing at ${this.state.wpm} WPM…`);
+
+    hud.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">✨</span>
+          <strong style="color: #c4b5fd; font-size: 13px; font-weight: 600;">Launch to Doc</strong>
+        </div>
+        <span style="font-size: 11px; font-family: monospace; color: #94a3b8; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${pct}%</span>
+      </div>
+      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        ${this.state.assignmentTitle || 'Assignment Content'}
+      </div>
+      <div style="background: rgba(255,255,255,0.12); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 10px;">
+        <div style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: ${pct}%; height: 100%; transition: width 0.15s ease;"></div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #cbd5e1;">
+        <span>${statusText} (${this.state.wordsTyped}/${this.state.totalWords} w)</span>
+        <div style="display: flex; gap: 6px;">
+          <button id="helpotron-hud-pause" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: background 0.2s;">
+            ${this.state.isPaused ? '▶ Resume' : '⏸ Pause'}
+          </button>
+          <button id="helpotron-hud-cancel" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: background 0.2s;">
+            ⏹ Cancel
+          </button>
+        </div>
+      </div>
+    `;
+
+    const pauseBtn = hud.querySelector('#helpotron-hud-pause');
+    if (pauseBtn) {
+      pauseBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (this.state.isPaused) this.resumeTyping();
+        else this.pauseTyping();
+      };
+    }
+
+    const cancelBtn = hud.querySelector('#helpotron-hud-cancel');
+    if (cancelBtn) {
+      cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.cancelTyping();
+      };
+    }
+  }
+
+  removeFloatingHUD() {
+    const existing = document.getElementById('helpotron-assistive-hud');
+    if (existing) existing.remove();
+    this.state.hudElement = null;
+  }
+}
+
+// Initialize on docs.google.com
+if (window.location.hostname.includes('docs.google.com')) {
+  window.__helpotron_gdocs_typing_engine = new GoogleDocsAssistiveTypingEngine();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── Web App PostMessage Bridge (for localhost / helpotron web app) ──────────
+// ═════════════════════════════════════════════════════════════════════════════
+if (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname.includes('helpotron')
+) {
+  window.__helpotron_extension_installed = true;
+  window.postMessage({ type: 'HELPOTRON_EXTENSION_READY', version: '2.1.0' }, '*');
+
+  window.addEventListener('message', async (event) => {
+    if (event.source !== window || !event.data || !event.data.type) return;
+
+    if (event.data.type === 'HELPOTRON_PING') {
+      window.postMessage({
+        type: 'HELPOTRON_PONG',
+        version: '2.1.0',
+        capabilities: ['scrape', 'agent', 'launch_to_doc'],
+      }, '*');
+    } else if (event.data.type === 'HELPOTRON_GET_GDOCS_TABS') {
+      try {
+        chrome.runtime.sendMessage({ action: 'getGDocsTabs' }, (resp) => {
+          window.postMessage({
+            type: 'HELPOTRON_GDOCS_TABS_RESULT',
+            requestId: event.data.requestId,
+            tabs: (resp && resp.tabs) || [],
+            error: resp && resp.error,
+          }, '*');
+        });
+      } catch (err) {
+        window.postMessage({
+          type: 'HELPOTRON_GDOCS_TABS_RESULT',
+          requestId: event.data.requestId,
+          tabs: [],
+          error: String(err),
+        }, '*');
+      }
+    } else if (event.data.type === 'HELPOTRON_LAUNCH_TO_DOC') {
+      try {
+        chrome.runtime.sendMessage({
+          action: 'launchToDoc',
+          payload: event.data.payload,
+        }, (resp) => {
+          window.postMessage({
+            type: 'HELPOTRON_LAUNCH_TO_DOC_RESULT',
+            requestId: event.data.requestId,
+            result: resp,
+          }, '*');
+        });
+      } catch (err) {
+        window.postMessage({
+          type: 'HELPOTRON_LAUNCH_TO_DOC_RESULT',
+          requestId: event.data.requestId,
+          error: String(err),
+        }, '*');
+      }
+    } else if (event.data.type === 'HELPOTRON_CONTROL_TYPING') {
+      try {
+        chrome.runtime.sendMessage({
+          action: event.data.action,
+          tabId: event.data.tabId,
+        });
+      } catch (e) {}
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.action === 'TYPING_PROGRESS') {
+      window.postMessage({
+        type: 'HELPOTRON_TYPING_PROGRESS',
+        payload: msg,
+      }, '*');
+    }
+  });
+}

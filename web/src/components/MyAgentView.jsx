@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import {
   Send, Paperclip, Mic, ShieldCheck, Shield, Flame, RefreshCw,
   Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, ChevronUp, User as UserIcon, Undo2, Pin, Pencil,
-  Settings2, ArrowUpRight,
+  Settings2, ArrowUpRight, Sparkles, Keyboard,
 } from 'lucide-react';
 import api, { getCsrfToken } from '../api.js';
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
@@ -21,6 +21,7 @@ import { normalizeCards, computeAssignmentEvents, formatAssignmentEvent, EVENT_M
 import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
 import AgentConfigsSidebar, { DEFAULT_IDENTITIES, DEFAULT_SKILLS } from './AgentConfigsSidebar.jsx';
+import LaunchToDocModal from './LaunchToDocModal.jsx';
 
 const FILE_KINDS = [
   { key: 'skill', label: 'Skill', icon: '🧩', hint: 'Teach the agent new abilities (.md/.txt)' },
@@ -81,6 +82,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     },
   ]);
   const [input, setInput] = useState('');
+  const [launchToDocTarget, setLaunchToDocTarget] = useState(null);
 
   /* ── CONFIGS sidebar (operator 08-28): SEE / ADD / SELECT every custom
    * agent config. Renders as a fixed column at xl+, a slide-over drawer at
@@ -512,7 +514,16 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     api.getAgentMemory().then((d) => setMemory(d.entries || [])).catch(() => {});
     api.listAgentFiles().then((d) => setFiles(d.files || [])).catch(() => {});
     const poll = setInterval(() => {
-      api.agentPermissionsPending().then((d) => setPendingPermissions(d.pending || [])).catch(() => {});
+      api.agentPermissionsPending()
+        .then((d) => setPendingPermissions(d.pending || []))
+        .catch((e) => {
+          /* Dead/expired session (401) or ban (403): stop polling so a stale
+           * signed-out tab doesn't spam 401s into the access log forever
+           * (08-30, burst-detector noise). A fresh sign-in remounts this view
+           * and restarts the poll. */
+          if (e && (e.status === 401 || e.status === 403)) clearInterval(poll);
+          /* transient network — next tick retries */
+        });
     }, 12000);
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1333,11 +1344,21 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                       </div>
                       <div className="text-xs font-semibold text-white leading-relaxed">{m.text}</div>
                       {m.detail && <div className="text-xs text-[var(--text-muted)]">{m.detail}</div>}
-                      <div className="pt-1">
+                      <div className="pt-1 flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setLaunchToDocTarget({
+                            assignment: m.assignment,
+                            text: m.assignment?.prompt || m.text || '',
+                          })}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-sm)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm transition cursor-pointer border border-violet-400/30"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-violet-200" /> Launch to Doc
+                        </button>
                         <button
                           type="button"
                           onClick={() => onGoTo('overview')}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
                         >
                           <ArrowUpRight className="w-3.5 h-3.5" /> View in Dashboard
                         </button>
@@ -1356,21 +1377,31 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   }`}>
                     {m.text}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
+                  <div className="flex items-center gap-2.5 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
                     <span>{m.time}</span>
                     {!isUser && m.text && (
-                      <button
-                        type="button"
-                        onClick={() => speakText(m.id, m.text)}
-                        className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
-                          speakingMessageId === m.id
-                            ? 'text-amber-400 font-semibold animate-pulse'
-                            : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
-                        }`}
-                        title={speakingMessageId === m.id ? 'Stop audio' : 'Listen to this reply'}
-                      >
-                        {speakingMessageId === m.id ? '⏹ Stop' : '🔊 Listen'}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => speakText(m.id, m.text)}
+                          className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
+                            speakingMessageId === m.id
+                              ? 'text-amber-400 font-semibold animate-pulse'
+                              : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
+                          }`}
+                          title={speakingMessageId === m.id ? 'Stop audio' : 'Listen to this reply'}
+                        >
+                          {speakingMessageId === m.id ? '⏹ Stop' : '🔊 Listen'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLaunchToDocTarget({ text: m.text })}
+                          className="hover:text-violet-300 text-violet-400/90 transition cursor-pointer flex items-center gap-1 text-[10px]"
+                          title="Launch this response to Google Doc with assistive typing"
+                        >
+                          <Sparkles className="w-3 h-3" /> Launch to Doc
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1479,6 +1510,14 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           </div>
         </div>
       )}
+
+      {/* Launch to Doc Accessibility Modal */}
+      <LaunchToDocModal
+        isOpen={!!launchToDocTarget}
+        assignment={launchToDocTarget?.assignment}
+        initialText={launchToDocTarget?.text || ''}
+        onClose={() => setLaunchToDocTarget(null)}
+      />
     </div>
   );
 }

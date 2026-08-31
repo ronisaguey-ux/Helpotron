@@ -1220,7 +1220,9 @@ header.sticky {
   padding: var(--space-3);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
-  vertical-align: middle;
+  /* rows whose action cell stacks controls are far taller than the label cells;
+     middle-aligning those left cells reads as a dead gap (08-30). */
+  vertical-align: top;
 }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr { transition: background 0.15s ease; }
@@ -1340,3 +1342,48 @@ header.sticky {
 html[data-ui="minimal"] .group,
 html[data-ui="minimal"] .group-strong,
 html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
+
+/* Aliases for chip names already used in markup (AdminAdvancedDashboard,
+   AdminPanels, AnonymousLanding, AssignmentCardDashboard) that had no CSS
+   behind them — semantic class names were shipped without a definition, so
+   those chips rendered as bare text. */
+.chip-emerald { color: #6ee7b7; background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.34); }
+.chip-amber   { color: #fcd34d; background: rgba(245,158,11,0.14); border: 1px solid rgba(245,158,11,0.34); }
+.chip-emerald, .chip-amber {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 9999px;
+  font-size: var(--fs-micro); font-weight: 600; line-height: 1.35; white-space: nowrap;
+}
+
+/* Compact empty state — a row, not a column. An empty panel must not reserve
+   a screen-height box for one sentence. */
+.empty-state--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  text-align: left;
+}
+.empty-state--compact .empty-state__icon { width: 30px; height: 30px; flex-shrink: 0; }
+.empty-state--compact p { margin: 0; }
+
+/* ── Landing atmosphere ──────────────────────────────────────────────────────
+ * Brand lighting, not a hero gradient. better-design's review rules flag the
+ * "glass panels over a radial-glow background" stack as a generated-page tell,
+ * so this is a single accent spill hugging the TOP EDGE that dies out by ~560px
+ * — the same gesture as .page-head::before, so signed-out and signed-in read as
+ * one product instead of two. No centred blob behind the headline. */
+.landing-atmos { position: relative; isolation: isolate; }
+.landing-atmos::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 560px;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(120% 100% at 16% -12%, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 62%),
+    radial-gradient(90% 84% at 90% -20%, color-mix(in srgb, var(--accent-2) 10%, transparent) 0%, transparent 58%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
+}

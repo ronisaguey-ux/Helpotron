@@ -59,10 +59,21 @@
         "https://*.schoology.com/*",
         "https://docs.google.com/*",
         "https://*.notion.so/*",
-        "https://*.notion.site/*"
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://docs.google.com/*",
+      "https://helpotron.dpdns.org/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  }
 }

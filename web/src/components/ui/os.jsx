@@ -136,21 +136,21 @@ export function Slider({ label, value, min = 0, max = 100, onChange, format = (v
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
 export function Tabs({ tabs, active, onChange }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          type="button"
-          onClick={() => onChange(t.key)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-            active === t.key
-              ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="os-scroll overflow-x-auto">
+      <div className="segmented w-max" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active === t.key}
+            onClick={() => onChange(t.key)}
+            className="seg-item"
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -158,10 +158,10 @@ export function Tabs({ tabs, active, onChange }) {
 /* ── EmptyState ───────────────────────────────────────────────────────────── */
 export function EmptyState({ icon = '✦', title, body, action, onAction, actionLabel }) {
   return (
-    <div className="clean-card p-10 text-center space-y-3">
-      <div className="text-3xl text-blue-400/60">{icon}</div>
-      <div className="text-sm font-semibold text-white">{title}</div>
-      {body && <p className="text-xs text-slate-500 max-w-sm mx-auto">{body}</p>}
+    <div className="panel px-5 py-6 text-center space-y-2.5">
+      <div className="empty-state__icon mx-auto text-[var(--accent)]">{icon}</div>
+      <div className="text-sm font-semibold text-[var(--text-primary)]">{title}</div>
+      {body && <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">{body}</p>}
       {(action || actionLabel) && (
         <button
           type="button"

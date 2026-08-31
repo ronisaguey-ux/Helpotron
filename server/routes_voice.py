@@ -15,6 +15,7 @@ These routes wire helpotron to it:
 """
 
 import asyncio
+import logging
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -25,6 +26,22 @@ from .routes_features import get_current_authenticated_user
 
 VOICEBOX = "http://127.0.0.1:17493"
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+logger = logging.getLogger("helpotron")
+
+# Audit 08-30: every failure path here interpolated the upstream error — host,
+# port, status line and body — straight into the HTTPException detail, which
+# the SPA renders to the user. That hands a browser the internal topology and
+# tells the user nothing they can act on. The cause goes to the log; the
+# client gets one sentence about what to do next.
+_VOICE_UNAVAILABLE = (
+    "Voice isn't available right now. The local voice service isn't responding — "
+    "type your message instead, or try again in a moment."
+)
+
+
+def _voice_unavailable(action: str, cause: object) -> HTTPException:
+    logger.warning("voicebox %s failed: %s", action, cause)
+    return HTTPException(503, _VOICE_UNAVAILABLE)
 
 
 async def _voicebox_reachable() -> bool:
@@ -57,13 +74,13 @@ async def voice_transcribe(
                 files={"file": (name, data, mime)},
             )
             if r.status_code != 200:
-                raise HTTPException(503, f"voicebox transcribe failed ({r.status_code}): {r.text[:120]}")
+                raise _voice_unavailable("transcribe", f"HTTP {r.status_code}: {r.text[:200]}")
             text = ((r.json() or {}).get("text") or "").strip()
             if not text:
-                raise HTTPException(502, "voicebox returned an empty transcription")
+                raise _voice_unavailable("transcribe", "empty transcription")
             return {"text": text}
     except httpx.HTTPError as e:
-        raise HTTPException(503, f"voicebox unavailable: {e}")
+        raise _voice_unavailable("request", f"{type(e).__name__}: {e}")
 
 
 class TtsIn(BaseModel):
@@ -92,10 +109,10 @@ async def voice_tts(body: TtsIn, current_user=Depends(get_current_authenticated_
                 },
             )
             if g.status_code != 200:
-                raise HTTPException(503, f"voicebox generate failed ({g.status_code}): {g.text[:120]}")
+                raise _voice_unavailable("generate", f"HTTP {g.status_code}: {g.text[:200]}")
             gid = (g.json() or {}).get("id")
             if not gid:
-                raise HTTPException(502, "voicebox response missing generation id")
+                raise _voice_unavailable("generate", "response missing generation id")
             # generation may be queued — poll the audio endpoint briefly
             for _ in range(20):
                 a = await c.get(f"{VOICEBOX}/audio/{gid}")
@@ -107,6 +124,6 @@ async def voice_tts(body: TtsIn, current_user=Depends(get_current_authenticated_
                 if a.status_code >= 500:
                     break
                 await asyncio.sleep(3)
-            raise HTTPException(504, "voicebox audio not ready in time")
+            raise _voice_unavailable("audio", "not ready within the polling window")
     except httpx.HTTPError as e:
-        raise HTTPException(503, f"voicebox unavailable: {e}")
+        raise _voice_unavailable("request", f"{type(e).__name__}: {e}")

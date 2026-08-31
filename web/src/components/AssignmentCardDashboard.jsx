@@ -1,7 +1,7 @@
-// export target: web/src/components/AssignmentCardDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import AssignmentCard from './AssignmentCard';
 import Button from './Button';
+import LaunchToDocModal from './LaunchToDocModal';
 import api from '../api';
 import { normalizeCards } from '../lib/assignmentEvents';
 import {
@@ -38,6 +38,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [fullViewData, setFullViewData] = useState(null);
+  const [launchToDocAssignment, setLaunchToDocAssignment] = useState(null);
   // Ghost filter (operator 08-28): ids of assignments that were turned in —
   // they live in the history ledger, so they never render in the bubbles.
   const [turnedInIds, setTurnedInIds] = useState(() => new Set());
@@ -302,10 +303,10 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
       {/* LEVEL 1: BUBBLE GRID (NO ASSIGNMENTS SHOWN BY DEFAULT) */}
       {!activeBubble ? (
             <div className="space-y-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-[var(--accent)]" />
+                  <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center flex-wrap gap-x-2 gap-y-1">
+                    <Layers className="w-4 h-4 text-[var(--accent)] shrink-0" />
                     <span>Curriculum Assignment Bubbles</span>
                     {/* Count + noun live in one visual text (08-28): no "(7)"
                         split label, correct pluralization */}
@@ -313,7 +314,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       {`${allBubblesList.length} ${allBubblesList.length === 1 ? 'bubble' : 'bubbles'}`}
                     </span>
                   </h2>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
                     Click any bubble to enter its workspace and view organized assignments and sub-agent teams.
                   </p>
                 </div>
@@ -323,7 +324,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   onClick={() => setIsCreatingBubble(true)}
                   variant="primary"
                   size="sm"
-                  className="shrink-0"
+                  className="shrink-0 self-start"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>New Bubble</span>
@@ -528,6 +529,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             else setSelectedCardId(card.id);
                           }}
                           onChat={(e) => handleAssignmentChat(card, e)}
+                          onLaunchToDoc={() => setLaunchToDocAssignment(card)}
                         />
 
                         {/* AI Multimodal Attachment */}
@@ -546,6 +548,13 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
               )}
             </div>
           )}
+
+      {/* Launch to Doc Accessibility Modal */}
+      <LaunchToDocModal
+        isOpen={!!launchToDocAssignment}
+        assignment={launchToDocAssignment}
+        onClose={() => setLaunchToDocAssignment(null)}
+      />
     </div>
   );
 }

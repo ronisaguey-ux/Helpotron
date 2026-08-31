@@ -104,7 +104,8 @@ export default function AdminPanels({ userId = '' }) {
 
   return (
     <div className="space-y-6">
-      <div className="segmented max-w-fit" role="tablist" aria-label="Control Center sections">
+      <div className="os-scroll overflow-x-auto">
+      <div className="segmented w-max" role="tablist" aria-label="Control Center sections">
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}
@@ -118,6 +119,7 @@ export default function AdminPanels({ userId = '' }) {
             {label}
           </button>
         ))}
+      </div>
       </div>
 
       {activeTab === 'users' && <AdminAdvancedDashboard userId={userId} />}

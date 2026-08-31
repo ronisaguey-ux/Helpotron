@@ -35,7 +35,14 @@ export default function AdminNoticePopup({ isLoggedIn }) {
           return fresh.length ? [...prev, ...fresh] : prev;
         });
       } catch (e) {
-        /* transient 401/network — next tick retries */
+        /* Dead/expired session: stop polling so a signed-out tab doesn't spam
+         * 401s into the access log every 20s (08-30, burst-detector noise).
+         * A fresh sign-in remounts this component and restarts the poll. */
+        if (e && e.status === 401) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          return;
+        }
+        /* transient network — next tick retries */
       }
     };
     poll();
