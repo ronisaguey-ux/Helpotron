@@ -205,10 +205,18 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
           )}
         </div>
 
-        {/* Tab Toggle */}
-        <div className="flex bg-[var(--bg-surface)] p-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] my-5">
+        {/* Tab Toggle. QA 08-31: which tab is active was carried by fill colour
+            alone, and the pair had no roles — a screen reader read out two
+            unlabelled buttons with no selected state (WCAG 4.1.2 / 1.4.1). */}
+        <div
+          className="flex bg-[var(--bg-surface)] p-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] my-5"
+          role="tablist"
+          aria-label="Create an account or sign in"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'signup'}
             onClick={() => { setTab('signup'); setLoginError(''); }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
               tab === 'signup' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -218,6 +226,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'login'}
             onClick={() => { setTab('login'); setLoginError(''); }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
               tab === 'login' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
