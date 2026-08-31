@@ -382,6 +382,7 @@ async def finalize_dump_item(
                     pieces.append(raw)
                 else:
                     errors += 1
+                    note_parts.append(f"Part {idx + 1} returned an empty response.")
             except Exception as e:  # noqa: BLE001 — finalize must still succeed
                 errors += 1
                 note_parts.append(f"Part {idx + 1} generation failed ({type(e).__name__}).")

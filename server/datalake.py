@@ -426,6 +426,10 @@ class DataLakeManager:
             "submission_id": sub_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_hash": _anonymize_id(user_id),
+            # 08-31 fix: the implement route pays the author via raw_user_id;
+            # the newer format dropped it, which would have credited the
+            # operator instead. File stays server-local/private.
+            "raw_user_id": str(user_id),
             "data_type": classified_category,
             "title": auto_title,
             "snippet": clean_text[:200] + ("..." if len(clean_text) > 200 else ""),
