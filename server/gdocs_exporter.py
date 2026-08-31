@@ -74,11 +74,16 @@ class OriginalityComplianceChecker:
 
 
 class HumanizedTypingSimulator:
-    """Generates realistic human typing bursts, pause intervals, and natural revisions."""
+    """Generates paced typing bursts and pause intervals for assistive document export.
 
-    def __init__(self, wpm: int = 65, typo_probability: float = 0.04):
+    Deliberately does NOT simulate typographical errors, false starts, or other
+    authorship artifacts: this engine enters the student's content as-is. The
+    output revision history therefore reflects the text, not a fabricated
+    human hand. See docs/ACCESSIBILITY_TYPING_ENGINE.md.
+    """
+
+    def __init__(self, wpm: int = 65):
         self.wpm = wpm
-        self.typo_probability = typo_probability
 
     def generate_typing_events(self, full_text: str) -> List[Dict[str, Any]]:
         """Splits full text into a sequence of human typing actions."""
@@ -106,23 +111,11 @@ class HumanizedTypingSimulator:
                     chunk_words = words[i:i + chunk_size]
                     chunk_text = (" " if (i > 0 or events) else "") + " ".join(chunk_words)
 
-                    # Simulated typo injection
-                    if random.random() < self.typo_probability and len(chunk_words[0]) > 3:
-                        typo_word = chunk_words[0]
-                        swap_pos = random.randint(1, len(typo_word) - 2)
-                        misspelled = typo_word[:swap_pos] + typo_word[swap_pos + 1] + typo_word[swap_pos] + typo_word[swap_pos + 2:]
-                        
-                        events.append({"action": "insert", "text": (" " if i > 0 else "") + misspelled, "delay_ms": 150})
-                        events.append({"action": "pause", "delay_ms": random.randint(300, 700), "reason": "notice_typo"})
-                        events.append({"action": "delete", "chars": len(misspelled), "delay_ms": 120})
-                        events.append({"action": "insert", "text": typo_word, "delay_ms": 100})
-                        
-                        if len(chunk_words) > 1:
-                            remaining_text = " " + " ".join(chunk_words[1:])
-                            events.append({"action": "insert", "text": remaining_text, "delay_ms": random.randint(80, 220)})
-                    else:
-                        delay = random.randint(90, 240)
-                        events.append({"action": "insert", "text": chunk_text, "delay_ms": delay})
+                    # No simulated typos / false starts: the engine types the
+                    # real text only (assistive-paced, never fabricating
+                    # corrections an author never made).
+                    delay = random.randint(90, 240)
+                    events.append({"action": "insert", "text": chunk_text, "delay_ms": delay})
 
                     i += chunk_size
 

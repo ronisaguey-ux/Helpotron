@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # Database
     database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/data/db/helpotron.db")
 
+    # Login captcha (Cloudflare Turnstile, 08-31). When TURNSTILE_SECRET is
+    # set, /api/login REQUIRES a valid Turnstile token unless the request
+    # carries the operator bypass header (X-Helpotron-Captcha-Bypass) matching
+    # CAPTCHA_BYPASS_SECRET — test bots / E2E harnesses only, never shipped in
+    # client bundles. Both empty = captcha disabled (local dev).
+    turnstile_sitekey: str = os.getenv("TURNSTILE_SITEKEY", "")
+    turnstile_secret: str = os.getenv("TURNSTILE_SECRET", "")
+    captcha_bypass_secret: str = os.getenv("CAPTCHA_BYPASS_SECRET", "")
+
     # CORS
     cors_origins: List[str] = [
         "http://localhost:5173",

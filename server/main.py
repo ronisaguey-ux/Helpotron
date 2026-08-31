@@ -37,6 +37,7 @@ try:
                            SecurityHeadersMiddleware)
     from .admin import require_admin, ResetPasswordRequest
     from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+    from .captcha import captcha_required, has_valid_bypass, verify_turnstile_token
     from .monitors import MonitorMiddleware, run_monitors_loop
 except (ImportError, ValueError):
     from server import agent_session, credits, detectors, ratelimit, study_tools, transcription
@@ -52,6 +53,7 @@ except (ImportError, ValueError):
                                  SecurityHeadersMiddleware)
     from server.admin import require_admin, ResetPasswordRequest
     from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
+    from server.captcha import captcha_required, has_valid_bypass, verify_turnstile_token
     from server.monitors import MonitorMiddleware, run_monitors_loop
 
 
@@ -597,6 +599,7 @@ class LoginIn(BaseModel):
     password: str = Field(..., max_length=256)
     code: Optional[str] = None
     two_factor_code: Optional[str] = None
+    turnstile_token: Optional[str] = None  # 08-31: mandatory once captcha configured
 
 class SignupIn(BaseModel):
     public_id: str = Field(..., max_length=100)
@@ -611,10 +614,29 @@ def get_csrf(response: Response, request: Request):
     return {"csrf_token": token}
 
 
+@app.get("/api/public-config")
+def public_config():
+    """Client-safe config for the login captcha (Turnstile)."""
+    return {
+        "turnstile_sitekey": config.turnstile_sitekey,
+        "captcha_enabled": captcha_required(),
+    }
+
+
 @app.post("/api/login")
 def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user with public_id and password."""
     logger.info("Login attempt for public_id: %s", body.public_id)
+
+    # Login captcha (08-31, operator): once Turnstile is configured every
+    # login must present a valid token unless the operator's test-bot bypass
+    # header is present. Deny-closed: enforcement never fails open.
+    if captcha_required() and not has_valid_bypass(request):
+        remote_ip = request.client.host if request.client else ""
+        if not verify_turnstile_token(body.turnstile_token or "", remote_ip):
+            raise HTTPException(
+                403, "Security check required — complete the captcha and try again."
+            )
 
     # Per-IP login throttle (audit 08-28, LOW): the per-account limiter below
     # keys on the public_id, so 12 bad logins across 12 different accounts

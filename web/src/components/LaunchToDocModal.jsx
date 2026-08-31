@@ -39,15 +39,11 @@ export default function LaunchToDocModal({
   const [loadingPayload, setLoadingPayload] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Realism Preset state
+  // Cadence preset state
   const [preset, setPreset] = useState('academic'); // academic | gentle | brisk | motor
   const [wpm, setWpm] = useState(65);
-  const [typoRate, setTypoRate] = useState(2.0); // %
-  const [falseStarts, setFalseStarts] = useState(true);
   const [naturalPauses, setNaturalPauses] = useState(true);
   const [jitter, setJitter] = useState(true);
-  const [burstRhythm, setBurstRhythm] = useState(true);
-  const [fatigueCurve, setFatigueCurve] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Live typing progress state
@@ -69,34 +65,20 @@ export default function LaunchToDocModal({
     setPreset(newPreset);
     if (newPreset === 'gentle') {
       setWpm(35);
-      setTypoRate(2.5);
-      setFalseStarts(true);
       setNaturalPauses(true);
       setJitter(true);
-      setFatigueCurve(true);
     } else if (newPreset === 'academic') {
       setWpm(65);
-      setTypoRate(1.8);
-      setFalseStarts(true);
       setNaturalPauses(true);
       setJitter(true);
-      setBurstRhythm(true);
-      setFatigueCurve(true);
     } else if (newPreset === 'brisk') {
       setWpm(95);
-      setTypoRate(1.0);
-      setFalseStarts(false);
       setNaturalPauses(true);
       setJitter(false);
-      setBurstRhythm(true);
-      setFatigueCurve(false);
     } else if (newPreset === 'motor') {
       setWpm(50);
-      setTypoRate(3.0);
-      setFalseStarts(true);
       setNaturalPauses(true);
       setJitter(true);
-      setFatigueCurve(true);
     }
   };
 
@@ -276,10 +258,6 @@ export default function LaunchToDocModal({
         wpm: Number(wpm),
         naturalPauses: naturalPauses,
         jitter: jitter,
-        typoRate: typoRate / 100.0,
-        falseStartRate: falseStarts ? 0.015 : 0.0,
-        burstRhythm: burstRhythm,
-        fatigueCurve: fatigueCurve,
         title: assignmentTitle,
         assignmentId: assignmentId,
         targetApp: targetApp,
@@ -389,7 +367,7 @@ export default function LaunchToDocModal({
                 </span>
               </h3>
               <p className="text-xs text-[var(--text-muted)]">
-                Autonomous human-like typing simulation for students with motor or cognitive disabilities
+                Assisted-paced entry of your approved text into any editor, at a comfortable cadence
               </p>
             </div>
           </div>
@@ -489,7 +467,7 @@ export default function LaunchToDocModal({
             </select>
           </div>
 
-          {/* Realism Preset Switcher */}
+          {/* Accessibility Preset Switcher */}
           <div className="space-y-2">
             <span id="launch-preset-label" className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
               <Gauge className="w-3.5 h-3.5 text-violet-400" />
@@ -553,7 +531,7 @@ export default function LaunchToDocModal({
             </div>
           </div>
 
-          {/* 9 Realism Dimensions Drawer */}
+          {/* Cadence Controls Drawer */}
           <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden">
             <button
               type="button"
@@ -562,7 +540,7 @@ export default function LaunchToDocModal({
             >
               <div className="flex items-center gap-2">
                 <Sliders className="w-3.5 h-3.5 text-violet-400" />
-                <span>Fine-Tuned Realism Controls (9 Dimensions)</span>
+                <span>Cadence Controls</span>
               </div>
               <span className="text-[11px] text-violet-400 font-mono">
                 {showAdvanced ? 'Hide −' : 'Customize +'}
@@ -588,53 +566,8 @@ export default function LaunchToDocModal({
                       onChange={(e) => setJitter(e.target.checked)}
                       className="rounded accent-violet-500"
                     />
-                    <span>Gaussian Keystroke Jitter</span>
+                    <span>Timing Jitter</span>
                   </label>
-                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={falseStarts}
-                      onChange={(e) => setFalseStarts(e.target.checked)}
-                      className="rounded accent-violet-500"
-                    />
-                    <span>False Starts &amp; Micro-Backspaces</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={burstRhythm}
-                      onChange={(e) => setBurstRhythm(e.target.checked)}
-                      className="rounded accent-violet-500"
-                    />
-                    <span>Syllable Burst Rhythm</span>
-                  </label>
-                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={fatigueCurve}
-                      onChange={(e) => setFatigueCurve(e.target.checked)}
-                      className="rounded accent-violet-500"
-                    />
-                    <span>Fatigue Curve Simulation</span>
-                  </label>
-                </div>
-
-                <div className="space-y-1.5 pt-2 border-t border-[var(--border-subtle)]">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-[var(--text-secondary)]">Realistic Neighbor Typo Rate:</span>
-                    <span className="font-mono text-violet-400 font-bold">{typoRate}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    aria-label="Realistic neighbour typo rate, percent"
-                    aria-valuetext={`${typoRate} percent`}
-                    min="0"
-                    max="6"
-                    step="0.5"
-                    value={typoRate}
-                    onChange={(e) => setTypoRate(Number(e.target.value))}
-                    className="w-full accent-violet-500 cursor-pointer"
-                  />
                 </div>
               </div>
             )}

@@ -178,7 +178,8 @@ export const api = {
   request,
   
   // Auth endpoints
-  login: (public_id, password, code = null) => request('/api/login', { method: 'POST', body: JSON.stringify({ public_id, password, code, two_factor_code: code }) }),
+  login: (public_id, password, code = null, turnstile_token = null) => request('/api/login', { method: 'POST', body: JSON.stringify({ public_id, password, code, two_factor_code: code, turnstile_token }) }),
+  publicConfig: () => request('/api/public-config', { method: 'GET' }),
   logout: () => request('/api/logout', { method: 'POST' }),
   me: () => request('/api/me', { method: 'GET' }),
   signup: (public_id, password) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password }) }),
