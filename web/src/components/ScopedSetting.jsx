@@ -35,7 +35,6 @@ export const APP_PLACES = [
   { key: 'activity', label: 'Activity' },
   { key: 'history', label: 'Assignments' },
   { key: 'agent', label: 'Agent Chat' },
-  { key: 'ai-workspace', label: 'AI Workspace' },
   { key: 'library', label: 'Library' },
   { key: 'dump', label: 'Assignment Dump' },
   { key: 'datalake', label: 'Data Lake' },

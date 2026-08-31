@@ -62,7 +62,6 @@ const ExtensionInstallView = lazyWithRetry(() => import('./components/ExtensionI
 const ActivityView = lazyWithRetry(() => import('./components/ActivityView.jsx'));
 const AutomationCenter = lazyWithRetry(() => import('./components/AutomationCenter.jsx'));
 const LibraryView = lazyWithRetry(() => import('./components/LibraryView.jsx'));
-const AIWorkspace = lazyWithRetry(() => import('./components/AIWorkspace.jsx'));
 const SettingsApp = lazyWithRetry(() => import('./components/SettingsApp.jsx'));
 const AdminPanels = lazyWithRetry(() => import('./components/AdminPanels.jsx'));
 const InsightsView = lazyWithRetry(() => import('./components/InsightsView.jsx'));
@@ -190,25 +189,40 @@ export default function App() {
   const [navFwd, setNavFwd] = useState([]);
   /* Legacy view → merged view/tab mapping (Experience Rewrite, 08-22).
    * Old standalone destinations fold into the merged views:
-   * analytics/progress/recommendations/cost → insights:<tab>,
-   * wallet/billing/referral/leaderboard → credits:<tab>,
-   * notifications → activity:notifications. */
+   * analytics/progress/recommendations → insights:<tab>,
+   * wallet/billing/referral/leaderboard/cost → credits:<tab>,
+   * notifications → activity:notifications, ai-workspace → agent.
+   * QA 08-31: three of these pointed at tabs that no longer exist —
+   * `cost` at insights:cost (InsightsView only has overview/progress/
+   * recommendations; the cost panel moved into CreditsPricingDashboard) and
+   * `wallet` at credits:balance (that tab was folded into the top bar on
+   * 08-28, so CreditsView silently discarded it). Both now name a tab that
+   * is actually rendered. */
   const LEGACY_VIEWS = {
     analytics: ['insights', 'overview'],
     progress: ['insights', 'progress'],
     recommendations: ['insights', 'recommendations'],
-    cost: ['insights', 'cost'],
-    wallet: ['credits', 'balance'],
+    cost: ['credits', 'plans'],
+    wallet: ['credits', 'plans'],
     billing: ['credits', 'plans'],
     referral: ['credits', 'earn'],
     leaderboard: ['credits', 'earn'],
     notifications: ['activity', 'notifications'],
+    'ai-workspace': ['agent', null],
   };
   const [viewTab, setViewTab] = useState(null);
   const viewKey = activeView === 'overview' && openAssignment
     ? 'assignment'
     : `${activeView}:${viewTab ?? ''}`;
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  /* Which tab the auth modal should land on ('signup' | 'login'). A "Sign in"
+   * CTA that opens the create-account form is a dead end for returning users
+   * (QA 08-31), so every opener now states its intent. */
+  const [authModalMode, setAuthModalMode] = useState('signup');
+  const openAuth = (intent = 'signup') => {
+    setAuthModalMode(intent === 'login' ? 'login' : 'signup');
+    setAuthModalOpen(true);
+  };
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   /* Global command palette: ⌘K / Ctrl+K */
@@ -344,9 +358,9 @@ export default function App() {
     if (authStatus !== 'signedOut') return;
     const params = new URLSearchParams(window.location.search);
     const hash = window.location.hash.toLowerCase();
-    const wantsAuth = params.has('signup') || params.has('signin')
-      || hash === '#signup' || hash === '#signin';
-    if (wantsAuth) setAuthModalOpen(true);
+    const wantsSignin = params.has('signin') || hash === '#signin';
+    const wantsAuth = wantsSignin || params.has('signup') || hash === '#signup';
+    if (wantsAuth) openAuth(wantsSignin ? 'login' : 'signup');
   }, [authStatus]);
 
   /* Live token balance polling (08-27): /api/me every 25s while logged in —
@@ -445,10 +459,12 @@ export default function App() {
     setOpenAssignment(entry.assignment);
   };
 
-  const handleSelectView = (viewKey) => {
+  /* `tab` is optional and wins over the legacy alias table, so a caller can
+   * land on insights:progress without needing a `progress` alias to exist. */
+  const handleSelectView = (viewKey, tab = null) => {
     const mapped = LEGACY_VIEWS[viewKey];
     const nextView = mapped ? mapped[0] : viewKey;
-    const nextTab = mapped ? mapped[1] : null;
+    const nextTab = tab ?? (mapped ? mapped[1] : null);
     /* Same destination (e.g. clicking the current nav item) — no history push. */
     if (nextView === activeView && nextTab === viewTab && !openAssignment) return;
     recordNav();
@@ -528,6 +544,7 @@ export default function App() {
             dialog-on-demand handle — never while the probe is in flight. */}
         <AuthModal
           isOpen={authModalOpen}
+          mode={authModalMode}
           isMandatory={false}
           onClose={() => setAuthModalOpen(false)}
           onLoginSuccess={(u) => {
@@ -546,7 +563,7 @@ export default function App() {
 
         {authStatus === 'signedOut' && (
           <AnonymousLanding
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenAuth={openAuth}
             onOpenPrivacy={() => setShowPrivacyModal(true)}
           />
         )}
@@ -570,7 +587,7 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={() => setAuthModalOpen(true)}
+              onClick={() => openAuth('login')}
               className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg text-xs transition cursor-pointer"
             >
               Sign In or Register →
@@ -620,7 +637,7 @@ export default function App() {
           user={{ credits, public_id: userId, token_balance: tokenBalance }}
           onLogout={handleLogout}
           onOpenSearch={() => setPaletteOpen(true)}
-          onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenAuth={() => openAuth('login')}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
         >
           {/* Backend unreachable banner */}
@@ -681,7 +698,6 @@ export default function App() {
                       }}
                     />
                   )}
-                  {activeView === 'ai-workspace' && <MyAgentView userId={userId} onGoTo={handleSelectView} onTokenBalance={setTokenBalance} />}
                   {activeView === 'library' && <LibraryView user={{ public_id: userId }} onOpenAssignmentBubble={() => setActiveView('agent')} onOpenWorkspace={() => setActiveView('agent')} />}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
 

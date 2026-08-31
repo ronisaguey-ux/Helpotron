@@ -3,8 +3,11 @@ import { api } from '../api.js';
 import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff, X } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
-export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false }) {
-  const [tab, setTab] = useState('signup'); // 'signup' | 'login'
+export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false, mode = 'signup' }) {
+  /* `mode` is the caller's INTENT for this open ('signup' | 'login'). Before
+   * QA 08-31 the tab was hard-coded to 'signup', so every "Sign in" button
+   * and the ?signin=1 deep link opened the create-account form. */
+  const [tab, setTab] = useState(mode === 'login' ? 'login' : 'signup');
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -62,6 +65,16 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   const onPanelAnimEnd = (e) => {
     if (e.animationName === 'aurora-panel-in') setPeReady(true);
   };
+
+  // QA 08-31: the modal is kept mounted between opens, so the initial useState
+  // above only fires once. Re-sync the tab to the caller's intent each time the
+  // modal is (re)opened, otherwise the second "Sign in" click reopens on
+  // whichever tab the user happened to leave behind.
+  // NOTE: must stay above the `if (!isOpen) return null` — hooks run unconditionally.
+  useEffect(() => {
+    if (!isOpen) return;
+    setTab(mode === 'login' ? 'login' : 'signup');
+  }, [isOpen, mode]);
 
   if (!isOpen) return null;
 

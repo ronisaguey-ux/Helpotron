@@ -405,7 +405,6 @@ export function searchIndex() {
   push('view', 'Assignments', 'All coursework', 'history', {});
   push('view', 'Study Tools', 'Guides, flashcards, tests, summaries', 'study', {});
   push('view', 'Automation Center', 'Automations, runs, schedules, templates', 'automation', {});
-  push('view', 'AI Workspace', 'Materials → conversation → context', 'ai-workspace', {});
   push('view', 'Library', 'Files, saved materials, calendar', 'library', {});
   push('view', 'Activity', 'Everything that happened', 'activity', {});
   push('view', 'Insights', 'Analytics, progress, recommendations, cost', 'insights', {});
