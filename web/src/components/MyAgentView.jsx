@@ -1144,8 +1144,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 ⚡ {Math.max(1, Math.round(effort / 100))}/10 ({effortBucket(effort)})
               </span>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
-              Autonomous study & coursework partner · ask anything, draft papers, transcribe lectures
+            {/* QA 08-31: this column is ~274px once the name field and the
+                two chips take their share, so the old 627px-wide tagline was
+                truncated after "coursework partn…" — the reader got the filler
+                half and none of the useful half. Kept to what it actually
+                tells someone standing in front of the chat box. */}
+            <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">
+              Ask anything, draft papers, transcribe lectures.
             </p>
           </div>
         </div>

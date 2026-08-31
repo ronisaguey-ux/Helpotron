@@ -85,10 +85,22 @@ function probe() {
     }
   }
 
-  /* horizontal overflow + nodes escaping the viewport */
+  /* Horizontal overflow. Three patterns in this app overflow BY DESIGN and
+   * drowned the real findings 3:1 in the 08-31 baseline, so they are excluded
+   * (each verified by hand first — see the notes):
+   *   · `sr-only` skip link — clipped to 1px until focused, where it renders
+   *     at its full 198x44 (confirmed by tabbing to it).
+   *   · a clipping ancestor (`overflow: hidden`, e.g. Tailwind `truncate`) —
+   *     the content is deliberately cut and an ellipsis is shown.
+   *   · a child pulled past the padding edge by a negative margin, e.g. the
+   *     SectionCard chevron's `-mr-1.5` optical alignment.
+   * Everything else is reported. */
+  const OVERHANG = /(^|\s)-m[rltbxy]?-/;
   const overflow = [...document.querySelectorAll('body *')]
     .filter((el) => isVisible(el) && el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0)
-    .filter((el) => !/auto|scroll/.test(getComputedStyle(el).overflowX))
+    .filter((el) => !/auto|scroll|hidden|clip/.test(getComputedStyle(el).overflowX))
+    .filter((el) => !el.matches('.sr-only'))
+    .filter((el) => ![...el.children].some((c) => OVERHANG.test(String(c.className || ''))))
     .slice(0, 12)
     .map((el) => ({ el: label(el), scrollW: el.scrollWidth, clientW: el.clientWidth }));
 
@@ -111,8 +123,12 @@ function probe() {
   );
 
   /* fully transparent panels that are meant to be opaque surfaces */
+  /* Panels that name a background token but paint nothing — the `--bg-canvas`
+   * class of bug. `focus:`-prefixed backgrounds (skip link) only paint when
+   * focused, so they are not ghosts. */
   const ghostPanels = [...document.querySelectorAll('[class*="bg-[var("]')]
     .filter(isVisible)
+    .filter((el) => !/(^|\s)(focus|hover|active|group-hover)[:-]/.test(String(el.className || '')))
     .filter((el) => getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)')
     .slice(0, 10)
     .map((el) => ({ el: label(el), cls: String(el.className).slice(0, 90) }));
