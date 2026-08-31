@@ -65,6 +65,10 @@ class User(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     discount_balance: Mapped[float] = mapped_column(Float, default=0.0)
     discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)
+    # Operator 08-31: one-time order discount granted by redeeming someone
+    # else's referral code — 30% for a new user, 15% for an existing one.
+    # Consumed (reset to 0.0) by the next successful payment.
+    referral_discount_pct: Mapped[float] = mapped_column(Float, default=0.0)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -547,6 +551,8 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN discount_spillover FLOAT DEFAULT 0.0"))
                 if "discount_balance" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN discount_balance FLOAT DEFAULT 0.0"))
+                if "referral_discount_pct" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN referral_discount_pct FLOAT DEFAULT 0.0"))
                 if "password_hash" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(128)"))
                 if "password_salt" not in columns_user:
