@@ -92,15 +92,25 @@ function probe() {
    *     at its full 198x44 (confirmed by tabbing to it).
    *   · a clipping ancestor (`overflow: hidden`, e.g. Tailwind `truncate`) —
    *     the content is deliberately cut and an ellipsis is shown.
-   *   · a child pulled past the padding edge by a negative margin, e.g. the
-   *     SectionCard chevron's `-mr-1.5` optical alignment.
+   *   · a child pulled past the padding edge by a negative margin or a negative
+   *     inset, e.g. the SectionCard chevron's `-mr-1.5` optical alignment, or
+   *     the absolutely-positioned `-inset-1` gradient halo behind the logo and
+   *     the nav buttons — a decorative bleed that is supposed to sit outside
+   *     the element it glows around.
    * Everything else is reported. */
-  const OVERHANG = /(^|\s)-m[rltbxy]?-/;
+  const OVERHANG = /(^|\s)-(m[rltbxy]?|inset(-[xy])?|top|right|bottom|left)-/;
   const overflow = [...document.querySelectorAll('body *')]
     .filter((el) => isVisible(el) && el.scrollWidth > el.clientWidth + 2 && el.clientWidth > 0)
     .filter((el) => !/auto|scroll|hidden|clip/.test(getComputedStyle(el).overflowX))
     .filter((el) => !el.matches('.sr-only'))
-    .filter((el) => ![...el.children].some((c) => OVERHANG.test(String(c.className || ''))))
+    .filter((el) => {
+      /* the bleed may be the element itself (SectionCard chevron carries the
+       * negative margin) or any descendant (the logo halo is a grandchild),
+       * and it propagates scrollWidth up every ancestor in between. */
+      const cls = (n) => String(n.className?.baseVal ?? n.className ?? '');
+      if (OVERHANG.test(cls(el))) return false;
+      return ![...el.querySelectorAll('*')].some((c) => OVERHANG.test(cls(c)));
+    })
     .slice(0, 12)
     .map((el) => ({ el: label(el), scrollW: el.scrollWidth, clientW: el.clientWidth }));
 
