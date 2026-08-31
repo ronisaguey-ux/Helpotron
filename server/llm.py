@@ -343,6 +343,12 @@ async def call_llm(
                 if content is None:
                     # reasoning model burned its output cap — retry next candidate
                     raise ValueError("blank content (reasoning cap)")
+                if not str(content).strip():
+                    # 200 with an empty body is a provider backend failure, not a
+                    # real answer (08-31: finalize silently produced no material
+                    # because every chunk came back as "" with a 200) — fall
+                    # through to the next candidate / lane.
+                    raise ValueError("empty content (blank 200)")
                 usage = data.get("usage", {})
                 if db and user_id:
                     await record_routing_telemetry(db, user_id, {**route, "model": cand_id}, usage)
@@ -379,6 +385,8 @@ async def call_llm(
                     resp.raise_for_status()
                 ldata = resp.json()
                 lcontent = ldata["choices"][0]["message"]["content"] or ""
+                if not lcontent.strip():
+                    raise ValueError("lane returned empty content")
                 lusage = ldata.get("usage") or {}
                 if db and user_id:
                     await record_routing_telemetry(db, user_id, route, lusage)
