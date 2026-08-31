@@ -385,7 +385,7 @@ export function CreditsPricingDashboard({
               </div>
             </div>
             <div className="text-left @sm:text-right min-w-0">
-              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5 @sm:py-0">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5">
                 <input
                   type="checkbox"
                   checked={useDiscountCredits}
@@ -433,7 +433,7 @@ export function CreditsPricingDashboard({
             }`}
           >
             <span>Annual Billing</span>
-            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
+            <span className="text-[10px] leading-4 bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
               Save 20%
             </span>
           </button>
