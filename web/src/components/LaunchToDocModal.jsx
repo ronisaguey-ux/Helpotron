@@ -16,6 +16,9 @@ import {
   RefreshCw,
   Gauge,
   Sliders,
+  UploadCloud,
+  FileCode,
+  Zap,
 } from 'lucide-react';
 import api from '../api.js';
 
@@ -26,6 +29,7 @@ export default function LaunchToDocModal({
   initialText = '',
 }) {
   const [targetTabId, setTargetTabId] = useState('');
+  const [targetApp, setTargetApp] = useState('gdocs'); // 'gdocs' | 'gmail' | 'notion' | 'universal'
   const [openTabs, setOpenTabs] = useState([]);
   const [detectingTabs, setDetectingTabs] = useState(false);
   const [extensionConnected, setExtensionConnected] = useState(false);
@@ -35,10 +39,15 @@ export default function LaunchToDocModal({
   const [loadingPayload, setLoadingPayload] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Typing config state
+  // Realism Preset state
+  const [preset, setPreset] = useState('academic'); // academic | gentle | brisk | motor
   const [wpm, setWpm] = useState(65);
+  const [typoRate, setTypoRate] = useState(2.0); // %
+  const [falseStarts, setFalseStarts] = useState(true);
   const [naturalPauses, setNaturalPauses] = useState(true);
   const [jitter, setJitter] = useState(true);
+  const [burstRhythm, setBurstRhythm] = useState(true);
+  const [fatigueCurve, setFatigueCurve] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Live typing progress state
@@ -55,7 +64,43 @@ export default function LaunchToDocModal({
   const assignmentTitle = assignment?.title || assignment?.name || 'Assignment';
   const assignmentId = assignment?.id || null;
 
-  // 1. Detect Extension & Google Docs tabs via postMessage bridge
+  // Handle Preset Change
+  const applyPreset = (newPreset) => {
+    setPreset(newPreset);
+    if (newPreset === 'gentle') {
+      setWpm(35);
+      setTypoRate(2.5);
+      setFalseStarts(true);
+      setNaturalPauses(true);
+      setJitter(true);
+      setFatigueCurve(true);
+    } else if (newPreset === 'academic') {
+      setWpm(65);
+      setTypoRate(1.8);
+      setFalseStarts(true);
+      setNaturalPauses(true);
+      setJitter(true);
+      setBurstRhythm(true);
+      setFatigueCurve(true);
+    } else if (newPreset === 'brisk') {
+      setWpm(95);
+      setTypoRate(1.0);
+      setFalseStarts(false);
+      setNaturalPauses(true);
+      setJitter(false);
+      setBurstRhythm(true);
+      setFatigueCurve(false);
+    } else if (newPreset === 'motor') {
+      setWpm(50);
+      setTypoRate(3.0);
+      setFalseStarts(true);
+      setNaturalPauses(true);
+      setJitter(true);
+      setFatigueCurve(true);
+    }
+  };
+
+  // 1. Detect Extension & Google Docs / Editor tabs via postMessage bridge
   useEffect(() => {
     if (!isOpen) return;
 
@@ -81,12 +126,12 @@ export default function LaunchToDocModal({
         const p = e.data.payload || {};
         setTypingState((prev) => ({
           ...prev,
-          isTyping: p.status === 'typing' || p.status === 'started',
-          isPaused: p.status === 'paused',
-          percentage: p.percentage || 0,
+          isTyping: p.isTyping || p.status === 'typing' || p.status === 'started',
+          isPaused: p.isPaused || p.status === 'paused',
+          percentage: p.progressPct || p.percentage || 0,
           wordsTyped: p.wordsTyped || 0,
           totalWords: p.totalWords || 0,
-          status: p.status || prev.status,
+          status: p.isTyping ? 'typing' : (p.progressPct >= 100 ? 'completed' : prev.status),
           error: p.error || null,
         }));
       }
@@ -132,19 +177,18 @@ export default function LaunchToDocModal({
         const assign = data?.assignment || {};
         const materials = data?.materials || [];
         
-        // Priority: Finalized work -> Generated material/solution -> Prompt
         let chosenText = assign.do_it_work || '';
         if (!chosenText && materials.length > 0) {
           const textMat = materials.find((m) => m.content_text || m.content);
           if (textMat) chosenText = textMat.content_text || textMat.content;
         }
-        if (!chosenText) {
-          chosenText = assign.prompt || assignment?.prompt || '';
-        }
+        if (!chosenText) chosenText = assign.prompt || '';
+
         setText(chosenText);
       })
       .catch(() => {
-        if (!cancelled) setText(assignment?.prompt || '');
+        if (cancelled) return;
+        setText(assignment?.prompt || '');
       })
       .finally(() => {
         if (!cancelled) setLoadingPayload(false);
@@ -155,12 +199,8 @@ export default function LaunchToDocModal({
     };
   }, [isOpen, assignmentId, initialText]);
 
-  if (!isOpen) return null;
-
-  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const estMinutes = Math.max(1, Math.round(wordCount / wpm));
-
-  const handleStartTyping = () => {
+  // 3. Action Handlers
+  const handleLaunch = () => {
     if (!text.trim()) return;
 
     setTypingState({
@@ -168,42 +208,53 @@ export default function LaunchToDocModal({
       isPaused: false,
       percentage: 0,
       wordsTyped: 0,
-      totalWords: wordCount,
+      totalWords: text.split(/\s+/).filter(Boolean).length,
       status: 'typing',
       error: null,
     });
-
-    const chosenId = targetTabId && targetTabId !== 'new' ? Number(targetTabId) : null;
 
     window.postMessage({
       type: 'HELPOTRON_LAUNCH_TO_DOC',
       requestId: Date.now(),
       payload: {
-        tabId: chosenId,
-        text,
-        wpm: Number(wpm) || 65,
-        naturalPauses,
-        jitter,
+        tabId: targetTabId && targetTabId !== 'new' ? Number(targetTabId) : null,
+        text: text,
+        wpm: Number(wpm),
+        naturalPauses: naturalPauses,
+        jitter: jitter,
+        typoRate: typoRate / 100.0,
+        falseStartRate: falseStarts ? 0.015 : 0.0,
+        burstRhythm: burstRhythm,
+        fatigueCurve: fatigueCurve,
         title: assignmentTitle,
-        assignmentId,
+        assignmentId: assignmentId,
+        targetApp: targetApp,
       },
     }, '*');
   };
 
-  const handlePauseResume = () => {
-    const nextAction = typingState.isPaused ? 'resumeTyping' : 'pauseTyping';
+  const handlePause = () => {
     window.postMessage({
       type: 'HELPOTRON_CONTROL_TYPING',
-      action: nextAction,
+      action: 'pause',
       tabId: targetTabId && targetTabId !== 'new' ? Number(targetTabId) : null,
     }, '*');
-    setTypingState((prev) => ({ ...prev, isPaused: !prev.isPaused }));
+    setTypingState((prev) => ({ ...prev, isPaused: true, status: 'paused' }));
+  };
+
+  const handleResume = () => {
+    window.postMessage({
+      type: 'HELPOTRON_CONTROL_TYPING',
+      action: 'resume',
+      tabId: targetTabId && targetTabId !== 'new' ? Number(targetTabId) : null,
+    }, '*');
+    setTypingState((prev) => ({ ...prev, isPaused: false, status: 'typing' }));
   };
 
   const handleCancel = () => {
     window.postMessage({
       type: 'HELPOTRON_CONTROL_TYPING',
-      action: 'cancelTyping',
+      action: 'cancel',
       tabId: targetTabId && targetTabId !== 'new' ? Number(targetTabId) : null,
     }, '*');
     setTypingState((prev) => ({
@@ -214,302 +265,378 @@ export default function LaunchToDocModal({
     }));
   };
 
-  const handleCopyText = () => {
+  const handleCopyFallback = () => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      setText(re.target?.result || '');
+    };
+    reader.readAsText(file);
+  };
+
+  if (!isOpen) return null;
+
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const estimatedMins = Math.max(1, Math.round(wordCount / (wpm || 65)));
+
   return (
     <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="launch-to-doc-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-      onClick={onClose}
+      aria-labelledby="launch-modal-title"
     >
-      <div
-        className="relative w-full max-w-2xl bg-[var(--bg-canvas)] border border-[rgba(139,92,246,0.35)] rounded-[var(--radius-lg)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] bg-gradient-to-r from-[rgba(139,92,246,0.12)] via-transparent to-[rgba(6,182,212,0.08)]">
+      <div className="relative w-full max-w-2xl bg-[var(--bg-surface)] border border-violet-500/30 rounded-2xl shadow-2xl shadow-violet-950/40 overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] bg-gradient-to-r from-violet-950/40 to-transparent">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
-              <Keyboard className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 id="launch-to-doc-title" className="text-base font-bold text-white">
-                  Launch to Doc
-                </h2>
-                <span className="chip chip-accent text-[10px] font-mono tracking-wide">
-                  ♿ Accessibility Assistive Tool
+              <h3 id="launch-modal-title" className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                Launch to Doc
+                <span className="text-[10px] font-semibold font-mono uppercase px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                  Assistive Typing Engine
                 </span>
-              </div>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                Simulates natural, human-paced assistive typing directly into your open Google Doc.
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Autonomous human-like typing simulation for students with motor or cognitive disabilities
               </p>
             </div>
           </div>
           <button
-            type="button"
             onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition"
             aria-label="Close dialog"
-            className="text-[var(--text-muted)] hover:text-white p-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 text-xs text-[var(--text-secondary)]">
-          {/* Target Assignment Pill */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-            <div className="flex items-center gap-2 truncate">
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+          {/* Assignment Context Banner */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.03] border border-[var(--border-subtle)] text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
               <FileText className="w-4 h-4 text-violet-400 shrink-0" />
-              <span className="font-semibold text-white truncate">{assignmentTitle}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)] shrink-0">
-              <span>{wordCount} words</span>
-              <span>•</span>
-              <span>~{estMinutes} min typing time</span>
-            </div>
-          </div>
-
-          {/* Active Typing In-Progress Card */}
-          {typingState.isTyping && (
-            <div className="p-4 rounded-xl border border-violet-500/40 bg-gradient-to-br from-violet-950/40 via-slate-900 to-slate-950 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-violet-400 animate-ping" />
-                  <span className="font-bold text-white text-sm">
-                    {typingState.isPaused ? 'Typing Paused' : `Typing into Google Doc at ${wpm} WPM…`}
-                  </span>
-                </div>
-                <span className="font-mono text-sm font-bold text-violet-300">
-                  {typingState.percentage}%
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="h-3 w-full bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 via-cyan-400 to-emerald-400 transition-all duration-300"
-                  style={{ width: `${typingState.percentage}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-mono text-slate-300">
-                <span>
-                  Typed {typingState.wordsTyped} of {typingState.totalWords || wordCount} words
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handlePauseResume}
-                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white font-semibold flex items-center gap-1.5 transition cursor-pointer"
-                  >
-                    {typingState.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-                    {typingState.isPaused ? 'Resume' : 'Pause'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    className="px-3 py-1.5 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold border border-rose-500/30 flex items-center gap-1.5 transition cursor-pointer"
-                  >
-                    <Square className="w-3.5 h-3.5" /> Stop
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Completed Message */}
-          {typingState.status === 'completed' && (
-            <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-950/30 flex items-center gap-3 text-emerald-200">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-              <div>
-                <div className="font-bold text-white text-sm">Assistive Typing Completed!</div>
-                <div className="text-xs text-emerald-300/90 mt-0.5">
-                  The assignment content was successfully typed into your Google Doc at your cursor location.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section 1: Target Google Doc Tab Selection */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-white uppercase tracking-wider">
-              1. Select Google Docs Tab
-            </label>
-            <div className="relative">
-              <select
-                value={targetTabId}
-                onChange={(e) => setTargetTabId(e.target.value)}
-                disabled={typingState.isTyping}
-                className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-violet-500 transition cursor-pointer disabled:opacity-50"
-              >
-                {detectingTabs ? (
-                  <option value="">Detecting open Google Docs tabs…</option>
-                ) : openTabs.length > 0 ? (
-                  <>
-                    {openTabs.map((t) => (
-                      <option key={t.id} value={String(t.id)}>
-                        📄 {t.title || 'Google Doc'} {t.active ? '(Active Tab)' : ''}
-                      </option>
-                    ))}
-                    <option value="new">➕ Open New Google Doc (docs.new)</option>
-                  </>
-                ) : (
-                  <option value="new">✨ Open New Google Doc (docs.new)</option>
-                )}
-              </select>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
-              <span>💡</span>
-              <span>Make sure your Google Doc is open in another tab and click where you want the typing to start.</span>
-            </p>
-          </div>
-
-          {/* Section 2: Typing Cadence & Accessibility Controls */}
-          <div className="space-y-3 p-4 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-violet-400" />
-                <span className="font-bold text-white text-xs uppercase tracking-wider">
-                  2. Typing Cadence & Speed
-                </span>
-              </div>
-              <span className="font-mono text-xs font-bold text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/30">
-                {wpm} WPM ({wpm <= 45 ? 'Gentle' : wpm <= 75 ? 'Natural' : 'Brisk'})
+              <span className="font-semibold text-[var(--text-primary)] truncate">
+                {assignmentTitle}
               </span>
             </div>
+            <div className="flex items-center gap-2 text-violet-300/80 font-mono text-[11px] shrink-0">
+              <span>{wordCount} words</span>
+              <span>•</span>
+              <span>~{estimatedMins} min at {wpm} WPM</span>
+            </div>
+          </div>
 
-            {/* WPM Slider */}
-            <div className="space-y-1.5">
-              <input
-                type="range"
-                min="30"
-                max="120"
-                step="5"
-                value={wpm}
-                onChange={(e) => setWpm(Number(e.target.value))}
-                disabled={typingState.isTyping}
-                className="w-full accent-violet-500 cursor-pointer disabled:opacity-50"
-              />
-              <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
-                <span>30 WPM (Slow & Steady)</span>
-                <span>65 WPM (Natural Average)</span>
-                <span>120 WPM (Fast)</span>
-              </div>
+          {/* Target App & Tab Selector */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+                <Keyboard className="w-3.5 h-3.5 text-violet-400" />
+                Target Editor &amp; Tab
+              </label>
+              {extensionConnected ? (
+                <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                  <CheckCircle2 className="w-3 h-3" /> Extension Ready (v2.2.0)
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-400 flex items-center gap-1 font-mono">
+                  <AlertCircle className="w-3 h-3" /> Standalone Mode
+                </span>
+              )}
             </div>
 
-            {/* Preset Buttons */}
-            <div className="flex gap-2 pt-1">
+            <div className="grid grid-cols-4 gap-2 mb-2">
               {[
-                { label: 'Gentle (40 WPM)', val: 40 },
-                { label: 'Natural (65 WPM)', val: 65 },
-                { label: 'Brisk (90 WPM)', val: 90 },
-              ].map((p) => (
+                { id: 'gdocs', label: 'Google Docs', icon: '📄' },
+                { id: 'gmail', label: 'Gmail', icon: '✉️' },
+                { id: 'notion', label: 'Notion', icon: '📝' },
+                { id: 'universal', label: 'Active Field', icon: '⌨️' },
+              ].map((item) => (
                 <button
-                  key={p.val}
+                  key={item.id}
                   type="button"
-                  onClick={() => setWpm(p.val)}
-                  disabled={typingState.isTyping}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium border transition cursor-pointer ${
-                    wpm === p.val
-                      ? 'bg-violet-600/30 border-violet-500 text-violet-200'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                  onClick={() => setTargetApp(item.id)}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition ${
+                    targetApp === item.id
+                      ? 'bg-violet-600/20 border-violet-500/50 text-violet-200'
+                      : 'bg-white/[0.02] border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-white/5'
                   }`}
                 >
-                  {p.label}
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
                 </button>
               ))}
             </div>
 
-            {/* Advanced Natural Rhythm Toggles */}
-            <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={naturalPauses}
-                  onChange={(e) => setNaturalPauses(e.target.checked)}
-                  disabled={typingState.isTyping}
-                  className="rounded border-slate-700 text-violet-500 focus:ring-violet-500"
-                />
-                <span className="text-xs">Natural pauses at punctuation, commas, and paragraph breaks</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={jitter}
-                  onChange={(e) => setJitter(e.target.checked)}
-                  disabled={typingState.isTyping}
-                  className="rounded border-slate-700 text-violet-500 focus:ring-violet-500"
-                />
-                <span className="text-xs">Variable keystroke rhythm (organic motor timing)</span>
-              </label>
+            <select
+              value={targetTabId}
+              onChange={(e) => setTargetTabId(e.target.value)}
+              disabled={detectingTabs}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-violet-500/60 disabled:opacity-50"
+            >
+              {openTabs.length > 0 ? (
+                openTabs.map((t) => (
+                  <option key={t.id} value={String(t.id)}>
+                    {t.active ? '👉 ' : ''}[{t.app || 'Tab'}] {t.title || 'Document'}
+                  </option>
+                ))
+              ) : (
+                <option value="new">✨ Open New Google Doc (docs.new)</option>
+              )}
+              <option value="new">➕ Open New Google Doc tab (docs.new)</option>
+            </select>
+          </div>
+
+          {/* Realism Preset Switcher */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
+              <Gauge className="w-3.5 h-3.5 text-violet-400" />
+              Accessibility Cadence Preset
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { id: 'academic', label: 'Natural Academic', wpm: 65, desc: 'Balanced 65 WPM' },
+                { id: 'gentle', label: 'Gentle RSI Relief', wpm: 35, desc: 'Slow 35 WPM' },
+                { id: 'brisk', label: 'Brisk Pro', wpm: 95, desc: 'Fast 95 WPM' },
+                { id: 'motor', label: 'Motor Assist', wpm: 50, desc: 'High Variance' },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    preset === p.id
+                      ? 'bg-violet-600/20 border-violet-500/50 text-white ring-1 ring-violet-500/30'
+                      : 'bg-white/[0.02] border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-white/5'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{p.label}</div>
+                  <div className="text-[10px] text-violet-300 font-mono mt-0.5">{p.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Section 3: Content Preview */}
+          {/* Speed (WPM) Slider */}
+          <div className="space-y-2 p-4 rounded-xl bg-white/[0.02] border border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-[var(--text-primary)]">Typing Speed</span>
+              <span className="font-mono font-bold text-violet-400 text-sm">{wpm} WPM</span>
+            </div>
+            <input
+              type="range"
+              min="20"
+              max="130"
+              step="5"
+              value={wpm}
+              onChange={(e) => setWpm(Number(e.target.value))}
+              className="w-full accent-violet-500 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
+              <span>20 WPM (RSI/Fatigue)</span>
+              <span>65 WPM (Human Average)</span>
+              <span>130 WPM (Brisk)</span>
+            </div>
+          </div>
+
+          {/* 9 Realism Dimensions Drawer */}
+          <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.02] hover:bg-white/[0.04] text-xs font-semibold text-[var(--text-secondary)] transition"
+            >
+              <div className="flex items-center gap-2">
+                <Sliders className="w-3.5 h-3.5 text-violet-400" />
+                <span>Fine-Tuned Realism Controls (9 Dimensions)</span>
+              </div>
+              <span className="text-[11px] text-violet-400 font-mono">
+                {showAdvanced ? 'Hide −' : 'Customize +'}
+              </span>
+            </button>
+
+            {showAdvanced && (
+              <div className="p-4 bg-black/20 border-t border-[var(--border-subtle)] space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={naturalPauses}
+                      onChange={(e) => setNaturalPauses(e.target.checked)}
+                      className="rounded accent-violet-500"
+                    />
+                    <span>Punctuation &amp; Paragraph Pauses</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={jitter}
+                      onChange={(e) => setJitter(e.target.checked)}
+                      className="rounded accent-violet-500"
+                    />
+                    <span>Gaussian Keystroke Jitter</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={falseStarts}
+                      onChange={(e) => setFalseStarts(e.target.checked)}
+                      className="rounded accent-violet-500"
+                    />
+                    <span>False Starts &amp; Micro-Backspaces</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={burstRhythm}
+                      onChange={(e) => setBurstRhythm(e.target.checked)}
+                      className="rounded accent-violet-500"
+                    />
+                    <span>Syllable Burst Rhythm</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-[var(--text-secondary)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fatigueCurve}
+                      onChange={(e) => setFatigueCurve(e.target.checked)}
+                      className="rounded accent-violet-500"
+                    />
+                    <span>Fatigue Curve Simulation</span>
+                  </label>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-[var(--border-subtle)]">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-[var(--text-secondary)]">Realistic Neighbor Typo Rate:</span>
+                    <span className="font-mono text-violet-400 font-bold">{typoRate}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="6"
+                    step="0.5"
+                    value={typoRate}
+                    onChange={(e) => setTypoRate(Number(e.target.value))}
+                    className="w-full accent-violet-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Text Preview & File Upload */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-white uppercase tracking-wider">
-                3. Assignment Text to Type
+            <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
+              <span className="flex items-center gap-1.5">
+                <FileCode className="w-3.5 h-3.5 text-violet-400" />
+                Text to Type ({wordCount} words)
+              </span>
+              <label className="text-[11px] text-violet-400 hover:text-violet-300 cursor-pointer flex items-center gap-1">
+                <UploadCloud className="w-3.5 h-3.5" />
+                Load .txt/.md File
+                <input type="file" accept=".txt,.md,.json" onChange={handleFileUpload} className="hidden" />
               </label>
-              <button
-                type="button"
-                onClick={handleCopyText}
-                className="flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 transition cursor-pointer"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy Text'}</span>
-              </button>
             </div>
             <textarea
-              rows={5}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              disabled={typingState.isTyping}
-              placeholder="Enter or review the content to be typed into Google Docs…"
-              className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-lg p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-violet-500 font-sans resize-y max-h-[220px]"
+              rows={4}
+              placeholder="Paste or write the assignment text to type into Google Docs…"
+              className="w-full p-3 rounded-xl bg-black/40 border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/60 custom-scrollbar resize-none"
             />
           </div>
+
+          {/* Live Typing Status & Progress Bar */}
+          {typingState.isTyping && (
+            <div className="p-4 rounded-xl bg-violet-950/30 border border-violet-500/40 space-y-3 animate-in fade-in">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="font-semibold text-violet-200">
+                    {typingState.isPaused ? 'Typing Paused' : `Typing autonomously at ${wpm} WPM…`}
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-violet-300">
+                  {typingState.percentage}% ({typingState.wordsTyped}/{typingState.totalWords} w)
+                </span>
+              </div>
+
+              <div className="w-full bg-black/40 h-2 rounded-full overflow-hidden border border-white/5">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-300"
+                  style={{ width: `${typingState.percentage}%` }}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                {typingState.isPaused ? (
+                  <button
+                    type="button"
+                    onClick={handleResume}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition"
+                  >
+                    <Play className="w-3.5 h-3.5" /> Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePause}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white transition"
+                  >
+                    <Pause className="w-3.5 h-3.5" /> Pause
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition"
+                >
+                  <Square className="w-3.5 h-3.5" /> Stop
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
+        {/* Modal Footer */}
+        <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-black/20 flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-[var(--bg-surface-elevated)] hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
+            onClick={handleCopyFallback}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/5 transition"
           >
-            {typingState.isTyping ? 'Close Panel (Typing Continues)' : 'Close'}
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copied!' : 'Copy to Clipboard'}
           </button>
 
           <div className="flex items-center gap-2">
-            {!typingState.isTyping ? (
-              <button
-                type="button"
-                onClick={handleStartTyping}
-                disabled={!text.trim()}
-                className="px-5 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-violet-600/30 flex items-center gap-2 transition cursor-pointer disabled:opacity-40"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Launch to Doc</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handlePauseResume}
-                className="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold flex items-center gap-2 transition cursor-pointer"
-              >
-                {typingState.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                <span>{typingState.isPaused ? 'Resume Typing' : 'Pause Typing'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-white transition"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleLaunch}
+              disabled={!text.trim() || typingState.isTyping}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-700/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Sparkles className="w-4 h-4 text-violet-200" />
+              Launch Typing Engine
+            </button>
           </div>
         </div>
       </div>

@@ -897,60 +897,299 @@ class GoogleDocsAssistiveTypingEngine {
     const statusText = customStatus || (this.state.isPaused ? 'Paused' : `Typing at ${this.state.wpm} WPM…`);
 
     hud.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 16px;">✨</span>
-          <strong style="color: #c4b5fd; font-size: 13px; font-weight: 600;">Launch to Doc</strong>
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: none;
+    `;
+
+    container.innerHTML = `
+      <div id="hud-card" style="
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        border-radius: 14px;
+        box-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.6), 0 0 16px rgba(139, 92, 246, 0.25);
+        width: 310px;
+        overflow: hidden;
+      ">
+        <!-- Header / Drag Bar -->
+        <div id="hud-header" style="
+          padding: 10px 14px;
+          background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(30, 41, 59, 0.6));
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: move;
+          user-select: none;
+        ">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+            <span style="font-size: 11px; font-weight: 700; color: #c4b5fd; letter-spacing: 0.5px; text-transform: uppercase;">Assistive Typing</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button id="hud-btn-settings" title="Realism Settings" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">⚙️</button>
+            <button id="hud-btn-collapse" title="Collapse" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">−</button>
+            <button id="hud-btn-close" title="Close" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">✕</button>
+          </div>
         </div>
-        <span style="font-size: 11px; font-family: monospace; color: #94a3b8; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${pct}%</span>
-      </div>
-      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        ${this.state.assignmentTitle || 'Assignment Content'}
-      </div>
-      <div style="background: rgba(255,255,255,0.12); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 10px;">
-        <div style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: ${pct}%; height: 100%; transition: width 0.15s ease;"></div>
-      </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #cbd5e1;">
-        <span>${statusText} (${this.state.wordsTyped}/${this.state.totalWords} w)</span>
-        <div style="display: flex; gap: 6px;">
-          <button id="helpotron-hud-pause" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: background 0.2s;">
-            ${this.state.isPaused ? '▶ Resume' : '⏸ Pause'}
-          </button>
-          <button id="helpotron-hud-cancel" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: background 0.2s;">
-            ⏹ Cancel
-          </button>
+
+        <!-- Body Content -->
+        <div id="hud-body" style="padding: 14px;">
+          <div style="font-size: 12px; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="hud-title">
+            Document Ready
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+            <span id="hud-target-badge" style="background: rgba(139, 92, 246, 0.15); color: #c4b5fd; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 10px;">Google Docs</span>
+            <span id="hud-wpm-badge" style="color: #a78bfa; font-weight: 600;">65 WPM</span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div style="background: rgba(255, 255, 255, 0.08); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+            <div id="hud-progress-fill" style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: 0%; height: 100%; transition: width 0.2s ease;"></div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #64748b; font-family: monospace; margin-bottom: 12px;">
+            <span id="hud-pct">0%</span>
+            <span id="hud-words">0 / 0 words</span>
+            <span id="hud-eta">ETA: --</span>
+          </div>
+
+          <!-- Controls -->
+          <div style="display: flex; gap: 8px;">
+            <button id="hud-btn-toggle" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; background: #7c3aed; color: #fff; border: 1px solid rgba(139, 92, 246, 0.4); transition: all 0.15s;">
+              ⏸ Pause
+            </button>
+            <button id="hud-btn-cancel" style="padding: 7px 12px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); transition: all 0.15s;">
+              ⏹ Stop
+            </button>
+          </div>
+
+          <!-- File Drag-and-Drop Zone -->
+          <div id="hud-drop-zone" style="margin-top: 10px; padding: 8px; border: 1px dashed rgba(139, 92, 246, 0.4); border-radius: 8px; text-align: center; font-size: 10px; color: #94a3b8; background: rgba(139, 92, 246, 0.05); cursor: pointer;">
+            📄 Drop .txt / .md file to type into doc
+          </div>
+
+          <!-- Realism Controls Drawer -->
+          <div id="hud-settings-drawer" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>Speed:</span> <b id="hud-slider-wpm-val">65 WPM</b>
+            </div>
+            <input type="range" id="hud-slider-wpm" min="25" max="130" value="65" style="width: 100%; margin-bottom: 8px;">
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-typos" checked> Typos & Fix
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-falsestarts" checked> False Starts
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-pauses" checked> Pauses
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-jitter" checked> Jitter Rhythm
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     `;
 
-    const pauseBtn = hud.querySelector('#helpotron-hud-pause');
-    if (pauseBtn) {
-      pauseBtn.onclick = (e) => {
-        e.stopPropagation();
-        if (this.state.isPaused) this.resumeTyping();
-        else this.pauseTyping();
-      };
-    }
+    document.body.appendChild(container);
+    this.hudElement = container;
+    this.wireHUDEvents();
+  }
 
-    const cancelBtn = hud.querySelector('#helpotron-hud-cancel');
-    if (cancelBtn) {
-      cancelBtn.onclick = (e) => {
-        e.stopPropagation();
-        this.cancelTyping();
-      };
+  wireHUDEvents() {
+    if (!this.hudElement) return;
+
+    // Draggable functionality
+    const header = this.hudElement.querySelector('#hud-header');
+    let isDragging = false;
+    let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = this.hudElement.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      this.hudElement.style.bottom = 'auto';
+      this.hudElement.style.right = 'auto';
+      this.hudElement.style.left = `${initialLeft}px`;
+      this.hudElement.style.top = `${initialTop}px`;
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      this.hudElement.style.left = `${initialLeft + dx}px`;
+      this.hudElement.style.top = `${initialTop + dy}px`;
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // Buttons
+    this.hudElement.querySelector('#hud-btn-close').addEventListener('click', () => {
+      this.hudElement.style.display = 'none';
+    });
+
+    const collapseBtn = this.hudElement.querySelector('#hud-btn-collapse');
+    const bodyEl = this.hudElement.querySelector('#hud-body');
+    collapseBtn.addEventListener('click', () => {
+      this.hudCollapsed = !this.hudCollapsed;
+      bodyEl.style.display = this.hudCollapsed ? 'none' : 'block';
+      collapseBtn.textContent = this.hudCollapsed ? '+' : '−';
+    });
+
+    const settingsBtn = this.hudElement.querySelector('#hud-btn-settings');
+    const drawerEl = this.hudElement.querySelector('#hud-settings-drawer');
+    settingsBtn.addEventListener('click', () => {
+      drawerEl.style.display = drawerEl.style.display === 'none' ? 'block' : 'none';
+    });
+
+    const toggleBtn = this.hudElement.querySelector('#hud-btn-toggle');
+    toggleBtn.addEventListener('click', () => {
+      if (this.state.isPaused) {
+        this.resumeTyping();
+      } else {
+        this.pauseTyping();
+      }
+    });
+
+    this.hudElement.querySelector('#hud-btn-cancel').addEventListener('click', () => {
+      this.cancelTyping();
+    });
+
+    // Realism Controls Listeners
+    const wpmSlider = this.hudElement.querySelector('#hud-slider-wpm');
+    const wpmVal = this.hudElement.querySelector('#hud-slider-wpm-val');
+    wpmSlider.addEventListener('input', (e) => {
+      const v = Number(e.target.value);
+      this.config.wpm = v;
+      wpmVal.textContent = `${v} WPM`;
+      this.saveConfig();
+      this.updateHUD();
+    });
+
+    this.hudElement.querySelector('#hud-chk-typos').addEventListener('change', (e) => {
+      this.config.typosEnabled = e.target.checked;
+      this.saveConfig();
+    });
+    this.hudElement.querySelector('#hud-chk-falsestarts').addEventListener('change', (e) => {
+      this.config.falseStarts = e.target.checked;
+      this.saveConfig();
+    });
+    this.hudElement.querySelector('#hud-chk-pauses').addEventListener('change', (e) => {
+      this.config.punctuationPauses = e.target.checked;
+      this.config.thinkingBreaks = e.target.checked;
+      this.saveConfig();
+    });
+    this.hudElement.querySelector('#hud-chk-jitter').addEventListener('change', (e) => {
+      this.config.jitter = e.target.checked;
+      this.saveConfig();
+    });
+
+    // File Drop Zone
+    const dropZone = this.hudElement.querySelector('#hud-drop-zone');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#a78bfa';
+      dropZone.style.background = 'rgba(139, 92, 246, 0.15)';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+      dropZone.style.background = 'rgba(139, 92, 246, 0.05)';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+      dropZone.style.background = 'rgba(139, 92, 246, 0.05)';
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        const reader = new FileReader();
+        reader.onload = (re) => {
+          const text = re.target.result;
+          this.startTyping({ text, title: file.name });
+        };
+        reader.readAsText(file);
+      }
+    });
+  }
+
+  showHUD() {
+    if (!this.hudElement) this.injectCrossTabHUD();
+    if (this.hudElement) this.hudElement.style.display = 'block';
+  }
+
+  updateHUD() {
+    if (!this.hudElement) return;
+
+    const status = this.getStatus();
+    const titleEl = this.hudElement.querySelector('#hud-title');
+    const badgeEl = this.hudElement.querySelector('#hud-wpm-badge');
+    const targetBadgeEl = this.hudElement.querySelector('#hud-target-badge');
+    const fillEl = this.hudElement.querySelector('#hud-progress-fill');
+    const pctEl = this.hudElement.querySelector('#hud-pct');
+    const wordsEl = this.hudElement.querySelector('#hud-words');
+    const etaEl = this.hudElement.querySelector('#hud-eta');
+    const toggleBtn = this.hudElement.querySelector('#hud-btn-toggle');
+
+    if (titleEl) titleEl.textContent = this.state.assignmentTitle || 'Document';
+    if (badgeEl) badgeEl.textContent = `${this.config.wpm} WPM`;
+    if (targetBadgeEl) {
+      const appMap = { gdocs: 'Google Docs', gmail: 'Gmail', notion: 'Notion', word_online: 'Word Online', universal: 'Text Field' };
+      targetBadgeEl.textContent = appMap[this.state.targetApp] || 'Editor';
+    }
+    if (fillEl) fillEl.style.width = `${status.progressPct}%`;
+    if (pctEl) pctEl.textContent = `${status.progressPct}%`;
+    if (wordsEl) wordsEl.textContent = `${status.wordsTyped} / ${status.totalWords} w`;
+    if (etaEl) etaEl.textContent = `ETA: ${status.remainingSeconds}s`;
+
+    if (toggleBtn) {
+      if (this.state.isPaused) {
+        toggleBtn.textContent = '▶ Resume';
+        toggleBtn.style.background = '#059669';
+      } else {
+        toggleBtn.textContent = '⏸ Pause';
+        toggleBtn.style.background = '#7c3aed';
+      }
     }
   }
 
-  removeFloatingHUD() {
-    const existing = document.getElementById('helpotron-assistive-hud');
-    if (existing) existing.remove();
-    this.state.hudElement = null;
+  renderThinkingPulse(active) {
+    if (!this.hudElement) return;
+    const titleEl = this.hudElement.querySelector('#hud-title');
+    if (titleEl) {
+      if (active) {
+        titleEl.textContent = '🤔 Natural cognitive break…';
+        titleEl.style.color = '#fde047';
+      } else {
+        titleEl.textContent = this.state.assignmentTitle || 'Document';
+        titleEl.style.color = '#f1f5f9';
+      }
+    }
+  }
+
+  renderCompletionNotice() {
+    if (!this.hudElement) return;
+    const titleEl = this.hudElement.querySelector('#hud-title');
+    if (titleEl) {
+      titleEl.textContent = '✨ Assistive typing complete!';
+      titleEl.style.color = '#34d399';
+    }
   }
 }
 
-// Initialize on docs.google.com
-if (window.location.hostname.includes('docs.google.com')) {
-  window.__helpotron_gdocs_typing_engine = new GoogleDocsAssistiveTypingEngine();
+// Instantiate and attach
+if (!window.__helpotron_unified_typing_engine) {
+  window.__helpotron_unified_typing_engine = new UnifiedAssistiveTypingEngine();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -962,7 +1201,7 @@ if (
   window.location.hostname.includes('helpotron')
 ) {
   window.__helpotron_extension_installed = true;
-  window.postMessage({ type: 'HELPOTRON_EXTENSION_READY', version: '2.1.0' }, '*');
+  window.postMessage({ type: 'HELPOTRON_EXTENSION_READY', version: '2.2.0' }, '*');
 
   window.addEventListener('message', async (event) => {
     if (event.source !== window || !event.data || !event.data.type) return;
@@ -970,8 +1209,8 @@ if (
     if (event.data.type === 'HELPOTRON_PING') {
       window.postMessage({
         type: 'HELPOTRON_PONG',
-        version: '2.1.0',
-        capabilities: ['scrape', 'agent', 'launch_to_doc'],
+        version: '2.2.0',
+        capabilities: ['scrape', 'agent', 'launch_to_doc', 'dripwriter_api', 'nine_realism_controls', 'cross_tab_hud'],
       }, '*');
     } else if (event.data.type === 'HELPOTRON_GET_GDOCS_TABS') {
       try {
@@ -1007,21 +1246,36 @@ if (
         window.postMessage({
           type: 'HELPOTRON_LAUNCH_TO_DOC_RESULT',
           requestId: event.data.requestId,
-          error: String(err),
+          result: { ok: false, error: String(err) },
         }, '*');
       }
     } else if (event.data.type === 'HELPOTRON_CONTROL_TYPING') {
       try {
+        const action = event.data.action === 'pause' ? 'pauseTyping'
+                     : event.data.action === 'resume' ? 'resumeTyping'
+                     : 'cancelTyping';
         chrome.runtime.sendMessage({
-          action: event.data.action,
+          action,
           tabId: event.data.tabId,
+        }, (resp) => {
+          window.postMessage({
+            type: 'HELPOTRON_CONTROL_TYPING_RESULT',
+            requestId: event.data.requestId,
+            result: resp,
+          }, '*');
         });
-      } catch (e) {}
+      } catch (err) {
+        window.postMessage({
+          type: 'HELPOTRON_CONTROL_TYPING_RESULT',
+          requestId: event.data.requestId,
+          result: { ok: false, error: String(err) },
+        }, '*');
+      }
     }
   });
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg && msg.action === 'TYPING_PROGRESS') {
+    if (msg && msg.action === 'BROADCAST_TYPING_PROGRESS') {
       window.postMessage({
         type: 'HELPOTRON_TYPING_PROGRESS',
         payload: msg,
