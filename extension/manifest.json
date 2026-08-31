@@ -15,8 +15,7 @@
     "tabs",
     "scripting",
     "alarms",
-    "downloads",
-    "debugger"
+    "downloads"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
