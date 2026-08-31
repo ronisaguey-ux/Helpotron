@@ -358,11 +358,12 @@ async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
             return None
 
     def _rewrite_system(draft_score: Optional[float]) -> str:
+        from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
         sys = (
             "You rewrite drafts until they pass AI-content detectors as "
             f"writing by a real human. The draft below scored {draft_score if draft_score is not None else 'unknown'}% "
             f"human; it must reach at least {min_human}%.\n\n"
-            "Follow the rulebook strictly:\n" + HUMANIZER_RULEBOOK
+            "Follow the rulebook strictly:\n" + HUMANIZER_RULEBOOK + "\n\n" + sandbox_math_rule()
         )
         # 08-31 (operator): the draft was generated in a SAMPLE VOICE — the
         # rewrite must keep that voice or the redo loop drifts off-style.

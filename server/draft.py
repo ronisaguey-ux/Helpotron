@@ -72,6 +72,7 @@ def _transcript_chunk(text: str) -> str:
 
 def build_style_prompt(style_text: str, assignment_prompt: str, transcript_text: str) -> str:
     """Build a system prompt that instructs the LLM to mimic the student's style."""
+    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
     return f"""You are an AI assistant helping a student write an assignment draft.
 
 The student has provided samples of their own writing style. Your task is to generate a draft that mimics their style as closely as possible. Use the same vocabulary, sentence structure, tone, and level of formality.
@@ -85,11 +86,14 @@ Assignment prompt:
 Lecture/transcript context:
 {_transcript_chunk(transcript_text)}
 
-Write a complete draft that directly addresses the assignment prompt. Do not include any meta-commentary. Just produce the draft text."""
+Write a complete draft that directly addresses the assignment prompt. Do not include any meta-commentary. Just produce the draft text.
+
+{sandbox_math_rule()}"""
 
 
 def build_default_style_prompt(reading_level: str, target_grade: str, assignment_prompt: str, transcript_text: str) -> str:
     """Build a system prompt that uses a default writing style based on reading level and target grade."""
+    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
     style_text = get_default_style(reading_level, target_grade)
     if not style_text:
         style_text = "Write in a clear, academic style appropriate for the reading level."
@@ -109,7 +113,9 @@ Assignment prompt:
 Lecture/transcript context:
 {_transcript_chunk(transcript_text)}
 
-Write a complete draft that directly addresses the assignment prompt. Mimic the style of the sample as closely as possible. Do not include any meta-commentary. Just produce the draft text."""
+Write a complete draft that directly addresses the assignment prompt. Mimic the style of the sample as closely as possible. Do not include any meta-commentary. Just produce the draft text.
+
+{sandbox_math_rule()}"""
 
 
 async def generate_draft(

@@ -680,10 +680,45 @@ let isTypingPaused = false;
 let activeGDocsTabId = null;
 
 
-const cadencePresetSelect = document.getElementById('cadencePreset');
+const realismPresetSelect = document.getElementById('realismPreset');
+const chkTypos = document.getElementById('chkTypos');
+const chkFalseStarts = document.getElementById('chkFalseStarts');
 const chkPauses = document.getElementById('chkPauses');
 const chkJitter = document.getElementById('chkJitter');
+const chkBurst = document.getElementById('chkBurst');
+const chkFatigue = document.getElementById('chkFatigue');
 const assignmentSelect = document.getElementById('assignmentSelect');
+
+if (realismPresetSelect) {
+  realismPresetSelect.addEventListener('change', () => {
+    const val = realismPresetSelect.value;
+    if (val === 'gentle') {
+      if (wpmSlider) wpmSlider.value = 35;
+      if (wpmValue) wpmValue.innerText = '35 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkFatigue) chkFatigue.checked = true;
+    } else if (val === 'academic') {
+      if (wpmSlider) wpmSlider.value = 65;
+      if (wpmValue) wpmValue.innerText = '65 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkBurst) chkBurst.checked = true;
+    } else if (val === 'brisk') {
+      if (wpmSlider) wpmSlider.value = 95;
+      if (wpmValue) wpmValue.innerText = '95 WPM';
+      if (chkFalseStarts) chkFalseStarts.checked = false;
+      if (chkBurst) chkBurst.checked = true;
+    } else if (val === 'motor') {
+      if (wpmSlider) wpmSlider.value = 50;
+      if (wpmValue) wpmValue.innerText = '50 WPM';
+      if (chkTypos) chkTypos.checked = true;
+      if (chkFalseStarts) chkFalseStarts.checked = true;
+      if (chkJitter) chkJitter.checked = true;
+      if (chkFatigue) chkFatigue.checked = true;
+    }
+  });
+}
 
 // Assignment picker (Bob flow 08-31): the extension's launch-to-doc section
 // lists the user's Helpotron assignments so they can pick WHICH assignment to
@@ -810,6 +845,8 @@ if (btnStartLaunchToDoc) {
         wpm,
         naturalPauses: chkPauses ? chkPauses.checked : true,
         jitter: chkJitter ? chkJitter.checked : true,
+        typoRate: chkTypos && chkTypos.checked ? 0.02 : 0.0,
+        falseStartRate: chkFalseStarts && chkFalseStarts.checked ? 0.015 : 0.0,
         title: assignmentSelect && assignmentSelect.value ? (assignmentSelect.selectedOptions[0] || {}).text || 'Assignment Document' : 'Assignment Document',
       }
     }).catch((e) => ({ ok: false, error: String(e) }));
