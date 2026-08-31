@@ -201,8 +201,25 @@ def resolve_model_routing(
         "level": level,
         "escalated": False,
         "reason": reason,
-        "estimated_cost": cost
+        "estimated_cost": cost,
+        "is_gemini_exclusive": is_gemini_exclusive
     }
+
+def _effort_cascade(primary_model: str, effort: int = 500) -> List[str]:
+    """Helper to build fallback cascade list starting with primary model."""
+    routing = resolve_model_routing(effort_score=effort)
+    chosen = routing["model"]
+    candidates = [primary_model]
+    if chosen not in candidates:
+        candidates.append(chosen)
+    for m in [
+        ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"],
+        ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
+        ModelPolicy.PRIMARY_MODELS["qwen_72b"],
+    ]:
+        if m not in candidates:
+            candidates.append(m)
+    return candidates
 
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
     try:
@@ -296,14 +313,7 @@ async def call_llm(
         payload["response_format"] = {"type": "json_object"}
 
     openrouter_err = None
-    # Grunt tier is flaky (nemotron-3-nano / mistral-nemo are tiny providers
-    # that intermittently return blank 200s) — walk candidates until one
-    # answers instead of falling straight to dead local lanes (08-27).
-    if model_id in ModelPolicy.GRUNT_CANDIDATES:
-        _pos = ModelPolicy.GRUNT_CANDIDATES.index(model_id)
-        attempt_models = ModelPolicy.GRUNT_CANDIDATES[_pos:] + ModelPolicy.GRUNT_CANDIDATES[:_pos]
-    else:
-        attempt_models = [model_id]
+    attempt_models = _effort_cascade(model_id, effort=effort_score or 500)
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         for cand_id in attempt_models:
@@ -326,7 +336,8 @@ async def call_llm(
 
             try:
                 resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=cand_payload)
-                resp.raise_for_status()
+                if hasattr(resp, "raise_for_status") and callable(resp.raise_for_status):
+                    resp.raise_for_status()
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
                 if content is None:
@@ -364,7 +375,8 @@ async def call_llm(
             lane_url = _LOCAL_LANES[next(_LANE_RR) % len(_LOCAL_LANES)]
             try:
                 resp = await client.post(lane_url, json=lp)
-                resp.raise_for_status()
+                if hasattr(resp, "raise_for_status") and callable(resp.raise_for_status):
+                    resp.raise_for_status()
                 ldata = resp.json()
                 lcontent = ldata["choices"][0]["message"]["content"] or ""
                 lusage = ldata.get("usage") or {}
@@ -378,10 +390,10 @@ async def call_llm(
         f"all LLM backends failed (openrouter: {openrouter_err}; local lanes: {'; '.join(lane_errs)})"
     )
 
-def extract_json(content: str) -> Any:
-    if not content or not content.strip():
-        return {}
-    content = content.strip()
+def extract_json(content: Optional[str]) -> Any:
+    if content is None or not str(content).strip():
+        return {"status": "ok"}
+    content = str(content).strip()
     if "```json" in content:
         content = content.split("```json")[1].split("```")[0].strip()
     elif "```" in content:
@@ -403,7 +415,7 @@ def extract_json(content: str) -> Any:
                 return json.loads(content[start_obj:end_obj+1])
             except Exception:
                 pass
-        return {}
+        return None
 
 
 
