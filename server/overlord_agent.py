@@ -365,6 +365,7 @@ class OverlordAgent:
         """
         from .llm import call_llm
 
+        from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
         k = _history_key(target_key, getattr(user, "id", None) if user is not None else None)
         history = self._chat_histories.get(k, [])
         total_chars = sum(len(m.get("text", "")) for m in history)
@@ -391,7 +392,8 @@ class OverlordAgent:
                         "You are a context compactor for a personal study agent. "
                         "Compress the chat transcript into a dense but complete "
                         "summary of decisions, facts, deadlines and user preferences. "
-                        "Keep it under 250 words."
+                        "Keep it under 250 words.\n"
+                        + sandbox_math_rule()
                     ),
                     user_prompt=f"Compress this agent chat transcript:\n\n{transcript[:12000]}",
                     temperature=0.2,

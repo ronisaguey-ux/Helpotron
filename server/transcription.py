@@ -96,6 +96,7 @@ async def transcribe_audio(
 
 
 async def _transcribe_gemini_openrouter(path: str, model_name: str, api_key: str) -> Tuple[str, float | None]:
+    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
     """Send audio as an input_audio part to OpenRouter's chat completions."""
     with open(path, "rb") as f:
         audio_bytes = f.read()
@@ -108,7 +109,8 @@ async def _transcribe_gemini_openrouter(path: str, model_name: str, api_key: str
         "1. Insert timestamp markers in [MM:SS] format at logical paragraph pauses.\n"
         "2. Add Speaker Labels (e.g. `**Professor:**`, `**Student 1:**`) if detectable.\n"
         "3. Group related segments under descriptive Markdown headers (e.g. `## Lecture Introduction`, `## Key Concepts & Proofs`).\n"
-        "4. Conclude with a `### Core Takeaways & Next Steps` bulleted section."
+        "4. Conclude with a `### Core Takeaways & Next Steps` bulleted section.\n"
+        + sandbox_math_rule()
     )
 
     headers = {

@@ -586,11 +586,40 @@ class GoogleDocsAssistiveTypingEngine {
       wpm: 65,
       naturalPauses: true,
       jitter: true,
+      typoRate: 0.02,
+      falseStartRate: 0.015,
       assignmentTitle: '',
       assignmentId: null,
       hudElement: null,
     };
+    // HUD realism controls live in this.config (persisted per-user); the
+    // engine reads the effective rates as state-rate × config-toggle so both
+    // the popup payload and the on-page HUD drawer stay in control.
+    this.config = {
+      wpm: 65,
+      typosEnabled: true,
+      falseStarts: true,
+      punctuationPauses: true,
+      thinkingBreaks: true,
+      jitter: true,
+    };
+    this.loadConfig();
     this.setupListeners();
+  }
+
+  async loadConfig() {
+    try {
+      const { helpotron_hud_config } = await chrome.storage.local.get('helpotron_hud_config');
+      if (helpotron_hud_config && typeof helpotron_hud_config === 'object') {
+        this.config = { ...this.config, ...helpotron_hud_config };
+      }
+    } catch (e) {}
+  }
+
+  saveConfig() {
+    try {
+      chrome.storage.local.set({ helpotron_hud_config: this.config });
+    } catch (e) {}
   }
 
   setupListeners() {
@@ -710,6 +739,88 @@ class GoogleDocsAssistiveTypingEngine {
     target.dispatchEvent(keyup);
   }
 
+  async deleteChar(target) {
+    try {
+      const beforeInput = new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(beforeInput);
+    } catch (e) {}
+
+    const keydown = new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', keyCode: 8, which: 8, bubbles: true, cancelable: true });
+    target.dispatchEvent(keydown);
+    const keypress = new KeyboardEvent('keypress', { key: 'Backspace', code: 'Backspace', keyCode: 8, which: 8, bubbles: true, cancelable: true });
+    target.dispatchEvent(keypress);
+
+    try {
+      document.execCommand('delete', false);
+    } catch (e) {}
+
+    try {
+      const inputEvent = new InputEvent('input', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+      });
+      target.dispatchEvent(inputEvent);
+    } catch (e) {}
+
+    const keyup = new KeyboardEvent('keyup', { key: 'Backspace', code: 'Backspace', keyCode: 8, which: 8, bubbles: true, cancelable: true });
+    target.dispatchEvent(keyup);
+  }
+
+  // Physical-keyboard neighbor substitution: a letter typed one key off.
+  neighborKey(ch) {
+    if (!ch || !/[a-zA-Z]/.test(ch)) return ch;
+    const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+    const lower = ch.toLowerCase();
+    for (const row of rows) {
+      const idx = row.indexOf(lower);
+      if (idx >= 0) {
+        const step = Math.random() < 0.5 ? -1 : 1;
+        const neighbor = row[idx + step];
+        if (neighbor) return ch === ch.toUpperCase() ? neighbor.toUpperCase() : neighbor;
+      }
+    }
+    return ch;
+  }
+
+  // Per-word realism rolls: at most one neighbour typo and/or one false start
+  // per word, decided when the word starts (same semantics as the server's
+  // HumanizedTypingSimulator). Rates combine the launch payload with the live
+  // HUD toggles so both control paths stay effective.
+  computeWordRolls(chars) {
+    const rolls = new Map();
+    let inWord = false;
+    let wordStart = -1;
+    for (let i = 0; i <= chars.length; i++) {
+      const isBoundary = i >= chars.length || chars[i] === ' ' || chars[i] === '\n';
+      if (!inWord && !isBoundary) {
+        inWord = true;
+        wordStart = i;
+      } else if (inWord && isBoundary) {
+        const wordLen = i - wordStart;
+        const roll = { typoAt: -1, wrongChar: '', falseStart: false };
+        if (wordLen > 3) {
+          const typoRate = this.config.typosEnabled ? this.state.typoRate : 0;
+          const falseStartRate = this.config.falseStarts ? this.state.falseStartRate : 0;
+          if (typoRate > 0 && Math.random() < typoRate) {
+            const off = 1 + Math.floor(Math.random() * Math.min(wordLen - 1, 4));
+            roll.typoAt = wordStart + off;
+            roll.wrongChar = this.neighborKey(chars[roll.typoAt]);
+          }
+          if (falseStartRate > 0 && Math.random() < falseStartRate) {
+            roll.falseStart = true;
+          }
+        }
+        rolls.set(wordStart, roll);
+        inWord = false;
+      }
+    }
+    return rolls;
+  }
+
   calculateDelay(char, nextChar, wpm, usePauses, useJitter) {
     const baseDelay = Math.max(30, Math.round(12000 / Math.max(20, wpm)));
     let delay = baseDelay;
@@ -755,6 +866,8 @@ class GoogleDocsAssistiveTypingEngine {
       wpm: Math.max(20, Math.min(150, Number(payload.wpm) || 65)),
       naturalPauses: payload.naturalPauses !== false,
       jitter: payload.jitter !== false,
+      typoRate: Math.max(0, Math.min(0.5, Number(payload.typoRate) || 0)),
+      falseStartRate: Math.max(0, Math.min(0.5, Number(payload.falseStartRate) || 0)),
       assignmentTitle: payload.title || 'Assignment Document',
       assignmentId: payload.assignmentId || null,
       hudElement: null,
@@ -770,6 +883,7 @@ class GoogleDocsAssistiveTypingEngine {
   async runTypingLoop() {
     const target = this.getTargetElement();
     const chars = Array.from(this.state.text);
+    const rolls = this.computeWordRolls(chars);
 
     try {
       for (let i = 0; i < chars.length; i++) {
@@ -782,6 +896,26 @@ class GoogleDocsAssistiveTypingEngine {
 
         const char = chars[i];
         const nextChar = chars[i + 1] || '';
+        const roll = rolls.get(i);
+
+        // False start: a few keystrokes get retyped away before the word lands.
+        if (roll && roll.falseStart) {
+          const fragLen = 2 + Math.floor(Math.random() * 3);
+          const frag = Array.from({ length: fragLen }, () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]).join('');
+          for (const fc of frag) await this.insertChar(target, fc);
+          await new Promise((r) => setTimeout(r, 320 + Math.random() * 420));
+          for (let b = 0; b < fragLen; b++) await this.deleteChar(target);
+          await new Promise((r) => setTimeout(r, 450 + Math.random() * 550));
+        }
+
+        // Neighbour-key typo: the wrong key lands, a short "double-take"
+        // pause, then backspace + the correct character.
+        if (roll && roll.typoAt === i && roll.wrongChar && roll.wrongChar !== char) {
+          await this.insertChar(target, roll.wrongChar);
+          await new Promise((r) => setTimeout(r, 160 + Math.random() * 320));
+          await this.deleteChar(target);
+          await new Promise((r) => setTimeout(r, 110 + Math.random() * 210));
+        }
 
         await this.insertChar(target, char);
         this.state.currentIndex = i + 1;
@@ -801,7 +935,9 @@ class GoogleDocsAssistiveTypingEngine {
           this.broadcastProgress('typing');
         }
 
-        const delay = this.calculateDelay(char, nextChar, this.state.wpm, this.state.naturalPauses, this.state.jitter);
+        const usePauses = this.state.naturalPauses && this.config.punctuationPauses !== false;
+        const useJitter = this.state.jitter && this.config.jitter !== false;
+        const delay = this.calculateDelay(char, nextChar, this.state.wpm, usePauses, useJitter);
         await new Promise((r) => setTimeout(r, delay));
       }
 
@@ -928,7 +1064,7 @@ class GoogleDocsAssistiveTypingEngine {
             <span style="font-size: 11px; font-weight: 700; color: #c4b5fd; letter-spacing: 0.5px; text-transform: uppercase;">Assistive Typing</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button id="hud-btn-settings" title="Cadence Settings" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">⚙️</button>
+            <button id="hud-btn-settings" title="Realism Settings" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">⚙️</button>
             <button id="hud-btn-collapse" title="Collapse" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">−</button>
             <button id="hud-btn-close" title="Close" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">✕</button>
           </div>
@@ -970,7 +1106,7 @@ class GoogleDocsAssistiveTypingEngine {
             📄 Drop .txt / .md file to type into doc
           </div>
 
-          <!-- Cadence Controls Drawer -->
+          <!-- Realism Controls Drawer -->
           <div id="hud-settings-drawer" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 10px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span>Speed:</span> <b id="hud-slider-wpm-val">65 WPM</b>
@@ -983,6 +1119,12 @@ class GoogleDocsAssistiveTypingEngine {
               </label>
               <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" id="hud-chk-jitter" checked> Jitter Rhythm
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-typos" checked> Typos & Fix
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                <input type="checkbox" id="hud-chk-falsestarts" checked> False Starts
               </label>
             </div>
           </div>
@@ -1060,24 +1202,43 @@ class GoogleDocsAssistiveTypingEngine {
       this.cancelTyping();
     });
 
-    // Cadence Controls Listeners
+    // Realism Controls Listeners
     const wpmSlider = this.hudElement.querySelector('#hud-slider-wpm');
     const wpmVal = this.hudElement.querySelector('#hud-slider-wpm-val');
+    wpmSlider.value = this.config.wpm || 65;
+    wpmVal.textContent = `${wpmSlider.value} WPM`;
     wpmSlider.addEventListener('input', (e) => {
       const v = Number(e.target.value);
       this.config.wpm = v;
+      this.state.wpm = Math.max(20, Math.min(150, v)); // live: affects the running loop
       wpmVal.textContent = `${v} WPM`;
       this.saveConfig();
       this.updateHUD();
     });
 
-    this.hudElement.querySelector('#hud-chk-pauses').addEventListener('change', (e) => {
+    const hudChkPauses = this.hudElement.querySelector('#hud-chk-pauses');
+    const hudChkJitter = this.hudElement.querySelector('#hud-chk-jitter');
+    const hudChkTypos = this.hudElement.querySelector('#hud-chk-typos');
+    const hudChkFalseStarts = this.hudElement.querySelector('#hud-chk-falsestarts');
+    hudChkPauses.checked = this.config.punctuationPauses !== false;
+    hudChkJitter.checked = this.config.jitter !== false;
+    hudChkTypos.checked = this.config.typosEnabled !== false;
+    hudChkFalseStarts.checked = this.config.falseStarts !== false;
+    hudChkPauses.addEventListener('change', (e) => {
       this.config.punctuationPauses = e.target.checked;
       this.config.thinkingBreaks = e.target.checked;
       this.saveConfig();
     });
-    this.hudElement.querySelector('#hud-chk-jitter').addEventListener('change', (e) => {
+    hudChkJitter.addEventListener('change', (e) => {
       this.config.jitter = e.target.checked;
+      this.saveConfig();
+    });
+    hudChkTypos.addEventListener('change', (e) => {
+      this.config.typosEnabled = e.target.checked;
+      this.saveConfig();
+    });
+    hudChkFalseStarts.addEventListener('change', (e) => {
+      this.config.falseStarts = e.target.checked;
       this.saveConfig();
     });
 
@@ -1174,8 +1335,12 @@ class GoogleDocsAssistiveTypingEngine {
 }
 
 // Instantiate and attach
+// (08-31 fix: 871ef58 renamed the class to GoogleDocsAssistiveTypingEngine
+// but the instantiation still referenced the vanished UnifiedAssistiveTypingEngine
+// — ReferenceError at load, so the whole content script never registered its
+// listeners and extension-path typing was dead. window handle kept for compat.)
 if (!window.__helpotron_unified_typing_engine) {
-  window.__helpotron_unified_typing_engine = new UnifiedAssistiveTypingEngine();
+  window.__helpotron_unified_typing_engine = new GoogleDocsAssistiveTypingEngine();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1196,7 +1361,7 @@ if (
       window.postMessage({
         type: 'HELPOTRON_PONG',
         version: '2.2.0',
-        capabilities: ['scrape', 'agent', 'launch_to_doc', 'dripwriter_api', 'cadence_controls', 'cross_tab_hud'],
+        capabilities: ['scrape', 'agent', 'launch_to_doc', 'dripwriter_api', 'nine_realism_controls', 'cross_tab_hud'],
       }, '*');
     } else if (event.data.type === 'HELPOTRON_GET_GDOCS_TABS') {
       try {

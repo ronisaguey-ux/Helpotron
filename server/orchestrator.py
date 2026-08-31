@@ -245,7 +245,12 @@ async def _run_workflow_async(assignment_id: int):
 
 async def plan_tasks(prompt: str, transcript: str) -> List[Dict]:
     """Use LLM to break down assignment into sub-tasks."""
-    system = "You are a task planner. Break down the given assignment into 3-5 logical sub-tasks. Return a JSON list of tasks, each with 'name', 'description', and 'estimated_seconds' (int)."
+    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+    system = (
+        "You are a task planner. Break down the given assignment into 3-5 logical sub-tasks. "
+        "Return a JSON list of tasks, each with 'name', 'description', and 'estimated_seconds' (int).\n"
+        + sandbox_math_rule()
+    )
     # 08-28 fix: 2000 chars meant the planner never saw beyond the intro when
     # the scrape is the source (full content is now up to 1M chars). 50k keeps
     # the planner cheap while covering a real assignment document.
