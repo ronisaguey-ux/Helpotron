@@ -488,24 +488,30 @@ export default function AppShell({
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex-1 min-w-0 max-w-[180px] sm:max-w-md flex items-center gap-2.5 px-2.5 sm:px-3 py-2 rounded-xl bg-white/4 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer text-xs"
+            className="flex-1 min-w-0 max-w-[180px] sm:max-w-md flex items-center gap-2.5 overflow-hidden px-2.5 sm:px-3 py-2 rounded-xl bg-white/4 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer text-xs"
             aria-label="Search anything…"
             title="Search"
           >
             <Search width={14} height={14} className="shrink-0" />
             <span className="flex-1 text-left truncate hidden sm:block">Search anything…</span>
-            <span className="hidden sm:block"><Kbd>⌘K</Kbd></span>
+            {/* QA 08-31: the ⌘K hint had no shrink-0 and the button no
+                overflow-hidden, so once the balance chip squeezed the button to
+                26px the hint rendered OUTSIDE it and landed on top of the chip.
+                It is also a keyboard affordance, so md+ only. */}
+            <span className="hidden md:block shrink-0"><Kbd>⌘K</Kbd></span>
           </button>
 
           <div className="ml-auto flex items-center gap-1.5 min-w-0">
-            {/* Tokens (usage) + Credits (discounts) chips — hidden on phones
-                (≤sm): on a 390px viewport the chip cluster ate the header and
-                squeezed the search to 22-33px; the balance now lives in the
-                mobile drawer footer (08-29). */}
+            {/* Tokens (usage) + Credits (discounts) chips — the chip cluster is
+                ~214px and does not shrink, so it eats the header and squeezes
+                the search trigger down to 26px. Hidden below md; the drawer
+                that carries the balance in its footer is itself md:hidden, so
+                the two hand over at exactly 768px with no gap and no overlap.
+                (08-29 used sm, which left 640-767px showing both AND broken.) */}
             <button
               type="button"
               onClick={() => onNavigate('credits')}
-              className="hidden sm:flex min-w-0 items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--text-secondary)] hover:bg-[var(--accent-subtle)] hover:border-[rgba(139,92,246,0.5)] transition cursor-pointer text-xs font-semibold font-mono"
+              className="hidden md:flex min-w-0 items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--text-secondary)] hover:bg-[var(--accent-subtle)] hover:border-[rgba(139,92,246,0.5)] transition cursor-pointer text-xs font-semibold font-mono"
               aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
             >
               <span className="w-2 h-2 rounded-full bg-[var(--accent-2)] animate-pulse shrink-0" />
