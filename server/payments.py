@@ -148,22 +148,34 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
 
 
 def process_payment(db: Session, user: User, provider: str, amount_cents: int) -> dict:
-    """Process a payment, validate provider, calculate discount, and credit balance."""
+    """Process a payment, validate provider, calculate discount, and credit balance.
+
+    Operator 08-31: a referral redemption grants a one-time order discount
+    (30% new user / 15% existing user, stored in user.referral_discount_pct).
+    The order CHARGE is reduced by that amount while the full credit value is
+    delivered — 30% off the order, not 30% fewer credits. The entitlement is
+    consumed by this order.
+    """
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported payment provider: '{provider}'. Must be one of {sorted(SUPPORTED_PROVIDERS)}")
 
     if amount_cents <= 0:
         raise ValueError("Payment amount must be greater than zero")
 
+    referral_pct = float(getattr(user, "referral_discount_pct", 0.0) or 0.0)
+
     discount_pct = compute_applicable_discount(user)
     discount_factor = 1.0 - (discount_pct / 100.0)
     credits_added = round((amount_cents / 100.0) * discount_factor, 2)
+
+    # Referral discount: the order price drops by pct%, credits stay at full value.
+    charged_cents = max(1, round(amount_cents * (1.0 - referral_pct / 100.0))) if referral_pct > 0 else amount_cents
 
     status = "captured" if provider == "stripe" else "pending"
     payment = Payment(
         user_id=user.id,
         provider=provider,
-        amount_cents=amount_cents,
+        amount_cents=charged_cents,
         status=status,
         provider_ref=f"{provider}_{user.id}_{amount_cents}",
     )
@@ -172,18 +184,33 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
 
     if status == "captured":
         user.credits += credits_added
+        reason = f"payment:{provider}:${charged_cents/100:.2f}"
+        if referral_pct > 0:
+            reason += f" (referral discount: {referral_pct:g}%)"
+        if discount_pct > 0:
+            reason += f" (discount: {discount_pct}%)"
         tx = CreditTransaction(
             user_id=user.id,
             delta=credits_added,
-            reason=f"payment:{provider}:${amount_cents/100:.2f} (discount: {discount_pct}%)"
+            reason=reason
         )
         db.add(tx)
+
+    # Referral entitlement is one-time: consumed by this order.
+    if referral_pct > 0:
+        user.referral_discount_pct = 0.0
 
     if discount_pct > 0:
         apply_discount(user, db)
 
     db.commit()
-    return {"id": payment.id, "status": payment.status, "credits_added": credits_added if status == "captured" else 0}
+    return {
+        "id": payment.id,
+        "status": payment.status,
+        "credits_added": credits_added if status == "captured" else 0,
+        "amount_charged_cents": charged_cents,
+        "referral_discount_pct": referral_pct,
+    }
 
 
 def refund_unused(db: Session, user: User, amount_cents: int) -> dict:

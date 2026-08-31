@@ -219,9 +219,14 @@ export function CreditsPricingDashboard({
     setPromoMsg('');
     try {
       const res = await api.redeemReferralCode(code);
-      const granted = res?.credits_awarded ?? res?.reward ?? 10;
+      const granted = res?.bonus_credits ?? res?.credits_awarded ?? res?.reward ?? 10;
+      const pct = res?.discount_pct ?? 0;
       setPromoApplied(true);
-      setPromoMsg(`Referral code accepted — ${granted} credits added to your balance.`);
+      setPromoMsg(
+        pct > 0
+          ? `Referral code accepted — ${granted} credits added, plus ${pct}% off your next order!`
+          : `Referral code accepted — ${granted} credits added to your balance.`
+      );
       setPromoCode('');
     } catch (err) {
       setPromoApplied(false);
