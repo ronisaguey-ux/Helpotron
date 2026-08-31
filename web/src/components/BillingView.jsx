@@ -13,6 +13,8 @@ export default function BillingView({ userId }) {
   const [plan, setPlan] = useState('');
   const [msg, setMsg] = useState('');
   const [transactions, setTransactions] = useState([]);
+  /* Operator 08-31: one-time % off from a redeemed referral code (30 new / 15 existing). */
+  const [referralPct, setReferralPct] = useState(0);
 
   useEffect(() => {
     api.dashboard(userId).then((d) => {
@@ -22,6 +24,7 @@ export default function BillingView({ userId }) {
       setTokens(Number(d.settings?.token_balance ?? 0));
       setPlan(typeof d.plan === 'string' ? d.plan : '');
       setTransactions(d.recent_transactions || []);
+      setReferralPct(Number(d.referral_discount_pct ?? 0));
     }).catch(() => {});
   }, [userId]);
 
@@ -50,6 +53,18 @@ export default function BillingView({ userId }) {
       {msg && (
         <div className="panel p-4 text-xs text-[var(--text-secondary)]">
           {msg}
+        </div>
+      )}
+
+      {/* Operator 08-31: active referral order discount (one-time, consumed at checkout) */}
+      {referralPct > 0 && (
+        <div className="panel p-4 border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-200" role="status">
+          <p className="text-sm font-semibold text-emerald-100">
+            🎁 Referral discount active: {referralPct}% off your next order
+          </p>
+          <p className="mt-1 text-emerald-200/90 leading-relaxed">
+            You redeemed a friend's referral code — the discount applies automatically on your next top-up and is used once.
+          </p>
         </div>
       )}
       <CreditsPricingDashboard currentCredits={balance} currentTokens={tokens} plan={plan} onTopUp={handleTopUp} userId={userId} />

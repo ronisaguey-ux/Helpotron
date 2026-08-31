@@ -4,13 +4,16 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from server.database import get_db, User, Referral, SessionLocal
+from server.database import get_db, User, Referral, SessionLocal, Payment
 from server.referral import (
     generate_referral_code,
     check_user_subscription,
     create_new_referral_code,
     redeem_referral,
     get_referral_stats,
+    is_new_user,
+    REFERRAL_DISCOUNT_NEW_USER_PCT,
+    REFERRAL_DISCOUNT_EXISTING_USER_PCT,
 )
 
 
@@ -99,6 +102,88 @@ def test_referral_subscription_gating_and_attribution():
         assert stats["total_issued"] == 1
         assert stats["total_completed"] == 1
         assert stats["is_subscribed"] is True
+    finally:
+        db_session.close()
+
+
+def test_referral_discount_granted_to_new_user():
+    """Operator 08-31: redeeming a code gives a NEW user (no payments, no
+    live subscription) a one-time 30% order discount."""
+    from server.payments import process_payment
+
+    db_session = SessionLocal()
+    try:
+        suffix = uuid.uuid4().hex[:8]
+        referrer = User(public_id=f"RefDiscReferrer_{suffix}", plan="pro", subscription_status="active", credits=0.0)
+        db_session.add(referrer)
+        db_session.commit()
+        db_session.refresh(referrer)
+
+        ref = create_new_referral_code(db_session, referrer)
+
+        # New user: no Payment rows, no active subscription.
+        fresh = User(public_id=f"RefDiscFresh_{suffix}", plan="none", credits=0.0)
+        db_session.add(fresh)
+        db_session.commit()
+        db_session.refresh(fresh)
+
+        assert is_new_user(db_session, fresh) is True
+
+        res = redeem_referral(db_session, ref.referral_code, fresh)
+        assert res["status"] == "success"
+        assert res["is_new_user"] is True
+        assert res["discount_pct"] == 30.0
+        assert res["discount_pct"] == REFERRAL_DISCOUNT_NEW_USER_PCT
+
+        db_session.refresh(fresh)
+        assert fresh.referral_discount_pct == 30.0
+
+        # The discount applies at payment time: $10 order charged $7, full
+        # 10 credits delivered, entitlement consumed.
+        pay = process_payment(db_session, fresh, "stripe", 1000)
+        assert pay["amount_charged_cents"] == 700
+        assert pay["credits_added"] == 10.0
+        assert pay["referral_discount_pct"] == 30.0
+
+        db_session.refresh(fresh)
+        assert fresh.credits == 20.0  # +10 welcome bonus + 10 purchase
+        assert fresh.referral_discount_pct == 0.0  # one-time, consumed
+
+        # Second order is charged full price.
+        pay2 = process_payment(db_session, fresh, "stripe", 1000)
+        assert pay2["amount_charged_cents"] == 1000
+        assert pay2["referral_discount_pct"] == 0.0
+    finally:
+        db_session.close()
+
+
+def test_referral_discount_existing_user_gets_15():
+    """Operator 08-31: an EXISTING user (has paid before) redeeming a code
+    gets a one-time 15% order discount."""
+    db_session = SessionLocal()
+    try:
+        suffix = uuid.uuid4().hex[:8]
+        referrer = User(public_id=f"RefDiscRef2_{suffix}", plan="pro", subscription_status="active", credits=0.0)
+        db_session.add(referrer)
+        db_session.commit()
+        db_session.refresh(referrer)
+        ref = create_new_referral_code(db_session, referrer)
+
+        # Existing user: has a Payment row already.
+        existing = User(public_id=f"RefDiscOld_{suffix}", plan="basic", credits=0.0)
+        db_session.add(existing)
+        db_session.commit()
+        db_session.refresh(existing)
+        db_session.add(Payment(user_id=existing.id, provider="stripe", amount_cents=1000, status="captured"))
+        db_session.commit()
+
+        assert is_new_user(db_session, existing) is False
+
+        res = redeem_referral(db_session, ref.referral_code, existing)
+        assert res["status"] == "success"
+        assert res["is_new_user"] is False
+        assert res["discount_pct"] == 15.0
+        assert res["discount_pct"] == REFERRAL_DISCOUNT_EXISTING_USER_PCT
     finally:
         db_session.close()
 

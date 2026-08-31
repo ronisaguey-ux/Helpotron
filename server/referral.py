@@ -9,7 +9,13 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from .config import config
-from .database import CreditTransaction, Referral, User
+from .database import CreditTransaction, Payment, Referral, User
+
+# Operator 08-31: redeeming someone else's referral code grants a one-time
+# order discount — 30% for a new user (no payment history, no live
+# subscription), 15% for an existing user.
+REFERRAL_DISCOUNT_NEW_USER_PCT = 30.0
+REFERRAL_DISCOUNT_EXISTING_USER_PCT = 15.0
 
 
 def generate_referral_code() -> str:
@@ -50,6 +56,25 @@ def create_new_referral_code(db: Session, user: User) -> Referral:
     return ref
 
 
+def is_new_user(db: Session, user: User) -> bool:
+    """Operator 08-31: a user counts as NEW for referral-discount purposes if
+    they have never placed an order (no Payment rows) and are not on a live
+    paid subscription. Anyone who has ever paid (or is subscribed/trialing)
+    is an existing user."""
+    if db.query(Payment).filter(Payment.user_id == user.id).first() is not None:
+        return False
+    return not check_user_subscription(user)
+
+
+def grant_referral_discount(db: Session, user: User, pct: float) -> float:
+    """Grant a one-time order discount entitlement, never downgrading a
+    larger active one. Persists until consumed by the next payment."""
+    current = float(getattr(user, "referral_discount_pct", 0.0) or 0.0)
+    granted = max(current, pct)
+    user.referral_discount_pct = granted
+    return granted
+
+
 def get_or_create_referral(db: Session, user: User) -> Referral:
     """Get active unredeemed referral code for user or generate a fresh one if subscribed."""
     if not check_user_subscription(user):
@@ -72,12 +97,14 @@ def get_or_create_referral(db: Session, user: User) -> Referral:
 
 def redeem_referral(db: Session, code: str, new_user: User) -> Dict[str, Any]:
     """Redeem a 40-digit single-use referral code.
-    
+
     Rules:
     1. Code must exist in database.
     2. Code cannot be reused (single-use).
     3. User cannot redeem their own code.
     4. Rewards 40 credits to the specific referrer and 10 credits to the new user.
+    5. Operator 08-31: grants a one-time order discount — 30% off (new user)
+       or 15% off (existing user) — applied to the next successful payment.
     """
     clean_code = code.strip()
     ref = db.query(Referral).filter(Referral.referral_code == clean_code).first()
@@ -115,13 +142,24 @@ def redeem_referral(db: Session, code: str, new_user: User) -> Dict[str, Any]:
         reason=f"referral:welcome_bonus_from_code_{clean_code[:8]}"
     ))
 
+    # Operator 08-31: one-time order discount — 30% off if the redeemer is a
+    # new user (never paid, no live subscription), 15% off otherwise.
+    user_is_new = is_new_user(db, new_user)
+    discount_pct = REFERRAL_DISCOUNT_NEW_USER_PCT if user_is_new else REFERRAL_DISCOUNT_EXISTING_USER_PCT
+    granted = grant_referral_discount(db, new_user, discount_pct)
+
     db.commit()
 
     return {
         "status": "success",
-        "message": "Referral code redeemed successfully! +10 credits awarded to your account.",
+        "message": (
+            f"Referral code redeemed successfully! +10 credits awarded to your account "
+            f"and a one-time {granted:g}% off your next order has been applied."
+        ),
         "bonus_credits": 10,
         "referrer_public_id": referrer.public_id if referrer else "Scholar",
+        "is_new_user": user_is_new,
+        "discount_pct": granted,
     }
 
 

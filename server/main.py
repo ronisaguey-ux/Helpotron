@@ -1419,6 +1419,9 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
         "monthly_credits": None if monthly == float("inf") else monthly,
         "settings": user.settings,
         "discount_balance": user.discount_balance,
+        # Operator 08-31: one-time order discount from a redeemed referral
+        # code (30% new user / 15% existing) — server-side truth for the UI.
+        "referral_discount_pct": float(getattr(user, "referral_discount_pct", 0.0) or 0.0),
         "pagination": {"limit": limit, "offset": offset},
         "user": {
             "public_id": user.public_id,
@@ -1497,7 +1500,14 @@ def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Dep
     except ValueError as e:
         raise HTTPException(400, str(e))
     db.commit()
-    return {"payment_id": payment["id"], "status": payment["status"], "credits": credits.get_balance(user)}
+    return {
+        "payment_id": payment["id"],
+        "status": payment["status"],
+        "credits": credits.get_balance(user),
+        # Operator 08-31 referral discount (0 when none/no longer active)
+        "amount_charged_cents": payment.get("amount_charged_cents", body.amount_cents),
+        "referral_discount_pct": payment.get("referral_discount_pct", 0.0),
+    }
 
 
 class CheckoutIn(BaseModel):
