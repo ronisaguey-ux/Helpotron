@@ -342,7 +342,7 @@ export function CreditsPricingDashboard({
               </div>
             </div>
             <div className="min-w-0 @xs:text-right">
-              <div className="text-xs text-slate-400 font-medium mb-1">Active tier</div>
+              <div className="text-xs text-slate-400 font-medium mb-1">Your plan</div>
               <span
                 className="inline-block max-w-full truncate align-bottom text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono"
                 title={plan === 'none' || !plan ? 'No plan' : plan}
@@ -350,7 +350,7 @@ export function CreditsPricingDashboard({
                 {plan === 'none' || !plan ? 'No plan' : plan}
               </span>
               {(plan === 'none' || !plan) && (
-                <div className="text-[10px] text-slate-500 mt-1">ask the operator to activate one</div>
+                <div className="text-[10px] text-slate-500 mt-1">ask an admin to activate one</div>
               )}
             </div>
           </div>
