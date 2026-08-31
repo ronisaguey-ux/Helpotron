@@ -318,45 +318,60 @@ export function CreditsPricingDashboard({
     <div className="space-y-8 text-slate-100 animate-fadeIn">
       {/* Balance & Discount Credits Header */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Regular Compute Balance */}
-        <div className="clean-card rounded-2xl p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        {/* Regular Compute Balance.
+            QA 08-31: this row used a `sm:` VIEWPORT breakpoint while the card
+            itself is one half of a 2-up grid — so at 1024–1440px the card was
+            220–556px wide but the row still laid out side by side, and the
+            shrink-0 tier pill (392px, it carried its own label plus an
+            activation sentence) crushed the token figure to 0–44px against its
+            115px of content. Now the row breaks on the CARD's width, and the
+            tier is a labelled field like the balance beside it instead of one
+            long pill. */}
+        <div className="clean-card rounded-2xl p-6 @container">
+          <div className="flex flex-col gap-3 @xs:flex-row @xs:items-center @xs:justify-between @xs:gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.30)] flex items-center justify-center text-[var(--accent)] shrink-0">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-slate-400 font-medium">Available Task Tokens</div>
-                <div className="text-2xl font-black text-[var(--accent)] font-mono whitespace-nowrap">
+                <div className="text-2xl font-black text-[var(--accent)] font-mono tabular-nums whitespace-nowrap">
                   {Number(currentTokens).toLocaleString()} tokens
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">usage budget for AI tasks</div>
               </div>
             </div>
-            <div className="text-left sm:text-right shrink-0">
-              <span className="inline-block text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono">
-                Active Tier: {plan === 'none' || !plan ? 'No plan (activate via operator)' : plan}
+            <div className="min-w-0 @xs:text-right">
+              <div className="text-xs text-slate-400 font-medium mb-1">Active tier</div>
+              <span
+                className="inline-block max-w-full truncate align-bottom text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono"
+                title={plan === 'none' || !plan ? 'No plan' : plan}
+              >
+                {plan === 'none' || !plan ? 'No plan' : plan}
               </span>
+              {(plan === 'none' || !plan) && (
+                <div className="text-[10px] text-slate-500 mt-1">ask the operator to activate one</div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Referral Discount Credits Balance */}
-        <div className="clean-card rounded-2xl p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="clean-card rounded-2xl p-6 @container">
+          <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center @sm:justify-between @sm:gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <Tag className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-slate-400 font-medium">Referral Discount Credits</div>
-                <div className="text-2xl font-black text-emerald-400 font-mono whitespace-nowrap">
+                <div className="text-2xl font-black text-emerald-400 font-mono tabular-nums whitespace-nowrap">
                   ${userDiscountCredits}.00 USD
                 </div>
               </div>
             </div>
-            <div className="text-left sm:text-right shrink-0">
-              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5 sm:py-0">
+            <div className="text-left @sm:text-right shrink-0">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5 @sm:py-0">
                 <input
                   type="checkbox"
                   checked={useDiscountCredits}
@@ -544,7 +559,7 @@ export function CreditsPricingDashboard({
       )}
 
       {/* Pricing Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-6">
         {tiers.map((tier) => {
           const isAnnual = billingCycle === 'annual';
           const base = isAnnual ? tier.annualBasePrice : tier.basePrice;
@@ -567,7 +582,7 @@ export function CreditsPricingDashboard({
               }
             >
               {tier.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[var(--accent)] text-white font-bold text-[10px] uppercase tracking-wider shadow-lg">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1 rounded-full bg-[var(--accent)] text-white font-bold text-[10px] uppercase tracking-wider shadow-lg">
                   Most Popular
                 </div>
               )}

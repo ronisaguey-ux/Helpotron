@@ -85,38 +85,41 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [launchToDocTarget, setLaunchToDocTarget] = useState(null);
 
   /* ── CONFIGS sidebar (operator 08-28): SEE / ADD / SELECT every custom
-   * agent config. Renders as a fixed column at xl+, a slide-over drawer at
-   * lg (1024-1279) so the chat never gets pinched, and an inline block on
-   * small screens. Default open on xl desktops (a drawer covering the chat
-   * at load would be worse); toggled anytime via ⚙ Configs in the chat
-   * header or the panel's own Minimize control. ───────────────────────── */
+   * agent config. At xl+ it is DOCKED as a third grid column — non-modal, so
+   * the chat beside it stays visible and interactive — and it may therefore
+   * default open. Below xl there is no room to dock, so the same panel opens
+   * as a modal slide-over drawer and defaults CLOSED: a drawer covering the
+   * chat on load hides the view the user actually navigated to (QA 08-31).
+   * Toggled anytime via ⚙ Configs in the chat header or the panel's own
+   * Minimize control. ──────────────────────────────────────────────────── */
   const [configsOpen, setConfigsOpen] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
   );
-  /* Responsive breakpoints — matchMedia state so the grid can re-flow when
-   * the window crosses lg (1024) / xl (1280) without relying on CSS alone. */
+  /* Responsive breakpoint — matchMedia state so the grid can re-flow when the
+   * window crosses xl (1280) without relying on CSS alone. */
   const [isXL, setIsXL] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
   );
-  const [isLG, setIsLG] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
-  );
   useEffect(() => {
     const mqXl = window.matchMedia('(min-width: 1280px)');
-    const mqLg = window.matchMedia('(min-width: 1024px)');
-    const onXl = () => setIsXL(mqXl.matches);
-    const onLg = () => setIsLG(mqLg.matches);
+    const onXl = () => {
+      setIsXL(mqXl.matches);
+      /* Shrinking past xl would turn a docked column into a modal drawer that
+       * suddenly covers the chat, so hand the space back instead. */
+      if (!mqXl.matches) setConfigsOpen(false);
+    };
     mqXl.addEventListener('change', onXl);
-    mqLg.addEventListener('change', onLg);
-    return () => { mqXl.removeEventListener('change', onXl); mqLg.removeEventListener('change', onLg); };
+    return () => mqXl.removeEventListener('change', onXl);
   }, []);
-  /* Drawer mode: Escape closes the configs overlay. */
+  /* Drawer mode: Escape closes the configs overlay. Only while it is actually
+   * modal (below xl) — at xl the panel is a docked column and Escape there
+   * would collapse a panel the user never opened as a dialog. */
   useEffect(() => {
-    if (!(configsOpen && !isXL && isLG)) return;
+    if (!(configsOpen && !isXL)) return;
     const onKey = (e) => { if (e.key === 'Escape') setConfigsOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [configsOpen, isXL, isLG]);
+  }, [configsOpen, isXL]);
   /* operator 08-28: collapse the prompt composer to a slim bar (header toggle) */
   const [promptMinimized, setPromptMinimized] = useState(false);
 
@@ -1252,8 +1255,14 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         </div>
       )}
 
-      {/* ── Main Workspace Grid: Threads Rail + Chat Canvas ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-4 h-[calc(100vh-14rem)] min-h-[580px]">
+      {/* ── Main Workspace Grid: Threads Rail + Chat Canvas (+ docked Configs at xl) ── */}
+      <div
+        className={`grid grid-cols-1 gap-4 h-[calc(100vh-14rem)] min-h-[580px] ${
+          configsOpen && isXL
+            ? 'lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_440px]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)]'
+        }`}
+      >
         {/* Left Rail: Threads List & Quick Effort Slider */}
         <div className="panel p-3 flex flex-col justify-between overflow-hidden">
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
@@ -1476,17 +1485,38 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             </form>
           </div>
         </div>
+
+        {/* ── Configs, docked as a third column at xl ──────────────────────
+         * At xl there is room to show the panel beside the chat, so it is a
+         * non-modal column: the chat stays visible AND interactive. Below xl
+         * the same panel becomes the modal drawer rendered after this grid. */}
+        {configsOpen && isXL && (
+          <aside
+            aria-label="Agent configurations"
+            className="hidden xl:flex min-h-0 min-w-0 flex-col animate-fadeIn"
+          >
+            <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
+          </aside>
+        )}
       </div>
 
-      {/* ── Slide-Over Drawer for Memory & Skills ── */}
-      {configsOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
+      {/* ── Slide-Over Drawer for Memory & Skills (below xl only) ──────────
+       * Modal here is the right call: under 1280px there is no room to dock,
+       * so the panel takes over with a dismissable scrim. At xl the docked
+       * column above replaces it entirely — never both. */}
+      {configsOpen && !isXL && (
+        <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn xl:hidden">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setConfigsOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-lg bg-[var(--bg-canvas)] border-l border-[var(--border-subtle)] h-full flex flex-col shadow-2xl z-10">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Agent configurations"
+            className="relative w-full max-w-lg bg-[var(--bg-base)] border-l border-[var(--border-subtle)] h-full flex flex-col shadow-2xl z-10"
+          >
             <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
           </div>
         </div>

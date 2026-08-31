@@ -205,7 +205,7 @@ function Pricing({ onOpenAuth }) {
             </div>
             <button
               type="button"
-              onClick={onOpenAuth}
+              onClick={() => onOpenAuth('signup')}
               className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'px-4 py-2.5 rounded-[var(--radius-sm)] text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition' : BTN_SECONDARY)} w-full px-4 py-2.5 cursor-pointer`}
             >
               {p.is_trial ? 'Start free trial' : p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
@@ -235,7 +235,9 @@ function Pricing({ onOpenAuth }) {
 }
 
 export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = null }) {
-  const openAuth = () => { if (onOpenAuth) onOpenAuth(); };
+  /* `intent` is 'login' or 'signup'. Call sites MUST pass it explicitly —
+   * a bare onClick={openAuth} would forward React's event object instead. */
+  const openAuth = (intent) => { if (onOpenAuth) onOpenAuth(intent === 'login' ? 'login' : 'signup'); };
 
   return (
     <div id="main-content" className="landing-atmos min-h-screen text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
@@ -260,14 +262,14 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
             </a>
             <button
               type="button"
-              onClick={openAuth}
+              onClick={() => openAuth('login')}
               className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] text-[var(--text-secondary)] text-xs font-semibold transition cursor-pointer whitespace-nowrap"
             >
               Sign in
             </button>
             <button
               type="button"
-              onClick={openAuth}
+              onClick={() => openAuth('signup')}
               className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer glow-accent whitespace-nowrap"
             >
               Start free
@@ -297,10 +299,10 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
             you actually completed.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
-            <button type="button" onClick={openAuth} className={`${BTN_PRIMARY} px-7 py-3.5 text-base w-full sm:w-auto`}>
+            <button type="button" onClick={() => openAuth('signup')} className={`${BTN_PRIMARY} px-7 py-3.5 text-base w-full sm:w-auto`}>
               Start free <ArrowRight className="w-4 h-4" />
             </button>
-            <button type="button" onClick={openAuth} className={`${BTN_SECONDARY} px-6 py-3.5 w-full sm:w-auto`}>
+            <button type="button" onClick={() => openAuth('login')} className={`${BTN_SECONDARY} px-6 py-3.5 w-full sm:w-auto`}>
               Sign in
             </button>
           </div>
@@ -362,7 +364,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
           {/* One action. This block previously offered two buttons that both
               opened the same dialog. */}
           <div className="border-t border-[var(--border-subtle)] pt-7">
-            <button type="button" onClick={openAuth} className={`${BTN_PRIMARY} px-7 py-3.5 text-base`}>
+            <button type="button" onClick={() => openAuth('signup')} className={`${BTN_PRIMARY} px-7 py-3.5 text-base`}>
               Start free <ArrowRight className="w-4 h-4" />
             </button>
           </div>

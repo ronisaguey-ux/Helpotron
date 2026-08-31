@@ -43,3 +43,6 @@ helpotron_audit/
 data/logs/
 data/sandboxes/
 
+
+# playwright-mcp screenshot staging (QA evidence, not source)
+.playwright-mcp/
