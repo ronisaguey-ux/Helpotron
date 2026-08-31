@@ -317,7 +317,13 @@ export function CreditsPricingDashboard({
   return (
     <div className="space-y-8 text-slate-100 animate-fadeIn">
       {/* Balance & Discount Credits Header */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* QA 08-31: `md:grid-cols-2` keys off the VIEWPORT, but this grid sits in
+          the content column beside the nav rail. At a 768px viewport that column
+          is 456px, so `md:` fired and split it into two 220px cards — narrower
+          than the 232px the balance rows need, and the figures escaped by 14px.
+          auto-fit keys off the real track width instead: one column until there
+          is genuinely room for two. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
         {/* Regular Compute Balance.
             QA 08-31: this row used a `sm:` VIEWPORT breakpoint while the card
             itself is one half of a 2-up grid — so at 1024–1440px the card was
@@ -359,18 +365,26 @@ export function CreditsPricingDashboard({
         {/* Referral Discount Credits Balance */}
         <div className="clean-card rounded-2xl p-6 @container">
           <div className="flex flex-col gap-3 @sm:flex-row @sm:items-center @sm:justify-between @sm:gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
+            {/* QA 08-31: the shrink priorities were inverted here. The dollar
+                figure is the card's primary data but sat under `min-w-0` (free to
+                shrink below its own content), while the secondary "up to 50%"
+                note was `shrink-0` (protected). At 1280px that crushed the left
+                group to 168px against 184px of content and the figure — which is
+                `whitespace-nowrap`, so it cannot reflow — escaped its box by 16px.
+                Dropping `min-w-0` floors the group at min-content; the note now
+                yields and wraps instead. */}
+            <div className="flex items-center gap-3.5">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <Tag className="w-5 h-5" />
               </div>
-              <div className="min-w-0">
+              <div>
                 <div className="text-xs text-slate-400 font-medium">Referral Discount Credits</div>
                 <div className="text-2xl font-black text-emerald-400 font-mono tabular-nums whitespace-nowrap">
                   ${userDiscountCredits}.00 USD
                 </div>
               </div>
             </div>
-            <div className="text-left @sm:text-right shrink-0">
+            <div className="text-left @sm:text-right min-w-0">
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer py-1.5 @sm:py-0">
                 <input
                   type="checkbox"
@@ -391,8 +405,15 @@ export function CreditsPricingDashboard({
         <CostIntelligenceSection costData={costData} loading={costLoading} />
       </div>
 
-      {/* Billing Switch & Promo Section */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white/4 border border-white/8">
+      {/* Billing Switch & Promo Section.
+          QA 08-31: `sm:flex-row` fired at a 640px VIEWPORT, but this row lives in
+          the content column — 456px at a 768px viewport. Side by side its two
+          children need ~619px (270px cycle toggle + 333px promo form + gap), so
+          it overflowed by 163px and dragged the whole credits column with it.
+          `@3xl` (768px CONTAINER) is the first width that actually fits both:
+          measured, the row needs 713px and @2xl/672px still left it 3px short. */}
+      <div className="@container">
+      <div className="flex flex-col @3xl:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white/4 border border-white/8">
         {/* Monthly vs Annual */}
         <div className="flex items-center p-1 rounded-xl bg-white/4 border border-white/8 text-xs font-semibold">
           <button
@@ -419,13 +440,13 @@ export function CreditsPricingDashboard({
         </div>
 
         {/* Promo Code Box */}
-        <form onSubmit={handleApplyPromo} className="flex gap-2 w-full sm:w-auto text-xs">
+        <form onSubmit={handleApplyPromo} className="flex gap-2 w-full @3xl:w-auto text-xs">
           <input
             type="text"
             placeholder="Have a referral/promo code?"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
-            className="clean-input px-3.5 py-2 w-full sm:w-60 font-mono text-xs uppercase"
+            className="clean-input px-3.5 py-2 w-full @3xl:w-60 font-mono text-xs uppercase"
           />
           <button
             type="submit"
@@ -434,6 +455,7 @@ export function CreditsPricingDashboard({
             Apply Code
           </button>
         </form>
+      </div>
       </div>
 
       {promoMsg && (
