@@ -928,7 +928,7 @@ class GoogleDocsAssistiveTypingEngine {
             <span style="font-size: 11px; font-weight: 700; color: #c4b5fd; letter-spacing: 0.5px; text-transform: uppercase;">Assistive Typing</span>
           </div>
           <div style="display: flex; align-items: center; gap: 4px;">
-            <button id="hud-btn-settings" title="Realism Settings" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">⚙️</button>
+            <button id="hud-btn-settings" title="Cadence Settings" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">⚙️</button>
             <button id="hud-btn-collapse" title="Collapse" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">−</button>
             <button id="hud-btn-close" title="Close" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 12px; padding: 2px 4px;">✕</button>
           </div>
@@ -970,7 +970,7 @@ class GoogleDocsAssistiveTypingEngine {
             📄 Drop .txt / .md file to type into doc
           </div>
 
-          <!-- Realism Controls Drawer -->
+          <!-- Cadence Controls Drawer -->
           <div id="hud-settings-drawer" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 10px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span>Speed:</span> <b id="hud-slider-wpm-val">65 WPM</b>
@@ -978,12 +978,6 @@ class GoogleDocsAssistiveTypingEngine {
             <input type="range" id="hud-slider-wpm" min="25" max="130" value="65" style="width: 100%; margin-bottom: 8px;">
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
-              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                <input type="checkbox" id="hud-chk-typos" checked> Typos & Fix
-              </label>
-              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                <input type="checkbox" id="hud-chk-falsestarts" checked> False Starts
-              </label>
               <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" id="hud-chk-pauses" checked> Pauses
               </label>
@@ -1066,7 +1060,7 @@ class GoogleDocsAssistiveTypingEngine {
       this.cancelTyping();
     });
 
-    // Realism Controls Listeners
+    // Cadence Controls Listeners
     const wpmSlider = this.hudElement.querySelector('#hud-slider-wpm');
     const wpmVal = this.hudElement.querySelector('#hud-slider-wpm-val');
     wpmSlider.addEventListener('input', (e) => {
@@ -1077,14 +1071,6 @@ class GoogleDocsAssistiveTypingEngine {
       this.updateHUD();
     });
 
-    this.hudElement.querySelector('#hud-chk-typos').addEventListener('change', (e) => {
-      this.config.typosEnabled = e.target.checked;
-      this.saveConfig();
-    });
-    this.hudElement.querySelector('#hud-chk-falsestarts').addEventListener('change', (e) => {
-      this.config.falseStarts = e.target.checked;
-      this.saveConfig();
-    });
     this.hudElement.querySelector('#hud-chk-pauses').addEventListener('change', (e) => {
       this.config.punctuationPauses = e.target.checked;
       this.config.thinkingBreaks = e.target.checked;
@@ -1210,7 +1196,7 @@ if (
       window.postMessage({
         type: 'HELPOTRON_PONG',
         version: '2.2.0',
-        capabilities: ['scrape', 'agent', 'launch_to_doc', 'dripwriter_api', 'nine_realism_controls', 'cross_tab_hud'],
+        capabilities: ['scrape', 'agent', 'launch_to_doc', 'dripwriter_api', 'cadence_controls', 'cross_tab_hud'],
       }, '*');
     } else if (event.data.type === 'HELPOTRON_GET_GDOCS_TABS') {
       try {
@@ -1267,6 +1253,32 @@ if (
       } catch (err) {
         window.postMessage({
           type: 'HELPOTRON_CONTROL_TYPING_RESULT',
+          requestId: event.data.requestId,
+          result: { ok: false, error: String(err) },
+        }, '*');
+      }
+    } else if (event.data.type === 'HELPOTRON_SESSION_HANDOFF') {
+      // 08-31: login is captcha-gated in the web app; the MV3 popup cannot
+      // load the Turnstile script, so the web session (public_id +
+      // session_token) is handed to the extension after a successful login.
+      // Origin is already restricted: this listener only exists on
+      // helpotron/localhost pages (guard above), and event.source is window.
+      try {
+        const p = event.data;
+        if (!p.public_id || !p.session_token) return;
+        chrome.runtime.sendMessage({
+          action: 'storeSession',
+          payload: { public_id: p.public_id, session_token: p.session_token, token: p.token || '', server: p.server || '' },
+        }, () => {
+          window.postMessage({
+            type: 'HELPOTRON_SESSION_HANDOFF_RESULT',
+            requestId: p.requestId,
+            result: { ok: true },
+          }, '*');
+        });
+      } catch (err) {
+        window.postMessage({
+          type: 'HELPOTRON_SESSION_HANDOFF_RESULT',
           requestId: event.data.requestId,
           result: { ok: false, error: String(err) },
         }, '*');

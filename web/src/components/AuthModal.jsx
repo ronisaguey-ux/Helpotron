@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff, X } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
@@ -20,6 +20,16 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   const [showLoginPass, setShowLoginPass] = useState(false);
   const [showSignupPass, setShowSignupPass] = useState(false);
   const [showSignupConfirm, setShowSignupConfirm] = useState(false);
+
+  // Login captcha (08-31, operator): Cloudflare Turnstile, mandatory
+  // server-side once TURNSTILE_SITEKEY/SECRET are configured. The widget is
+  // client-side UX only — the server re-verifies the token on every login,
+  // so a missing/failed widget still results in a clean 403.
+  const [captchaEnabled, setCaptchaEnabled] = useState(false);
+  const [turnstileSitekey, setTurnstileSitekey] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileContainerRef = useRef(null);
+  const turnstileWidgetIdRef = useRef(null);
 
   // Sign up state
   const [signupUser, setSignupUser] = useState('');
@@ -76,7 +86,76 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     setTab(mode === 'login' ? 'login' : 'signup');
   }, [isOpen, mode]);
 
+  // Fetch captcha config each time the modal opens. If this fails we simply
+  // leave the widget off — the server still denies captcha-less logins with 403.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    api.publicConfig()
+      .then((cfg) => {
+        if (cancelled || !cfg) return;
+        setCaptchaEnabled(!!cfg.captcha_enabled);
+        setTurnstileSitekey(cfg.turnstile_sitekey || '');
+      })
+      .catch(() => { if (!cancelled) { setCaptchaEnabled(false); } });
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  // Render the Turnstile widget once the loader script is available. The
+  // container lives outside the tab conditionals so the same solve covers
+  // login, 2FA stage 2 and the post-signup auto-login.
+  useEffect(() => {
+    if (!isOpen || !captchaEnabled) return;
+    const container = turnstileContainerRef.current;
+    if (!container) return;
+    const removeWidget = () => {
+      if (turnstileWidgetIdRef.current !== null && window.turnstile) {
+        try { window.turnstile.remove(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
+      }
+      turnstileWidgetIdRef.current = null;
+    };
+    const render = () => {
+      if (!window.turnstile || turnstileWidgetIdRef.current !== null) return;
+      turnstileWidgetIdRef.current = window.turnstile.render(container, {
+        sitekey: turnstileSitekey,
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      });
+    };
+    let script = document.getElementById('cf-turnstile-script');
+    if (!script) {
+      script = document.createElement('script');
+      script.id = 'cf-turnstile-script';
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.onload = render;
+      document.head.appendChild(script);
+    } else if (window.turnstile) {
+      render();
+    }
+    return removeWidget;
+  }, [isOpen, captchaEnabled, turnstileSitekey]);
+
   if (!isOpen) return null;
+
+  // 08-31: share a successful web login's session with the browser extension.
+  // The MV3 extension popup cannot render Cloudflare Turnstile (remote-script
+  // ban), so captcha-gated logins happen here and the session (public_id +
+  // session_token) is handed off through the content script on helpotron
+  // pages (→ background storeSession). Harmless no-op on non-extension pages.
+  const sendSessionHandoff = (res) => {
+    try {
+      window.postMessage({
+        type: 'HELPOTRON_SESSION_HANDOFF',
+        requestId: `handoff-${Date.now()}`,
+        public_id: res?.public_id || loginUser.trim() || signupUser.trim(),
+        session_token: res?.session_token,
+        token: res?.token,
+        server: window.location.origin,
+      }, '*');
+    } catch (e) { /* content script not present — popup login still works */ }
+  };
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -88,14 +167,19 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
       setLoginError('Please enter your 2FA verification code.');
       return;
     }
+    if (captchaEnabled && !turnstileToken) {
+      setLoginError('Please complete the security check before signing in.');
+      return;
+    }
     setLoading(true);
     setLoginError('');
     try {
-      const res = await api.login(loginUser.trim(), loginPass, requires2FA ? twoFactorCode.trim() : null);
+      const res = await api.login(loginUser.trim(), loginPass, requires2FA ? twoFactorCode.trim() : null, turnstileToken || null);
       if (res && res.status === '2fa_required') {
         setRequires2FA(true);
         setTwoFactorMethod(res.method || 'totp');
       } else if (res && res.message === 'Logged in') {
+        sendSessionHandoff(res);
         onLoginSuccess(loginUser.trim());
       } else {
         setLoginError('Invalid credentials. Please verify your username and password.');
@@ -104,6 +188,12 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
       setLoginError(err.message || 'Login failed. Please check your username and password.');
     } finally {
       setLoading(false);
+      // Turnstile tokens are single-use: every attempt (2FA stage 2 included)
+      // needs a fresh solve, so clear the stored token and reset the widget.
+      setTurnstileToken('');
+      if (turnstileWidgetIdRef.current !== null && window.turnstile) {
+        try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
+      }
     }
   };
 
@@ -137,8 +227,13 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
         // (Step 2) so the gate opens with the checkbox pre-checked and needs
         // only one click. The gate still requires an explicit Accept.
         try { localStorage.setItem('helpotron_signup_consent', '1'); } catch (e) { /* storage unavailable */ }
-        // Automatically log in with new credentials
-        await api.login(u, signupPass);
+        // Automatically log in with new credentials (carry the captcha token;
+        // the signup POST itself is not captcha-gated, so the solve is unused
+        // at this point and safe to pass to the login call).
+        const autoLoginRes = await api.login(u, signupPass, null, turnstileToken || null);
+        if (autoLoginRes && autoLoginRes.message === 'Logged in') {
+          sendSessionHandoff(autoLoginRes);
+        }
         onLoginSuccess(u);
       } else {
         setLoginError(signupRes?.detail || 'Signup failed.');
@@ -236,6 +331,21 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             Sign In
           </button>
         </div>
+
+        {/* Security check — Cloudflare Turnstile (shown for both tabs; the
+            server enforces it on /api/login regardless of this widget). */}
+        {captchaEnabled && turnstileSitekey && (
+          <div className="mb-4">
+            <div
+              ref={turnstileContainerRef}
+              className="flex justify-center"
+              data-turnstile
+            />
+            <p className="text-[10px] text-[var(--text-muted)] text-center mt-1.5">
+              Security check required to keep your account safe.
+            </p>
+          </div>
+        )}
 
         {/* Error Notification */}
         {loginError && (

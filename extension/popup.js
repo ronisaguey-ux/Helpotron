@@ -72,7 +72,7 @@ async function init() {
   // /api/login; the 24h JWT in `token` is only a fallback.
   const loggedIn = !!(st.public_id && (st.token || st.session_token));
   if (!loggedIn) {
-    setStatus('⚠️ Login required: enter your Helpotron username & password below and Save — scrapes stay disabled until then.');
+    setStatus('⚠️ Login required: enter your Helpotron username & password below and Save (or sign in on the website once — the session syncs here). Scrapes stay disabled until then.');
     statusEl.classList.remove('hidden');
   }
 
@@ -311,6 +311,39 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
   const pid = publicIdInput.value.trim();
   const pwd = document.getElementById('password')?.value;
 
+  // 08-31 captcha: when the server enforces Turnstile, this popup cannot solve
+  // it (MV3 blocks remote scripts), so password login here would 403. The web
+  // app login hands the session to the extension (HELPOTRON_SESSION_HANDOFF →
+  // storeSession); here we validate any synced session or route the user there.
+  let captchaOn = false;
+  try {
+    const cfgRes = await fetch(`${srv}/api/public-config`);
+    const cfg = await cfgRes.json();
+    captchaOn = !!(cfg && cfg.captcha_enabled);
+  } catch (e) { /* server unreachable; try normal auth below */ }
+
+  if (captchaOn && pid && pwd) {
+    const st = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
+    if (st.public_id && (st.session_token || st.token)) {
+      try {
+        const meRes = await fetch(`${srv}/api/me`, {
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${st.session_token || st.token}` },
+        });
+        const me = await meRes.json();
+        if (meRes.ok && me.public_id) {
+          setStatus(`✅ Signed in as ${me.public_id} — web session synced to the extension`);
+          chatSendBtn.disabled = false;
+          loadChatHistory();
+          return;
+        }
+      } catch (e) { /* session stale — fall through */ }
+    }
+    await chrome.storage.local.set({ server: srv, public_id: pid });
+    setStatus('🔒 Security check is on — sign in on the Helpotron website (session syncs here automatically). Opening site…');
+    chrome.tabs.create({ url: srv });
+    return;
+  }
+
   if (pid && pwd) {
     try {
       setStatus('🔐 Authenticating with Helpotron…');
@@ -346,6 +379,14 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     public_id: pid,
   });
   setStatus('✅ Settings saved');
+});
+
+// Live-sync: when the web app hands off a session after a captcha login, the
+// popup picks it up without a manual reopen.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.public_id || changes.session_token || changes.token)) {
+    init();
+  }
 });
 
 // ── Mini Agent Chatbox (talk to the scraper/capture agent) ───────────────────
@@ -639,41 +680,77 @@ let isTypingPaused = false;
 let activeGDocsTabId = null;
 
 
-const realismPresetSelect = document.getElementById('realismPreset');
-const chkTypos = document.getElementById('chkTypos');
-const chkFalseStarts = document.getElementById('chkFalseStarts');
+const cadencePresetSelect = document.getElementById('cadencePreset');
 const chkPauses = document.getElementById('chkPauses');
 const chkJitter = document.getElementById('chkJitter');
-const chkBurst = document.getElementById('chkBurst');
-const chkFatigue = document.getElementById('chkFatigue');
+const assignmentSelect = document.getElementById('assignmentSelect');
 
-if (realismPresetSelect) {
-  realismPresetSelect.addEventListener('change', () => {
-    const val = realismPresetSelect.value;
-    if (val === 'gentle') {
-      if (wpmSlider) wpmSlider.value = 35;
-      if (wpmValue) wpmValue.innerText = '35 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkFatigue) chkFatigue.checked = true;
-    } else if (val === 'academic') {
-      if (wpmSlider) wpmSlider.value = 65;
-      if (wpmValue) wpmValue.innerText = '65 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkBurst) chkBurst.checked = true;
-    } else if (val === 'brisk') {
-      if (wpmSlider) wpmSlider.value = 95;
-      if (wpmValue) wpmValue.innerText = '95 WPM';
-      if (chkFalseStarts) chkFalseStarts.checked = false;
-      if (chkBurst) chkBurst.checked = true;
-    } else if (val === 'motor') {
-      if (wpmSlider) wpmSlider.value = 50;
-      if (wpmValue) wpmValue.innerText = '50 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkJitter) chkJitter.checked = true;
-      if (chkFatigue) chkFatigue.checked = true;
+// Assignment picker (Bob flow 08-31): the extension's launch-to-doc section
+// lists the user's Helpotron assignments so they can pick WHICH assignment to
+// type, then pick the editor tab, then start. Text is fetched from the
+// assignment's full view (draft > materials > prompt), same source the web
+// modal uses.
+let selectedAssignmentText = '';
+
+async function refreshAssignments() {
+  if (!assignmentSelect) return;
+  const { server, session_token, token, public_id } = await chrome.storage.local.get([
+    'server', 'session_token', 'token', 'public_id',
+  ]);
+  const srv = server || 'https://helpotron.dpdns.org';
+  if (!srv || !public_id || !(session_token || token)) {
+    assignmentSelect.innerHTML = '<option value="">Log in to Helpotron to pick an assignment…</option>';
+    return;
+  }
+  try {
+    const resp = await fetch(`${srv}/api/assignments`, {
+      headers: { Authorization: `Bearer ${session_token || token}` },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    assignmentSelect.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.innerText = 'Select an assignment to type…';
+    assignmentSelect.appendChild(none);
+    (data.assignments || []).slice(0, 50).forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      const s = a.status || '';
+      opt.innerText = `(${s}) ${(a.title || `Assignment ${a.id}`).slice(0, 42)}`;
+      assignmentSelect.appendChild(opt);
+    });
+    selectedAssignmentText = '';
+  } catch (e) {
+    assignmentSelect.innerHTML = '<option value="">Could not load assignments</option>';
+  }
+}
+
+if (assignmentSelect) {
+  assignmentSelect.addEventListener('change', async () => {
+    const id = assignmentSelect.value;
+    selectedAssignmentText = '';
+    if (!id) return;
+    const { server, session_token, token } = await chrome.storage.local.get(['server', 'session_token', 'token']);
+    const srv = server || 'https://helpotron.dpdns.org';
+    try {
+      const resp = await fetch(`${srv}/api/assignment/${id}/full-view`, {
+        headers: { Authorization: `Bearer ${session_token || token}` },
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const assign = data.assignment || {};
+      const materials = data.materials || [];
+      let text = assign.do_it_work || '';
+      if (!text && materials.length) {
+        const textMat = materials.find((m) => m.content_text || m.content);
+        if (textMat) text = textMat.content_text || textMat.content;
+      }
+      if (!text) text = assign.prompt || '';
+      selectedAssignmentText = text;
+      setStatus(`📄 Loaded "${(assign.title || 'assignment').slice(0, 30)}" (${text.split(/\s+/).filter(Boolean).length} words)`);
+    } catch (e) {
+      setStatus(`⚠️ Could not load assignment: ${String(e).slice(0, 60)}`);
     }
   });
 }
@@ -714,8 +791,8 @@ if (btnStartLaunchToDoc) {
     const targetTabId = targetVal && targetVal !== 'new' ? Number(targetVal) : null;
     const wpm = Number(wpmSlider ? wpmSlider.value : 65) || 65;
 
-    // Get text from chat or recent prompt or clipboard
-    let textToType = (chatInputEl && chatInputEl.value.trim()) || '';
+    // Text source: assignment picker first (Bob flow), then chat, then last payload
+    let textToType = selectedAssignmentText || (chatInputEl && chatInputEl.value.trim()) || '';
     if (!textToType) {
       const last = (await chrome.storage.local.get('helpotron_last_doc_payload'))['helpotron_last_doc_payload'];
       textToType = (last && last.text) || 'Helpotron Assistive Typing: Document ready for editing and review.';
@@ -733,9 +810,7 @@ if (btnStartLaunchToDoc) {
         wpm,
         naturalPauses: chkPauses ? chkPauses.checked : true,
         jitter: chkJitter ? chkJitter.checked : true,
-        typoRate: chkTypos && chkTypos.checked ? 0.02 : 0.0,
-        falseStartRate: chkFalseStarts && chkFalseStarts.checked ? 0.015 : 0.0,
-        title: 'Assignment Document',
+        title: assignmentSelect && assignmentSelect.value ? (assignmentSelect.selectedOptions[0] || {}).text || 'Assignment Document' : 'Assignment Document',
       }
     }).catch((e) => ({ ok: false, error: String(e) }));
 
@@ -804,6 +879,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 refreshGDocsTabs();
+refreshAssignments();
 init();
 
 
