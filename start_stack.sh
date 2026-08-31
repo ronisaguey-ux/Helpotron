@@ -7,8 +7,12 @@ set -e
 cd /home/roni/Roni_workspace/helpotron
 
 # 1) API server (background, reload on)
+# --proxy-headers: trust cloudflared's X-Forwarded-Proto so request.url.is_secure
+# is True for tunnel requests -> Secure session/CSRF cookies on https (handoff A10 #2).
+# --forwarded-allow-ips 127.0.0.1: only the local tunnel may supply forwarded headers.
 nohup /home/roni/Roni_workspace/helpotron/.venv/bin/uvicorn server.main:app \
-  --host 0.0.0.0 --port 8000 --reload > /tmp/helpotron_api.log 2>&1 &
+  --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1 \
+  > /tmp/helpotron_api.log 2>&1 &
 echo "api pid $!"
 
 # 2) Web preview (background)
