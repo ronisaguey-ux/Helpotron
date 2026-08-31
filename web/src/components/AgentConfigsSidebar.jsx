@@ -148,7 +148,7 @@ export default function AgentConfigsSidebar({
   const allSkills = skills || [];
 
   return (
-    <div className="panel h-full flex flex-col overflow-hidden bg-[var(--bg-canvas)]">
+    <div className="panel h-full flex flex-col overflow-hidden bg-[var(--bg-base)]">
       {/* Header */}
       <div className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
@@ -166,26 +166,40 @@ export default function AgentConfigsSidebar({
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 pt-1 gap-1 shrink-0 overflow-x-auto">
+      <div
+        role="tablist"
+        aria-label="Agent configuration sections"
+        className="flex items-center border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 pt-1 gap-1 shrink-0 overflow-x-auto"
+      >
+        {/* Real icons rather than emoji: emoji render at inconsistent widths
+         * across platforms (which is part of why this row overflowed) and
+         * carry no accessible meaning. */}
         {[
-          { key: 'identities', label: 'Identities', icon: '🎭', count: allIdentities.length },
-          { key: 'skills', label: 'Skills', icon: '⚡', count: allSkills.length },
-          { key: 'memories', label: 'Memories', icon: '🧠', count: memory.length },
-          { key: 'files', label: 'Rules & Files', icon: '📁', count: files.length },
+          { key: 'identities', label: 'Identities', Icon: UserIcon, count: allIdentities.length },
+          { key: 'skills', label: 'Skills', Icon: Cpu, count: allSkills.length },
+          { key: 'memories', label: 'Memories', Icon: Database, count: memory.length },
+          { key: 'files', label: 'Rules & Files', Icon: FileText, count: files.length },
         ].map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition cursor-pointer whitespace-nowrap ${
+            aria-selected={activeTab === t.key}
+            role="tab"
+            className={`flex items-center gap-1.5 px-2 py-2 text-xs font-medium border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === t.key
                 ? 'border-[var(--accent)] text-white font-semibold'
                 : 'border-transparent text-[var(--text-muted)] hover:text-slate-200'
             }`}
           >
-            <span>{t.icon}</span>
+            <t.Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>{t.label}</span>
-            <span className="text-[10px] opacity-70 px-1 py-0.2 rounded-full bg-white/5 font-mono">{t.count}</span>
+            {/* A "0" badge is noise on every empty tab, and four of them are
+             * what pushed this row past the panel width. Show a count only
+             * when there is something to count. */}
+            {t.count > 0 && (
+              <span className="text-[10px] opacity-70 px-1 rounded-full bg-white/5 font-mono">{t.count}</span>
+            )}
           </button>
         ))}
       </div>
@@ -220,7 +234,10 @@ export default function AgentConfigsSidebar({
                     }
                   }}
                   placeholder="e.g. Atlas, Socrates, JARVIS"
-                  className="clean-input flex-1 px-3 py-1.5 text-xs text-white outline-none rounded-[var(--radius-sm)]"
+                  /* min-w-0: without it the input keeps its intrinsic
+                   * placeholder width and shoves Save Name out of the panel
+                   * once this renders in the narrower docked column. */
+                  className="clean-input flex-1 min-w-0 px-3 py-1.5 text-xs text-white outline-none rounded-[var(--radius-sm)]"
                 />
                 <button
                   type="button"
@@ -236,15 +253,15 @@ export default function AgentConfigsSidebar({
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <div>
+            <div className="flex items-start justify-between gap-3 pt-1">
+              <div className="min-w-0">
                 <h3 className="text-xs font-bold text-white">Agent Identities</h3>
                 <p className="text-[11px] text-[var(--text-muted)]">Select an active persona or expand to view details.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewIdentityModal(true)}
-                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-sm"
+                className="shrink-0 whitespace-nowrap px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Identity
               </button>
