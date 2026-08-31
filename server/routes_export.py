@@ -13,7 +13,9 @@ from .export import (
     export_flashcards_anki,
     export_practice_test_json,
     export_study_guide_markdown,
+    export_study_guide_latex,
     export_summary_text,
+    export_summary_latex,
 )
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -127,6 +129,50 @@ async def export_summary(
         content=content,
         media_type="text/plain",
         headers={"Content-Disposition": f"attachment; filename=summary_{material_id}.txt"}
+    )
+
+
+@router.get("/study-guide/{material_id}/latex")
+async def export_study_guide_tex(
+    material_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Direct LaTeX export of a study guide (08-30, user-requested)."""
+    material = db.query(StudyMaterial).filter(
+        StudyMaterial.id == material_id,
+        StudyMaterial.user_id == user.id,
+        StudyMaterial.kind == "study_guide"
+    ).first()
+    if not material:
+        raise HTTPException(404, "Study guide not found")
+    content = export_study_guide_latex(material.content)
+    return Response(
+        content=content,
+        media_type="text/x-tex",
+        headers={"Content-Disposition": f"attachment; filename=study_guide_{material_id}.tex"}
+    )
+
+
+@router.get("/summary/{material_id}/latex")
+async def export_summary_tex(
+    material_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Direct LaTeX export of a summary (08-30, user-requested)."""
+    material = db.query(StudyMaterial).filter(
+        StudyMaterial.id == material_id,
+        StudyMaterial.user_id == user.id,
+        StudyMaterial.kind == "summary"
+    ).first()
+    if not material:
+        raise HTTPException(404, "Summary not found")
+    content = export_summary_latex(material.content)
+    return Response(
+        content=content,
+        media_type="text/x-tex",
+        headers={"Content-Disposition": f"attachment; filename=summary_{material_id}.tex"}
     )
 
 

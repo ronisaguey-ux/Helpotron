@@ -22,6 +22,7 @@ export default function AssignmentCard({
   teacherName = "",
   onSelect = () => {},
   onChat = null,
+  onLaunchToDoc = null,
 }) {
   const isUrgent = urgency === "high" || status === "Humanizing";
   const isCompleted = status === "Completed" || status === "Submitted";
@@ -92,7 +93,7 @@ export default function AssignmentCard({
         </div>
       </div>
 
-      {/* Card Action Footer — one primary intent + the chat bubble */}
+      {/* Card Action Footer — one primary intent + Launch to Doc + chat */}
       <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
         <div className="flex items-center gap-1.5 text-xs font-mono">
           {isCompleted ? (
@@ -111,6 +112,20 @@ export default function AssignmentCard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Launch to Doc Assistive Typing button */}
+          {typeof onLaunchToDoc === 'function' && (
+            <button
+              type="button"
+              aria-label={`Launch ${displayTitle} to Google Doc with assistive typing`}
+              title="Launch to Google Doc (Assistive Typing for Accessibility)"
+              onClick={(e) => { e.stopPropagation(); onLaunchToDoc(e); }}
+              className="flex items-center gap-1 text-xs font-semibold text-violet-400 hover:text-white bg-violet-500/10 hover:bg-violet-600 rounded-[var(--radius-sm)] px-2 py-1.5 transition cursor-pointer border border-violet-500/20 shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-violet-300" aria-hidden="true" />
+              <span>Launch to Doc</span>
+            </button>
+          )}
+
           {/* Chat bubble — opens the per-assignment agent team chat (08-28) */}
           {typeof onChat === 'function' && (
             <button

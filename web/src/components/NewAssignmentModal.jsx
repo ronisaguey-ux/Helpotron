@@ -307,7 +307,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
         </form>
 
         <p className="text-xs text-[var(--text-muted)]">
-          Assignments you create appear in the workspace and cards; they land in this ledger after being turned in.
+          Assignments you create appear in the workspace and cards; they land in this ledger after being marked completed.
         </p>
       </div>
     </div>

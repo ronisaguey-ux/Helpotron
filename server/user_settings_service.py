@@ -415,6 +415,56 @@ class UserSettingsService:
                 "gemini_multimodal": "gemini_37_flash",
             },
 
+            # 8b. AI & Intelligence (agent brain — one top-level key so the
+            # Settings UI, overlord and the per-surface hierarchy gates share
+            # it; "ai" must be declared here or the 08-29 writable-keys filter
+            # silently drops every AI-section edit at the PATCH boundary).
+            "ai": {
+                "aiName": "Helpotron",
+                "personality": "Professional",
+                "instructions": "",
+                "effortScore": 500,
+                "effort": "balanced",
+                "autoRouting": True,
+                # Humanizer skill (08-30): unified AI-humanizer rulebook; when a
+                # surface is "on", humanize_skill.humanizer_block() is appended
+                # to that surface's agent system prompt.
+                "humanizer": "off",
+                # AI Detection Standard (08-31, operator): run the plugged-in
+                # detectors on agent replies and redo until the min-human%
+                # rate is met. Same global/subject/assignment hierarchy as the
+                # humanizer (via settings["scoped"] overrides). Detector names
+                # are registry keys of the 3 plugged-in detectors.
+                "detection": {
+                    "enabled": "off",
+                    "min_human": 70,
+                    # 08-31 (operator): Sapling+Panagram only for now — Winston
+                    # is expensive (1 credit per word, bulk-buy only) and its
+                    # key errors out when the balance is spent. The toggle stays
+                    # so it can be re-enabled after a top-up.
+                    "detectors": {"sapling": True, "winston_ai": False, "pangram": True},
+                },
+                # Sample Voice (08-31, operator): "write like a sample" — the
+                # user adds samples (paste or upload) and the agent writes in
+                # that voice. enabled is scoped-able (ai.style.enabled);
+                # selection holds the GLOBAL sample ids; per-subject/assignment
+                # overrides are scoped variants of ai.style.samples (value =
+                # list of sample ids). samples = {id: {name, text}} library.
+                "style": {
+                    "enabled": "off",
+                    "selection": [],
+                    "samples": {},
+                },
+                "hierarchy": {
+                    "my_agent": {},
+                    "assignment_team": {},
+                    "study_tools": {},
+                    "dump_agent": {},
+                    "qa_chat": {},
+                    "extensions": {},
+                },
+            },
+
             # 9. Data Lake & Micro-Credits
             "datalake_opt_in": True,
             "micro_credits_balance": 0,  # earned only via admin-reviewed Data Lake implementations (operator 08-26)

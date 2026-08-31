@@ -41,3 +41,5 @@ exports/sandboxes/
 graphify-out/
 helpotron_audit/
 data/logs/
+data/sandboxes/
+
