@@ -12,6 +12,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+
 try:
     from . import llm
 except (ImportError, ValueError):
@@ -36,7 +38,8 @@ _SYSTEM = (
     "lecture transcripts and assignment prompts. Be accurate to the transcript; "
     "when the transcript doesn't cover something, say so instead of inventing it. "
     "Never fabricate sources or quotes. Output in clean Markdown unless the user "
-    "asked for JSON."
+    "asked for JSON.\n"
+    + sandbox_math_rule()
 )
 
 READING_LEVELS = ["9th", "10th", "11th", "12th", "college-freshman", "sophomore"]
@@ -208,8 +211,9 @@ async def generate_study_pack(content: str, user: Any, db: Any) -> dict:
     
     try:
         prompt = f'Generate a structured study guide with key terms and summaries from: {content}'
+        from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
         raw_response = await llm.call_llm(
-            system_prompt='You are an expert academic tutor. Return valid JSON only.',
+            system_prompt='You are an expert academic tutor. Return valid JSON only.\n' + sandbox_math_rule(),
             user_prompt=prompt,
             response_format='json_object'
         )

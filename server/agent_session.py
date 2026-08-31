@@ -18,6 +18,8 @@ import logging
 import time
 import uuid
 
+from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+
 from fastapi import WebSocket
 
 try:
@@ -47,7 +49,8 @@ AGENT_SYSTEM = (
     "Extract the assignment title, due date, full prompt/description, rubric criteria/tables, instructor guidance, and attached files. "
     "Navigate and inspect pages using your tool calls. When the assignment details are complete, call 'finish' with the structured JSON payload. "
     "If the page is heavily obfuscated, DRM-protected, or does not contain readable assignment data, honestly call 'report_unparseable' and suggest submitting feedback to the Data Lake. "
-    "Never submit anything, never take destructive actions."
+    "Never submit anything, never take destructive actions.\n\n"
+    + sandbox_math_rule()
 )
 
 TOOL_DOC = """Tools (call EXACTLY one per turn, as JSON):

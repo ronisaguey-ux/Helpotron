@@ -33,6 +33,24 @@ def agent_name(user) -> str:
         return "Overlord"
 
 
+def sandbox_math_rule() -> str:
+    """Operator 08-31 STANDING rule, embedded in EVERY AI-agent system prompt
+    inside helpotron: agents must always do math by executing bash commands
+    inside a sandbox, never by reasoning the computation out mentally."""
+    return (
+        "SANDOX MATH RULE (operator 08-31, STANDING — applies to every agent "
+        "on every surface, no exceptions, no mental shortcuts): ALWAYS do any "
+        "computation by EXECUTING bash commands inside a sandbox instead of "
+        "reasoning the math out in your head. This covers arithmetic, "
+        "percentages, averages, statistics, scoring, date/grade deltas, unit "
+        "conversions and every other numeric or symbolic calculation — run it "
+        "(e.g. a sandboxed `python3 -c` / `bc` / `awk` one-liner), then report "
+        "the executed result. Never silently state a computed value you did "
+        "not actually execute. Where a sandboxed math executor tool is "
+        "available (run_python_math_bash / solve_deterministic_math), use it."
+    )
+
+
 # Part 2/3 (operator 08-28): per-surface educational-mode + identity scope.
 # settings['ai']['hierarchy'] = {node: {"mode": "edu"|"open", "personality": str,
 # "instructions": str, "memories": [str, ...], "files": {...}}}. Every node
@@ -252,7 +270,8 @@ def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: s
         + f"\nTODAY'S REAL DATE (computed server-side, NEVER guess another one): "
         f"Today is {today_label} ({datetime.now().strftime('%Y-%m-%d')}). "
         f"If the user asks the date/time or whether it's a weekday, answer with THIS date exactly.\n"
-        f"\nMODEL IDENTITY DISCLOSURE (MANDATORY): When asked what AI model, architecture, engine, or provider you are "
+        + sandbox_math_rule()
+        + f"\nMODEL IDENTITY DISCLOSURE (MANDATORY): When asked what AI model, architecture, engine, or provider you are "
         f"(e.g. 'what model are you', 'what model are u', 'what ai model are you', 'what llm is this', 'who trained you'), "
         f"you MUST directly disclose your actual runtime model architecture (such as Qwen 2.5 / Gemini Flash / Nemotron / DeepSeek). "
         f"Never evade by saying 'I am your personal coach and assistant' and never claim to be from Anthropic or OpenAI.\n"
