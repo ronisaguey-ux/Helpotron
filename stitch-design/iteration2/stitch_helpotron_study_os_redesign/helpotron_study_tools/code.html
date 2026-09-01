@@ -1,0 +1,350 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Helpotron OS - Study Session</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "on-background": "#0b1c30",
+                        "primary": "#00685f",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed-variant": "#005049",
+                        "outline-variant": "#bcc9c6",
+                        "on-secondary-container": "#fffbff",
+                        "outline": "#6d7a77",
+                        "background": "#f8f9ff",
+                        "surface-container": "#e5eeff",
+                        "secondary": "#4648d4",
+                        "tertiary-container": "#b05e3d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "primary-container": "#008378",
+                        "surface-dim": "#cbdbf5",
+                        "secondary-fixed": "#e1e0ff",
+                        "primary-fixed": "#89f5e7",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#006a61",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#370e00",
+                        "inverse-primary": "#6bd8cb",
+                        "on-surface-variant": "#3d4947",
+                        "tertiary": "#924628",
+                        "on-surface": "#0b1c30",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "secondary-container": "#6063ee",
+                        "tertiary-fixed": "#ffdbce",
+                        "inverse-surface": "#213145",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "on-tertiary-fixed-variant": "#773215",
+                        "on-primary-container": "#f4fffc",
+                        "surface-container-low": "#eff4ff",
+                        "on-primary-fixed": "#00201d",
+                        "primary-fixed-dim": "#6bd8cb",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary-fixed": "#07006c",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-container": "#fffbff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "container-padding": "24px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "display-xl": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "tabular-stat": ["JetBrains Mono"],
+                        "title-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "tabular-stat": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #f8f9ff; }
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        .flip-card-inner { transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .flipped .flip-card-inner { transform: rotateY(180deg); }
+        
+        /* Focus state minimal rings */
+        *:focus-visible {
+            outline: 2px solid #00685f;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen flex flex-col md:flex-row">
+<!-- Mobile Top Navigation (suppressed on desktop for SideNav) -->
+<header class="md:hidden flex justify-between items-center w-full px-container-padding h-16 bg-surface border-b border-outline-variant sticky top-0 z-40">
+<div class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">Helpotron</div>
+<div class="flex items-center gap-4">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Credits: 1,240</span>
+<button class="text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Desktop Side Navigation -->
+<nav class="hidden md:flex flex-col h-screen w-64 bg-surface-container-low border-r border-outline-variant sticky top-0 py-container-padding gap-gutter shrink-0">
+<div class="px-container-padding mb-4">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, stylized avatar image of a sleek, minimalist robot face. The design is modern, vector-based, using primary teal and white colors, evoking a premium artificial intelligence assistant in a clean, professional context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPlzErlxUfpuTW-e7gwe12TeUQy6VDiLipbmDdeNmAitTb6cnK8TN07122OEHc_tJ2dVxGIS7vWcqDus_Q2NOfsRXhUoj6f8G-4IO3NhqLAnSJF4yXVa3Rj3JrON3cCDNzpxw2dCm9L8F5Ht-9ohAtJajyY-vU01lAkAn6LYZf5e5Gk3cD0nesfkcCz-ffBXLJR9OcLZWKh8zCT1BCCLjwOXia5sNGhEqB5vTMHu3Rx-5tp0vFkU2JWA">
+<div>
+<h1 class="font-title-md text-title-md font-bold text-primary">Helpotron OS</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Premium Co-pilot</p>
+</div>
+</div>
+</div>
+<div class="px-container-padding mb-4">
+<button class="w-full bg-primary hover:bg-primary-container text-on-primary font-body-md text-body-md py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                New Study Session
+            </button>
+</div>
+<ul class="flex-1 flex flex-col gap-1 px-4">
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-primary-container/10 transition-all font-body-sm text-body-sm translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+                    My Agent
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                    Insights
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">history</span>
+                    History
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-body-sm text-body-sm mt-auto" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-h-screen max-w-[1440px] mx-auto w-full pb-20 md:pb-0 relative">
+<!-- Document Header -->
+<div class="w-full max-w-[800px] mx-auto px-4 sm:px-6 md:px-8 pt-8 pb-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="font-label-caps text-label-caps bg-surface-container-high text-primary px-2 py-1 rounded-full">Biology 101</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant flex items-center"><span class="material-symbols-outlined text-[16px] mr-1">timer</span> 45 min left</span>
+</div>
+<h2 class="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background mb-2">Cellular Respiration Review</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Focus mode active. Master these core concepts before moving to the quiz.</p>
+</div>
+<!-- Study Mode Toggle (Tabs) -->
+<div class="w-full max-w-[800px] mx-auto px-4 sm:px-6 md:px-8 mb-8">
+<div class="flex border-b border-outline-variant">
+<button class="flex-1 py-3 text-center font-title-md text-body-md font-bold text-primary border-b-2 border-primary transition-colors" id="tab-flashcards">
+                    Flashcards
+                </button>
+<button class="flex-1 py-3 text-center font-title-md text-body-md text-on-surface-variant hover:text-primary transition-colors" id="tab-quiz">
+                    Practice Quiz
+                </button>
+</div>
+</div>
+<!-- Canvas Container -->
+<div class="flex-1 w-full max-w-[800px] mx-auto px-4 sm:px-6 md:px-8 flex flex-col items-center justify-start relative">
+<!-- AI Copilot subtle indicator -->
+<div class="absolute top-0 right-4 flex items-center gap-2 bg-surface-container-lowest/80 backdrop-blur-md border border-primary/20 px-3 py-1.5 rounded-full shadow-sm z-10 hidden sm:flex">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="font-label-caps text-label-caps text-primary">AI Copilot Monitoring</span>
+</div>
+<!-- View: Flashcards -->
+<div class="w-full flex flex-col items-center gap-8 w-full transition-opacity duration-300" id="view-flashcards">
+<!-- Progress -->
+<div class="w-full flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant mb-2">
+<span class="">Card 3 of 25</span>
+<span class="">12% Mastered</span>
+</div>
+<div class="w-full h-1 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[12%] rounded-full transition-all duration-500"></div>
+</div>
+<!-- Flashcard -->
+<div class="perspective-1000 w-full max-w-[600px] h-[350px] cursor-pointer group mt-4" onclick="this.classList.toggle('flipped')">
+<div class="flip-card-inner w-full h-full relative transform-style-3d shadow-[0_4px_20px_rgba(0,0,0,0.05)] rounded-2xl hover:-translate-y-1 transition-all duration-300">
+<!-- Front -->
+<div class="absolute w-full h-full bg-surface-container-lowest border border-outline-variant rounded-2xl backface-hidden flex flex-col items-center justify-center p-8 text-center">
+<span class="material-symbols-outlined text-primary mb-4 opacity-50">touch_app</span>
+<h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">What is the primary function of ATP in cellular processes?</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-auto pt-4 border-t border-outline-variant/50 w-full">Tap to reveal answer</p>
+</div>
+<!-- Back -->
+<div class="absolute w-full h-full bg-surface-container-low border border-primary/30 rounded-2xl backface-hidden rotate-y-180 flex flex-col items-center justify-center p-8 text-center">
+<div class="font-body-md text-body-md text-on-background leading-relaxed">
+<span class="font-bold text-primary block mb-2">Adenosine Triphosphate (ATP)</span>
+                                Serves as the primary energy currency of the cell. It stores and transfers energy required for many cellular processes, releasing energy when its terminal phosphate bond is hydrolyzed.
+                            </div>
+<!-- Confidence Rating (appears on flip) -->
+<div class="mt-8 w-full border-t border-outline-variant/50 pt-4 flex justify-between gap-2" onclick="event.stopPropagation()">
+<button class="flex-1 py-2 bg-error-container text-on-error-container font-label-caps text-label-caps rounded-lg hover:opacity-90 transition-opacity">Hard</button>
+<button class="flex-1 py-2 bg-surface-container-highest text-on-surface font-label-caps text-label-caps rounded-lg hover:opacity-90 transition-opacity">Good</button>
+<button class="flex-1 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps rounded-lg hover:opacity-90 transition-opacity">Easy</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Controls -->
+<div class="flex items-center gap-6 mt-4">
+<button class="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center text-on-surface hover:bg-surface-container hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<button class="font-body-md text-body-md flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">shuffle</span>
+                        Shuffle
+                    </button>
+<button class="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container focus-visible:ring-offset-2">
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- View: Quiz (Hidden by default in this demo via inline style for simplicity, toggled by JS normally) -->
+<div class="hidden w-full flex flex-col gap-6 transition-opacity duration-300" id="view-quiz">
+<!-- Progress -->
+<div class="w-full flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant mb-2">
+<span class="">Question 1 of 10</span>
+<span class="">0/10 Correct</span>
+</div>
+<div class="flex gap-1 w-full mb-4">
+<div class="h-2 flex-1 bg-primary rounded-full"></div>
+<div class="h-2 flex-1 bg-surface-container-high rounded-full"></div>
+<div class="h-2 flex-1 bg-surface-container-high rounded-full"></div>
+<div class="h-2 flex-1 bg-surface-container-high rounded-full"></div>
+<div class="h-2 flex-1 bg-surface-container-high rounded-full"></div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+<h3 class="font-title-md text-title-md text-on-background mb-6">During glycolysis, glucose is broken down into two molecules of what substance?</h3>
+<div class="flex flex-col gap-3">
+<!-- Option A -->
+<label class="flex items-center gap-4 p-4 border border-outline-variant rounded-lg cursor-pointer hover:border-primary hover:bg-surface-container-low transition-colors group">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary focus:ring-offset-0 bg-transparent" name="q1" type="radio">
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Pyruvate</span>
+</label>
+<!-- Option B -->
+<label class="flex items-center gap-4 p-4 border border-outline-variant rounded-lg cursor-pointer hover:border-primary hover:bg-surface-container-low transition-colors group">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary focus:ring-offset-0 bg-transparent" name="q1" type="radio">
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Lactic Acid</span>
+</label>
+<!-- Option C -->
+<label class="flex items-center gap-4 p-4 border border-outline-variant rounded-lg cursor-pointer hover:border-primary hover:bg-surface-container-low transition-colors group">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary focus:ring-offset-0 bg-transparent" name="q1" type="radio">
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Acetyl-CoA</span>
+</label>
+<!-- Option D -->
+<label class="flex items-center gap-4 p-4 border border-outline-variant rounded-lg cursor-pointer hover:border-primary hover:bg-surface-container-low transition-colors group">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary focus:ring-offset-0 bg-transparent" name="q1" type="radio">
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Citric Acid</span>
+</label>
+</div>
+</div>
+<div class="flex justify-end mt-4">
+<button class="bg-primary hover:bg-primary-container text-on-primary font-label-caps text-label-caps py-3 px-8 rounded-full transition-colors flex items-center gap-2">
+                        Submit Answer <span class="material-symbols-outlined text-[18px]">send</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile Bottom Navigation -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-sm">
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps p-2" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+            Home
+        </a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1 font-label-caps text-label-caps scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+            Agent
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps p-2" href="#">
+<span class="material-symbols-outlined mb-1">query_stats</span>
+            Insights
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps p-2" href="#">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+            History
+        </a>
+</nav>
+<script>
+        // Simple view toggling script
+        document.getElementById('tab-flashcards').addEventListener('click', function() {
+            document.getElementById('view-flashcards').classList.remove('hidden');
+            document.getElementById('view-quiz').classList.add('hidden');
+            
+            this.classList.add('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+            this.classList.remove('text-on-surface-variant');
+            
+            let quizTab = document.getElementById('tab-quiz');
+            quizTab.classList.remove('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+            quizTab.classList.add('text-on-surface-variant');
+        });
+
+        document.getElementById('tab-quiz').addEventListener('click', function() {
+            document.getElementById('view-quiz').classList.remove('hidden');
+            document.getElementById('view-flashcards').classList.add('hidden');
+            
+            this.classList.add('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+            this.classList.remove('text-on-surface-variant');
+            
+            let fcTab = document.getElementById('tab-flashcards');
+            fcTab.classList.remove('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+            fcTab.classList.add('text-on-surface-variant');
+        });
+    </script>
+
+
+
+
+</body></html>

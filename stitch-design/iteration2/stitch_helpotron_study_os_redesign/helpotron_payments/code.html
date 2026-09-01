@@ -1,0 +1,362 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Payments &amp; Top-up | Helpotron OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "on-background": "#0b1c30",
+                        "primary": "#00685f",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed-variant": "#005049",
+                        "outline-variant": "#bcc9c6",
+                        "on-secondary-container": "#fffbff",
+                        "outline": "#6d7a77",
+                        "background": "#f8f9ff",
+                        "surface-container": "#e5eeff",
+                        "secondary": "#4648d4",
+                        "tertiary-container": "#b05e3d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "primary-container": "#008378",
+                        "surface-dim": "#cbdbf5",
+                        "secondary-fixed": "#e1e0ff",
+                        "primary-fixed": "#89f5e7",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#006a61",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#370e00",
+                        "inverse-primary": "#6bd8cb",
+                        "on-surface-variant": "#3d4947",
+                        "tertiary": "#924628",
+                        "on-surface": "#0b1c30",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "secondary-container": "#6063ee",
+                        "tertiary-fixed": "#ffdbce",
+                        "inverse-surface": "#213145",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "on-tertiary-fixed-variant": "#773215",
+                        "on-primary-container": "#f4fffc",
+                        "surface-container-low": "#eff4ff",
+                        "on-primary-fixed": "#00201d",
+                        "primary-fixed-dim": "#6bd8cb",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary-fixed": "#07006c",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-container": "#fffbff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "container-padding": "24px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "display-xl": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "tabular-stat": ["JetBrains Mono"],
+                        "title-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "tabular-stat": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased h-screen flex overflow-hidden">
+<!-- SideNavBar (Desktop) -->
+<aside class="hidden md:flex flex-col h-full py-container-padding gap-gutter bg-surface-container-low docked left-0 w-64 shrink-0">
+<div class="px-container-padding mb-8 flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A clean, minimalist 3D rendering of a premium robotic assistant head or abstract AI core, serving as an avatar. The style is highly polished, professional corporate modern with soft lighting, set against a pristine white or light grey background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0FrYvJKNlBvGRUGeqtPwfk388HicWm9RqHOfG1LtWiMb5SDIcZX8-Gs4qirrtiP7K8KC3Pdf5uzCrgl7ZPt_XZmIsdBeH242H-zohpcTXSJHq0cnZr-pS-DH88f90Xvdk02UUi28sZQhYYr2HAQPV3hhxG-DzOt9PX5e62a2ppc1xbyJ1VXX1x8NqbYbTZTeDkGoFEt_zOBOXQcebB8YOgPWUf0I7DfYP0tNPm4WLosYvYX2aFtL1ig">
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">Helpotron OS</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Premium Co-pilot</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-3 rounded-lg font-title-md text-title-md flex items-center justify-center gap-2 hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                New Study Session
+            </button>
+</div>
+<nav class="flex-1 flex flex-col gap-2 px-4">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-caps text-label-caps">My Agent</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">Insights</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-caps text-label-caps">History</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-primary-container/10 translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col h-full overflow-hidden relative">
+<!-- TopNavBar (Mobile only for Nav, but acts as header for Desktop too) -->
+<header class="flex justify-between items-center w-full px-container-padding h-16 bg-surface border-b border-outline-variant shrink-0 z-10">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-on-surface">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-bold text-primary md:hidden">Helpotron</span>
+<h2 class="hidden md:block font-title-md text-title-md text-on-surface">Billing &amp; Payments</h2>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-sm">toll</span>
+<span class="font-label-caps text-label-caps text-on-surface font-semibold">Credits: 1,240</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop bg-surface-bright">
+<div class="max-w-4xl mx-auto flex flex-col gap-8 pb-24 md:pb-8">
+<!-- Page Header -->
+<div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-background mb-2">Wallet &amp; Top-up</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Manage your study credits, review transaction history, and securely top up your balance.</p>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Balance Card (Spans 2 cols on md) -->
+<div class="md:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-col justify-between relative overflow-hidden">
+<!-- Decorative background element -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-container opacity-5 rounded-full -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+<div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+<div>
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-1">Available Balance</h3>
+<div class="flex items-baseline gap-2">
+<span class="font-display-xl text-display-xl text-primary">1,240</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Tokens</span>
+</div>
+</div>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-title-md text-title-md hover:bg-primary-container transition-colors flex items-center gap-2 w-full md:w-auto justify-center">
+<span class="material-symbols-outlined">add_circle</span>
+                                Top Up Now
+                            </button>
+</div>
+<div class="relative z-10 grid grid-cols-2 gap-4 border-t border-outline-variant pt-6">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Purchased Credits</p>
+<p class="font-tabular-stat text-tabular-stat text-on-surface font-medium">1,000</p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Referral Bonus</p>
+<p class="font-tabular-stat text-tabular-stat text-tertiary-container font-medium">+240</p>
+</div>
+</div>
+</div>
+<!-- Quick Top Up Packages -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 flex flex-col">
+<h3 class="font-title-md text-title-md text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">shopping_cart</span>
+                            Quick Packages
+                        </h3>
+<div class="flex flex-col gap-3 flex-1">
+<button class="flex justify-between items-center p-3 border border-outline-variant rounded-lg bg-surface-container-lowest hover:border-primary hover:bg-surface transition-all group">
+<div class="flex flex-col items-start">
+<span class="font-body-sm text-body-sm font-medium text-on-surface">500 Tokens</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Standard</span>
+</div>
+<span class="font-tabular-stat text-tabular-stat text-primary font-semibold">$5.00</span>
+</button>
+<button class="flex justify-between items-center p-3 border-2 border-primary rounded-lg bg-primary-container/5 relative overflow-hidden">
+<div class="absolute top-0 right-0 bg-primary text-on-primary px-2 py-0.5 rounded-bl-lg font-label-caps text-[10px] uppercase tracking-wider">Popular</div>
+<div class="flex flex-col items-start mt-2">
+<span class="font-body-sm text-body-sm font-medium text-on-surface">1,200 Tokens</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">20% Bonus</span>
+</div>
+<span class="font-tabular-stat text-tabular-stat text-primary font-semibold">$10.00</span>
+</button>
+<button class="flex justify-between items-center p-3 border border-outline-variant rounded-lg bg-surface-container-lowest hover:border-primary hover:bg-surface transition-all">
+<div class="flex flex-col items-start">
+<span class="font-body-sm text-body-sm font-medium text-on-surface">3,000 Tokens</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Pro</span>
+</div>
+<span class="font-tabular-stat text-tabular-stat text-primary font-semibold">$20.00</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Payment Methods & Referrals -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Payment Methods -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-md text-title-md text-on-surface">Payment Methods</h3>
+<button class="text-primary font-label-caps text-label-caps hover:underline">Add New</button>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between p-4 border border-outline-variant rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-4">
+<div class="w-12 h-8 bg-surface-dim rounded flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface-variant">credit_card</span>
+</div>
+<div>
+<p class="font-body-sm text-body-sm font-medium text-on-surface">•••• 4242</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Expires 12/25</p>
+</div>
+</div>
+<span class="font-label-caps text-label-caps bg-primary-container/20 text-primary px-2 py-1 rounded">Default</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">lock</span>
+<span class="font-label-caps text-label-caps">Secured by Stripe</span>
+</div>
+</div>
+<!-- Referrals -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6">
+<h3 class="font-title-md text-title-md text-on-surface mb-2">Earn Free Tokens</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6">Invite classmates to Helpotron OS. You both get 200 tokens when they sign up.</p>
+<div class="flex gap-2">
+<div class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2 flex items-center justify-between">
+<code class="font-tabular-stat text-tabular-stat text-on-surface">HLP-29X-KLM</code>
+</div>
+<button class="bg-secondary text-on-secondary px-4 py-2 rounded-lg font-title-md text-title-md hover:bg-secondary-container transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+                                Copy
+                            </button>
+</div>
+</div>
+</div>
+<!-- Transaction History -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 mb-8">
+<h3 class="font-title-md text-title-md text-on-surface mb-6">Recent Transactions</h3>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant font-medium">Date</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant font-medium">Description</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant font-medium">Amount</th>
+<th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant font-medium text-right">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-low transition-colors">
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-on-surface">Oct 24, 2023</td>
+<td class="py-4 px-4">
+<p class="font-body-sm text-body-sm text-on-surface">Top-up: 1,200 Tokens (Popular)</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Invoice #INV-2938</p>
+</td>
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-on-surface">$10.00</td>
+<td class="py-4 px-4 text-right">
+<span class="inline-block px-2 py-1 rounded-full bg-primary-container/20 text-primary font-label-caps text-label-caps">Completed</span>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/50 hover:bg-surface-container-low transition-colors">
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-on-surface">Oct 15, 2023</td>
+<td class="py-4 px-4">
+<p class="font-body-sm text-body-sm text-on-surface">Referral Bonus: Alex M.</p>
+</td>
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-tertiary-container">+200 Tokens</td>
+<td class="py-4 px-4 text-right">
+<span class="inline-block px-2 py-1 rounded-full bg-primary-container/20 text-primary font-label-caps text-label-caps">Applied</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-on-surface">Sep 01, 2023</td>
+<td class="py-4 px-4">
+<p class="font-body-sm text-body-sm text-on-surface">Top-up: 500 Tokens</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Invoice #INV-2102</p>
+</td>
+<td class="py-4 px-4 font-tabular-stat text-tabular-stat text-on-surface">$5.00</td>
+<td class="py-4 px-4 text-right">
+<span class="inline-block px-2 py-1 rounded-full bg-primary-container/20 text-primary font-label-caps text-label-caps">Completed</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<button class="mt-4 w-full py-2 font-label-caps text-label-caps text-primary hover:bg-surface-container-low rounded-lg transition-colors">View All History</button>
+</div>
+</div>
+<!-- Footer -->
+<footer class="w-full py-margin-desktop px-container-padding flex flex-col md:flex-row justify-between items-center gap-4 bg-surface-dim mt-auto border-t border-outline-variant">
+<div class="font-headline-lg text-headline-lg font-bold text-primary">Helpotron</div>
+<div class="font-body-sm text-body-sm text-secondary">© 2024 Helpotron Study OS. All rights reserved.</div>
+<div class="flex gap-4">
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:underline transition-opacity duration-200" href="#">Privacy Policy</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:underline transition-opacity duration-200" href="#">Terms of Service</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:underline transition-opacity duration-200" href="#">Help Center</a>
+</div>
+</footer>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-sm pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-3 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-3 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-caps text-label-caps mt-1">Agent</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-3 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined">query_stats</span>
+<span class="font-label-caps text-label-caps mt-1">Insights</span>
+</a>
+<!-- Assume Settings is accessed elsewhere on mobile bottom nav, or mapping to an active state if it was present in BottomNavBar JSON. Since it's not, we'll keep history inactive. -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-3 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="font-label-caps text-label-caps mt-1">History</span>
+</a>
+</nav>
+
+
+
+
+</body></html>

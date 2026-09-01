@@ -1,0 +1,361 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Operator Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "on-background": "#0b1c30",
+                      "primary": "#00685f",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#005049",
+                      "outline-variant": "#bcc9c6",
+                      "on-secondary-container": "#fffbff",
+                      "outline": "#6d7a77",
+                      "background": "#f8f9ff",
+                      "surface-container": "#e5eeff",
+                      "secondary": "#4648d4",
+                      "tertiary-container": "#b05e3d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary-fixed-variant": "#2f2ebe",
+                      "secondary-fixed-dim": "#c0c1ff",
+                      "primary-container": "#008378",
+                      "surface-dim": "#cbdbf5",
+                      "secondary-fixed": "#e1e0ff",
+                      "primary-fixed": "#89f5e7",
+                      "on-primary": "#ffffff",
+                      "surface-tint": "#006a61",
+                      "on-secondary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed": "#370e00",
+                      "inverse-primary": "#6bd8cb",
+                      "on-surface-variant": "#3d4947",
+                      "tertiary": "#924628",
+                      "on-surface": "#0b1c30",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb59a",
+                      "secondary-container": "#6063ee",
+                      "tertiary-fixed": "#ffdbce",
+                      "inverse-surface": "#213145",
+                      "on-error": "#ffffff",
+                      "surface-variant": "#d3e4fe",
+                      "on-tertiary-fixed-variant": "#773215",
+                      "on-primary-container": "#f4fffc",
+                      "surface-container-low": "#eff4ff",
+                      "on-primary-fixed": "#00201d",
+                      "primary-fixed-dim": "#6bd8cb",
+                      "surface-container-high": "#dce9ff",
+                      "on-secondary-fixed": "#07006c",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-container": "#fffbff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "container-padding": "24px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "display-xl": ["Hanken Grotesk"],
+                      "label-caps": ["JetBrains Mono"],
+                      "headline-lg": ["Hanken Grotesk"],
+                      "headline-lg-mobile": ["Hanken Grotesk"],
+                      "body-md": ["Inter"],
+                      "body-sm": ["Inter"],
+                      "tabular-stat": ["JetBrains Mono"],
+                      "title-md": ["Inter"]
+              },
+              "fontSize": {
+                      "display-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                      "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                      "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                      "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                      "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                      "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                      "tabular-stat": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                      "title-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for dense tables */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #bcc9c6; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6d7a77; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-sm h-screen overflow-hidden flex antialiased">
+<!-- SideNavBar (JSON) -->
+<aside class="hidden md:flex flex-col h-full w-64 bg-surface-container-low py-container-padding gap-gutter border-r border-outline-variant z-10 shrink-0">
+<div class="px-container-padding mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary font-headline-lg font-bold">
+                    H
+                </div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary text-[20px] leading-tight">Helpotron OS</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Premium Co-pilot</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-4">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-primary-container/10" href="#">
+<span class="material-symbols-outlined icon-filled">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-caps text-label-caps">My Agent</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">Insights</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-caps text-label-caps">History</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</nav>
+<div class="px-container-padding mt-auto">
+<button class="w-full py-3 px-4 bg-primary text-on-primary rounded-xl font-label-caps text-label-caps hover:bg-primary-container transition-colors shadow-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Study Session
+            </button>
+</div>
+</aside>
+<div class="flex-1 flex flex-col h-full overflow-hidden relative">
+<!-- TopNavBar (JSON) -->
+<header class="flex justify-between items-center w-full px-container-padding h-16 bg-surface border-b border-outline-variant shrink-0 z-10 shadow-sm">
+<div class="flex items-center md:hidden">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">Helpotron</h1>
+</div>
+<div class="hidden md:flex items-center">
+<h2 class="font-title-md text-title-md text-on-surface">Operator Control Center</h2>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden md:block">
+<span class="font-label-caps text-label-caps text-on-surface-variant bg-surface-container-high px-3 py-1.5 rounded-full">Credits: 1,240</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors hover:scale-95 duration-150">
+<span class="material-symbols-outlined text-[28px]">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto bg-background p-margin-mobile md:p-container-padding">
+<div class="max-w-[1440px] mx-auto flex flex-col gap-gutter">
+<!-- Monitors Section -->
+<section class="flex flex-col gap-4">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant tracking-wider">Monitors &amp; Live Health</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- System Health -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex flex-col gap-3 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-semibold flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-pulse"></span>
+                                    System Core
+                                </span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">memory</span>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-2">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant text-[10px]">CPU USAGE</p>
+<p class="font-tabular-stat text-tabular-stat font-semibold text-on-surface">34.2%</p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant text-[10px]">MEMORY</p>
+<p class="font-tabular-stat text-tabular-stat font-semibold text-on-surface">12.4 GB</p>
+</div>
+<div class="col-span-2 pt-1">
+<div class="w-full bg-surface-container-high rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 34%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- API / Uptime -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex flex-col gap-3 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-semibold text-on-surface">API Gateway</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">router</span>
+</div>
+<div class="flex flex-col gap-1 mt-1">
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant text-[10px]">UPTIME (30D)</span>
+<span class="font-tabular-stat text-tabular-stat font-semibold text-primary">99.998%</span>
+</div>
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant text-[10px]">LATENCY</span>
+<span class="font-tabular-stat text-tabular-stat font-semibold text-on-surface">42ms</span>
+</div>
+<div class="flex justify-between items-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant text-[10px]">REQ/SEC</span>
+<span class="font-tabular-stat text-tabular-stat font-semibold text-on-surface">1,402</span>
+</div>
+</div>
+</div>
+<!-- Telegram Wake Monitors -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex flex-col gap-3 shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-semibold text-on-surface">Telegram Hook</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">send</span>
+</div>
+<div class="flex flex-col gap-2 mt-2">
+<div class="flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Bot Status</span>
+<span class="px-2 py-0.5 bg-primary-container/20 text-primary-container font-label-caps text-[10px] rounded-full">ACTIVE</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Msg Queue</span>
+<span class="font-tabular-stat text-tabular-stat font-semibold">0</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Last Wake</span>
+<span class="font-tabular-stat text-tabular-stat text-outline">12s ago</span>
+</div>
+</div>
+</div>
+<!-- Event Feed Mini -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex flex-col shadow-[0px_4px_20px_rgba(0,0,0,0.02)] h-full">
+<div class="flex justify-between items-center mb-3">
+<span class="font-body-md text-body-md font-semibold text-on-surface">Live Feed</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">list_alt</span>
+</div>
+<div class="flex flex-col gap-2 overflow-y-auto max-h-[88px] flex-1">
+<div class="flex gap-2 items-start">
+<span class="font-tabular-stat text-[10px] text-outline mt-0.5">14:02:11</span>
+<p class="font-body-sm text-[12px] leading-tight text-on-surface truncate">DB Sync Completed</p>
+</div>
+<div class="flex gap-2 items-start">
+<span class="font-tabular-stat text-[10px] text-outline mt-0.5">14:01:45</span>
+<p class="font-body-sm text-[12px] leading-tight text-error truncate">Cache Miss: Auth</p>
+</div>
+<div class="flex gap-2 items-start">
+<span class="font-tabular-stat text-[10px] text-outline mt-0.5">14:00:00</span>
+<p class="font-body-sm text-[12px] leading-tight text-on-surface truncate">Hourly Cron Triggered</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Control Center Section -->
+<section class="flex flex-col gap-4 mt-4 lg:mt-8">
+<div class="flex justify-between items-end">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant tracking-wider">Control Center Action Queue</h3>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 border border-outline-variant text-on-surface font-label-caps text-label-caps rounded-lg hover:bg-surface-container-low transition-colors">Export CSV</button>
+<button class="px-3 py-1.5 bg-error-container text-on-error-container font-label-caps text-label-caps rounded-lg hover:opacity-90 transition-opacity">Clear All Done</button>
+</div>
+</div>
+<div class="bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">
+<!-- Table Header -->
+<div class="grid grid-cols-[100px_1fr_120px_150px_100px] gap-4 p-3 bg-surface-container-low border-b border-outline-variant items-center">
+<div class="font-label-caps text-label-caps text-on-surface-variant text-[11px]">TYPE</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant text-[11px]">PAYLOAD / DESCRIPTION</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant text-[11px]">SOURCE</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant text-[11px]">TIMESTAMP</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant text-[11px] text-right">ACTIONS</div>
+</div>
+<!-- Table Body -->
+<div class="flex flex-col divide-y divide-outline-variant/50 max-h-[400px] overflow-y-auto">
+<!-- Row 1 -->
+<div class="grid grid-cols-[100px_1fr_120px_150px_100px] gap-4 p-3 items-center hover:bg-surface-bright transition-colors group">
+<div>
+<span class="inline-block px-2 py-1 rounded bg-secondary-container/10 text-secondary-container font-label-caps text-[10px]">FEEDBACK</span>
+</div>
+<div class="font-body-sm text-on-surface truncate pr-4">"The new flashcard UI is slightly misaligned on mobile."</div>
+<div class="font-tabular-stat text-[12px] text-outline">Data Lake</div>
+<div class="font-tabular-stat text-[12px] text-outline">2024-05-12 14:00</div>
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-[18px]">check</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[100px_1fr_120px_150px_100px] gap-4 p-3 items-center hover:bg-surface-bright transition-colors group">
+<div>
+<span class="inline-block px-2 py-1 rounded bg-error/10 text-error font-label-caps text-[10px]">BUG REPORT</span>
+</div>
+<div class="font-body-sm text-on-surface truncate pr-4">Crash on study session init: NullReferenceException in study_engine.rs:42</div>
+<div class="font-tabular-stat text-[12px] text-outline">App V2.1.4</div>
+<div class="font-tabular-stat text-[12px] text-outline">2024-05-12 13:45</div>
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-[18px]">check</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-[100px_1fr_120px_150px_100px] gap-4 p-3 items-center hover:bg-surface-bright transition-colors group">
+<div>
+<span class="inline-block px-2 py-1 rounded bg-tertiary-container/10 text-tertiary-container font-label-caps text-[10px]">FEATURE</span>
+</div>
+<div class="font-body-sm text-on-surface truncate pr-4">Requesting dark mode support for PDF exports.</div>
+<div class="font-tabular-stat text-[12px] text-outline">User Portal</div>
+<div class="font-tabular-stat text-[12px] text-outline">2024-05-12 11:20</div>
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined text-[18px]">check</span></button>
+<button class="text-on-surface-variant hover:text-error"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- BottomNavBar for Mobile (JSON) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface shadow-[0px_-2px_10px_rgba(0,0,0,0.05)] pb-safe">
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-4 py-1 scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined icon-filled text-[24px]">home</span>
+<span class="font-label-caps text-[10px] mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest px-3 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined text-[24px]">smart_toy</span>
+<span class="font-label-caps text-[10px] mt-1">Agent</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest px-3 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined text-[24px]">query_stats</span>
+<span class="font-label-caps text-[10px] mt-1">Insights</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest px-3 py-1 rounded-xl" href="#">
+<span class="material-symbols-outlined text-[24px]">auto_stories</span>
+<span class="font-label-caps text-[10px] mt-1">History</span>
+</a>
+</nav>
+
+
+
+
+</body></html>
