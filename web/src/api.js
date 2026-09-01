@@ -73,6 +73,19 @@ export function getCsrfToken() {
   return localStorage.getItem('helpotron_csrf_token') || null;
 }
 
+/* Blob download helper (09-01): an <a download> click + revoke — the jump
+ * the JSON export endpoints need for their attachments. */
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Memory-budget queue (08-31, operator) ──────────────────────────────────
 // The API runs under a 10G cgroup budget (server/memguard.py). While the
 // budget is consumed every NEW request gets 429 {"detail": QUEUE_MESSAGE} —
@@ -381,6 +394,61 @@ export const api = {
   agentChatHistory: (key) => request(`/api/agent/chat/${key}`, { method: 'GET' }),
   updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
   getSubagentTeam: (id) => request(`/api/assignments/${id}/subagent-team`, { method: 'GET' }),
+
+  // ── Direction picker & lifecycle (09-01): choose what the subagent team
+  // should build, mark the work done, archive to history, export as JSON.
+  getAssignmentDirection: (id) => request(`/api/assignments/${id}/direction`, { method: 'GET' }),
+  chooseAssignmentDirection: (id, direction, customText = null) => request(`/api/assignments/${id}/choose-direction`, { method: 'POST', body: JSON.stringify({ direction, custom_text: customText || null }) }),
+  markAssignmentDone: (id) => request(`/api/assignments/${id}/mark-done`, { method: 'POST' }),
+  archiveAssignment: (id) => request(`/api/assignments/${id}/archive`, { method: 'POST' }),
+  // Export an assignment (or a whole subject bubble — assignments + materials
+  // + messages + agent_actions) as a JSON attachment. Needs the raw bytes and
+  // the Content-Disposition filename, so it fetches with its own auth headers
+  // like the multipart helpers above instead of request() (which json()-parses).
+  exportAssignmentData: async ({ assignment_id, bubble } = {}) => {
+    const params = new URLSearchParams();
+    if (assignment_id != null) params.set('assignment_id', assignment_id);
+    else if (bubble) params.set('bubble', bubble);
+    if (!params.toString()) throw new Error('Export needs assignment_id or bubble.');
+    // DEMO MODE: hand back a small sample export so the button works offline.
+    if (isDemoMode()) {
+      const payload = {
+        exported_at: new Date().toISOString(),
+        source: assignment_id != null ? `assignment #${assignment_id}` : `bubble "${bubble}"`,
+        assignments: assignment_id != null ? [{ id: assignment_id, demo: true }] : [],
+        note: 'Demo-mode export — sign in for real data.',
+      };
+      triggerDownload(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `helpotron_demo_export_${Date.now()}.json`);
+      return { filename: `helpotron_demo_export_${Date.now()}.json`, demo: true };
+    }
+    const headers = { 'X-Public-ID': getUserId() };
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${getBaseUrl()}/api/assignments/export?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let message = text || `HTTP ${response.status}`;
+      try { const parsed = JSON.parse(text); if (parsed && parsed.detail) message = parsed.detail; } catch { /* raw body is already readable — keep it */ }
+      const err = new Error(message);
+      err.status = response.status;
+      throw err;
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    // RFC 5987 filename* (UTF-8'') wins; plain filename= falls back; a
+    // sane generated name is the last resort so the download never lands
+    // unnamed.
+    const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/i.exec(disposition);
+    const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(disposition);
+    const fallback = `helpotron_export_${assignment_id != null ? `assignment_${assignment_id}` : 'bubble'}_${Date.now()}.json`;
+    const filename = ((star ? decodeURIComponent(star[1]) : (plain ? plain[1] : '')) || fallback).trim() || fallback;
+    const blob = await response.blob();
+    triggerDownload(blob, filename);
+    return { filename };
+  },
 
   // Turn-in (08-27): mark an assignment as turned in; it moves into history.
   listAssignments: (history) => request(`/api/assignments${history != null ? `?history=${history}` : ''}`, { method: 'GET' }),
