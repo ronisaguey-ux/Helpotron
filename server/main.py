@@ -709,8 +709,39 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
         code = body.code or body.two_factor_code
         method = user.settings.get("2fa_method", "totp")
         if not code:
+            # 09-01 (Logan, live): the route used to return 2fa_required WITHOUT
+            # sending the code — the UI asked for a code that never arrived.
+            # Send the email/SMS code here so it lands while the user types.
+            if method in ("email", "sms"):
+                settings_ = user.settings or {}
+                if method == "sms":
+                    from .auth_2fa import send_sms_sync
+                    from .routes_auth_2fa import _e164
+                    phone = settings_.get("phone_number") or (settings_.get("profile") or {}).get("phone")
+                    try:
+                        phone = _e164(phone) if phone else ""
+                    except ValueError:
+                        phone = ""
+                    if not phone:
+                        raise HTTPException(
+                            400,
+                            "No phone number on file for SMS 2FA — add one in Settings, or use the authenticator app.",
+                        )
+                    if settings_.get("sms_opt_out"):
+                        raise HTTPException(
+                            400,
+                            "SMS messages are disabled for this number (you replied STOP). Reply START from that phone, or use email/authenticator 2FA.",
+                        )
+                    new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
+                    if not send_sms_sync(phone, f"Your Helpotron 2FA code is: {new_code}. Valid for 15 minutes."):
+                        raise HTTPException(502, "SMS could not be delivered right now — try again in a moment.")
+                else:  # email
+                    from .auth_2fa import email_service
+                    target = (settings_.get("profile") or {}).get("email") or f"{user.public_id}@helpotron.app"
+                    new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
+                    email_service.send_verification_code(target, new_code, purpose_label="2FA Login")
             return {"status": "2fa_required", "method": method, "message": "2FA verification code required"}
-        
+
         if method == "totp":
             secret = user.settings.get("2fa_totp_secret")
             if not totp_service.verify_code_with_replay(user.id, secret, code):
