@@ -67,6 +67,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
   const [adminMessages, setAdminMessages] = useState([]);
   const [replyTextMap, setReplyTextMap] = useState({});
   const [replyStatusMap, setReplyStatusMap] = useState({});
+  const [inboxStatus, setInboxStatus] = useState('');
 
   // Cost & Usage State
   const [costsSummary, setCostsSummary] = useState(null);
@@ -215,6 +216,14 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
     statusTimer.current = setTimeout(() => setBulkStatus(''), 5000);
   };
 
+  // Inbox-local status line (delete/clear live in the Inquiries tab, not bulk).
+  const inboxStatusTimer = useRef(null);
+  const flashInbox = (text) => {
+    setInboxStatus(text);
+    if (inboxStatusTimer.current) clearTimeout(inboxStatusTimer.current);
+    inboxStatusTimer.current = setTimeout(() => setInboxStatus(''), 5000);
+  };
+
   const handleRowKick = async (u) => {
     try {
       await api.adminKickUser(u.public_id);
@@ -355,6 +364,28 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       fetchAdminMessages();
     } catch (e) {
       setReplyStatusMap((prev) => ({ ...prev, [msgId]: '❌ Error sending reply' }));
+    }
+  };
+
+  const handleDeleteMessage = async (msg) => {
+    if (!window.confirm('Delete this message?')) return;
+    try {
+      await api.deleteAdminMessage(msg.id);
+      flashInbox(`🗑 Deleted message #${msg.id} — "${msg.subject || 'no subject'}"`);
+      fetchAdminMessages();
+    } catch (e) {
+      flashInbox(`❌ Delete failed: ${e.message || 'unknown error'}`);
+    }
+  };
+
+  const handleClearInbox = async () => {
+    if (!window.confirm('Delete ALL admin messages? This cannot be undone.')) return;
+    try {
+      const res = await api.clearAdminMessages();
+      setAdminMessages([]);
+      flashInbox(`🗑 Cleared inbox — ${res.deleted ?? 0} message(s) removed`);
+    } catch (e) {
+      flashInbox(`❌ Clear failed: ${e.message || 'unknown error'}`);
     }
   };
 
@@ -989,14 +1020,31 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <span className="section-label">Incoming user inquiries</span>
-            <button
-              type="button"
-              onClick={fetchAdminMessages}
-              className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh Inbox
-            </button>
+            <div className="flex items-center gap-2">
+              {safeAdminMessages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearInbox}
+                  className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear Inbox
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={fetchAdminMessages}
+                className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh Inbox
+              </button>
+            </div>
           </div>
+
+          {inboxStatus && (
+            <div className="p-3 bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
+              {inboxStatus}
+            </div>
+          )}
 
           {safeAdminMessages.length === 0 ? (
             <div className="panel">
@@ -1018,10 +1066,21 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       <span className="text-[var(--text-muted)] text-xs font-mono">from: {msg.user_id}</span>
                     </div>
 
-                    <span className={`chip ${msg.status === 'replied' ? 'chip-emerald' : 'chip-amber'} shrink-0`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'replied' ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
-                      {msg.status === 'replied' ? 'Replied' : 'Pending Reply'}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`chip ${msg.status === 'replied' ? 'chip-emerald' : 'chip-amber'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'replied' ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
+                        {msg.status === 'replied' ? 'Replied' : 'Pending Reply'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMessage(msg)}
+                        title="Delete this message"
+                        aria-label={`Delete message ${msg.id}`}
+                        className="p-1.5 rounded-[var(--radius-sm)] text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="panel-body space-y-3 text-xs">

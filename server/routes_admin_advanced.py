@@ -199,6 +199,29 @@ async def reply_to_admin_message_endpoint(message_id: int, payload: AdminReplyPa
     }
 
 
+@router.delete("/messages/{message_id}")
+async def delete_admin_message_endpoint(message_id: int, request: Request, db: Session = Depends(get_db)):
+    """Admin endpoint: deletes a single inbox message."""
+    require_admin(request)
+    from .database import AdminMessage
+    msg = db.query(AdminMessage).filter(AdminMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    db.delete(msg)
+    db.commit()
+    return {"status": "success", "message_id": message_id}
+
+
+@router.delete("/messages")
+async def clear_admin_messages_endpoint(request: Request, db: Session = Depends(get_db)):
+    """Admin endpoint: clears the entire admin inbox."""
+    require_admin(request)
+    from .database import AdminMessage
+    deleted = db.query(AdminMessage).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "deleted": deleted}
+
+
 # ─── Cost Monitoring & Per-User Token Multipliers ─────────────────────────────
 
 class SetMultiplierPayload(BaseModel):
