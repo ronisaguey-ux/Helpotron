@@ -112,6 +112,11 @@ async def create_assignment(
     assignment.prompt = body.prompt
     assignment.file_urls = body.file_urls or []
     if assignment.id is None:
+        # 09-01: new assignments await the user's direction (lifecycle:
+        # pending_approval → in_progress → completed → archived). An explicit
+        # status is never passed by this endpoint, so the new default applies;
+        # re-scrapes of an existing row keep their current status.
+        assignment.status = assignment.status or "pending_approval"
         db.add(assignment)
     db.commit()
     db.refresh(assignment)
