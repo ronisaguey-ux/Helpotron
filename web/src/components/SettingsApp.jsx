@@ -861,6 +861,129 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
           ))}
         </div>
       </div>
+
+      {/* Telegram bot ↔ My Agent (08-31, operator): paste your own bot token
+          from @BotFather; the API polls it and turns your messages into My
+          Agent instructions (1 credit each), replying with the result. */}
+      <TelegramAgentCard />
+    </div>
+  );
+}
+
+/* ── Telegram bot ↔ My Agent ─────────────────────────────────────────────── */
+
+function TelegramAgentCard() {
+  const [status, setStatus] = useState(null);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const refresh = () => {
+    api.telegramAgentStatus().then(setStatus).catch(() => setStatus(null));
+  };
+  useEffect(refresh, []);
+
+  const connect = async () => {
+    if (!token.trim()) { setError('Paste the bot token first.'); return; }
+    setBusy(true); setError('');
+    try {
+      await api.telegramAgentConnect(token.trim());
+      setToken('');
+      refresh();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.telegramAgentDisconnect();
+      refresh();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const connected = !!(status && status.connected);
+
+  return (
+    <div className="panel p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs font-medium text-slate-200">Telegram Bot</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">
+            Connect your own bot to My Agent — text it a task and the agent does it and
+            replies here in Telegram (1 credit per instruction).
+          </div>
+        </div>
+      </div>
+
+      {connected && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${status.status === 'error' ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+            {status.status === 'error' ? '● error' : '● connected'}
+          </span>
+          <span className="text-slate-300">@{status.bot_username}</span>
+          <span className="text-slate-500">
+            {status.chat_linked ? '· chat linked' : '· waiting for first message — send /start to your bot'}
+          </span>
+          {status.sessions_run > 0 && <span className="text-slate-500">· {status.sessions_run} instruction{status.sessions_run === 1 ? '' : 's'} run</span>}
+        </div>
+      )}
+      {connected && status.status === 'error' && status.last_error && (
+        <p className="text-[11px] text-red-300">{status.last_error}</p>
+      )}
+
+      {!connected ? (
+        <div className="space-y-2">
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') connect(); }}
+            placeholder="123456789:AAAA-your-botfather-token"
+            className="w-full bg-[var(--bg-surface-elevated)] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            aria-label="Telegram bot token"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={connect}
+              disabled={busy}
+              className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-4 py-2 hover:opacity-85 disabled:opacity-50"
+            >
+              {busy ? 'Connecting…' : 'Connect bot'}
+            </button>
+            <button
+              onClick={disconnect}
+              disabled={busy}
+              className="bg-slate-700 text-slate-200 text-xs font-medium rounded-lg px-4 py-2 hover:bg-slate-600 disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500">
+            No bot yet? In Telegram: <span className="text-slate-400">@BotFather → /newbot → name it → paste the token here.</span>{' '}
+            Your token stays on your account only.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={disconnect}
+            disabled={busy}
+            className="bg-slate-700 text-slate-200 text-xs font-medium rounded-lg px-4 py-2 hover:bg-slate-600 disabled:opacity-50"
+          >
+            {busy ? 'Disconnecting…' : 'Disconnect bot'}
+          </button>
+        </div>
+      )}
+
+      {error && <p className="text-[11px] text-red-300">{error}</p>}
     </div>
   );
 }

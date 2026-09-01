@@ -69,6 +69,7 @@ try:
     from .routes_datalake import router as datalake_router
     from .routes_monitors import router as monitors_router
     from .routes_auth_2fa import router as auth_2fa_router
+    from .routes_telegram_agent import router as telegram_agent_router
     from .routes_user_settings import router as user_settings_router
     from .routes_hygiene import router as hygiene_router
     from .routes_agent_actions import router as agent_actions_router
@@ -95,6 +96,7 @@ except (ImportError, ValueError):
     from server.routes_datalake import router as datalake_router
     from server.routes_monitors import router as monitors_router
     from server.routes_auth_2fa import router as auth_2fa_router
+    from server.routes_telegram_agent import router as telegram_agent_router
     from server.routes_user_settings import router as user_settings_router
     from server.routes_hygiene import router as hygiene_router
     from server.routes_agent_actions import router as agent_actions_router
@@ -186,10 +188,15 @@ async def lifespan(_app: FastAPI):
     lake_task = asyncio.create_task(_datalake_background_loop())
     cleanup_task = asyncio.create_task(_cleanup_temp_files_loop())
     monitor_task = asyncio.create_task(run_monitors_loop())
+    # Telegram bot ↔ My Agent link (operator 08-31): long-polls every user's
+    # own bot; text messages become agent instructions, replies go to the chat.
+    from .telegram_agent_link import telegram_agent_loop
+    telegram_agent_task = asyncio.create_task(telegram_agent_loop())
     yield
     lake_task.cancel()
     cleanup_task.cancel()
     monitor_task.cancel()
+    telegram_agent_task.cancel()
     try:
         await lake_task
     except asyncio.CancelledError:
@@ -200,6 +207,10 @@ async def lifespan(_app: FastAPI):
         pass
     try:
         await monitor_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await telegram_agent_task
     except asyncio.CancelledError:
         pass
 
@@ -315,6 +326,7 @@ app.include_router(study_groups_router)
 app.include_router(datalake_router)
 app.include_router(monitors_router)
 app.include_router(auth_2fa_router)
+app.include_router(telegram_agent_router)
 app.include_router(user_settings_router)
 app.include_router(hygiene_router)
 app.include_router(agent_actions_router)

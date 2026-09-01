@@ -2,156 +2,202 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Helpotron Academic OS Companion</title>
+  <title>Helpotron Companion</title>
   <style>
-    body {
-      width: 320px;
-      padding: 14px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      background: #0f172a;
-      color: #f8fafc;
-      box-sizing: border-box;
+    :root {
+      --bg: #0b0f19;
+      --surface: #131b2e;
+      --surface-elevated: #1e293b;
+      --border: rgba(255, 255, 255, 0.1);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius: 10px;
     }
-    h2 {
-      margin: 0 0 10px;
-      font-size: 15px;
-      font-weight: 700;
+    body {
+      width: 360px;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      box-sizing: border-box;
+      user-select: none;
+    }
+    
+    /* Header */
+    .header {
+      padding: 12px 14px;
+      background: rgba(19, 27, 46, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 6px;
-      color: #60a5fa;
+      justify-content: space-between;
     }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand img {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      object-fit: cover;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    }
+    .brand-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .brand-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    /* Nav Tabs */
+    .nav-tabs {
+      display: flex;
+      background: #0d1322;
+      border-bottom: 1px solid var(--border);
+      padding: 4px 6px;
+      gap: 4px;
+    }
+    .nav-tab {
+      flex: 1;
+      text-align: center;
+      padding: 6px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .nav-tab:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .nav-tab.active {
+      color: #fff;
+      background: var(--surface-elevated);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Tab Content Areas */
+    .tab-pane {
+      display: none;
+      padding: 12px 14px;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Form Controls */
     label {
       font-size: 11px;
-      color: #94a3b8;
+      font-weight: 600;
+      color: var(--text-muted);
       display: block;
       margin-bottom: 4px;
     }
-    select, input {
+    select, input[type="text"], input[type="password"] {
       width: 100%;
       box-sizing: border-box;
-      padding: 7px 10px;
-      margin-bottom: 10px;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      background: #1e293b;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
       color: #fff;
-      font-size: 12px;
+      font-size: 11.5px;
       outline: none;
+      transition: border-color 0.15s;
     }
     select:focus, input:focus {
-      border-color: #3b82f6;
+      border-color: var(--accent);
     }
-    button.btn-primary {
+
+    /* Buttons */
+    .btn-primary {
       width: 100%;
-      padding: 9px;
+      padding: 9px 12px;
       margin: 4px 0;
-      border: 1px solid rgba(59, 130, 246, 0.4);
-      border-radius: 8px;
-      background: #2563eb;
+      border: 1px solid rgba(99, 102, 241, 0.5);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
       color: #fff;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
-      transition: background 0.15s;
+      transition: opacity 0.15s, transform 0.05s;
     }
-    button.btn-primary:hover {
-      background: #1d4ed8;
+    .btn-primary:hover {
+      opacity: 0.95;
     }
-    button.btn-secondary {
+    .btn-primary:active {
+      transform: scale(0.99);
+    }
+    .btn-secondary {
       width: 100%;
-      padding: 8px;
+      padding: 8px 12px;
       margin: 4px 0;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
       color: #cbd5e1;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 500;
+      transition: background 0.15s, color 0.15s;
     }
-    button.btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    #status {
-      margin-top: 10px;
-      font-size: 11px;
-      padding: 8px;
-      border-radius: 6px;
-      background: #1e293b;
-      border: 1px solid rgba(255,255,255,0.06);
-      color: #94a3b8;
-      min-height: 16px;
-      line-height: 1.4;
-      font-family: monospace;
-    }
-    .unparseable-card {
-      display: none;
-      margin-top: 10px;
-      padding: 10px;
-      background: rgba(244, 63, 94, 0.1);
-      border: 1px solid rgba(244, 63, 94, 0.3);
-      border-radius: 8px;
-      font-size: 11px;
-      color: #fecdd3;
-    }
-    .unparseable-card button {
-      width: 100%;
-      margin-top: 8px;
-      padding: 7px;
-      border-radius: 6px;
-      background: #e11d48;
-      border: none;
+    .btn-secondary:hover {
+      background: var(--surface-elevated);
       color: #fff;
-      font-weight: 600;
-      font-size: 11px;
-      cursor: pointer;
     }
-    details {
-      margin-top: 10px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      padding-top: 8px;
-    }
-    summary {
-      font-size: 11px;
-      color: #64748b;
-      cursor: pointer;
-    }
+
+    /* Chat Messages */
     #chatMessages {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      min-height: 60px;
-      max-height: 200px;
+      min-height: 110px;
+      max-height: 160px;
       overflow-y: auto;
       padding: 8px;
       margin-bottom: 8px;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
-      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #090d16;
     }
     .chat-msg {
       max-width: 88%;
       padding: 6px 9px;
-      border-radius: 10px;
+      border-radius: 8px;
       font-size: 11px;
-      line-height: 1.45;
+      line-height: 1.4;
       white-space: pre-wrap;
       word-break: break-word;
     }
     .chat-msg.user {
       align-self: flex-end;
-      background: #2563eb;
+      background: #4f46e5;
       color: #fff;
-      border-bottom-right-radius: 3px;
     }
     .chat-msg.agent {
       align-self: flex-start;
       background: #1e293b;
-      border: 1px solid rgba(255,255,255,0.12);
+      border: 1px solid var(--border);
       color: #e2e8f0;
-      border-bottom-left-radius: 3px;
     }
     .chat-msg.chat-note {
       align-self: center;
@@ -159,12 +205,7 @@
       border: none;
       color: #64748b;
       font-size: 10px;
-    }
-    .chat-sender {
-      display: block;
-      margin-bottom: 2px;
-      font-size: 9px;
-      opacity: 0.7;
+      text-align: center;
     }
     #chatRow {
       display: flex;
@@ -179,82 +220,147 @@
       width: auto;
       margin: 0;
       padding: 8px 12px;
+    }
+
+    /* Status Bar */
+    .status-container {
+      padding: 8px 14px 10px;
+      border-top: 1px solid var(--border);
+      background: #0a0e1a;
+    }
+    #status {
+      font-size: 10.5px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: #94a3b8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      line-height: 1.35;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .unparseable-card {
+      display: none;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: var(--radius);
+      font-size: 11px;
+      color: #fecdd3;
+    }
+    .unparseable-card button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 6px;
+      border-radius: 6px;
+      background: #e11d48;
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      font-size: 10.5px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-    <h2>
-    <!-- Popup-open latency: this renders on every open. icon128.jpeg is a
-         1024x1024/151KB decode for a 20px slot; icon48.png is 3.8KB. -->
-    <img src="icon48.png" width="20" height="20" alt="" style="border-radius: 5px; object-fit: cover; box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);">
-    <span>Helpotron Companion</span>
-  </h2>
-  
-  <label for="tabSelect">Select Target Tab to Scrape:</label>
-  <select id="tabSelect">
-    <option value="">Loading open tabs…</option>
-  </select>
 
-  <button id="activateAgent" class="btn-primary">🤖 Spawn AI Subagent (Methodical Scrape)</button>
-  <button id="startScrape" class="btn-secondary">📄 Quick Scrape Selected Tab</button>
-  <button id="startCrawl" class="btn-secondary">🌐 Scrape Entire Course (throttled, ~2-5s/page)</button>
-  <button id="stopCrawl" class="btn-secondary" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fca5a5;">⏹ Stop Course Crawl</button>
-  <div id="crawlProgress" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(96, 165, 250, 0.3); font-size: 11px; line-height: 1.4; color: #93c5fd; font-family: monospace;"></div>
-  <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
-
-  <!-- Mini Agent Chatbox (talk to the scraper/capture agent) -->
-  <div id="agentChat" style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <label for="chatInput" style="margin: 0; font-size: 11px; font-weight: 700; color: #60a5fa;">💬 Agent Chat — talk to your scraper</label>
-      <button id="chatRefresh" title="Reload conversation from the server" style="width: auto; margin: 0; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: #cbd5e1; font-size: 11px; cursor: pointer;">⟳</button>
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <img src="icon48.png" alt="Helpotron">
+      <span class="brand-title">Helpotron</span>
+      <span class="brand-badge">Companion</span>
     </div>
-    <div id="chatMessages"><div class="chat-msg chat-note">💡 Type an instruction, e.g. “only scrape algebra” — the agent replies here.</div></div>
-    <div id="chatRow">
-      <input id="chatInput" placeholder="e.g. only scrape algebra…" autocomplete="off">
-      <button id="chatSend" class="btn-primary" disabled>Send</button>
-    </div>
-    <div style="margin-top: 6px;">
-      <button id="chatScrapeTab" class="btn-secondary" style="padding: 6px; font-size: 11px;">🤖 Scrape selected tab with this instruction</button>
-      <button id="chatScrapeContext" class="btn-secondary" style="margin-top: 4px; padding: 6px; font-size: 11px;">📄 Scrape page into prompt (context)</button>
-    </div>
+    <div style="font-size: 10px; color: var(--text-muted);">v2.0.1</div>
   </div>
 
-  <!-- Launch to Doc Assistive Typing Panel -->
-  <div id="launchToDocPanel" style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <label for="gdocsTabSelect" style="margin: 0; font-size: 11px; font-weight: 700; color: #a78bfa;">✨ Launch to Doc (Assistive Typing)</label>
-      <span id="gdocsTypingBadge" style="display: none; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Typing</span>
+  <!-- Navigation Tabs -->
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-target="tab-scrape">⚡ Scrape</div>
+    <div class="nav-tab" data-target="tab-type">✍️ Type</div>
+    <div class="nav-tab" data-target="tab-chat">💬 Chat</div>
+    <div class="nav-tab" data-target="tab-settings">⚙️ Settings</div>
+  </div>
+
+  <!-- Update Banner (if available) -->
+  <div id="updateBanner" style="display: none; margin: 10px 14px 0; padding: 8px 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-weight: 700; font-size: 11px; color: #6ee7b7;">✨ Update Available</span>
+      <span id="updateVersionBadge" style="font-size: 9px; background: #059669; padding: 1px 5px; border-radius: 4px; color: white;">v2.0.0</span>
     </div>
-    
-    <label for="assignmentSelect">Assignment (from your Helpotron workspace):</label>
-    <select id="assignmentSelect" style="margin-bottom: 8px;">
+    <button id="btnDownloadUpdate" style="width: 100%; margin-top: 5px; padding: 5px; background: #10b981; border: none; border-radius: 6px; color: #022c22; font-weight: 700; font-size: 10px; cursor: pointer;">
+      Download Latest Version (.zip)
+    </button>
+  </div>
+
+  <!-- ─── TAB 1: SCRAPE ──────────────────────────────────────────────── -->
+  <div id="tab-scrape" class="tab-pane active">
+    <label for="tabSelect">Select Target Course Tab:</label>
+    <select id="tabSelect">
+      <option value="">Loading open tabs…</option>
+    </select>
+
+    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+      <button id="startScrape" class="btn-primary">📄 Quick Scrape Selected Tab</button>
+      <button id="activateAgent" class="btn-secondary">🤖 Spawn AI Subagent (Methodical)</button>
+      <button id="startCrawl" class="btn-secondary">🌐 Scrape Entire Course (Throttled)</button>
+      <button id="stopCrawl" class="btn-secondary" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fca5a5;">⏹ Stop Course Crawl</button>
+      <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
+    </div>
+
+    <div id="crawlProgress" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(96, 165, 250, 0.3); font-size: 10.5px; line-height: 1.4; color: #93c5fd; font-family: monospace;"></div>
+
+    <!-- Honest Unparseable Box -->
+    <div id="unparseableBox" class="unparseable-card" style="margin-top: 8px;">
+      <div id="unparseableReason">⚠️ Helpotron was unable to parse structured assignment data.</div>
+      <button id="btnOpenDataLake">📥 Submit Feedback to Data Lake</button>
+    </div>
+
+    <button id="openAssignmentBtn" class="btn-secondary" style="display: none; margin-top: 6px; border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc;">📖 Open Assignment in Workspace</button>
+  </div>
+
+  <!-- ─── TAB 2: LAUNCH TO DOC (ASSISTIVE TYPING) ──────────────────────── -->
+  <div id="tab-type" class="tab-pane">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+      <label style="margin: 0; color: #c4b5fd;">✨ Assistive Typing Setup</label>
+      <span id="gdocsTypingBadge" style="display: none; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Typing Active</span>
+    </div>
+
+    <label for="assignmentSelect">Assignment Draft:</label>
+    <select id="assignmentSelect">
       <option value="">Select an assignment to type…</option>
     </select>
 
-    <label for="gdocsTabSelect">Target Editor Tab (Docs, Gmail, Notion, LMS):</label>
+    <label for="gdocsTabSelect">Target Editor Tab (Docs, Word, LMS):</label>
     <select id="gdocsTabSelect">
       <option value="">Detecting open editor tabs…</option>
     </select>
 
-    <label for="realismPreset">Accessibility Preset:</label>
-    <select id="realismPreset" style="margin-bottom: 8px;">
-      <option value="academic">Natural Academic (65 WPM)</option>
-      <option value="gentle">Gentle RSI Relief (35 WPM)</option>
-      <option value="brisk">Brisk Pro (95 WPM)</option>
-      <option value="motor">High Variance Motor Assist (50 WPM)</option>
-    </select>
-
-    <div style="margin-bottom: 6px;">
-      <div style="display: flex; justify-content: space-between;">
-        <label for="wpmSlider" style="margin: 0;">Typing Speed:</label>
-        <span id="wpmValue" style="color: #c4b5fd; font-weight: 700; font-size: 11px;">65 WPM</span>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+      <div>
+        <label for="realismPreset">Cadence Preset:</label>
+        <select id="realismPreset" style="margin: 0;">
+          <option value="academic">Natural (65 WPM)</option>
+          <option value="gentle">RSI Relief (35 WPM)</option>
+          <option value="brisk">Brisk Pro (95 WPM)</option>
+          <option value="motor">High Variance (50 WPM)</option>
+        </select>
       </div>
-      <input id="wpmSlider" type="range" min="20" max="140" value="65" style="padding: 0; margin-bottom: 6px;">
+      <div>
+        <div style="display: flex; justify-content: space-between;">
+          <label for="wpmSlider">Speed:</label>
+          <span id="wpmValue" style="color: #c4b5fd; font-weight: 700; font-size: 10px;">65 WPM</span>
+        </div>
+        <input id="wpmSlider" type="range" min="20" max="140" value="65" style="padding: 0; margin-top: 4px;">
+      </div>
     </div>
 
-    <details style="margin-bottom: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px;">
-      <summary style="font-size: 10px; color: #94a3b8; cursor: pointer; font-weight: 600;">⚙️ Realism & Cadence Controls (9 Dimensions)</summary>
+    <details style="margin-bottom: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; padding: 6px;">
+      <summary style="font-size: 10px; color: #94a3b8; cursor: pointer; font-weight: 600;">⚙️ 9 Realism Dimensions</summary>
       <div style="margin-top: 6px; font-size: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
         <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
           <input type="checkbox" id="chkTypos" checked> Typos & Fix
@@ -263,7 +369,7 @@
           <input type="checkbox" id="chkFalseStarts" checked> False Starts
         </label>
         <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkPauses" checked> Punctuation Pauses
+          <input type="checkbox" id="chkPauses" checked> Pauses
         </label>
         <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
           <input type="checkbox" id="chkJitter" checked> Timing Jitter
@@ -277,19 +383,17 @@
       </div>
     </details>
 
-    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-      <button id="btnStartLaunchToDoc" class="btn-primary" style="background: #7c3aed; border-color: rgba(139, 92, 246, 0.4);">
-        ⌨️ Start Assistive Typing
-      </button>
-    </div>
+    <button id="btnStartLaunchToDoc" class="btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">
+      ⌨️ Start Assistive Typing
+    </button>
 
-    <!-- Active Typing Controls & Progress -->
-    <div id="typingProgressSection" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(167, 139, 250, 0.3); font-size: 11px;">
+    <!-- Typing Progress Section -->
+    <div id="typingProgressSection" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(167, 139, 250, 0.3); font-size: 10.5px;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #ddd6fe; font-weight: 600;">
         <span id="typingStatusText">Typing…</span>
         <span id="typingPercentText">0%</span>
       </div>
-      <div style="background: rgba(255,255,255,0.1); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+      <div style="background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px; overflow: hidden; margin-bottom: 6px;">
         <div id="typingProgressBar" style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: 0%; height: 100%; transition: width 0.2s;"></div>
       </div>
       <div style="display: flex; gap: 6px;">
@@ -299,48 +403,62 @@
     </div>
   </div>
 
-  <!-- Extension Update Alert Banner -->
-  <div id="updateBanner" style="display: none; margin-bottom: 10px; padding: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-      <span style="font-weight: 700; font-size: 11px; color: #6ee7b7;">✨ New Version Available!</span>
-      <span id="updateVersionBadge" style="font-size: 10px; background: #059669; padding: 2px 6px; border-radius: 4px; color: white;">v2.0.0</span>
+  <!-- ─── TAB 3: AGENT CHAT ──────────────────────────────────────────── -->
+  <div id="tab-chat" class="tab-pane">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+      <label style="margin: 0; color: #93c5fd;">💬 Scraper Instruction Agent</label>
+      <button id="chatRefresh" title="Reload conversation" style="width: auto; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: #cbd5e1; font-size: 10px; cursor: pointer;">⟳ Refresh</button>
     </div>
-    <p style="margin: 4px 0 6px 0; font-size: 10px; color: #a7f3d0; line-height: 1.3;">
-      A newer version of the Helpotron Extension is ready. Download to keep all features running smoothly.
-    </p>
-    <button id="btnDownloadUpdate" style="width: 100%; padding: 6px; background: #10b981; border: none; border-radius: 6px; color: #022c22; font-weight: 700; font-size: 11px; cursor: pointer;">
-      📥 Download Latest Extension Zip
-    </button>
+    
+    <div id="chatMessages">
+      <div class="chat-msg chat-note">💡 Type an instruction, e.g. “only scrape algebra problem sets”.</div>
+    </div>
+
+    <div id="chatRow">
+      <input id="chatInput" placeholder="Direct your scraper agent…" autocomplete="off">
+      <button id="chatSend" class="btn-primary" disabled>Send</button>
+    </div>
+
+    <div style="display: flex; gap: 4px; margin-top: 6px;">
+      <button id="chatScrapeTab" class="btn-secondary" style="flex: 1; padding: 5px; font-size: 10px;">🤖 Scrape Tab</button>
+      <button id="chatScrapeContext" class="btn-secondary" style="flex: 1; padding: 5px; font-size: 10px;">📄 Page → Prompt</button>
+    </div>
   </div>
 
-  <div id="status">Ready. Select a tab above to begin.</div>
+  <!-- ─── TAB 4: SETTINGS ───────────────────────────────────────────── -->
+  <div id="tab-settings" class="tab-pane">
+    <label for="server">Workspace Server URL:</label>
+    <input id="server" placeholder="http://localhost:8000">
 
-  <!-- 08-28: after a successful scrape the returned bubble id is surfaced
-       here and this button opens the bubble in the web app (#assignment deep
-       link) — the "auto-create/return assignment bubble" leg. -->
-  <button id="openAssignmentBtn" class="btn-secondary" style="display: none; border-color: rgba(59, 130, 246, 0.35); color: #93c5fd;">📖 Open assignment bubble in Helpotron</button>
+    <label for="public_id">Username / Public ID:</label>
+    <input id="public_id" placeholder="your username">
 
-  <!-- Honest Unparseable Warning Box with Direct Data Lake Prompt -->
-  <div id="unparseableBox" class="unparseable-card">
-    <div id="unparseableReason">⚠️ Helpotron was unable to parse structured assignment data from this website.</div>
-    <p style="margin: 4px 0 0 0; color: #fda4af; font-size: 10px;">
-      Submit this page format to the Data Lake to earn micro-credits and help train our platform!
-    </p>
-    <button id="btnOpenDataLake">📥 Submit Feedback to Data Lake</button>
+    <label for="password">Account Password:</label>
+    <input id="password" type="password" placeholder="Account password">
+
+    <button id="saveSettings" class="btn-primary" style="margin-top: 4px;">Save &amp; Connect</button>
   </div>
 
-  <details open>
-    <summary>🔑 Login (required) — Account &amp; Connection Settings</summary>
-    <div style="margin-top: 6px;">
-      <label>Server URL</label>
-      <input id="server" placeholder="http://localhost:8000">
-      <label>Username / Public ID</label>
-      <input id="public_id" placeholder="your Helpotron username">
-      <label>Password (login to enable sync &amp; AI agent)</label>
-      <input id="password" type="password" placeholder="Account password">
-      <button id="saveSettings" class="btn-secondary" style="padding: 5px;">Log In &amp; Save</button>
-    </div>
-  </details>
+  <!-- Status Bar Footer -->
+  <div class="status-container">
+    <div id="status">Ready. Select a tab above to begin.</div>
+  </div>
+
+  <!-- Simple Tab Switching Script -->
+  <script>
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.getAttribute('data-target');
+        if (target) {
+          const pane = document.getElementById(target);
+          if (pane) pane.classList.add('active');
+        }
+      });
+    });
+  </script>
 
   <script src="popup.js"></script>
 </body>
