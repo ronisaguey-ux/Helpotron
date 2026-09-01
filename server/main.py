@@ -83,6 +83,7 @@ try:
     from .routes_extension import router as extension_router
     from .assignments import router as assignments_router
     from .assignment_turnin import router as assignment_turnin_router
+    from .routes_assignment_direction import router as assignment_direction_router
     from .privacy import router as privacy_router
     from .admin import router as admin_router
     from .routes_features import router as features_router
@@ -109,6 +110,7 @@ except (ImportError, ValueError):
     from server.routes_extension import router as extension_router
     from server.assignments import router as assignments_router
     from server.assignment_turnin import router as assignment_turnin_router
+    from server.routes_assignment_direction import router as assignment_direction_router
     from server.privacy import router as privacy_router
     from server.admin import router as admin_router
     from server.routes_features import router as features_router
@@ -340,6 +342,7 @@ app.include_router(dump_router)
 app.include_router(math_router)
 app.include_router(extension_router)
 app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
+app.include_router(assignment_direction_router)
 app.include_router(assignments_router)
 app.include_router(privacy_router)
 app.include_router(trial_router)
@@ -1148,6 +1151,10 @@ async def upsert_assignment(body: AssignmentIn, db: Session = Depends(get_db), c
         assignment = db.query(Assignment).filter_by(user_id=user.id, canvas_id=body.canvas_id).first()
     if assignment is None:
         assignment = Assignment(user_id=user.id)
+        # 09-01 lifecycle: a brand-new assignment awaits the user's direction.
+        # Re-scrapes of an existing row keep whatever status it has (the
+        # assignment.status or ... expression never overrides a set status).
+        assignment.status = assignment.status or "pending_approval"
         db.add(assignment)
     assignment.canvas_id = body.canvas_id
     assignment.title = body.title
