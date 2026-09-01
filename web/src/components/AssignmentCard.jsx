@@ -45,19 +45,17 @@ export default function AssignmentCard({
         }
       }}
       aria-label={`Select assignment: ${displayTitle}`}
-      className="relative group glass-panel p-5 transition-all duration-300 hover:-translate-y-0.5 overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)]"
+      className="relative group bg-surface-container-low hover:bg-surface-container rounded-2xl border border-outline-variant/30 hover:border-outline-variant/60 p-5 transition-all duration-200 card-lift overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <style>{AURORA_CHIP_TINTS}</style>
-
       {/* Corner Accent Edge */}
       <div className="absolute top-0 right-0 w-12 h-12 overflow-hidden pointer-events-none">
         <div
-          className={`absolute transform rotate-45 bg-gradient-to-r w-16 h-2 -top-1 -right-4 ${
+          className={`absolute transform rotate-45 w-16 h-1.5 -top-1 -right-4 ${
             isUrgent
-              ? 'from-rose-500 to-amber-500'
+              ? 'bg-error'
               : isCompleted
-              ? 'from-emerald-500 to-teal-400'
-              : 'from-cyan-500 to-indigo-500'
+              ? 'bg-primary'
+              : 'bg-secondary'
           }`}
         />
       </div>
@@ -65,47 +63,47 @@ export default function AssignmentCard({
       {/* Header Info */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="aurora-chip info font-mono uppercase tracking-wide">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="font-label-caps text-[10px] px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant uppercase tracking-wider font-medium">
               {displayCourse}
             </span>
             {teacherName && (
-              <span className="text-[11px] font-mono text-[var(--text-muted)] truncate max-w-[140px]">
+              <span className="font-body-sm text-[11px] text-on-surface-variant truncate max-w-[140px]">
                 {teacherName}
               </span>
             )}
           </div>
-          <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors line-clamp-2 leading-snug">
+          <h3 className="font-title-md text-title-md text-on-surface group-hover:text-primary transition-colors line-clamp-2 leading-snug">
             {displayTitle}
           </h3>
         </div>
       </div>
 
       {/* Details Row */}
-      <div className="grid grid-cols-2 gap-2 my-3.5 py-2 px-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs font-mono">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+      <div className="grid grid-cols-2 gap-2 my-3.5 py-2.5 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/20 font-tabular-stat text-xs">
+        <div className="flex items-center gap-2 text-on-surface-variant">
+          <Clock className="w-3.5 h-3.5 text-outline" />
           <span className="truncate">Due: {dueDate || 'No deadline'}</span>
         </div>
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
+        <div className="flex items-center gap-2 text-on-surface-variant">
+          <Zap className="w-3.5 h-3.5 text-secondary" />
           <span>AI Risk: {detectorRisk != null ? `${(detectorRisk * 100).toFixed(0)}%` : 'Not checked'}</span>
         </div>
       </div>
 
-      {/* Card Action Footer — one primary intent + Launch to Doc + chat */}
-      <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
-        <div className="flex items-center gap-1.5 text-xs font-mono">
+      {/* Card Action Footer */}
+      <div className="flex items-center justify-between pt-3 border-t border-outline-variant/20">
+        <div className="flex items-center gap-1.5">
           {isCompleted ? (
-            <span className="aurora-chip ok">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-label-caps text-[10px] uppercase font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5" /> {status}
             </span>
           ) : isInProgress ? (
-            <span className="aurora-chip info">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary font-label-caps text-[10px] uppercase font-semibold">
               <Sparkles className="w-3.5 h-3.5 animate-spin" /> {status}
             </span>
           ) : (
-            <span className="aurora-chip warn">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 font-label-caps text-[10px] uppercase font-semibold">
               <AlertTriangle className="w-3.5 h-3.5" /> Pending Execution
             </span>
           )}
@@ -119,21 +117,21 @@ export default function AssignmentCard({
               aria-label={`Launch ${displayTitle} to Google Doc with assistive typing`}
               title="Launch to Google Doc (Assistive Typing for Accessibility)"
               onClick={(e) => { e.stopPropagation(); onLaunchToDoc(e); }}
-              className="flex items-center gap-1 text-xs font-semibold text-violet-400 hover:text-white bg-violet-500/10 hover:bg-violet-600 rounded-[var(--radius-sm)] px-2 py-1.5 transition cursor-pointer border border-violet-500/20 shadow-sm"
+              className="flex items-center gap-1 font-label-caps text-xs text-secondary hover:text-on-primary hover:bg-secondary rounded-lg px-2.5 py-1.5 transition cursor-pointer border border-secondary/30 shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5 text-violet-300" aria-hidden="true" />
+              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Launch to Doc</span>
             </button>
           )}
 
-          {/* Chat bubble — opens the per-assignment agent team chat (08-28) */}
+          {/* Chat bubble */}
           {typeof onChat === 'function' && (
             <button
               type="button"
               aria-label={`Chat with the agent team about ${displayTitle}`}
               title="Chat with the agent team about this assignment"
               onClick={(e) => { e.stopPropagation(); onChat(e); }}
-              className="flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle)] rounded-[var(--radius-sm)] px-2 py-1.5 transition cursor-pointer"
+              className="flex items-center gap-1 font-label-caps text-xs text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded-lg px-2.5 py-1.5 transition cursor-pointer"
             >
               <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Chat
             </button>
@@ -142,7 +140,7 @@ export default function AssignmentCard({
           <button
             type="button"
             aria-label={`Inspect and execute assignment: ${displayTitle}`}
-            className="flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] group-hover:text-[var(--accent)] transition-colors group-hover:translate-x-0.5 focus-visible:ring-1 focus-visible:ring-[var(--accent)] rounded-[var(--radius-sm)] px-1.5 py-1.5"
+            className="flex items-center gap-1 font-label-caps text-xs text-on-surface-variant group-hover:text-primary transition-colors group-hover:translate-x-0.5 rounded-lg px-2 py-1.5"
           >
             Open <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>

@@ -308,113 +308,109 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
   ) : null;
 
   return (
-    <div className="h-full flex flex-col max-w-7xl mx-auto p-6 space-y-6">
-      <style>{AURORA_CHIP_TINTS}</style>
-
+    <div className="h-full flex flex-col max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Workspace Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+      <div className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold text-[var(--text-primary)]">{title}</h2>
-            <span className="aurora-chip info font-mono">{course}</span>
+          <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
+            <h2 className="font-headline-lg text-headline-lg text-on-surface">{title}</h2>
+            <span className="font-label-caps text-label-caps uppercase px-3 py-1 rounded-full bg-secondary-container/20 text-secondary border border-secondary/30">{course}</span>
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="text-[11px] font-mono text-[var(--text-muted)] hover:text-white transition cursor-pointer underline underline-offset-2"
+                className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition cursor-pointer underline underline-offset-2"
               >
                 ← Back to dashboard
               </button>
             )}
           </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            Due: {due} • Teacher: {teacher} • Status: {status}
+          <p className="font-body-sm text-body-sm text-on-surface-variant">
+            Due: <span className="font-tabular-stat text-on-surface">{due}</span> • Teacher: <span className="text-on-surface">{teacher}</span> • Status: <span className="font-semibold text-primary">{status}</span>
           </p>
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
-            {/* Export assignment (09-01): whole-assignment JSON attachment —
-                real fetch + Content-Disposition filename from api.js. */}
+            {/* Export assignment (09-01): whole-assignment JSON attachment */}
             <button
               type="button"
               onClick={handleExportAssignment}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--accent)]/60 hover:text-[var(--accent)] text-[var(--text-secondary)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/30 bg-surface-container-low hover:border-primary/50 hover:text-primary text-on-surface-variant font-label-caps text-label-caps uppercase transition cursor-pointer disabled:opacity-40"
             >
               {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>Export assignment</span>
+              <span>Export</span>
             </button>
             <button
               type="button"
               onClick={() => setShowLaunchToDocModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-violet-600/25 transition cursor-pointer border border-violet-400/30"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-on-primary font-label-caps text-label-caps uppercase shadow-sm transition cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-violet-200" />
+              <Sparkles className="w-4 h-4" />
               <span>Launch to Doc</span>
             </button>
           </div>
           {exportError && (
-            <p className="text-[11px] text-rose-400 font-mono">⚠️ {exportError}</p>
+            <p className="font-label-caps text-xs text-error font-mono">⚠️ {exportError}</p>
           )}
         </div>
       </div>
 
-      {/* Direction picker (09-01): real dispatch intent — tell the subagent
-          team what to build while the assignment is still pending. */}
+      {/* Direction picker (09-01): real dispatch intent */}
       {showDirectionPicker && (
-        <section ref={pickerRef} className="glass-panel p-5">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-1.5">
-            <Compass className="w-4 h-4 text-[var(--accent)] shrink-0" /> Pick what you want for this assignment
+        <section ref={pickerRef} className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-1.5">
+            <Compass className="w-4 h-4 text-secondary shrink-0" /> Pick what you want for this assignment
           </h3>
-          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
             Tell the subagent team what to build — it starts working the moment you pick.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-4">
             {directionButtons.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => (opt.value === 'custom' ? setCustomOpen((c) => !c) : handleChooseDirection(opt.value))}
                 disabled={choosing}
-                className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--accent)] hover:text-[var(--accent)] px-3 py-2.5 text-xs font-semibold text-[var(--text-secondary)] transition cursor-pointer disabled:opacity-40"
+                className="rounded-2xl border border-outline-variant/30 bg-surface-container-low hover:border-primary hover:bg-surface-container-high px-4 py-3 font-label-caps text-label-caps uppercase text-on-surface transition cursor-pointer disabled:opacity-40 text-left"
               >
                 {opt.label}
               </button>
             ))}
           </div>
           {customOpen && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-2.5">
               <textarea
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
                 rows={3}
                 placeholder="Describe what you need — e.g. 'a 3-page essay on the civil war, with citations'…"
-                className="w-full clean-input px-3 py-2.5 text-xs text-[var(--text-primary)] resize-y"
+                className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary resize-y"
               />
-              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
                 If what you describe isn&apos;t something the app can do yet, it&apos;s automatically sent to the Data Lake and we&apos;ll build it.
               </p>
               <button
                 type="button"
                 onClick={() => handleChooseDirection('custom', customText)}
                 disabled={!customText.trim() || choosing}
-                className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-4 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
               >
                 {choosing && <RefreshCw className="w-3 h-3 animate-spin" />} Send to the team
               </button>
             </div>
           )}
           {choosing && !customOpen && (
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--accent)] mt-3">
+            <div className="flex items-center gap-1.5 font-label-caps text-xs text-primary mt-3">
               <RefreshCw className="w-3 h-3 animate-spin" /> Dispatching to the team…
             </div>
           )}
           {directionError && (
-            <p className="text-[11px] text-rose-400 mt-3">⚠️ {directionError}</p>
+            <p className="font-label-caps text-xs text-error mt-3">⚠️ {directionError}</p>
           )}
           {dispatchNote && (
-            <div className="mt-3 p-3 rounded-[var(--radius-md)] bg-[rgba(16,185,129,0.10)] border border-[rgba(16,185,129,0.30)] text-xs text-[#6ee7b7] font-mono leading-relaxed">
+            <div className="mt-3 p-3 rounded-xl bg-primary/10 border border-primary/30 text-xs text-primary font-mono leading-relaxed">
               {dispatchNote}
             </div>
           )}
@@ -422,54 +418,50 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
       )}
 
       {/* Subagent Team Live Ribbon — REAL progress from the assignment row */}
-      <div className="glass-panel p-5">
-        <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-[var(--accent)] shrink-0" /> Subagent Team
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+        <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4 text-primary shrink-0" /> Subagent Team
         </h3>
         {subagents.length === 0 ? (
-          <div className="space-y-2 text-xs text-[var(--text-muted)]">
+          <div className="space-y-2 text-xs text-on-surface-variant">
             {loading ? (
-              <div className="flex items-center gap-2">
-                <EyeOff className="w-4 h-4 shrink-0" /> Loading sub-agent activity…
+              <div className="flex items-center gap-2 font-body-sm">
+                <EyeOff className="w-4 h-4 shrink-0 text-outline" /> Loading sub-agent activity…
               </div>
             ) : bucket === 'pending' && !directionChosen ? (
-              /* Real call-to-action (09-01): a pending assignment with no
-                 direction chosen needs one — never the inert bare line. */
               <>
-                <div className="flex items-center gap-2">
-                  <Compass className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <Compass className="w-4 h-4 shrink-0 text-primary" />
                   <span>Choose a direction to start your subagent team</span>
                 </div>
                 {renderDumpLine()}
                 <button
                   type="button"
                   onClick={() => pickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 bg-primary text-on-primary hover:bg-primary-container font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
                 >
                   Pick a direction <ArrowRight className="w-3 h-3" />
                 </button>
               </>
             ) : dispatchNote ? (
               <>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 shrink-0 text-[var(--accent)]" />
-                  <span className="text-[var(--text-secondary)]">{dispatchNote}</span>
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <Sparkles className="w-4 h-4 shrink-0 text-primary" />
+                  <span className="text-on-surface">{dispatchNote}</span>
                 </div>
                 {bucket === 'pending' && directionChosen && (
-                  <div className="text-[11px] leading-relaxed opacity-80">
-                    The team starts on <span className="font-mono text-[var(--accent)]">{directionLabel}</span> — progress appears here the moment it&apos;s really recorded.
+                  <div className="font-body-sm text-xs leading-relaxed text-on-surface-variant">
+                    The team starts on <span className="font-mono text-primary font-semibold">{directionLabel}</span> — progress appears here the moment it&apos;s really recorded.
                   </div>
                 )}
                 {renderDumpLine()}
               </>
             ) : bucket === 'pending' && directionChosen ? (
-              /* Direction chosen, note not recorded yet — say what the team
-                 is starting on instead of an inert line. */
               <>
-                <div className="flex items-center gap-2">
-                  <Compass className="w-4 h-4 shrink-0 text-[var(--accent)]" />
-                  <span className="text-[var(--text-secondary)]">
-                    The team starts on <span className="font-mono text-[var(--accent)]">{directionLabel}</span> — progress appears here the moment it&apos;s really recorded.
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <Compass className="w-4 h-4 shrink-0 text-primary" />
+                  <span className="text-on-surface">
+                    The team starts on <span className="font-mono text-primary font-semibold">{directionLabel}</span> — progress appears here the moment it&apos;s really recorded.
                   </span>
                 </div>
                 {renderDumpLine()}
@@ -478,15 +470,15 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
               <>
                 {!markedDone && !archiveDone && (
                   <>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                      <span className="text-[var(--text-secondary)]">Work on this assignment is complete — mark it done, then move it to history.</span>
+                    <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
+                      <span>Work on this assignment is complete — mark it done, then move it to history.</span>
                     </div>
                     <button
                       type="button"
                       onClick={handleMarkDone}
                       disabled={markingDone}
-                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
                     >
                       {markingDone ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Mark as done
                     </button>
@@ -494,19 +486,19 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
                 )}
                 {markedDone && !archiveDone && !archiveConfirmDismissed && (
                   <div className="flex items-center gap-2 pt-1">
-                    <span className="text-[11px]">Done — move it to Assignment History?</span>
+                    <span className="font-body-sm text-xs text-on-surface">Done — move it to Assignment History?</span>
                     <button
                       type="button"
                       onClick={handleMoveToHistory}
                       disabled={archiving}
-                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white text-[11px] font-semibold transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
                     >
                       {archiving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />} Move to history
                     </button>
                     <button
                       type="button"
                       onClick={() => setArchiveConfirmDismissed(true)}
-                      className="text-[10px] text-[var(--text-muted)] hover:text-white underline underline-offset-2 transition cursor-pointer"
+                      className="font-label-caps text-xs text-on-surface-variant hover:text-on-surface underline underline-offset-2 transition cursor-pointer uppercase"
                     >
                       Not now
                     </button>
@@ -514,14 +506,14 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
                 )}
                 {archiveDone && (
                   <>
-                    <div className="flex items-center gap-2">
-                      <Archive className="w-4 h-4 shrink-0 text-emerald-400" />
-                      <span className="text-emerald-300">Archived — it now lives in your Assignment History.</span>
+                    <div className="flex items-center gap-2 font-body-sm text-primary">
+                      <Archive className="w-4 h-4 shrink-0" />
+                      <span>Archived — it now lives in your Assignment History.</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => (onGoToHistory ? onGoToHistory() : (onBack && onBack()))}
-                      className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--accent)] hover:text-[var(--accent)] text-[var(--text-secondary)] text-[11px] font-semibold transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 border border-outline-variant/30 bg-surface-container-low hover:border-primary hover:text-primary text-on-surface-variant font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
                     >
                       View in Assignment History <ArrowRight className="w-3 h-3" />
                     </button>
@@ -531,33 +523,30 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
               </>
             ) : bucket === 'in_progress' ? (
               <>
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <RefreshCw className="w-4 h-4 shrink-0 text-primary animate-spin" />
                   <span>The team is working on this assignment — progress appears here as it is recorded.</span>
                 </div>
                 {renderDumpLine()}
               </>
             ) : bucket === 'archived' ? (
               <>
-                <div className="flex items-center gap-2">
-                  <Archive className="w-4 h-4 shrink-0 text-[var(--accent)]" />
-                  <span className="text-[var(--text-secondary)]">This assignment is archived — it lives in your Assignment History.</span>
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <Archive className="w-4 h-4 shrink-0 text-outline" />
+                  <span>This assignment is archived — it lives in your Assignment History.</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => (onGoToHistory ? onGoToHistory() : (onBack && onBack()))}
-                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3.5 py-1.5 border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--accent)] hover:text-[var(--accent)] text-[var(--text-secondary)] text-[11px] font-semibold transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 border border-outline-variant/30 bg-surface-container-low hover:border-primary hover:text-primary text-on-surface-variant font-label-caps text-xs uppercase tracking-wider transition cursor-pointer"
                 >
                   Open Assignment History <ArrowRight className="w-3 h-3" />
                 </button>
               </>
             ) : (
-              /* Honest fallback (operator 08-28) — a fresh auto-routed
-                 assignment with ZERO real activity: say why, and show the
-                 dump provenance instead of a bug-looking bare line. */
               <>
-                <div className="flex items-center gap-2">
-                  <EyeOff className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+                <div className="flex items-center gap-2 font-body-sm text-on-surface">
+                  <EyeOff className="w-4 h-4 shrink-0 text-outline" />
                   <span>
                     No sub-agent activity recorded for this assignment yet
                     {dumpInfo
@@ -568,9 +557,9 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
                   </span>
                 </div>
                 {renderDumpLine()}
-                <div className="text-[11px] leading-relaxed">
+                <div className="font-body-sm text-xs leading-relaxed text-on-surface-variant">
                   {dumpInfo && dumpInfo.requested_action
-                    ? <>You requested <span className="font-mono text-[var(--accent)]">{dumpInfo.requested_action}</span> — it shows up here the moment the team finishes it.</>
+                    ? <>You requested <span className="font-mono text-primary">{dumpInfo.requested_action}</span> — it shows up here the moment the team finishes it.</>
                     : <>Next steps: finalize your dump — flashcards / study guide / summary / do-it — or ask your agent in this bubble to start. Progress and tools appear here the moment they really happen.</>}
                 </div>
               </>
@@ -579,7 +568,7 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
         ) : (
           <>
           {dispatchNote && (
-            <div className="mb-3 p-2.5 rounded-[var(--radius-md)] bg-[rgba(16,185,129,0.10)] border border-[rgba(16,185,129,0.30)] text-[11px] text-[#6ee7b7] font-mono leading-relaxed">
+            <div className="mb-3 p-3 rounded-xl bg-primary/10 border border-primary/30 text-xs text-primary font-mono leading-relaxed">
               {dispatchNote}
             </div>
           )}
@@ -588,21 +577,21 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
               const statusLabel = SUBAGENT_STATUS_LABEL[agent.status] || String(agent.status || 'PENDING').toUpperCase();
               const progress = Math.max(0, Math.min(100, Number(agent.progress) || 0));
               return (
-                <div key={i} className="p-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] space-y-1.5">
+                <div key={i} className="p-4 rounded-2xl border border-outline-variant/30 bg-surface-container-low space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[var(--text-primary)]">{agent.agent || 'Agent'}</span>
-                    <span className={`aurora-chip tight font-mono font-medium ${
-                      statusLabel === 'COMPLETE' ? 'ok' :
-                      statusLabel === 'WORKING' ? 'info' :
-                      statusLabel === 'FAILED' ? 'danger' : ''
+                    <span className="font-semibold text-on-surface">{agent.agent || 'Agent'}</span>
+                    <span className={`font-label-caps text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full ${
+                      statusLabel === 'COMPLETE' ? 'bg-primary/15 text-primary' :
+                      statusLabel === 'WORKING' ? 'bg-secondary/15 text-secondary' :
+                      statusLabel === 'FAILED' ? 'bg-error/15 text-error' : 'bg-surface-container-high text-on-surface-variant'
                     }`}>
                       {statusLabel}
                     </span>
                   </div>
-                  <div className="w-full bg-white/10 rounded-full h-1">
-                    <div className="bg-[var(--accent)] h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  <div className="w-full bg-surface-container-highest rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                   </div>
-                  <div className="text-[10px] text-[var(--text-muted)] font-mono">{progress}% complete</div>
+                  <div className="font-tabular-stat text-[11px] text-on-surface-variant">{progress}% complete</div>
                 </div>
               );
             })}
@@ -610,16 +599,14 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
           </>
         )}
 
-        {/* Talk to the sub-agent team (operator 08-28): the same composer
-            pattern as MyAgentView's assignment bubbles — real thread history,
-            real reply from the agent, no fabricated messages. */}
-        <div className="mt-4" ref={teamChatRef}>
+        {/* Talk to the sub-agent team */}
+        <div className="mt-6 pt-4 border-t border-outline-variant/20" ref={teamChatRef}>
           {teamChat.length > 0 ? (
-            <div className="max-h-44 overflow-y-auto space-y-1.5 mb-2 pr-1">
+            <div className="max-h-48 overflow-y-auto space-y-2 mb-3 pr-1">
               {teamChat.map((m) => (
                 <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-[var(--radius-md)] px-3 py-1.5 text-[11px] leading-relaxed whitespace-pre-wrap break-words ${
-                    m.sender === 'user' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 font-body-sm text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                    m.sender === 'user' ? 'bg-primary text-on-primary' : 'bg-surface-container-low border border-outline-variant/30 text-on-surface'
                   }`}>
                     {m.text}
                   </div>
@@ -627,9 +614,9 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
               ))}
             </div>
           ) : (
-            <p className="text-[10px] text-[var(--text-muted)] mb-2">This bubble is fresh — ask the agent team to start, or finalize your dump.</p>
+            <p className="font-body-sm text-xs text-on-surface-variant mb-3">This bubble is fresh — ask the agent team to start, or finalize your dump.</p>
           )}
-          <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] px-2.5 py-1 focus-within:border-[var(--accent)] transition">
+          <div className="flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low px-3 py-1.5 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition">
             <input
               ref={teamInputRef}
               type="text"
@@ -638,82 +625,82 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTeamMessage(); } }}
               placeholder="Message the agent team about this assignment…"
               aria-label={`Message the ${title || `assignment ${assignment.id}`} team`}
-              className="flex-1 bg-transparent border-none text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+              className="flex-1 bg-transparent border-none text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
             />
             <button
               type="button"
               onClick={sendTeamMessage}
               disabled={!teamInput.trim() || teamBusy}
               aria-label={`Send message to the ${title || `assignment ${assignment.id}`} team`}
-              className="p-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
+              className="p-2 rounded-lg bg-primary text-on-primary hover:bg-primary-container disabled:opacity-30 transition cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>
           {teamBusy && (
-            <div className="flex items-center gap-1.5 text-[10px] text-[var(--accent)] mt-1.5">
+            <div className="flex items-center gap-1.5 font-label-caps text-xs text-primary mt-2">
               <RefreshCw className="w-3 h-3 animate-spin" /> Agent team is working…
             </div>
           )}
           {teamError && (
-            <p className="text-[10px] text-rose-400 mt-1.5">⚠️ Message not sent — {teamError}</p>
+            <p className="font-label-caps text-xs text-error mt-2">⚠️ Message not sent — {teamError}</p>
           )}
         </div>
       </div>
 
-      {/* Assignment details — real prompt/rubric/files or honest empty states */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="glass-panel p-5">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <BookOpen className="w-4 h-4 text-[var(--accent)] shrink-0" /> Prompt
+      {/* Assignment details */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-3">
+            <BookOpen className="w-4 h-4 text-primary shrink-0" /> Prompt
           </h3>
-          <div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
+          <div className="font-body-sm text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
             {prompt || 'No prompt recorded for this assignment yet.'}
           </div>
         </section>
-        <section className="glass-panel p-5">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <Circle className="w-4 h-4 text-[var(--accent)] shrink-0" /> Rubric
+        <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-3">
+            <Circle className="w-4 h-4 text-primary shrink-0" /> Rubric
           </h3>
-          <div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
+          <div className="font-body-sm text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words min-h-[80px]">
             {full && full.rubric ? full.rubric : 'No rubric attached yet.'}
           </div>
         </section>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="glass-panel p-5">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <Paperclip className="w-4 h-4 text-[var(--accent)] shrink-0" /> Attached Files
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-3">
+            <Paperclip className="w-4 h-4 text-primary shrink-0" /> Attached Files
           </h3>
           {attachedFiles.length === 0 ? (
-            <div className="text-xs text-[var(--text-muted)]">
+            <div className="font-body-sm text-xs text-on-surface-variant">
               No files attached to this assignment yet.
             </div>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-2">
               {attachedFiles.map((f, i) => (
-                <li key={i} className="p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] text-xs text-[var(--text-secondary)] font-mono flex items-center gap-2">
-                  <Paperclip className="w-3.5 h-3.5 shrink-0" /> {f}
+                <li key={i} className="p-3 rounded-xl border border-outline-variant/30 bg-surface-container-low font-body-sm text-xs text-on-surface flex items-center gap-2.5">
+                  <Paperclip className="w-3.5 h-3.5 text-outline shrink-0" /> {f}
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <section className="glass-panel p-5">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <Brain className="w-4 h-4 text-[var(--accent)] shrink-0" /> Saved Materials
+        <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2 mb-3">
+            <Brain className="w-4 h-4 text-primary shrink-0" /> Saved Materials
           </h3>
           {materials.length === 0 ? (
-            <div className="text-xs text-[var(--text-muted)]">
+            <div className="font-body-sm text-xs text-on-surface-variant">
               No study materials generated for this assignment yet.
             </div>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-2">
               {materials.map((m) => (
-                <li key={m.id} className="p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] text-xs font-mono text-[var(--text-muted)] flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" /> {m.kind}
-                  <span className="text-[10px] opacity-70 ml-auto">
+                <li key={m.id} className="p-3 rounded-xl border border-outline-variant/30 bg-surface-container-low font-body-sm text-xs text-on-surface flex items-center gap-2.5">
+                  <Clock className="w-3.5 h-3.5 shrink-0 text-primary" /> {m.kind}
+                  <span className="font-tabular-stat text-[11px] text-on-surface-variant ml-auto">
                     {m.created_at ? new Date(m.created_at).toLocaleDateString() : ''}
                   </span>
                 </li>
@@ -723,9 +710,9 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
         </section>
       </div>
 
-      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-        <Sparkles className="w-3.5 h-3.5" />
-        Sub-agent, rubric, dump and chat data is loaded live from the server — it reflects only activity that was really recorded. (operator 08-28)
+      <div className="flex items-center gap-2 font-body-sm text-xs text-on-surface-variant">
+        <Sparkles className="w-3.5 h-3.5 text-primary" />
+        Sub-agent, rubric, dump and chat data is loaded live from the server — it reflects only activity that was really recorded.
       </div>
 
       <LaunchToDocModal

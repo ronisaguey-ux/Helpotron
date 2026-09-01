@@ -43,19 +43,18 @@ function CalendarGrid() {
   const monthName = firstDay.toLocaleDateString([], { month: 'long', year: 'numeric' });
 
   return (
-    <SectionCard id="library-calendar" header={
+    <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm space-y-4">
       <div className="flex items-center justify-between w-full">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-[var(--accent)]" /> {monthName}
+        <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2">
+          <CalendarIcon className="w-4 h-4 text-primary" /> {monthName}
         </h3>
         <div className="flex gap-1.5">
-          <button type="button" onClick={() => setMonthOffset(monthOffset - 1)} className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] hover:border-[rgba(139,92,246,0.35)] transition cursor-pointer" aria-label="Previous month">←</button>
-          <button type="button" onClick={() => setMonthOffset(0)} className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] hover:border-[rgba(139,92,246,0.35)] transition cursor-pointer">Today</button>
-          <button type="button" onClick={() => setMonthOffset(monthOffset + 1)} className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] hover:border-[rgba(139,92,246,0.35)] transition cursor-pointer" aria-label="Next month">→</button>
+          <button type="button" onClick={() => setMonthOffset(monthOffset - 1)} className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer" aria-label="Previous month">←</button>
+          <button type="button" onClick={() => setMonthOffset(0)} className="px-3.5 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer">Today</button>
+          <button type="button" onClick={() => setMonthOffset(monthOffset + 1)} className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer" aria-label="Next month">→</button>
         </div>
       </div>
-    }>
-      <div className="grid grid-cols-7 gap-1.5 text-[10px] font-semibold text-[var(--text-muted)] mb-1.5">
+      <div className="grid grid-cols-7 gap-1.5 font-label-caps text-label-caps uppercase text-on-surface-variant mb-1.5">
         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => <div key={d} className="text-center py-1">{d}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-1.5">
@@ -66,24 +65,24 @@ function CalendarGrid() {
           return (
             <div
               key={d}
-              className={`min-h-[74px] rounded-[var(--radius-md)] border p-1.5 transition ${
-                isToday ? 'border-[rgba(139,92,246,0.6)] bg-[var(--accent-subtle)]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
+              className={`min-h-[74px] rounded-xl border p-2 transition ${
+                isToday ? 'border-primary bg-primary/10' : 'border-outline-variant/20 bg-surface-container-low'
               }`}
             >
-              <div className={`text-[10px] font-semibold ${isToday ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>{d}</div>
+              <div className={`font-tabular-stat text-xs font-semibold ${isToday ? 'text-primary' : 'text-on-surface-variant'}`}>{d}</div>
               <div className="space-y-1 mt-1">
                 {events.map((e) => (
                   <div
                     key={e.title + d}
                     title={`${e.title} · ${e.course}`}
-                    className={`px-1 py-0.5 rounded text-[8px] font-medium truncate ${
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-medium truncate ${
                       e.kind === 'study'
-                        ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/20'
+                        ? 'bg-primary/15 text-primary border border-primary/20'
                         : e.status?.startsWith('completed')
-                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 line-through opacity-70'
+                          ? 'bg-primary/15 text-primary border border-primary/20 line-through opacity-70'
                           : e.status === 'draft_ready'
                             ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                            : 'bg-blue-500/15 text-blue-300 border border-blue-500/20'
+                            : 'bg-secondary/15 text-secondary border border-secondary/20'
                     }`}
                   >
                     {e.title}
@@ -94,7 +93,7 @@ function CalendarGrid() {
           );
         })}
       </div>
-    </SectionCard>
+    </div>
   );
 }
 
@@ -134,27 +133,24 @@ export default function LibraryView({ user, onOpenAssignmentBubble, onOpenWorksp
         files.length === 0 ? (
           <EmptyState icon="🗂️" title="Your library is empty" body="Upload lectures, PDFs and scans — Helpotron turns them into study material." actionLabel="Upload materials" onAction={() => { /* dump view */ window.location.hash = ''; }} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
             {files.map((f) => (
-              <SectionCard id={`library-file-${f.id}`} className="h-full flex flex-col overflow-hidden transition group" header={
+              <div key={`library-file-${f.id}`} className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm h-full flex flex-col justify-between group">
                 <div className="w-full">
-                  <div className="aspect-[16/9] max-h-44 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-gradient-to-br from-[rgba(139,92,246,0.14)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.10)] flex flex-col items-center justify-center gap-1.5">
+                  <div className="aspect-[16/9] max-h-40 w-full rounded-2xl border border-outline-variant/20 bg-surface-container-low flex flex-col items-center justify-center gap-2 mb-4">
                     <span className="text-4xl leading-none" aria-hidden="true">{KIND_ICON[f.kind] || '📄'}</span>
-                    <span className="aurora-chip">{f.kind}</span>
+                    <span className="font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold">{f.kind}</span>
                   </div>
+                  <div className="font-title-md text-sm text-on-surface line-clamp-2 min-h-[2.6em] group-hover:text-primary transition">{f.name}</div>
+                  <div className="font-body-sm text-xs text-on-surface-variant line-clamp-1 mt-1">{f.course} · {f.size}{f.pages ? ` · ${f.pages} pages` : ''}{f.duration ? ` · ${f.duration}` : ''}</div>
+                  <div className="font-tabular-stat text-[11px] text-on-surface-variant mt-1">uploaded {timeAgo(f.uploaded)}</div>
                 </div>
-              }>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <div className="text-xs font-semibold text-[var(--text-primary)] line-clamp-2 min-h-[2.6em] group-hover:text-[var(--accent)] transition">{f.name}</div>
-                  <div className="text-[11px] text-[var(--text-muted)] line-clamp-1">{f.course} · {f.size}{f.pages ? ` · ${f.pages} pages` : ''}{f.duration ? ` · ${f.duration}` : ''}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">uploaded {timeAgo(f.uploaded)}</div>
-                  <div className="mt-auto">
-                    <button type="button" onClick={handleOpenBubble} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer">
-                      <Bot className="w-3.5 h-3.5 text-[var(--accent)]" /> Open in Assignment Bubble
-                    </button>
-                  </div>
+                <div className="mt-4 pt-3 border-t border-outline-variant/20">
+                  <button type="button" onClick={handleOpenBubble} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer">
+                    <Bot className="w-3.5 h-3.5 text-primary" /> Open in Bubble
+                  </button>
                 </div>
-              </SectionCard>
+              </div>
             ))}
           </div>
         )

@@ -1122,10 +1122,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* ── Top Bar Panel: Identity + Mode + Quick Actions ── */}
-      <div className="panel p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0">
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           <AvatarUpload
             url={ai.avatarUrl || '/My_Agent_logo.jpeg'}
             initial="🧠"
@@ -1133,7 +1133,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             onUpload={(f) => handleAvatarUpload(f, 'agent')}
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <div className="relative flex items-center">
                 <input
                   value={agentNameDraft}
@@ -1146,63 +1146,63 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   }}
                   aria-label="Agent name"
                   title="Click to rename your agent (press Enter to save)"
-                  className="bg-white/5 hover:bg-white/10 focus:bg-slate-900 border border-white/10 focus:border-[var(--accent)] rounded px-2.5 py-0.5 text-base font-bold text-white outline-none min-w-[120px] max-w-[220px] transition cursor-text"
+                  className="bg-surface-container-low hover:bg-surface-container focus:bg-surface-container-lowest border border-outline-variant/30 focus:border-primary rounded-xl px-3 py-1 font-headline-lg text-title-md text-on-surface outline-none min-w-[120px] max-w-[240px] transition cursor-text"
                 />
               </div>
-              <span className="chip chip-emerald text-[11px] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Ready
+              <span className="font-label-caps text-[11px] uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/15 text-primary flex items-center gap-1.5 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Ready
               </span>
-              <span className="chip chip-neutral text-[11px]">
+              <span className="font-label-caps text-[11px] uppercase tracking-wider px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-medium">
                 ⚡ {Math.max(1, Math.round(effort / 100))}/10 ({effortBucket(effort)})
               </span>
             </div>
-            {/* QA 08-31: this column is ~274px once the name field and the
-                two chips take their share, so the old 627px-wide tagline was
-                truncated after "coursework partn…" — the reader got the filler
-                half and none of the useful half. Kept to what it actually
-                tells someone standing in front of the chat box. */}
-            <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">
+            <p className="font-body-sm text-xs text-on-surface-variant mt-1 line-clamp-2">
               Ask anything, draft papers, transcribe lectures.
             </p>
           </div>
         </div>
 
         {/* Active Identity Pill + Execution Mode + Drawer Trigger + New Chat */}
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           {/* Quick Active Identity Selector */}
           {currentIdentity ? (
             <button
               type="button"
               onClick={() => setConfigsOpen(true)}
-              className="chip chip-accent px-3 py-1.5 flex items-center gap-1.5 cursor-pointer text-xs font-semibold hover:border-[var(--accent)] transition"
+              className="px-3.5 py-2 rounded-xl bg-secondary-container/20 text-secondary border border-secondary/30 flex items-center gap-2 cursor-pointer font-label-caps text-xs uppercase tracking-wider hover:bg-secondary-container/30 transition"
               title="Active Agent Identity — Click to switch or customize"
             >
               <span>{currentIdentity.icon}</span>
               <span className="truncate max-w-[140px]">{currentIdentity.name}</span>
-              <ChevronDown className="w-3 h-3 opacity-70" />
+              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setConfigsOpen(true)}
-              className="px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-dashed border-white/20 text-xs font-medium text-[var(--text-muted)] hover:text-white hover:border-white/40 flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3 py-2 rounded-xl border border-dashed border-outline-variant/40 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:border-outline flex items-center gap-2 transition cursor-pointer"
               title="No custom identity active — click to configure"
             >
               <span>🎭</span>
               <span>Set Identity</span>
-              <ChevronDown className="w-3 h-3 opacity-70" />
+              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
           )}
 
-          <div className="segmented p-0.5">
+          <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 flex items-center gap-1">
             {Object.entries(MODE_META).map(([k, m]) => {
               const Icon = m.icon;
+              const isActive = mode === k;
               return (
                 <button
                   key={k}
                   type="button"
                   onClick={() => handleSwitchMode(k)}
-                  className={`seg-item text-xs flex items-center gap-1.5 ${mode === k ? 'active' : ''}`}
+                  className={`px-3.5 py-1.5 rounded-xl font-label-caps text-xs uppercase tracking-wider flex items-center gap-1.5 transition ${
+                    isActive
+                      ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
                 >
                   <Icon className="w-3.5 h-3.5" /> {m.label}
                 </button>
@@ -1214,10 +1214,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             type="button"
             onClick={() => setConfigsOpen(!configsOpen)}
             aria-pressed={configsOpen}
-            className={`px-3 py-1.5 rounded-[var(--radius-sm)] border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl border font-label-caps text-xs uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
               configsOpen
-                ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.35)] text-[var(--accent)]'
-                : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white'
+                ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
+                : 'bg-surface-container-low border-outline-variant/30 text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <Settings2 className="w-3.5 h-3.5" /> Configs ({allIdentitiesList.length + skills.length + memory.length + files.length})
@@ -1226,7 +1226,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           <button
             type="button"
             onClick={newChat}
-            className="px-3.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="px-4 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-label-caps text-xs uppercase tracking-wider font-semibold flex items-center gap-2 transition cursor-pointer shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" /> New Chat
           </button>
@@ -1281,22 +1281,22 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         }`}
       >
         {/* Left Rail: Threads List & Quick Effort Slider */}
-        <div className="panel p-3 flex flex-col justify-between overflow-hidden">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-4 flex flex-col justify-between overflow-hidden shadow-sm">
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] px-2 py-1 flex items-center justify-between">
+            <div className="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant px-2 py-1 flex items-center justify-between">
               <span>Conversations</span>
-              <span className="text-[10px] font-mono">{threads.length}</span>
+              <span className="font-tabular-stat text-xs">{threads.length}</span>
             </div>
 
             <div className="space-y-1">
               {threads.length === 0 && (
-                <div className="text-xs text-[var(--text-muted)] p-3 text-center italic">
+                <div className="font-body-sm text-xs text-on-surface-variant p-3 text-center italic">
                   No previous chats. Start a new topic!
                 </div>
               )}
               {threads.some((t) => t.pinned) && (
                 <>
-                  <div className="text-[10px] text-amber-400 font-semibold uppercase px-2 pt-1">📌 Pinned</div>
+                  <div className="font-label-caps text-[10px] text-primary font-semibold uppercase px-2 pt-1">📌 Pinned</div>
                   {threads.filter((t) => t.pinned).map((t) => renderThreadRow(t))}
                 </>
               )}
@@ -1305,10 +1305,10 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           </div>
 
           {/* Quick Effort Slider at Bottom of Rail */}
-          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+          <div className="pt-3 border-t border-outline-variant/20 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[var(--text-muted)] font-medium">Model Effort</span>
-              <span className="font-mono font-bold text-[var(--accent)]">{Math.max(1, Math.round(effort / 100))}/10</span>
+              <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">Model Effort</span>
+              <span className="font-tabular-stat font-bold text-primary">{Math.max(1, Math.round(effort / 100))}/10</span>
             </div>
             <input
               type="range"
@@ -1318,22 +1318,22 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               value={Math.max(1, Math.round(effort / 100))}
               onChange={(e) => handleEffort(e.target.value)}
               aria-label="Effort level"
-              className="w-full accent-[var(--accent)] cursor-pointer"
+              className="w-full accent-primary cursor-pointer"
             />
           </div>
         </div>
 
         {/* Right Canvas: Message Stream + Floating Composer */}
-        <div className="panel p-0 flex flex-col overflow-hidden">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-0 flex flex-col overflow-hidden shadow-sm">
           {/* Active Chat Header */}
-          <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               <AgentAvatar
                 size="sm"
                 status={busy ? 'working' : 'ready'}
                 src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
               />
-              <span className="text-xs font-semibold text-white truncate">
+              <span className="font-title-md text-sm text-on-surface truncate">
                 {activeThread ? threads.find((t) => t.id === activeThread)?.title || 'Current Chat' : `Chat with ${agentName}`}
               </span>
             </div>
@@ -1478,17 +1478,17 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           </div>
 
           {/* Bottom Floating Composer */}
-          <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+          <div className="p-4 border-t border-outline-variant/30 bg-surface-container-lowest">
             <form
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-              className="flex items-end gap-2 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] px-3 py-2 focus-within:border-[rgba(139,92,246,0.45)] transition"
+              className="flex items-end gap-2 bg-surface-container-low border border-outline-variant/30 rounded-2xl px-4 py-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary transition"
             >
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach file"
                 title="Attach document or media"
-                className="text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1"
+                className="text-on-surface-variant hover:text-primary transition cursor-pointer p-1.5"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
@@ -1496,7 +1496,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 type="button"
                 onClick={toggleRecord}
                 aria-label={recording ? 'Stop recording' : 'Record voice'}
-                className={`text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer p-1 ${recording ? 'text-red-400 animate-pulse' : ''}`}
+                className={`text-on-surface-variant hover:text-primary transition cursor-pointer p-1.5 ${recording ? 'text-error animate-pulse' : ''}`}
                 title={recording ? 'Stop voice recording' : 'Dictate message'}
               >
                 <Mic className="w-4 h-4" />
@@ -1524,13 +1524,13 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 }}
                 placeholder={`Message ${agentName} (Enter to send, Shift+Enter for newline)…`}
                 aria-label="Agent prompt input"
-                className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder:text-[var(--text-muted)] focus:outline-none resize-none leading-relaxed py-1 max-h-[160px] overflow-y-auto"
+                className="flex-1 min-w-0 bg-transparent border-none text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none resize-none leading-relaxed py-1.5 max-h-[160px] overflow-y-auto"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || busy}
                 aria-label="Send prompt"
-                className="p-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-30 transition cursor-pointer"
+                className="p-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container disabled:opacity-30 transition cursor-pointer shadow-sm"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
