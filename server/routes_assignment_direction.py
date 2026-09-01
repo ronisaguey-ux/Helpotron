@@ -184,10 +184,15 @@ async def export_assignments(
             for ac in actions
         ],
     }
-    slug = re.sub(r"[^a-z0-9-]+", "-", str(scope or "all").lower()).strip("-") or "all"
+    if assignment_id is not None:
+        label = f"assignment-{assignment_id}"
+    elif bubble:
+        label = re.sub(r"[^a-z0-9-]+", "-", str(bubble).lower()).strip("-") or "bubble"
+    else:
+        label = re.sub(r"[^a-z0-9-]+", "-", str(scope or "all").lower()).strip("-") or "all"
     return JSONResponse(
         content=payload,
-        headers={"Content-Disposition": f'attachment; filename="helpotron-{slug}.json"'},
+        headers={"Content-Disposition": f'attachment; filename="helpotron-{label}.json"'},
     )
 
 
