@@ -735,15 +735,16 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
         {setupStep === 'disabling' && (
           <div className="space-y-3 pt-2 border-t border-white/10">
             <p className="text-xs text-slate-300">
-              Enter your current 6-digit 2FA security code to confirm turning off 2FA:
+              Enter your current 2FA security code to confirm turning off 2FA
+              (6 digits from your authenticator app, or the 12-digit code sent to you):
             </p>
             <input
               type="text"
-              maxLength={6}
-              placeholder="123456"
+              maxLength={12}
+              placeholder="123456789012"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              aria-label="6-digit security code to confirm turning off 2FA"
+              aria-label="2FA security code to confirm turning off 2FA"
               className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-sm tracking-widest text-white outline-none focus:border-rose-500"
             />
             <div className="flex gap-2 pt-1">
