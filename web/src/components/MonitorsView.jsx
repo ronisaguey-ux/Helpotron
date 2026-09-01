@@ -20,7 +20,7 @@ function Sparkline({ values, height = 36 }) {
       {values.map((v, i) => (
         <div
           key={i}
-          className="bg-[var(--accent)]/60 rounded-sm flex-1 min-w-[4px]"
+          className="bg-primary/60 rounded-sm flex-1 min-w-[4px]"
           style={{ height: `${Math.max(6, (v / max) * height)}px` }}
           title={fmt(v)}
         />
@@ -77,62 +77,67 @@ export default function MonitorsView({ userId = '' }) {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <Gauge className="w-5 h-5 text-[var(--accent)] shrink-0" />
-          <h2 className="text-lg font-semibold shrink-0">Monitors</h2>
-          <span className="text-xs text-[var(--text-muted)] min-w-0 truncate">
-            persistent collectors · traffic · activity · data lake · cost
-          </span>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+            <Gauge className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-headline-lg text-title-md text-on-surface">Monitors</h2>
+            <p className="font-body-sm text-xs text-on-surface-variant min-w-0 truncate">
+              Persistent telemetry collectors · traffic · activity · data lake · API cost
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
+        <div className="flex items-center gap-3 text-xs text-on-surface-variant min-w-0">
           {updatedAt && (
-            <span className="min-w-0 truncate">
-              updated {updatedAt.toLocaleTimeString()} · refreshes every {REFRESH_MS / 1000}s
+            <span className="font-tabular-stat text-tabular-stat min-w-0 truncate">
+              Updated {updatedAt.toLocaleTimeString()} · refreshes every {REFRESH_MS / 1000}s
             </span>
           )}
           <button
             type="button"
             onClick={load}
-            className="p-2 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
+            className="p-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant border border-outline-variant/30 transition cursor-pointer"
             aria-label="Refresh now"
             title="Refresh now"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4 text-primary" />
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-[var(--radius-md)] text-xs">
+        <div className="bg-error/15 border border-error/30 text-error px-4 py-2.5 rounded-xl text-xs font-label-caps uppercase">
           {error}
         </div>
       )}
 
-      {/* [&>*]:min-w-0 — grid items default to min-width:auto, so one wide
-          child (a long endpoint or monitor name) would otherwise stretch the
-          whole track past the viewport instead of being clipped inside it. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 [&>*]:min-w-0">
         {/* Traffic */}
-        <SectionCard title="Traffic" icon={<Wifi className="w-4 h-4" />}>
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 font-title-md text-title-md text-on-surface">
+            <Wifi className="w-4 h-4 text-primary" />
+            <span>Traffic</span>
+          </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(traff.total_requests)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">reqs total</div>
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(traff.total_requests)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">reqs total</div>
             </div>
             <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(traff.requests_last_window)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">last 60s</div>
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(traff.requests_last_window)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">last 60s</div>
             </div>
             <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{traff.requests_per_min || 0}/m</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">rate</div>
+              <div className="font-tabular-stat text-2xl font-bold text-primary truncate">{traff.requests_per_min || 0}/m</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">rate</div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Status codes</div>
-            <div className="flex h-3 rounded overflow-hidden bg-white/4">
+          <div className="mt-6 pt-4 border-t border-outline-variant/20">
+            <div className="font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant mb-2">Status codes</div>
+            <div className="flex h-3 rounded-full overflow-hidden bg-surface-container-high">
               {['2', '3', '4', '5'].map((c) => {
                 const n = Object.entries(status)
                   .filter(([k]) => k.startsWith(c))
@@ -143,126 +148,136 @@ export default function MonitorsView({ userId = '' }) {
                   <div
                     key={c}
                     title={`${c}xx: ${fmt(n)}`}
-                    className={c === '2' ? 'bg-emerald-500/80' : c === '3' ? 'bg-sky-500/80' : c === '4' ? 'bg-amber-500/80' : 'bg-rose-500/80'}
+                    className={c === '2' ? 'bg-primary' : c === '3' ? 'bg-secondary' : c === '4' ? 'bg-amber-500' : 'bg-error'}
                     style={{ width: `${pct}%` }}
                   />
                 );
               })}
               {Object.keys(status).length === 0 && (
-                <div className="bg-white/10 flex-1" />
+                <div className="bg-surface-container flex-1" />
               )}
             </div>
-            <div className="flex gap-3 mt-2 text-xs text-[var(--text-muted)]">
-              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" />2xx</span>
-              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-sky-400" />3xx</span>
+            <div className="flex gap-4 mt-2 font-label-caps text-[11px] text-on-surface-variant">
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary" />2xx</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-secondary" />3xx</span>
               <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" />4xx</span>
-              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400" />5xx</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-error" />5xx</span>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">Top endpoints</div>
+          <div className="mt-6 pt-4 border-t border-outline-variant/20">
+            <div className="font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant mb-2">Top endpoints</div>
             {(traff.top_endpoints || []).slice(0, 6).map((e) => {
               const pct = Math.min(100, (e.count / (traff.total_requests || 1)) * 100);
               return (
-                /* Endpoint strings are server-supplied and unbounded: the name
-                   cell must be able to shrink (min-w-0) or it forces the row —
-                   and the whole grid — wider than a 360px phone. */
-                <div key={e.endpoint} className="flex items-center gap-2 text-xs py-1 min-w-0">
-                  <code className="text-[var(--text-secondary)] truncate min-w-0 basis-[45%] max-w-[220px]" title={e.endpoint}>{e.endpoint}</code>
-                  <div className="flex-1 min-w-0 h-2 bg-white/6 rounded overflow-hidden">
-                    <div className="bg-[var(--accent)]/70 h-full rounded" style={{ width: `${pct}%` }} />
+                <div key={e.endpoint} className="flex items-center gap-2 text-xs py-1.5 min-w-0">
+                  <code className="text-on-surface truncate min-w-0 basis-[45%] max-w-[220px] font-mono text-[11px]" title={e.endpoint}>{e.endpoint}</code>
+                  <div className="flex-1 min-w-0 h-2 bg-surface-container-high rounded-full overflow-hidden">
+                    <div className="bg-primary h-full rounded-full" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-[var(--text-muted)] w-14 shrink-0 text-right">{fmt(e.count)}</span>
+                  <span className="font-tabular-stat text-on-surface-variant w-14 shrink-0 text-right">{fmt(e.count)}</span>
                 </div>
               );
             })}
             {(!traff.top_endpoints || traff.top_endpoints.length === 0) && (
-              <div className="text-xs text-[var(--text-muted)]">waiting for traffic…</div>
+              <div className="font-body-sm text-xs text-on-surface-variant">waiting for traffic…</div>
             )}
           </div>
-        </SectionCard>
+        </div>
 
         {/* Activity */}
-        <SectionCard title="Activity" icon={<Activity className="w-4 h-4" />}>
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 font-title-md text-title-md text-on-surface">
+            <Activity className="w-4 h-4 text-primary" />
+            <span>Activity</span>
+          </div>
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.study_sessions_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">study sessions 24h</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.study_sessions_24h)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">study sessions 24h</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.study_sessions)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">sessions all-time</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.study_sessions)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">sessions all-time</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.assignments_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">assignments 24h</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.assignments_24h)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">assignments 24h</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.assignments)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">assignments all-time</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.assignments)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">assignments all-time</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.study_materials)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">study materials</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.study_materials)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">study materials</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(act.transcripts)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">transcripts</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(act.transcripts)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">transcripts</div>
             </div>
           </div>
-          <div className="mt-4 text-xs text-[var(--text-muted)] flex items-center gap-1 min-w-0">
-            <Server className="w-3 h-3 shrink-0" /> <span className="truncate">uptime {Math.floor((overview?.uptime_seconds || 0) / 3600)}h {Math.floor(((overview?.uptime_seconds || 0) % 3600) / 60)}m</span>
+          <div className="mt-6 pt-4 border-t border-outline-variant/20 text-xs text-on-surface-variant flex items-center gap-1.5 min-w-0 font-label-caps uppercase">
+            <Server className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="truncate">uptime {Math.floor((overview?.uptime_seconds || 0) / 3600)}h {Math.floor(((overview?.uptime_seconds || 0) % 3600) / 60)}m</span>
           </div>
-        </SectionCard>
+        </div>
 
         {/* Data Lake */}
-        <SectionCard title="Data Lake" icon={<Database className="w-4 h-4" />}>
-          <div className="space-y-2">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 font-title-md text-title-md text-on-surface">
+            <Database className="w-4 h-4 text-primary" />
+            <span>Data Lake</span>
+          </div>
+          <div className="space-y-3">
             {dlRows.map((r) => (
-              <div key={r.label} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-[var(--border-subtle)] last:border-0 min-w-0">
-                <span className="text-[var(--text-secondary)] min-w-0 truncate" title={r.label}>{r.label}</span>
+              <div key={r.label} className="flex items-center justify-between gap-2 text-xs py-1.5 border-b border-outline-variant/20 last:border-0 min-w-0">
+                <span className="text-on-surface-variant font-body-sm min-w-0 truncate" title={r.label}>{r.label}</span>
                 <span className="flex items-center gap-2 shrink-0">
                   {r.delta > 0 && (
-                    <span className="text-emerald-400 text-xs">+{fmt(r.delta)}</span>
+                    <span className="font-label-caps text-xs text-primary font-semibold">+{fmt(r.delta)}</span>
                   )}
-                  <span className="font-semibold">{r.value}</span>
+                  <span className="font-tabular-stat font-bold text-on-surface">{r.value}</span>
                 </span>
               </div>
             ))}
           </div>
-          <div className="mt-4">
-            <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Total entries over time
+          <div className="mt-6 pt-4 border-t border-outline-variant/20">
+            <div className="font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant mb-2 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-primary" /> Total entries over time
             </div>
             <Sparkline values={dlSeries} />
           </div>
-        </SectionCard>
+        </div>
 
         {/* Cost */}
-        <SectionCard title="API Cost" icon={<Coins className="w-4 h-4" />}>
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 font-title-md text-title-md text-on-surface">
+            <Coins className="w-4 h-4 text-primary" />
+            <span>API Cost</span>
+          </div>
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">${(cost.cost_usd_24h ?? 0).toFixed(4)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">spent 24h</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">${(cost.cost_usd_24h ?? 0).toFixed(4)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">spent 24h</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">${(cost.cost_usd ?? 0).toFixed(4)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">spent all-time</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">${(cost.cost_usd ?? 0).toFixed(4)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">spent all-time</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(cost.calls_24h)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">API calls 24h</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(cost.calls_24h)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">API calls 24h</div>
             </div>
-            <div className="min-w-0">
-              <div className="text-2xl font-bold truncate">{fmt(cost.calls)}</div>
-              <div className="text-xs text-[var(--text-muted)] break-words">calls all-time</div>
+            <div className="min-w-0 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/20">
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface truncate">{fmt(cost.calls)}</div>
+              <div className="font-label-caps text-[11px] text-on-surface-variant uppercase mt-1">calls all-time</div>
             </div>
           </div>
-          <div className="mt-4 flex justify-between gap-2 text-xs text-[var(--text-muted)]">
+          <div className="mt-6 pt-4 border-t border-outline-variant/20 flex justify-between gap-2 font-tabular-stat text-xs text-on-surface-variant">
             <span className="min-w-0 truncate">{fmt(cost.input_tokens)} in-tokens</span>
             <span className="min-w-0 truncate">{fmt(cost.output_tokens)} out-tokens</span>
           </div>
-        </SectionCard>
+        </div>
       </div>
     </div>
   );

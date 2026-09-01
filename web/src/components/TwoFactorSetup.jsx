@@ -70,19 +70,23 @@ export default function TwoFactorSetup({ s, set }) {
   ];
 
   return (
-    <div className="p-4 rounded-2xl bg-white/4 border border-white/10 space-y-4">
+    <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-bold text-white">Two-Factor Authentication</div>
-          <p className="text-[10px] text-slate-400 mt-0.5">
+          <div className="font-title-md text-sm font-bold text-on-surface">Two-Factor Authentication</div>
+          <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
             Secure your account with an extra verification layer on sign in.
           </p>
         </div>
-        <Badge color={enabled ? 'emerald' : 'slate'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>
+        <span className={`font-label-caps text-xs uppercase px-3 py-1 rounded-full font-semibold ${
+          enabled ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface-variant'
+        }`}>
+          {enabled ? 'Enabled' : 'Disabled'}
+        </span>
       </div>
 
       {msg.text && (
-        <div className={`p-2.5 rounded-xl text-xs ${msg.type === 'error' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300' : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'}`}>
+        <div className={`p-3 rounded-xl text-xs font-label-caps uppercase ${msg.type === 'error' ? 'bg-error/15 border border-error/30 text-error' : 'bg-primary/15 border border-primary/30 text-primary'}`}>
           {msg.text}
         </div>
       )}
@@ -91,12 +95,12 @@ export default function TwoFactorSetup({ s, set }) {
         <div className="flex items-center gap-3 pt-1">
           {!enabled ? (
             <button type="button" onClick={() => setSetupStep('method_select')}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-blue-900/30">
+              className="px-4 py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm">
               Set up two-factor authentication
             </button>
           ) : (
             <button type="button" onClick={() => { setSetupStep('disabling'); setCode(''); setMsg({ text: '', type: '' }); }}
-              className="px-3.5 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-error/15 border border-error/30 hover:bg-error/25 text-error font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer">
               Disable 2FA
             </button>
           )}
@@ -104,24 +108,24 @@ export default function TwoFactorSetup({ s, set }) {
       )}
 
       {setupStep === 'method_select' && (
-        <div className="space-y-3 pt-2 border-t border-white/10">
-          <label className="block text-xs font-medium text-slate-300">Choose Verification Method:</label>
+        <div className="space-y-3 pt-4 border-t border-outline-variant/20">
+          <label className="block font-label-caps text-xs uppercase tracking-wider text-on-surface-variant">Choose Verification Method:</label>
           <div className="grid grid-cols-3 gap-2">
             {methods.map((m) => (
               <button key={m.key} type="button" onClick={() => setMethod(m.key)}
-                className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${method === m.key ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-white/4 border-white/8 text-slate-400 hover:text-slate-200'}`}>
+                className={`p-3 rounded-xl border text-left transition cursor-pointer ${method === m.key ? 'bg-primary/15 border-primary text-on-surface' : 'bg-surface-container-low border-outline-variant/30 text-on-surface-variant hover:text-on-surface'}`}>
                 <div className="text-xs font-bold">{m.label}</div>
-                <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{m.desc}</div>
+                <div className="font-body-sm text-[11px] text-on-surface-variant leading-tight mt-0.5">{m.desc}</div>
               </button>
             ))}
           </div>
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2">
             <button type="button" disabled={loading} onClick={startSetup}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm">
               {loading ? 'Setting up…' : 'Continue Setup →'}
             </button>
             <button type="button" onClick={() => setSetupStep('idle')}
-              className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface font-label-caps text-xs uppercase tracking-wider transition cursor-pointer">
               Cancel
             </button>
           </div>
@@ -129,33 +133,33 @@ export default function TwoFactorSetup({ s, set }) {
       )}
 
       {setupStep === 'configuring' && (
-        <div className="space-y-3 pt-2 border-t border-white/10">
+        <div className="space-y-3 pt-4 border-t border-outline-variant/20">
           {method === 'totp' ? (
             <div className="space-y-2">
-              <p className="text-xs text-slate-300">
+              <p className="font-body-sm text-xs text-on-surface">
                 Scan the QR code in your Authenticator app, or enter the key manually:
               </p>
-              <div className="p-3 bg-slate-950 rounded-xl border border-white/10 text-center font-mono text-xs text-blue-400 select-all break-all">
+              <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-center font-mono text-xs text-primary select-all break-all">
                 {secret}
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-300">A 6-digit verification code has been sent via {method.toUpperCase()}.</p>
+            <p className="font-body-sm text-xs text-on-surface">A 6-digit verification code has been sent via {method.toUpperCase()}.</p>
           )}
           <div className="space-y-1.5">
-            <label htmlFor="two-factor-setup-code" className="text-xs font-semibold text-slate-300">Enter 6-Digit Code to Confirm:</label>
+            <label htmlFor="two-factor-setup-code" className="font-label-caps text-xs uppercase tracking-wider text-on-surface-variant">Enter 6-Digit Code to Confirm:</label>
             <input id="two-factor-setup-code" type="text" maxLength={6} placeholder="123456" value={code}
               inputMode="numeric" autoComplete="one-time-code"
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-base tracking-widest text-white outline-none focus:border-blue-500" />
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-center font-tabular-stat text-lg tracking-widest text-on-surface outline-none focus:ring-2 focus:ring-primary" />
           </div>
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2">
             <button type="button" disabled={loading || code.length < 6} onClick={verifySetup}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm">
               {loading ? 'Verifying…' : 'Activate 2FA'}
             </button>
             <button type="button" onClick={() => { setSetupStep('idle'); setCode(''); }}
-              className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface font-label-caps text-xs uppercase tracking-wider transition cursor-pointer">
               Cancel
             </button>
           </div>
@@ -163,19 +167,19 @@ export default function TwoFactorSetup({ s, set }) {
       )}
 
       {setupStep === 'disabling' && (
-        <div className="space-y-3 pt-2 border-t border-white/10">
-          <p className="text-xs text-slate-300">Enter your current 6-digit 2FA security code to confirm turning off 2FA:</p>
+        <div className="space-y-3 pt-4 border-t border-outline-variant/20">
+          <p className="font-body-sm text-xs text-on-surface">Enter your current 6-digit 2FA security code to confirm turning off 2FA:</p>
           <input type="text" maxLength={6} placeholder="123456" value={code} aria-label="6-digit security code to confirm turning off 2FA"
             inputMode="numeric" autoComplete="one-time-code"
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            className="w-full bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center font-mono text-base tracking-widest text-white outline-none focus:border-rose-500" />
-          <div className="flex gap-2 pt-1">
+            className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-center font-tabular-stat text-lg tracking-widest text-on-surface outline-none focus:ring-2 focus:ring-error" />
+          <div className="flex gap-2 pt-2">
             <button type="button" disabled={loading || code.length < 6} onClick={disable}
-              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-error text-white hover:bg-error/90 disabled:opacity-40 font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm">
               {loading ? 'Disabling…' : 'Confirm Turn Off'}
             </button>
             <button type="button" onClick={() => { setSetupStep('idle'); setCode(''); }}
-              className="px-3.5 py-2 rounded-xl bg-white/5 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer">
+              className="px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface font-label-caps text-xs uppercase tracking-wider transition cursor-pointer">
               Cancel
             </button>
           </div>

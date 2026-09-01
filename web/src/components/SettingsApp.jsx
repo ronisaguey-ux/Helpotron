@@ -1195,7 +1195,7 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 max-w-4xl mx-auto">
       {/* Toolbar: search + save flash */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
@@ -1204,7 +1204,7 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search settings…"
             aria-label="Search settings"
-            className="clean-input flex-1 min-w-[180px] px-3.5 py-2 text-xs outline-none"
+            className="w-full px-4 py-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
           />
           <AnimatePresence>
             {savedFlash && (
@@ -1212,9 +1212,9 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="chip chip-emerald shrink-0"
+                className="font-label-caps text-xs uppercase px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold shrink-0"
               >
-                <Check className="w-3.5 h-3.5" /> Saved
+                <Check className="w-3.5 h-3.5 inline mr-1" /> Saved
               </motion.span>
             )}
           </AnimatePresence>
@@ -1226,28 +1226,28 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
         const Icon = sec.icon;
         const open = section === sec.key;
         return (
-          <div key={sec.key} className="panel overflow-hidden transition-all duration-150">
+          <div key={sec.key} className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl overflow-hidden shadow-sm transition-all duration-150">
             <button
               type="button"
               onClick={() => setSection(open ? null : sec.key)}
               aria-expanded={open}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition cursor-pointer ${
-                open ? 'bg-[var(--accent-subtle)]' : 'hover:bg-white/3'
+              className={`w-full flex items-center gap-4 px-6 py-4 text-left transition cursor-pointer ${
+                open ? 'bg-surface-container-low/60' : 'hover:bg-surface-container-low/40'
               }`}
             >
-              <span className={`w-8 h-8 shrink-0 rounded-[var(--radius-sm)] flex items-center justify-center transition ${
-                open ? 'bg-[var(--accent)] text-white shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_2px_12px_rgba(139,92,246,0.35)]' : 'bg-white/6 text-slate-300'
+              <span className={`w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center transition ${
+                open ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-high text-on-surface-variant'
               }`}>
-                <Icon className="w-4 h-4" />
+                <Icon className="w-5 h-5" />
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-sm font-semibold text-white">{sec.label}</span>
-                <span className="block text-xs text-[var(--text-muted)] truncate mt-0.5">{sec.desc}</span>
+                <span className="block font-title-md text-base text-on-surface">{sec.label}</span>
+                <span className="block font-body-sm text-xs text-on-surface-variant truncate mt-0.5">{sec.desc}</span>
               </span>
-              <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180 text-[var(--accent)]' : ''}`} />
+              <ChevronDown className={`w-4 h-4 shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? 'rotate-180 text-primary' : ''}`} />
             </button>
             {open && (
-              <div className="px-5 pb-5 pt-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+              <div className="px-6 pb-6 pt-4 border-t border-outline-variant/20 bg-surface-container-lowest">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={sec.key}
@@ -1265,7 +1265,7 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
         );
       })}
       {visibleSections.length === 0 && (
-        <div className="empty-state">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center text-on-surface-variant font-body-sm text-xs">
           <p>No settings match “{search}”</p>
         </div>
       )}

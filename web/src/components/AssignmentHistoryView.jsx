@@ -127,20 +127,13 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <style>{AURORA_CHIP_TINTS}</style>
-
       {/* ─── Header Banner ───────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-[var(--accent)]">
-            <HistoryIcon className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Assignment History & Submission Archive</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Permanent verified ledger of all synthesized and submitted coursework across all semesters.
-            </p>
-          </div>
+        <div>
+          <h2 className="font-headline-lg text-headline-lg text-on-surface">Submission Ledger</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+            Review and analyze your archived study assignments and generated insights.
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -148,6 +141,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             onClick={() => setShowNewAssignment(true)}
             variant="primary"
             size="sm"
+            className="rounded-xl font-label-caps uppercase tracking-wider"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Assignment</span>
@@ -158,6 +152,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             disabled={historyList.length === 0}
             variant="secondary"
             size="sm"
+            className="rounded-xl font-label-caps uppercase tracking-wider"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export</span>
@@ -170,20 +165,20 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             size="sm"
             ariaLabel="Refresh history"
             title="Refresh history"
-            className={`px-2.5 ${loading ? 'cursor-wait' : ''}`}
+            className={`rounded-xl border border-outline-variant/30 px-2.5 ${loading ? 'cursor-wait' : ''}`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[var(--accent)]' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : ''}`} />
           </Button>
         </div>
       </div>
 
       {exportNotice && (
-        <div className="p-3 bg-[rgba(16,185,129,0.10)] border border-[rgba(16,185,129,0.32)] rounded-[var(--radius-md)] text-xs text-[#6ee7b7] font-mono">
+        <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl text-xs text-primary font-label-caps uppercase tracking-wider">
           {exportNotice}
         </div>
       )}
       {createNotice && (
-        <div className="p-3 bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.30)] rounded-[var(--radius-md)] text-xs text-[var(--accent)] font-mono">
+        <div className="p-3 bg-secondary/10 border border-secondary/30 rounded-xl text-xs text-secondary font-label-caps uppercase tracking-wider">
           {createNotice}
         </div>
       )}
@@ -194,10 +189,10 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           type="button"
           onClick={() => setHistoryTab('ledger')}
           aria-pressed={historyTab === 'ledger'}
-          className={`px-4 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer border ${
+          className={`px-4 py-2 rounded-xl text-xs font-label-caps uppercase tracking-wider transition cursor-pointer ${
             historyTab === 'ledger'
-              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-              : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)]'
+              ? 'bg-primary text-on-primary shadow-sm font-semibold'
+              : 'border border-outline-variant/30 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
           }`}
         >
           Submission Ledger
@@ -206,10 +201,10 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           type="button"
           onClick={() => setHistoryTab('archived')}
           aria-pressed={historyTab === 'archived'}
-          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer border ${
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-label-caps uppercase tracking-wider transition cursor-pointer ${
             historyTab === 'archived'
-              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-              : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)]'
+              ? 'bg-primary text-on-primary shadow-sm font-semibold'
+              : 'border border-outline-variant/30 bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
           }`}
         >
           <Archive className="w-3.5 h-3.5" />
@@ -220,18 +215,18 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
       {historyTab === 'archived' ? (
         <>
           {/* ─── Archived tab (09-01) ─────────────────────────────────────── */}
-          <div className="clean-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-[var(--accent)]">
+              <div className="w-10 h-10 rounded-2xl bg-secondary/15 flex items-center justify-center text-secondary">
                 <Archive className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[var(--text-primary)]">Archived Assignments</h3>
-                <p className="text-xs text-[var(--text-muted)]">Assignments you moved to history from their workspace — openable, revisitable and exportable.</p>
+                <h3 className="font-title-md text-title-md text-on-surface">Archived Assignments</h3>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">Assignments you moved to history from their workspace — openable, revisitable and exportable.</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="chip chip-neutral text-xs font-mono shrink-0">{`${archivedCards.length} archived`}</span>
+              <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-3 py-1 text-xs shrink-0">{`${archivedCards.length} archived`}</span>
               <Button
                 onClick={fetchArchived}
                 disabled={archivedLoading}
@@ -239,71 +234,72 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                 size="sm"
                 ariaLabel="Refresh archived assignments"
                 title="Refresh archived assignments"
-                className={`px-2.5 ${archivedLoading ? 'cursor-wait' : ''}`}
+                className={`rounded-xl border border-outline-variant/30 px-2.5 ${archivedLoading ? 'cursor-wait' : ''}`}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${archivedLoading ? 'animate-spin text-[var(--accent)]' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${archivedLoading ? 'animate-spin text-primary' : ''}`} />
               </Button>
             </div>
           </div>
 
           {archivedLoading ? (
-            <div className="clean-card p-12 text-center text-xs text-[var(--accent)] font-mono flex items-center justify-center gap-2">
+            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center text-xs text-primary font-label-caps uppercase flex items-center justify-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin" />
               Loading archived assignments…
             </div>
           ) : archivedCards.length === 0 ? (
-            <SectionCard id="archived-empty" padding="p-12" className="text-center space-y-3" title="No archived assignments">
-              <Archive className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
-              <div>
-                <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto mt-1">
-                  Finished assignments move here from the assignment workspace once you mark them done and archive them.
-                </p>
-              </div>
-            </SectionCard>
+            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center space-y-3">
+              <Archive className="w-10 h-10 text-outline mx-auto" />
+              <h4 className="font-title-md text-title-md text-on-surface">No archived assignments yet</h4>
+              <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm mx-auto">
+                Mark an assignment done and move it to history from its workspace — it stays safely recorded here.
+              </p>
+            </div>
           ) : (
-            <div className="clean-card overflow-hidden">
+            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-mono text-[11px]">
+                  <thead className="bg-surface-container-low/50 border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
                     <tr>
-                      <th className="py-3.5 px-4">Assignment Title</th>
-                      <th className="py-3.5 px-4">Subject / Course</th>
-                      <th className="py-3.5 px-4">Instructor</th>
-                      <th className="py-3.5 px-4 text-right">Status</th>
+                      <th className="py-4 px-6">Assignment Title</th>
+                      <th className="py-4 px-6">Course</th>
+                      <th className="py-4 px-6">Due Date</th>
+                      <th className="py-4 px-6">AI Risk</th>
+                      <th className="py-4 px-6 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border-subtle)]">
-                    {archivedCards.map((item) => (
+                  <tbody className="divide-y divide-outline-variant/20 font-body-sm text-body-sm text-on-surface">
+                    {archivedCards.map((card) => (
                       <tr
-                        key={item.id}
-                        onClick={() => onSelectAssignment && item.id != null && onSelectAssignment({
-                          id: item.id,
-                          name: item.title || item.name,
-                          title: item.title || item.name,
-                          subject: item.subject,
-                          teacher_name: item.teacher_name,
-                          status: item.status,
-                        })}
-                        className={`transition-colors ${onSelectAssignment && item.id != null ? 'hover:bg-white/5 cursor-pointer group' : 'hover:bg-white/5'}`}
-                        title={onSelectAssignment && item.id != null ? 'Open assignment in workspace' : undefined}
+                        key={card.id}
+                        onClick={() => onSelectAssignment && card.id != null && onSelectAssignment(card)}
+                        className="hover:bg-surface-container-low/50 transition-colors cursor-pointer group"
                       >
-                        <td className="py-4 px-4 font-semibold text-[var(--text-primary)]">
-                          <div className="flex items-center gap-2">
-                            <span className={onSelectAssignment && item.id != null ? 'group-hover:text-[var(--accent)] group-hover:underline underline-offset-2' : ''}>
-                              {item.title || item.name || `Assignment #${item.id}`}
-                            </span>
-                            {onSelectAssignment && item.id != null && (
-                              <ExternalLink className="w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
-                            )}
+                        <td className="py-4 px-6">
+                          <div className="font-title-md text-body-md text-on-surface group-hover:text-primary transition-colors flex items-center gap-2">
+                            <span>{card.title || card.name || `Assignment #${card.id}`}</span>
+                            <ExternalLink className="w-3.5 h-3.5 text-outline group-hover:text-primary" />
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-[var(--text-secondary)] font-mono text-[11px]">
-                          {[item.subject, item.class_code].filter(Boolean).join(' · ') || item.course || '—'}
+                        <td className="py-4 px-6">
+                          <span className="font-label-caps text-[11px] px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant uppercase">
+                            {card.course || card.subject || 'General'}
+                          </span>
                         </td>
-                        <td className="py-4 px-4 text-[var(--text-muted)]">{item.teacher_name || '—'}</td>
-                        <td className="py-4 px-4 text-right">
-                          <span className="aurora-chip tight">
-                            <Archive className="w-3 h-3" /> {item.status || 'archived'}
+                        <td className="py-4 px-6 font-tabular-stat text-tabular-stat text-on-surface-variant">
+                          {card.due_date || '—'}
+                        </td>
+                        <td className="py-4 px-6">
+                          {card.score_ai != null ? (
+                            <span className="font-label-caps text-[11px] text-primary">
+                              {(Number(card.score_ai) * 100).toFixed(0)}% AI Risk
+                            </span>
+                          ) : (
+                            <span className="font-label-caps text-[11px] text-outline">Not checked</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <span className="inline-flex items-center gap-1.5 font-label-caps text-[11px] uppercase text-secondary group-hover:translate-x-0.5 transition-transform">
+                            Open <ArrowRight className="w-3.5 h-3.5" />
                           </span>
                         </td>
                       </tr>
@@ -315,81 +311,76 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           )}
         </>
       ) : (
-      <>
-      {/* ─── Metric Summary Cards (honest, computed from ledger contents) ─── */}
+        <>
+      {/* ─── Metric Cards ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SectionCard id="history-total-completed" padding="p-5" header={
-          <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-            <span>Assignments in Ledger</span>
-            <BookOpen className="w-4 h-4 text-[var(--accent)]" />
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
+            <span>Total Completed</span>
+            <BookOpen className="w-4 h-4 text-primary" />
           </div>
-        }>
-          <div className="text-2xl font-bold text-[var(--text-primary)] font-mono">{historyList.length}</div>
-          <div className="text-[11px] text-[var(--text-muted)] mt-1">
-            {`${historyList.length} assignment${historyList.length === 1 ? '' : 's'} on record`}
-          </div>
-        </SectionCard>
+          <div className="text-3xl font-bold text-on-surface font-tabular-stat">{historyList.length}</div>
+          <div className="font-body-sm text-xs text-on-surface-variant mt-1">Submitted coursework</div>
+        </div>
 
-        <SectionCard id="history-average-grade" padding="p-5" header={
-          <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
             <span>Average Recorded Score</span>
             <Award className="w-4 h-4 text-amber-400" />
           </div>
-        }>
           {avgScore != null ? (
             <>
-              <div className="text-2xl font-bold text-amber-300 font-mono">{avgScore}%</div>
-              <div className="text-[11px] text-[var(--text-muted)] mt-1">
+              <div className="text-3xl font-bold text-on-surface font-tabular-stat">{avgScore}%</div>
+              <div className="font-body-sm text-xs text-on-surface-variant mt-1">
                 {`Across ${gradedCount} graded assignment${gradedCount === 1 ? '' : 's'}`}
               </div>
             </>
           ) : (
             <>
-              <div className="text-2xl font-bold text-[var(--text-muted)] font-mono">Not graded</div>
-              <div className="text-[11px] text-[var(--text-muted)] mt-1">Scores are recorded when an instructor publishes grades</div>
+              <div className="text-3xl font-bold text-outline font-tabular-stat">Not graded</div>
+              <div className="font-body-sm text-xs text-on-surface-variant mt-1">Scores are recorded when an instructor publishes grades</div>
             </>
           )}
-        </SectionCard>
+        </div>
 
-        <SectionCard id="history-ai-risk" padding="p-5" header={
-          <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
             <span>Average AI Detection Risk</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-primary" />
           </div>
-        }>
           {avgDetector != null ? (
             <>
-              <div className="text-2xl font-bold text-emerald-300 font-mono">{avgDetector}%</div>
-              <div className="text-[11px] text-[var(--text-muted)] mt-1">Average detection score on file</div>
+              <div className="text-3xl font-bold text-on-surface font-tabular-stat">{avgDetector}%</div>
+              <div className="font-body-sm text-xs text-on-surface-variant mt-1">Average detection score on file</div>
             </>
           ) : (
             <>
-              <div className="text-2xl font-bold text-[var(--text-muted)] font-mono">Not checked</div>
-              <div className="text-[11px] text-[var(--text-muted)] mt-1">No detector scores recorded for these assignments</div>
+              <div className="text-3xl font-bold text-outline font-tabular-stat">Not checked</div>
+              <div className="font-body-sm text-xs text-on-surface-variant mt-1">No detector scores recorded for these assignments</div>
             </>
           )}
-        </SectionCard>
+        </div>
       </div>
 
       {/* ─── Search & Subject Filter Bar ───────────────────────────────── */}
-      <div className="clean-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
         <div className="relative w-full sm:w-80">
-          <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
           <input
             type="text"
             placeholder="Search assignments by title, subject, or teacher..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-[var(--radius-md)] clean-input text-xs font-mono text-[var(--text-primary)] focus:outline-none"
+            className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+          <Filter className="w-4 h-4 text-outline shrink-0" />
           <select
             value={subjectFilter}
             onChange={(e) => setSubjectFilter(e.target.value)}
-            className="w-full sm:w-48 clean-input rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none"
+            className="w-full sm:w-56 bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="ALL">All Subjects & Modules</option>
             <option value="Mathematics">Mathematics</option>
@@ -404,35 +395,34 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
 
       {/* ─── Archive Table ────────────────────────────────────────────── */}
       {loading ? (
-        <div className="clean-card p-12 text-center text-xs text-[var(--accent)] font-mono flex items-center justify-center gap-2">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center text-xs text-primary font-label-caps uppercase flex items-center justify-center gap-2 shadow-sm">
           <RefreshCw className="w-4 h-4 animate-spin" />
           Loading assignment history ledger…
         </div>
       ) : filteredHistory.length === 0 ? (
-        <SectionCard id="history-empty" padding="p-12" className="text-center space-y-3" title="No historical assignments found">
-          <Archive className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
-          <div>
-            <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto mt-1">
-              New assignments record into this archive once completed; finished coursework lands here automatically.
-            </p>
-          </div>
-        </SectionCard>
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center space-y-3 shadow-sm">
+          <Archive className="w-10 h-10 text-outline mx-auto" />
+          <h4 className="font-title-md text-title-md text-on-surface">No historical assignments found</h4>
+          <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm mx-auto">
+            New assignments record into this archive once completed; finished coursework lands here automatically.
+          </p>
+        </div>
       ) : (
-        <div className="clean-card overflow-hidden">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-mono text-[11px]">
+              <thead className="bg-surface-container-low/50 border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-4">Assignment Title</th>
-                  <th className="py-3.5 px-4">Subject / Course</th>
-                  <th className="py-3.5 px-4">Instructor</th>
-                  <th className="py-3.5 px-4">Grade Output</th>
-                  <th className="py-3.5 px-4">AI Evasion Check</th>
-                  <th className="py-3.5 px-4">Date Completed</th>
-                  <th className="py-3.5 px-4 text-right">Status</th>
+                  <th className="py-4 px-6">Assignment Title</th>
+                  <th className="py-4 px-6">Subject / Course</th>
+                  <th className="py-4 px-6">Instructor</th>
+                  <th className="py-4 px-6">Grade Output</th>
+                  <th className="py-4 px-6">AI Evasion Check</th>
+                  <th className="py-4 px-6">Date Completed</th>
+                  <th className="py-4 px-6 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border-subtle)]">
+              <tbody className="divide-y divide-outline-variant/20 font-body-sm text-body-sm text-on-surface">
                 {filteredHistory.map((item) => (
                   <tr
                     key={item.id}
@@ -444,56 +434,59 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                       teacher_name: item.teacher_name,
                       status: item.status,
                     })}
-                    className={`transition-colors ${onSelectAssignment && item.id != null ? 'hover:bg-white/5 cursor-pointer group' : 'hover:bg-white/5'}`}
+                    className={`hover:bg-surface-container-low/50 transition-colors ${onSelectAssignment && item.id != null ? 'cursor-pointer group' : ''}`}
                     title={onSelectAssignment && item.id != null ? 'Open assignment in workspace' : undefined}
                   >
-                    <td className="py-4 px-4 font-semibold text-[var(--text-primary)]">
+                    <td className="py-4 px-6 font-semibold text-on-surface">
                       <div className="flex items-center gap-2">
-                        <span className={onSelectAssignment && item.id != null ? 'group-hover:text-[var(--accent)] group-hover:underline underline-offset-2' : ''}>
+                        <span className={onSelectAssignment && item.id != null ? 'group-hover:text-primary transition-colors' : ''}>
                           {item.title}
                         </span>
                         {onSelectAssignment && item.id != null && (
-                          <ExternalLink className="w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
+                          <ExternalLink className="w-3.5 h-3.5 text-outline group-hover:text-primary" />
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-[var(--text-secondary)] font-mono text-[11px]">
-                      {item.course || '—'}
+                    <td className="py-4 px-6">
+                      <span className="font-label-caps text-[11px] px-2.5 py-1 rounded-full bg-secondary-container/10 text-secondary border border-secondary/20">
+                        {item.course || '—'}
+                      </span>
                     </td>
-                    <td className="py-4 px-4 text-[var(--text-muted)]">
+                    <td className="py-4 px-6 text-on-surface-variant">
                       {item.teacher_name || '—'}
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-6">
                       {item.grade_letter || item.score_predicted != null ? (
-                        <span className="aurora-chip tight font-mono font-bold">
+                        <span className="font-tabular-stat font-semibold text-on-surface">
                           {item.grade_letter || `${Math.round(item.score_predicted)}%`}
                           {item.grade_letter && item.score_predicted != null ? ` (${Math.round(item.score_predicted)}%)` : ''}
                         </span>
                       ) : (
-                        <span className="font-mono text-[var(--text-muted)] px-1 italic">Not graded</span>
+                        <span className="font-body-sm text-outline italic text-xs">Not graded</span>
                       )}
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-6">
                       {item.detector_score != null ? (
-                        <span className="aurora-chip tight ok">
-                          <ShieldCheck className="w-3 h-3" />
+                        <span className="inline-flex items-center gap-1.5 font-label-caps text-[11px] text-primary">
+                          <ShieldCheck className="w-3.5 h-3.5" />
                           {(item.detector_score * 100).toFixed(0)}% AI Risk
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 font-mono text-[var(--text-muted)] px-2 py-0.5 text-[11px]">
-                          <ShieldCheck className="w-3 h-3" />
+                        <span className="inline-flex items-center gap-1 font-label-caps text-[11px] text-outline">
+                          <ShieldCheck className="w-3.5 h-3.5" />
                           Not checked
                         </span>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-[var(--text-muted)] font-mono text-[11px]">
+                    <td className="py-4 px-6 font-tabular-stat text-tabular-stat text-on-surface-variant">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        <Calendar className="w-3.5 h-3.5 text-outline shrink-0" />
                         <span>{item.completed_at || '—'}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="aurora-chip tight ok">
+                    <td className="py-4 px-6 text-right">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary font-label-caps text-[11px] uppercase font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                         {item.status || 'Tracked'}
                       </span>
                     </td>

@@ -371,12 +371,12 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <style>{AURORA_CHIP_TINTS}</style>
 
       {/* Export / reset feedback (09-01: bubble exports reuse this notice) */}
       {exportNotice && (
-        <div className="p-3 bg-[rgba(16,185,129,0.10)] border border-[rgba(16,185,129,0.32)] rounded-[var(--radius-md)] text-xs text-[#6ee7b7] font-mono">
+        <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl text-xs text-primary font-label-caps uppercase tracking-wider">
           {exportNotice}
         </div>
       )}
@@ -384,28 +384,28 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
       {/* LEVEL 1: BUBBLE GRID (NO ASSIGNMENTS SHOWN BY DEFAULT) */}
       {!activeBubble ? (
             <div className="space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4">
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center flex-wrap gap-x-2 gap-y-1">
-                    <Layers className="w-4 h-4 text-[var(--accent)] shrink-0" />
-                    <span>Curriculum Assignment Bubbles</span>
+                  <h2 className="font-headline-lg text-headline-lg text-on-surface flex items-center flex-wrap gap-x-3 gap-y-1">
+                    <Layers className="w-6 h-6 text-secondary shrink-0" aria-hidden="true" />
+                    <span>Active Subjects</span>
                     {/* Count + noun live in one visual text (08-28): no "(7)"
                         split label, correct pluralization */}
-                    <span className="aurora-chip tight">
+                    <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-3 py-1">
                       {`${allBubblesList.length} ${allBubblesList.length === 1 ? 'bubble' : 'bubbles'}`}
                     </span>
                   </h2>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">
-                    Click any bubble to enter its workspace and view organized assignments and sub-agent teams.
+                  <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+                    Manage and review your study tasks grouped by domain — click any bubble to open its workspace.
                   </p>
                 </div>
 
                 {/* + Button for Custom Bubble */}
                 <Button
                   onClick={() => setIsCreatingBubble(true)}
-                  variant="primary"
+                  variant="secondary"
                   size="sm"
-                  className="shrink-0 self-start"
+                  className="shrink-0 self-start rounded-lg font-label-caps uppercase tracking-wider"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>New Bubble</span>
@@ -414,14 +414,14 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
               {/* Create Custom Bubble Modal */}
               {isCreatingBubble && (
-                <div className="p-6 rounded-[var(--radius-lg)] surface-glass-strong border border-[rgba(139,92,246,0.30)] space-y-3.5 text-xs animate-fadeIn shadow-2xl">
+                <div className="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 space-y-4 text-xs animate-fadeIn shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2">
                       <span>🫧</span> Add a New Custom Assignment Bubble
                     </h3>
                     <button
                       onClick={() => setIsCreatingBubble(false)}
-                      className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+                      className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
                       aria-label="Close create bubble dialog"
                     >
                       <X className="w-4 h-4" />
@@ -429,18 +429,18 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   </div>
 
                   <form onSubmit={handleCreateBubble} className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <input
                         type="text"
                         placeholder="Bubble Title (e.g. Dr. Miller Lab Reports, Exam 2 Prep)..."
                         value={newBubbleTitle}
                         onChange={(e) => setNewBubbleTitle(e.target.value)}
-                        className="sm:col-span-2 clean-input px-3 py-2 text-white"
+                        className="sm:col-span-2 bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       />
                       <select
                         value={newBubbleIcon}
                         onChange={(e) => setNewBubbleIcon(e.target.value)}
-                        className="clean-input px-3 py-2 text-white"
+                        className="bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       >
                         <option value="🫧">🫧 Bubble</option>
                         <option value="🔬">🔬 Lab Science</option>
@@ -455,21 +455,21 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       placeholder="Describe what goes inside this bubble so AI auto-organizes your scraped assignments into it..."
                       value={newBubbleDesc}
                       onChange={(e) => setNewBubbleDesc(e.target.value)}
-                      className="w-full clean-input px-3 py-2.5 text-white resize-y"
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary text-xs resize-y"
                     />
 
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2.5 pt-1">
                       <button
                         type="button"
                         onClick={() => setIsCreatingBubble(false)}
-                        className="rounded-[var(--radius-sm)] px-4 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] transition cursor-pointer"
+                        className="rounded-lg px-4 py-2 font-label-caps text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border border-outline-variant/30 transition cursor-pointer uppercase tracking-wider"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={!newBubbleTitle.trim() || !newBubbleDesc.trim()}
-                        className="rounded-[var(--radius-sm)] px-4 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white font-semibold transition cursor-pointer"
+                        className="rounded-lg px-4 py-2 font-label-caps text-xs font-medium bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 transition cursor-pointer shadow-sm uppercase tracking-wider"
                       >
                         Save Bubble
                       </button>
@@ -489,16 +489,16 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                     <div
                       key={bubble.id}
                       onClick={() => setActiveBubble(bubble)}
-                      className="panel p-5 flex flex-col justify-between space-y-4 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative overflow-hidden group"
+                      className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/20 shadow-[0_4px_20px_rgba(0,0,0,0.02)] card-lift flex flex-col justify-between space-y-4 cursor-pointer relative overflow-hidden group"
                     >
                       {/* Top Header */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-xl">
+                        <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center text-xl">
                           {bubble.icon || '🫧'}
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <span className="chip chip-neutral text-xs">
+                          <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-2.5 py-1 whitespace-nowrap">
                             {`${count} ${count === 1 ? 'Assignment' : 'Assignments'}`}
                           </span>
 
@@ -507,7 +507,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleExportBubble(bubble.title); }}
                             disabled={bubbleExporting}
-                            className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[rgba(139,92,246,0.12)] rounded-lg transition cursor-pointer disabled:opacity-40"
+                            className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-lg transition cursor-pointer disabled:opacity-40"
                             title={`Export ${bubble.title} data`}
                             aria-label={`Export ${bubble.title} data as JSON`}
                           >
@@ -519,7 +519,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             <button
                               type="button"
                               onClick={(e) => handleDeleteBubble(bubble.id, e)}
-                              className="p-1 text-[var(--text-muted)] hover:text-[#fda4af] hover:bg-[rgba(244,63,94,0.12)] rounded-lg transition cursor-pointer"
+                              className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-lg transition cursor-pointer"
                               title="Delete custom bubble"
                               aria-label="Delete custom bubble"
                             >
@@ -531,23 +531,23 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
                       {/* Content */}
                       <div>
-                        <div className="font-semibold text-sm text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
+                        <div className="font-title-md text-title-md text-on-surface group-hover:text-primary transition-colors flex items-center gap-1.5">
                           <span>{(bubble.title || '').trim() || 'Untitled Bubble'}</span>
                           {bubble.is_custom && (
-                            <span className="chip chip-accent text-[10px]">Custom</span>
+                            <span className="font-label-caps text-[10px] text-primary bg-primary-container/15 rounded-full px-2 py-0.5 uppercase">Custom</span>
                           )}
                         </div>
-                        <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
+                        <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 line-clamp-2 leading-relaxed">
                           {(bubble.description || '').trim() || 'No description provided.'}
                         </p>
                       </div>
 
                       {/* Footer Info */}
-                      <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)]">
-                        <span className="flex items-center gap-1 text-emerald-400">
+                      <div className="pt-4 border-t border-outline-variant/20 flex items-center justify-between text-[11px] font-mono text-on-surface-variant">
+                        <span className="flex items-center gap-1 text-primary">
                           <Bot className="w-3.5 h-3.5" /> {count > 0 ? `${count} Teams Active` : 'Idle'}
                         </span>
-                        <span className="text-[var(--accent-2)] group-hover:translate-x-1 transition-transform flex items-center gap-0.5 font-semibold">
+                        <span className="text-secondary group-hover:translate-x-1 transition-transform flex items-center gap-0.5 font-semibold">
                           Open Bubble <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
@@ -560,11 +560,11 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
             /* LEVEL 2: ACTIVE BUBBLE WORKSPACE VIEW (ASSIGNMENTS ONLY VISIBLE HERE) */
             <div className="space-y-5 animate-fadeIn">
               {/* Back Bar & Bubble Info */}
-              <div className="panel p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="bg-surface-container-lowest rounded-3xl p-5 border border-outline-variant/20 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setActiveBubble(null)}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-outline-variant/30 px-3 py-2 font-label-caps text-label-caps uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
                     <span>Back to All Bubbles</span>
@@ -573,25 +573,25 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{activeBubble.icon || '🫧'}</span>
-                      <h2 className="text-base font-bold text-white truncate">{activeBubble.title}</h2>
-                      <span className="chip chip-neutral text-xs shrink-0">
+                      <h2 className="font-title-md text-title-md text-on-surface truncate">{activeBubble.title}</h2>
+                      <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-2.5 py-1 shrink-0">
                         {`${currentBubbleCards.length} ${currentBubbleCards.length === 1 ? 'Assignment' : 'Assignments'}`}
                       </span>
                     </div>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">{activeBubble.description}</p>
+                    <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5 truncate">{activeBubble.description}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-xs font-mono shrink-0">
-                  <span className="chip chip-emerald">
-                    🤖 {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
+                  <span className="inline-flex items-center gap-1.5 bg-secondary/10 text-secondary rounded-full px-3 py-1 font-label-caps text-[10px] uppercase">
+                    <Bot className="w-3.5 h-3.5" /> {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
                   </span>
                   {/* Bubble export (09-01): ↓ icon + label, whole-bubble JSON */}
                   <button
                     type="button"
                     onClick={() => handleExportBubble(activeBubble.title)}
                     disabled={bubbleExporting || !activeBubble.title}
-                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]/50 transition cursor-pointer disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant/30 px-3 py-2 font-label-caps text-label-caps uppercase text-on-surface-variant hover:text-primary hover:border-primary/50 transition cursor-pointer disabled:opacity-40"
                     title={`Export ${activeBubble.title} data`}
                   >
                     {bubbleExporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -604,11 +604,14 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   Completed / In Progress / Pending for Approval, sorted by
                   bucket; archived assignments point at History instead. */}
               {currentBubbleCards.length === 0 ? (
-                <div className="panel">
-                  <div className="empty-state">
-                    <span className="empty-state__icon">🫧</span>
-                    <p>No assignments currently inside “{activeBubble.title}”. Scraped assignments matching this bubble&apos;s description will be automatically organized here.</p>
+                <div className="bg-surface-container-low/50 rounded-2xl border border-dashed border-outline-variant/50 p-8 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center mb-4 text-outline">
+                    <Layers className="w-7 h-7" aria-hidden="true" />
                   </div>
+                  <h4 className="font-body-md text-body-md font-semibold text-on-surface mb-2">Nothing here yet</h4>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm">
+                    No assignments inside “{activeBubble.title}” yet — scraped assignments matching this bubble&apos;s description are organized here automatically.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -616,16 +619,16 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                     const items = groupedCards[sec.bucket] || [];
                     return (
                       <section key={sec.bucket} aria-label={`${sec.label}: ${items.length} assignment${items.length === 1 ? '' : 's'}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{sec.label}</h3>
-                          <span className="chip chip-neutral text-[10px]">{items.length}</span>
+                        <div className="flex items-center gap-2.5 mb-3">
+                          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">{sec.label}</h3>
+                          <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full w-5 h-5 flex items-center justify-center text-[10px]">{items.length}</span>
                         </div>
                         {items.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                             {items.map(renderBubbleCard)}
                           </div>
                         ) : (
-                          <p className="text-[11px] font-mono text-[var(--text-muted)]">Nothing here yet.</p>
+                          <p className="font-body-sm text-body-sm text-on-surface-variant">Nothing here yet.</p>
                         )}
                       </section>
                     );
@@ -635,25 +638,25 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       assignments live in Assignment History; this is the
                       pointer section. */}
                   <section aria-label="Archived assignments">
-                    <div className="flex items-center gap-2 mb-3">
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-                        <Archive className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Archived
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                        <Archive className="w-3.5 h-3.5 text-outline" /> Archived
                       </h3>
-                      <span className="chip chip-neutral text-[10px]">{groupedCards.archived.length}</span>
+                      <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-2 py-0.5 text-[10px]">{groupedCards.archived.length}</span>
                     </div>
-                    <div className="panel p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="bg-surface-container-low rounded-xl border border-outline-variant/30 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       {groupedCards.archived.length > 0 ? (
-                        <span className="text-[var(--text-muted)]">
+                        <span className="font-body-sm text-body-sm text-on-surface-variant">
                           {groupedCards.archived.length} archived assignment{groupedCards.archived.length === 1 ? '' : 's'} in this bubble — archived assignments show up in Assignment History instead.
                         </span>
                       ) : (
-                        <span className="text-[var(--text-muted)]">None yet — move a finished assignment to history from its workspace.</span>
+                        <span className="font-body-sm text-body-sm text-on-surface-variant">None yet — move a finished assignment to history from its workspace.</span>
                       )}
                       {onOpenHistory && (
                         <button
                           type="button"
                           onClick={onOpenHistory}
-                          className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:text-white transition cursor-pointer"
+                          className="shrink-0 inline-flex items-center gap-1 font-label-caps text-xs text-secondary hover:text-on-surface transition cursor-pointer uppercase tracking-wider"
                         >
                           Open Assignment History <ArrowRight className="w-3.5 h-3.5" />
                         </button>

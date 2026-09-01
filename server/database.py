@@ -443,6 +443,10 @@ class AdminNotice(Base):
     Mirrors AdminMessage (user → admin) but with the direction reversed:
     recipient is `user_id`, and read tracking is per-recipient, not a reply
     thread.
+
+    broadcast (operator 09-01): a single row with user_id='*' reaches every
+    user; per-user read state lives in AdminNoticeRead so one user dismissing
+    never silences it for the others.
     """
     __tablename__ = "admin_notices"
 
@@ -452,6 +456,20 @@ class AdminNotice(Base):
     message: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    broadcast: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AdminNoticeRead(Base):
+    """Per-user read receipts for broadcast admin notices (operator 09-01):
+    one row per (broadcast notice, user). Without this, a broadcast row's
+    single read_at would mark the announcement read for everyone.
+    """
+    __tablename__ = "admin_notice_reads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    notice_id: Mapped[int] = mapped_column(Integer, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class PasswordReset(Base):
@@ -604,6 +622,13 @@ def init_db() -> None:
                 columns_dump = [row[1] for row in conn.execute(text("PRAGMA table_info(universal_dump_items)")).fetchall()]
                 if columns_dump and "requested_action" not in columns_dump:
                     conn.execute(text("ALTER TABLE universal_dump_items ADD COLUMN requested_action VARCHAR(32)"))
+
+                # Operator 09-01: broadcast admin notices (user_id='*' row).
+                # admin_notice_reads is a brand-new table — create_all already
+                # made it; only the existing admin_notices table needs the col.
+                columns_notices = [row[1] for row in conn.execute(text("PRAGMA table_info(admin_notices)")).fetchall()]
+                if columns_notices and "broadcast" not in columns_notices:
+                    conn.execute(text("ALTER TABLE admin_notices ADD COLUMN broadcast BOOLEAN DEFAULT 0"))
 
                 conn.commit()
             except Exception:

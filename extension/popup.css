@@ -1,0 +1,10 @@
+/* popup.css — browser-action popup shell over the shared design system. */
+@import url('design.css');
+
+body {
+  width: 380px;
+  max-height: 600px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
