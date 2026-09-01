@@ -319,7 +319,12 @@ async def call_llm(
         for cand_id in attempt_models:
             cand_payload = dict(payload)
             openrouter_model = {
-                "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash",
+                # 09-01 (Bob): plain deepseek-v4-flash is TEXT-ONLY on OpenRouter
+                # (verified against the live catalog) — every app request must land
+                # on the vision flavor. The "-vision" slug doesn't exist in the OR
+                # catalog; "-vision-exp" does (same model the machine's Claude fleet
+                # runs). No pro-vision variant exists on OpenRouter → pro stays plain.
+                "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
                 "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
             }.get(cand_id, cand_id)
             cand_payload["model"] = openrouter_model
