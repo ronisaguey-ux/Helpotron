@@ -7,11 +7,10 @@ import pytest
 from server import study_tools
 
 
-def test_signup_welcome_bonus_only_for_named_user(client):
-    """08-31 (owner directive): new accounts start with nothing EXCEPT the
-    named welcome users — public IDs containing 'dylan' or 'emma' get 300
-    tokens. Everyone else must NOT (explicitly: "don't do blindly every
-    new sign up, js this one")."""
+def test_signup_welcome_bonus_every_new_user(client):
+    """08-31 (owner directive, evening — supersedes the named-only grant):
+    EVERY new account is born with 300 tokens ("theres a few new accounts
+    coming, upon generation grant them 300 tokens")."""
     from server.database import User, SessionLocal
 
     # Idempotent: the suite DB (sqlite:///./test_helpotron.db) persists between
@@ -19,26 +18,22 @@ def test_signup_welcome_bonus_only_for_named_user(client):
     db = SessionLocal()
     try:
         db.query(User).filter(
-            User.public_id.in_(["Dylan2026", "Emma2026", "SomeoneElse42"])
+            User.public_id.in_(["BrandNew10", "AnotherNew20"])
         ).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()
 
-    for pid in ("Dylan2026", "Emma2026"):
+    for pid in ("BrandNew10", "AnotherNew20"):
         r = client.post("/api/signup", json={"public_id": pid, "password": "Passw0rd99"})
         assert r.status_code == 200, r.text
         assert r.json()["token_balance"] == 300.0
 
-    other = client.post("/api/signup", json={"public_id": "SomeoneElse42", "password": "Passw0rd99"})
-    assert other.status_code == 200
-    assert other.json()["token_balance"] == 0
-
     db = SessionLocal()
     try:
-        for pid, expected in (("Dylan2026", 300.0), ("Emma2026", 300.0), ("SomeoneElse42", 0.0)):
+        for pid in ("BrandNew10", "AnotherNew20"):
             u = db.query(User).filter(User.public_id == pid).first()
-            assert float((u.settings or {}).get("token_balance", 0) or 0) == expected
+            assert float((u.settings or {}).get("token_balance", 0) or 0) == 300.0
 
     finally:
         db.close()

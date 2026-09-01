@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 import GuideView from './GuideView.jsx';
+import { LipScrollZoominAnimation } from './ui/lip-scroll-zoomin-animation.jsx';
 
 const FEATURES = [
   {
@@ -351,6 +352,12 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
           <ProductPreview />
         </div>
       </section>
+
+      {/* ── Cinematic interlude (08-31): pinned scroll-driven lip-mask zoom
+          video from the owner's component brief (gsap/ScrollTrigger). Sits
+          between the conversion hero and the feature grid: intro statement →
+          pinned ~260% scrub zoom → outro, all on the white brand canvas. */}
+      <LipScrollZoominAnimation />
 
       {/* ── Features ────────────────────────────────────────────────────────── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">

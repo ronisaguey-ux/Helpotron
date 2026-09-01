@@ -26,6 +26,7 @@
     "d3-array": "^3.2.4",
     "d3-shape": "^3.2.0",
     "framer-motion": "^13.1.1",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.33.0",
     "motion": "npm:framer-motion@^13.1.1",
     "radix-ui": "^1.6.7",

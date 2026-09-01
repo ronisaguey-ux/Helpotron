@@ -386,18 +386,11 @@ async def health_check():
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 
-# 08-31 (owner directive): grant a one-time 300-token welcome to NAMED new
-# users — first "Dylan", then "Emma" (Bob: "a new user is about to join,
-# called Emma. Grant her 300 also") — the moment their account is created.
-# Deliberately NOT a blanket signup bonus (Bob: "don't do blindly every new
-# sign up, js this one"): only public IDs containing one of the names get it.
+# 08-31 (owner directive, evening): EVERY new account is born with a
+# 300-token welcome balance — Bob: "theres a few new accounts coming, upon
+# generation grant them 300 tokens". Supersedes the earlier Dylan/Emma-only
+# grant (substring name matching removed).
 WELCOME_TOKEN_BONUS = 300.0
-WELCOME_TOKEN_NAMES = ("dylan", "emma")
-
-
-def _mentions_welcome_name(public_id: str) -> bool:
-    low = public_id.lower()
-    return any(name in low for name in WELCOME_TOKEN_NAMES)
 
 
 def get_or_create_user(db: Session, public_id: str) -> User:
@@ -407,9 +400,7 @@ def get_or_create_user(db: Session, public_id: str) -> User:
         low = public_id.lower()
         if low in RESERVED_PUBLIC_IDS or low == ADMIN_PUBLIC_ID.lower():
             raise ValueError(f"public_id '{public_id}' is reserved and cannot be auto-created")
-        settings = {"reading_level": "college-freshman"}
-        if _mentions_welcome_name(public_id):
-            settings["token_balance"] = WELCOME_TOKEN_BONUS
+        settings = {"reading_level": "college-freshman", "token_balance": WELCOME_TOKEN_BONUS}
         user = User(public_id=public_id, plan="basic", settings=settings)
         db.add(user)
         db.flush()
@@ -785,12 +776,9 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Public ID already taken")
     hash_hex, salt = hash_password(body.password)
-    # No auto trial/bonus by default; the ONLY exception is the named
-    # welcome grant (08-31 owner directive, "just this one"): accounts whose
-    # public ID matches the welcome name start with 300 tokens.
-    settings = {"reading_level": "college-freshman"}
-    if _mentions_welcome_name(body.public_id):
-        settings["token_balance"] = WELCOME_TOKEN_BONUS
+    # Every new account starts with a 300-token welcome balance
+    # (08-31 owner directive, evening — supersedes the named-only grant).
+    settings = {"reading_level": "college-freshman", "token_balance": WELCOME_TOKEN_BONUS}
     user = User(
         public_id=body.public_id,
         plan="none",
