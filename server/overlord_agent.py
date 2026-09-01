@@ -248,6 +248,34 @@ _CMD_ALLOW = re.compile(r"^[0-9a-zA-Z\s.+\-*/()'\"\[\],:%_=;×÷·−]+$")
 _PY3_CMD = re.compile(r"""^python3\s+-c\s+(?P<quote>["'])(?P<code>.+)(?P=quote)$""")
 
 
+# 09-01 (Bob): My Agent couldn't edit user settings — the change_settings
+# handler only knew chat-level keys, so "make my font small" was refused.
+# These drive the UI's real storage shapes (see SettingsApp/AppShell).
+_ACCESSIBILITY_KEYS = {
+    "reducedMotion": "reducedMotion", "reduced_motion": "reducedMotion",
+    "highContrast": "highContrast", "high_contrast": "highContrast",
+    "largeText": "largeText", "large_text": "largeText",
+    "dyslexiaFriendly": "dyslexiaFriendly", "dyslexia_friendly": "dyslexiaFriendly",
+    "screenReader": "screenReader", "screen_reader": "screenReader",
+}
+
+
+def _coerce_flag(v: Any) -> Optional[bool]:
+    """Boolean from JSON bools or lax string forms (true/1/yes/on/…).
+    None when the value is not recognizable as a flag."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("true", "1", "yes", "on", "enable", "enabled"):
+            return True
+        if s in ("false", "0", "no", "off", "disable", "disabled"):
+            return False
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return None
+
+
 def _validated_argv(command: str) -> Optional[list[str]]:
     """Turn a run_shell payload into an argv array. STRICT: only a tiny set of
     compute commands — python3 -c '<code>' or 'date'. No shell metas, no
@@ -922,6 +950,10 @@ print(f"Active files: {os.listdir('.')}")
             if not isinstance(updates, dict):
                 return {"action": action_type, "status": "failed", "message": "No settings provided."}
             ai = dict(settings.get("ai") or {})
+            disp = dict(settings.get("display") or {})
+            ap = dict(settings.get("appearance") or {})
+            acc = dict(settings.get("accessibility") or {})
+            loc = dict(settings.get("localization") or {})
             applied = []
             # chat-level keys → the ai sub-dict the UI + resolver read
             for k, v in updates.items():
@@ -943,11 +975,69 @@ print(f"Active files: {os.listdir('.')}")
                 elif k == "auto_approved_actions" and isinstance(v, list):
                     settings["auto_approved_actions"] = v
                     applied.append("auto-approved actions")
-                elif k in ("school_name", "major", "goal", "timezone", "theme"):
+                elif k in ("school_name", "major", "goal"):
                     settings[k] = v
+                    applied.append(k.replace("_", " "))
+                # 09-01 (Bob): appearance/display/accessibility keys — the
+                # shapes the UI actually reads and applies live.
+                elif k == "font_size" and str(v).lower() in ("small", "medium", "large"):
+                    size = str(v).lower()
+                    disp["font_size"] = size
+                    # appearance.fontScale is the live-applied value
+                    # (SettingsApp: 50 = default; small ≈ 35, large ≈ 65).
+                    ap["fontScale"] = {"small": 35, "medium": 50, "large": 65}[size]
+                    applied.append("font size")
+                elif k in ("font_scale", "fontScale"):
+                    try:
+                        ap["fontScale"] = max(1, min(100, int(v)))
+                    except (TypeError, ValueError):
+                        continue
+                    applied.append("font scale")
+                elif k == "theme":
+                    settings[k] = v
+                    disp["theme"] = ap["theme"] = v
+                    applied.append("theme")
+                elif k == "accent":
+                    ap["accent"] = v
+                    applied.append("accent")
+                elif k == "density":
+                    ap["density"] = v
+                    applied.append("density")
+                elif k == "compact_mode":
+                    f = _coerce_flag(v)
+                    if f is None:
+                        continue
+                    disp["compact_mode"] = f
+                    applied.append("compact mode")
+                elif k in ("uiStyle", "ui_style"):
+                    ap["uiStyle"] = v
+                    applied.append("UI style")
+                elif k in ("animation", "background"):
+                    ap[k] = v
+                    applied.append(k)
+                elif k == "custom_color":
+                    disp["custom_color"] = v
+                    applied.append("custom color")
+                elif k == "language":
+                    loc["language"] = v
+                    applied.append("language")
+                elif k == "timezone":
+                    settings[k] = v
+                    loc["timezone"] = v
+                    applied.append("timezone")
+                elif k in _ACCESSIBILITY_KEYS and (f := _coerce_flag(v)) is not None:
+                    acc[_ACCESSIBILITY_KEYS[k]] = f
                     applied.append(k.replace("_", " "))
             if ai:
                 settings["ai"] = ai
+            if disp:
+                settings["display"] = disp
+            if ap:
+                settings["appearance"] = ap
+            if acc:
+                settings["accessibility"] = acc
+            if loc:
+                settings["localization"] = loc
             if not applied:
                 return {"action": action_type, "status": "failed", "message": "No recognized settings in that request."}
             user.settings = settings
