@@ -877,7 +877,7 @@ _AGENT_ACTIONS = {
     "delete_assignment": {"assignment_id": "int"},
     "read_assignment": {"assignment_id": "int"},
     "edit_assignment": {"assignment_id": "int", "updates": "dict with optional keys title, due_date (ISO string), prompt, status (one of: tracked, not_started, in_progress, completed, submitted, graded, paused), progress — progress MUST be a JSON object of {section: state} e.g. {\"section 2\": \"done\"}, NEVER a string or list"},
-    "change_settings": {"settings": "dict — valid keys: effort_score (int 1-1000), agent_name (str), personality (str), instructions (str), operation_mode (manual|auto|yolo), auto_approved_actions (list of action names), school_name, major, goal"},
+    "change_settings": {"settings": "dict — valid keys: effort_score (int 1-1000), agent_name (str), personality (str), instructions (str), operation_mode (manual|auto|yolo), auto_approved_actions (list of action names), school_name, major, goal, theme (str), accent (str), density (str), animation (str), background (str), uiStyle/ui_style (str), font_size (small|medium|large), font_scale/fontScale (int 1-100), custom_color (str), language (str), timezone (str), compact_mode (bool), reducedMotion/reduced_motion, highContrast/high_contrast, largeText/large_text, dyslexiaFriendly/dyslexia_friendly, screenReader/screen_reader (bool)"},
     "generate_flashcards": {"title": "str", "prompt": "str — the topic/subject or source text to build the deck from", "count": "int optional (1-100, default 20)"},
     "humanize_text": {"text": "str to humanize"},
     "analyze_rubric": {"prompt": "str", "rubric": "str"},
