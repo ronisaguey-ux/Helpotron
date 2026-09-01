@@ -22,7 +22,7 @@ Debugging the frontend login flow — the login page shows "Invalid credentials"
    - Changed main.jsx to render LoginTest instead of App
 
 3. **Backend verification:**
-   - Curl test: `curl -X POST http://localhost:8000/api/login -H "Content-Type: application/json" -d '{"public_id":"RoniDev","password":"Mongosdev999"}'`
+   - Curl test: `curl -X POST http://localhost:8000/api/login -H "Content-Type: application/json" -d '{"public_id":"RoniDev","password":"<ADMIN_PASSWORD>"}'`
    - Returns: `{"message":"Logged in","public_id":"RoniDev","plan":"elite"}`
    - ✅ Backend login works
 
@@ -67,7 +67,7 @@ cd /home/roni/Roni_Workspace/helpotron/web && npm run dev -- --port 5173
 
 ## Admin Credentials
 - Public ID: RoniDev
-- Password: Mongosdev999
+- Password: [CONFIGURED VIA ENVIRONMENT / DB]
 
 ## Notes
 - The backend login works via curl

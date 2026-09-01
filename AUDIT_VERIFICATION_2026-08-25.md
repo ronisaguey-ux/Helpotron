@@ -52,8 +52,8 @@ But the commit `git show --stat 9378a6d` **touches none of**: `routes_auth_2fa.p
 C1 (sandbox `startswith` prefix match), C2 (gdocs silent batch drop), C3 (dump "processing" orphan), C4 (CSV no escaping). (C5/C6/C13/C17/C19 not end-to-end verified — don't assume.)
 
 ## NEW issues found by verification (not in original audit)
-1. **LIVE GitHub PAT in git remote**: local `.git/config` embeds `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` (live, different from the dead leaked one) — rotate + credential helper NOW.
-2. **Hardcoded admin creds still in working tree**: `set_password.py:20` (executable repo-root script) AND `web/src/LoginTest.jsx:12` `api.login('RoniDev','Mongosdev999')` shipping in FRONTEND source; `HANDOFF.md:25,70` too. Full working-tree secret grep: these 3 files + audit docs.
+1. **LIVE GitHub PAT in git remote**: local `.git/config` embeds `ghp_••••••••••••••••••••••••••••••••••••` (live, different from the dead leaked one) — rotate + credential helper NOW.
+2. **Hardcoded admin creds still in working tree**: `set_password.py:20` (executable repo-root script) AND `web/src/LoginTest.jsx:12` `api.login('RoniDev','••••••••••••')` shipping in FRONTEND source; `HANDOFF.md:25,70` too. Full working-tree secret grep: these 3 files + audit docs.
 3. **History not purged**: all three secrets (DeepSeek `sk-f445…`, Telegram `8668566979:…`, PAT `ghp_7GRB7A…`) recoverable from 15+ old commits (9b368d8, 52516a5, 16d8dda, 7807cf8, …). A1's "purge history" directive unmet.
 4. **Commit message overclaim**: "resolve all critical, high, and medium audit findings" vs. ~15/85 → responsibility is to re-verify, not rubber-stamp.
 5. `/api/dump/upload`+`/api/dump/list` default to `"RoniDev"` and auto-credit — infinite user/credit minting on random payloads (worse than plain IDOR).

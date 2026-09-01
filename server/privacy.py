@@ -96,6 +96,7 @@ def delete_user_account_and_data(
 
 
 @router.delete("/user/account")
+@router.delete("/api/user/account")
 def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

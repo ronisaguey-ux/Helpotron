@@ -22,7 +22,7 @@
 
 ### A1. Git-tracked LIVE secrets — rotate NOW, purge history before pushing anywhere
 `.agents/mcp_config.json` (git-tracked, commit 43fdcc7, no .gitignore) contains **plaintext live credentials**: Telegram bot token `8668566979:...` (live), DeepSeek API key `sk-f445f2a5...` (live), GitHub PAT `ghp_7GRB7A...` (DEAD but still leaked).
-Also in repo source: `scripts/create_admin.py` + `set_password.py:12-16` hardcode **`RoniDev` / `Mongosdev999`** (the live admin password).
+Also in repo source: `scripts/create_admin.py` + `set_password.py:12-16` hardcode **`RoniDev` / `••••••••••••`** (the live admin password).
 **Fix:** rotate Telegram + DeepSeek keys, change admin password; `git rm --cached .agents/mcp_config.json` + gitignore it; `git filter-repo` purge the secrets from ALL history (they are in commits, not just working tree); source secrets from env only; add a secret-scan pre-commit/CI gate.
 
 ### A2. JWT signing key is the hardcoded repo default — forged admin JWT possible

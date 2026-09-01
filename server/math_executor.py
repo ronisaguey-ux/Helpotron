@@ -223,8 +223,48 @@ def assert_math_expression_safe(expression: str) -> str:
     return expr
 
 
+def _is_safe_math_code(code: str) -> bool:
+    import ast
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+
+    SAFE_MODULES = {"math", "datetime", "decimal", "fractions", "statistics", "sympy", "numpy", "ast", "operator"}
+    DISALLOWED_NAMES = {
+        "open", "eval", "exec", "__import__", "globals", "locals", "getattr",
+        "setattr", "delattr", "compile", "breakpoint", "input", "memoryview",
+        "sys", "os", "subprocess", "shutil", "socket", "urllib", "requests",
+        "pathlib", "io", "builtins", "posix", "ctypes", "importlib", "exit", "quit"
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            if node.id.startswith("__") or node.id in DISALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") or node.attr in DISALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] not in SAFE_MODULES:
+                    return False
+        elif isinstance(node, ast.ImportFrom):
+            if not node.module or node.module.split(".")[0] not in SAFE_MODULES:
+                return False
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in DISALLOWED_NAMES:
+                return False
+            if isinstance(node.func, ast.Attribute) and node.func.attr in DISALLOWED_NAMES:
+                return False
+
+    return True
+
+
 def run_python_math_bash(code: str, timeout: float = 5.0) -> Tuple[bool, str]:
     """Executes Python math code via bash subprocess with safety constraints and timeout."""
+    if not _is_safe_math_code(code):
+        return False, "Error: Disallowed operation detected in code"
     # Prepend standard safe mathematical imports
     preamble = (
         "import math\n"

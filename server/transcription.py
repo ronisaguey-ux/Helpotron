@@ -31,9 +31,13 @@ OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 GEMINI_AUDIO_MODEL = "google/gemini-2.0-flash"
 
 
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".ogg", ".webm", ".m4a", ".aac", ".mp4"}
+
+
 def save_upload(content: bytes, filename: str) -> str:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    ext = os.path.splitext(filename)[1] or ".webm"
+    raw_ext = os.path.splitext(filename)[1].lower()
+    ext = raw_ext if raw_ext in ALLOWED_AUDIO_EXTENSIONS else ".webm"
     path = UPLOAD_DIR / f"{uuid.uuid4().hex}{ext}"
     path.write_bytes(content)
     return str(path)

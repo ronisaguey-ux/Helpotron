@@ -1521,6 +1521,9 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         if action_name.endswith("_ask_permissions"):
             force_permission = True
             action_name = action_name[: -len("_ask_permissions")].strip()
+        lower_txt = text.lower().strip()
+        if lower_txt.startswith("submit") or "submit assignment" in lower_txt:
+            action_name = "submit_assignment"
     if parsed and action_name in actions:
         return {
             "action": action_name,

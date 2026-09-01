@@ -55,9 +55,9 @@ def scrub_pii(text: str) -> str:
 
 def _anonymize_id(raw_id: Any) -> str:
     """Anonymizes user IDs or document IDs into a salted SHA256 truncated hash."""
-    if not raw_id:
-        return "anon_" + uuid.uuid4().hex[:8]
     salt = os.getenv("DATALAKE_SALT", os.getenv("SECRET_KEY", "helpotron_salt_2026"))
+    if not raw_id:
+        return "usr_anon_" + hashlib.sha256(f"{salt}_{uuid.uuid4().hex}".encode("utf-8")).hexdigest()[:8]
     val = f"{salt}_{raw_id}"
     return "usr_" + hashlib.sha256(val.encode("utf-8")).hexdigest()[:12]
 

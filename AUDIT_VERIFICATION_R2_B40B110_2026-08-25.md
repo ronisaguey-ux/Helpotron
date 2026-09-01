@@ -40,7 +40,7 @@ No postgres driver (a PG URL hard-fails), no docker-compose, zero boto3/S3/R2, a
 `manifest.json` host_permissions localhost-only; `background.js:4` `DEFAULT_SERVER='http://localhost:8000'` — the extension cannot reach a Cloudflare origin; a demo that includes the extension is dead until a config-mapped origin + permissions exist.
 
 ### 5. **A1 — secrets still recoverable; remote URL embeds live PAT**
-History (43fdcc7, 9804380, 9378a6d…) still contains `RoniDev/Mongosdev999`, DeepSeek key, Telegram bot token, old PAT; `.git/config remote.origin.url` embeds the **live** PAT `ghp_1mQmc…`. Purge (filter-repo) + rotate + credential-helper before any public push.
+History (43fdcc7, 9804380, 9378a6d…) still contains `RoniDev/••••••••••••`, DeepSeek key, Telegram bot token, old PAT; `.git/config remote.origin.url` embeds the **live** PAT `ghp_1mQmc…`. Purge (filter-repo) + rotate + credential-helper before any public push.
 
 ### 6. **A4 remainder — 2FA still cosmetic**
 Never enforced at login (zero `2fa_enabled` checks in main.py/config.py); `/2fa/verify-setup` still enables 2FA/secret on any public_id anonymously; `verify-email` C18 persists.
