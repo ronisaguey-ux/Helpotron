@@ -414,6 +414,7 @@ export function searchIndex() {
   push('view', 'Terms of Service', 'Terms of use', 'terms', {});
   push('view', 'Message Admin', 'Direct encrypted channel', 'message_admin', {});
   push('view', 'Data Lake', 'Anonymized training pool', 'datalake', {});
+  push('view', 'Guide', 'Every feature & how to use it', 'guide', {});
   push('view', 'Admin Control Center', 'System-wide operations', 'admin', {});
   return items;
 }
