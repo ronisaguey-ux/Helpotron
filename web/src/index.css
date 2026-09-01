@@ -1598,6 +1598,17 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --color-inverse-primary: var(--st-inverse-primary);
   --color-surface-tint: var(--st-surface-tint);
 
+  /* semantic (status) palette — the sheets define the vars; this wires them
+     to utilities (text-sem-green, bg-sem-amber/15, …) like the M3 roles. */
+  --color-sem-amber: var(--st-sem-amber);     --color-on-sem-amber: var(--st-on-sem-amber);
+  --color-sem-blue: var(--st-sem-blue);       --color-on-sem-blue: var(--st-on-sem-blue);
+  --color-sem-green: var(--st-sem-green);     --color-on-sem-green: var(--st-on-sem-green);
+  --color-sem-cyan: var(--st-sem-cyan);       --color-on-sem-cyan: var(--st-on-sem-cyan);
+  --color-sem-indigo: var(--st-sem-indigo);   --color-on-sem-indigo: var(--st-on-sem-indigo);
+  --color-sem-deepgreen: var(--st-sem-deepgreen); --color-on-sem-deepgreen: var(--st-on-sem-deepgreen);
+  --color-sem-gray: var(--st-sem-gray);       --color-on-sem-gray: var(--st-on-sem-gray);
+  --color-sem-slate: var(--st-sem-slate);     --color-on-sem-slate: var(--st-on-sem-slate);
+
   /* spacing — design grid (unit 4px); rem so root font-size scales it */
   --spacing-container-padding: 1.5rem;   /* 24px */
   --spacing-margin-mobile: 1rem;         /* 16px */
