@@ -15,13 +15,17 @@ export default function CreditsView({ userId, initialTab, userCredits }) {
 
   return (
     <div className="space-y-6">
-      <div className="segmented max-w-fit" role="tablist" aria-label="Credits navigation">
+      <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 flex max-w-fit gap-1" role="tablist" aria-label="Credits navigation">
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'plans'}
           onClick={() => setTab('plans')}
-          className="seg-item"
+          className={`px-4 py-2 rounded-xl font-label-caps text-xs uppercase tracking-wider transition ${
+            tab === 'plans'
+              ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
         >
           Plans &amp; Top-ups
         </button>
@@ -30,7 +34,11 @@ export default function CreditsView({ userId, initialTab, userCredits }) {
           role="tab"
           aria-selected={tab === 'earn'}
           onClick={() => setTab('earn')}
-          className="seg-item"
+          className={`px-4 py-2 rounded-xl font-label-caps text-xs uppercase tracking-wider transition ${
+            tab === 'earn'
+              ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
         >
           Earn Credits
         </button>

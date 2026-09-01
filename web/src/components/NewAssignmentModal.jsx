@@ -109,8 +109,8 @@ async function assignmentRequest(method, path, body) {
   return data;
 }
 
-const inputCls = 'clean-input w-full px-3 py-2 text-sm leading-relaxed';
-const labelCls = 'block text-sm font-semibold text-[var(--text-secondary)] mb-1.5';
+const inputCls = 'w-full px-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
+const labelCls = 'block font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider mb-1.5';
 
 export default function NewAssignmentModal({ onClose, onCreated }) {
   const [title, setTitle] = useState('');
@@ -191,16 +191,16 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
       aria-labelledby="new-assignment-title"
       onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== 'creating') onClose(); }}
     >
-      {/* Aurora modal chrome (scoped; index.css owns the design system) */}
+      {/* Modal chrome */}
       <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
 .aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
 .aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
-      <div className="m-auto w-full max-w-xl surface-glass-strong rounded-[var(--radius-lg)] p-5 sm:p-6 space-y-4 text-[var(--text-primary)] aurora-modal-panel">
+      <div className="m-auto w-full max-w-xl bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 sm:p-8 space-y-5 text-on-surface shadow-2xl aurora-modal-panel">
         <div className="flex items-center justify-between">
-          <h3 id="new-assignment-title" className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <span className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent)]">
-              <FileText className="w-3.5 h-3.5" />
+          <h3 id="new-assignment-title" className="font-headline-lg text-title-md text-on-surface flex items-center gap-3">
+            <span className="w-9 h-9 rounded-2xl bg-primary/15 flex items-center justify-center text-primary">
+              <FileText className="w-4 h-4" />
             </span>
             New Assignment
           </h3>
@@ -208,15 +208,15 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             type="button"
             onClick={() => onClose()}
             disabled={phase === 'creating'}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 cursor-pointer transition"
+            className="text-outline hover:text-on-surface disabled:opacity-40 cursor-pointer transition p-1"
             aria-label="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <form
-          className="space-y-3.5"
+          className="space-y-4"
           onSubmit={(e) => { e.preventDefault(); if (canSubmit) createAssignment(); }}
         >
           <div>
@@ -248,7 +248,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             <label htmlFor="na-prompt" className={labelCls}>Prompt / instructions (optional)</label>
             <textarea
               id="na-prompt"
-              rows={6}
+              rows={5}
               placeholder="Paste the full assignment instructions, links, or what the instructor expects."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -270,14 +270,14 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-[var(--radius-md)] text-xs text-rose-300 font-mono whitespace-pre-wrap" role="alert">
+            <div className="p-3 bg-error/15 border border-error/30 rounded-xl text-xs text-error font-mono whitespace-pre-wrap" role="alert">
               {error}
               {phase === 'saving_rubric' && createdId != null && (
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
                     onClick={retryRubric}
-                    className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded-lg border border-rose-500/30 cursor-pointer"
+                    className="px-3 py-1 bg-error/20 hover:bg-error/30 text-error rounded-lg border border-error/30 font-label-caps text-xs uppercase cursor-pointer"
                   >
                     Retry rubric save
                   </button>
@@ -286,19 +286,19 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2.5 pt-2">
             <button
               type="button"
               onClick={() => onClose()}
               disabled={phase === 'creating'}
-              className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-semibold transition disabled:opacity-40 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant font-label-caps text-xs uppercase tracking-wider transition disabled:opacity-40 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 rounded-xl font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm"
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               <span>{phase === 'creating' ? 'Creating…' : phase === 'saving_rubric' ? 'Saving rubric…' : 'Create Assignment'}</span>
@@ -306,7 +306,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
           </div>
         </form>
 
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="font-body-sm text-xs text-on-surface-variant">
           Assignments you create appear in the workspace and cards; they land in this ledger after being marked completed.
         </p>
       </div>

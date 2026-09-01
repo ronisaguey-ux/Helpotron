@@ -443,7 +443,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           icons; real icons carry the meaning and counts became chips. */}
       <div className="flex items-center gap-3">
         <div className="os-scroll overflow-x-auto min-w-0 flex-1">
-          <div className="segmented w-max" role="tablist" aria-label="Admin sections">
+          <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 flex w-max gap-1" role="tablist" aria-label="Admin sections">
             {[
               ['bulk_users', 'User Operations', Users, listUsers.length],
               ['costs', 'Cost & Usage', CircleDollarSign, null],
@@ -459,16 +459,20 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 onClick={() => setActiveTab(key)}
                 role="tab"
                 aria-selected={activeTab === key}
-                className="seg-item"
+                className={`px-4 py-2 rounded-xl font-label-caps text-xs uppercase tracking-wider flex items-center gap-2 transition ${
+                  activeTab === key
+                    ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
               >
                 <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
                 {label}
-                {count != null && <span className="seg-count">{count}</span>}
+                {count != null && <span className="font-tabular-stat text-xs bg-surface-container-high px-2 py-0.5 rounded-full">{count}</span>}
               </button>
             ))}
           </div>
         </div>
-        <span className="chip chip-accent font-mono shrink-0 hidden lg:inline-flex">
+        <span className="font-label-caps text-xs uppercase px-3.5 py-1.5 rounded-full bg-primary/15 text-primary font-semibold shrink-0 hidden lg:inline-flex items-center gap-1.5">
           <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
           ADMIN: {userId || 'anonymous'}
         </span>
@@ -477,14 +481,14 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
       {/* TAB 1: BULK USERS */}
       {activeTab === 'bulk_users' && (
         <div className="space-y-4">
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-head__title">Bulk user operations</span>
-              <span className={`chip ${selectedUserIds.length ? 'chip-accent' : 'chip-neutral'}`}>
+          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="font-title-md text-title-md text-on-surface">Bulk user operations</span>
+              <span className={`font-label-caps text-xs uppercase px-3 py-1 rounded-full font-semibold ${selectedUserIds.length ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
                 {selectedUserIds.length} selected
               </span>
             </div>
-            <div className="panel-body space-y-4">
+            <div className="space-y-4">
             {selectedUserIds.length === 0 ? (
               /* 08-30 de-clunk: with nothing selected this box used to render
                  the whole control grid plus a huge disabled "Apply to 0"
