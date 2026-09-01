@@ -46,6 +46,7 @@ function lazyWithRetry(componentImport) {
 const AppShell = lazyWithRetry(() => import('./components/AppShell.jsx'));
 const CookieBanner = lazyWithRetry(() => import('./components/CookieBanner.jsx'));
 const AdminNoticePopup = lazyWithRetry(() => import('./components/ui/AdminNoticePopup.jsx'));
+const QueueNoticeBanner = lazyWithRetry(() => import('./components/QueueNoticeBanner.jsx'));
 const CommandPalette = lazyWithRetry(() => import('./components/CommandPalette.jsx'));
 
 const AssignmentCardDashboard = lazyWithRetry(() => import('./components/AssignmentCardDashboard.jsx'));
@@ -576,6 +577,10 @@ export default function App() {
 
         {/* Global command palette */}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
+
+        {/* Memory-budget queue notice (08-31, operator) — shows while the
+            API's 10G RAM budget is consumed and requests are auto-retried */}
+        <QueueNoticeBanner />
 
         {/* Guest Warning Banner */}
         {isGuest && (

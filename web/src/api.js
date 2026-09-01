@@ -73,13 +73,64 @@ export function getCsrfToken() {
   return localStorage.getItem('helpotron_csrf_token') || null;
 }
 
+// ── Memory-budget queue (08-31, operator) ──────────────────────────────────
+// The API runs under a 10G cgroup budget (server/memguard.py). While the
+// budget is consumed every NEW request gets 429 {"detail": QUEUE_MESSAGE} —
+// the work completes when RAM frees up: we surface the message in the UI and
+// retry the same request (the handler never ran, so retries are safe).
+export const QUEUE_MESSAGE = 'Task is in Queue, will be completed momentarily';
+
+function queueNotify() {
+  try {
+    window.dispatchEvent(new CustomEvent('helpotron:queue'));
+  } catch (e) { /* no window (SSR/tests) — nothing to notify */ }
+}
+
+function queueClear() {
+  try {
+    window.dispatchEvent(new CustomEvent('helpotron:queue-clear'));
+  } catch (e) { /* noop */ }
+}
+
+function isQueueError(err) {
+  return !!err && err.status === 429 && err.message === QUEUE_MESSAGE;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Retries fn (backoff 3s → 10s) until RAM frees up; bounded at 10 minutes so
+// a genuinely stuck server surfaces as an error instead of a silent spinner.
+async function queueRetry(fn) {
+  queueNotify();
+  const deadline = Date.now() + 10 * 60 * 1000;
+  let backoff = 3000;
+  while (Date.now() < deadline) {
+    await sleep(backoff);
+    backoff = Math.min(backoff + 1000, 10000);
+    try {
+      const result = await fn();
+      queueClear();
+      return result;
+    } catch (err) {
+      if (!isQueueError(err)) {
+        queueClear();
+        throw err;
+      }
+      // still queued — keep waiting for the next slot
+    }
+  }
+  queueClear();
+  const stuck = new Error(`${QUEUE_MESSAGE} (the memory budget is still full — try again shortly.)`);
+  stuck.status = 429;
+  throw stuck;
+}
+
 export async function request(endpoint, options = {}) {
   // Ensure endpoint starts with /api if relative
   let cleanEndpoint = endpoint;
   if (!cleanEndpoint.startsWith('http://') && !cleanEndpoint.startsWith('https://') && !cleanEndpoint.startsWith('/api') && cleanEndpoint.startsWith('/')) {
     cleanEndpoint = `/api${cleanEndpoint}`;
   }
-  const url = `${getBaseUrl()}${cleanEndpoint}`;
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -102,6 +153,25 @@ export async function request(endpoint, options = {}) {
       headers['X-CSRF-Token'] = csrfToken;
     }
   }
+
+  try {
+    return await doRequest(cleanEndpoint, options, headers);
+  } catch (err) {
+    // Memory budget consumed (08-31, operator): the handler never ran, so the
+    // same request can be retried until RAM frees up — the queue message is
+    // surfaced in the UI meanwhile (see QueueNoticeBanner).
+    if (isQueueError(err)) {
+      return queueRetry(() => doRequest(cleanEndpoint, options, headers));
+    }
+    throw err;
+  }
+}
+
+// The actual fetch + parse, split out so the budget retry can re-run the same
+// request with its original headers/body.
+async function doRequest(cleanEndpoint, options, headers) {
+  const url = `${getBaseUrl()}${cleanEndpoint}`;
+  const method = options.method || 'GET';
 
   // DEMO MODE: registered endpoints return hardcoded sample data instead of
   // hitting the backend (only while the demo toggle is ON; unmocked endpoints
@@ -182,7 +252,7 @@ export const api = {
   publicConfig: () => request('/api/public-config', { method: 'GET' }),
   logout: () => request('/api/logout', { method: 'POST' }),
   me: () => request('/api/me', { method: 'GET' }),
-  signup: (public_id, password) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password }) }),
+  signup: (public_id, password, turnstileToken = null) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password, turnstile_token: turnstileToken }) }),
   adminCheck: () => request('/api/admin/check', { method: 'GET' }),
   setup2FA: (method = 'totp', phone = null) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method, phone_number: phone }) }),
   verifySetup2FA: (method, code, secret) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret }) }),
@@ -213,35 +283,57 @@ export const api = {
     if (isDemoMode()) {
       return mockGenerateStream(kind, body, onProgress);
     }
-    const response = await fetch(`${getBaseUrl()}/api/generate/stream/${kind}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers,
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error(await response.text());
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let result = null;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop();
-      for (const frame of frames) {
-        const line = frame.split('\n').find((l) => l.startsWith('data: '));
-        if (!line) continue;
-        let evt;
-        try { evt = JSON.parse(line.slice(6)); } catch { continue; }
-        if (evt.event === 'progress' && typeof onProgress === 'function') onProgress(evt);
-        else if (evt.event === 'done') result = evt.material;
-        else if (evt.event === 'error') throw new Error(evt.detail || 'Generation failed');
+    const run = async () => {
+      const response = await fetch(`${getBaseUrl()}/api/generate/stream/${kind}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        let message = text;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && parsed.detail) message = parsed.detail;
+        } catch { /* raw body — keep as message */ }
+        const err = new Error(message);
+        err.status = response.status;
+        throw err;
       }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop();
+        for (const frame of frames) {
+          const line = frame.split('\n').find((l) => l.startsWith('data: '));
+          if (!line) continue;
+          let evt;
+          try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+          if (evt.event === 'progress' && typeof onProgress === 'function') onProgress(evt);
+          else if (evt.event === 'done') result = evt.material;
+          else if (evt.event === 'error') throw new Error(evt.detail || 'Generation failed');
+        }
+      }
+      if (!result) throw new Error('Generation stream ended without a result');
+      return result;
+    };
+    try {
+      return await run();
+    } catch (err) {
+      if (isQueueError(err)) {
+        // Budget consumed (operator 08-31): the SSE handler never started, so
+        // re-run the whole stream once RAM frees up.
+        return queueRetry(run);
+      }
+      throw err;
     }
-    if (!result) throw new Error('Generation stream ended without a result');
-    return result;
   },
   updateSettings: (settings) => request('/api/user/settings', { method: 'PATCH', body: JSON.stringify(settings) }),
   getAgentActions: () => request('/api/agent/actions'),
