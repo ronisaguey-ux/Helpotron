@@ -228,7 +228,9 @@ def test_upsert_assignment_and_status(client, unique_user, auth_headers):
 
     status = client.get(f"/api/status/{unique_user}", headers=auth_headers).json()
     assert len(status["assignments"]) == 1
-    assert status["assignments"][0]["status"] == "tracked"
+    # 09-01 (Bob): every new assignment bubble starts pending_approval — the
+    # user picks a direction (do it for me / study guide / …) before work starts.
+    assert status["assignments"][0]["status"] == "pending_approval"
 
 
 def test_material_requires_credits_then_succeeds(client, unique_user, auth_headers, monkeypatch):
