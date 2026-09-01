@@ -8,7 +8,7 @@ import { XAxis } from '@/components/charts/x-axis';
 import { ChartTooltip } from '@/components/charts/tooltip/chart-tooltip';
 
 const GlassCard = ({ className = '', children }) => (
-  <div className={`glass-panel rounded-[var(--radius-lg)] p-5 ${className}`}>{children}</div>
+  <div className={`bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm ${className}`}>{children}</div>
 );
 
 // Minutes studied in the trailing 7 days, computed from the analytics
@@ -18,14 +18,14 @@ const weekMinutes = (a) => {
   return Object.values(days).reduce((sum, m) => sum + (Number(m) || 0), 0);
 };
 
-const Stat = ({ label, value, sub = '', icon: Icon, iconColor = 'text-[var(--accent)]' }) => (
-  <div className="glass-panel rounded-[var(--radius-lg)] p-5">
-    <div className="flex items-center justify-between text-[var(--text-muted)] mb-1 text-xs">
+const Stat = ({ label, value, sub = '', icon: Icon, iconColor = 'text-primary' }) => (
+  <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+    <div className="flex items-center justify-between text-on-surface-variant mb-2 font-label-caps text-label-caps uppercase">
       <span>{label}</span>
       {Icon && <Icon className={`w-4 h-4 ${iconColor}`} />}
     </div>
-    <div className="text-2xl font-bold text-white mt-1">{value}</div>
-    {sub && <div className="text-xs text-emerald-400 mt-1">{sub}</div>}
+    <div className="font-tabular-stat text-3xl font-bold text-on-surface mt-1">{value}</div>
+    {sub && <div className="font-body-sm text-xs text-on-surface-variant mt-1">{sub}</div>}
   </div>
 );
 
@@ -73,20 +73,22 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
     loadData();
   }, [loadData]);
 
-  if (loading) return <GlassCard className="text-center text-[var(--accent)] text-xs py-8">Loading live analytics…</GlassCard>;
-  if (error) return <GlassCard className="text-rose-400 text-xs">{error}</GlassCard>;
+  if (loading) return <GlassCard className="text-center text-primary text-xs py-8 font-label-caps uppercase">Loading live analytics…</GlassCard>;
+  if (error) return <GlassCard className="text-error text-xs">{error}</GlassCard>;
   if (!analytics || (analytics.session_count === 0 && analytics.total_study_time_hours === 0)) {
     return (
-      <div className="panel px-5 py-6 text-center space-y-3">
-        <span className="empty-state__icon mx-auto"><Activity className="w-4 h-4" aria-hidden="true" /></span>
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">No study activity yet</h3>
-        <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl px-6 py-8 text-center space-y-4 shadow-sm">
+        <span className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mx-auto">
+          <Activity className="w-6 h-6" aria-hidden="true" />
+        </span>
+        <h3 className="font-title-md text-title-md text-on-surface">No study activity yet</h3>
+        <p className="font-body-sm text-sm text-on-surface-variant max-w-md mx-auto leading-relaxed">
           Study hours and performance metrics appear here once you complete an assignment or generate flashcards or practice tests.
         </p>
         <button
           type="button"
           onClick={() => onExplainWithAgent?.('academic_progress_summary')}
-          className="seg-item mx-auto !bg-[var(--accent-subtle)] !text-[var(--text-primary)] border !border-[color-mix(in_srgb,var(--accent)_34%,transparent)]"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-label-caps text-xs uppercase tracking-wider transition cursor-pointer shadow-sm mx-auto"
         >
           Start with your agent
         </button>
@@ -97,41 +99,41 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Total Study Time" value={`${(analytics.total_study_time_hours ?? 0).toFixed(1)}h`} sub={`${weekMinutes(analytics)}m in the last 7 days`} icon={Clock} iconColor="text-[var(--accent)]" />
-        <Stat label="Materials Studied" value={analytics.materials_studied ?? 0} sub={`${analytics.total_materials_generated ?? 0} generated total`} icon={BookOpen} iconColor="text-indigo-400" />
-        <Stat label="Study Sessions" value={analytics.session_count ?? 0} sub={`avg score ${analytics.average_score != null ? `${analytics.average_score}%` : '—'}`} icon={Activity} iconColor="text-emerald-400" />
+        <Stat label="Total Study Time" value={`${(analytics.total_study_time_hours ?? 0).toFixed(1)}h`} sub={`${weekMinutes(analytics)}m in the last 7 days`} icon={Clock} iconColor="text-primary" />
+        <Stat label="Materials Studied" value={analytics.materials_studied ?? 0} sub={`${analytics.total_materials_generated ?? 0} generated total`} icon={BookOpen} iconColor="text-secondary" />
+        <Stat label="Study Sessions" value={analytics.session_count ?? 0} sub={`avg score ${analytics.average_score != null ? `${analytics.average_score}%` : '—'}`} icon={Activity} iconColor="text-primary" />
         <Stat label="Tutor Cost Saved" value={valueMetrics?.tutor_savings != null ? `$${Math.round(valueMetrics.tutor_savings)}` : '—'} sub={valueMetrics?.monthly_cost != null ? `vs $${Math.round(valueMetrics.monthly_cost)}/mo live cost` : 'no cost data yet'} icon={DollarSign} iconColor="text-amber-400" />
       </div>
 
       {valueMetrics && (
         <GlassCard>
-          <div className="flex items-center gap-2 mb-3 text-sm text-[var(--text-secondary)] font-semibold">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <span>Autonomous ROI & Cost Metrics</span>
+          <div className="flex items-center gap-2 mb-4 text-sm text-on-surface font-semibold flex-wrap">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            <span className="font-title-md text-title-md text-on-surface">Autonomous ROI & Cost Metrics</span>
             <button
               type="button"
               onClick={() => onExplainWithAgent?.('academic_progress_summary')}
-              className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--accent)] transition cursor-pointer"
+              className="ml-auto flex items-center gap-2 text-xs px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 font-label-caps uppercase tracking-wider transition cursor-pointer"
             >
-              <Sparkles className="w-3 h-3" /> Explain My Progress with Agent
+              <Sparkles className="w-3.5 h-3.5" /> Explain My Progress with Agent
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px] uppercase">Hours Saved</span>
-              <strong className="text-white text-base">{valueMetrics.study_hours != null ? `${valueMetrics.study_hours}h` : '—'}</strong>
+            <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+              <span className="text-on-surface-variant block font-label-caps text-[11px] uppercase tracking-wider mb-1">Hours Saved</span>
+              <strong className="text-on-surface font-tabular-stat text-xl font-bold">{valueMetrics.study_hours != null ? `${valueMetrics.study_hours}h` : '—'}</strong>
             </div>
-            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px] uppercase">Monthly Cost</span>
-              <strong className="text-white text-base">{valueMetrics.monthly_cost != null ? `$${valueMetrics.monthly_cost}` : '—'}</strong>
+            <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+              <span className="text-on-surface-variant block font-label-caps text-[11px] uppercase tracking-wider mb-1">Monthly Cost</span>
+              <strong className="text-on-surface font-tabular-stat text-xl font-bold">{valueMetrics.monthly_cost != null ? `$${valueMetrics.monthly_cost}` : '—'}</strong>
             </div>
-            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px] uppercase">Cost Per Hour</span>
-              <strong className="text-[var(--accent)] text-base">{valueMetrics.cost_per_hour != null ? `$${valueMetrics.cost_per_hour}` : '—'}</strong>
+            <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+              <span className="text-on-surface-variant block font-label-caps text-[11px] uppercase tracking-wider mb-1">Cost Per Hour</span>
+              <strong className="text-primary font-tabular-stat text-xl font-bold">{valueMetrics.cost_per_hour != null ? `$${valueMetrics.cost_per_hour}` : '—'}</strong>
             </div>
-            <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
-              <span className="text-[var(--text-muted)] block text-[10px] uppercase">Est. Tutor Savings</span>
-              <strong className="text-emerald-300 text-base">{valueMetrics.tutor_savings != null ? `$${Math.round(valueMetrics.tutor_savings)}` : '—'}</strong>
+            <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+              <span className="text-on-surface-variant block font-label-caps text-[11px] uppercase tracking-wider mb-1">Est. Tutor Savings</span>
+              <strong className="text-primary font-tabular-stat text-xl font-bold">{valueMetrics.tutor_savings != null ? `$${Math.round(valueMetrics.tutor_savings)}` : '—'}</strong>
             </div>
           </div>
         </GlassCard>
@@ -139,15 +141,15 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
 
       {activity && activity.length > 0 && (
         <GlassCard>
-          <div className="flex items-center justify-between gap-2 mb-4 text-sm text-[var(--text-secondary)] font-semibold">
+          <div className="flex items-center justify-between gap-2 mb-4 text-sm text-on-surface font-semibold">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[var(--accent)]" />
-              <span>Telemetry Activity (Last 30 Days)</span>
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <span className="font-title-md text-title-md text-on-surface">Telemetry Activity (Last 30 Days)</span>
             </div>
             <button
               type="button"
               onClick={loadData}
-              className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--color-surface-raised)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3.5 py-2 rounded-xl text-xs bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant border border-outline-variant/30 flex items-center gap-1.5 font-label-caps uppercase tracking-wider transition cursor-pointer"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
@@ -164,7 +166,7 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
             <XAxis numTicks={5} tickerHalfWidth={44} />
             <ChartTooltip
               rows={(point) => [
-                { color: 'var(--chart-line-primary)', label: 'Minutes studied', value: point.time_minutes ?? 0 },
+                { color: 'var(--st-primary)', label: 'Minutes studied', value: point.time_minutes ?? 0 },
               ]}
             />
           </AreaChart>
@@ -173,11 +175,11 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
 
       {analytics.material_breakdown && Object.keys(analytics.material_breakdown).length > 0 && (
         <GlassCard>
-          <h3 className="text-xs text-[var(--text-muted)] font-semibold uppercase mb-3">Synthesized Materials Breakdown</h3>
+          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider mb-3">Synthesized Materials Breakdown</h3>
           <div className="flex flex-wrap gap-2 text-xs">
             {Object.entries(analytics.material_breakdown).map(([kind, count]) => (
-              <span key={kind} className="px-3 py-1.5 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-primary)]">
-                {kind}: <strong>{count}</strong>
+              <span key={kind} className="px-3.5 py-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-label-caps text-xs">
+                {kind}: <strong className="font-tabular-stat text-primary font-bold ml-1">{count}</strong>
               </span>
             ))}
           </div>

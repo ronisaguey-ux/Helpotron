@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Helpotron</title>
+  <link rel="stylesheet" href="design.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      overflow-y: auto;
+    }
+    .onboard {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+    .hero .logo {
+      width: 96px; height: 96px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--outline-variant);
+      box-shadow: 0 0 28px color-mix(in srgb, var(--primary) 25%, transparent);
+    }
+    .step-card {
+      background: var(--surface-container-lowest);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .step-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px; line-height: 14px; font-weight: 500; letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--on-surface-variant);
+    }
+    .step-tag .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    .mini-card {
+      background: var(--surface-container-low);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--radius-xl);
+      padding: 14px;
+      display: flex; gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .mini-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 85% -30%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%);
+      pointer-events: none;
+    }
+    .detect-row {
+      margin-top: 6px; padding-top: 10px;
+      border-top: 1px solid var(--outline-variant);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <symbol id="i-capture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+    </symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
+      <path d="M4 9h16"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="m8 12.5 2.5 2.5L16 9.5"/>
+    </symbol>
+    <symbol id="i-search-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <path d="m21 21-4.3-4.3"/>
+      <path d="m8.5 11 2 2M12.5 8l2 2"/>
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+      <path d="M12 7v5l4 2"/>
+    </symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8V4H8"/>
+      <rect x="4" y="8" width="16" height="12" rx="2"/>
+      <circle cx="9" cy="14" r="1"/>
+      <circle cx="15" cy="14" r="1"/>
+      <path d="M2 14h2M20 14h2"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2" width="6" height="11" rx="3"/>
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1"/>
+      <path d="M12 18v4"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <path d="M21 3v6h-6"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 2 11 13"/>
+      <path d="m22 2-7 20-4-9-9-4z"/>
+    </symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="4" width="14" height="17" rx="2"/>
+      <path d="M9 2h6v4H9z"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 4H6v16h4zM18 4h-4v16h4z"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"/>
+      <path d="m7 10 5 5 5-5"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 3 1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2L12 3z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </symbol>
+    <symbol id="i-sigma" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 5H7l6 6-6 8h11"/>
+    </symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="3"/>
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
+    </symbol>
+    <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="12" rx="2"/>
+      <path d="M8 20h8M12 16v4"/>
+    </symbol>
+    <symbol id="i-light-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+    </symbol>
+    <symbol id="i-dark-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/>
+      <path d="m13 6 6 6-6 6"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/>
+      <path d="M1 14h6M9 8h6M17 16h6"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5"/>
+      <path d="m11 12 9-9"/>
+      <path d="m16 7 3 3"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </symbol>
+  </defs>
+</svg>
+  <main class="onboard">
+    <!-- Step 1: brand -->
+    <header class="hero">
+      <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" />
+      <h1 class="font-headline-lg-mobile text-headline-lg-mobile" style="margin:0;letter-spacing:-0.02em;">
+        Turn any course page into a study session
+      </h1>
+      <p class="font-body-md text-body-md text-on-surface-variant" style="margin:0;max-width:300px;">
+        Your premium AI co-pilot captures assignments, suggests the subject, and sends them to Helpotron — automatically.
+      </p>
+    </header>
+
+    <!-- Step 2: connect -->
+    <section class="step-card">
+      <span class="step-tag"><span class="dot"></span>Step 1 · Connect</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="icon-btn" style="background:var(--surface-container-high);width:36px;height:36px;">
+          <svg class="ic"><use href="#i-user" /></svg>
+        </div>
+        <div>
+          <div class="field-label">Account status</div>
+          <div class="font-body-md" id="obStatus">Not connected</div>
+        </div>
+      </div>
+      <button class="btn btn--primary" id="obSignIn" type="button">
+        <span>Sign in to Helpotron</span>
+        <svg class="ic"><use href="#i-arrow" /></svg>
+      </button>
+      <span class="font-label-caps text-label-caps text-on-surface-variant">Secure &amp; private processing</span>
+    </section>
+
+    <!-- Step 3: try it -->
+    <section class="step-card">
+      <span class="step-tag"><span class="dot"></span>Step 2 · Try it</span>
+      <h2 class="text-title-md" style="margin:0;">Try it on any assignment page</h2>
+      <div class="mini-card" aria-hidden="true">
+        <div class="icon-btn" style="background:var(--surface-container-high);width:40px;height:40px;border-radius:10px;flex-shrink:0;">
+          <svg class="ic ic--lg"><use href="#i-doc" /></svg>
+        </div>
+        <div style="flex:1;">
+          <div class="skel skel--line" style="width:75%;"></div>
+          <div class="skel skel--line-sm" style="margin-top:8px;"></div>
+          <div class="detect-row">
+            <span class="font-label-caps text-label-caps text-on-surface-variant">Auto-detected</span>
+            <span class="chip chip--green"><span class="dot"></span>Ready</span>
+          </div>
+        </div>
+      </div>
+      <span class="font-body-sm text-body-sm text-on-surface-variant">
+        Open Canvas, Blackboard, or any course page — the extension reads the assignment (title, due date, instructions) the moment you open it.
+      </span>
+    </section>
+
+    <!-- Step: go -->
+    <section class="step-card" style="align-items:center;text-align:center;gap:10px;">
+      <span class="step-tag"><span class="dot"></span>Done</span>
+      <p class="font-body-sm text-body-sm text-on-surface-variant" style="margin:0;">
+        Ready when you are. Adjust theme and shortcuts any time from the extension options.
+      </p>
+      <button class="btn btn--secondary" id="obDone" type="button">Got it — close</button>
+    </section>
+  </main>
+
+  <script src="theme.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

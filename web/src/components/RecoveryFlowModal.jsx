@@ -12,14 +12,14 @@ import { createPortal } from 'react-dom';
 import { X, Mail, Phone, UserCog, KeyRound } from 'lucide-react';
 import api from '../api.js';
 
-const CARD = 'p-3.5 rounded-[var(--radius-md)] border text-left transition cursor-pointer w-full';
-const CARD_OFF = `${CARD} bg-[var(--bg-surface)] border-[var(--border-subtle)] opacity-55 cursor-not-allowed`;
-const CARD_ON = `${CARD} recovery-card-on text-[var(--text-primary)]`;
-const CARD_DEV = `${CARD} recovery-card-dev text-[var(--text-primary)]`;
+const CARD = 'p-4 rounded-2xl border text-left transition cursor-pointer w-full';
+const CARD_OFF = `${CARD} bg-surface-container-low border-outline-variant/30 opacity-55 cursor-not-allowed`;
+const CARD_ON = `${CARD} bg-surface-container-low border-outline-variant/30 hover:border-primary text-on-surface`;
+const CARD_DEV = `${CARD} bg-secondary-container/10 border-secondary/30 hover:border-secondary text-on-surface`;
 // text-base (>= 16px computed) so iOS/Safari never auto-zooms the field on focus.
-const INPUT = 'clean-input w-full px-3 py-2 text-base outline-none';
-const BTN = 'px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer';
-const BTN_SUB = 'px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer';
+const INPUT = 'w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
+const BTN = 'px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm';
+const BTN_SUB = 'px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition cursor-pointer';
 
 export default function RecoveryFlowModal({ open, onClose, publicId }) {
   const [step, setStep] = useState('options'); // options | enter | done
@@ -143,16 +143,16 @@ export default function RecoveryFlowModal({ open, onClose, publicId }) {
 }
 .recovery-card-dev:hover { background: color-mix(in srgb, var(--accent-2) 25%, transparent); }`}</style>
       <div
-        className={`w-full max-w-md surface-glass-strong rounded-[var(--radius-lg)] max-h-[85vh] overflow-y-auto aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`w-full max-w-md bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onPanelAnimEnd}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/30">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-[var(--accent)]" />
-            <h2 className="text-sm font-bold text-[var(--text-primary)]">Recover your password</h2>
+            <KeyRound className="w-4 h-4 text-primary" />
+            <h2 className="font-headline-lg text-title-md text-on-surface">Recover your password</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-on-surface-variant hover:text-on-surface transition">
             <X className="w-4 h-4" />
           </button>
         </div>

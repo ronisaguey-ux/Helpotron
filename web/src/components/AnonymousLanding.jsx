@@ -57,8 +57,8 @@ const STEPS = [
   { n: '03', title: 'Work and mark complete', body: 'Bubbles group it, your agent drafts, the ledger records it.' },
 ];
 
-const BTN_PRIMARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold transition cursor-pointer glow-accent';
-const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] text-[var(--text-primary)] text-sm font-semibold transition cursor-pointer';
+const BTN_PRIMARY = 'inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm';
+const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer';
 
 /* ── Product depiction ───────────────────────────────────────────────────────
  * A faithful, static rendering of the real workspace built from the same
@@ -68,34 +68,33 @@ const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 rounded-[va
  * Decorative: the surrounding copy carries the meaning for screen readers. */
 function ProductPreview() {
   const bubbles = [
-    { subject: 'Organic Chemistry', count: 4, tone: 'var(--accent)' },
-    { subject: 'US History', count: 2, tone: 'var(--accent-2)' },
-    { subject: 'Calculus II', count: 3, tone: '#a78bfa' },
+    { subject: 'Organic Chemistry', count: 4, tone: 'var(--color-primary)' },
+    { subject: 'US History', count: 2, tone: 'var(--color-secondary)' },
+    { subject: 'Calculus II', count: 3, tone: 'var(--color-primary)' },
   ];
   return (
-    <div aria-hidden="true" className="panel p-4 sm:p-5 space-y-4 select-none">
+    <div aria-hidden="true" className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 sm:p-8 space-y-4 select-none shadow-2xl">
       {/* window chrome */}
-      <div className="flex items-center gap-2 pb-3 border-b border-[var(--border-subtle)]">
-        <span className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
-        <span className="ml-2 text-[11px] font-mono text-[var(--text-muted)]">helpotron.workspace</span>
+      <div className="flex items-center gap-2 pb-4 border-b border-outline-variant/30">
+        <span className="h-3 w-3 rounded-full bg-error/80" />
+        <span className="h-3 w-3 rounded-full bg-amber-500/80" />
+        <span className="h-3 w-3 rounded-full bg-primary/80" />
+        <span className="ml-2 font-mono text-xs text-on-surface-variant">helpotron.study_os</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1.05fr_1fr]">
         {/* left: subject bubbles */}
         <div className="space-y-2.5">
-          <div className="section-label">Bubbles</div>
+          <div className="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant">Bubbles</div>
           {bubbles.map(({ subject, count, tone }) => (
             <div
               key={subject}
-              className="group flex items-center gap-3 p-2.5"
+              className="group flex items-center gap-3 p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-colors"
             >
               <span
-                className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] flex items-center justify-center"
-                style={{ background: 'color-mix(in srgb, ' + tone + ' 18%, transparent)' }}
+                className="h-8 w-8 shrink-0 rounded-xl flex items-center justify-center bg-primary/15 text-primary"
               >
-                <Layers className="w-4 h-4" style={{ color: tone }} />
+                <Layers className="w-4 h-4" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{subject}</span>

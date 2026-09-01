@@ -12,7 +12,7 @@ import { applyAppearance, applyAccessibility, applyFontScale } from './SettingsA
 import { resolveScopedValue } from './ScopedSetting.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
-  ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
+  Plus, Star, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
   BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge, X, HelpCircle,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
@@ -301,7 +301,7 @@ function NotificationBell({ onOpenAll }) {
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications (${unread} unread)`}
         aria-expanded={open}
-        className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[var(--accent-subtle)] transition cursor-pointer"
+        className="relative p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
       >
         <Bell className="w-4.5 h-4.5" width={18} height={18} />
         {unread > 0 && (
@@ -324,7 +324,7 @@ function NotificationBell({ onOpenAll }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -6, scale: 0.98 }}
               transition={{ duration: 0.12 }}
-              className="fixed left-3 right-3 top-[calc(3.5rem+var(--safe-top))] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 clean-card p-0 overflow-hidden shadow-2xl shadow-black/50 z-50"
+              className="fixed left-3 right-3 top-[calc(4rem+var(--safe-top))] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 clean-card p-0 overflow-hidden shadow-2xl shadow-black/50 z-50"
             >
               <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -377,7 +377,6 @@ export default function AppShell({
   onOpenSearch, onOpenAuth, onOpenPrivacy, children,
   canGoBack = false, canGoForward = false, onGoBack, onGoForward,
 }) {
-  const [collapsed, setCollapsed] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -420,18 +419,19 @@ export default function AppShell({
   const flatItems = tree.flatMap((g) => g.items);
   const current = flatItems.find((i) => i.key === activeView);
 
-  const toggleGroup = (group) => setCollapsed((c) => ({ ...c, [group]: !c[group] }));
-
   return (
     <>
+      {/* Stitch sidebar (09-01) is a fixed full-height panel — the topbar and
+          content live in the md:pl-* region right of it, exactly like the design. */}
+      <div className={sidebarOpen ? 'md:pl-64' : 'md:pl-20'}>
       {/* ── TOPBAR ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] backdrop-blur-xl">
-        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 h-14 flex items-center gap-2 sm:gap-3">
+      <header className="sticky top-0 z-30 border-b border-outline-variant/20 bg-surface/80 backdrop-blur-md">
+        <div className="w-full px-3 sm:px-6 h-16 flex items-center gap-2 sm:gap-3">
           {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen((o) => !o)}
-            className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/6 transition cursor-pointer"
+            className="md:hidden p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
             aria-label="Open mobile navigation menu"
           >
             <div className="flex flex-col gap-1 w-4">
@@ -450,8 +450,8 @@ export default function AppShell({
           >
             <AnimatedLogo size="md" showWordmark={false} />
             <span className="hidden sm:flex flex-col leading-tight text-left">
-              <span className="text-aurora font-extrabold text-base tracking-tight leading-none">helpotron</span>
-              <span className="text-[9px] font-mono text-slate-400 tracking-widest uppercase font-semibold mt-0.5">Academic OS</span>
+              <span className="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary leading-none">Helpotron</span>
+              <span className="font-label-caps text-label-caps text-on-surface-variant tracking-widest uppercase font-semibold mt-0.5">Academic OS</span>
             </span>
           </button>
 
@@ -467,7 +467,7 @@ export default function AppShell({
               disabled={!canGoBack}
               aria-label="Back"
               title="Back"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 enabled:hover:text-white enabled:hover:bg-white/6 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronLeft width={18} height={18} />
             </button>
@@ -477,7 +477,7 @@ export default function AppShell({
               disabled={!canGoForward}
               aria-label="Forward"
               title="Forward"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 enabled:hover:text-white enabled:hover:bg-white/6 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronRight width={18} height={18} />
             </button>
@@ -489,7 +489,7 @@ export default function AppShell({
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex-1 min-w-0 max-w-[180px] sm:max-w-md flex items-center gap-2.5 overflow-hidden px-2.5 sm:px-3 py-2 rounded-xl bg-white/4 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[rgba(139,92,246,0.4)] transition cursor-pointer text-xs"
+            className="flex-1 min-w-0 max-w-[180px] sm:max-w-md flex items-center gap-2.5 overflow-hidden px-2.5 sm:px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:border-outline/50 transition cursor-pointer text-xs"
             aria-label="Search anything…"
             title="Search"
           >
@@ -512,13 +512,16 @@ export default function AppShell({
             <button
               type="button"
               onClick={() => onNavigate('credits')}
-              className="hidden md:flex min-w-0 items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[var(--text-secondary)] hover:bg-[var(--accent-subtle)] hover:border-[rgba(139,92,246,0.5)] transition cursor-pointer text-xs font-semibold font-mono"
+              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/30 hover:border-outline/50 transition cursor-pointer"
               aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
             >
-              <span className="w-2 h-2 rounded-full bg-[var(--accent-2)] animate-pulse shrink-0" />
-              <span className="text-[var(--accent)] truncate">{Number(user.token_balance ?? 0).toLocaleString()} tokens</span>
-              <span className="text-[var(--text-muted)] font-normal">·</span>
-              <span className="text-[var(--accent-2)] shrink-0">{Number(user?.credits ?? 0).toLocaleString()} credits</span>
+              <Star className="w-4 h-4 text-primary shrink-0" fill="currentColor" aria-hidden="true" />
+              <span className="font-tabular-stat text-tabular-stat font-medium text-on-surface truncate">
+                Credits: {Number(user?.credits ?? 0).toLocaleString()}
+              </span>
+              <span className="font-tabular-stat text-tabular-stat text-on-surface-variant shrink-0">
+                {Number(user?.token_balance ?? 0).toLocaleString()} tokens
+              </span>
             </button>
 
             {/* Notification bell */}
@@ -530,7 +533,7 @@ export default function AppShell({
                 <button
                   type="button"
                   onClick={() => setQuickOpen((o) => !o)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white border-2 border-[var(--border-subtle)] hover:border-[var(--accent-2)] transition cursor-pointer"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white border-2 border-outline-variant/40 hover:border-primary transition cursor-pointer"
                   style={{ backgroundImage: 'var(--accent-mix)' }}
                   aria-label="Quick settings"
                 >
@@ -604,18 +607,18 @@ export default function AppShell({
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-              className="fixed inset-y-0 left-0 z-50 w-72 surface-glass-strong border-r border-[var(--border-subtle)] p-4 flex flex-col justify-between shadow-2xl md:hidden overflow-y-auto"
+              className="fixed inset-y-0 left-0 z-50 w-72 bg-surface-container-lowest border-r border-outline-variant/30 p-4 flex flex-col justify-between shadow-2xl md:hidden overflow-y-auto"
             >
               <div className="space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-white/8">
+                <div className="flex items-center justify-between pb-3 border-b border-outline-variant/30">
                   <div className="flex items-center gap-2">
                     <AnimatedLogo size="sm" />
-                    <span className="text-aurora text-xs font-bold tracking-wider">HELPOTRON</span>
+                    <span className="font-label-caps text-label-caps text-primary font-bold tracking-wider uppercase">Helpotron OS</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
                     aria-label="Close menu"
                   >
                     ✕
@@ -626,7 +629,7 @@ export default function AppShell({
                 <div className="space-y-3">
                   {tree.map((group) => (
                     <div key={group.group} className="space-y-1">
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 pt-1">
+                      <div className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider px-2 pt-1">
                         {group.group}
                       </div>
                       {group.items.map((item) => {
@@ -641,11 +644,11 @@ export default function AppShell({
                             }}
                             className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition ${
                               selected
-                                ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border border-[rgba(139,92,246,0.35)]'
-                                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                                ? 'bg-primary-container/15 text-primary border border-primary/25'
+                                : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                             }`}
                           >
-                            {item.Icon && <item.Icon className={`w-4 h-4 ${selected ? 'text-[var(--accent)]' : 'text-slate-400'}`} />}
+                            {item.Icon && <item.Icon className={`w-4 h-4 ${selected ? 'text-primary' : 'text-on-surface-variant'}`} />}
                             <span>{item.label}</span>
                           </button>
                         );
@@ -656,7 +659,7 @@ export default function AppShell({
               </div>
 
               {/* Mobile Drawer Footer */}
-              <div className="pt-4 border-t border-white/8 space-y-2">
+              <div className="pt-4 border-t border-outline-variant/30 space-y-2">
                 {/* Balance chip lives here on phones (topbar chip is
                     sm+ only since 08-29 — see above) */}
                 <button
@@ -665,13 +668,13 @@ export default function AppShell({
                     setMobileMenuOpen(false);
                     onNavigate('credits');
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-xs font-semibold font-mono text-[var(--text-secondary)]"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs font-semibold font-mono text-on-surface-variant"
                   aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-[var(--accent-2)] animate-pulse shrink-0" />
-                  <span className="text-[var(--accent)]">{Number(user.token_balance ?? 0).toLocaleString()} tokens</span>
-                  <span className="text-[var(--text-muted)] font-normal">·</span>
-                  <span className="text-[var(--accent-2)]">{Number(user?.credits ?? 0).toLocaleString()} credits</span>
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+                  <span className="text-primary">{Number(user.token_balance ?? 0).toLocaleString()} tokens</span>
+                  <span className="text-on-surface-variant font-normal">·</span>
+                  <span className="text-on-surface-variant">{Number(user?.credits ?? 0).toLocaleString()} credits</span>
                 </button>
                 <button
                   type="button"
@@ -679,7 +682,7 @@ export default function AppShell({
                     setMobileMenuOpen(false);
                     onOpenPrivacy();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200"
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
                 >
                   <ShieldCheck className="w-4 h-4" /> Privacy Policy
                 </button>
@@ -702,71 +705,130 @@ export default function AppShell({
       </AnimatePresence>
 
       {/* ── CONTENT ROW: sidebar + main ───────────────────────────────────── */}
-      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4 sm:pt-6 flex gap-6 items-start">
-        {/* Desktop Sidebar */}
-        <aside className={`hidden md:block shrink-0 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[64px]'}`}>
-          <div className={`clean-card flex flex-col gap-1 ${sidebarOpen ? 'p-3' : 'p-2'}`}>
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-4 sm:pt-6 flex gap-6 items-start">
+        {/* Desktop Sidebar (Stitch design 09-01): fixed full-height panel,
+            surface-container-lowest, capsule-mono nav labels, active = primary
+            with container tint + 4px primary edge, footer user chip. */}
+        <aside className={`hidden md:flex fixed left-0 top-0 h-full flex-col py-6 gap-4 bg-surface-container-lowest border-r border-outline-variant/30 z-40 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className={sidebarOpen ? 'px-6 flex items-center justify-between' : 'flex justify-center'}>
+            {sidebarOpen ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-headline-lg text-headline-lg font-bold shrink-0">
+                    H
+                  </div>
+                  <div>
+                    <h1 className="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary leading-tight">Helpotron OS</h1>
+                    <p className="font-body-sm text-[11px] text-on-surface-variant">Premium Co-pilot</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
+                  aria-label="Collapse Navigation sidebar"
+                  title="Collapse sidebar"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center hover:opacity-90 transition cursor-pointer shrink-0"
+                aria-label="Expand Navigation sidebar"
+                title="Expand sidebar"
+              >
+                <span className="font-headline-lg text-headline-lg font-bold leading-none">H</span>
+              </button>
+            )}
+          </div>
+
+          {sidebarOpen ? (
             <button
               type="button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center justify-center gap-2 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer mb-1"
-              aria-label={sidebarOpen ? 'Collapse Navigation sidebar' : 'Expand Navigation sidebar'}
+              onClick={() => onNavigate('overview')}
+              className="mx-6 bg-primary text-on-primary rounded-xl py-3 px-4 flex items-center justify-center gap-2 hover:bg-primary-container transition-colors shadow-sm cursor-pointer min-h-[44px]"
             >
-              <div className="flex flex-col gap-[3px] items-center w-4">
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-              </div>
-              {sidebarOpen && <span className="text-[10px] font-semibold uppercase tracking-wider">Navigation</span>}
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              <span className="font-label-caps text-label-caps uppercase">New Study Session</span>
             </button>
+          ) : (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => onNavigate('overview')}
+                className="w-10 h-10 bg-primary text-on-primary rounded-xl flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm cursor-pointer"
+                title="New Study Session"
+                aria-label="New Study Session"
+              >
+                <Plus className="w-5 h-5 shrink-0" aria-hidden="true" />
+              </button>
+            </div>
+          )}
 
-            {tree.map((group) => {
-              const isCollapsed = collapsed[group.group];
-              return (
-                <div key={group.group}>
-                  <div className="pt-3 pb-1">
-                    {sidebarOpen ? (
+          <nav className="flex-1 overflow-y-auto space-y-4 px-2" aria-label="Primary">
+            {tree.map((group) => (
+              <div key={group.group}>
+                {sidebarOpen && (
+                  <div className="font-label-caps text-label-caps text-on-surface-variant uppercase px-4 pb-1 tracking-wider">{group.group}</div>
+                )}
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const selected = activeView === item.key;
+                    return (
                       <button
+                        key={item.key}
                         type="button"
-                        onClick={() => toggleGroup(group.group)}
-                        aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.group} section`}
-                        aria-expanded={!isCollapsed}
-                        className="nav-group-label flex items-center gap-2 w-full py-1 transition cursor-pointer hover:text-[var(--text-secondary)]"
+                        onClick={() => onNavigate(item.key)}
+                        className={`w-full flex items-center gap-4 py-3 transition-all cursor-pointer ${sidebarOpen ? 'px-4' : 'justify-center px-0'} ${
+                          selected
+                            ? 'text-primary font-bold border-r-4 border-primary bg-primary-container/10'
+                            : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                        }`}
+                        aria-label={item.label}
+                        aria-current={selected ? 'page' : undefined}
+                        title={sidebarOpen ? undefined : item.label}
                       >
-                        <span>{group.group}</span>
-                        <span className="flex-1 h-px bg-white/10" />
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
-                          aria-hidden="true"
-                        />
+                        {item.Icon && <item.Icon className="w-5 h-5 shrink-0" aria-hidden="true" />}
+                        {sidebarOpen && <span className="font-label-caps text-label-caps uppercase truncate">{item.label}</span>}
                       </button>
-                    ) : (
-                      <span className="block h-px bg-white/10 mx-2" aria-hidden="true" />
-                    )}
-                  </div>
-                  {!isCollapsed && (
-                    <div className="space-y-0.5">
-                      {group.items.map((item) => {
-                        const selected = activeView === item.key;
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onClick={() => onNavigate(item.key)}
-                            className={`nav-item ${sidebarOpen ? '' : 'justify-center px-0'}`}
-                            aria-label={item.label}
-                            aria-current={selected ? 'page' : undefined}
-                          >
-                            {item.Icon && <item.Icon className={`w-[18px] h-[18px] shrink-0 ${selected ? 'text-[var(--accent)]' : ''}`} aria-hidden="true" />}
-                            {sidebarOpen && <span className="truncate">{item.label}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
+          </nav>
+
+          {/* Footer user chip (Stitch design) → settings */}
+          <div className="px-6 pt-6 border-t border-outline-variant/30">
+            {sidebarOpen ? (
+              <button
+                type="button"
+                onClick={() => onNavigate('settings')}
+                className="w-full flex items-center gap-3 text-left cursor-pointer group"
+                aria-label="Open settings"
+              >
+                <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ backgroundImage: 'var(--accent-mix)' }}>
+                  {isLoggedIn ? (user?.public_id?.[0] || 'R') : 'R'}
+                </span>
+                <span className="min-w-0">
+                  <span className="font-body-sm text-body-sm text-on-surface block truncate">
+                    {isLoggedIn ? (user?.public_id || 'Guest') : 'Guest'}
+                  </span>
+                  <span className="font-body-sm text-body-sm text-on-surface-variant block truncate">
+                    {isLoggedIn ? `${Number(user?.credits ?? 0).toLocaleString()} credits` : 'Sign in'}
+                  </span>
+                </span>
+              </button>
+            ) : (
+              <div className="flex justify-center">
+                <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundImage: 'var(--accent-mix)' }}>
+                  {isLoggedIn ? (user?.public_id?.[0] || 'R') : 'R'}
+                </span>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -776,18 +838,18 @@ export default function AppShell({
             with min-w-0 so this flex child can shrink below its content width. */}
         <main id="main-content" className="flex-1 min-w-0 w-full overflow-x-hidden pb-24 md:pb-12">
           {/* View header */}
-          <header className="page-head">
-            <div className="flex items-end gap-3 min-w-0">
+          <header className="mb-8">
+            <div className="flex items-end gap-4 min-w-0">
               {activeView !== 'agent' && (
-                <div className="page-head__icon">
+                <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
                   {current?.logo
                     ? <img src={current.logo} alt="" className="w-7 h-7 rounded-lg object-cover" />
-                    : <span className="text-lg leading-none">{current?.icon ?? '✦'}</span>}
+                    : <span className="text-xl leading-none">{current?.icon ?? '✦'}</span>}
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="page-head__title truncate">{current?.label ?? 'Helpotron'}</h1>
-                <p className="page-head__sub line-clamp-2">
+                <h1 className="font-headline-lg text-headline-lg text-on-surface truncate">{current?.label ?? 'Helpotron'}</h1>
+                <p className="font-body-md text-body-md text-on-surface-variant line-clamp-2">
                   {activeView === 'overview' && 'Your personal academic command center'}
                   {activeView === 'activity' && 'Every event, in one timeline'}
                   {activeView === 'monitors' && 'Live traffic, activity, data lake & cost'}
@@ -801,7 +863,7 @@ export default function AppShell({
               </div>
             </div>
             {activeView === 'overview' && (
-              <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.28)] text-[10px] text-[var(--text-secondary)]">
+              <span className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant/30 text-[10px] font-label-caps uppercase tracking-wider text-on-surface-variant">
                 <GraduationCap className="w-3.5 h-3.5" /> Capture → Understand → Execute → Improve
               </span>
             )}
@@ -838,60 +900,41 @@ export default function AppShell({
           </button>
         </div>
       </footer>
+      </div>
 
       {/* ── MOBILE STICKY BOTTOM NAVIGATION BAR ────────────────────── */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--bg-surface)] border-t border-[var(--border-subtle)] backdrop-blur-xl px-2 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.375rem)] flex items-center justify-around"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md border-t border-outline-variant/30 px-4 pt-2 pb-safe flex items-center justify-around"
         aria-label="Mobile Bottom Navigation"
       >
-        <button
-          type="button"
-          onClick={() => onNavigate('overview')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
-            activeView === 'overview' ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          <span className="text-[10px]">Dashboard</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('agent')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
-            activeView === 'agent' ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Brain className="w-5 h-5" />
-          <span className="text-[10px]">My Agent</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('insights')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
-            activeView === 'insights' ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-5 h-5" />
-          <span className="text-[10px]">Insights</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('dump')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition ${
-            activeView === 'dump' ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Inbox className="w-5 h-5" />
-          <span className="text-[10px]">Dump</span>
-        </button>
-
+        {[
+          { key: 'overview', label: 'Home', Icon: LayoutDashboard },
+          { key: 'agent', label: 'Agent', Icon: Brain },
+          { key: 'insights', label: 'Insights', Icon: BarChart3 },
+          { key: 'activity', label: 'History', Icon: Activity },
+        ].map((t) => {
+          const selected = activeView === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onNavigate(t.key)}
+              aria-current={selected ? 'page' : undefined}
+              className={`flex flex-col items-center justify-center rounded-xl px-4 py-1 transition-all ${
+                selected
+                  ? 'bg-primary-container text-on-primary-container scale-90 font-semibold'
+                  : 'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface'
+              }`}
+            >
+              <t.Icon className="w-5 h-5" aria-hidden="true" />
+              <span className="font-label-caps text-[10px] mt-1">{t.label}</span>
+            </button>
+          );
+        })}
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition"
+          className="flex flex-col items-center justify-center rounded-xl px-3 py-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-colors"
           aria-label="Open full menu"
         >
           <div className="flex flex-col gap-0.5 items-center justify-center w-5 h-5">
@@ -899,7 +942,7 @@ export default function AppShell({
             <span className="w-3.5 h-0.5 bg-current rounded-full" />
             <span className="w-3.5 h-0.5 bg-current rounded-full" />
           </div>
-          <span className="text-[10px]">More</span>
+          <span className="font-label-caps text-[10px] mt-1">More</span>
         </button>
       </nav>
       {!isAdmin && <DevContactModal />}
