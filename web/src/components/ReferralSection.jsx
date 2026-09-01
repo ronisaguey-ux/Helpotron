@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button.jsx';
 
+// Referrer credits per plan the referee BUYS (operator 08-31): Basic 2, Pro 5, Elite 10.
+const PLAN_REWARDS = { basic: 2, pro: 5, elite: 10 };
+
 export default function ReferralSection({ userId = '' }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -123,7 +126,7 @@ export default function ReferralSection({ userId = '' }) {
             </div>
             <h2 className="text-xl font-bold text-aurora tracking-tight">Invite Classmates & Earn Compute Credits</h2>
             <p className="text-xs text-slate-400 mt-1 max-w-xl leading-relaxed">
-              Generate <strong>40-digit cryptographic single-use invite codes</strong> attached to your account. When a classmate redeems your code, you earn <strong>+40 Compute Credits</strong> and they receive <strong>+10 bonus credits</strong>. Codes are strictly single-use and non-reusable.
+              Generate <strong>40-digit cryptographic single-use invite codes</strong> attached to your account. When a classmate redeems your code, their order gets a one-time discount (30% new / 15% existing) — and when they buy a plan with your code, <strong>YOU earn credits: 2 for a Basic subscription, 5 for Pro, 10 for Elite</strong>. Codes are strictly single-use and non-reusable.
             </p>
           </div>
 
@@ -201,7 +204,7 @@ export default function ReferralSection({ userId = '' }) {
           </div>
         }>
           <div className="text-2xl font-black text-emerald-400 font-mono">{stats?.total_completed || 0}</div>
-          <p className="text-[11px] text-emerald-400/80">+{ (stats?.total_completed || 0) * 40 } credits earned</p>
+          <p className="text-[11px] text-emerald-400/80">Payout on plan purchase — Basic 2 · Pro 5 · Elite 10</p>
         </SectionCard>
 
         <SectionCard id="referral-reward-rule" padding="p-5" className="space-y-1" header={
@@ -210,8 +213,8 @@ export default function ReferralSection({ userId = '' }) {
             <Award className="w-4 h-4 text-purple-400" />
           </div>
         }>
-          <div className="text-sm font-bold text-white mt-1">40 Credits / Invite</div>
-          <p className="text-[11px] text-slate-400">Single-use, attributed to your account</p>
+          <div className="text-sm font-bold text-white mt-1">2 / 5 / 10 Credits</div>
+          <p className="text-[11px] text-slate-400">Basic / Pro / Elite — credited when they buy</p>
         </SectionCard>
       </div>
 
@@ -293,7 +296,11 @@ export default function ReferralSection({ userId = '' }) {
                       </span>
                     </td>
                     <td className="py-3 text-emerald-400 font-bold">
-                      {c.is_redeemed ? '+40 Credits' : '40 Credits on use'}
+                      {c.is_redeemed
+                        ? (c.plan && PLAN_REWARDS[c.plan]
+                            ? `+${PLAN_REWARDS[c.plan]} Credits · ${c.plan[0].toUpperCase() + c.plan.slice(1)}`
+                            : '+2–10 Credits')
+                        : 'Basic 2 · Pro 5 · Elite 10'}
                     </td>
                     <td className="py-3 text-[11px] text-slate-500">{c.created_at.slice(0, 10)}</td>
                     <td className="py-3 text-right whitespace-nowrap">
