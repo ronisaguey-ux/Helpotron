@@ -27,9 +27,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   Layers, Brain, History as HistoryIcon, ArrowRight, ShieldCheck,
-  Puzzle, Sparkles, Check, FileText,
+  Puzzle, Sparkles, Check, FileText, BookOpen, X,
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
+import GuideView from './GuideView.jsx';
 
 const FEATURES = [
   {
@@ -239,6 +240,23 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
    * a bare onClick={openAuth} would forward React's event object instead. */
   const openAuth = (intent) => { if (onOpenAuth) onOpenAuth(intent === 'login' ? 'login' : 'signup'); };
 
+  /* Public guide (09-01? no — 08-31, owner request "add the guide in the
+     front page before users sign up, currently its gated behind a sign up
+     wall"): any visitor can read the full feature guide before creating an
+     account. Static content only — no authed fetches, so the auth gate
+     (08-28: anonymous = zero dashboard internals) is preserved. */
+  const [guideOpen, setGuideOpen] = useState(false);
+  useEffect(() => {
+    if (!guideOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setGuideOpen(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [guideOpen]);
+
   return (
     <div id="main-content" className="landing-atmos min-h-screen text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
@@ -260,6 +278,13 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
             >
               Pricing
             </a>
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[var(--radius-sm)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-semibold transition cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5" aria-hidden="true" /> Guide
+            </button>
             <button
               type="button"
               onClick={() => openAuth('login')}
@@ -392,6 +417,40 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
           </div>
         </div>
       </footer>
+
+      {/* ── Public guide modal (pre-signup access) ─────────────────────────── */}
+      {guideOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Helpotron guide"
+          onClick={() => setGuideOpen(false)}
+          className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-3xl mt-2 sm:mt-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl overflow-hidden"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+              <span className="inline-flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+                <BookOpen className="w-4 h-4 text-[var(--accent)]" aria-hidden="true" /> Guide
+              </span>
+              <button
+                type="button"
+                onClick={() => setGuideOpen(false)}
+                aria-label="Close guide"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+              <GuideView publicMode onGoTo={() => { setGuideOpen(false); openAuth('signup'); }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
