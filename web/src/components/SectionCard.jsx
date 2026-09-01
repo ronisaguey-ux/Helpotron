@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 /* ── SectionCard: every panel on the site is collapsible ───────────────────
@@ -57,6 +57,15 @@ export default function SectionCard({
     });
   };
 
+  /* Programmatic open (e.g. Guide jump chips): a window event carrying this
+   * card's id expands it without touching the user's stored preference. */
+  useEffect(() => {
+    if (!id) return;
+    const onOpen = (e) => { if (e.detail === id) setOpen(true); };
+    window.addEventListener('helpotron:open-section', onOpen);
+    return () => window.removeEventListener('helpotron:open-section', onOpen);
+  }, [id]);
+
   const hasHeader = !!(header || title || icon || headerRight);
 
   /* Collapsed headers get `collapsed` forwarded so shared headers like
@@ -69,7 +78,7 @@ export default function SectionCard({
   return (
     /* Collapsed = a slim one-line bar (no big padding, no empty box);
      * open = the normal padded card with content. */
-    <section className={`clean-card ${open ? padding : 'p-2'} relative ${className}`}>
+    <section id={id || undefined} className={`clean-card ${open ? padding : 'p-2'} relative ${className}`}>
       {hasHeader && (
         <div className={`flex gap-2 ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-3' : '') : ''}`}>
           {icon && <span className="text-[var(--accent)] shrink-0">{icon}</span>}

@@ -1,10 +1,16 @@
 """FastAPI routes for User Verification & Two-Factor Authentication (2FA)."""
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import logging
+import os
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+from starlette.responses import PlainTextResponse, Response
 
 from .config import config
 from .database import User, Payment, get_db
@@ -50,12 +56,14 @@ class TwoFactorChallengeRequest(BaseModel):
 class TwoFactorVerifyChallengeRequest(BaseModel):
     user_id: str
     method: str = Field(..., description="totp | email | sms")
-    code: str = Field(..., min_length=6, max_length=6)
+    # 08-31 (owner): login codes are 12 digits; max_length 6→12 here and in the
+    # disable request so a 12-digit challenge can actually be submitted.
+    code: str = Field(..., min_length=6, max_length=12)
 
 
 class TwoFactorDisableRequest(BaseModel):
     user_id: str
-    code: str = Field(..., min_length=6, max_length=6)
+    code: str = Field(..., min_length=6, max_length=12)
 
 
 class PurchaseChallengeRequest(BaseModel):
@@ -201,22 +209,41 @@ async def verify_two_factor_setup(
 
 @router.post("/2fa/send-challenge")
 async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Session = Depends(get_db)):
-    """Sends a 2FA challenge code to the user via their configured method."""
+    """Sends a 2FA challenge code to the user via their configured method.
+
+    08-31 (owner): login codes are 12-digit (not 6).
+    """
     method = payload.method.lower()
 
     if method == "email":
-        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge")
-        await asyncio.to_thread(email_service.send_verification_code, payload.user_id, code, purpose_label="2FA Login")
-        return {"status": "success", "message": "2FA verification code sent to your email."}
+        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
+        sent = await asyncio.to_thread(
+            email_service.send_verification_code, payload.user_id, code, purpose_label="2FA Login"
+        )
+        if not sent:
+            raise HTTPException(500, "Failed to send the 2FA email.")
+        return {"status": "success", "message": "12-digit 2FA verification code sent to your email."}
 
     elif method == "sms":
         user = db.query(User).filter(User.public_id == payload.user_id).first()
-        phone = (user.settings or {}).get("phone_number") if user else None
+        if not user:
+            raise HTTPException(404, "User not found.")
+        phone = (user.settings or {}).get("phone_number")
         if not phone:
             raise HTTPException(400, "No phone number found on account for SMS 2FA.")
-        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge")
-        await asyncio.to_thread(sms_service.send_sms_code, phone, code)
-        return {"status": "success", "message": f"2FA code sent via SMS to {phone}."}
+        # SMS opt-out (08-31, owner): numbers that replied STOP are never
+        # texted again — the user must reply START to re-subscribe.
+        if (user.settings or {}).get("sms_opt_out"):
+            raise HTTPException(
+                400,
+                "SMS messages are disabled for this number (you replied STOP). "
+                "Reply START from that phone to re-enable, or use email/authenticator 2FA.",
+            )
+        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
+        sent = await asyncio.to_thread(sms_service.send_sms_code, phone, code)
+        if not sent:
+            raise HTTPException(500, "Failed to send the 2FA SMS — Twilio rejected the message.")
+        return {"status": "success", "message": f"12-digit 2FA code sent via SMS to {phone}."}
 
     elif method == "totp":
         return {"status": "ready", "message": "Please enter the 6-digit code from your authenticator app."}
@@ -323,6 +350,8 @@ async def send_purchase_challenge(
         target = (current_user.settings or {}).get("phone_number")
         if not target:
             raise HTTPException(400, "No phone number found on account for SMS verification.")
+        if (current_user.settings or {}).get("sms_opt_out"):
+            raise HTTPException(400, "SMS messages are disabled for this number (you replied STOP). Reply START to re-enable.")
         code = code_store.generate_code(target, purpose="purchase_verification")
         sent = await asyncio.to_thread(sms_service.send_sms_code, target, code)
         if not sent:
@@ -402,3 +431,131 @@ def verify_totp_code(
     if not totp_service.verify_code(secret, code):
         raise HTTPException(status_code=400, detail="Invalid TOTP code.")
     return {"status": "success", "message": "TOTP code verified."}
+
+
+# ─── Inbound SMS compliance (STOP/START/HELP) ─────────────────────────────────
+# 08-31 (owner): Twilio bans accounts that ignore TCPA/A2P opt-outs, so inbound
+# messages must be handled. Twilio auto-enforces STOP at the platform level for
+# well-configured senders; this handler ALSO records the opt-out in our DB so
+# our own code never texts an opted-out number (defense in depth) and replies
+# with the required confirmation.
+
+STOP_WORDS = frozenset({"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPP"})
+START_WORDS = frozenset({"START", "YES", "UNSTOP", "STARTALL"})
+HELP_WORDS = frozenset({"HELP", "INFO", "SUPPORT", "?"})
+
+STOP_REPLY = (
+    "Helpotron: You have been unsubscribed from SMS messages. "
+    "No more texts will be sent. Reply START to subscribe again."
+)
+START_REPLY = (
+    "Helpotron: You have been re-subscribed to SMS messages. "
+    "Reply STOP to unsubscribe at any time."
+)
+HELP_REPLY = (
+    "Helpotron support: you get text messages only when a 2FA login code is "
+    "requested. Reply STOP to unsubscribe. Msg & data rates may apply."
+)
+
+logger_2fa = logging.getLogger("helpotron.routes_auth_2fa")
+
+
+def _verify_twilio_signature(request_url: str, form_params: Dict[str, str], signature: str) -> bool:
+    """Tightly verified per Twilio docs: HMAC-SHA1 over (full URL + all form
+    params sorted by key), base64, compared against X-Twilio-Signature.
+
+    Requires the account auth token (TWILIO_AUTH_TOKEN). That key is NOT in
+    .env today (the account uses API-key auth), so without it we cannot verify
+    and accept anyway with a loud warning — anyone who spoofs From/Body could
+    otherwise toggle opt-outs. Add TWILIO_AUTH_TOKEN to .env to enable strict
+    verification.
+    """
+    token = getattr(config, "twilio_auth_token", "") or os.getenv("TWILIO_AUTH_TOKEN", "")
+    if not token:
+        logger_2fa.warning("SMS inbound: TWILIO_AUTH_TOKEN unset — Twilio signature NOT verified")
+        return True
+    payload = request_url + "".join(f"{k}{v}" for k, v in sorted(form_params.items()))
+    expected = base64.b64encode(
+        hmac.new(token.encode("utf-8"), payload.encode("utf-8"), hashlib.sha1).digest()
+    )
+    return hmac.compare_digest(expected, (signature or "").encode("utf-8"))
+
+
+def _users_with_phone(db: Session, phone: str):
+    """All accounts whose settings.phone_number matches (E.164 as Twilio sends)."""
+    from sqlalchemy import func
+
+    try:
+        return (
+            db.query(User)
+            .filter(func.json_extract(User.settings, "$.phone_number") == phone)
+            .all()
+        )
+    except Exception:  # noqa: BLE001 — old SQLite without JSON1: fall back to full scan
+        return [u for u in db.query(User).all() if (u.settings or {}).get("phone_number") == phone]
+
+
+@router.post("/sms/inbound")
+async def sms_inbound(request: Request, db: Session = Depends(get_db)):
+    """Twilio inbound webhook: honors SMS opt-out commands.
+
+    Twilio POSTs form-encoded From/To/Body. The reply body (plain text) is what
+    Twilio sends back to the user; <Response/> means no reply.
+    """
+    form = await request.form()
+    params: Dict[str, str] = {str(k): str(v) for k, v in form.multi_items()}
+
+    signature = request.headers.get("x-twilio-signature", "")
+    if str(request.url).startswith("http://127.0.0.1"):
+        # Behind the vite preview proxy the signed URL is the public one; Twilio
+        # signs exactly the URL it posts to (helpotron.dpdns.org), so verify
+        # against that canonical form when the request arrived via localhost.
+        signed_url = "https://helpotron.dpdns.org" + request.url.path
+        if request.url.query:
+            signed_url += "?" + request.url.query
+    else:
+        signed_url = str(request.url)
+    if not _verify_twilio_signature(signed_url, params, signature):
+        raise HTTPException(401, "Invalid Twilio signature")
+
+    body = (params.get("Body") or "").strip().upper().rstrip(".")
+    from_num = params.get("From") or ""
+    if not from_num:
+        return Response(content="<Response/>", media_type="application/xml")
+
+    reply = None
+    if body in STOP_WORDS:
+        users = _users_with_phone(db, from_num)
+        changed = 0
+        for u in users:
+            s = dict(u.settings or {})
+            if not s.get("sms_opt_out"):
+                s["sms_opt_out"] = True
+                u.settings = s
+                changed += 1
+        db.commit()
+        logger_2fa.info("SMS opt-out: %s (%d accounts flagged)", from_num, changed)
+        reply = STOP_REPLY
+    elif body in START_WORDS:
+        users = _users_with_phone(db, from_num)
+        changed = 0
+        for u in users:
+            s = dict(u.settings or {})
+            if s.get("sms_opt_out"):
+                s.pop("sms_opt_out", None)
+                s["sms_opt_out"] = False
+                u.settings = s
+                changed += 1
+        db.commit()
+        logger_2fa.info("SMS re-subscribe: %s (%d accounts cleared)", from_num, changed)
+        reply = START_REPLY
+    elif body in HELP_WORDS:
+        reply = HELP_REPLY
+
+    if reply is None:
+        return Response(content="<Response/>", media_type="application/xml")
+
+    sent = await asyncio.to_thread(sms_service.send_sms_async, from_num, reply)
+    if not sent:
+        logger_2fa.error("Failed to send SMS compliance reply to %s", from_num)
+    return PlainTextResponse(reply)

@@ -125,7 +125,11 @@ const SECTIONS = [
 
 export default function GuideView({ onGoTo, publicMode = false }) {
   const go = (key) => onGoTo && onGoTo(key);
-  const jump = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const jump = (id) => {
+    // Expand the target section first (SectionCard listens), then scroll to it.
+    window.dispatchEvent(new CustomEvent('helpotron:open-section', { detail: id }));
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   return (
     <div className="space-y-3">
