@@ -69,7 +69,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   );
 }
 
-export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {}, onTokenBalance = () => {} }) {
+export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {}, onTokenBalance = () => {}, onOpenAssignment = () => {} }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [threads, setThreads] = useState([]);
   const [activeThread, setActiveThread] = useState(null); // null = the original chat (key 0)
@@ -1348,9 +1348,25 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               const evtMeta = EVENT_META[m.eventType] || EVENT_META.created;
 
               if (isAssignmentBubble) {
+                /* (09-01) the assignment card opens the assignment's full
+                   bubble workspace (same surface AssignmentCardDashboard uses).
+                   Previously the only action routed to the bare dashboard grid,
+                   losing the card ("navigated back to dashboard"). */
+                const openBubbleAssign = () => {
+                  if (m.assignment && m.assignment.id != null) onOpenAssignment(m.assignment);
+                  else onGoTo('overview');
+                };
                 return (
                   <div key={m.id} className="w-full flex flex-col items-start">
-                    <div className="w-full sm:max-w-[85%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.14)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.10)] p-3.5 space-y-2">
+                    <div
+                      role={m.assignment && m.assignment.id != null ? 'button' : undefined}
+                      tabIndex={m.assignment && m.assignment.id != null ? 0 : undefined}
+                      onClick={openBubbleAssign}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBubbleAssign(); }
+                      }}
+                      className={`w-full sm:max-w-[85%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.14)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.10)] p-3.5 space-y-2 ${m.assignment && m.assignment.id != null ? 'cursor-pointer hover:border-[rgba(139,92,246,0.6)] transition-colors focus:outline-none focus-visible:border-[rgba(139,92,246,0.8)]' : ''}`}
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{evtMeta.icon}</span>
                         <span className="chip chip-accent text-[10px] font-mono">{evtMeta.label}</span>
@@ -1361,21 +1377,40 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                       <div className="pt-1 flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => setLaunchToDocTarget({
-                            assignment: m.assignment,
-                            text: m.assignment?.prompt || m.text || '',
-                          })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLaunchToDocTarget({
+                              assignment: m.assignment,
+                              text: m.assignment?.prompt || m.text || '',
+                            });
+                          }}
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-sm)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm transition cursor-pointer border border-violet-400/30"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-violet-200" /> Launch to Doc
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => onGoTo('overview')}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
-                        >
-                          <ArrowUpRight className="w-3.5 h-3.5" /> View in Dashboard
-                        </button>
+                        {m.assignment && m.assignment.id != null ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenAssignment(m.assignment);
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" /> Open Assignment
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onGoTo('overview');
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" /> View in Dashboard
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

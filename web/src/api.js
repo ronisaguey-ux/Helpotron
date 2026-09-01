@@ -503,6 +503,8 @@ export const api = {
   getMyAdminMessages: () => request('/api/user/my-admin-messages', { method: 'GET' }),
   getAllAdminMessages: () => request('/api/admin/messages', { method: 'GET' }),
   replyToAdminMessage: (messageId, reply) => request(`/api/admin/messages/${messageId}/reply`, { method: 'POST', body: JSON.stringify({ reply }) }),
+  deleteAdminMessage: (messageId) => request(`/api/admin/messages/${messageId}`, { method: 'DELETE' }),
+  clearAdminMessages: () => request('/api/admin/messages', { method: 'DELETE' }),
 
   // Admin endpoints
   adminUsers: () => request('/api/admin/users', { method: 'GET' }),

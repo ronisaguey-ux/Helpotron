@@ -490,7 +490,11 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          /* items-start (09-01): without it the 2-col grid's default
+             align-items:stretch forces a minimized dump card to the row
+             height of an expanded neighbor, leaving a large empty box under
+             the collapsed header bar. */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             {filteredItems.map((item) => {
               const isMatched = item.status === 'matched' || item.status === 'manual_routed' || item.status === 'auto_routed';
               const isFinalized = item.status === 'finalized';
@@ -575,10 +579,22 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                         {FINALIZE_BADGE[item.requested_action] || '✅ Finalized'}
                       </span>
                     ) : item.matched_assignment_id ? (
-                      <div className="text-xs text-emerald-400 font-semibold truncate flex items-center gap-1 min-w-0">
+                      /* (09-01) matched card click: open the assignment's full
+                         bubble workspace (same surface the dashboard cards use)
+                         instead of leaving the badge inert. onSelectAssignment
+                         is provided by App.jsx on the dump view. */
+                      <button
+                        type="button"
+                        onClick={() => onSelectAssignment && onSelectAssignment({
+                          id: item.matched_assignment_id,
+                          name: item.matched_assignment_title || `Assignment #${item.matched_assignment_id}`,
+                        })}
+                        title={onSelectAssignment ? 'Open this assignment bubble' : 'Matches an assignment bubble'}
+                        className="text-xs text-emerald-400 font-semibold truncate flex items-center gap-1 min-w-0 hover:text-emerald-300 transition cursor-pointer text-left"
+                      >
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{item.matched_assignment_title || `Assignment #${item.matched_assignment_id}`}</span>
-                      </div>
+                        <span className="truncate underline decoration-emerald-400/40 underline-offset-2">{item.matched_assignment_title || `Assignment #${item.matched_assignment_id}`}</span>
+                      </button>
                     ) : (
                       <span className="text-xs text-amber-400 flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5" /> Select Assignment

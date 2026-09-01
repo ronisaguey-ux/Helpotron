@@ -85,6 +85,53 @@ def _get_current_user(request: Request, db: Session) -> User:
     never an identity and no user is auto-selected from the DB."""
     from .routes_features import get_current_authenticated_user
     return get_current_authenticated_user(request, db)
+# Bubble vocabulary normalization (operator 09-01): the dump classifier and
+# scrape scanner store granular subjects ("Earth Science", "Chemistry",
+# "Physics", "Astronomy") that the dashboard bubble grid's fixed vocabulary
+# cannot match — those cards surfaced only in the "all" bubble. Natural-science
+# granular subjects map onto the default "Biology & Life Sciences" bubble label;
+# the honest stored value is preserved on the card in subject_detail.
+_SCIENCE_BUBBLE_LABEL = "Biology & Life Sciences"
+_SCIENCE_BUBBLE_MAP = {
+    "biology": _SCIENCE_BUBBLE_LABEL,
+    "biochemistry": _SCIENCE_BUBBLE_LABEL,
+    "earth science": _SCIENCE_BUBBLE_LABEL,
+    "earth and space science": _SCIENCE_BUBBLE_LABEL,
+    "space science": _SCIENCE_BUBBLE_LABEL,
+    "physical science": _SCIENCE_BUBBLE_LABEL,
+    "life science": _SCIENCE_BUBBLE_LABEL,
+    "general science": _SCIENCE_BUBBLE_LABEL,
+    "environmental science": _SCIENCE_BUBBLE_LABEL,
+    "marine science": _SCIENCE_BUBBLE_LABEL,
+    "geology": _SCIENCE_BUBBLE_LABEL,
+    "geoscience": _SCIENCE_BUBBLE_LABEL,
+    "chemistry": _SCIENCE_BUBBLE_LABEL,
+    "physics": _SCIENCE_BUBBLE_LABEL,
+    "astronomy": _SCIENCE_BUBBLE_LABEL,
+}
+# Single-word families also match prefixed variants ("Chemistry Honors",
+# "AP Chemistry", "Physics 1").
+_SCIENCE_PREFIXES = ("chemistry", "physics", "astronomy", "geology",
+                     "geoscience", "biology", "biochemistry", "science")
+
+
+def _bubble_vocab_subject(subject: str) -> str:
+    """Map a granular subject onto the dashboard's default bubble vocabulary.
+
+    Already-vocabulary and non-science subjects pass through untouched;
+    natural-science granular values map to "Biology & Life Sciences". Callers
+    keep the original stored value in subject_detail — never lose data."""
+    if not subject:
+        return ""
+    low = subject.strip().lower()
+    if low in _SCIENCE_BUBBLE_MAP:
+        return _SCIENCE_BUBBLE_MAP[low]
+    for prefix in _SCIENCE_PREFIXES:
+        if low.startswith(prefix + " ") or low.startswith(prefix + "-") or low.startswith("ap " + prefix):
+            return _SCIENCE_BUBBLE_LABEL
+    return subject
+
+
 @router.get("/assignments/cards")
 async def get_assignment_cards(request: Request, db: Session = Depends(get_db)):
     """Returns assignments formatted as collapsed dashboard cards with essential metadata."""
@@ -117,7 +164,7 @@ async def get_assignment_cards(request: Request, db: Session = Depends(get_db)):
         card = {
             "id": a.id,
             "name": a.title,
-            "subject": progress.get("subject") or progress.get("course") or "",
+            "subject": "",
             "class_code": progress.get("course_code") or "",
             "teacher_name": progress.get("teacher_name") or "",
             "estimated_time": progress.get("estimated_time") or "",
@@ -126,6 +173,29 @@ async def get_assignment_cards(request: Request, db: Session = Depends(get_db)):
             "score_ai": progress.get("ai_score"),
             "detector_risk": progress.get("detector_risk"),
         }
+
+        # Subject routing (operator 09-01): manual-route/manual-create paths
+        # stored no subject at all — backfill from the assignment title with the
+        # same deterministic classifier the extension scrape flow uses (title
+        # keywords, never an LLM call).
+        raw_subject = progress.get("subject") or progress.get("course") or ""
+        if not raw_subject:
+            from .main import _classify_subject as _scrape_classify
+            card["subject"], fallback_code = _scrape_classify(a.title)
+            if not card["class_code"]:
+                card["class_code"] = fallback_code or ""
+        else:
+            card["subject"] = raw_subject
+
+        # Bubble vocabulary (operator 09-01): granular natural-science subjects
+        # ("Earth Science", "Chemistry") match no default bubble title — normalize
+        # the routed label so the card lands in its subject bubble (not only
+        # "all"); the stored granular value stays available in subject_detail.
+        bubble_subject = _bubble_vocab_subject(card["subject"])
+        if bubble_subject != card["subject"]:
+            card["subject_detail"] = card["subject"]
+            card["subject"] = bubble_subject
+
         cards.append(card)
 
     return {"status": "success", "cards": cards}
