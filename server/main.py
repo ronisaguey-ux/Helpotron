@@ -386,6 +386,18 @@ async def health_check():
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 
+# 08-31 (owner directive): grant a one-time 300-token welcome to ONE named
+# new user — "Dylan" — the moment their account is created. Deliberately NOT
+# a blanket signup bonus (Bob: "don't do blindly every new sign up, just this
+# one"): only public IDs containing the name get it.
+WELCOME_TOKEN_BONUS = 300.0
+WELCOME_TOKEN_NAME = "dylan"
+
+
+def _mentions_welcome_name(public_id: str) -> bool:
+    return WELCOME_TOKEN_NAME in public_id.lower()
+
+
 def get_or_create_user(db: Session, public_id: str) -> User:
     user = db.query(User).filter(User.public_id == public_id).first()
     if user is None:
@@ -393,7 +405,10 @@ def get_or_create_user(db: Session, public_id: str) -> User:
         low = public_id.lower()
         if low in RESERVED_PUBLIC_IDS or low == ADMIN_PUBLIC_ID.lower():
             raise ValueError(f"public_id '{public_id}' is reserved and cannot be auto-created")
-        user = User(public_id=public_id, plan="basic", settings={"reading_level": "college-freshman"})
+        settings = {"reading_level": "college-freshman"}
+        if _mentions_welcome_name(public_id):
+            settings["token_balance"] = WELCOME_TOKEN_BONUS
+        user = User(public_id=public_id, plan="basic", settings=settings)
         db.add(user)
         db.flush()
     return user
@@ -768,20 +783,30 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Public ID already taken")
     hash_hex, salt = hash_password(body.password)
-    # No auto trial/bonus: new accounts start with nothing (basic/0) until
-    # payment (prototype: unavailable) or an admin upgrade (operator 08-26).
+    # No auto trial/bonus by default; the ONLY exception is the named
+    # welcome grant (08-31 owner directive, "just this one"): accounts whose
+    # public ID matches the welcome name start with 300 tokens.
+    settings = {"reading_level": "college-freshman"}
+    if _mentions_welcome_name(body.public_id):
+        settings["token_balance"] = WELCOME_TOKEN_BONUS
     user = User(
         public_id=body.public_id,
         plan="none",
         password_hash=hash_hex,
         password_salt=salt,
-        settings={"reading_level": "college-freshman"},
+        settings=settings,
         credits=0,
         subscription_status="none",
     )
     db.add(user)
     db.commit()
-    return {"message": "User created", "public_id": user.public_id, "plan": user.plan, "trial_expires_at": None}
+    return {
+        "message": "User created",
+        "public_id": user.public_id,
+        "plan": user.plan,
+        "trial_expires_at": None,
+        "token_balance": float(settings.get("token_balance", 0) or 0),
+    }
 
 
 @app.post("/api/logout")

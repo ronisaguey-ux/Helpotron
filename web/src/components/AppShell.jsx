@@ -13,7 +13,7 @@ import { resolveScopedValue } from './ScopedSetting.jsx';
 import {
   Search, Settings, Bell, LogOut, GraduationCap, ChevronLeft, ChevronRight,
   ChevronDown, ShieldCheck, LayoutDashboard, Activity, Brain, FileText, BookOpen,
-  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge, X,
+  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge, X, HelpCircle,
 } from 'lucide-react';
 import { NOTIFICATIONS, loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
 import { Kbd, Badge, timeAgo } from './ui/os.jsx';
@@ -31,6 +31,7 @@ const NAV_TREE = (isAdmin) => [
       { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard },
       { key: 'activity', label: 'Activity', Icon: Activity },
       { key: 'extension', label: 'Extension', Icon: Puzzle },
+      { key: 'guide', label: 'Guide', Icon: HelpCircle },
     ],
   },
   {

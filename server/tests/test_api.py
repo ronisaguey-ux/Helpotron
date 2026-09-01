@@ -7,6 +7,39 @@ import pytest
 from server import study_tools
 
 
+def test_signup_welcome_bonus_only_for_named_user(client):
+    """08-31 (owner directive): new accounts start with nothing EXCEPT the
+    one named welcome user — a public ID containing 'dylan' gets 300 tokens.
+    Everyone else must NOT (explicitly: "don't do blindly every new sign up")."""
+    from server.database import User, SessionLocal
+
+    # Idempotent: the suite DB (sqlite:///./test_helpotron.db) persists between
+    # runs, so a prior run's rows would 400 "already taken" on the next one.
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.public_id.in_(["Dylan2026", "SomeoneElse42"])).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    dylan = client.post("/api/signup", json={"public_id": "Dylan2026", "password": "Passw0rd99"})
+    assert dylan.status_code == 200
+    assert dylan.json()["token_balance"] == 300.0
+
+    other = client.post("/api/signup", json={"public_id": "SomeoneElse42", "password": "Passw0rd99"})
+    assert other.status_code == 200
+    assert other.json()["token_balance"] == 0
+
+    db = SessionLocal()
+    try:
+        for pid, expected in (("Dylan2026", 300.0), ("SomeoneElse42", 0.0)):
+            u = db.query(User).filter(User.public_id == pid).first()
+            assert float((u.settings or {}).get("token_balance", 0) or 0) == expected
+
+    finally:
+        db.close()
+
+
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
 
