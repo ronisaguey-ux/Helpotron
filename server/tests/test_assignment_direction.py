@@ -182,7 +182,8 @@ def test_export_with_assignment_id_returns_assignment_and_rows(client, auth_head
     res = client.get(f"/api/assignments/export?assignment_id={aid}", headers=auth_headers)
     assert res.status_code == 200, res.text
     assert "attachment" in res.headers.get("content-disposition", "")
-    assert 'filename="helpotron-all.json"' in res.headers["content-disposition"]
+    # 09-01: per-assignment exports carry an assignment-scoped filename.
+    assert f'filename="helpotron-assignment-{aid}.json"' in res.headers["content-disposition"]
 
     data = res.json()
     assert data["user"]["public_id"] == unique_user
