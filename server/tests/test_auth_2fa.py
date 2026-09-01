@@ -209,3 +209,81 @@ def test_api_mandatory_purchase_2fa_routes():
     assert "credits_added" not in res_data
 
 
+
+
+# ─── 09-01 (Logan, live bug): SMS 2FA chain ──────────────────────────────────
+# setup used to 422 on a required user_id the UI never sends; verify-setup never
+# persisted the phone; and /api/login returned 2fa_required without sending the
+# code. This test pins the whole chain from a raw 10-digit number to login.
+
+def test_e164_normalization():
+    from server.routes_auth_2fa import _e164
+    assert _e164("9547404058") == "+19547404058"
+    assert _e164("(954) 740-4058") == "+19547404058"
+    assert _e164("+19547404058") == "+19547404058"
+    with pytest.raises(ValueError):
+        _e164("")
+
+
+def test_sms_2fa_setup_persists_phone_and_login_sends_code():
+    import uuid
+    uid = f"2fa_sms_{uuid.uuid4().hex[:8]}"
+    pwd = "Password123!"
+
+    client.post("/api/signup", json={"public_id": uid, "password": pwd})
+    login_resp = client.post("/api/login", json={"public_id": uid, "password": pwd})
+    csrf = login_resp.json().get("csrf_token", "")
+    auth_token = login_resp.json().get("token") or login_resp.json().get("session_token") or ""
+    headers = {"X-CSRF-Token": csrf, "Authorization": f"Bearer {auth_token}"}
+
+    # 1) Setup must NOT require user_id (UI sends only method+phone_number)
+    setup = client.post(
+        "/api/auth/2fa/setup",
+        json={"method": "sms", "phone_number": "+15551234567"},
+        headers=headers,
+    )
+    assert setup.status_code == 200, setup.text
+    assert setup.json()["method"] == "sms"
+
+    # 2) Verify setup (UI sends method+code+phone_number, no user_id)
+    code_entry = code_store._store.get((uid, "2fa_setup"))
+    assert code_entry is not None
+    verify = client.post(
+        "/api/auth/2fa/verify-setup",
+        json={"method": "sms", "code": code_entry["code"], "phone_number": "+15551234567"},
+        headers=headers,
+    )
+    assert verify.status_code == 200, verify.text
+
+    # 3) The verified number must be persisted for login challenges
+    from server.database import SessionLocal, User
+    db = SessionLocal()
+    user = db.query(User).filter(User.public_id == uid).first()
+    assert user.settings.get("2fa_enabled") is True
+    assert user.settings.get("phone_number") == "+15551234567"
+    db.close()
+
+    # 4) Login WITHOUT a code → 2fa_required AND a 12-digit code is now in the
+    #    store (the code was actually sent — mock branch for +1555 numbers).
+    resp = client.post("/api/login", json={"public_id": uid, "password": pwd})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "2fa_required"
+    challenge = code_store._store.get((uid, "2fa_challenge"))
+    assert challenge is not None
+    assert len(challenge["code"]) == 12
+
+    # 5) Login WITH the code → full session
+    final = client.post(
+        "/api/login",
+        json={"public_id": uid, "password": pwd, "code": challenge["code"]},
+    )
+    assert final.status_code == 200
+    assert final.json().get("message") == "Logged in"
+
+    # Cleanup after purpose (ORM delete so relationship cascades run)
+    db = SessionLocal()
+    user = db.query(User).filter(User.public_id == uid).first()
+    if user:
+        db.delete(user)
+        db.commit()
+    db.close()

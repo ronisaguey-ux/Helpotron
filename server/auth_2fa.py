@@ -257,3 +257,9 @@ class TOTPAuthenticatorService:
 email_service = EmailNotificationService()
 sms_service = TwilioSMSService()
 totp_service = TOTPAuthenticatorService()
+
+
+def send_sms_sync(to_phone: str, message: str) -> bool:
+    """Blocking Twilio send for sync routes (main.login runs in a threadpool —
+    no running loop there, so asyncio.run is safe)."""
+    return asyncio.run(sms_service.send_sms_async(to_phone, message))

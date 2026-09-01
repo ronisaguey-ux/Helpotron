@@ -719,7 +719,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                             </button>
                           </div>
                         </td>
-                        <td className="py-3">
+                        <td className="py-3 max-w-[420px]">
                           <div className="flex flex-col items-end gap-1.5">
                             {/* Per-row user management: Kick / Temp Ban / Ban / Unban / Delete / Act as / Change Pw —
                                 grouped behind a ⋮ More toggle (IA rule: max 1 primary + 2 secondary per row). */}
@@ -814,7 +814,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </div>
                             )}
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] w-[64px] text-right shrink-0">plan</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)] w-12 text-right shrink-0">plan</span>
                               <select
                                 value={u.plan || 'none'}
                                 onChange={async (e) => {
@@ -824,7 +824,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   fetchUsers();
                                 }}
                                 aria-label={`Set plan for ${u.public_id}`}
-                                className="clean-input w-24 px-2 py-1 text-white text-xs font-mono outline-none"
+                                className="clean-input w-20 px-2 py-1 text-white text-xs font-mono outline-none"
                                 title="Upgrade / downgrade plan"
                               >
                                 <option value="none">none</option>
@@ -834,7 +834,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </select>
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-emerald-400/80 w-[64px] text-right shrink-0">tokens</span>
+                              <span className="text-[9px] uppercase tracking-wider text-emerald-400/80 w-12 text-right shrink-0">tokens</span>
                               <input
                                 type="number"
                                 step="1"
@@ -842,7 +842,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 aria-label={`Token amount to grant or remove for ${u.public_id}`}
                                 value={tokenAmountMap[u.id] ?? ''}
                                 onChange={(e) => setTokenAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                                className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
+                                className="clean-input w-16 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                                 title="Grant usage tokens (negative removes)"
                               />
                               <button
@@ -893,7 +893,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </button>
                             </div>
                             <div className="flex items-center gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-[var(--accent)]/80 w-[64px] text-right shrink-0">credits</span>
+                              <span className="text-[9px] uppercase tracking-wider text-[var(--accent)]/80 w-12 text-right shrink-0">credits</span>
                               <input
                                 type="number"
                                 step="1"
@@ -901,7 +901,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 aria-label={`Credit amount to adjust for ${u.public_id}`}
                                 value={creditAmountMap[u.id] ?? ''}
                                 onChange={(e) => setCreditAmountMap((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                                className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
+                                className="clean-input w-16 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                                 title="Discount credits (negative deducts)"
                               />
                               <button
@@ -948,8 +948,8 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               </button>
                             </div>
                             {/* Admin → user message (operator 08-28): pops on their screen */}
-                            <div className="flex items-center gap-1 w-full sm:w-auto sm:ml-11">
-                              <span className="text-[9px] uppercase tracking-wider text-cyan-400/80 w-[64px] text-right shrink-0">message</span>
+                            <div className="flex items-center gap-1 w-full sm:w-auto">
+                              <span className="text-[9px] uppercase tracking-wider text-cyan-400/80 w-12 text-right shrink-0">message</span>
                               <input
                                 type="text"
                                 placeholder="Direct message… pops up on their screen"
@@ -1237,7 +1237,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 setMultiplierMap((prev) => ({ ...prev, [u.public_id]: val }));
                               }}
                               aria-label={`Token cost multiplier for ${u.public_id}`}
-                              className="clean-input w-20 px-2 py-1 text-white text-xs font-mono text-center outline-none"
+                              className="clean-input w-16 px-2 py-1 text-white text-xs font-mono text-center outline-none"
                             />
                             <span className="text-[var(--text-muted)] text-[11px]">x</span>
                           </div>
