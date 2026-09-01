@@ -13,7 +13,11 @@ import {
   Plus,
   Minus,
   X,
+  Download,
+  RefreshCw,
+  Archive,
 } from 'lucide-react';
+import { getAssignmentBucket, BUBBLE_SECTIONS } from '../lib/assignmentBuckets.js';
 
 /* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
    base from index.css; these modifiers recolor it for status semantics. */
@@ -33,7 +37,7 @@ const DEFAULT_SUBJECT_BUBBLES = [
   { id: 'subj_psychology', title: 'Psychology & Cognitive Sciences', description: 'Empirical research, cognitive neuroscience & case studies', color: 'indigo', icon: '🧠' },
 ];
 
-export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null }) {
+export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = false, onSelectAssignment = null, onOpenHistory = null }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState(null);
@@ -65,6 +69,9 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
   // Data Export & Deletion Modals
   const [exportNotice, setExportNotice] = useState('');
+  // Bubble export (09-01): one subject bubble at a time — assignments +
+  // materials + messages + agent_actions as a JSON attachment.
+  const [bubbleExporting, setBubbleExporting] = useState(false);
   const [showSoftResetModal, setShowSoftResetModal] = useState(false);
   const [showPermanentDeleteModal, setShowPermanentDeleteModal] = useState(false);
   const [permDeleteConfirmText, setPermDeleteConfirmText] = useState('');
@@ -204,6 +211,21 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
     }
   };
 
+  // Bubble export (09-01): the server builds the whole-bubble JSON payload —
+  // only a missing bubble title (or a still-404 endpoint) is an error here.
+  const handleExportBubble = async (title) => {
+    if (!title) return;
+    setBubbleExporting(true);
+    try {
+      await api.exportAssignmentData({ bubble: title });
+    } catch (e) {
+      setExportNotice(`❌ Export failed — ${e && e.status === 404 ? 'nothing recorded for this bubble yet.' : (e.message || 'try again.')}`);
+      setTimeout(() => setExportNotice(''), 5000);
+    } finally {
+      setBubbleExporting(false);
+    }
+  };
+
   // Soft Reset (Restorable)
   // Reports what the server actually did — the old copy claimed the workspace
   // had been cleared while the endpoint was a no-op that changed nothing.
@@ -296,9 +318,68 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
     else setSelectedCardId(card.id);
   };
 
+  // Lifecycle sections (09-01): distribute the bubble's cards into the three
+  // sections by bucket — archived cards NEVER render as cards here (they live
+  // in Assignment History; the bubble gets a pointer section instead). A card
+  // with an unrecognized status lands in pending rather than dropping out.
+  const groupedCards = { completed: [], in_progress: [], pending: [], archived: [] };
+  currentBubbleCards.forEach((card) => {
+    const b = getAssignmentBucket(card.status);
+    if (groupedCards[b]) groupedCards[b].push(card);
+    else groupedCards.pending.push(card);
+  });
+
+  // Card render (09-01): shared by all three sections so the matched-badge
+  // button → onSelectAssignment behavior stays identical wherever it shows.
+  const renderBubbleCard = (card) => {
+    const cardBlob = `${card.name || ''} ${card.subject || ''}`.toLowerCase();
+    const hasVideoOrMedia = cardBlob.includes('video') ||
+      cardBlob.includes('lecture') ||
+      cardBlob.includes('presentation');
+
+    return (
+      <div key={card.id} className="relative group">
+        <AssignmentCard
+          id={card.id}
+          title={card.name}
+          course={[card.subject, card.class_code].filter(Boolean).join(' · ') || '—'}
+          dueDate={card.due_date}
+          status={card.status}
+          urgency={card.urgency}
+          detectorRisk={card.detector_risk}
+          scoreAI={card.score_ai}
+          teacherName={card.teacher_name}
+          onSelect={() => {
+            if (onSelectAssignment) onSelectAssignment(card);
+            else setSelectedCardId(card.id);
+          }}
+          onChat={(e) => handleAssignmentChat(card, e)}
+          onLaunchToDoc={() => setLaunchToDocAssignment(card)}
+        />
+
+        {/* AI Multimodal Attachment */}
+        {hasVideoOrMedia && (
+          <div className="absolute top-3 right-3 z-10 pointer-events-none">
+            <span className="aurora-chip info">
+              <Video className="w-3.5 h-3.5" />
+              <span>AI Multimodal</span>
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <style>{AURORA_CHIP_TINTS}</style>
+
+      {/* Export / reset feedback (09-01: bubble exports reuse this notice) */}
+      {exportNotice && (
+        <div className="p-3 bg-[rgba(16,185,129,0.10)] border border-[rgba(16,185,129,0.32)] rounded-[var(--radius-md)] text-xs text-[#6ee7b7] font-mono">
+          {exportNotice}
+        </div>
+      )}
 
       {/* LEVEL 1: BUBBLE GRID (NO ASSIGNMENTS SHOWN BY DEFAULT) */}
       {!activeBubble ? (
@@ -421,6 +502,18 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             {`${count} ${count === 1 ? 'Assignment' : 'Assignments'}`}
                           </span>
 
+                          {/* Export button (09-01): whole-bubble JSON download */}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleExportBubble(bubble.title); }}
+                            disabled={bubbleExporting}
+                            className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[rgba(139,92,246,0.12)] rounded-lg transition cursor-pointer disabled:opacity-40"
+                            title={`Export ${bubble.title} data`}
+                            aria-label={`Export ${bubble.title} data as JSON`}
+                          >
+                            {bubbleExporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          </button>
+
                           {/* - Button for Custom Bubbles */}
                           {bubble.is_custom && (
                             <button
@@ -493,10 +586,23 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   <span className="chip chip-emerald">
                     🤖 {currentBubbleCards.length === 0 ? 'Idle — no assignments yet' : 'Sub-agent chat ready'}
                   </span>
+                  {/* Bubble export (09-01): ↓ icon + label, whole-bubble JSON */}
+                  <button
+                    type="button"
+                    onClick={() => handleExportBubble(activeBubble.title)}
+                    disabled={bubbleExporting || !activeBubble.title}
+                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]/50 transition cursor-pointer disabled:opacity-40"
+                    title={`Export ${activeBubble.title} data`}
+                  >
+                    {bubbleExporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    <span>Export</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Assignments Inside Active Bubble */}
+              {/* Assignments Inside Active Bubble — lifecycle sections (09-01)
+                  Completed / In Progress / Pending for Approval, sorted by
+                  bucket; archived assignments point at History instead. */}
               {currentBubbleCards.length === 0 ? (
                 <div className="panel">
                   <div className="empty-state">
@@ -505,45 +611,55 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {currentBubbleCards.map((card) => {
-                    const cardBlob = `${card.name || ''} ${card.subject || ''}`.toLowerCase();
-                    const hasVideoOrMedia = cardBlob.includes('video') ||
-                      cardBlob.includes('lecture') ||
-                      cardBlob.includes('presentation');
-
+                <div className="space-y-6">
+                  {BUBBLE_SECTIONS.map((sec) => {
+                    const items = groupedCards[sec.bucket] || [];
                     return (
-                      <div key={card.id} className="relative group">
-                        <AssignmentCard
-                          id={card.id}
-                          title={card.name}
-                          course={[card.subject, card.class_code].filter(Boolean).join(' · ') || '—'}
-                          dueDate={card.due_date}
-                          status={card.status}
-                          urgency={card.urgency}
-                          detectorRisk={card.detector_risk}
-                          scoreAI={card.score_ai}
-                          teacherName={card.teacher_name}
-                          onSelect={() => {
-                            if (onSelectAssignment) onSelectAssignment(card);
-                            else setSelectedCardId(card.id);
-                          }}
-                          onChat={(e) => handleAssignmentChat(card, e)}
-                          onLaunchToDoc={() => setLaunchToDocAssignment(card)}
-                        />
-
-                        {/* AI Multimodal Attachment */}
-                        {hasVideoOrMedia && (
-                          <div className="absolute top-3 right-3 z-10 pointer-events-none">
-                            <span className="aurora-chip info">
-                              <Video className="w-3.5 h-3.5" />
-                              <span>AI Multimodal</span>
-                            </span>
+                      <section key={sec.bucket} aria-label={`${sec.label}: ${items.length} assignment${items.length === 1 ? '' : 's'}`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{sec.label}</h3>
+                          <span className="chip chip-neutral text-[10px]">{items.length}</span>
+                        </div>
+                        {items.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                            {items.map(renderBubbleCard)}
                           </div>
+                        ) : (
+                          <p className="text-[11px] font-mono text-[var(--text-muted)]">Nothing here yet.</p>
                         )}
-                      </div>
+                      </section>
                     );
                   })}
+
+                  {/* Archived (09-01): stays OUT of the sections — archived
+                      assignments live in Assignment History; this is the
+                      pointer section. */}
+                  <section aria-label="Archived assignments">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+                        <Archive className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Archived
+                      </h3>
+                      <span className="chip chip-neutral text-[10px]">{groupedCards.archived.length}</span>
+                    </div>
+                    <div className="panel p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      {groupedCards.archived.length > 0 ? (
+                        <span className="text-[var(--text-muted)]">
+                          {groupedCards.archived.length} archived assignment{groupedCards.archived.length === 1 ? '' : 's'} in this bubble — archived assignments show up in Assignment History instead.
+                        </span>
+                      ) : (
+                        <span className="text-[var(--text-muted)]">None yet — move a finished assignment to history from its workspace.</span>
+                      )}
+                      {onOpenHistory && (
+                        <button
+                          type="button"
+                          onClick={onOpenHistory}
+                          className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:text-white transition cursor-pointer"
+                        >
+                          Open Assignment History <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </section>
                 </div>
               )}
             </div>

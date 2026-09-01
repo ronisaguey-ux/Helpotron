@@ -673,6 +673,7 @@ export default function App() {
                         assignment={openAssignment}
                         userId={userId}
                         onBack={goBack}
+                        onGoToHistory={() => handleSelectView('history')}
                       />
                     ) : (
                       <>
@@ -681,6 +682,7 @@ export default function App() {
                             userId={userId}
                             isGuest={isGuest}
                             onSelectAssignment={(a) => { recordNav(); setOpenAssignment(a); }}
+                            onOpenHistory={() => handleSelectView('history')}
                           />
                         </div>
                         <div className="mt-5">

@@ -33,6 +33,30 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
   const [exportNotice, setExportNotice] = useState('');
   const [showNewAssignment, setShowNewAssignment] = useState(false);
   const [createNotice, setCreateNotice] = useState('');
+  // Archived tab (09-01): archived rows may only exist in the cards payload
+  // (they are not part of the turn-in ledger) — pull the cards snapshot and
+  // filter client-side on status === 'archived'.
+  const [historyTab, setHistoryTab] = useState('ledger'); // 'ledger' | 'archived'
+  const [archivedCards, setArchivedCards] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+
+  const fetchArchived = async () => {
+    setArchivedLoading(true);
+    try {
+      const data = await api.assignmentCards().catch(() => null);
+      const rows = (data && Array.isArray(data.cards)) ? data.cards : [];
+      setArchivedCards(rows.filter((c) => String(c.status || '').toLowerCase() === 'archived'));
+    } catch (e) {
+      console.warn('Failed to load archived assignments:', e);
+    } finally {
+      setArchivedLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (historyTab === 'archived') fetchArchived();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyTab, userId]);
 
   const fetchHistory = async (subj) => {
     setLoading(true);
@@ -164,6 +188,134 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
         </div>
       )}
 
+      {/* ─── Tab: Submission Ledger vs Archived (09-01) ───────────────────── */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setHistoryTab('ledger')}
+          aria-pressed={historyTab === 'ledger'}
+          className={`px-4 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer border ${
+            historyTab === 'ledger'
+              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+              : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)]'
+          }`}
+        >
+          Submission Ledger
+        </button>
+        <button
+          type="button"
+          onClick={() => setHistoryTab('archived')}
+          aria-pressed={historyTab === 'archived'}
+          className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer border ${
+            historyTab === 'archived'
+              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+              : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface-elevated)]'
+          }`}
+        >
+          <Archive className="w-3.5 h-3.5" />
+          <span>Archived{archivedCards.length > 0 ? ` (${archivedCards.length})` : ''}</span>
+        </button>
+      </div>
+
+      {historyTab === 'archived' ? (
+        <>
+          {/* ─── Archived tab (09-01) ─────────────────────────────────────── */}
+          <div className="clean-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.25)] flex items-center justify-center text-[var(--accent)]">
+                <Archive className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">Archived Assignments</h3>
+                <p className="text-xs text-[var(--text-muted)]">Assignments you moved to history from their workspace — openable, revisitable and exportable.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="chip chip-neutral text-xs font-mono shrink-0">{`${archivedCards.length} archived`}</span>
+              <Button
+                onClick={fetchArchived}
+                disabled={archivedLoading}
+                variant="ghost"
+                size="sm"
+                ariaLabel="Refresh archived assignments"
+                title="Refresh archived assignments"
+                className={`px-2.5 ${archivedLoading ? 'cursor-wait' : ''}`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${archivedLoading ? 'animate-spin text-[var(--accent)]' : ''}`} />
+              </Button>
+            </div>
+          </div>
+
+          {archivedLoading ? (
+            <div className="clean-card p-12 text-center text-xs text-[var(--accent)] font-mono flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Loading archived assignments…
+            </div>
+          ) : archivedCards.length === 0 ? (
+            <SectionCard id="archived-empty" padding="p-12" className="text-center space-y-3" title="No archived assignments">
+              <Archive className="w-10 h-10 text-[var(--text-muted)] mx-auto" />
+              <div>
+                <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto mt-1">
+                  Finished assignments move here from the assignment workspace once you mark them done and archive them.
+                </p>
+              </div>
+            </SectionCard>
+          ) : (
+            <div className="clean-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[var(--bg-surface-elevated)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-mono text-[11px]">
+                    <tr>
+                      <th className="py-3.5 px-4">Assignment Title</th>
+                      <th className="py-3.5 px-4">Subject / Course</th>
+                      <th className="py-3.5 px-4">Instructor</th>
+                      <th className="py-3.5 px-4 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                    {archivedCards.map((item) => (
+                      <tr
+                        key={item.id}
+                        onClick={() => onSelectAssignment && item.id != null && onSelectAssignment({
+                          id: item.id,
+                          name: item.title || item.name,
+                          title: item.title || item.name,
+                          subject: item.subject,
+                          teacher_name: item.teacher_name,
+                          status: item.status,
+                        })}
+                        className={`transition-colors ${onSelectAssignment && item.id != null ? 'hover:bg-white/5 cursor-pointer group' : 'hover:bg-white/5'}`}
+                        title={onSelectAssignment && item.id != null ? 'Open assignment in workspace' : undefined}
+                      >
+                        <td className="py-4 px-4 font-semibold text-[var(--text-primary)]">
+                          <div className="flex items-center gap-2">
+                            <span className={onSelectAssignment && item.id != null ? 'group-hover:text-[var(--accent)] group-hover:underline underline-offset-2' : ''}>
+                              {item.title || item.name || `Assignment #${item.id}`}
+                            </span>
+                            {onSelectAssignment && item.id != null && (
+                              <ExternalLink className="w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-[var(--text-secondary)] font-mono text-[11px]">
+                          {[item.subject, item.class_code].filter(Boolean).join(' · ') || item.course || '—'}
+                        </td>
+                        <td className="py-4 px-4 text-[var(--text-muted)]">{item.teacher_name || '—'}</td>
+                        <td className="py-4 px-4 text-right">
+                          <span className="aurora-chip tight">
+                            <Archive className="w-3 h-3" /> {item.status || 'archived'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+      <>
       {/* ─── Metric Summary Cards (honest, computed from ledger contents) ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SectionCard id="history-total-completed" padding="p-5" header={
@@ -351,6 +503,8 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             </table>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* ─── New Assignment modal (operator 08-28) ──────────────────────── */}
