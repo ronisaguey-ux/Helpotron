@@ -14,8 +14,8 @@ import {
 import SectionCard from './SectionCard.jsx';
 
 const TERMS = [
-  { term: 'Credits', gloss: 'what AI generation costs.' },
-  { term: 'Tokens', gloss: 'a budget the admin grants for heavy jobs.' },
+  { term: 'Credits', gloss: '$1.00 off each, applied at checkout.' },
+  { term: 'Tokens', gloss: 'your usage budget — every task costs a fixed amount.' },
   { term: 'Referral', gloss: 'an invite code that discounts a friend’s order.' },
 ];
 
@@ -26,12 +26,12 @@ const SECTIONS = [
     steps: [
       'Pick a public ID (3–64 chars, letters/numbers/_/-) and a password (8+ chars, at least one letter and one number).',
       'Log in — you land on your dashboard. Add coursework manually or capture it with the browser Extension.',
-      'Track spending in Credits & Billing; if you run out of tokens, use Message Admin to request more.',
+      'Track your token balance in the top bar; if you run out, use Message Admin to request more.',
     ],
   },
   {
     id: 'guide-agent', icon: Brain, title: 'My Agent', chip: 'My Agent',
-    what: 'Your AI assistant for coursework. Pick an assignment and chat — it drafts sections, humanizes writing, analyzes rubrics, and answers questions about the material.',
+    what: 'Your AI assistant for coursework. Pick an assignment and chat — it drafts sections, humanizes writing, analyzes rubrics, and answers questions about the material. Every reply and action is paid from your token budget: a reply costs 1 token, actions cost 3–10 depending on the job.',
     steps: [
       'Open My Agent from the sidebar and choose a conversation (each assignment has its own).',
       'Ask anything about the assignment, or let the agent suggest the next action (draft, humanize, rubric analysis).',
@@ -70,26 +70,26 @@ const SECTIONS = [
   },
   {
     id: 'guide-datalake', icon: Database, title: 'Data Lake & Micro-Credits', chip: 'Data Lake',
-    what: 'Contribute class material (text or file) to the anonymized Academic Data Lake. An AI reviewer classifies it and estimates 0–25 credits; once the admin reviews and implements the idea, the real micro-credits hit your spendable balance.',
+    what: 'Contribute class material (text or file) to the anonymized Academic Data Lake. An AI reviewer classifies it and estimates 0–25 micro-credits; once the admin reviews and implements the idea, the real micro-credits are awarded. Redeem 1,000 micro-credits as 1 credit — $1.00 off at checkout.',
     steps: [
       'Open Data Lake and submit your material — the entry is stored under an anonymous ID, never your public ID.',
-      'Read the Estimated Score right away; the entry sits in Pending until reviewed.',
-      'Approved + implemented entries earn Actual Award credits on your balance (review typically takes a day or two).',
+      'Read the Estimated Score right away; the entry sits in Pending until reviewed, then awaits implementation (typically a day or two).',
+      'Redeem earned micro-credits inside Data Lake: 1,000 micro-credits convert to 1 credit, your discount money.',
       'Opt in/out of the lake anytime in your settings; opt-out never deletes submissions already in review.',
     ],
   },
   {
     id: 'guide-credits', icon: CreditCard, title: 'Credits & Tokens', chip: 'Credits & Tokens',
-    what: 'Two budgets. Credits pay for AI generations — a study guide costs a couple. Tokens are a separate budget the admin grants for heavy work, like finalizing a dump (5 tokens per run).',
+    what: 'Two budgets, one job each. Tokens pay for usage — every task has a fixed token cost based on what it does (a chat reply 1, a practice quiz 5, humanize 3, finalizing a dump 5). Credits are discount money: each credit takes $1.00 off at checkout.',
     steps: [
-      'Open Credits for your balance, plan, and cost history.',
-      'Top up credits with a payment when you need more generation volume.',
-      'Tokens appear next to credits in the top bar and in Billing — when running low, Message Admin.',
+      'Your token balance sits in the top bar — your plan refills it monthly, and the admin can grant more.',
+      'Every task deducts its fixed cost automatically; heavier work (transcription, multi-step jobs) costs more.',
+      'Earn credits with payments and referrals, and by redeeming Data Lake micro-credits — they apply as $1.00 off each when you check out.',
     ],
   },
   {
     id: 'guide-referral', icon: Share2, title: 'Referral Codes', chip: 'Referrals',
-    what: 'Invite classmates with a single-use 40-character code. The friend gets a one-time discount on their order at redemption — 30% for a new user, 15% for an existing one — and you earn compute credits for every successful redemption.',
+    what: 'Invite classmates with a single-use 40-character code. The friend gets a one-time discount on their order at redemption — 30% for a new user, 15% for an existing one — and you earn credits for every successful redemption ($1.00 off each).',
     steps: [
       'Open Credits → Referrals and issue a code (each code is single-use and attributed to you).',
       'Share the code with a classmate or a friend.',
@@ -123,7 +123,7 @@ const SECTIONS = [
   },
 ];
 
-export default function GuideView({ onGoTo }) {
+export default function GuideView({ onGoTo, publicMode = false }) {
   const go = (key) => onGoTo && onGoTo(key);
   const jump = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -215,8 +215,9 @@ export default function GuideView({ onGoTo }) {
         );
       })}
 
-      {/* Still stuck */}
-      <SectionCard
+      {/* Still stuck — account actions; hidden in publicMode (pre-signup), where
+          a visitor has no Message Admin / My Agent yet */}
+      {!publicMode && <SectionCard
         id="guide-help"
         className="space-y-3"
         title="Still stuck?"
@@ -239,7 +240,7 @@ export default function GuideView({ onGoTo }) {
             <Brain className="w-4 h-4" /> Ask My Agent <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
-      </SectionCard>
+      </SectionCard>}
     </div>
   );
 }
