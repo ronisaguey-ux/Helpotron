@@ -1,341 +1,278 @@
-# PRIVACY POLICY AND DATA GOVERNANCE CHARTER
-### Helpotron Automator Platform
-**Effective Date:** August 18, 2026  
-**Last Updated:** August 18, 2026  
-**Document Version:** 4.0.0-PROD  
-**Legal Entity:** Helpotron Automator Systems Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”)  
-**Data Protection Officer (DPO) Contact:** `dpo@helpotron.com`  
-**Security & Legal Compliance:** `compliance@helpotron.com`  
-**Applicable Jurisdictions:** United States (Federal, California CCPA/CPRA, Virginia VCDPA, Colorado CPA, Florida FDBR), European Union & United Kingdom (General Data Protection Regulation - GDPR / UK-GDPR), Canada (PIPEDA), and International Student Data Privacy Standards (FERPA & COPPA compliant frameworks).
+# 🛡️ Helpotron Global Privacy Policy & Statutory Data Protection Disclosure
+
+**Effective Date:** August 31, 2026  
+**Last Material Revision:** August 31, 2026  
+**Operating Entity:** Helpotron, LLC ("Helpotron", "Company", "we", "us", or "our")  
+**Registered DPO / Privacy Contact:** `privacy@helpotron.com`  
+**Governing Jurisdiction:** State of Louisiana, United States of America  
 
 ---
 
-## Table of Contents
-1. [Preamble, Scope, and Binding Nature](#1-preamble-scope-and-binding-nature)
-2. [Comprehensive Categories of Data Collected](#2-comprehensive-categories-of-data-collected)
-3. [Legal Bases and Purposes of Processing](#3-legal-bases-and-purposes-of-processing)
-4. [Artificial Intelligence, Large Language Models, and Automated Processing](#4-artificial-intelligence-large-language-models-and-automated-processing)
-5. [Third-Party Service Providers and Subprocessors](#5-third-party-service-providers-and-subprocessors)
-6. [Data Storage, Encryption, and Security Hardening](#6-data-storage-encryption-and-security-hardening)
-7. [Data Retention and Account Lifecycle Policy](#7-data-retention-and-account-lifecycle-policy)
-8. [User Rights and Data Subject Access Mechanisms](#8-user-rights-and-data-subject-access-mechanisms)
-9. [Children's Privacy and Educational Data Protection (COPPA & FERPA)](#9-childrens-privacy-and-educational-data-protection-coppa--ferpa)
-10. [International Data Transfers](#10-international-data-transfers)
-11. [Data Breach Notification Protocol](#11-data-breach-notification-protocol)
-12. [Policy Modifications and Notification Mechanisms](#12-policy-modifications-and-notification-mechanisms)
-13. [Data Protection Officer & Contact Information](#13-data-protection-officer--contact-information)
-14. [US State-Specific Privacy Rights and Statutory Addenda](#14-us-state-specific-privacy-rights-and-statutory-addenda)
-15. [Detailed Cookie, Tracking, and Local Storage Governance](#15-detailed-cookie-tracking-and-local-storage-governance)
-16. [Educational Institution Data Protection Agreement (FERPA Addendum)](#16-educational-institution-data-protection-agreement-ferpa-addendum)
-17. [Technical Security Specification and Incident Protocols](#17-technical-security-specification-and-incident-protocols)
-18. [Accessibility, Equal Access, and Non-Discrimination Policy](#18-accessibility-equal-access-and-non-discrimination-policy)
-19. [Final Legal Disclosures and Supremacy](#19-final-legal-disclosures-and-supremacy)
+> [!NOTE]
+> **Summary for Students and Users:** We believe in absolute transparency. Helpotron is an autonomous study synthesizer, research assistant, and educational operating system. We collect only the data necessary to provide personalized study materials, transcribe lectures, manage account security (including optional SMS two-factor authentication), and operate our platform. **We do not sell your personal information, we do not share your study materials with data brokers, and we do not use your coursework to train external public foundation AI models.**
 
 ---
 
-## 1. PREAMBLE, SCOPE, AND BINDING NATURE
+## 1. Introduction, Scope & Identity of the Data Controller
 
-### 1.1 Scope and Application
-This Privacy Policy and Comprehensive Data Governance Charter ("Privacy Policy", "Policy") governs the collection, processing, storage, transmission, analysis, anonymization, and deletion of all personal data, academic records, audio streams, text transcripts, technical telemetry, and financial transaction records collected through the Helpotron Automator academic automation platform.
+This Global Privacy Policy ("Policy") governs the collection, storage, use, disclosure, transfer, and protection of personal information by **Helpotron, LLC** across all user interactions with our web platform ([`https://helpotron.com`](https://helpotron.com)), application programming interfaces (APIs), the Helpotron browser extensions (including the Chrome Web Store extension), desktop utilities, and mobile/remote interfaces (collectively, the "Platform" or "Services").
 
-This Policy applies to all services, applications, software extensions, and automated systems operated by Helpotron, including but not limited to:
-- **The Helpotron Web Application & Student Dashboard** (hosted at `https://helpotron.com` and associated subdomains).
-- **The Helpotron Academic Browser Extension** (running on Google Chrome, Chromium-based browsers, and associated manifest environments).
-- **The Autonomous Browser Collection Agent Sub-system** (WebSocket-bridged automation interface connecting browser sessions to backend orchestration).
-- **The Helpotron Lecture Audio Recorder & Transcription Engine** (including WebM/WAV recording handlers, Whisper API processing, and multimodal transcription pipelines).
-- **The Helpotron Study Material Generation Services** (encompassing algorithmic synthesis of study guides, active recall flashcards, multi-tier practice tests, and 2-minute class prep digests).
-- **The Assignment Draft & Style Mimicry Workflow** (including custom stylistic few-shot calibration, iterative AI detection scoring, and risk classification mechanisms).
-- **The Helpotron Telegram Notification & Command Bot** (operating via the Telegram Bot API).
-- **The Helpotron Enterprise & Educational Organization Portals** (encompassing institution-level, district-level, and study-group administrative collaboration services).
-- **The Helpotron Research Data Lake & Data Discount Program** (governing voluntary opt-in anonymized academic dataset contributions).
+For individuals located within the European Economic Area ("EEA"), the United Kingdom ("UK"), or Switzerland, Helpotron, LLC acts as the **Data Controller** under Regulation (EU) 2016/679 (General Data Protection Regulation or "GDPR") and the UK Data Protection Act 2018 ("UK GDPR"), unless our Services are procured by an educational institution under a signed enterprise institutional contract, in which case the educational institution acts as the Data Controller and Helpotron acts as the Data Processor.
 
-### 1.2 User Acknowledgement and Consent
-By registering an account, installing the Helpotron browser extension, uploading audio or text files, initiating autonomous collection sessions, redeeming promotional tokens, or accessing any endpoint across our public API, you (“User”, “Student”, “Educator”, or “Subscriber”) formally acknowledge that you have read, understood, and agreed to the practices described in this Policy.
-
-If you are accessing or using Helpotron on behalf of an educational institution, school district, university, or corporate team, you represent and warrant that you possess the requisite authority to bind that entity to this Policy, and that your use complies with all applicable institutional data governance bylaws and statutory student record frameworks.
-
-If you do not agree with any provision of this Privacy Policy, you must immediately terminate your use of Helpotron, uninstall the browser extension, and submit an account deletion request to `dpo@helpotron.com`.
+By accessing or utilizing Helpotron, you acknowledge that you have read, understood, and agree to the data collection and processing practices described herein. If you do not agree with this Policy, you must immediately terminate access and discontinue use of the Services.
 
 ---
 
-## 2. COMPREHENSIVE CATEGORIES OF DATA COLLECTED
+## 2. Granular Personal Data Category Inventory
 
-To deliver our high-performance academic assistance tools, autonomous study workflows, and generative study artifacts, Helpotron collects specific categories of personal, academic, technical, and transactional data. We strictly adhere to the principle of data minimization: we collect only data that is strictly necessary to fulfill our educational service objectives, secure our infrastructure, or satisfy regulatory obligations.
+We systematically categorize the personal information collected, processed, and maintained in our database infrastructure:
 
-### 2.1 Information Provided Directly by the User
-- **Account Identification & Authentication Credentials**:
-  - Public User Identifier (`public_id`): A unique alphanumeric username or pseudonym selected during onboarding.
-  - Cryptographic Authentication Records: Salted PBKDF2 password hashes (`password_hash` and `password_salt` generated with 100,000+ HMAC-SHA256 iterations), cryptographic session tokens, and CSRF token pairs.
-  - Contact Identifiers (Optional): Email address provided during enterprise onboarding or password recovery flows, and Telegram User ID (`telegram_id`) provided during Telegram Bot linking.
-  - User Profile Preferences: Selected academic reading level (e.g., 9th grade, 10th grade, 11th grade, 12th grade, college-freshman, sophomore), target grade averages, notification preferences, dark/light theme configurations, and interface localization settings.
-- **Student Writing Samples & Stylistic Calibration Data**:
-  - Custom Writing Text: Unedited essays, historical academic papers, and writing samples uploaded by the student into the Stylistic Profile Vault (`server/draft.py`) to train few-shot prompt templates for style mimicry.
-  - Vocabulary and Tone Metrics: Lexical density profiles, average sentence length distributions, syntactic complexity indices, and characteristic transition phrase patterns extracted from submitted samples.
-- **Payment & Financial Transaction Records**:
-  - Credit Ledger & Subscription Status: Active tier classification (Basic, Pro, Elite), current credit balance, historical credit expenditure deltas, discount balances, and rollover spillover ledgers.
-  - Payment Processor Metadata: Transaction identifiers (`provider_ref`), timestamps, currency, total amounts charged, and transaction status (`captured`, `manual`, `refunded`).
-  - *Note on Financial Data Processing*: Helpotron does NOT collect, store, or process raw credit card numbers, CVVs, bank account numbers, or debit card PINs. All payment card information is collected and processed directly by our PCI-DSS Level 1 certified third-party payment partner (Stripe, Inc.) or confirmed via manual peer-to-peer transaction logs.
-
-### 2.2 Academic & Learning Management System (LMS) Data Collected via Browser Extension
-When the Helpotron Academic Browser Extension is active on authorized Canvas LMS domains (`*.instructure.com` or custom university domains configured by the student), the extension collects:
-- **Assignment Metadata & Requirements**:
-  - Assignment Title, Canvas Assignment ID (`canvas_id`), Course Name, Course ID, and Module Name.
-  - Due dates, lock dates, submission cutoffs, and historical submission statuses.
-  - Complete assignment prompts, rubric criteria, scoring point distributions, and instructor guidelines.
-  - Document URLs and resource hyperlinks referenced within the assignment description.
-- **Autonomous Browser Collection Agent Artifacts**:
-  - When the user explicitly triggers the "Activate Collection Agent" feature, our autonomous collection agent logs interaction events (navigation targets, link traversal paths, and page reading timestamps).
-  - Scraped page text from corresponding syllabus entries, module lecture notes, instructor discussion boards, and attached reading summaries.
-  - Extracted text is transformed into structured academic transcripts (source: "agent") stored within our encrypted PostgreSQL/SQLite database.
-  - *Safety Boundary*: The browser agent operates exclusively within the user's active, authenticated browser session. The agent is strictly restricted to read-only traversal; it is hardcoded to never click submission buttons, alter student responses, or access non-course administrative resources.
-
-### 2.3 Audio Recordings & Lecture Transcripts
-- **Raw Audio Uploads & Microphone Streams**:
-  - Audio files (`.webm`, `.wav`, `.mp3`, `.m4a`, `.ogg`) recorded via the browser extension recorder or uploaded manually by the user.
-  - Audio metadata including sampling rate, duration in seconds, file format, and channel count.
-- **Transcribed Academic Text**:
-  - Full textual transcripts generated by our transcription pipelines (local faster-whisper models or secure multimodal API endpoints).
-  - Word-level timestamps, speaker diarization tags, confidence scores, and lecture topic segmentation boundaries.
-
-### 2.4 Automatically Generated Study Materials & AI Output
-- **Synthetic Educational Artifacts**:
-  - Structured Study Guides (key concepts, definitions, thematic summaries, sample exam questions).
-  - Active Recall Flashcard Decks (question/answer pairs formatted as JSON and exportable to Quizlet and Anki CSVs).
-  - Interactive Practice Tests (multiple-choice questions, option sets, answer indices, rationales, and short-answer prompts with model solutions).
-  - 2-Minute Lecture Summaries (thesis points, core arguments, memorable case studies, and instructor questions).
-  - Assignment Drafts, iterative revisions, and style-aligned text blocks.
-- **AI Detection & Authenticity Scoring Telemetry**:
-  - Multi-detector composite scores (0–100 scale), per-detector sub-scores (from integrated detection engines), variance metrics, perplexity estimates, and pass/fail/risky classification flags.
-
-### 2.5 Study Session Analytics & Telemetry
-- **Learning Behavioral Analytics**:
-  - Duration of study sessions (minutes spent per material, time-of-day engagement patterns).
-  - Flashcard review completion rates, retention accuracy, practice test scores, and re-attempt frequencies.
-  - Gamification metrics (earned XP, streak counts, scholar badge unlocks).
-- **Technical & Device Telemetry**:
-  - Client IP addresses, browser user-agent strings, operating system versions, and screen resolution.
-  - API request rates, endpoint latency profiles, WebSocket bridge connection durations, and error tracebacks.
+| Category Code | Category Description | Specific Data Elements | System Location & Storage | Primary Collection Source |
+|---|---|---|---|---|
+| **CAT-01** | **Account Credentials & Identity** | Unique Public ID (`public_id`), username, email address, password hash (salted `scrypt`/`PBKDF2-HMAC-SHA256`), Telegram ID (optional), role designation (`admin`, `moderator`, `member`), account creation and update timestamps. | Database Table: `users`, `user_sessions` | Directly provided by user upon registration or account update. |
+| **CAT-02** | **Authentication & Multi-Factor Secrets** | Session JSON Web Tokens (`HS256`/`RS256`), device user-agent hashes, IP binding fingerprints, Time-Based One-Time Password (TOTP) seed secrets (`pyotp`), temporary password reset tokens (15-minute TTL). | Database Table: `users`, `password_resets`, Memory Store | System-generated upon authentication and 2FA enrollment. |
+| **CAT-03** | **Telephony & 2FA Contact Signals** | E.164-formatted mobile phone numbers, single-use 6-digit SMS verification OTPs (15-minute TTL), cryptographic hashes of phone numbers for trial abuse prevention (`claimed_trial_phones`), delivery status receipts. | Database Table: `claimed_trial_phones`, In-Memory OTP Store | Directly provided by user when opting into SMS 2FA or free trial verification. |
+| **CAT-04** | **Academic Coursework & Assignment Context** | Course names, instructor/teacher names, Canvas assignment identifiers, assignment titles, submission deadlines, grading scales, rubrics, raw HTML prompt text, extracted textual instructions, target word counts. | Database Table: `assignments`, `universal_dump_items` | Directly entered by user, uploaded via files, or extracted locally via browser extension from user-authorized LMS sessions. |
+| **CAT-05** | **User Study Notes & Synthesis Artifacts** | Flashcard question-answer decks, practice exams, study guides, outlines, writing drafts, revision histories, Anki-compatible packages (`.apkg`), synthesized lecture notes. | Database Table: `study_materials`, `drafts` | System-generated via user-prompted AI synthesis and direct user edits. |
+| **CAT-06** | **Audio Recordings & Transcripts** | User-uploaded lecture audio files, streaming voice recordings, automated text transcriptions, AI-generated lecture chapter markers, speaker diarization tags, audio duration. | Database Table: `transcripts`, Object Storage pointers | Directly uploaded or recorded by the user during study or lecture sessions. |
+| **CAT-07** | **Interactive Agent Dialogues & Directives** | Chat messages with "My Agent", multi-turn conversation threads, prompt tokens, completion tokens, autonomous tool execution history, custom persona system instructions. | Database Table: `agent_chat_threads`, `agent_chat_messages`, `agent_actions` | Generated dynamically during interactive sessions between user and AI agent. |
+| **CAT-08** | **Knowledge Assets & Workspace Files** | User-uploaded reference documents (`.pdf`, `.docx`, `.txt`, `.py`, `.md`), custom agent skill configurations, persistent memory documents, personal style guidelines. | Database Table: `agent_files`, Local Workspace Cache | Uploaded directly by user into the agent workspace. |
+| **CAT-09** | **Hierarchical User Preferences** | Configuration parameters across the 7-tier scoping cascade (`task`, `assignment`, `teacher`, `class`, `subject`, `academic`, `global`), notification toggles, theme preferences. | Database Table: `user_settings`, `user_settings_scopes` | Configured by user through Settings and Control Center interfaces. |
+| **CAT-10** | **Billing & Commercial Ledger** | Stripe Customer ID, Stripe Subscription ID, checkout transaction tokens, payment amount, currency, transaction status, billing country, internal virtual microcredits balance (`credits`), credit ledger audit entries. *(Note: Full credit card numbers and CVVs are processed directly by Stripe and never touch Helpotron servers).* | Database Table: `payments`, `credit_transactions` | Generated upon commercial checkout via Stripe integration. |
+| **CAT-11** | **Referral & Growth Tracking** | Unique referral codes, referring user IDs, referee user IDs, redemption timestamps, credit bonus attribution status. | Database Table: `referrals` | Generated upon invocation of platform referral links. |
+| **CAT-12** | **Collaborative Study Groups** | Study group titles, institutional class tags, membership rosters, shared flashcard sets, collaborative study session timestamps. | Database Table: `study_groups`, `group_memberships`, `shared_materials` | Created and populated by users engaging in collaborative study features. |
+| **CAT-13** | **Institutional Organization Mapping** | Organization name, domain suffix, seat allocation quotas, institutional administrator user ID, institutional policy flags. | Database Table: `organizations` | Provided by institutional purchasers or school group organizers. |
+| **CAT-14** | **Data Lake Contributions (Opt-In Only)** | Anonymized academic writing samples, humanizer quality ratings, structural syntax patterns. All direct personal identifiers (names, emails, student IDs) are scrubbed prior to ingestion. | Database Table: `data_submissions` | Explicitly and voluntarily submitted by users opting into the research data lake. |
+| **CAT-15** | **Browser Extension Context Signals** | Active browser tab origin (`canvas.instructure.com` or Google Docs), visible DOM assignment containers, cursor positioning events, simulated keystroke pacing parameters. | Local Browser Storage / Chrome Extension Session | Read locally by the Chrome Extension from user-navigated active browser tabs. |
+| **CAT-16** | **Technical Telemetry, Network & Security Logs** | Truncated client IP address, HTTP request method, endpoint URL, HTTP response status, execution duration in milliseconds, User-Agent header, Cloudflare Turnstile verification tokens, rotating server access log entries. | Database Table: `api_usage_logs`, System Rotating Logs | Automatically recorded by edge servers (Cloudflare) and application gateways during API requests. |
 
 ---
 
-## 3. LEGAL BASES AND PURPOSES OF PROCESSING
+## 3. Lawful Bases for Processing (GDPR Article 6 & UK GDPR)
 
-Under Article 6 of the General Data Protection Regulation (GDPR) and equivalent international standards, Helpotron processes personal data only when an established legal basis applies.
+Under European and UK data protection frameworks, every processing operation conducted by Helpotron is justified by an established legal basis under **GDPR Article 6(1)**:
 
-| Legal Basis | Applicable Operations & Objectives |
-| :--- | :--- |
-| **1. Contractual Necessity (Art. 6(1)(b) GDPR)** | • Account Management & Authentication<br>• Study Material & Flashcard Generation<br>• Lecture Transcription Services<br>• Credit Ledger Tracking & Billing Operations |
-| **2. Legitimate Interests (Art. 6(1)(f) GDPR)** | • Infrastructure Defense & Firewall Hardening<br>• Automated Brute-Force & Fraud Prevention<br>• Rate-Limiting & Bot Interception<br>• Host Performance Monitoring & Memory Optimization |
-| **3. Explicit User Consent (Art. 6(1)(a) GDPR)** | • Research Data Lake Contributions (Data Discount Program)<br>• Personal Writing Sample Style Calibration<br>• Optional Telegram & Email Study Notifications<br>• Pedagogical Model Benchmarking Opt-In |
+```mermaid
+flowchart LR
+    subgraph Bases ["GDPR Article 6(1) Lawful Bases"]
+        B1["Contract Performance<br>Art. 6(1)(b)"]
+        B2["Legitimate Interests<br>Art. 6(1)(f)"]
+        B3["Consent<br>Art. 6(1)(a)"]
+        B4["Legal Obligation<br>Art. 6(1)(c)"]
+    end
 
----
+    subgraph Processing ["Helpotron Core Operations"]
+        P1["Account Auth, Assignment Parsing,<br>AI Synthesis, Transcriptions"]
+        P2["DDoS Prevention, Cloudflare Turnstile,<br>Access Logs, Fraud Detection"]
+        P3["SMS 2FA Delivery, Data Lake Ingestion,<br>Marketing/Opt-In Cookies"]
+        P4["Tax Ledger, Stripe Receipts,<br>Subpoena / Legal Process"]
+    end
 
-## 4. ARTIFICIAL INTELLIGENCE, LARGE LANGUAGE MODELS, AND AUTOMATED PROCESSING
+    B1 --> P1
+    B2 --> P2
+    B3 --> P3
+    B4 --> P4
+```
 
-Helpotron leverages cutting-edge artificial intelligence, machine learning architectures, and natural language processing pipelines. We are deeply committed to transparency, algorithmic integrity, and user agency regarding all automated processing workflows.
-
-### 4.1 AI Model Architecture & Multi-Tier Execution Hierarchy
-- **Tier 1 — High-Efficiency Foundation Models (e.g., Google Gemini 3.1 Flash-Lite, DeepSeek-V4-Flash)**: Deployed for high-frequency, low-latency generative tasks including active recall flashcard generation, 2-minute class prep digests, assignment classification, and structured slide outlines.
-- **Tier 2 — Advanced Reasoning & Multimodal Specialists (e.g., Google Gemini 3.7 Flash, DeepSeek-Chat)**: Deployed for complex multi-page study guide structuring, pedagogical practice test creation with explanatory distractors, visual layout design logic, and presentation narrative synthesis.
-- **Tier 3 — Neural Audio & Transcription Models (e.g., Local Faster-Whisper, Gemini 3.1 Flash-Lite Speech)**: Deployed to convert spoken classroom lectures, technical symposiums, and seminar recordings into formatted textual transcripts with timestamps and speaker tags.
-- **Presentation Tasks (Pure-Gemini Routing)**: Presentation and slide assignments (`.pptx`, `.ppt`, `.gslides`, pitch decks) automatically bypass general LLM subagents and are routed exclusively to Google Gemini, with a user-configurable model ratio split (0–100%).
-
-### 4.2 Data Handling by Third-Party AI Inference Providers
-When queries, assignment text, or transcripts are submitted to third-party model inference APIs (including Google Cloud Vertex AI / Gemini API, DeepSeek AI, and OpenAI-compatible OmniRoute gateways):
-- Data is transmitted exclusively over encrypted TLS 1.3 connections.
-- We utilize commercial enterprise API tiers that enforce **Zero Data Retention for Training** by default. Your proprietary assignment prompts, lecture transcripts, and student essays are NOT used by model vendors to train, fine-tune, or improve public foundation models.
-- Prompts and contextual transcripts are retained in transient memory solely for the duration required to complete the streaming inference request.
-
-### 4.3 Automated Decision-Making and Student Rights (GDPR Article 22)
-Helpotron does NOT make legal, academic, or disciplinary decisions regarding any student based solely on automated processing.
-- The AI Detection scoring module in `server/draft.py` provides informational, heuristic estimates of text originality and AI likelihood. These scores are designed solely as diagnostic feedback for the student's self-evaluation.
-- Helpotron's automated systems do not grade assignments, submit work to institutions, or communicate with instructors without explicit human agency.
-- Users maintain the right to obtain human intervention, contest any automated feedback, and request manual administrative review of account restrictions.
-
-### 4.4 The Helpotron Research Data Lake & Educational Model Development
-- **Voluntary Opt-In**: Users may choose to contribute anonymized assignment prompts, study guides, and grading criteria to the Helpotron Research Data Lake in exchange for promotional billing credits (the Data Discount Program).
-- **De-Identification & Anonymization Standards**: Prior to ingestion into the Data Lake, all submissions pass through an automated privacy sanitizer that strips student names, instructor names, institution names, email addresses, phone numbers, and unique identifiers.
-- **Irreversibility**: Anonymized records within the Data Lake are permanently severed from the user's account ID and cannot be re-identified.
+1. **Performance of a Contract (GDPR Art. 6(1)(b)):** Processing necessary to create your account, authenticate sessions, extract assignment criteria, synthesize study notes, manage compute credits, and execute core application features requested by you.
+2. **Legitimate Interests (GDPR Art. 6(1)(f)):** Processing necessary to protect system integrity, defend against Distributed Denial of Service (DDoS) attacks, detect bot abuse via Cloudflare Turnstile, debug application errors, prevent trial credit arbitrage, and optimize application latency. We balance these interests against your fundamental privacy rights.
+3. **Explicit Consent (GDPR Art. 6(1)(a)):** Processing based on affirmative, informed consent, including:
+   - Enrollment in SMS Two-Factor Authentication under TCPA and CTIA standards.
+   - Voluntary submission of anonymized writing samples into the Helpotron Data Lake.
+   - Non-essential client-side analytical cookie storage.
+   *(You maintain the statutory right to withdraw consent at any time without affecting the lawfulness of prior processing).*
+4. **Compliance with Legal Obligations (GDPR Art. 6(1)(c)):** Retention of commercial transaction logs, VAT/sales tax metadata, and payment records for statutory periods prescribed by financial, tax, and corporate accounting laws.
 
 ---
 
-## 5. THIRD-PARTY SERVICE PROVIDERS AND SUBPROCESSORS
+## 4. Third-Party Subprocessor & Vendor Schedule
 
-To operate our globally distributed cloud architecture, Helpotron engages vetted third-party subprocessors. Each subprocessor is bound by strict Data Processing Agreements (DPAs) and confidentiality obligations.
+Helpotron integrates specialized third-party cloud infrastructure providers ("Subprocessors") to deliver high-availability AI inference, edge security, telephony, and billing. All subprocessors are vetted for compliance with GDPR Article 28 and maintain Data Processing Agreements (DPAs) with standard contractual safeguards.
 
-| Subprocessor | Purpose / Function | Location / Jurisdiction | Data Categories Processed | Security Safeguards |
-| :--- | :--- | :--- | :--- | :--- |
-| **Google Cloud Platform / Gemini API** | AI Model Inference, Transcription, Multimodal Processing | United States / Global | Anonymized prompts, transcripts, audio streams | ISO 27001, SOC 2 Type II, HIPAA compliant, TLS 1.3 |
-| **DeepSeek AI / Moonshot AI** | Auxiliary Language Model Reasoning | Global / Regional Endpoints | Assignment prompts, study guide requests | Enterprise API DPA, Zero Data Retention Agreements |
-| **Stripe, Inc.** | Payment Processing & Subscription Billing | United States / EU | Billing address, transaction amounts, payment tokens | PCI-DSS Level 1, SOC 1/2/3, Tokenized Vaults |
-| **Telegram Messenger Inc.** | Optional Student Bot Notification Relay | Global | Chat IDs, notification alert text, summary snippets | MTProto Encryption, User-Configurable Disconnect |
-| **VPS Hosting Infrastructure Provider** | Bare-metal VPS, Linux Host Virtualization, Storage | United States / EU Datacenters | Encrypted database files, uploads, application logs | SOC 2 Type II, Physical Datacenter Access Control |
-| **Let's Encrypt (ISRG)** | Automated SSL/TLS Certificate Authority | United States | Domain DNS queries, server public keys | Automated ACME protocol, Public Transparency Logs |
+| Vendor / Subprocessor | Corporate Identity & Headquarters | Role in Processing | Data Categories Transferred | Data Location | Safeguard & Transfer Mechanism |
+|---|---|---|---|---|---|
+| **OpenRouter, Inc.** | OpenRouter, Inc.<br>San Francisco, CA, USA | AI Inference Gateway & Routing Dispatch | Coursework prompts, assignment instructions, user chat text, token allocation limits. | United States | Standard Contractual Clauses (SCCs); Zero Data Retention (ZDR) routing terms. |
+| **DeepSeek AI** | DeepSeek Technology Co.<br>US Cloud Gateway / Global | Mathematical Reasoning, Code Synthesis & Analytical Planning | Anonymized math problems, programming syntax, synthesis instructions. | United States / Distributed Cloud | Enterprise API Terms with strict no-training and confidential processing covenants. |
+| **Google Cloud (Vertex AI / Gemini)** | Google LLC<br>Mountain View, CA, USA | Multimodal Vision OCR & High-Fidelity Audio Transcription | Uploaded lecture audio, assignment images/diagrams for OCR extraction. | United States | EU-US Data Privacy Framework (DPF); ISO 27001; SOC 2 Type II; SCCs. |
+| **Cloudflare, Inc.** | Cloudflare, Inc.<br>San Francisco, CA, USA | Edge CDN, Web Application Firewall (WAF), DDoS Mitigation, Turnstile Captcha | Client IP address, HTTP headers, TLS fingerprint, Turnstile bot verification challenges. | Global Edge Network (Anycast) | EU-US DPF certified; SOC 2 Type II; ISO 27701; Standard Contractual Clauses. |
+| **Twilio Inc.** | Twilio Inc.<br>San Francisco, CA, USA | SMS Two-Factor Authentication Delivery (A2P 10DLC) | E.164 mobile phone number, 6-digit numeric verification OTP. | United States | Twilio Binding Corporate Rules (BCRs); EU-US DPF; Standard Contractual Clauses. |
+| **Stripe, Inc.** | Stripe, Inc.<br>San Francisco, CA, USA / Dublin, Ireland | Payment Card Processing, Subscription Billing & Fraud Defense | Billing name, email, payment card token, billing zip, transaction history. | United States & Ireland | PCI-DSS Level 1 Service Provider; EU-US DPF certified; Binding Corporate Rules. |
 
----
-
-## 6. DATA STORAGE, ENCRYPTION, AND SECURITY HARDENING
-
-Helpotron maintains an enterprise-grade defense-in-depth security posture designed to safeguard student data against unauthorized access, exfiltration, alteration, and destruction.
-
-### 6.1 Cryptographic Standards and Data Encryption
-- **Data in Transit**: All traffic between student browsers, the Canvas extension, mobile devices, and our VPS servers is encrypted using Transport Layer Security (TLS 1.3 primary, TLS 1.2 fallback). We mandate Strict Transport Security (HSTS) with a minimum duration of two years (`max-age=63072000; includeSubDomains; preload`).
-- **Data at Rest**: All database storage volumes, relational records, study material archives, and transaction ledgers are encrypted at rest using industry-standard AES-256 encryption.
-- **Password Security**: Student passwords are never stored in plaintext. Passwords are cryptographically hashed using PBKDF2 with unique, cryptographically random 16-byte hexadecimal salts (`secrets.token_hex(16)`) and 100,000 SHA-256 iterations.
-
-### 6.2 VPS Host Hardening & Infrastructure Protection
-- **Network Firewall & Port Security**: The Linux host enforces Uncomplicated Firewall (UFW) rules that deny all incoming traffic by default, permitting only SSH (port 22), HTTP (port 80, redirected immediately to HTTPS), and HTTPS (port 443). The backend application server (uvicorn/gunicorn) binds exclusively to internal loopback `127.0.0.1:8000`, completely isolated from external network interfaces.
-- **SSH Hardening**: Administrative access is restricted to authenticated Ed25519 public keys. Root login (`PermitRootLogin no`) and password-based authentication (`PasswordAuthentication no`) are globally disabled across all VPS nodes.
-- **Intrusion Prevention & Rate Limiting**: Automated daemon fail2ban monitors connection logs, enforcing immediate IP-level bans upon repeated authentication failures. Application-layer adaptive rate limiters throttle login attempts with exponential backoff.
-- **Principle of Least Privilege**: Application processes run under a dedicated, unprivileged system user (`helpotron`) without sudo or superuser capabilities.
-
-### 6.3 Transient Storage of Audio Uploads
-Uploaded audio files stored in the server's `uploads/` staging directory are processed asynchronously and purged automatically within 24 hours of successful transcript generation.
+### **Zero Public Foundation Model Training Guarantee:**
+Helpotron contractually requires our API inference subprocessors (OpenRouter, DeepSeek, Google Cloud) to operate under **Zero Data Retention / Zero Model Training** agreements. Your uploaded coursework, assignment instructions, lecture recordings, and interactive chat dialogues are **never** utilized to train, retrain, fine-tune, or adjust the weights of public foundation artificial intelligence models.
 
 ---
 
-## 7. DATA RETENTION AND ACCOUNT LIFECYCLE POLICY
+## 5. Client-Side Storage, Cookies & Local State Technologies
 
-### 7.1 Retention Schedule
-| Data Category | Active Account Retention | Inactive Account Retention | Post-Deletion Window |
-| :--- | :--- | :--- | :--- |
-| **User Account & Profile** | Duration of active subscription | 24 months from last login | Purged within 30 days of request |
-| **Assignments & Prompts** | Retained until deleted by user | 24 months | Purged within 30 days of request |
-| **Generated Study Guides & Flashcards** | Retained indefinitely for student revision | 24 months | Purged within 30 days of request |
-| **Raw Lecture Audio Files** | Maximum 24 hours in staging cache | Purged immediately post-transcription | Immediate deletion |
-| **Credit & Payment Transaction Logs** | 7 years (statutory tax/accounting rules) | 7 years | Retained in anonymized ledger format |
-| **Technical Telemetry & Access Logs** | 90 days rolling buffer | 90 days | Automatic log rotation overwrite |
+Helpotron operates on a privacy-first frontend architecture that minimizes cookie footprint in favor of localized browser storage. We do not deploy third-party advertising tracking pixels (e.g., Meta Pixel, Google AdSense, TikTok Pixel).
 
-### 7.2 Account Inactivity and Automated Deprecation
-Accounts with zero login activity for a consecutive period of twenty-four (24) months are flagged for deprecation. Helpotron will transmit an email notification thirty (30) days prior to deprecation. If no response or login occurs, all personal study materials, assignment histories, and transcripts will be permanently expunged.
+| Storage Mechanism | Identifier / Key Name | Category | Purpose & Description | Expiration / Lifespan |
+|---|---|---|---|---|
+| **LocalStorage** | `helpotron_token` | Strictly Necessary | Stores active JSON Web Token (JWT) authorizing API requests for the logged-in session. | Persistent until user logs out or clears browser data. |
+| **LocalStorage** | `helpotron_user` | Strictly Necessary | Caches user profile metadata (public ID, current plan, remaining credits balance). | Persistent until session refresh or logout. |
+| **LocalStorage** | `helpotron_theme` | Functional | Remembers UI visual presentation preferences (dark mode vs. light mode). | 1 Year. |
+| **LocalStorage** | `helpotron_cookie_consent` | Strictly Necessary | Records user acknowledgment of the statutory cookie and privacy disclosure. | 1 Year. |
+| **SessionStorage** | `helpotron_active_tab` | Functional | Tracks current workspace navigation view (e.g., Assignments, My Agent, Settings). | Discarded when browser tab is closed. |
+| **Cloudflare Cookie** | `__cf_bm` | Strictly Necessary (Security) | Cloudflare bot management cookie utilized to differentiate human users from automated malicious bots. | 30 Minutes. |
+| **Cloudflare Cookie** | `cf_clearance` | Strictly Necessary (Security) | Stores proof that a client successfully solved a Cloudflare Turnstile challenge. | Max 1 Year. |
 
----
-
-## 8. USER RIGHTS AND DATA SUBJECT ACCESS MECHANISMS
-
-Under the General Data Protection Regulation (GDPR Articles 15–22), the California Consumer Privacy Act / California Privacy Rights Act (CCPA/CPRA), and related privacy statutes, you possess comprehensive rights regarding your personal data:
-
-- **Right to Access & Portability (GDPR Art. 15 & 20; CCPA § 1798.100)**: Instant downloads of flashcards in Quizlet/Anki CSV formats, practice tests in structured JSON, and study guides in clean Markdown via `/api/export/*`. Full comprehensive data archives delivered within 30 calendar days upon request to `dpo@helpotron.com`.
-- **Right to Rectification (GDPR Art. 16)**: Update profile attributes, reading levels, or assignment data directly via the Settings modal or by contacting support.
-- **Right to Erasure / Right to Be Forgotten (GDPR Art. 17; CCPA § 1798.105)**: Permanent cryptographic wipe of user records, assignments, transcripts, drafts, and study sessions across all active databases within 30 days.
-- **Right to Restrict & Object to Processing (GDPR Art. 18 & 21)**: Restrict analytical telemetry or stylistic voice mimicry at any time.
-- **Non-Discrimination**: Helpotron will never discriminate against, deny service to, or degrade the quality of service for any student who chooses to exercise their statutory privacy rights.
+You can manage or disable cookies and local storage through your browser settings. Note that disabling strictly necessary storage (such as `helpotron_token`) will prevent you from authenticating or utilizing the Services.
 
 ---
 
-## 9. CHILDREN'S PRIVACY AND EDUCATIONAL DATA PROTECTION (COPPA & FERPA)
+## 6. Telephony, SMS Two-Factor Authentication & TCPA / A2P 10DLC Compliance
 
-### 9.1 Children's Online Privacy Protection Act (COPPA) Compliance
-Helpotron is designed for high school, undergraduate, and postgraduate students. Our services are NOT directed to children under the age of thirteen (13). We do not knowingly collect personal data from individuals under 13 years of age. If we discover that an account has been registered by a child under 13 without verified parental/institutional consent, we immediately terminate the account and purge all associated records.
+Helpotron provides an optional SMS Two-Factor Authentication ("SMS 2FA") security feature to protect student accounts and verify single-use promotional free trials. We strictly comply with the **Telephone Consumer Protection Act (TCPA, 47 U.S.C. § 227)**, CTIA Messaging Principles, and carrier A2P 10DLC regulations:
 
-### 9.2 Family Educational Rights and Privacy Act (FERPA) Alignment
-When Helpotron is utilized in conjunction with school-issued Canvas LMS accounts or institutional agreements:
-- Helpotron operates as a "School Official" with legitimate educational interests under 34 CFR § 99.31(a)(1)(i).
-- All student education records extracted from Canvas remain under the direct control and ownership of the student and their educational institution.
-- Helpotron does not redisclose, monetize, or use student educational records for commercial behavioral advertising.
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│                   MANDATORY SMS DISCLOSURE STATEMENT                    │
+│                                                                          │
+│ 1. Purpose: Phone numbers are collected EXCLUSIVELY to deliver 6-digit   │
+│    security authentication codes (2FA) and verify account ownership.     │
+│ 2. Non-Marketing Guarantee: Helpotron NEVER sends promotional texts,     │
+│    telemarketing offers, or automated sales messages via SMS.            │
+│ 3. Frequency: Message frequency depends on user login activity (1 text   │
+│    per 2FA challenge).                                                   │
+│ 4. Rates: Standard message and data rates may apply per your carrier.    │
+│ 5. STOP / Opt-Out: Text STOP to cancel at any time.                      │
+│ 6. HELP / Support: Text HELP for customer support or email               │
+│    support@helpotron.com.                                                │
+│ 7. Carriers: Wireless carriers are not liable for delayed messages.     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
----
-
-## 10. INTERNATIONAL DATA TRANSFERS
-
-Helpotron operates server infrastructure located primarily in the United States and the European Economic Area (EEA). To safeguard cross-border transfers from the EEA and UK to the United States, Helpotron relies on:
-- **Standard Contractual Clauses (SCCs)**: Incorporating European Commission approved Standard Contractual Clauses (Commission Implementing Decision (EU) 2021/914) into all subprocessor agreements.
-- **Supplementary Technical Safeguards**: Implementing end-to-end transport encryption (TLS 1.3), database field-level encryption, and strict anonymization filters before transfer.
-
----
-
-## 11. DATA BREACH NOTIFICATION PROTOCOL
-
-In the event of a confirmed security incident or data breach compromising personal student data:
-1. **Investigation & Containment (0–12 Hours)**: Node isolation, system secret rotation, and forensic investigation.
-2. **Regulatory Disclosure (Within 72 Hours)**: Notification of competent supervisory authorities (EU Data Protection Authorities and US State Attorneys General) in accordance with Article 33 of the GDPR.
-3. **User Notification**: Direct email notifications and prominent in-app dashboard banners detailing breach nature, impacted data categories, and user protection steps.
+### Express Written Consent Language:
+By entering your mobile phone number and clicking **"Enable SMS 2FA"** or **"Verify Phone"**, you provide your express written consent authorizing Helpotron, LLC to transmit automated single-use SMS verification codes to the provided phone number via Twilio. Consent is not a condition of purchasing any paid service; users may alternatively elect TOTP Authenticator app verification (Google Authenticator, Authy) at zero cost.
 
 ---
 
-## 12. POLICY MODIFICATIONS AND NOTIFICATION MECHANISMS
+## 7. EU Artificial Intelligence Act & Automated Processing Disclosures
 
-Helpotron reserves the right to revise this Privacy Policy periodically. When material modifications are enacted, we update the "Last Updated" date, broadcast an in-app modal notification across the student dashboard, and transmit an email digest at least fourteen (14) days prior to the effective date.
+In compliance with **Article 50 of the European Union Artificial Intelligence Act (Regulation (EU) 2024/1689)** and evolving consumer transparency mandates:
 
----
-
-## 13. DATA PROTECTION OFFICER & CONTACT INFORMATION
-
-**Helpotron Automator Systems Inc.**  
-*Office of the Data Protection Officer (DPO)*  
-- **DPO Inquiries & Rights Requests:** `dpo@helpotron.com`  
-- **Security Operations & Disclosures:** `security@helpotron.com`  
-- **Legal Compliance:** `compliance@helpotron.com`  
-- **General Support:** `support@helpotron.com`  
-- **Official Domain:** `https://helpotron.com`
+1. **Synthetic Content Generation Notice:** When you interact with Helpotron's "My Agent" workspace, generate flashcards, request assignment outlines, or summarize lecture audio, you are interacting with artificial intelligence systems that generate synthetic text and summaries.
+2. **Human Oversight & Academic Use:** Helpotron is an assistive educational tool designed for personal study, review, and learning acceleration. It is **not** an autonomous submission engine. You maintain ultimate editorial responsibility and human oversight over all coursework, papers, and assignments submitted to educational institutions.
+3. **No High-Risk Autonomous Profiling:** Helpotron does **not** make legal, credit, medical, employment, or academic admission decisions concerning you. No automated profiling produces legal or similarly significant effects under GDPR Article 22.
 
 ---
 
-## 14. US STATE-SPECIFIC PRIVACY RIGHTS AND STATUTORY ADDENDA
+## 8. Multi-State United States Consumer Privacy Rights
 
-### 14.1 California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA)
-- **Notice of Collection**: In the preceding 12 months, Helpotron collected Identifiers (Category A), Customer Records (Category B), Commercial Information (Category D), Internet Activity (Category F), Audio Information (Category H), and Non-Public Education Information (Category J).
-- **No Selling or Sharing**: Helpotron does NOT sell personal information and does NOT share personal information for cross-context behavioral advertising.
-- **Shine the Light (Cal. Civ. Code § 1798.83)**: Helpotron does not disclose personal data to third parties for direct marketing.
+If you are a resident of California, Colorado, Connecticut, Virginia, Utah, Oregon, Texas, Delaware, New Jersey, or other states with enacted comprehensive privacy laws, you possess specific statutory rights regarding your personal data:
 
-### 14.2 Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), and Florida (FDBR)
-Eligible residents may submit requests to confirm processing, access, correct, delete, or obtain portable copies of their personal data, or appeal rights determinations by emailing `dpo@helpotron.com` with subject `PRIVACY APPEAL`.
+| State Privacy Statute | Core Statutory Rights Granted | Helpotron Compliance Mechanism |
+|---|---|---|
+| **California Consumer Privacy Act (CCPA / CPRA, Cal. Civ. Code § 1798.100 et seq.)** | Right to Know, Delete, Correct, Opt-Out of Sale/Share, Limit Sensitive Personal Info, Non-Discrimination. | Self-service deletion (`DELETE /user/account`), data export, strict **NO SALE** and **NO SHARING** policy. |
+| **Virginia Consumer Data Protection Act (VCDPA, Va. Code § 59.1-575 et seq.)** | Access, Correct, Delete, Data Portability, Opt-Out of Targeted Advertising/Profiling. | Self-service account dashboard controls; formal appeal procedure via `privacy@helpotron.com`. |
+| **Colorado Privacy Act (CPA, C.R.S. § 6-1-1301 et seq.)** | Access, Correct, Delete, Portability, Universal Opt-Out Mechanism recognition. | Global Privacy Control (GPC) signal honor; verified consumer request workflow. |
+| **Connecticut Data Privacy Act (CTDPA, Conn. Gen. Stat. § 42-515 et seq.)** | Access, Correct, Delete, Portability, Opt-out of targeted ads/profiling. | Comprehensive DSR fulfillment within 45 days. |
+| **Utah Consumer Privacy Act (UCPA, Utah Code § 13-61-101 et seq.)** | Access, Delete, Portability, Opt-out of sale or targeted advertising. | Strict internal segregation preventing commercial data monetization. |
+| **Texas Data Privacy & Security Act (TDPSA, Tex. Bus. & Com. Code § 541.001 et seq.)** | Access, Correct, Delete, Portability, Opt-out of sale/targeted ads. | Verified identity request pipeline; no sale of biometric or student data. |
+| **Oregon Consumer Privacy Act (OCPA, ORS § 646A.570 et seq.)** | Access list of specific third parties, Delete, Correct, Portability. | Explicit Subprocessor Directory published in Section 4 of this Policy. |
 
----
-
-## 15. DETAILED COOKIE, TRACKING, AND LOCAL STORAGE GOVERNANCE
-
-### 15.1 Comprehensive Cookie Ledger
-| Cookie Identifier | Purpose / Category | Lifecycle / Duration | Security Flags Applied |
-| :--- | :--- | :--- | :--- |
-| `helpotron_session` | Authenticated session token; binds client to user ID | 7 Days (Rolling Refresh) | `HttpOnly=True`, `Secure=True` (Prod), `SameSite=Strict`, `Path=/` |
-| `csrf_token` | Double-submit CSRF prevention token | Session / Browser Close | `HttpOnly=False` (JS Readable), `Secure=True` (Prod), `SameSite=Lax` |
-| `theme_preference` | Stores visual preference (Dark/Light mode) | 365 Days | `HttpOnly=False`, `Secure=False`, `SameSite=Lax` |
-
-### 15.2 Client-Side Local Storage Objects (`localStorage`)
-- `helpotron_server`: Active backend API origin URL (e.g. `https://helpotron.com`).
-- `helpotron_public_id`: Student public username pseudonym for UI state persistence.
-- `helpotron_reading_level`: Cached academic reading level.
-- `helpotron_theme`: Selected visual theme token (dark or light mode).
-
-### 15.3 Global Privacy Control (GPC) & Do Not Track (DNT)
-Helpotron honors browser Global Privacy Control (GPC) signals and Do Not Track (DNT) headers.
+### Statutory Declaration Regarding "Sale" and "Sharing":
+Helpotron **does not sell** your personal information, coursework, transcripts, or telephone numbers for monetary consideration. Furthermore, Helpotron **does not share** your personal information for cross-context behavioral advertising under CCPA/CPRA. We have not sold or shared consumer personal information in the preceding twelve (12) months.
 
 ---
 
-## 16. EDUCATIONAL INSTITUTION DATA PROTECTION AGREEMENT (FERPA ADDENDUM)
+## 9. Educational Privacy & Protection of Minors
 
-When utilized by educational agencies, universities, colleges, or K-12 school districts:
-- **Designation as School Official**: Helpotron is designated as a School Official with legitimate educational interests pursuant to 34 CFR § 99.31(a)(1)(i).
-- **Direct Control & Non-Redisclosure**: All student records remain under institutional ownership and will not be redisclosed or monetized.
-- **Data Return & Destruction**: Records returned or cryptographically destroyed within sixty (60) days of agreement termination.
+### Children's Online Privacy Protection Act (COPPA, 15 U.S.C. § 6501 et seq.):
+Helpotron is directed to high school, college, university, and adult professional students. The platform is **strictly prohibited to children under the age of thirteen (13)**. We do not knowingly solicit, collect, or process personal data from children under 13. If we discover that an account has been registered by a child under 13 without verified parental consent, we immediately terminate the account and purge all associated records.
 
----
+### Family Educational Rights and Privacy Act (FERPA, 34 CFR Part 99):
+Helpotron is a private study productivity software provided directly to the individual student user. In the standard direct-to-consumer deployment, Helpotron is **not** an educational agency or institution subject to direct FERPA governance, nor does Helpotron receive education records directly from educational institutions. When you upload or import assignment prompts, syllabus requirements, or course materials from Canvas LMS, you warrant and represent that you have the legal right to utilize such materials for your own personal educational review under Fair Use principles.
 
-## 17. TECHNICAL SECURITY SPECIFICATION AND INCIDENT PROTOCOLS
-
-- **Kernel & Network Hardening**: Linux sysctl network hardening (`tcp_syncookies = 1`, `accept_redirects = 0`), UFW stateful filtering exposing only ports 22, 80, 443; internal loopback binding for API (`127.0.0.1:8000`).
-- **Nginx Reverse Proxy & DDoS Mitigation**: HTTP/2 multiplexing, dual-tier rate limiting zones (`api_limit` at 30 req/s, `auth_limit` at 5 req/s), 50MB body size cap.
-- **Automated Patching**: Unattended security upgrades (`unattended-upgrades`) applying CVE patches within 24 hours.
+When Helpotron contracts directly with an educational institution, school district, or university ("Institutional Agreement"), Helpotron acts as an authorized "School Official" with legitimate educational interests pursuant to **34 CFR § 99.31(a)(1)(i)**, operating strictly under institutional oversight and student record confidentiality agreements.
 
 ---
 
-## 18. ACCESSIBILITY, EQUAL ACCESS, AND NON-DISCRIMINATION POLICY
+## 10. Data Subject Rights & Fulfillment Procedure
 
-Helpotron adheres to Section 508 of the Rehabilitation Act, Title III of the ADA, and Web Content Accessibility Guidelines (**WCAG 2.1 Level AA**):
-- **Perceivable**: High-contrast ratios ($\ge 4.5:1$ normal text, $\ge 3:1$ large text/UI elements) in dark and light palettes, descriptive `aria-label` tags.
-- **Operable**: Complete keyboard accessibility (`Tab`, `Enter`, `Space`, `Escape`), focus-trapped dialogs, zero keyboard traps.
-- **Understandable & Robust**: Plain language system notices, live announcements (`aria-live="polite"`), semantic HTML5 structure.
+Regardless of your geographic location, Helpotron provides automated self-service and manual fulfillment mechanisms to exercise your data subject rights:
 
-Accessibility Coordinator Contact: `accessibility@helpotron.com`.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Data Subject
+    participant Web as Web Dashboard
+    participant API as FastAPI Backend (server/)
+    participant DB as SQLite Storage (22 Tables)
+    participant DPO as Privacy Officer (privacy@)
+
+    alt Self-Service Data Erasure (Right to be Forgotten)
+        User->>Web: Clicks "Permanently Delete Account"
+        Web->>API: DELETE /user/account (Bearer JWT)
+        API->>DB: Cascading purge across 15 child tables + user row
+        DB-->>API: Rows Deleted Confirmation
+        API-->>Web: HTTP 200 {"status": "deleted"}
+        Web-->>User: Account Wiped & Session Terminated
+    else Data Portability & Access Request
+        User->>DPO: Submits DSR Request (privacy@helpotron.com)
+        DPO->>API: Executes Verified Data Export Pipeline
+        API->>DB: Extracts assignments, cards, transcripts, ledger
+        DB-->>API: Structured Data Payload
+        API-->>DPO: Generates Encrypted JSON/Archive
+        DPO-->>User: Delivers Secure Data Package within 30-45 Days
+    end
+```
+
+### 1. Right to Erasure / Account Deletion (GDPR Art. 17 / CCPA § 1798.105):
+You can execute an immediate, cascading erasure of your entire account footprint at any time directly through the platform:
+- **Endpoint:** `DELETE /user/account` (requires authenticated session JWT).
+- **Scope of Deletion:** Immediately cascades across and deletes all assignments, transcripts, flashcards, study groups, chat dialogues, agent customization files, drafts, referral links, and your core user record.
+- **Backup Lifecycle:** Routine encrypted database snapshots are rotated and permanently purged within thirty (30) days.
+
+### 2. Right to Access & Portability (GDPR Art. 15, 20 / CCPA § 1798.100):
+You may request an export of all personal data held in our systems in structured, machine-readable format (JSON and Markdown) by emailing `privacy@helpotron.com`. Verification of account ownership is required.
+
+### 3. Response Timelines & Verification:
+We acknowledge receipt of verifiable consumer requests within ten (10) business days and fulfill substantive requests within thirty (30) days (for GDPR/UK GDPR) or forty-five (45) days (for US state privacy laws). We do not discriminate against any student for exercising their statutory privacy rights.
 
 ---
 
-## 19. FINAL LEGAL DISCLOSURES AND SUPREMACY
+## 11. Data Security Standards & Incident Response Framework
 
-- **Entire Agreement**: This Privacy Policy, together with the Terms of Service, constitutes the entire data governance agreement between the user and Helpotron Automator Systems Inc.
-- **Dispute Resolution & Governing Law**: Governed by the laws of the State of Florida, United States, or competent EU supervisory tribunals where mandated by GDPR Article 79.
+Helpotron maintains rigorous administrative, physical, and technical safeguards designed to protect personal data against accidental loss, unauthorized access, destruction, and alteration:
+
+1. **Encryption Standards:**
+   - **Data in Transit:** Enforced exclusively via **TLS 1.3** cryptographic protocols with HTTP Strict Transport Security (HSTS) preloading.
+   - **Data at Rest:** Encrypted storage volumes utilizing **AES-256** encryption for all persistent database records and object storage.
+   - **Password Security:** Credentials hashed using modern, memory-hard key derivation functions (`scrypt`/`PBKDF2`) utilizing cryptographically unique per-user salts.
+2. **Access Control & Least Privilege:** System access is restricted to authorized engineering personnel subject to strict non-disclosure obligations, multi-factor authentication, and audited role-based access controls (RBAC).
+3. **Statutory Incident & Breach Notification:** In the event of a confirmed security incident resulting in unauthorized exposure or compromise of unencrypted personal data:
+   - We notify competent supervisory authorities within **seventy-two (72) hours** of becoming aware of the breach pursuant to **GDPR Article 33**.
+   - We notify affected users without undue delay where the breach presents a high risk to individual rights and freedoms, or as mandated by applicable US state data breach notification statutes (including La. R.S. § 51:3071 et seq.).
 
 ---
-*Authoritative Document Reference: `PRIVACY_POLICY_2026_V4_MONOLITHIC.MD`*  
-*Helpotron Automator Systems Inc. · Office of the Data Protection Officer*
+
+## 12. Cross-Border International Data Transfers
+
+Helpotron is based in the United States and utilizes cloud infrastructure located primarily within the United States. If you access the Services from the European Economic Area, United Kingdom, Switzerland, or other jurisdictions with cross-border data transfer restrictions, your information will be transferred to and processed within the United States.
+
+We ensure an adequate level of data protection for international transfers through:
+- Utilization of the **European Commission Standard Contractual Clauses (SCCs)** pursuant to Commission Implementing Decision (EU) 2021/914, incorporating the UK International Data Transfer Addendum where applicable.
+- Integration of Subprocessors certified under the **EU-U.S. Data Privacy Framework (EU-U.S. DPF)** and the UK Extension to the EU-U.S. DPF.
+- Technical supplementary measures, including end-to-end encryption in transit and tokenization of sensitive identifiers.
+
+---
+
+## 13. Policy Modifications & Statutory Notices
+
+We reserve the right to modify this Policy periodically to reflect enhancements to platform capabilities, subprocessor additions, or legislative changes. When material modifications occur:
+- We will update the "Effective Date" at the top of this document.
+- We will provide prominent notice through the web application interface, an email notification to registered account holders, or an administrative dashboard alert at least thirty (30) days prior to the effective date of material changes.
+- Continued access to or use of Helpotron following the effective date constitutes acknowledgment and acceptance of the revised Policy.
+
+---
+
+## 14. Data Protection Officer & Regulatory Contact
+
+For privacy inquiries, statutory data subject requests, or questions regarding our data governance architecture, contact our Data Protection Officer:
+
+**Helpotron, LLC — Data Governance & Privacy Office**  
+- **Email:** `privacy@helpotron.com`  
+- **Mailing Address:** Helpotron, LLC, Legal Department, New Orleans, Louisiana, USA  
+- **Supervisory Authority Inquiries:** If you are located in the EEA or UK and believe our processing infringes upon your statutory rights, you possess the right to lodge a formal complaint with your local Data Protection Authority (e.g., the CNIL in France, the BfDI in Germany, or the Information Commissioner's Office in the UK).

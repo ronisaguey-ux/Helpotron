@@ -39,16 +39,22 @@ class VerificationCodeStore:
         # Key: (identifier, purpose) -> {"code": "123456", "expires_at": float, "attempts": int}
         self._store: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
-    def generate_code(self, identifier: str, purpose: str = "email_verification") -> str:
-        """Generates a 6-digit numeric verification code valid for 15 minutes."""
-        code = "".join(secrets.choice(string.digits) for _ in range(6))
+    def generate_code(
+        self, identifier: str, purpose: str = "email_verification", length: int = 6
+    ) -> str:
+        """Generates a numeric verification code valid for 15 minutes.
+
+        length was a constant 6; owner directive 08-31 wants a 12-digit code
+        at every login when 2FA is on, so login 2FA challenges call with 12.
+        """
+        code = "".join(secrets.choice(string.digits) for _ in range(length))
         expires_at = time.time() + CODE_EXPIRATION_SECONDS
         self._store[(identifier.lower().strip(), purpose)] = {
             "code": code,
             "expires_at": expires_at,
             "attempts": 0,
         }
-        logger.info("Generated 6-digit code for %s [%s] (expires in 15 min)", identifier, purpose)
+        logger.info("Generated %d-digit code for %s [%s] (expires in 15 min)", length, identifier, purpose)
         return code
 
     def verify_code(self, identifier: str, code: str, purpose: str = "email_verification") -> Tuple[bool, str]:

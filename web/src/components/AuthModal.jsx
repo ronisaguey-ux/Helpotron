@@ -539,7 +539,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   <span className="text-xs font-bold uppercase tracking-wider">Two-Factor Authentication</span>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)]">
-                  Enter the 6-digit verification code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} to continue.
+                  Enter the 12-digit verification code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} to continue.
                 </p>
                 <div className="space-y-1">
                   <label htmlFor="two-factor-code" className="text-xs font-semibold text-[var(--text-secondary)]">Security Code</label>
@@ -547,10 +547,10 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                     <input
                       id="two-factor-code"
                       type="text"
-                      maxLength={6}
+                      maxLength={12}
                       autoFocus
                       required
-                      placeholder="123456"
+                      placeholder="123456789012"
                       value={twoFactorCode}
                       onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                       className="clean-input w-full pl-9 text-base text-center tracking-widest font-mono"
@@ -570,7 +570,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 
             <button
               type="submit"
-              disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 6)}
+              disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 12)}
               className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
             >
               {loading ? 'Verifying…' : (requires2FA ? 'Verify Code & Sign In →' : 'Sign in to Workspace →')}
