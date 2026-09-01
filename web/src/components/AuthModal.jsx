@@ -290,7 +290,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   // text-base (16px → 17.6px at the 110% root): computed >= 16px so iOS/Safari
   // does NOT auto-zoom when the field is focused. text-sm (15.4px computed)
   // triggered the zoom every time a student tapped a field on a phone.
-  const INPUT = 'clean-input w-full pl-9 pr-10 py-2.5 text-base';
+  const INPUT = 'w-full pl-10 pr-10 py-3 text-base rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
 
   return (
     <div
@@ -307,7 +307,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 .aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
 .aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
       <div
-        className={`w-full max-w-md m-auto surface-glass-strong rounded-[var(--radius-lg)] p-6 sm:p-8 text-[var(--text-primary)] relative overflow-hidden aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`w-full max-w-md m-auto bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 sm:p-8 text-on-surface shadow-2xl relative overflow-hidden aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
         data-modal-container
         onClick={(e) => e.stopPropagation()}
         onAnimationEnd={onPanelAnimEnd}
@@ -317,36 +317,34 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+            className="absolute top-4 right-4 z-10 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         )}
         {/* Top Brand Banner */}
-        <div className="text-center space-y-2 pb-5 border-b border-[var(--border-subtle)]">
+        <div className="text-center space-y-2 pb-5 border-b border-outline-variant/30">
           <div className="flex justify-center">
             <AnimatedLogo size="lg" />
           </div>
-          <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+          <h2 className="font-headline-lg text-title-md text-on-surface tracking-tight">
             {tab === 'signup' ? 'Create Student Account' : 'Sign in to Helpotron'}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="font-body-sm text-xs text-on-surface-variant">
             {tab === 'signup'
               ? 'Join the autonomous academic operating system & study copilot'
               : 'Enter your credentials to access your autonomous study workspace'}
           </p>
           {tab === 'signup' && (
-            <span className="aurora-chip text-[11px] uppercase tracking-wider">
+            <span className="inline-block font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold">
               Step 1 of 2 · Legal consent
             </span>
           )}
         </div>
 
-        {/* Tab Toggle. QA 08-31: which tab is active was carried by fill colour
-            alone, and the pair had no roles — a screen reader read out two
-            unlabelled buttons with no selected state (WCAG 4.1.2 / 1.4.1). */}
+        {/* Tab Toggle */}
         <div
-          className="flex bg-[var(--bg-surface)] p-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] my-5"
+          className="flex bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 my-5 gap-1"
           role="tablist"
           aria-label="Create an account or sign in"
         >
@@ -355,8 +353,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             role="tab"
             aria-selected={tab === 'signup'}
             onClick={() => { setTab('signup'); setLoginError(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              tab === 'signup' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            className={`flex-1 py-2 font-label-caps text-xs uppercase tracking-wider rounded-xl transition cursor-pointer ${
+              tab === 'signup' ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Create Account
@@ -366,8 +364,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             role="tab"
             aria-selected={tab === 'login'}
             onClick={() => { setTab('login'); setLoginError(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
-              tab === 'login' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            className={`flex-1 py-2 font-label-caps text-xs uppercase tracking-wider rounded-xl transition cursor-pointer ${
+              tab === 'login' ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Sign In
