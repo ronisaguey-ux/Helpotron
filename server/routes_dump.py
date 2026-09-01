@@ -229,7 +229,8 @@ async def manual_route_dump_item(
                 user_id=item.user_id,
                 title=title,
                 prompt=item.extracted_text or f"Generated from dumped file {item.file_name}",
-                status="tracked",
+                # 09-01 lifecycle: new assignments await the user's direction.
+                status="pending_approval",
                 progress={"created_from_dump": True, "dump_file_id": item.id},
             )
             db.add(new_assign)
@@ -317,7 +318,8 @@ async def finalize_dump_item(
             user_id=item.user_id,
             title=title,
             prompt=item.extracted_text or f"Generated from dumped file {title}",
-            status="tracked",
+            # 09-01 lifecycle: new assignments await the user's direction.
+            status="pending_approval",
             progress={"created_from_dump": True, "dump_file_id": item.id, "requested_action": action},
         )
         db.add(assignment)
