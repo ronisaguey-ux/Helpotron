@@ -7,10 +7,12 @@ import pytest
 from server import study_tools
 
 
-def test_signup_welcome_bonus_every_new_user(client):
-    """08-31 (owner directive, evening — supersedes the named-only grant):
-    EVERY new account is born with 300 tokens ("theres a few new accounts
-    coming, upon generation grant them 300 tokens")."""
+def test_new_signup_starts_with_zero_tokens(client):
+    """08-31 (owner directive, late evening — supersedes both the named-only
+    and universal grants): NO automatic welcome bonus. Bob: "Don't
+    automatically give every new account 300 credits, run it by me here and
+    give only when I approve". Signups start at 0; the approval loop grants
+    via POST /api/admin/user/{public_id}/welcome-tokens."""
     from server.database import User, SessionLocal
 
     # Idempotent: the suite DB (sqlite:///./test_helpotron.db) persists between
@@ -27,16 +29,61 @@ def test_signup_welcome_bonus_every_new_user(client):
     for pid in ("BrandNew10", "AnotherNew20"):
         r = client.post("/api/signup", json={"public_id": pid, "password": "Passw0rd99"})
         assert r.status_code == 200, r.text
-        assert r.json()["token_balance"] == 300.0
+        assert r.json()["token_balance"] == 0.0
 
     db = SessionLocal()
     try:
         for pid in ("BrandNew10", "AnotherNew20"):
             u = db.query(User).filter(User.public_id == pid).first()
-            assert float((u.settings or {}).get("token_balance", 0) or 0) == 300.0
-
+            assert float((u.settings or {}).get("token_balance", 0) or 0) == 0.0
     finally:
         db.close()
+
+
+def test_owner_approved_welcome_tokens_grant(client):
+    """08-31 (Bob's approval loop): the admin endpoint applies the 300-token
+    grant only to accounts the owner approves; non-admins are rejected."""
+    from server.database import User, SessionLocal
+    from server.security import create_jwt_token
+
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.public_id == "RoniDev").first()
+        if admin is None:
+            admin = User(public_id="RoniDev", plan="elite", credits=100.0)
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+        admin_token = create_jwt_token(user_id=admin.id, role="admin")
+        student = db.query(User).filter(User.public_id == "BrandNew10").first()
+        assert student is not None
+        student_token = create_jwt_token(user_id=student.id, role="user")
+    finally:
+        db.close()
+
+    # Owner-approved grant: 300 tokens land in settings.token_balance.
+    r = client.post(
+        "/api/admin/user/BrandNew10/welcome-tokens",
+        params={"amount": 300.0},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["new_token_balance"] == 300.0
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "BrandNew10").first()
+        assert float((u.settings or {}).get("token_balance", 0) or 0) == 300.0
+    finally:
+        db.close()
+
+    # A non-admin (any signed-in user) cannot grant tokens.
+    r2 = client.post(
+        "/api/admin/user/BrandNew10/welcome-tokens",
+        params={"amount": 300.0},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert r2.status_code == 403
 
 
 def test_health(client):
