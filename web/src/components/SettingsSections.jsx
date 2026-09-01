@@ -548,7 +548,7 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
     setLoading2FA(true);
     setMsg2FA({ text: '', type: '' });
     try {
-      const res = await api.verifySetup2FA(method, code.trim(), secret);
+      const res = await api.verifySetup2FA(method, code.trim(), secret, method === 'sms' ? (s?.profile?.phone || null) : null);
       if (res && res.status === 'success') {
         setTwoFactorEnabled(true);
         setSetupStep('idle');

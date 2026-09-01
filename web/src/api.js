@@ -255,7 +255,7 @@ export const api = {
   signup: (public_id, password, turnstileToken = null) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password, turnstile_token: turnstileToken }) }),
   adminCheck: () => request('/api/admin/check', { method: 'GET' }),
   setup2FA: (method = 'totp', phone = null) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method, phone_number: phone }) }),
-  verifySetup2FA: (method, code, secret) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret }) }),
+  verifySetup2FA: (method, code, secret, phone = null) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret, phone_number: phone }) }),
   sendChallenge2FA: (method) => request('/api/auth/2fa/send-challenge', { method: 'POST', body: JSON.stringify({ method }) }),
   disable2FA: (code) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
   

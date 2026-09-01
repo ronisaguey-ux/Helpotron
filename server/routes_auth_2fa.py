@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
@@ -23,6 +24,28 @@ import asyncio
 router = APIRouter(prefix="/api/auth", tags=["auth_2fa"])
 
 
+def _e164(phone: str) -> str:
+    """Normalize a US phone to E.164 for Twilio: '9547404058' → '+19547404058'.
+
+    09-01 (Logan, live bug): raw 10-digit input was previously sent as-is and
+    Twilio rejects it — every SMS 2FA attempt failed. Passes valid +1… through.
+    """
+    raw = (phone or "").strip()
+    if not raw:
+        raise ValueError("Phone number is required.")
+    if raw.startswith("+"):
+        digits = raw[1:]
+        if not digits.isdigit() or len(digits) < 8:
+            raise ValueError("Phone number is not valid.")
+        return raw
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 10:
+        return "+1" + digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    raise ValueError("Phone number must be 10 digits (e.g. 9547404058) or E.164.")
+
+
 # ─── Pydantic Schemas ─────────────────────────────────────────────────────────
 
 class EmailVerificationRequest(BaseModel):
@@ -34,18 +57,25 @@ class EmailVerificationConfirm(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
+# user_id is a legacy field — the routes authenticate via the session token and
+# never read it. 09-01 (Logan, live bug): making it optional keeps old clients
+# working while the Settings UI (which sends only method/phone_number/code)
+# can actually complete setup — Pydantic was 422-rejecting every attempt.
 class TwoFactorSetupRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     method: str = Field(..., description="totp | email | sms")
     phone_number: Optional[str] = None
     email: Optional[EmailStr] = None
 
 
 class TwoFactorVerifySetupRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     method: str = Field(..., description="totp | email | sms")
     code: str = Field(..., min_length=6, max_length=6)
     secret: Optional[str] = None  # for TOTP
+    # 09-01: SMS setup stores the verified number here so login challenges can
+    # find it (settings["phone_number"]) — it was never persisted before.
+    phone_number: Optional[str] = None
 
 
 class TwoFactorChallengeRequest(BaseModel):
@@ -62,7 +92,7 @@ class TwoFactorVerifyChallengeRequest(BaseModel):
 
 
 class TwoFactorDisableRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None  # legacy — route uses the authenticated user
     code: str = Field(..., min_length=6, max_length=12)
 
 
@@ -159,12 +189,16 @@ async def setup_two_factor(
     elif method == "sms":
         if not payload.phone_number:
             raise HTTPException(400, "Phone number is required for SMS 2FA setup.")
+        try:
+            e164 = _e164(payload.phone_number)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         code = code_store.generate_code(current_user.public_id, purpose="2fa_setup")
-        await asyncio.to_thread(sms_service.send_sms_code, payload.phone_number, code)
+        await sms_service.send_sms_code(e164, code)
         return {
             "status": "success",
             "method": "sms",
-            "message": f"6-digit 2FA setup code sent to {payload.phone_number}."
+            "message": f"6-digit 2FA setup code sent to {e164}."
         }
 
     else:
@@ -199,6 +233,14 @@ async def verify_two_factor_setup(
         current_settings["2fa_method"] = method
         if method == "totp" and payload.secret:
             current_settings["2fa_totp_secret"] = payload.secret
+        if method == "sms":
+            # Persist the verified number (normalized) — login challenges read
+            # settings["phone_number"]; before 09-01 nothing wrote it.
+            raw_phone = payload.phone_number or current_settings.get("phone_number") or ""
+            try:
+                current_settings["phone_number"] = _e164(raw_phone)
+            except ValueError as e:
+                raise HTTPException(400, f"SMS 2FA needs a valid phone number: {e}")
         user.settings = current_settings
         db.commit()
 
@@ -228,7 +270,12 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
         user = db.query(User).filter(User.public_id == payload.user_id).first()
         if not user:
             raise HTTPException(404, "User not found.")
-        phone = (user.settings or {}).get("phone_number")
+        settings = user.settings or {}
+        phone = settings.get("phone_number") or (settings.get("profile") or {}).get("phone")
+        try:
+            phone = _e164(phone) if phone else ""
+        except ValueError:
+            phone = ""
         if not phone:
             raise HTTPException(400, "No phone number found on account for SMS 2FA.")
         # SMS opt-out (08-31, owner): numbers that replied STOP are never
@@ -240,7 +287,7 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
                 "Reply START from that phone to re-enable, or use email/authenticator 2FA.",
             )
         code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
-        sent = await asyncio.to_thread(sms_service.send_sms_code, phone, code)
+        sent = await sms_service.send_sms_code(phone, code)
         if not sent:
             raise HTTPException(500, "Failed to send the 2FA SMS — Twilio rejected the message.")
         return {"status": "success", "message": f"12-digit 2FA code sent via SMS to {phone}."}
@@ -353,7 +400,7 @@ async def send_purchase_challenge(
         if (current_user.settings or {}).get("sms_opt_out"):
             raise HTTPException(400, "SMS messages are disabled for this number (you replied STOP). Reply START to re-enable.")
         code = code_store.generate_code(target, purpose="purchase_verification")
-        sent = await asyncio.to_thread(sms_service.send_sms_code, target, code)
+        sent = await sms_service.send_sms_code(target, code)
         if not sent:
             raise HTTPException(500, "Failed to send purchase verification SMS.")
         return {
@@ -555,7 +602,7 @@ async def sms_inbound(request: Request, db: Session = Depends(get_db)):
     if reply is None:
         return Response(content="<Response/>", media_type="application/xml")
 
-    sent = await asyncio.to_thread(sms_service.send_sms_async, from_num, reply)
+    sent = await sms_service.send_sms_async(from_num, reply)
     if not sent:
         logger_2fa.error("Failed to send SMS compliance reply to %s", from_num)
     return PlainTextResponse(reply)

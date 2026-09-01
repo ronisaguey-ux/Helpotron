@@ -66,6 +66,14 @@ export default function SectionCard({
     return () => window.removeEventListener('helpotron:open-section', onOpen);
   }, [id]);
 
+  /* Owner (09-01): clicking anywhere on the bar toggles, not just the chevron.
+   * Clicks on real controls inside a custom header (buttons, links, inputs)
+   * are left alone so they keep working. */
+  const onHeaderClick = (e) => {
+    if (e.target.closest('button, a, input, select, textarea, label')) return;
+    toggle();
+  };
+
   const hasHeader = !!(header || title || icon || headerRight);
 
   /* Collapsed headers get `collapsed` forwarded so shared headers like
@@ -80,7 +88,11 @@ export default function SectionCard({
      * open = the normal padded card with content. */
     <section id={id || undefined} className={`clean-card ${open ? padding : 'p-2'} relative ${className}`}>
       {hasHeader && (
-        <div className={`flex gap-2 ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-3' : '') : ''}`}>
+        <div
+          className={`flex gap-2 select-none cursor-pointer ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-3' : '') : ''}`}
+          onClick={hasHeader ? onHeaderClick : undefined}
+          role="presentation"
+        >
           {icon && <span className="text-[var(--accent)] shrink-0">{icon}</span>}
           {title && (
             <h3 className="text-base font-semibold tracking-wide text-[var(--text-primary)] flex-1 truncate">
