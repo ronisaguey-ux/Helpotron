@@ -12,6 +12,8 @@ import logging
 import os
 import re
 import uuid
+import zipfile
+from xml.etree import ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -25,6 +27,54 @@ from .database import Assignment, UniversalDumpItem, User, utcnow
 from .transcription import transcribe_audio
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_pptx_text(file_path: str) -> Optional[str]:
+    """08-31: pull real slide text out of a .pptx package (a ZIP of XML parts).
+
+    Returns None when the file is not a PPTX zip (legacy .ppt OLE, .key, or
+    corrupt) so callers can fall back. Text is the <a:t> text runs of
+    ppt/slides/slideN.xml in numeric order (the order slides actually play),
+    one line per run, plus the matching speaker-notes text under each slide.
+    """
+    try:
+        zf = zipfile.ZipFile(file_path)
+    except (zipfile.BadZipFile, OSError):
+        return None  # not a zip at all (legacy .ppt OLE, .key, corrupt)
+    with zf:
+        slide_names = sorted(
+            (n for n in zf.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)),
+            key=lambda n: int(re.search(r"(\d+)", n).group(1)),
+        )
+        if not slide_names:
+            return None
+        note_names = {
+            re.search(r"(\d+)", n).group(1): n
+            for n in zf.namelist() if re.fullmatch(r"ppt/notesSlides/notesSlide\d+\.xml", n)
+        }
+
+        def _text_runs(xml_bytes: bytes) -> list[str]:
+            # Match <a:t> by local name — decks vary in how they declare the
+            # p:/a: namespaces, so prefix-agnostic matching is the robust path.
+            root = ET.fromstring(xml_bytes)
+            return [
+                el.text.strip() for el in root.iter()
+                if (el.tag == "t" or el.tag.endswith("}t")) and el.text and el.text.strip()
+            ]
+
+        parts: list[str] = []
+        for idx, name in enumerate(slide_names, 1):
+            lines = _text_runs(zf.read(name))
+            if lines:
+                parts.append(f"--- slide {idx} ---\n" + "\n".join(lines))
+            num = re.search(r"(\d+)", name).group(1)
+            note_name = note_names.get(num)
+            if note_name:
+                nlines = _text_runs(zf.read(note_name))
+                if nlines:
+                    parts.append(f"[speaker notes, slide {idx}] " + " ".join(nlines))
+        return "\n\n".join(parts)
+
 
 DUMP_DIR = BASE_DIR / "uploads" / "assignment_dump"
 DUMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -210,19 +260,23 @@ class AssignmentDumpManager:
         # 5. Presentation / PowerPoint / Google Slides -> Pure Gemini Extraction
         elif file_category == "presentation" or ext in [".pptx", ".ppt", ".key", ".gslides"]:
             try:
-                # Extract text / notes directly, bypassing Nemotron/DeepSeek.
-                # 08-28 truncation fix: real slide decks are binary ZIPs, so the
-                # printable-text pass gives clean text at full length (capped
-                # generously with an explicit marker, never silently cut).
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    raw = f.read()
-                clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
-                if len(clean) > 2_000_000:
-                    clean = clean[:2_000_000] + (
+                # 08-31 fix: .pptx is a ZIP of XML parts — parse the real slide
+                # text (<a:t> runs in slide order + speaker notes). The old
+                # printable-text pass read the binary as text and produced
+                # zip/XML garbage (questions about theme1.xml from a real
+                # textbook deck), which poisoned generated quizzes. Non-ZIP
+                # decks (legacy .ppt OLE, .key) fall back to the old pass.
+                text = _extract_pptx_text(file_path)
+                if not text:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        raw = f.read()
+                    clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
+                    text = clean.strip() if len(clean.strip()) > 20 else f"Presentation Slide Deck: {os.path.basename(file_path)}"
+                if len(text) > 2_000_000:
+                    text = text[:2_000_000] + (
                         "\n\n[presentation extraction truncated at 2,000,000 chars — "
                         "original file retained in the dump file store]")
-                text_preview = clean.strip() if len(clean.strip()) > 20 else f"Presentation Slide Deck: {os.path.basename(file_path)}"
-                return f"# Presentation Deck Outline ({os.path.basename(file_path)})\n\n{text_preview}\n\n*Routed Exclusively to Google Gemini Engine (Nemotron/DeepSeek Bypassed)*", "pure-gemini"
+                return f"# Presentation Deck Outline ({os.path.basename(file_path)})\n\n{text}\n\n*Routed Exclusively to Google Gemini Engine (Nemotron/DeepSeek Bypassed)*", "pure-gemini"
             except Exception:
                 return f"# Presentation: {os.path.basename(file_path)}\n\n[Slide deck loaded for Gemini generation]", "pure-gemini"
 
