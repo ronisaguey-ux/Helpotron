@@ -39,6 +39,7 @@ try:
     from .csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
     from .captcha import captcha_required, has_valid_bypass, verify_turnstile_token
     from .monitors import MonitorMiddleware, run_monitors_loop
+    from .memguard import MemoryBudgetMiddleware
 except (ImportError, ValueError):
     from server import agent_session, credits, detectors, ratelimit, study_tools, transcription
     from server.user_settings_service import user_settings_service, filter_user_settings_payload
@@ -55,6 +56,7 @@ except (ImportError, ValueError):
     from server.csrf import CSRFMiddleware, set_csrf_cookie, validate_csrf
     from server.captcha import captcha_required, has_valid_bypass, verify_turnstile_token
     from server.monitors import MonitorMiddleware, run_monitors_loop
+    from server.memguard import MemoryBudgetMiddleware
 
 
 # Import route modules
@@ -269,6 +271,15 @@ app.add_middleware(MonitorMiddleware)
 # Added last so it is outermost and sees every response, including the
 # inner middlewares' 401/403/429 rejections and the SPA FileResponses.
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Memory budget (08-31, operator): the server tree runs under a 10G cgroup
+# budget (start_stack.sh); while the budget is consumed every NEW request is
+# answered "Task is in Queue, will be completed momentarily" (429) and the
+# client retries until RAM frees up. Registered inside CORS (queue JSON must
+# stay CORS-readable) but outside CSRF/rate-limit, so the queue answer wins
+# over a CSRF rejection for the first POST of a session — and /health and
+# /api/csrf are exempt inside memguard so the wake monitors never queue.
+app.add_middleware(MemoryBudgetMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -613,6 +624,7 @@ class LoginIn(BaseModel):
 class SignupIn(BaseModel):
     public_id: str = Field(..., max_length=100)
     password: str = Field(..., max_length=256)
+    turnstile_token: Optional[str] = None  # 08-31: mandatory once captcha configured
 
 # ─── auth endpoints ──────────────────────────────────────────────────────
 
@@ -754,6 +766,17 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
 @app.post("/api/signup")
 def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     """Create a new user account with a 7-day free trial."""
+    # Same gate as /api/login (08-31, operator): once Turnstile is configured
+    # every signup must present a valid token unless the operator's test-bot
+    # bypass header is present. Deny-closed: enforcement never fails open, and
+    # an empty token isn't even sent to the network.
+    if captcha_required() and not has_valid_bypass(request):
+        remote_ip = request.client.host if request.client else ""
+        if not verify_turnstile_token(body.turnstile_token or "", remote_ip):
+            raise HTTPException(
+                403, "Security check required — complete the captcha and try again."
+            )
+
     # Account creation is far tighter than the blanket 120/min IP budget:
     # a demo box should never let one client mint dozens of trial accounts.
     # 08-26 prototype-beta: free test run means real users share an IP — 5/hr

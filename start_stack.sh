@@ -6,14 +6,24 @@
 set -e
 cd /home/roni/Roni_workspace/helpotron
 
-# 1) API server (background, reload on)
+# 1) API server (background, reload on) — inside a 10G RAM-budget scope
+# (owner directive 08-31). server/memguard.py reads the cgroup and answers
+# "Task is in Queue, will be completed momentarily" when the budget is spent.
+# --scope --unit names the cgroup helpotron-uvicorn.scope so a re-run detects
+# the active instance instead of spawning a second server that can't bind.
 # --proxy-headers: trust cloudflared's X-Forwarded-Proto so request.url.is_secure
 # is True for tunnel requests -> Secure session/CSRF cookies on https (handoff A10 #2).
 # --forwarded-allow-ips 127.0.0.1: only the local tunnel may supply forwarded headers.
-nohup /home/roni/Roni_workspace/helpotron/.venv/bin/uvicorn server.main:app \
-  --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1 \
-  > /tmp/helpotron_api.log 2>&1 &
-echo "api pid $!"
+if systemctl --user is-active --quiet helpotron-uvicorn.scope 2>/dev/null; then
+  echo "api scope already active — skipping launch"
+else
+  nohup systemd-run --user --scope --unit=helpotron-uvicorn \
+    -p MemoryMax=10G -p MemoryHigh=10G -p MemorySwapMax=0 \
+    /home/roni/Roni_workspace/helpotron/.venv/bin/uvicorn server.main:app \
+    --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1 \
+    > /tmp/helpotron_api.log 2>&1 &
+  echo "api scope started (pid $!)"
+fi
 
 # 2) Web preview (background)
 cd /home/roni/Roni_workspace/helpotron/web
