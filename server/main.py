@@ -80,6 +80,7 @@ try:
     from .routes_voice import router as voice_router
     from .routes_simulation import router as simulation_router
     from .routes_dump import router as dump_router
+    from .routes_import_url import router as import_url_router
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
     from .routes_extension import public_router as extension_public_router
@@ -108,6 +109,7 @@ except (ImportError, ValueError):
     from server.routes_overlord import router as overlord_router
     from server.routes_simulation import router as simulation_router
     from server.routes_dump import router as dump_router
+    from server.routes_import_url import router as import_url_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
     from server.routes_extension import public_router as extension_public_router
@@ -377,6 +379,7 @@ app.include_router(recovery_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)
+app.include_router(import_url_router)
 app.include_router(math_router)
 app.include_router(extension_router)
 app.include_router(extension_public_router)
@@ -834,10 +837,11 @@ def get_csrf(response: Response, request: Request):
 
 @app.get("/api/public-config")
 def public_config():
-    """Client-safe config for the login captcha (Turnstile)."""
+    """Client-safe config for the login captcha (Turnstile) + feature flags."""
     return {
         "turnstile_sitekey": config.turnstile_sitekey,
         "captcha_enabled": captcha_required(),
+        "import_from_url_enabled": config.import_from_url_enabled,
     }
 
 

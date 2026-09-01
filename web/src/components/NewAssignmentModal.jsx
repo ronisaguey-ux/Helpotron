@@ -24,7 +24,7 @@
  * shared client file stays untouched.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Plus, FileText, Loader2 } from 'lucide-react';
+import { X, Plus, FileText, Loader2, Link2 } from 'lucide-react';
 import { getServer, getUserId } from '../api.js';
 import { isDemoMode, resolveDemoRequest } from '../mock.js';
 
@@ -120,15 +120,36 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
   const [error, setError] = useState('');
   const [phase, setPhase] = useState('idle'); // idle | creating | saving_rubric
   const [createdId, setCreatedId] = useState(null);
+  // Import-from-link tab (feature #79): shown only when the operator has the
+  // flag on (/api/public-config → import_from_url_enabled).
+  const [importEnabled, setImportEnabled] = useState(false);
+  const [tab, setTab] = useState('manual'); // manual | link
+  const [impUrl, setImpUrl] = useState('');
+  const [impDesc, setImpDesc] = useState('');
+  const [importPhase, setImportPhase] = useState('idle'); // idle | importing
   const titleRef = useRef(null);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { if (phase === 'idle' || phase === 'saving_rubric') onClose(); } };
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`${getServer() || ''}/api/public-config`, { credentials: 'include' });
+        const d = await r.json();
+        if (alive && d && d.import_from_url_enabled) setImportEnabled(true);
+      } catch { /* flag intentionally default-off on failure */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && (phase === 'idle' || phase === 'saving_rubric') && importPhase === 'idle') onClose();
+    };
     window.addEventListener('keydown', onKey);
     titleRef.current?.focus();
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, importPhase]);
 
   const busy = phase === 'creating' || phase === 'saving_rubric';
   const canSubmit = title.trim().length > 0 && !busy;
@@ -183,13 +204,51 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
     }
   };
 
+  /** Import-from-link (#79): one POST — the API scrapes (sidecar + graph),
+   * routes the subject, and lands the assignment in the bubble. */
+  const importFromUrl = async () => {
+    setError('');
+    setImportPhase('importing');
+    try {
+      const res = await assignmentRequest('POST', '/api/assignments/import-from-url', {
+        url: impUrl.trim(),
+        description: impDesc.trim(),
+      });
+      // Zero-token accounts get a 200 with status insufficient_tokens (same
+      // shape as the dump finalize gate) — surface the detail, not an error.
+      if (res && res.status === 'insufficient_tokens') {
+        setImportPhase('idle');
+        setError(res.detail || 'Insufficient tokens to import from a link.');
+        return;
+      }
+      const id = res && res.assignment_id;
+      if (id == null) {
+        setImportPhase('idle');
+        setError('The scrape finished but no assignment id came back. Try again.');
+        return;
+      }
+      onCreated({
+        assignment_id: id,
+        title: res.title || impUrl.trim(),
+        subject: res.subject,
+        imported: true,
+        rubric_saved: false,
+      });
+    } catch (e) {
+      setImportPhase('idle');
+      setError(e.message || 'Import failed.');
+    }
+  };
+
+  const closeAllowed = phase !== 'creating' && importPhase !== 'importing';
+
   return (
     <div
       className="fixed inset-0 z-[100] flex p-3 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto aurora-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-assignment-title"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== 'creating') onClose(); }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget && closeAllowed) onClose(); }}
     >
       {/* Modal chrome */}
       <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
@@ -207,7 +266,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
           <button
             type="button"
             onClick={() => onClose()}
-            disabled={phase === 'creating'}
+            disabled={!closeAllowed}
             className="text-outline hover:text-on-surface disabled:opacity-40 cursor-pointer transition p-1"
             aria-label="Close"
           >
@@ -215,6 +274,42 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
           </button>
         </div>
 
+        {importEnabled && (
+          <div
+            className="flex gap-1 p-1 rounded-2xl bg-surface-container-low border border-outline-variant/30"
+            role="tablist"
+            aria-label="Assignment creation mode"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'manual'}
+              onClick={() => setTab('manual')}
+              className={`flex-1 px-3 py-2 rounded-xl font-label-caps text-xs uppercase tracking-wider transition cursor-pointer ${
+                tab === 'manual'
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              Create manually
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'link'}
+              onClick={() => setTab('link')}
+              className={`flex-1 px-3 py-2 rounded-xl font-label-caps text-xs uppercase tracking-wider transition cursor-pointer ${
+                tab === 'link'
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              Import from link
+            </button>
+          </div>
+        )}
+
+        {tab === 'manual' ? (
         <form
           className="space-y-4"
           onSubmit={(e) => { e.preventDefault(); if (canSubmit) createAssignment(); }}
@@ -290,7 +385,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             <button
               type="button"
               onClick={() => onClose()}
-              disabled={phase === 'creating'}
+              disabled={!closeAllowed}
               className="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant font-label-caps text-xs uppercase tracking-wider transition disabled:opacity-40 cursor-pointer"
             >
               Cancel
@@ -305,6 +400,72 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             </button>
           </div>
         </form>
+        ) : (
+        <form
+          className="space-y-4"
+          onSubmit={(e) => { e.preventDefault(); if (impUrl.trim().length >= 8 && importPhase === 'idle') importFromUrl(); }}
+        >
+          <div>
+            <label htmlFor="na-url" className={labelCls}>Assignment link *</label>
+            <input
+              id="na-url"
+              type="url"
+              maxLength={2048}
+              placeholder="https://yourclassportal.example.com/assignment/123"
+              value={impUrl}
+              onChange={(e) => setImpUrl(e.target.value)}
+              className={inputCls}
+            />
+            <p className="font-body-sm text-xs text-on-surface-variant mt-1.5">
+              Paste the page that holds the assignment — a class portal, syllabus page, or
+              public doc. Helpo reads it, pulls the instructions, and drops it in the right
+              subject bubble.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="na-impdesc" className={labelCls}>What is it? (optional)</label>
+            <textarea
+              id="na-impdesc"
+              rows={3}
+              maxLength={5000}
+              placeholder="e.g. APUSH essay on the Cold War, due Thursday"
+              value={impDesc}
+              onChange={(e) => setImpDesc(e.target.value)}
+              className={`${inputCls} resize-y`}
+            />
+            <p className="font-body-sm text-xs text-on-surface-variant mt-1.5">
+              A quick note makes the scrape smarter, and stands in for the page if the
+              portal hides the text. Scraping can take up to a minute.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-error/15 border border-error/30 rounded-xl text-xs text-error font-mono whitespace-pre-wrap" role="alert">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => onClose()}
+              disabled={!closeAllowed}
+              className="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant font-label-caps text-xs uppercase tracking-wider transition disabled:opacity-40 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={impUrl.trim().length < 8 || importPhase !== 'idle'}
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 rounded-xl font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm"
+            >
+              {importPhase === 'importing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+              <span>{importPhase === 'importing' ? 'Importing…' : 'Import Assignment'}</span>
+            </button>
+          </div>
+        </form>
+        )}
 
         <p className="font-body-sm text-xs text-on-surface-variant">
           Assignments you create appear in the workspace and cards; they land in this ledger after being marked completed.
