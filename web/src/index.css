@@ -1520,7 +1520,6 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --st-tertiary-fixed-dim: #ffb59a;
   --st-on-tertiary-fixed: #370e00;
   --st-on-tertiary-fixed-variant: #773215;
-  --st-background: #f8f9ff;
   --st-on-background: #0b1c30;
   --st-inverse-surface: #213145;
   --st-inverse-on-surface: #eaf1ff;
