@@ -504,9 +504,11 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
       {showNewAssignment && (
         <NewAssignmentModal
           onClose={() => { setShowNewAssignment(false); setCreateNotice(''); }}
-          onCreated={({ assignment_id, rubric_saved }) => {
+          onCreated={({ assignment_id, rubric_saved, imported, subject }) => {
             setShowNewAssignment(false);
-            setCreateNotice(`✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once completed.`);
+            setCreateNotice(imported
+              ? `✅ Imported from the link — assignment #${assignment_id} landed in the ${subject || 'assigned'} bubble.`
+              : `✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once completed.`);
             setTimeout(() => setCreateNotice(''), 6000);
             fetchHistory(subjectFilter);
           }}

@@ -145,6 +145,32 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       showToast('Paste some assignment text first.', false);
       return;
     }
+    // A lone http(s) link goes down the import-from-url lane (#79): the
+    // scrape sidecar reads the page and the assignment lands in its subject
+    // bubble (server-side flag; 403 surfaces as the toast below).
+    if (/^https?:\/\/\S+$/.test(text)) {
+      setUploading(true);
+      try {
+        const res = await api.request('/api/assignments/import-from-url', {
+          method: 'POST',
+          body: JSON.stringify({ url: text, description: '' }),
+        });
+        setPasteText('');
+        if (res && res.status === 'insufficient_tokens') {
+          showToast(res.detail || 'Insufficient tokens to import from a link.', false);
+        } else if (res && res.assignment_id) {
+          showToast(`✅ Imported — assignment #${res.assignment_id} landed in the ${res.subject || 'assigned'} bubble.`);
+        } else {
+          showToast('The scrape finished but returned no assignment — try again.', false);
+        }
+        await fetchItems();
+      } catch (e) {
+        showToast(e.message || 'Error importing from link', false);
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
     setUploading(true);
     try {
       const file = new File([text], `paste_${Date.now()}.txt`, { type: 'text/plain' });
@@ -448,7 +474,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
           <textarea
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={`Paste the full assignment / rubric / instructions here — ${agentName} will extract the details and match it to an assignment bubble…`}
+            placeholder={`Paste the full assignment / rubric / instructions here — or a link to the assignment page (Helpo will scrape it) — ${agentName} will extract the details and match it to an assignment bubble…`}
             rows={5}
             className="clean-input w-full px-3 py-2.5 text-xs rounded-[var(--radius-md)] outline-none resize-y font-mono leading-relaxed"
           />

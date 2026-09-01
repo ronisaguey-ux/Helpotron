@@ -82,6 +82,9 @@ class Settings(BaseSettings):
 
     # Security & Sessions
     session_secret: str = os.getenv("SESSION_SECRET", "helpotron_session_secret_dev_key_32chars")
+    # Import-from-URL (feature #79): the scrape sidecar address + operator flag.
+    scrape_sidecar_url: str = os.getenv("SCRAPE_SIDECAR_URL", "http://127.0.0.1:9778")
+    import_from_url_enabled: bool = os.getenv("IMPORT_FROM_URL_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     production_mode: bool = os.getenv("PRODUCTION_MODE", "false").lower() == "true"
     jwt_secret: str = os.getenv("JWT_SECRET", "helpotron_jwt_secret_dev_key_32chars")
     totp_secret: str = os.getenv("TOTP_SECRET", "JBSWY3DPEHPK3PXP")
