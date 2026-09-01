@@ -1176,18 +1176,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               <span className="truncate max-w-[140px]">{currentIdentity.name}</span>
               <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfigsOpen(true)}
-              className="px-3 py-2 rounded-xl border border-dashed border-outline-variant/40 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:border-outline flex items-center gap-2 transition cursor-pointer"
-              title="No custom identity active — click to configure"
-            >
-              <span>🎭</span>
-              <span>Set Identity</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-            </button>
-          )}
+          ) : null}
 
           <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 flex items-center gap-1">
             {Object.entries(MODE_META).map(([k, m]) => {
