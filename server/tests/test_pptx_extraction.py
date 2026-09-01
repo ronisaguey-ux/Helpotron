@@ -7,7 +7,6 @@ import zipfile
 
 from server.assignment_dump import _extract_pptx_text
 
-S = '{"http://schemas.openxmlformats.org/drawingml/2006/main"}'
 
 
 def _slide_xml(*runs: str) -> bytes:
