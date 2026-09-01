@@ -215,6 +215,30 @@ async def adjust_user_credits(
     return {"new_balance": user.credits, "public_id": user.public_id, "amount": amount}
 
 
+@router.post("/user/{public_id}/welcome-tokens")
+async def grant_welcome_tokens(
+    public_id: str,
+    amount: float = Query(300.0, description="Tokens to add to the token_balance"),
+    reason: str = Query("owner-approved welcome grant"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """08-31 (Bob): welcome tokens are NOT automatic — every signup is
+    reported to the owner, and only accounts he approves get the 300-token
+    grant through this admin endpoint."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    settings = dict(user.settings or {})
+    settings["token_balance"] = max(0.0, float(settings.get("token_balance", 0) or 0) + amount)
+    user.settings = settings
+    db.commit()
+    db.refresh(user)
+    print(f"[helpotron] owner-approved welcome grant: {amount} tokens -> {public_id} ({reason})")
+    return {"new_token_balance": settings["token_balance"], "public_id": public_id, "granted": amount}
+
+
 @router.post("/user/{public_id}/plan")
 async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db)):
     require_admin(request)

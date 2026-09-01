@@ -386,11 +386,12 @@ async def health_check():
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 
-# 08-31 (owner directive, evening): EVERY new account is born with a
-# 300-token welcome balance — Bob: "theres a few new accounts coming, upon
-# generation grant them 300 tokens". Supersedes the earlier Dylan/Emma-only
-# grant (substring name matching removed).
-WELCOME_TOKEN_BONUS = 300.0
+# 08-31 (owner directive, later evening): NO automatic welcome grant. Bob —
+# "Don't automatically give every new account 300 credits, run it by me here
+# and give only when I approve". New accounts start at 0 tokens; signups are
+# reported to the owner and granted on approval via
+# POST /api/admin/user/{public_id}/welcome-tokens (server/admin.py).
+WELCOME_TOKEN_BONUS = 300.0  # owner-approved grant amount
 
 
 def get_or_create_user(db: Session, public_id: str) -> User:
@@ -400,7 +401,7 @@ def get_or_create_user(db: Session, public_id: str) -> User:
         low = public_id.lower()
         if low in RESERVED_PUBLIC_IDS or low == ADMIN_PUBLIC_ID.lower():
             raise ValueError(f"public_id '{public_id}' is reserved and cannot be auto-created")
-        settings = {"reading_level": "college-freshman", "token_balance": WELCOME_TOKEN_BONUS}
+        settings = {"reading_level": "college-freshman"}
         user = User(public_id=public_id, plan="basic", settings=settings)
         db.add(user)
         db.flush()
@@ -776,9 +777,10 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "Public ID already taken")
     hash_hex, salt = hash_password(body.password)
-    # Every new account starts with a 300-token welcome balance
-    # (08-31 owner directive, evening — supersedes the named-only grant).
-    settings = {"reading_level": "college-freshman", "token_balance": WELCOME_TOKEN_BONUS}
+    # New accounts start at 0 tokens (08-31 owner directive, late evening —
+    # supersedes both the named-only and the universal grants: no auto-grant,
+    # the owner approves each signup's 300 tokens individually).
+    settings = {"reading_level": "college-freshman"}
     user = User(
         public_id=body.public_id,
         plan="none",
@@ -908,6 +910,17 @@ async def admin_user_credits(public_id: str, amount: float, reason: str = "admin
     from .admin import adjust_user_credits
     return await adjust_user_credits(public_id=public_id, amount=amount, reason=reason,
                                      request=request, db=db)
+
+
+@app.post("/api/admin/user/{public_id}/welcome-tokens")
+async def admin_user_welcome_tokens(public_id: str, amount: float = WELCOME_TOKEN_BONUS,
+                                    reason: str = "owner-approved welcome grant",
+                                    request: Request = None, db: Session = Depends(get_db)):
+    """08-31 (Bob): welcome tokens are granted only after he approves the
+    signup in chat — this is the endpoint the approval loop calls."""
+    from .admin import grant_welcome_tokens
+    return await grant_welcome_tokens(public_id=public_id, amount=amount, reason=reason,
+                                      request=request, db=db)
 
 
 @app.post("/api/admin/user/{public_id}/plan")
