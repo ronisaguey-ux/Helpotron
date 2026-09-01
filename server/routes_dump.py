@@ -405,11 +405,33 @@ async def finalize_dump_item(
                     if isinstance(parsed, list) and all(isinstance(c, dict) for c in parsed):
                         for c in parsed:
                             q = str(c.get("q") if c.get("q") is not None else c.get("front") or "").strip()
-                            a = str(c.get("a") if c.get("a") is not None else c.get("back") or "").strip()
-                            key = q[:80].lower()
-                            if q and a and key not in seen:
-                                seen.add(key)
-                                combined.append({"q": q, "a": a})
+                            if kind == "practice_test":
+                                # 08-31 fix: the quiz prompt asks for the
+                                # {q, options, answer, explain} shape, but the
+                                # merge was reading {a}/{back} (flashcards
+                                # shape), so every question had an empty answer
+                                # and was dropped — finalize always produced
+                                # no material. Keep the full quiz shape.
+                                a = str(
+                                    c.get("answer") if c.get("answer") is not None
+                                    else c.get("a") if c.get("a") is not None
+                                    else c.get("back") or ""
+                                ).strip()
+                                key = q[:80].lower()
+                                if q and a and key not in seen:
+                                    seen.add(key)
+                                    combined.append({
+                                        "q": q,
+                                        "options": c.get("options") or [],
+                                        "answer": a,
+                                        "explain": c.get("explain") or "",
+                                    })
+                            else:
+                                a = str(c.get("a") if c.get("a") is not None else c.get("back") or "").strip()
+                                key = q[:80].lower()
+                                if q and a and key not in seen:
+                                    seen.add(key)
+                                    combined.append({"q": q, "a": a})
                     else:
                         note_parts.append("Generation returned unexpected JSON shape — no material saved.")
                 if combined:
