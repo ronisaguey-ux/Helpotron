@@ -25,6 +25,7 @@ from .config import BASE_DIR, config
 from .cost_tracking import cost_engine
 from .database import Assignment, UniversalDumpItem, User, utcnow
 from .transcription import transcribe_audio
+from .ssrf import is_safe_url, check_redirect_ssrf
 
 logger = logging.getLogger(__name__)
 
@@ -567,13 +568,17 @@ async def attach_scraped_files(assignment_id: int, user_id: int,
         if user is None or assignment is None or assignment.user_id != user_id:
             return [{"filename": "?", "status": "error", "error": "assignment/user not found"}]
 
-        async with httpx.AsyncClient(timeout=ATTACH_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=ATTACH_TIMEOUT_SECONDS, follow_redirects=True, event_hooks={"response": [check_redirect_ssrf]}) as client:
             for rec in (files_meta or [])[:ATTACH_MAX_FILES]:
                 url = str((rec or {}).get("url") or "")
                 filename = os.path.basename(url.split("?")[0]) or str((rec or {}).get("filename") or "file")
                 if not url.startswith(("http://", "https://")):
                     outcomes.append({"url": url, "filename": filename, "status": "skipped",
                                      "error": "non-http URL"})
+                    continue
+                if not is_safe_url(url):
+                    outcomes.append({"url": url, "filename": filename, "status": "skipped",
+                                     "error": "blocked by SSRF policy"})
                     continue
                 try:
                     ok = False

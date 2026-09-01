@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, Transcript, User
-from .security import is_admin_user
+from .security import is_admin_user, is_junk_content, educational_guards_on
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
 from .engine.sandbox import sandbox_manager
@@ -312,6 +312,48 @@ def _mask_settings_for_agent(settings: dict) -> dict:
     return _mask_value(settings)
 
 
+def _is_safe_compute_code(code: str) -> bool:
+    """Validate that Python code for run_shell only does safe math/datetime computation.
+    Blocks all dangerous imports, builtins, filesystem, network, and subprocess calls.
+    """
+    import ast
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+
+    SAFE_MODULES = {"math", "datetime", "decimal", "fractions", "statistics", "sympy"}
+    DISALLOWED_NAMES = {
+        "open", "eval", "exec", "__import__", "globals", "locals", "getattr",
+        "setattr", "delattr", "compile", "breakpoint", "input", "memoryview",
+        "sys", "os", "subprocess", "shutil", "socket", "urllib", "requests",
+        "pathlib", "io", "builtins", "posix", "ctypes", "importlib", "exit", "quit"
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            if node.id.startswith("__") or node.id in DISALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") or node.attr in DISALLOWED_NAMES:
+                return False
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                root_pkg = alias.name.split(".")[0]
+                if root_pkg not in SAFE_MODULES:
+                    return False
+        elif isinstance(node, ast.ImportFrom):
+            if not node.module or node.module.split(".")[0] not in SAFE_MODULES:
+                return False
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in DISALLOWED_NAMES:
+                return False
+            if isinstance(node.func, ast.Attribute) and node.func.attr in DISALLOWED_NAMES:
+                return False
+
+    return True
+
+
 def _validated_argv(command: str) -> Optional[list[str]]:
     """Turn a run_shell payload into an argv array. STRICT: only a tiny set of
     compute commands — python3 -c '<code>' or 'date'. No shell metas, no
@@ -329,6 +371,8 @@ def _validated_argv(command: str) -> Optional[list[str]]:
     if m:
         code = m.group("code")
         if _SHELL_META.search(code) or not _CMD_ALLOW.fullmatch(code):
+            return None
+        if not _is_safe_compute_code(code):
             return None
         return [sys.executable, "-c", code]
     return None
@@ -1010,7 +1054,10 @@ print(f"Active files: {os.listdir('.')}")
                     ai["aiName"] = str(v)
                     applied.append("agent name")
                 elif k in ("personality", "instructions"):
-                    ai[k] = str(v)
+                    val_str = str(v)
+                    if is_junk_content(val_str) and educational_guards_on(user):
+                        continue
+                    ai[k] = val_str
                     applied.append(k)
                 elif k == "effort_score":
                     try:

@@ -227,8 +227,9 @@ async def main():
 
         # ── 3. ADMIN APP VIEWS (RoniDev) ───────────────────────────────────────
         print("\n=== Phase 3: Admin App Views (RoniDev) ===")
+        admin_pw = os.getenv("ADMIN_PASSWORD", "")
         async with httpx.AsyncClient() as client:
-            admin_resp = await client.post("http://127.0.0.1:8000/api/login", json={"public_id": "RoniDev", "password": "<REDACTED-DEV-PASSWORD>"})
+            admin_resp = await client.post("http://127.0.0.1:8000/api/login", json={"public_id": "RoniDev", "password": admin_pw})
             admin_data = admin_resp.json()
             admin_token = admin_data.get("token") or admin_data.get("access_token")
 

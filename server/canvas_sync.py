@@ -12,6 +12,7 @@ Provides robust synchronization with Canvas instances using:
 import re
 import httpx
 from typing import List, Dict, Any, Optional
+from .ssrf import validate_safe_url
 
 
 class CanvasSyncEngine:
@@ -22,6 +23,7 @@ class CanvasSyncEngine:
         self.base_url = base_url.rstrip("/")
         if not self.base_url.startswith("http"):
             self.base_url = f"https://{self.base_url}"
+        validate_safe_url(self.base_url)
         self.access_token = access_token
         self.headers = {
             "Authorization": f"Bearer {access_token}",
