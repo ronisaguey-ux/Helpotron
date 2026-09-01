@@ -107,8 +107,14 @@ class Settings(BaseSettings):
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     twilio_api_key_sid: str = os.getenv("TWILIO_API_KEY_SID", os.getenv("TWILIO_SID", ""))
     twilio_api_key_secret: str = os.getenv("TWILIO_API_KEY_SECRET", os.getenv("TWILIO_SECRET", ""))
-    twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "MG9757965c48d30953d3670030994f0c80")
+    # 08-31: the old default MG9757... was stale — the account has no
+    # messaging service (live API check: create/list 404), and sends work via
+    # the owned From number. Empty default = fall back to From.
+    twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
     twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "+13187688667")
+    # 08-31 (owner): when purchases go live, buyers must have 2FA enabled
+    # (optional today; flip PURCHASES_REQUIRE_2FA=true in .env when live).
+    purchases_require_2fa: bool = os.getenv("PURCHASES_REQUIRE_2FA", "false").lower() == "true"
 
 
     # Feature Toggles

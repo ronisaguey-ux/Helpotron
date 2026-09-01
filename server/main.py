@@ -1543,8 +1543,20 @@ def credits_balance(public_id: str, db: Session = Depends(get_db), current_user:
 
 # ─── payments / discounts ──────────────────────────────────────────────────
 
+def _purchase_2fa_required(user: User) -> None:
+    """Owner directive 08-31: when purchases_require_2fa is on, every buyer must
+    have 2FA enabled (settings flag — same source login reads) before paying."""
+    if config.purchases_require_2fa and not (user.settings or {}).get("2fa_enabled"):
+        raise HTTPException(
+            403,
+            "Two-factor authentication must be enabled before making purchases — "
+            "enable it in Account > Settings and try again.",
+        )
+
+
 @app.post("/api/payments")
 def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _purchase_2fa_required(current_user)
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
         payment = process_payment(db, user, body.provider, body.amount_cents)
@@ -1570,6 +1582,7 @@ class CheckoutIn(BaseModel):
 @app.post("/api/checkout")
 def checkout(body: CheckoutIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a Stripe Checkout session for a subscription."""
+    _purchase_2fa_required(current_user)
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
         result = create_checkout_session(db, user, body.plan, body.is_annual)
