@@ -53,6 +53,7 @@ const AssignmentTurnInView = lazyWithRetry(() => import('./components/Assignment
 const AssignmentDetailView = lazyWithRetry(() => import('./components/AssignmentDetailView.jsx'));
 const AssignmentHistoryView = lazyWithRetry(() => import('./components/AssignmentHistoryView.jsx'));
 const AssignmentDumpView = lazyWithRetry(() => import('./components/AssignmentDumpView.jsx'));
+const GuideView = lazyWithRetry(() => import('./components/GuideView.jsx'));
 const MessageAdminView = lazyWithRetry(() => import('./components/MessageAdminView.jsx'));
 const PrivacyPolicyView = lazyWithRetry(() => import('./components/PrivacyPolicyView.jsx'));
 const TermsOfServiceView = lazyWithRetry(() => import('./components/TermsOfServiceView.jsx'));
@@ -711,6 +712,7 @@ export default function App() {
                   {activeView === 'credits' && <CreditsView userId={userId} initialTab={viewTab} userCredits={credits} />}
                   {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} plan={userPlan} credits={credits} tokenBalance={tokenBalance} isAdmin={effectiveIsAdmin} />}
                   {activeView === 'extension' && <ExtensionInstallView />}
+                  {activeView === 'guide' && <GuideView onGoTo={handleSelectView} />}
 
                   {/* LEGACY + LEGAL */}
                   {activeView === 'dump' && (
