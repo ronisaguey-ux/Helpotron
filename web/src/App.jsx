@@ -693,7 +693,22 @@ export default function App() {
                   {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
 
                   {/* WORKSPACE */}
-                  {activeView === 'agent' && <MyAgentView userId={userId} onGoTo={handleSelectView} onTokenBalance={setTokenBalance} />}
+                  {activeView === 'agent' && (
+                    <MyAgentView
+                      userId={userId}
+                      onGoTo={handleSelectView}
+                      onTokenBalance={setTokenBalance}
+                      onOpenAssignment={(a) => {
+                        // (09-01) assignment bubbles in the agent chat open the
+                        // assignment's full bubble workspace — never a bare
+                        // dashboard grid that loses the card.
+                        if (!a || a.id == null) return;
+                        recordNav();
+                        setOpenAssignment(a);
+                        setActiveView('overview');
+                      }}
+                    />
+                  )}
                   {activeView === 'history' && (
                     <AssignmentHistoryView
                       userId={userId}

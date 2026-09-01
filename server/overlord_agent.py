@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -244,13 +245,17 @@ def _today_label() -> str:
 _SBOX_SH = Path(__file__).resolve().parent.parent / "deploy" / "sandboxes" / "sandbox_run.sh"
 _SHELL_META = re.compile(r"[|&`$<>~\\\n]")
 _CMD_ALLOW = re.compile(r"^[0-9a-zA-Z\s.+\-*/()'\"\[\],:%_=;×÷·−]+$")
-_PY3_CMD = re.compile(r'^python3\s+-c\s+"(.+)"$')
+_PY3_CMD = re.compile(r"""^python3\s+-c\s+(?P<quote>["'])(?P<code>.+)(?P=quote)$""")
 
 
 def _validated_argv(command: str) -> Optional[list[str]]:
     """Turn a run_shell payload into an argv array. STRICT: only a tiny set of
     compute commands — python3 -c '<code>' or 'date'. No shell metas, no
-    arbitrary user text, never shell=True."""
+    arbitrary user text, never shell=True.
+    08-31 fix: the code runs with sys.executable (the server's own venv
+    interpreter), NOT bare `python3` — that resolves to the system python,
+    which lacks sympy/ratelim/etc. and made every LLM-authored compute
+    command fail with 'nothing executed' (observed ModuleNotFoundError)."""
     cmd = (command or "").strip()
     if not cmd or _SHELL_META.search(cmd) or not _CMD_ALLOW.fullmatch(cmd):
         return None
@@ -258,10 +263,10 @@ def _validated_argv(command: str) -> Optional[list[str]]:
         return ["date"]
     m = _PY3_CMD.match(cmd)
     if m:
-        code = m.group(1)
+        code = m.group("code")
         if _SHELL_META.search(code) or not _CMD_ALLOW.fullmatch(code):
             return None
-        return ["python3", "-c", code]
+        return [sys.executable, "-c", code]
     return None
 
 
