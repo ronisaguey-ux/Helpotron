@@ -25,21 +25,26 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 ADMIN_IDS = [ADMIN_PUBLIC_ID]
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
+    if not request:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication required')
     auth_user = None
     local_db = SessionLocal()
     try:
         auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ', 1)[1]
+            token = auth_header.split(' ', 1)[1].strip()
             payload = verify_jwt_token(token)
             if payload and 'sub' in payload:
                 auth_user = local_db.query(User).filter(User.id == payload['sub']).first()
+            if not auth_user:
+                session_data = SessionStore.get_session(token)
+                if session_data and 'user_id' in session_data:
+                    auth_user = local_db.query(User).filter(User.id == session_data['user_id']).first()
         else:
             session_token = request.cookies.get('helpotron_session')
             if session_token:
-                from .security import SessionStore
                 session_data = SessionStore.get_session(session_token)
-                if session_data:
+                if session_data and 'user_id' in session_data:
                     auth_user = local_db.query(User).filter(User.id == session_data['user_id']).first()
 
         if not auth_user:

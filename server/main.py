@@ -29,7 +29,7 @@ try:
     from .agent_session import manager as agent_manager
     from .config import config
     from .database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment, utcnow
-    from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
+    from .payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook, _stripe_enabled
     from .draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
     from .security import (hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME,
                            validate_public_id, validate_password_strength, is_admin_user,
@@ -46,7 +46,7 @@ except (ImportError, ValueError):
     from server.agent_session import manager as agent_manager
     from server.config import config
     from server.database import Assignment, Draft, StudyMaterial, Transcript, User, get_db, init_db, Payment
-    from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook
+    from server.payments import process_payment, refund_unused, create_checkout_session, handle_stripe_webhook, _stripe_enabled
     from server.draft import create_draft_task, start_draft_workflow, get_style, set_style, DRAFT_COST, MAX_RETRIES
     from server.security import (hash_password, verify_password, SessionStore, SESSION_COOKIE_NAME,
                                  validate_public_id, validate_password_strength, is_admin_user,
@@ -217,7 +217,19 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-app = FastAPI(title="Helpotron Automator", version="1.0.0", lifespan=lifespan)
+# Disable public API docs in production mode to prevent schema and endpoint enumeration
+_docs_url = None if config.production_mode else "/docs"
+_redoc_url = None if config.production_mode else "/redoc"
+_openapi_url = None if config.production_mode else "/openapi.json"
+
+app = FastAPI(
+    title="Helpotron Automator",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
+)
 
 
 @app.exception_handler(Exception)
@@ -250,6 +262,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client = request.client.host if request.client else "unknown"
+        if client in ("127.0.0.1", "::1", "localhost"):
+            cf_ip = request.headers.get("cf-connecting-ip")
+            if cf_ip:
+                client = cf_ip.strip()
+            else:
+                x_fwd = request.headers.get("x-forwarded-for")
+                if x_fwd:
+                    client = x_fwd.split(",")[0].strip()
+
         if not ratelimit.limiter.allow(f"ip:{client}", IP_LIMIT):
             return JSONResponse({"detail": "rate limited"}, status_code=429,
                                 headers={"Retry-After": "60"})
@@ -622,7 +643,7 @@ class SettingsIn(BaseModel):
 class PaymentIn(BaseModel):
     public_id: str = Field(..., max_length=100)
     provider: str = Field(..., max_length=50)
-    amount_cents: int = Field(..., ge=0, le=10_000_000)
+    amount_cents: int = Field(..., gt=0, le=10_000_000)
 
 
 class DiscountIn(BaseModel):
@@ -1332,9 +1353,16 @@ async def transcribe(file: UploadFile = File(...),
     # clients (extension recorder, web) send assignment_id as form
     # fields; curl and direct callers use query params — accept both
     assignment_id = assignment_id if assignment_id is not None else assignment_id_q
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    allowed_audio_exts = {".mp3", ".wav", ".flac", ".ogg", ".webm", ".m4a", ".aac", ".mp4"}
+    if ext and ext not in allowed_audio_exts:
+        raise HTTPException(400, f"Unsupported audio format: '{ext}'. Allowed: {', '.join(sorted(allowed_audio_exts))}")
+    max_audio_bytes = 100 * 1024 * 1024  # 100MB
     content = await file.read()
     if not content:
         raise HTTPException(400, "empty upload")
+    if len(content) > max_audio_bytes:
+        raise HTTPException(413, "Audio upload exceeds 100MB limit")
     path = transcription.save_upload(content, file.filename or "lecture.webm")
     try:
         text, duration = await transcription.transcribe_audio(path)
@@ -1607,6 +1635,10 @@ def _purchase_2fa_required(user: User) -> None:
 @app.post("/api/payments")
 def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _purchase_2fa_required(current_user)
+    if body.amount_cents <= 0:
+        raise HTTPException(400, "Payment amount must be greater than zero")
+    if _stripe_enabled() and body.provider.lower() == "stripe":
+        raise HTTPException(400, "Stripe payments must be initiated via /api/checkout")
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
         payment = process_payment(db, user, body.provider, body.amount_cents)
@@ -1966,7 +1998,19 @@ if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
         # Let FastAPI router handle any unhandled api routes with 404
         if full_path.startswith("api"):
             raise HTTPException(404, "API route not found")
-        target = _WEB_DIST / full_path
+        # Prevent path traversal outside _WEB_DIST or access to dotfiles
+        try:
+            target = (_WEB_DIST / full_path).resolve()
+            dist_resolved = _WEB_DIST.resolve()
+            if not target.is_relative_to(dist_resolved):
+                raise HTTPException(404, "Not found")
+            if any(part.startswith(".") for part in target.relative_to(dist_resolved).parts):
+                raise HTTPException(404, "Not found")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(404, "Not found")
+
         if full_path and target.is_file():
             # Immutable content-hashed assets
             if full_path.startswith("assets/"):

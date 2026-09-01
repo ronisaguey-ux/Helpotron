@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
@@ -118,14 +119,23 @@ async def upload_dump_file(
     Extracts content via Gemini 3.1 Flash-Lite (Audio) / Gemini 3.7 Flash (Vision/OCR),
     and uses the Overlord AI to automatically route to the correct assignment.
     """
+    filename = file.filename or "uploaded_file.bin"
+    ext = os.path.splitext(filename)[1].lower()
+    disallowed_exts = {".exe", ".bat", ".sh", ".cmd", ".ps1", ".msi", ".py", ".js", ".php", ".cgi", ".bin", ".dll", ".so", ".elf"}
+    if ext in disallowed_exts:
+        raise HTTPException(status_code=400, detail="Executable and script file uploads are not permitted.")
+
+    max_dump_bytes = 100 * 1024 * 1024  # 100MB limit
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    if len(content) > max_dump_bytes:
+        raise HTTPException(status_code=413, detail="Uploaded file exceeds 100MB limit.")
 
     dump_item = await assignment_dump_manager.process_dump_upload(
         db=db,
         user=current_user,
-        filename=file.filename or "uploaded_file.bin",
+        filename=filename,
         content=content,
         manual_assignment_id=assignment_id,
     )
