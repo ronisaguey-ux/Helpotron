@@ -386,16 +386,18 @@ async def health_check():
 
 # ─── helpers ───────────────────────────────────────────────────────────────
 
-# 08-31 (owner directive): grant a one-time 300-token welcome to ONE named
-# new user — "Dylan" — the moment their account is created. Deliberately NOT
-# a blanket signup bonus (Bob: "don't do blindly every new sign up, just this
-# one"): only public IDs containing the name get it.
+# 08-31 (owner directive): grant a one-time 300-token welcome to NAMED new
+# users — first "Dylan", then "Emma" (Bob: "a new user is about to join,
+# called Emma. Grant her 300 also") — the moment their account is created.
+# Deliberately NOT a blanket signup bonus (Bob: "don't do blindly every new
+# sign up, js this one"): only public IDs containing one of the names get it.
 WELCOME_TOKEN_BONUS = 300.0
-WELCOME_TOKEN_NAME = "dylan"
+WELCOME_TOKEN_NAMES = ("dylan", "emma")
 
 
 def _mentions_welcome_name(public_id: str) -> bool:
-    return WELCOME_TOKEN_NAME in public_id.lower()
+    low = public_id.lower()
+    return any(name in low for name in WELCOME_TOKEN_NAMES)
 
 
 def get_or_create_user(db: Session, public_id: str) -> User:
