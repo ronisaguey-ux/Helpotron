@@ -17,6 +17,14 @@ from .database import CreditTransaction, Payment, Referral, User
 REFERRAL_DISCOUNT_NEW_USER_PCT = 30.0
 REFERRAL_DISCOUNT_EXISTING_USER_PCT = 15.0
 
+# Operator 08-31 (Bob): the code generator's reward is TIER-BASED and tied to
+# the plan the referee actually BUYS with the code — 2 credits for a Basic
+# subscription purchase, 5 for Pro, 10 for Elite (1 credit = $1.00 discount
+# value). Paid once per purchase; grants happen on the referee's checkout
+# (payments webhook) or immediately when a code is redeemed by someone who is
+# already subscribed.
+REFERRAL_PLAN_REWARD_CREDITS = {"basic": 2.0, "pro": 5.0, "elite": 10.0}
+
 
 def generate_referral_code() -> str:
     """Generate a 40-character cryptographically secure randomized referral code."""
@@ -66,6 +74,32 @@ def is_new_user(db: Session, user: User) -> bool:
     return not check_user_subscription(user)
 
 
+def grant_referrer_plan_reward(db: Session, referrer: User, plan: str, code: str) -> float:
+    """Reward a referrer for a plan purchase (operator 08-31, Bob).
+
+    Tier payouts: basic 2 credits, pro 5, elite 10. Idempotent — a
+    (referrer, plan, code) reward is granted at most once (a code is
+    single-use, and the redemption path + checkout path share the same
+    reason string, so they can never double-pay). Does NOT commit — the
+    caller owns the transaction.
+    """
+    plan = (plan or "").lower()
+    reward = float(REFERRAL_PLAN_REWARD_CREDITS.get(plan, 0.0) or 0.0)
+    if reward <= 0:
+        return 0.0
+    tx_reason = f"referral:plan_reward:{plan}:{code[:8]}"
+    already = (
+        db.query(CreditTransaction)
+        .filter(CreditTransaction.user_id == referrer.id, CreditTransaction.reason == tx_reason)
+        .first()
+    )
+    if already is not None:
+        return 0.0
+    referrer.credits = (referrer.credits or 0.0) + reward
+    db.add(CreditTransaction(user_id=referrer.id, delta=reward, reason=tx_reason))
+    return reward
+
+
 def grant_referral_discount(db: Session, user: User, pct: float) -> float:
     """Grant a one-time order discount entitlement, never downgrading a
     larger active one. Persists until consumed by the next payment."""
@@ -102,9 +136,14 @@ def redeem_referral(db: Session, code: str, new_user: User) -> Dict[str, Any]:
     1. Code must exist in database.
     2. Code cannot be reused (single-use).
     3. User cannot redeem their own code.
-    4. Rewards 40 credits to the specific referrer and 10 credits to the new user.
+    4. Rewards 10 credits to the redeemer.
     5. Operator 08-31: grants a one-time order discount — 30% off (new user)
        or 15% off (existing user) — applied to the next successful payment.
+    6. Operator 08-31 (Bob): the code generator's reward is TIER-BASED and
+       tied to the PLAN the redeemer buys — 2 credits (basic) / 5 (pro) /
+       10 (elite). A redeemer who is already subscribed pays immediately
+       (their current plan); a fresh redeemer is rewarded when their
+       checkout completes (payments.py webhook). Never 40 flat credits.
     """
     clean_code = code.strip()
     ref = db.query(Referral).filter(Referral.referral_code == clean_code).first()
@@ -124,15 +163,11 @@ def redeem_referral(db: Session, code: str, new_user: User) -> Dict[str, Any]:
     ref.referee_id = new_user.id
     ref.completed_at = datetime.now(timezone.utc)
 
-    # Reward referrer with 40 compute credits
+    # Referrer reward (operator 08-31, Bob): tier-based on the referee's plan.
+    # Already subscribed -> pay now by current plan; fresh -> paid at checkout.
     referrer = db.query(User).filter(User.id == ref.referrer_id).first()
-    if referrer:
-        referrer.credits = (referrer.credits or 0.0) + 40.0
-        db.add(CreditTransaction(
-            user_id=referrer.id,
-            delta=40.0,
-            reason=f"referral:friend_redeemed_code_{clean_code[:8]}"
-        ))
+    if referrer and check_user_subscription(new_user):
+        grant_referrer_plan_reward(db, referrer, str(new_user.plan or ""), clean_code)
 
     # Reward new user with 10 compute credits
     new_user.credits = (new_user.credits or 0.0) + 10.0
@@ -182,6 +217,7 @@ def get_referral_stats(db: Session, user: User) -> Dict[str, Any]:
                 "id": r.id,
                 "code": r.referral_code,
                 "is_redeemed": r.referee_id is not None,
+                "plan": (r.referee.plan if (r.referee is not None) else None),  # tier reward depends on the plan bought (08-31)
                 "created_at": r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else str(r.created_at),
                 "completed_at": r.completed_at.isoformat() if r.completed_at and hasattr(r.completed_at, "isoformat") else str(r.completed_at) if r.completed_at else None,
             }

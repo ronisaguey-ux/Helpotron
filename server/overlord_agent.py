@@ -33,6 +33,15 @@ from .engine.sandbox import sandbox_manager
 
 logger = logging.getLogger("helpotron.overlord")
 
+# Read-only actions never require approval in ANY mode (operator 08-31, My
+# Agent full-capability): asking for your balance, listing library materials
+# or feedback entries is not a work action — manual mode should not gate it.
+READONLY_ACTION_TYPES = {
+    "plain_answer", "run_shell", "read_assignment",
+    "get_wallet", "list_library", "list_referrals",
+    "list_datalake_entries", "get_progress",
+}
+
 # Critical actions that trigger permission prompt in AUTO mode
 CRITICAL_ACTION_TYPES = {
     "submit_assignment",
@@ -177,6 +186,10 @@ class PermissionEngine:
         """
         mode = (session_mode_override or user_settings.get("operation_mode") or "auto").lower()
         auto_approved_rules: List[str] = user_settings.get("auto_approved_actions", [])
+
+        # 0. Read-only actions never ask, in any mode (operator 08-31).
+        if action_type.lower() in READONLY_ACTION_TYPES:
+            return True, "Read-only action — never requires approval."
 
         # 1. Check persistent auto-approved rules list (exact match or substring rule)
         for rule in auto_approved_rules:
@@ -1090,6 +1103,121 @@ print(f"Active files: {os.listdir('.')}")
                 "status": "completed",
                 "message": f"Assignment #{assignment.id} updated: {', '.join(applied)}.",
             }
+
+        # ── 08-31 (Bob, My Agent full-capability): the rest of the website ──
+        # Read-only surface access — wallet, library, referrals, Data Lake
+        # entries and progress — all zero-cost and never permission-gated.
+
+        elif action_type == "get_wallet":
+            s = dict(user.settings or {})
+            tokens = float(s.get("token_balance", 0) or 0)
+            credits = float(getattr(user, "credits", 0) or 0)
+            micro = float(s.get("micro_credits_balance", 0) or 0)
+            plan = str(getattr(user, "plan", "basic") or "basic")
+            msg = (f"Wallet — {tokens:g} tokens (usage budget), {credits:g} credits "
+                   f"(discount money, 1 credit = $1.00 off), {micro:g} micro-credits")
+            if micro >= 1000:
+                msg += f" (redeems to {int(micro) // 1000} credit{'' if int(micro) // 1000 == 1 else 's'} at 1,000:1)"
+            msg += f". Plan: {plan}."
+            return {"action": action_type, "status": "completed", "message": msg,
+                    "wallet": {"tokens": tokens, "credits": credits,
+                               "micro_credits": micro, "plan": plan}}
+
+        elif action_type == "list_library":
+            try:
+                limit = max(1, min(int(payload.get("limit", 10)), 50))
+            except (TypeError, ValueError):
+                limit = 10
+            q = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id)
+            aid = payload.get("assignment_id")
+            if aid:
+                try:
+                    q = q.filter(StudyMaterial.assignment_id == int(aid))
+                except (TypeError, ValueError):
+                    pass
+            rows = q.order_by(StudyMaterial.created_at.desc()).limit(limit).all()
+            if not rows:
+                return {"action": action_type, "status": "completed",
+                        "message": "Library is empty — generate flashcards, a quiz or a "
+                                   "study guide from an assignment first."}
+            aid_map: Dict[int, str] = {}
+            ids = sorted({m.assignment_id for m in rows if m.assignment_id})
+            if ids:
+                for a in db.query(Assignment).filter(Assignment.id.in_(ids)).all():
+                    aid_map[a.id] = a.title
+            lines = []
+            for m in rows:
+                preview = ""
+                try:
+                    parsed = json.loads(m.content or "null")
+                    if isinstance(parsed, list):
+                        preview = f"{len(parsed)} items"
+                    elif isinstance(parsed, dict):
+                        preview = str(parsed)[:60]
+                except (ValueError, TypeError):
+                    preview = str(m.content or "")[:60].replace("\n", " ")
+                kind = m.kind or "material"
+                owner = aid_map.get(m.assignment_id, "—")
+                lines.append(f"#{m.id} [{kind}] {owner}: {preview} ({m.created_at:%b %d})")
+            return {"action": action_type, "status": "completed",
+                    "message": f"Library ({len(rows)} material{'s' if len(rows) != 1 else ''}):\n"
+                               + "\n".join(lines)}
+
+        elif action_type == "list_referrals":
+            from .database import Referral
+            rows = (db.query(Referral).filter(Referral.referrer_id == user.id)
+                    .order_by(Referral.created_at.desc()).all())
+            if not rows:
+                return {"action": action_type, "status": "completed",
+                        "message": "No referral codes yet — issue one from Credits "
+                                   "→ Referrals to share."}
+            lines = [f"{r.referral_code} — {'redeemed' if r.completed_at else 'unused'} ({r.created_at:%b %d})"
+                     for r in rows[:10]]
+            return {"action": action_type, "status": "completed",
+                    "message": "Your referral codes:\n" + "\n".join(lines)}
+
+        elif action_type == "list_datalake_entries":
+            try:
+                from .datalake import DataLakeManager
+                try:
+                    limit = max(1, min(int(payload.get("limit", 5)), 20))
+                except (TypeError, ValueError):
+                    limit = 5
+                entries = DataLakeManager().list_microcredit_submissions(
+                    user_id=user.public_id, limit=limit)
+            except Exception as e:  # noqa: BLE001 — honest in-band failure
+                return {"action": action_type, "status": "failed",
+                        "message": f"Could not read Data Lake entries: {e}"}
+            if not entries:
+                return {"action": action_type, "status": "completed",
+                        "message": "No Data Lake submissions yet — submit anything that "
+                                   "could improve the site (material, notes, feedback, "
+                                   "ideas) from the Data Lake view."}
+            lines = []
+            for e in entries:
+                est = e.get("estimated_credits") or e.get("credits_awarded") or 0
+                act = e.get("actual_credits") or 0
+                lines.append(f"{e.get('title', 'Untitled')} — {est} est / {act:g} awarded, "
+                             f"status {e.get('status', '?')}")
+            return {"action": action_type, "status": "completed",
+                    "message": "Your Data Lake submissions:\n" + "\n".join(lines)}
+
+        elif action_type == "get_progress":
+            rows = db.query(Assignment).filter(Assignment.user_id == user.id).all()
+            if not rows:
+                return {"action": action_type, "status": "completed",
+                        "message": "No assignments yet — add coursework on the dashboard "
+                                   "or from the Assignment Dump."}
+            counts: Dict[str, int] = {}
+            for a in rows:
+                st = (a.status or "tracked").lower()
+                counts[st] = counts.get(st, 0) + 1
+            by_status = ", ".join(f"{s}: {n}" for s, n in sorted(counts.items()))
+            upcoming = sorted([a for a in rows if a.due_date], key=lambda a: a.due_date)[:3]
+            msg = f"Progress: {len(rows)} assignment{'s' if len(rows) != 1 else ''} ({by_status})."
+            if upcoming:
+                msg += "\nNext due:\n" + "\n".join(f"  • {a.title} — due {a.due_date}" for a in upcoming)
+            return {"action": action_type, "status": "completed", "message": msg}
 
         elif action_type == "admin_lookup_user":
             if not is_admin_user(user):

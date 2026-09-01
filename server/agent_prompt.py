@@ -227,6 +227,52 @@ def _gptzero_assurance(ctx: Optional[Dict[str, Any]]) -> str:
     )
 
 
+def website_context_block() -> str:
+    """My Agent full-capability (operator 08-31, Bob): the agent must know the
+    WHOLE app — every view, both budgets, and how to guide the user — so it
+    can help with anything on the website instead of only answering about
+    coursework. Injected on the my_agent surface only (other surfaces keep
+    their own narrow scope)."""
+    return (
+        "WEBSITE CONTEXT (helpotron — the app you live in; know it completely):\n"
+        "- DASHBOARD: every assignment is a bubble, grouped by subject. A bubble holds "
+        "the prompt, status (tracked / not_started / in_progress / completed / submitted / "
+        "graded / paused), a progress map, due date, and its own chat thread.\n"
+        "- MY AGENT (you): conversations live in the sidebar; each assignment bubble has "
+        "its own chat. The user can tune your effort, name and personality in Settings, "
+        "and set your operation mode: manual (every action asks), auto (routine actions "
+        "run, critical ones ask — the default), yolo (nothing asks).\n"
+        "- ASSIGNMENT DUMP: drop any coursework file (PDF, Word, slides, lecture audio, "
+        "image, video) or paste text; the AI pairs it with the right assignment or creates "
+        "a new bubble, then generates flashcards / practice quiz / study guide / summary "
+        "or 'Do it for me'.\n"
+        "- LIBRARY: every generated material (flashcards, practice tests with multiple "
+        "choice + explanations, study guides, summaries) filed under its assignment.\n"
+        "- LAUNCH TO DOC: turns a bubble into a real Google Doc typed by the browser "
+        "extension with human-typing realism (9 dimensions, speed presets).\n"
+        "- DATA LAKE & MICRO-CREDITS: users submit almost anything that could improve the "
+        "site (class material, notes, feedback, ideas, corrections) and earn 0-25 "
+        "micro-credits once the entry is reviewed and used; 1,000 micro-credits = 1 credit "
+        "= $1.00 off at checkout. Opt-out lives in settings and never deletes submissions "
+        "already in review.\n"
+        "- CREDITS & TOKENS: tokens are the USAGE budget — each task costs a different "
+        "amount of tokens based on the work it does. Credits are DISCOUNT money: 1 credit "
+        "= $1.00 off at checkout. The plan refills tokens monthly; the admin can grant "
+        "more; 'Message Admin' requests them.\n"
+        "- REFERRALS: single-use codes. A friend's redemption discounts their order, and "
+        "when they BUY a plan with your code you earn credits: Basic 2, Pro 5, Elite 10.\n"
+        "- INSIGHTS: progress analytics and next-step recommendations by subject.\n"
+        "- BROWSER EXTENSION: captures assignments from Canvas/class pages into the "
+        "dashboard and powers Launch to Doc.\n"
+        "- MESSAGE ADMIN: direct channel to the operator for token requests, bug reports, "
+        "anything the app doesn't answer.\n"
+        "You can DO most of this yourself through your actions (assignments, settings, "
+        "materials, memory). For the views (Extension install, Launch to Doc, Data Lake, "
+        "Insights, Message Admin), tell the user exactly where in the app to click — name "
+        "the sidebar item or button — and what will happen.\n"
+    )
+
+
 def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: str = "my_agent", ctx: Optional[Dict[str, Any]] = None) -> str:
     """CANONICAL agent system prompt, node-scoped (operator 08-28): educational
     gate per surface + identity + memory + full loaded-file contents + today's
@@ -265,6 +311,9 @@ def agent_system_prompt(user, settings: Optional[Dict[str, Any]] = None, node: s
     head = edu_block(user, settings, node) + role_block + "\n\n"  # edu "open" means zero bytes
     if persona_block:
         head += persona_block
+    if node == "my_agent":
+        # The My Agent surface knows the whole product (operator 08-31).
+        head += "\n" + website_context_block()
     return (
         head
         + f"\nTODAY'S REAL DATE (computed server-side, NEVER guess another one): "
