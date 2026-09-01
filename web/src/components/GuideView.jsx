@@ -15,7 +15,7 @@ import SectionCard from './SectionCard.jsx';
 
 const TERMS = [
   { term: 'Credits', gloss: '$1.00 off each, applied at checkout.' },
-  { term: 'Tokens', gloss: 'your usage budget — every task costs a fixed amount.' },
+  { term: 'Tokens', gloss: 'your usage budget — each task costs a different amount based on what it does.' },
   { term: 'Referral', gloss: 'an invite code that discounts a friend’s order.' },
 ];
 
@@ -31,7 +31,7 @@ const SECTIONS = [
   },
   {
     id: 'guide-agent', icon: Brain, title: 'My Agent', chip: 'My Agent',
-    what: 'Your AI assistant for coursework. Pick an assignment and chat — it drafts sections, humanizes writing, analyzes rubrics, and answers questions about the material. Every reply and action is paid from your token budget: a reply costs 1 token, actions cost 3–10 depending on the job.',
+    what: 'Your AI assistant for coursework. Pick an assignment and chat — it drafts sections, humanizes writing, analyzes rubrics, and answers questions about the material. Every reply and action is paid from your token budget — each task costs a different amount of tokens based on the work it does.',
     steps: [
       'Open My Agent from the sidebar and choose a conversation (each assignment has its own).',
       'Ask anything about the assignment, or let the agent suggest the next action (draft, humanize, rubric analysis).',
@@ -46,7 +46,7 @@ const SECTIONS = [
       'Open Assignment Dump and drop a file, record audio, or paste the assignment text.',
       'Pick the matching assignment (or let the AI match it) — unmatched dumps become a new bubble.',
       'Choose what you want from it: Flashcards, Practice quiz, Study guide, Summary, or “Do it for me”.',
-      'Generation uses 5 tokens from your budget and lands in Library when done. Long files are handled in parts, so nothing is cut off.',
+      'Generation draws from your token budget — the cost depends on the job (bigger tasks cost more) — and lands in Library when done. Long files are handled in parts, so nothing is cut off.',
     ],
   },
   {
@@ -70,17 +70,17 @@ const SECTIONS = [
   },
   {
     id: 'guide-datalake', icon: Database, title: 'Data Lake & Micro-Credits', chip: 'Data Lake',
-    what: 'Contribute class material (text or file) to the anonymized Academic Data Lake. An AI reviewer classifies it and estimates 0–25 micro-credits; once the admin reviews and implements the idea, the real micro-credits are awarded. Redeem 1,000 micro-credits as 1 credit — $1.00 off at checkout.',
+    what: 'Contribute anything that could improve the website — class material, study resources, notes, feedback, ideas, corrections: almost any type of data counts as an entry. An AI reviewer classifies it and estimates 0–25 micro-credits; when your entry is actually used, your points are calculated and rewarded. Redeem 1,000 micro-credits as 1 credit — $1.00 off at checkout.',
     steps: [
-      'Open Data Lake and submit your material — the entry is stored under an anonymous ID, never your public ID.',
-      'Read the Estimated Score right away; the entry sits in Pending until reviewed, then awaits implementation (typically a day or two).',
+      'Open Data Lake and submit almost anything — material, notes, feedback, an idea, a correction — stored under an anonymous ID, never your public ID.',
+      'Read the Estimated Score right away; the entry sits in Pending, and when it is used your real points are calculated and awarded.',
       'Redeem earned micro-credits inside Data Lake: 1,000 micro-credits convert to 1 credit, your discount money.',
       'Opt in/out of the lake anytime in your settings; opt-out never deletes submissions already in review.',
     ],
   },
   {
     id: 'guide-credits', icon: CreditCard, title: 'Credits & Tokens', chip: 'Credits & Tokens',
-    what: 'Two budgets, one job each. Tokens pay for usage — every task has a fixed token cost based on what it does (a chat reply 1, a practice quiz 5, humanize 3, finalizing a dump 5). Credits are discount money: each credit takes $1.00 off at checkout.',
+    what: 'Two budgets, one job each. Tokens pay for usage — every task has a token cost sized to the work it does, so different tasks cost different amounts. Credits are discount money: each credit takes $1.00 off at checkout.',
     steps: [
       'Your token balance sits in the top bar — your plan refills it monthly, and the admin can grant more.',
       'Every task deducts its fixed cost automatically; heavier work (transcription, multi-step jobs) costs more.',
@@ -89,11 +89,11 @@ const SECTIONS = [
   },
   {
     id: 'guide-referral', icon: Share2, title: 'Referral Codes', chip: 'Referrals',
-    what: 'Invite classmates with a single-use 40-character code. The friend gets a one-time discount on their order at redemption — 30% for a new user, 15% for an existing one — and you earn credits for every successful redemption ($1.00 off each).',
+    what: 'Invite classmates with a single-use 40-character code. The friend gets a one-time discount on their order at redemption — 30% for a new user, 15% for an existing one — and when they buy a plan with your code, YOU earn credits: 2 for a Basic subscription, 5 for Pro, 10 for Elite.',
     steps: [
       'Open Credits → Referrals and issue a code (each code is single-use and attributed to you).',
       'Share the code with a classmate or a friend.',
-      'When they redeem it at checkout, their order is discounted and your credits are credited automatically.',
+      'When they redeem it and buy a plan, their order is discounted and your credits are credited: Basic 2, Pro 5, Elite 10.',
     ],
   },
   {

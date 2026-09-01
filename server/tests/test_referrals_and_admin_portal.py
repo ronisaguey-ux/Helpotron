@@ -14,6 +14,8 @@ from server.referral import (
     is_new_user,
     REFERRAL_DISCOUNT_NEW_USER_PCT,
     REFERRAL_DISCOUNT_EXISTING_USER_PCT,
+    REFERRAL_PLAN_REWARD_CREDITS,
+    grant_referrer_plan_reward,
 )
 
 
@@ -77,10 +79,12 @@ def test_referral_subscription_gating_and_attribution():
         assert redeem_res["status"] == "success"
         assert redeem_res["bonus_credits"] == 10
 
-        # Check attribution and credit balances
+        # Check attribution and credit balances. Operator 08-31 (Bob): the
+        # referrer reward is TIER-BASED — the redeemer is on basic, so the
+        # pro referrer earns 2 credits (was a flat 40 before 08-31).
         db_session.refresh(pro_user)
         db_session.refresh(new_student)
-        assert pro_user.credits == 90.0  # 50 + 40
+        assert pro_user.credits == 52.0  # 50 + 2 (basic plan purchase reward)
         assert new_student.credits == 15.0  # 5 + 10
 
         # 4. Attempt to reuse the same code -> Blocked (cannot be reused)
@@ -97,11 +101,13 @@ def test_referral_subscription_gating_and_attribution():
             redeem_referral(db_session, ref.referral_code, third_student)
         assert "already been redeemed and cannot be reused" in str(exc_info2.value)
 
-        # 5. Check stats
+        # 5. Check stats (08-31: per-code plan exposes the tier payout)
         stats = get_referral_stats(db_session, pro_user)
         assert stats["total_issued"] == 1
         assert stats["total_completed"] == 1
         assert stats["is_subscribed"] is True
+        assert stats["codes"][0]["plan"] == getattr(new_student, "plan", None)
+        assert stats["codes"][0]["is_redeemed"] is True
     finally:
         db_session.close()
 
@@ -263,3 +269,56 @@ def test_admin_endpoints_and_messages_inbox():
     listed = client.get("/api/admin/tokens", headers=admin_headers)
     assert listed.status_code == 200
     assert any(t["token"] == token_str for t in listed.json()["tokens"])
+
+
+def test_referrer_plan_tier_rewards():
+    """Operator 08-31 (Bob): the code generator's reward is tier-based on the
+    plan the referee BUYS — 2 credits (basic) / 5 (pro) / 10 (elite). Paid
+    once per (referrer, plan, code); both the redemption path (already
+    subscribed referee) and the checkout path are idempotent."""
+    db_session = SessionLocal()
+    try:
+        suffix = uuid.uuid4().hex[:8]
+
+        # 1. Fresh referee (no plan yet) redeems -> NO immediate referrer reward.
+        referrer = User(public_id=f"TierReferrer_{suffix}", plan="pro", subscription_status="active", credits=0.0)
+        db_session.add(referrer)
+        db_session.commit()
+        db_session.refresh(referrer)
+        ref = create_new_referral_code(db_session, referrer)
+
+        fresh = User(public_id=f"TierFresh_{suffix}", plan="none", credits=0.0)
+        db_session.add(fresh)
+        db_session.commit()
+        db_session.refresh(fresh)
+        res = redeem_referral(db_session, ref.referral_code, fresh)
+        assert res["status"] == "success"
+        db_session.refresh(referrer)
+        assert referrer.credits == 0.0  # nothing yet — paid at checkout
+
+        # 2. Checkout path: elite purchase pays the referrer 10 credits (the
+        #    same grant the webhook performs), exactly once.
+        paid = grant_referrer_plan_reward(db_session, referrer, "elite", ref.referral_code)
+        assert paid == 10.0
+        db_session.commit()
+        db_session.refresh(referrer)
+        assert referrer.credits == 10.0
+        again = grant_referrer_plan_reward(db_session, referrer, "elite", ref.referral_code)
+        assert again == 0.0  # idempotent
+        db_session.commit()
+        db_session.refresh(referrer)
+        assert referrer.credits == 10.0
+
+        # 3. Already-subscribed referee: redemption pays by CURRENT plan.
+        ref2 = create_new_referral_code(db_session, referrer)
+        subscriber = User(public_id=f"TierPro_{suffix}", plan="pro", subscription_status="active", credits=0.0)
+        db_session.add(subscriber)
+        db_session.commit()
+        db_session.refresh(subscriber)
+        res2 = redeem_referral(db_session, ref2.referral_code, subscriber)
+        assert res2["status"] == "success"
+        db_session.refresh(referrer)
+        assert referrer.credits == 15.0  # 10 (elite) + 5 (pro subscriber)
+        assert REFERRAL_PLAN_REWARD_CREDITS == {"basic": 2.0, "pro": 5.0, "elite": 10.0}
+    finally:
+        db_session.close()

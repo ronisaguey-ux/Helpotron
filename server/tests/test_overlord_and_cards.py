@@ -1,7 +1,9 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
-from server.database import init_db, SessionLocal, User, Assignment
+from server.database import init_db, SessionLocal, User, Assignment, Referral
 from server.main import app
 from server.overlord_agent import permission_engine, overlord_agent
 
@@ -341,3 +343,75 @@ def test_degenerate_reply_guard():
     for good in ("ok", "Alright \U0001f939", "✅ Done.", "Thanks!", "你好",
                  "привет", "a", "Can you try that again?"):
         assert _is_degenerate_reply(good) is False, repr(good)
+
+
+def test_readonly_actions_never_require_approval():
+    """Operator 08-31 (Bob, My Agent full-capability): pure reads (wallet,
+    library, referrals, datalake list, progress) must NOT be gated by any
+    mode — manual mode is for WORK actions, not for asking your balance."""
+    settings_manual = {"operation_mode": "manual", "auto_approved_actions": []}
+    for action in ("get_wallet", "list_library", "list_referrals",
+                   "list_datalake_entries", "get_progress", "read_assignment"):
+        approved, reason = permission_engine.evaluate_action_permission(settings_manual, action)
+        assert approved is True, f"{action} should be read-only-approved: {reason}"
+    # Work actions in manual still ask:
+    approved, _ = permission_engine.evaluate_action_permission(settings_manual, "change_settings")
+    assert approved is False
+
+
+def test_surface_read_actions():
+    """08-31: the agent's website-surface actions return real row data:
+    wallet from settings, library from study_materials, referrals from the
+    referrals table, progress from assignments, datalake from the JSONL."""
+    import asyncio
+    from server.database import StudyMaterial
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "test_overlord_user").first()
+        assert user is not None
+        user.settings = {**(user.settings or {}), "token_balance": 123.0, "micro_credits_balance": 2500}
+        user.credits = 7.5
+        db.commit()
+        db.refresh(user)
+
+        # Library: seed one material file under the test user's assignment.
+        assign = db.query(Assignment).filter(Assignment.user_id == user.id).first()
+        mat_present = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).first()
+        if not mat_present:
+            db.add(StudyMaterial(
+                user_id=user.id, assignment_id=assign.id if assign else None,
+                kind="flashcards", content=json.dumps([{"q": "Q1", "a": "A1"}]),
+            ))
+            db.commit()
+
+        # Referrals: the fixture user is on plan pro, so a code can be issued.
+        from server.referral import create_new_referral_code
+        has_ref = db.query(Referral).filter(Referral.referrer_id == user.id).first()
+        if not has_ref:
+            create_new_referral_code(db, user)
+        db.commit()
+
+        wallet = asyncio.run(overlord_agent.execute_task_action(db, user, "get_wallet", {}))
+        assert wallet["status"] == "completed"
+        assert wallet["wallet"]["tokens"] == 123.0
+        assert wallet["wallet"]["credits"] == 7.5
+        assert wallet["wallet"]["micro_credits"] == 2500.0
+        assert "123" in wallet["message"]
+
+        lib = asyncio.run(overlord_agent.execute_task_action(db, user, "list_library", {}))
+        assert lib["status"] == "completed"
+        assert "flashcards" in lib["message"]
+
+        refs = asyncio.run(overlord_agent.execute_task_action(db, user, "list_referrals", {}))
+        assert refs["status"] == "completed"
+        assert "unused" in refs["message"]
+
+        prog = asyncio.run(overlord_agent.execute_task_action(db, user, "get_progress", {}))
+        assert prog["status"] == "completed"
+        assert "assignments" in prog["message"]
+
+        dl = asyncio.run(overlord_agent.execute_task_action(db, user, "list_datalake_entries", {}))
+        assert dl["status"] == "completed"
+    finally:
+        db.close()

@@ -105,6 +105,21 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
                     delta=TIER_CREDITS.get(plan, 0),
                     reason=f"subscription:{plan}:checkout",
                 ))
+                # Operator 08-31 (Bob): the referral reward is paid when the
+                # referee BUYS the plan — 2 credits (basic) / 5 (pro) /
+                # 10 (elite) to the code generator, once, idempotently.
+                try:
+                    from .database import Referral
+                    from .referral import grant_referrer_plan_reward
+                    ref_row = db.query(Referral).filter(
+                        Referral.referee_id == user.id, Referral.completed_at.isnot(None)
+                    ).first()
+                    if ref_row is not None:
+                        ref_referrer = db.query(User).filter(User.id == ref_row.referrer_id).first()
+                        if ref_referrer is not None:
+                            grant_referrer_plan_reward(db, ref_referrer, plan, ref_row.referral_code)
+                except Exception:  # noqa: BLE001 — never block a live subscription activation
+                    logger.exception("Referral plan reward failed for %s", user.public_id)
                 db.commit()
                 logger.info("Subscription activated for user %s (plan: %s)", user.public_id, plan)
 
