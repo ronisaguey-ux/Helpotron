@@ -1,0 +1,260 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Helpotron OS - Sign In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "on-background": "#0b1c30",
+                      "primary": "#00685f",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#005049",
+                      "outline-variant": "#bcc9c6",
+                      "on-secondary-container": "#fffbff",
+                      "outline": "#6d7a77",
+                      "background": "#f8f9ff",
+                      "surface-container": "#e5eeff",
+                      "secondary": "#4648d4",
+                      "tertiary-container": "#b05e3d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary-fixed-variant": "#2f2ebe",
+                      "secondary-fixed-dim": "#c0c1ff",
+                      "primary-container": "#008378",
+                      "surface-dim": "#cbdbf5",
+                      "secondary-fixed": "#e1e0ff",
+                      "primary-fixed": "#89f5e7",
+                      "on-primary": "#ffffff",
+                      "surface-tint": "#006a61",
+                      "on-secondary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed": "#370e00",
+                      "inverse-primary": "#6bd8cb",
+                      "on-surface-variant": "#3d4947",
+                      "tertiary": "#924628",
+                      "on-surface": "#0b1c30",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb59a",
+                      "secondary-container": "#6063ee",
+                      "tertiary-fixed": "#ffdbce",
+                      "inverse-surface": "#213145",
+                      "on-error": "#ffffff",
+                      "surface-variant": "#d3e4fe",
+                      "on-tertiary-fixed-variant": "#773215",
+                      "on-primary-container": "#f4fffc",
+                      "surface-container-low": "#eff4ff",
+                      "on-primary-fixed": "#00201d",
+                      "primary-fixed-dim": "#6bd8cb",
+                      "surface-container-high": "#dce9ff",
+                      "on-secondary-fixed": "#07006c",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-container": "#fffbff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "container-padding": "24px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "display-xl": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "tabular-stat": [
+                              "JetBrains Mono"
+                      ],
+                      "title-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display-xl": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "tabular-stat": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Transactional Screen: Navigation Shell Suppressed -->
+<main class="min-h-screen flex w-full overflow-hidden">
+<!-- Left Pane: Atmospheric Branding (Hidden on Mobile) -->
+<div class="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-surface-container">
+<!-- Background Image -->
+<div class="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-multiply pointer-events-none" data-alt="A serene, abstract architectural interior bathed in soft, diffused daylight. The composition features clean, geometric planes of white and pale gray, creating a sense of calm and focused study. Subtle, elegant shadows emphasize depth without heavy contrast. The mood is highly organized, premium, and distraction-free, embodying a modern 'Cognitive Calm' aesthetic suitable for an advanced operating system." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVPSnnMZmiGxmX9Al8UwPSciA6J0o1sT2pnvbIzYtRnyvRjFiYBoZNjk4hZ1gHDz23R9JKhSK0rJWVgjy9cddFXEr_8uusRYk-Awsyc_lmtZJFsh2T4fzNfJFx1JTHSIgupAfM4b7Qeeq1aRGZdTPvW0ovodYpaG3mK6RSd-aG6nwavKjSiHVByHB6nWAPcQG452teslAogRj1BSFjRkLRhck1ALHN0RHkUN3WbooliAvA8rAN6tNrmQ')"></div>
+<!-- Gradient Overlay for readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container via-transparent to-transparent pointer-events-none"></div>
+<div class="relative z-10">
+<img alt="Helpotron Logo" class="w-16 h-16 rounded-xl shadow-sm border border-outline-variant/20 mb-8" src="https://lh3.googleusercontent.com/aida/AEtjO1Um5VsGImBIxmwV1nLWSyvwO4-XqKVxRtHl6-pzxoW14VNiuHyPBioq2yzjoMwpL49jBUu0KbLa7k20YR2lck-7Qd75BOomje1PreCgbjzH_g3LGn8G08sXbj5BozozLSsMGxTVrrFmgNU0-4Qrre28sFHDI5lMWfRZ8ZROIxY1AGZ7JB4SX2NXVrQpoiumJkPR3imYF74RiXwqFI_9kCfXDpA-Njv6m4uPjeO6qu4nVvZcorhHu0MWwA">
+</div>
+<div class="relative z-10 max-w-lg mb-12">
+<h1 class="font-display-xl text-display-xl text-on-surface mb-4">Master your<br>cognitive load.</h1>
+<p class="font-title-md text-title-md text-on-surface-variant">Access your Helpotron OS workspace. A unified environment designed for deep focus and rigorous academic achievement.</p>
+</div>
+</div>
+<!-- Right Pane: Login Form -->
+<div class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
+<!-- Mobile Logo Fallback -->
+<div class="absolute top-8 left-8 lg:hidden">
+<img alt="Helpotron Logo" class="w-12 h-12 rounded-lg shadow-sm border border-outline-variant/20" src="https://lh3.googleusercontent.com/aida/AEtjO1Um5VsGImBIxmwV1nLWSyvwO4-XqKVxRtHl6-pzxoW14VNiuHyPBioq2yzjoMwpL49jBUu0KbLa7k20YR2lck-7Qd75BOomje1PreCgbjzH_g3LGn8G08sXbj5BozozLSsMGxTVrrFmgNU0-4Qrre28sFHDI5lMWfRZ8ZROIxY1AGZ7JB4SX2NXVrQpoiumJkPR3imYF74RiXwqFI_9kCfXDpA-Njv6m4uPjeO6qu4nVvZcorhHu0MWwA">
+</div>
+<div class="w-full max-w-md">
+<div class="mb-10 text-center lg:text-left pt-12 lg:pt-0">
+<h2 class="font-headline-lg text-headline-lg font-bold text-on-surface tracking-tight">Welcome back</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-2">Sign in to continue to your study environment.</p>
+</div>
+<!-- Form Card -->
+<div class="bg-surface-container-lowest rounded-[24px] p-8 sm:p-10 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/40">
+<form class="space-y-6">
+<!-- Username Field -->
+<div class="relative">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-wider" for="username">Username or Email</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline-variant pointer-events-none">person</span>
+<input class="w-full h-[48px] pl-12 pr-4 bg-transparent border border-outline-variant rounded-xl text-on-surface font-body-md placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200" id="username" name="username" placeholder="Enter your credentials" type="text">
+</div>
+</div>
+<!-- Password Field -->
+<div class="relative">
+<div class="flex justify-between items-center mb-2">
+<label class="block font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider" for="password">Password</label>
+<a class="font-body-sm text-body-sm text-primary font-medium hover:text-primary-container transition-colors" href="#">Forgot?</a>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline-variant pointer-events-none">lock</span>
+<input class="w-full h-[48px] pl-12 pr-4 bg-transparent border border-outline-variant rounded-xl text-on-surface font-body-md placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200" id="password" name="password" placeholder="••••••••••••" type="password">
+</div>
+</div>
+<!-- 2FA Option -->
+<div class="flex items-center gap-3 mt-4 p-4 rounded-xl bg-surface-container-low/50 border border-outline-variant/30 hover:bg-surface-container-low transition-colors group cursor-pointer" onclick="document.getElementById('2fa-toggle').click()">
+<div class="relative flex items-center justify-center w-5 h-5">
+<input class="peer appearance-none w-5 h-5 border-2 border-outline rounded-md checked:bg-primary checked:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface-container-lowest transition-all cursor-pointer" id="2fa-toggle" type="checkbox">
+<span class="material-symbols-outlined absolute text-[16px] text-on-primary opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm font-medium text-on-surface group-hover:text-primary transition-colors cursor-pointer">Require 2FA on this device</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-[12px] cursor-pointer">Supports TOTP Authenticator or SMS</span>
+</div>
+</div>
+<!-- Turnstile CAPTCHA Placeholder -->
+<div class="mt-6 w-full h-[65px] border border-outline-variant/50 rounded-xl bg-surface-container-low flex items-center justify-between px-4 overflow-hidden relative group">
+<!-- Simulated scanning effect -->
+<div class="absolute inset-y-0 left-0 w-1 bg-primary/20 group-hover:bg-primary transition-colors"></div>
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant border-t-primary animate-spin"></div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Verifying secure connection...</span>
+</div>
+<span class="font-label-caps text-label-caps text-outline text-[10px] uppercase">Turnstile</span>
+</div>
+<!-- Submit Button -->
+<button class="w-full h-[48px] mt-8 bg-primary text-on-primary rounded-xl font-title-md text-title-md hover:bg-primary-container hover:text-on-primary-container focus:outline-none focus:ring-4 focus:ring-primary/20 active:scale-[0.98] transition-all duration-200 shadow-sm flex justify-center items-center gap-2" type="button">
+<span class="">Sign In</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</form>
+</div>
+<!-- Footer Links -->
+<div class="mt-8 text-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                        New to Helpotron? 
+                        <a class="text-primary font-medium hover:text-primary-container transition-colors ml-1" href="#">Request access</a>
+</p>
+</div>
+</div>
+</div>
+</main>
+
+
+
+
+</body></html>

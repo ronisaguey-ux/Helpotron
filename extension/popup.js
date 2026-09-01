@@ -71,6 +71,12 @@ async function init() {
   // session_token is the long-lived (7-day sliding) credential returned by
   // /api/login; the 24h JWT in `token` is only a fallback.
   const loggedIn = !!(st.public_id && (st.token || st.session_token));
+  // Design-v2 shell: account chip mirrors the signed-in identity.
+  const accountChip = document.getElementById('accountChip');
+  if (accountChip) {
+    const label = accountChip.querySelector('span');
+    if (label) label.textContent = (st.public_id && st.public_id !== 'Guest') ? `@${st.public_id}` : 'Guest';
+  }
   if (!loggedIn) {
     setStatus('⚠️ Login required: enter your Helpotron username & password below and Save (or sign in on the website once — the session syncs here). Scrapes stay disabled until then.');
     statusEl.classList.remove('hidden');
@@ -918,5 +924,40 @@ chrome.runtime.onMessage.addListener((msg) => {
 refreshGDocsTabs();
 refreshAssignments();
 init();
+
+// ── Design-v2 shell (09-01): segmented tabs, account chip, options button ─────
+(function initShell() {
+  const tabs = document.querySelectorAll('.nav-tab');
+  const panes = document.querySelectorAll('.tab-pane');
+  const activate = (btn) => {
+    const target = btn.dataset.target;
+    tabs.forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panes.forEach((p) => { p.hidden = p.id !== target; });
+  };
+  tabs.forEach((btn) => btn.addEventListener('click', () => activate(btn)));
+
+  const optsBtn = document.getElementById('btnOptions');
+  if (optsBtn) {
+    optsBtn.addEventListener('click', () => {
+      if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
+    });
+  }
+
+  // Account chip paints as soon as any stored identity exists (init() also
+  // paints it from its batched storage read — this covers the pre-init gap).
+  const chip = document.getElementById('accountChip');
+  if (chip) {
+    chrome.storage.local.get('public_id', (st) => {
+      const label = chip.querySelector('span');
+      if (!label) return;
+      const pid = (st.public_id || '').trim();
+      label.textContent = (pid && pid !== 'Guest') ? `@${pid}` : 'Guest';
+    });
+  }
+})();
 
 

@@ -917,15 +917,28 @@ async def update_presentation_gemini_config(
 @router.get("/admin-notices")
 async def get_my_admin_notices_route(request: Request, db: Session = Depends(get_db)):
     """Unread admin → user notices (operator 08-28). The client polls this and
-    pops the newest unread on screen; dismissing marks it read."""
-    from .database import AdminNotice
+    pops the newest unread on screen; dismissing marks it read.
+
+    Operator 09-01: broadcast notices (user_id='*') are included for every
+    user; their per-user read state lives in admin_notice_reads so one user
+    dismissing never silences it for the others."""
+    from .database import AdminNotice, AdminNoticeRead
     user = _get_current_user(request, db)
-    notices = (
+    mine_or_broadcast = (
         db.query(AdminNotice)
-        .filter(AdminNotice.user_id == user.public_id, AdminNotice.read_at.is_(None))
+        .filter((AdminNotice.user_id == user.public_id) | (AdminNotice.broadcast.is_(True)))
         .order_by(AdminNotice.id.asc())
         .all()
     )
+    read_ids = {
+        r.notice_id
+        for r in db.query(AdminNoticeRead).filter(AdminNoticeRead.user_id == user.public_id).all()
+    }
+    unread = [
+        n
+        for n in mine_or_broadcast
+        if (n.broadcast and n.id not in read_ids) or (not n.broadcast and n.read_at is None)
+    ]
     return {
         "status": "success",
         "unread": [
@@ -933,9 +946,10 @@ async def get_my_admin_notices_route(request: Request, db: Session = Depends(get
                 "id": n.id,
                 "subject": n.subject,
                 "message": n.message,
+                "broadcast": bool(n.broadcast),
                 "created_at": n.created_at.isoformat() if hasattr(n.created_at, "isoformat") else str(n.created_at),
             }
-            for n in notices
+            for n in unread
         ],
     }
 
@@ -946,17 +960,36 @@ class AdminNoticeReadPayload(BaseModel):
 
 @router.post("/admin-notices/read")
 async def mark_admin_notices_read_route(payload: AdminNoticeReadPayload, request: Request, db: Session = Depends(get_db)):
-    """Marks dismissed admin notices as read (scoped to the caller's own notices)."""
-    from .database import AdminNotice
+    """Marks dismissed admin notices as read (scoped to the caller's own notices).
+
+    Per-user rows get read_at stamped; broadcast rows get a per-user receipt
+    row in admin_notice_reads."""
+    from .database import AdminNotice, AdminNoticeRead
     user = _get_current_user(request, db)
     from datetime import datetime, timezone
-    db.query(AdminNotice).filter(
-        AdminNotice.user_id == user.public_id,
-        AdminNotice.id.in_(payload.notice_ids),
-        AdminNotice.read_at.is_(None),
-    ).update({AdminNotice.read_at: datetime.now(timezone.utc)}, synchronize_session=False)
+    now = datetime.now(timezone.utc)
+    notices = (
+        db.query(AdminNotice)
+        .filter((AdminNotice.user_id == user.public_id) | (AdminNotice.broadcast.is_(True)))
+        .filter(AdminNotice.id.in_(payload.notice_ids))
+        .all()
+    )
+    marked = 0
+    for n in notices:
+        if n.broadcast:
+            exists = (
+                db.query(AdminNoticeRead.id)
+                .filter(AdminNoticeRead.notice_id == n.id, AdminNoticeRead.user_id == user.public_id)
+                .first()
+            )
+            if not exists:
+                db.add(AdminNoticeRead(notice_id=n.id, user_id=user.public_id, read_at=now))
+                marked += 1
+        elif n.read_at is None:
+            n.read_at = now
+            marked += 1
     db.commit()
-    return {"status": "success", "marked_read": len(payload.notice_ids)}
+    return {"status": "success", "marked_read": marked}
 
 
 # ─── GDPR Article 17: Account Deletion ────────────────────────────────────────

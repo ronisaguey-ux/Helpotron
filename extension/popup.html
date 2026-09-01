@@ -1,465 +1,406 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Helpotron Companion</title>
+  <!-- Design system (dark-first; theme.js applies [data-theme]) -->
+  <link rel="stylesheet" href="popup.css" />
   <style>
-    :root {
-      --bg: #0b0f19;
-      --surface: #131b2e;
-      --surface-elevated: #1e293b;
-      --border: rgba(255, 255, 255, 0.1);
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --radius: 10px;
-    }
-    body {
-      width: 360px;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      box-sizing: border-box;
-      user-select: none;
-    }
-    
-    /* Header */
-    .header {
-      padding: 12px 14px;
-      background: rgba(19, 27, 46, 0.85);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .brand img {
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-      object-fit: cover;
-      box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
-    }
-    .brand-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.01em;
-    }
-    .brand-badge {
-      font-size: 9px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.3);
-    }
-
-    /* Nav Tabs */
-    .nav-tabs {
-      display: flex;
-      background: #0d1322;
-      border-bottom: 1px solid var(--border);
-      padding: 4px 6px;
-      gap: 4px;
-    }
-    .nav-tab {
-      flex: 1;
-      text-align: center;
-      padding: 6px 4px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .nav-tab:hover {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.05);
-    }
-    .nav-tab.active {
-      color: #fff;
-      background: var(--surface-elevated);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-
-    /* Tab Content Areas */
-    .tab-pane {
-      display: none;
-      padding: 12px 14px;
-    }
-    .tab-pane.active {
-      display: block;
-    }
-
-    /* Form Controls */
-    label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-    select, input[type="text"], input[type="password"] {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 8px 10px;
-      margin-bottom: 8px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: #fff;
-      font-size: 11.5px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    select:focus, input:focus {
-      border-color: var(--accent);
-    }
-
-    /* Buttons */
-    .btn-primary {
-      width: 100%;
-      padding: 9px 12px;
-      margin: 4px 0;
-      border: 1px solid rgba(99, 102, 241, 0.5);
-      border-radius: var(--radius);
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
-      color: #fff;
-      cursor: pointer;
-      font-size: 11.5px;
-      font-weight: 600;
-      transition: opacity 0.15s, transform 0.05s;
-    }
-    .btn-primary:hover {
-      opacity: 0.95;
-    }
-    .btn-primary:active {
-      transform: scale(0.99);
-    }
-    .btn-secondary {
-      width: 100%;
-      padding: 8px 12px;
-      margin: 4px 0;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: #cbd5e1;
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 500;
-      transition: background 0.15s, color 0.15s;
-    }
-    .btn-secondary:hover {
-      background: var(--surface-elevated);
-      color: #fff;
-    }
-
-    /* Chat Messages */
-    #chatMessages {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      min-height: 110px;
-      max-height: 160px;
-      overflow-y: auto;
-      padding: 8px;
-      margin-bottom: 8px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: #090d16;
-    }
-    .chat-msg {
-      max-width: 88%;
-      padding: 6px 9px;
-      border-radius: 8px;
-      font-size: 11px;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .chat-msg.user {
-      align-self: flex-end;
-      background: #4f46e5;
-      color: #fff;
-    }
-    .chat-msg.agent {
-      align-self: flex-start;
-      background: #1e293b;
-      border: 1px solid var(--border);
-      color: #e2e8f0;
-    }
-    .chat-msg.chat-note {
-      align-self: center;
-      background: transparent;
-      border: none;
-      color: #64748b;
-      font-size: 10px;
-      text-align: center;
-    }
-    #chatRow {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    #chatInput {
-      flex: 1;
-      margin: 0;
-    }
-    #chatSend {
-      width: auto;
-      margin: 0;
-      padding: 8px 12px;
-    }
-
-    /* Status Bar */
-    .status-container {
-      padding: 8px 14px 10px;
-      border-top: 1px solid var(--border);
-      background: #0a0e1a;
-    }
-    #status {
-      font-size: 10.5px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: #94a3b8;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      line-height: 1.35;
+    /* Popup-shell adjustments only (no tokens here) */
+    body { width: 380px; max-height: 600px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .chat-send { width: 44px; padding: 0; flex-shrink: 0; }
+    .typing-actions { display: flex; gap: 8px; }
+    .typing-actions .btn { flex: 1; }
+    .wpm-row { display: flex; align-items: center; gap: 12px; }
+    .wpm-row input[type='range'] { flex: 1; accent-color: var(--primary); }
+    .wpm-val {
+      font-family: var(--font-mono); font-size: 13px; color: var(--primary);
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
-
-    .unparseable-card {
-      display: none;
-      margin-bottom: 8px;
-      padding: 8px 10px;
-      background: rgba(244, 63, 94, 0.12);
-      border: 1px solid rgba(244, 63, 94, 0.3);
-      border-radius: var(--radius);
-      font-size: 11px;
-      color: #fecdd3;
-    }
-    .unparseable-card button {
-      width: 100%;
-      margin-top: 6px;
-      padding: 6px;
-      border-radius: 6px;
-      background: #e11d48;
-      border: none;
-      color: #fff;
-      font-weight: 600;
-      font-size: 10.5px;
+    details.realism summary {
       cursor: pointer;
+      font-family: var(--font-mono); font-size: 12px; line-height: 16px;
+      font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--on-surface-variant);
+      padding: 8px 4px; border-radius: 8px; list-style: none;
     }
+    details.realism summary::-webkit-details-marker { display: none; }
+    details.realism summary::before { content: '▸ '; }
+    details.realism[open] summary::before { content: '▾ '; }
+    details.realism > .check-row { margin-top: 6px; }
   </style>
 </head>
 <body>
-
-  <!-- Header -->
-  <div class="header">
-    <div class="brand">
-      <img src="icon48.png" alt="Helpotron">
-      <span class="brand-title">Helpotron</span>
-      <span class="brand-badge">Companion</span>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <symbol id="i-capture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+    </symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
+      <path d="M4 9h16"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="m8 12.5 2.5 2.5L16 9.5"/>
+    </symbol>
+    <symbol id="i-search-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <path d="m21 21-4.3-4.3"/>
+      <path d="m8.5 11 2 2M12.5 8l2 2"/>
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+      <path d="M12 7v5l4 2"/>
+    </symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8V4H8"/>
+      <rect x="4" y="8" width="16" height="12" rx="2"/>
+      <circle cx="9" cy="14" r="1"/>
+      <circle cx="15" cy="14" r="1"/>
+      <path d="M2 14h2M20 14h2"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2" width="6" height="11" rx="3"/>
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1"/>
+      <path d="M12 18v4"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <path d="M21 3v6h-6"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 2 11 13"/>
+      <path d="m22 2-7 20-4-9-9-4z"/>
+    </symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="4" width="14" height="17" rx="2"/>
+      <path d="M9 2h6v4H9z"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 4H6v16h4zM18 4h-4v16h4z"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"/>
+      <path d="m7 10 5 5 5-5"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 3 1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2L12 3z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </symbol>
+    <symbol id="i-sigma" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 5H7l6 6-6 8h11"/>
+    </symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="3"/>
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
+    </symbol>
+    <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="12" rx="2"/>
+      <path d="M8 20h8M12 16v4"/>
+    </symbol>
+    <symbol id="i-light-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+    </symbol>
+    <symbol id="i-dark-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/>
+      <path d="m13 6 6 6-6 6"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/>
+      <path d="M1 14h6M9 8h6M17 16h6"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5"/>
+      <path d="m11 12 9-9"/>
+      <path d="m16 7 3 3"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </symbol>
+  </defs>
+</svg>
+  <!-- ============ Update banner (hidden; popup.js shows on update_available) ============ -->
+  <div class="update-banner" id="updateBanner" style="display:none">
+    <svg class="ic ic--sm"><use href="#i-download" /></svg>
+    <div>
+      <div class="b-sub">NEW VERSION AVAILABLE</div>
+      <div class="font-body-sm">Helpotron v<span id="updateVersionBadge">2.2.0</span> — download the update</div>
     </div>
-    <div style="font-size: 10px; color: var(--text-muted);">v2.0.1</div>
+    <button class="btn btn--ghost btn--sm" id="btnDownloadUpdate">Get</button>
   </div>
 
-  <!-- Navigation Tabs -->
-  <div class="nav-tabs">
-    <div class="nav-tab active" data-target="tab-scrape">⚡ Scrape</div>
-    <div class="nav-tab" data-target="tab-type">✍️ Type</div>
-    <div class="nav-tab" data-target="tab-chat">💬 Chat</div>
-    <div class="nav-tab" data-target="tab-settings">⚙️ Settings</div>
-  </div>
-
-  <!-- Update Banner (if available) -->
-  <div id="updateBanner" style="display: none; margin: 10px 14px 0; padding: 8px 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px;">
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-      <span style="font-weight: 700; font-size: 11px; color: #6ee7b7;">✨ Update Available</span>
-      <span id="updateVersionBadge" style="font-size: 9px; background: #059669; padding: 1px 5px; border-radius: 4px; color: white;">v2.0.0</span>
-    </div>
-    <button id="btnDownloadUpdate" style="width: 100%; margin-top: 5px; padding: 5px; background: #10b981; border: none; border-radius: 6px; color: #022c22; font-weight: 700; font-size: 10px; cursor: pointer;">
-      Download Latest Version (.zip)
+  <!-- ============ App bar ============ -->
+  <header class="appbar">
+    <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" />
+    <div class="app-title">Helpotron</div>
+    <div class="spacer"></div>
+    <button class="account-chip" id="accountChip" type="button" title="Account">
+      <svg class="ic"><use href="#i-user" /></svg>
+      <span>Guest</span>
     </button>
-  </div>
+    <button class="icon-btn" id="btnOptions" type="button" title="Extension options" aria-label="Open extension options">
+      <svg class="ic"><use href="#i-settings" /></svg>
+    </button>
+  </header>
 
-  <!-- ─── TAB 1: SCRAPE ──────────────────────────────────────────────── -->
-  <div id="tab-scrape" class="tab-pane active">
-    <label for="tabSelect">Select Target Course Tab:</label>
-    <select id="tabSelect">
-      <option value="">Loading open tabs…</option>
-    </select>
+  <!-- ============ Segmented tabs (Scrape / Type / Chat / Settings) ============ -->
+  <nav class="seg" role="tablist" aria-label="Helpotron companion sections">
+    <button class="seg-btn nav-tab active" data-target="pane-scrape" role="tab" aria-selected="true" type="button">Scrape</button>
+    <button class="seg-btn nav-tab" data-target="pane-type" role="tab" aria-selected="false" type="button">Type</button>
+    <button class="seg-btn nav-tab" data-target="pane-chat" role="tab" aria-selected="false" type="button">Chat</button>
+    <button class="seg-btn nav-tab" data-target="pane-settings" role="tab" aria-selected="false" type="button">Settings</button>
+  </nav>
 
-    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-      <button id="startScrape" class="btn-primary">📄 Quick Scrape Selected Tab</button>
-      <button id="activateAgent" class="btn-secondary">🤖 Spawn AI Subagent (Methodical)</button>
-      <button id="startCrawl" class="btn-secondary">🌐 Scrape Entire Course (Throttled)</button>
-      <button id="stopCrawl" class="btn-secondary" style="display: none; border-color: rgba(244, 63, 94, 0.4); color: #fca5a5;">⏹ Stop Course Crawl</button>
-      <button id="startRecording" class="btn-secondary">🎙️ Record Lecture Audio</button>
-    </div>
+  <!-- ============ Main ============ -->
+  <main class="app-main">
 
-    <div id="crawlProgress" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(96, 165, 250, 0.3); font-size: 10.5px; line-height: 1.4; color: #93c5fd; font-family: monospace;"></div>
-
-    <!-- Honest Unparseable Box -->
-    <div id="unparseableBox" class="unparseable-card" style="margin-top: 8px;">
-      <div id="unparseableReason">⚠️ Helpotron was unable to parse structured assignment data.</div>
-      <button id="btnOpenDataLake">📥 Submit Feedback to Data Lake</button>
-    </div>
-
-    <button id="openAssignmentBtn" class="btn-secondary" style="display: none; margin-top: 6px; border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc;">📖 Open Assignment in Workspace</button>
-  </div>
-
-  <!-- ─── TAB 2: LAUNCH TO DOC (ASSISTIVE TYPING) ──────────────────────── -->
-  <div id="tab-type" class="tab-pane">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-      <label style="margin: 0; color: #c4b5fd;">✨ Assistive Typing Setup</label>
-      <span id="gdocsTypingBadge" style="display: none; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Typing Active</span>
-    </div>
-
-    <label for="assignmentSelect">Assignment Draft:</label>
-    <select id="assignmentSelect">
-      <option value="">Select an assignment to type…</option>
-    </select>
-
-    <label for="gdocsTabSelect">Target Editor Tab (Docs, Word, LMS):</label>
-    <select id="gdocsTabSelect">
-      <option value="">Detecting open editor tabs…</option>
-    </select>
-
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
-      <div>
-        <label for="realismPreset">Cadence Preset:</label>
-        <select id="realismPreset" style="margin: 0;">
-          <option value="academic">Natural (65 WPM)</option>
-          <option value="gentle">RSI Relief (35 WPM)</option>
-          <option value="brisk">Brisk Pro (95 WPM)</option>
-          <option value="motor">High Variance (50 WPM)</option>
-        </select>
-      </div>
-      <div>
-        <div style="display: flex; justify-content: space-between;">
-          <label for="wpmSlider">Speed:</label>
-          <span id="wpmValue" style="color: #c4b5fd; font-weight: 700; font-size: 10px;">65 WPM</span>
+    <!-- ────────────── SCRAPE ────────────── -->
+    <section class="tab-pane" id="pane-scrape" role="tabpanel">
+      <div class="card">
+        <div class="field">
+          <label class="field-label" for="tabSelect">Target tab</label>
+          <select class="select" id="tabSelect" aria-label="Target tab">
+            <option value="">No eligible tabs open</option>
+          </select>
         </div>
-        <input id="wpmSlider" type="range" min="20" max="140" value="65" style="padding: 0; margin-top: 4px;">
+
+        <button class="btn btn--primary" id="startScrape" type="button">
+          <svg class="ic"><use href="#i-capture" /></svg>
+          Capture Assignment
+        </button>
+        <button class="btn btn--secondary" id="activateAgent" type="button">
+          <svg class="ic"><use href="#i-bot" /></svg>
+          AI Subagent
+        </button>
+        <button class="btn btn--secondary" id="startCrawl" type="button">
+          <svg class="ic"><use href="#i-globe" /></svg>
+          Crawl Entire Course
+        </button>
+        <button class="btn btn--danger-outline" id="stopCrawl" type="button" style="display:none">
+          <svg class="ic"><use href="#i-stop" /></svg>
+          Stop Crawl
+        </button>
+        <button class="btn btn--outline" id="startRecording" type="button">
+          <svg class="ic"><use href="#i-mic" /></svg>
+          Record Lecture Audio
+        </button>
+
+        <!-- Crawl progress (hidden; pollCrawlStatus fills + shows) -->
+        <div class="card--inset font-tabular-stat text-tabular-stat text-primary" id="crawlProgress" role="status" style="display:none"></div>
+
+        <!-- Unparseable page (hidden; showUnparseable/hideUnparseable) -->
+        <div class="error-card" id="unparseableBox" style="display:none">
+          <div class="e-title">
+            <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+            Unparseable website
+          </div>
+          <div class="e-body" id="unparseableReason">Unsupported DOM or protected webview.</div>
+          <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
+            <svg class="ic ic--sm"><use href="#i-folder" /></svg>
+            Open Data Lake
+          </button>
+        </div>
+
+        <!-- Success: open the created bubble (hidden; showOpenAssignment) -->
+        <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
+          <svg class="ic"><use href="#i-check-circle" /></svg>
+          <span>Open bubble in Helpotron</span>
+        </button>
       </div>
-    </div>
+    </section>
 
-    <details style="margin-bottom: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; padding: 6px;">
-      <summary style="font-size: 10px; color: #94a3b8; cursor: pointer; font-weight: 600;">⚙️ 9 Realism Dimensions</summary>
-      <div style="margin-top: 6px; font-size: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkTypos" checked> Typos & Fix
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkFalseStarts" checked> False Starts
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkPauses" checked> Pauses
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkJitter" checked> Timing Jitter
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkBurst" checked> Burst Rhythm
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px; color: #cbd5e1; margin: 0;">
-          <input type="checkbox" id="chkFatigue" checked> Fatigue Curve
-        </label>
+    <!-- ────────────── TYPE (assistive typing engine) ────────────── -->
+    <section class="tab-pane" id="pane-type" role="tabpanel" hidden>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span class="field-label">Assistive typing engine</span>
+          <span class="chip chip--green" id="gdocsTypingBadge" style="display:none"><span class="dot"></span>Typing</span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="assignmentSelect">Assignment to type</label>
+          <select class="select" id="assignmentSelect" aria-label="Assignment to type">
+            <option value="">Log in to Helpotron to pick an assignment…</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="gdocsTabSelect">Target editor</label>
+          <select class="select" id="gdocsTabSelect" aria-label="Target editor tab">
+            <option value="new">Open New Google Doc (docs.new)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="realismPreset">Realism preset</label>
+          <select class="select" id="realismPreset" aria-label="Realism preset">
+            <option value="academic" selected>Academic — balanced (65 WPM)</option>
+            <option value="gentle">Gentle — slowed, with pauses (35 WPM)</option>
+            <option value="brisk">Brisk — fast & clean (95 WPM)</option>
+            <option value="motor">Motor — steady + typos (50 WPM)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="wpmSlider">Typing speed</label>
+          <div class="wpm-row">
+            <input type="range" id="wpmSlider" min="20" max="140" value="65" step="1" aria-label="Words per minute" />
+            <span class="wpm-val" id="wpmValue">65 WPM</span>
+          </div>
+        </div>
+
+        <details class="realism">
+          <summary>9 Realism Dimensions</summary>
+          <label class="check-row"><input type="checkbox" id="chkTypos" checked /><label for="chkTypos">Typos &amp; corrections</label></label>
+          <label class="check-row"><input type="checkbox" id="chkFalseStarts" checked /><label for="chkFalseStarts">False starts</label></label>
+          <label class="check-row"><input type="checkbox" id="chkPauses" checked /><label for="chkPauses">Natural pauses</label></label>
+          <label class="check-row"><input type="checkbox" id="chkJitter" checked /><label for="chkJitter">Timing jitter</label></label>
+          <label class="check-row"><input type="checkbox" id="chkBurst" checked /><label for="chkBurst">Burst / scurry rhythm</label></label>
+          <label class="check-row"><input type="checkbox" id="chkFatigue" checked /><label for="chkFatigue">Fatigue slowdowns</label></label>
+        </details>
+
+        <button class="btn btn--primary" id="btnStartLaunchToDoc" type="button">
+          <svg class="ic"><use href="#i-edit" /></svg>
+          Launch to Doc
+        </button>
+
+        <!-- Typing progress (hidden; BROADCAST_TYPING_PROGRESS fills + shows) -->
+        <div class="typing-track" id="typingProgressSection" style="display:none">
+          <div class="typing-status" id="typingStatusText">Typing…</div>
+          <div class="font-tabular-stat text-tabular-stat text-on-surface-variant" id="typingPercentText">0% (0/0 w)</div>
+          <div class="progress" role="progressbar" aria-label="Assistive typing progress">
+            <div class="progress-bar" id="typingProgressBar"></div>
+          </div>
+          <div class="typing-actions">
+            <button class="btn btn--secondary btn--sm" id="btnPauseTyping" type="button">
+              <svg class="ic ic--sm"><use href="#i-pause" /></svg>
+              Pause
+            </button>
+            <button class="btn btn--danger-outline btn--sm" id="btnCancelTyping" type="button">
+              <svg class="ic ic--sm"><use href="#i-x" /></svg>
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
-    </details>
+    </section>
 
-    <button id="btnStartLaunchToDoc" class="btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">
-      ⌨️ Start Assistive Typing
-    </button>
+    <!-- ────────────── CHAT (agent chatbox) ────────────── -->
+    <section class="tab-pane" id="pane-chat" role="tabpanel" hidden>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span class="field-label">Agent chat</span>
+          <button class="icon-btn" id="chatRefresh" type="button" title="Reload conversation" aria-label="Reload conversation">
+            <svg class="ic"><use href="#i-refresh" /></svg>
+          </button>
+        </div>
 
-    <!-- Typing Progress Section -->
-    <div id="typingProgressSection" style="display: none; margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(167, 139, 250, 0.3); font-size: 10.5px;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #ddd6fe; font-weight: 600;">
-        <span id="typingStatusText">Typing…</span>
-        <span id="typingPercentText">0%</span>
+        <div class="chat-msgs" id="chatMessages" aria-live="polite"></div>
+
+        <div class="chat-composer">
+          <textarea class="input" id="chatInput" placeholder="Ask the agent to scrape, summarize, or plan…" rows="2" aria-label="Chat message"></textarea>
+          <button class="btn btn--primary chat-send" id="chatSend" type="button" aria-label="Send message">
+            <svg class="ic"><use href="#i-send" /></svg>
+          </button>
+        </div>
+
+        <div class="grid-2">
+          <button class="btn btn--outline btn--sm" id="chatScrapeTab" type="button">
+            <svg class="ic ic--sm"><use href="#i-bot" /></svg>
+            Send to Tab Scraper
+          </button>
+          <button class="btn btn--outline btn--sm" id="chatScrapeContext" type="button">
+            <svg class="ic ic--sm"><use href="#i-clipboard" /></svg>
+            Insert Page Context
+          </button>
+        </div>
       </div>
-      <div style="background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px; overflow: hidden; margin-bottom: 6px;">
-        <div id="typingProgressBar" style="background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: 0%; height: 100%; transition: width 0.2s;"></div>
+    </section>
+
+    <!-- ────────────── SETTINGS (server connection) ────────────── -->
+    <section class="tab-pane" id="pane-settings" role="tabpanel" hidden>
+      <div class="card">
+        <span class="field-label">Server connection</span>
+
+        <div class="field">
+          <label class="field-label" for="server">Server</label>
+          <input class="input" id="server" type="url" placeholder="https://helpotron.dpdns.org" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="public_id">Public ID</label>
+          <input class="input" id="public_id" type="text" placeholder="your Helpotron username" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="password">Password</label>
+          <input class="input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+
+        <button class="btn btn--primary" id="saveSettings" type="button">
+          <svg class="ic"><use href="#i-key" /></svg>
+          Save &amp; Connect
+        </button>
+
+        <p class="field-hint">
+          Security-check accounts: sign in on the Helpotron website once — the session syncs here automatically.
+        </p>
       </div>
-      <div style="display: flex; gap: 6px;">
-        <button id="btnPauseTyping" class="btn-secondary" style="padding: 4px; font-size: 10px; flex: 1;">⏸ Pause</button>
-        <button id="btnCancelTyping" class="btn-secondary" style="padding: 4px; font-size: 10px; flex: 1; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">⏹ Cancel</button>
-      </div>
-    </div>
-  </div>
+    </section>
+  </main>
 
-  <!-- ─── TAB 3: AGENT CHAT ──────────────────────────────────────────── -->
-  <div id="tab-chat" class="tab-pane">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-      <label style="margin: 0; color: #93c5fd;">💬 Scraper Instruction Agent</label>
-      <button id="chatRefresh" title="Reload conversation" style="width: auto; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: #cbd5e1; font-size: 10px; cursor: pointer;">⟳ Refresh</button>
-    </div>
-    
-    <div id="chatMessages">
-      <div class="chat-msg chat-note">💡 Type an instruction, e.g. “only scrape algebra problem sets”.</div>
-    </div>
+  <!-- ============ Status strip ============ -->
+  <div class="status" id="status" role="status" aria-live="polite" hidden></div>
 
-    <div id="chatRow">
-      <input id="chatInput" placeholder="Direct your scraper agent…" autocomplete="off">
-      <button id="chatSend" class="btn-primary" disabled>Send</button>
-    </div>
-
-    <div style="display: flex; gap: 4px; margin-top: 6px;">
-      <button id="chatScrapeTab" class="btn-secondary" style="flex: 1; padding: 5px; font-size: 10px;">🤖 Scrape Tab</button>
-      <button id="chatScrapeContext" class="btn-secondary" style="flex: 1; padding: 5px; font-size: 10px;">📄 Page → Prompt</button>
-    </div>
-  </div>
-
-  <!-- ─── TAB 4: SETTINGS ───────────────────────────────────────────── -->
-  <div id="tab-settings" class="tab-pane">
-    <label for="server">Workspace Server URL:</label>
-    <input id="server" placeholder="http://localhost:8000">
-
-    <label for="public_id">Username / Public ID:</label>
-    <input id="public_id" placeholder="your username">
-
-    <label for="password">Account Password:</label>
-    <input id="password" type="password" placeholder="Account password">
-
-    <button id="saveSettings" class="btn-primary" style="margin-top: 4px;">Save &amp; Connect</button>
-  </div>
-
-  <!-- Status Bar Footer -->
-  <div class="status-container">
-    <div id="status">Ready. Select a tab above to begin.</div>
-  </div>
-
-  <!-- Simple Tab Switching Script -->
-  <script>
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        const target = tab.getAttribute('data-target');
-        if (target) {
-          const pane = document.getElementById(target);
-          if (pane) pane.classList.add('active');
-        }
-      });
-    });
-  </script>
-
+  <script src="theme.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
