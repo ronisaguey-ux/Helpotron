@@ -222,22 +222,36 @@ def _effort_cascade(primary_model: str, effort: int = 500) -> List[str]:
     return candidates
 
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
+    """Ledger one routed LLM call (see cost_tracking.ApiUsageLog).
+
+    The cost engine keys rows by public_id, while callers hand us either the
+    numeric user id or the public_id — resolve both (log_api_call() takes
+    db + public_id; the historical `user_id=`/`model=` kwargs no longer
+    exist, which silently dropped every row since the signature change).
+    """
     try:
         from .cost_tracking import cost_engine
-        # 09-01 fix: the call passed user_id=/model=/input_tokens= kwargs that
-        # don't exist on CostEngine.log_api_call (its real signature takes
-        # db, public_id, tool_or_model, category, ...) — every attempt raised
-        # TypeError and NO routing row reached api_usage_logs, so admin
-        # analytics and the credits/tokens ledger-of-record silently missed
-        # all agent-model traffic. Mirror transcription.py's correct call.
+        from .database import User
+
+        user = None
+        if isinstance(user_id, int) or str(user_id).isdigit():
+            user = db_session.query(User).filter(User.id == int(user_id)).first()
+        if user is None:
+            user = db_session.query(User).filter(User.public_id == str(user_id)).first()
+
+        # 09-01 fix: log_api_call's real signature takes db, public_id,
+        # tool_or_model, category, ... (the kwargs user_id=/model=/input_tokens=
+        # don't exist) — every attempt raised TypeError and NO routing row
+        # reached api_usage_logs; mirror transcription.py's correct call.
         cost_engine.log_api_call(
             db=db_session,
-            public_id=user_id,
+            public_id=user.public_id if user else str(user_id),
             tool_or_model=route_info.get("model", "unknown"),
             category="llm",
             duration_seconds=0.0,
             input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
             output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
+            metadata={k: v for k, v in route_info.items() if k != "model"},
         )
     except Exception as e:
         logger.warning(f"Failed to persist routing telemetry: {e}")

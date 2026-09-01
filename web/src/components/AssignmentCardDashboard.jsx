@@ -633,11 +633,14 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       </section>
                     );
                   })}
+                </div>
+              )}
 
-                  {/* Archived (09-01): stays OUT of the sections — archived
-                      assignments live in Assignment History; this is the
-                      pointer section. */}
-                  <section aria-label="Archived assignments">
+              {/* Archived (09-01): always rendered — fix: it used to live
+                  inside the length>0 branch, so a brand-new user with zero
+                  assignments could never reach Submission History (and its
+                  New Assignment button) from the dashboard. */}
+              <section aria-label="Archived assignments">
                     <div className="flex items-center gap-2.5 mb-3">
                       <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
                         <Archive className="w-3.5 h-3.5 text-outline" /> Archived
@@ -662,8 +665,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         </button>
                       )}
                     </div>
-                  </section>
-                </div>
+                </section>
               )}
             </div>
           )}
