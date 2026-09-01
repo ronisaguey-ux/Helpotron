@@ -594,6 +594,16 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     }]);
   }
 
+  /* ── action-result side effects (09-01): an executed tool call can ask the
+   * view to switch (select_settings → Settings page via onGoTo) or hand over a
+   * real download (export_assignment_data → export_url). ───────────────── */
+  function handleActionResult(res) {
+    const exec = res && res.execution;
+    if (!exec) return;
+    if (exec.navigate_to) onGoTo(exec.navigate_to);
+    if (exec.export_url) window.open(exec.export_url, '_blank', 'noopener');
+  }
+
   /* ── chat: one agent, any request ─────────────────────────────────────── */
   async function sendMessage(text) {
     const query = (text || input).trim();
@@ -618,6 +628,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       const replyRaw = res?.reply ?? res?.message;
       const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
       pushAssistant(replyText);
+      handleActionResult(res);
     } catch (e) {
       pushAssistant(`⚠️ The agent couldn't reach the backend right now (${e.message}). In demo mode responses are simulated.`);
     } finally {
@@ -652,6 +663,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       const replyRaw = res?.reply ?? res?.message;
       const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
       pushAssistant(replyText);
+      handleActionResult(res);
       setInput(''); // the typed text went with the attachment
     } catch (e) {
       setBusy(false);
