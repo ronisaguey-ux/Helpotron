@@ -21,7 +21,7 @@ from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .agent_prompt import agent_persona_block, agent_system_prompt
 from .database import AgentChatMessage, AgentChatThread, Assignment, StudyMaterial, UniversalDumpItem, User, get_db
-from .overlord_agent import agent_display_name, overlord_agent, permission_engine
+from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_agent, permission_engine
 
 router = APIRouter(prefix="/api", tags=["overlord_and_cards"])
 
@@ -896,6 +896,15 @@ _AGENT_ACTIONS = {
     "list_referrals": {"": "no payload — returns the user's referral codes and their redemption status"},
     "list_datalake_entries": {"limit": "int optional (1-20, default 5)"},
     "get_progress": {"": "no payload — returns assignment status counts and next due dates"},
+    # ── 09-01 (Bob, full-capability: "tool calls to do EVERYTHING") ─────────
+    "see_settings": {"": "no payload — read-only dump of ALL user settings (secrets masked). Prefer select_settings for one section"},
+    "select_settings": {"section": "str — one of: appearance | display | accessibility | ai | goals | notifications | localization (returns that settings section and opens the Settings page)"},
+    "see_config": {"": "no payload — plan, credits, token balance, micro-credits, plan-gated features and usage limits"},
+    "choose_assignment_direction": {"assignment_id": "int", "direction": "str — one of: do_it_for_me | study_guide | quiz | flashcards | summary | custom; the per-assignment subagent team then ACTUALLY does the work", "custom_text": "str optional — what the direction should be when direction=custom"},
+    "mark_assignment_done": {"assignment_id": "int — moves the bubble to completed"},
+    "archive_assignment": {"assignment_id": "int — moves the bubble to archived (history)"},
+    "export_assignment_data": {"assignment_id": "int optional — export this bubble (omit + no bubble to export everything)", "bubble": "str optional — assign/ bubble title substring filter; returns a summary plus a real download URL"},
+    "request_feature": {"text": "str — the feature/improvement request; logged in the Data Lake for the team"},
 }
 
 # ─── Extension-surface scrape tool (operator 08-28) ─────────────────────────
@@ -930,6 +939,15 @@ _AGENT_ACTION_COSTS = {
     "remember": 0, "forget_memory": 0, "plain_answer": 0,
     "get_wallet": 0, "list_library": 0, "list_referrals": 0,
     "list_datalake_entries": 0, "get_progress": 0,
+    # 09-01 (Bob, full-capability): reads are free; the direction dispatch is
+    # real team work (assignment_solve); lifecycle flips are cheap; feature
+    # requests cost a token's worth (they are logged, not free).
+    "see_settings": 0, "select_settings": 0, "see_config": 0,
+    "export_assignment_data": 0,
+    "choose_assignment_direction": 5,   # assignment_solve
+    "mark_assignment_done": 1,          # agent_session
+    "archive_assignment": 1,            # agent_session
+    "request_feature": 1,               # agent_session
     "admin_lookup_user": 0, "admin_adjust_credits": 0, "admin_system_status": 0,
 }
 
@@ -1375,6 +1393,21 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         system_prompt += assignment_context
     system_prompt += (
         f"AVAILABLE ACTIONS (choose exactly one):\n{action_spec}\n\n"
+        f"OPERATION MODE RULE (Bob 09-01 — the user's mode is "
+        f"'{str(settings.get('operation_mode', 'auto')).upper()}' and it is binding):\n"
+        f"- MANUAL: EVERY work tool call must end with the suffix `_ask_permissions` "
+        f"(e.g. \"change_settings_ask_permissions\", \"submit_assignment_ask_permissions\"). "
+        f"Never run a work action bare in manual mode.\n"
+        f"- AUTO: you run every tool call automatically, but you MUST ask permission on "
+        f"RISKY actions — irreversible or account-affecting ones: delete_assignment, "
+        f"submit_assignment, archive_assignment, mark_assignment_done, change_settings, "
+        f"request_feature, and anything touching purchases, credits or money. For those "
+        f"append the suffix `_ask_permissions`; everything else runs directly.\n"
+        f"- YOLO: never ask — run every tool call directly, no suffix ever.\n"
+        f"Pure reads and reversible computes NEVER take the suffix in any mode: "
+        f"see_settings, select_settings, see_config, export_assignment_data, get_wallet, "
+        f"list_library, list_referrals, list_datalake_entries, get_progress, read_assignment, "
+        f"run_shell.\n\n"
         f'For ANY math/calculation/date/time or "check/prove/compute" question, always use '
         f'"action": "run_shell" — you pick a tiny SAFE python3 one-liner (or the date one-liner) '
         f'for the payload; NEVER answer such a question from memory. '
@@ -1477,11 +1510,23 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         raw = ""
 
     parsed = _safe_json_extract(raw) if raw else None
-    if parsed and isinstance(parsed.get("action"), str) and parsed["action"] in actions:
+    action_name = ""
+    force_permission = False
+    if parsed and isinstance(parsed.get("action"), str):
+        action_name = parsed["action"].strip()
+        # 09-01 (Bob, mode rule): a `_ask_permissions` suffix means the model
+        # explicitly asks the user — strip it, accept the base action, and the
+        # permission gate below takes the approval path even if the engine
+        # would have auto-approved.
+        if action_name.endswith("_ask_permissions"):
+            force_permission = True
+            action_name = action_name[: -len("_ask_permissions")].strip()
+    if parsed and action_name in actions:
         return {
-            "action": parsed["action"],
+            "action": action_name,
+            "force_permission": force_permission,
             "payload": parsed.get("payload") if isinstance(parsed.get("payload"), dict) else {},
-            "reply": str(parsed.get("reply") or f"Done — {parsed['action'].replace('_', ' ')}."),
+            "reply": str(parsed.get("reply") or f"Done — {action_name.replace('_', ' ')}."),
         }
     if parsed and parsed.get("action") == "plain_answer":
         lower = text.lower()
@@ -1651,12 +1696,17 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     if cost > 0 and not privileged and tok_bal < cost:
         return _insufficient_tokens_response(thread_key, user, cost, db)
 
-    # 3. Permission gate (manual mode asks; auto approves routine; yolo never asks)
+    # 3. Permission gate (manual mode asks; auto approves routine; yolo never
+    # asks). 09-01 (Bob): a bare `_ask_permissions` call forces the approval
+    # path even when the engine would have approved — but pure read-only
+    # actions can NEVER be gated, by any mode, ever.
     is_approved, reason = permission_engine.evaluate_action_permission(
         user_settings=settings,
         action_type=intent["action"],
         session_mode_override=payload.session_mode_override,
     )
+    if intent.get("force_permission") and intent["action"] not in READONLY_ACTION_TYPES:
+        is_approved = False
 
     # run_shell is a read-only, sandboxed compute query — it never asks for
     # permission (like plain_answer); it still pays the credit gate above.
@@ -1864,31 +1914,41 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
     user = _get_current_user(request, db)
     thread_key = payload.assignment_id  # 08-28 operator: was undefined -> NameError (crash)
 
+    # 09-01 (Bob, mode rule): the client may send "<action>_ask_permissions" —
+    # strip the suffix and force the approval path (read-only actions never).
+    action_type = (payload.action_type or "").strip()
+    force_permission = False
+    if action_type.endswith("_ask_permissions"):
+        force_permission = True
+        action_type = action_type[: -len("_ask_permissions")].strip()
+
     is_approved, reason = permission_engine.evaluate_action_permission(
         user_settings=user.settings or {},
-        action_type=payload.action_type,
+        action_type=action_type,
         session_mode_override=payload.session_mode_override,
     )
+    if force_permission and action_type not in READONLY_ACTION_TYPES:
+        is_approved = False
 
     if not is_approved:
         perm = overlord_agent.create_pending_permission(
             user_public_id=user.public_id,
-            action_type=payload.action_type,
+            action_type=action_type,
             title=payload.title,
-            description=payload.description or f"Permission required for '{payload.action_type}'",
+            description=payload.description or f"Permission required for '{action_type}'",
             payload=payload.payload,
             assignment_id=thread_key,
         )
         return {
             "status": "permission_required",
             "permission_request": perm,
-            "message": f"Action '{payload.action_type}' paused awaiting user confirmation.",
+            "message": f"Action '{action_type}' paused awaiting user confirmation.",
         }
 
     exec_res = await overlord_agent.execute_task_action(
         db,
         user=user,
-        action_type=payload.action_type,
+        action_type=action_type,
         payload=payload.payload,
         assignment_id=thread_key,
     )

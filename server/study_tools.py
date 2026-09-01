@@ -181,6 +181,28 @@ async def generate_practice_test(
 # Alias for test compatibility
 generate_quiz = generate_practice_test
 
+# 09-01 (Bob, assignment directions): the per-assignment team's quiz generator.
+# A practice-test generator already existed (generate_practice_test) — reuse it
+# under the quiz name so direction dispatch has one canonical contract.
+async def generate_practice_quiz(
+    transcript: str,
+    mc_count: int = 10,
+    short_answer_count: int = 5,
+    reading_level: str | None = None,
+    on_progress: ProgressCB | None = None,
+    effort_score: int = 500,
+) -> tuple[dict, str]:
+    """Practice quiz for the assignment team — canonical wrapper around the
+    existing practice-test generator (multiple choice + short answer)."""
+    return await generate_practice_test(
+        transcript,
+        mc_count=mc_count,
+        short_answer_count=short_answer_count,
+        reading_level=reading_level,
+        on_progress=on_progress,
+        effort_score=effort_score,
+    )
+
 
 
 async def generate_summary(
@@ -231,6 +253,7 @@ GENERATORS: dict[str, Any] = {
     "study_guide": generate_study_guide,
     "flashcards": generate_flashcards,
     "practice_test": generate_practice_test,
+    "practice_quiz": generate_practice_quiz,
     "summary": generate_summary,
     "study_pack": generate_study_pack,
 }

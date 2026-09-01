@@ -41,12 +41,21 @@ READONLY_ACTION_TYPES = {
     "plain_answer", "run_shell", "read_assignment",
     "get_wallet", "list_library", "list_referrals",
     "list_datalake_entries", "get_progress",
+    # 09-01 (Bob, full-capability suite): config/plan reads and data exports
+    # are pure reads — manual mode must never gate them either.
+    "see_settings", "select_settings", "see_config", "export_assignment_data",
 }
 
-# Critical actions that trigger permission prompt in AUTO mode
+# Critical actions that trigger permission prompt in AUTO mode (09-01, Bob:
+# risky = irreversible or account-affecting — delete/submit/archive/mark-done,
+# settings changes, feature requests, anything touching purchases/credits/money).
 CRITICAL_ACTION_TYPES = {
     "submit_assignment",
     "delete_assignment",
+    "archive_assignment",
+    "mark_assignment_done",
+    "change_settings",
+    "request_feature",
     "large_credit_deduct",
     "delete_data",
     "external_file_upload",
@@ -69,6 +78,7 @@ ROUTINE_ACTION_TYPES = {
     "change_settings",
     "create_assignment",
     "message_assignment_team",
+    "choose_assignment_direction",
 }
 
 def _persist_user_settings(db, user, settings) -> None:
@@ -274,6 +284,32 @@ def _coerce_flag(v: Any) -> Optional[bool]:
     if isinstance(v, (int, float)):
         return bool(v)
     return None
+
+
+# 09-01 (Bob, full-capability): see_settings dumps the user's settings to the
+# LLM — secrets must never leave the server. Mask any key that names a
+# credential (api_key, password, secret, access/refresh token) and any value
+# that is shaped like a key (sk-…/key-…). token_balance etc. are budgets, not
+# secrets — they stay visible (the wallet action surfaces them anyway).
+_SECRET_KEY_RE = re.compile(
+    r"(api[-_]?key|password|passwd|secret|client[-_]?secret|access[-_]?token|refresh[-_]?token|private[-_]?key)",
+    re.IGNORECASE,
+)
+_SECRET_VALUE_RE = re.compile(r"^(sk|pk|key|token|glpat|ghp)[-_][A-Za-z0-9_\-\.]{8,}$")
+
+
+def _mask_settings_for_agent(settings: dict) -> dict:
+    """Deep-copy of the user settings with credential-shaped entries masked."""
+    def _mask_value(v):
+        if isinstance(v, dict):
+            return {k: ("•••••• (masked)" if _SECRET_KEY_RE.search(str(k)) else _mask_value(val))
+                    for k, val in v.items()}
+        if isinstance(v, list):
+            return [_mask_value(item) for item in v]
+        if isinstance(v, str) and v and _SECRET_VALUE_RE.match(v.strip()):
+            return "•••••• (masked)"
+        return v
+    return _mask_value(settings)
 
 
 def _validated_argv(command: str) -> Optional[list[str]]:
@@ -546,7 +582,11 @@ class OverlordAgent:
                 user_id=user.id,
                 title=title,
                 prompt=payload.get("prompt") or text,
-                status="in_progress",
+                # 09-01 (Bob): an agent-created assignment WAITS for the user to
+                # pick its direction (do it / study guide / quiz / …) — it is
+                # never silently started. The user approves it, picks a
+                # direction, and only then does the team start working.
+                status=payload.get("status") or "pending_approval",
                 due_date=payload["due_date"],
                 progress=payload["progress"],
             )
@@ -874,6 +914,12 @@ print(f"Active files: {os.listdir('.')}")
             undo_payload = {"assignment_id": payload.get("assignment_id") or assignment_id}
         elif action_type in ("read_assignment", "create_assignment"):
             undo_payload = {}
+        elif action_type in ("mark_assignment_done", "archive_assignment"):
+            # 09-01 (Bob): status flips are reversible — snapshot the old status.
+            _aid = payload.get("assignment_id") or assignment_id
+            _row = db.query(Assignment).filter_by(id=_aid, user_id=user.id).first()
+            if _row is not None:
+                undo_payload = {"restore_status": _row.status}
         if undo_payload is not None:
             from .agent_actions import record_agent_action
             ledger = record_agent_action(
@@ -889,7 +935,10 @@ print(f"Active files: {os.listdir('.')}")
                 user_id=user.id,
                 title=title,
                 prompt=payload.get("prompt", "Directly initialized coursework task."),
-                status="in_progress",
+                # 09-01 (Bob): agent-created bubbles start PENDING — the user
+                # picks the direction (do it for me / study guide / quiz / …)
+                # and it moves to in_progress only when work actually starts.
+                status=payload.get("status") or "pending_approval",
                 due_date=payload.get("due_date", "2026-04-15"),
                 progress={"course": course, "teacher_name": payload.get("teacher_name", "Department Instructor"), "ai_score": 0.0},
             )
@@ -1177,7 +1226,7 @@ print(f"Active files: {os.listdir('.')}")
             if not changes:
                 return {"action": action_type, "status": "failed", "message": "Nothing to change."}
             applied = []
-            allowed_status = {"tracked", "not_started", "in_progress", "completed", "submitted", "graded", "paused"}
+            allowed_status = {"tracked", "not_started", "in_progress", "completed", "submitted", "graded", "paused", "archived"}
             if "status" in changes and changes["status"] in allowed_status:
                 assignment.status = changes["status"]
                 applied.append("status")
@@ -1313,6 +1362,239 @@ print(f"Active files: {os.listdir('.')}")
             if upcoming:
                 msg += "\nNext due:\n" + "\n".join(f"  • {a.title} — due {a.due_date}" for a in upcoming)
             return {"action": action_type, "status": "completed", "message": msg}
+
+        # ── 09-01 (Bob, full-capability): config/plan reads, lifecycle state
+        # changes, data export and feature requests. All are user-scoped. ────
+
+        elif action_type == "see_settings":
+            masked = _mask_settings_for_agent(dict(user.settings or {}))
+            msg = (f"Settings snapshot ({len(masked)} keys) — secrets are masked. "
+                   "Ask for one section with select_settings to see it cleanly.")
+            return {"action": action_type, "status": "completed", "message": msg,
+                    "settings": masked}
+
+        elif action_type == "select_settings":
+            section = str(payload.get("section") or "").strip().lower()
+            allowed = {"appearance", "display", "accessibility", "ai", "goals",
+                       "notifications", "localization"}
+            if section not in allowed:
+                return {"action": action_type, "status": "failed",
+                        "message": f"Pick a section from: {', '.join(sorted(allowed))}."}
+            settings = dict(user.settings or {})
+            sub = settings.get(section)
+            if sub is None:
+                sub = _mask_settings_for_agent(settings) if section in ("ai",) else {}
+            if section in ("ai",) and sub is not None:
+                sub = _mask_settings_for_agent(sub)
+            return {"action": action_type, "status": "completed",
+                    "message": f"Settings section '{section}': the user can tune this "
+                               "on the Settings page (I opened it for you).",
+                    "settings_section": sub,
+                    "navigate_to": "settings"}
+
+        elif action_type == "see_config":
+            s = dict(user.settings or {})
+            plan = str(getattr(user, "plan", "basic") or "basic")
+            tokens = float(s.get("token_balance", 0) or 0)
+            credits = float(getattr(user, "credits", 0) or 0)
+            micro = float(s.get("micro_credits_balance", 0) or 0)
+            features = []
+            limits = {}
+            try:
+                from .plans import get_plan_catalogue, low_balance_threshold
+                for entry in get_plan_catalogue():
+                    if entry.get("id") == plan:
+                        features = list(entry.get("capabilities") or [])
+                        limits = {
+                            "monthly_task_tokens": entry.get("monthly_task_tokens"),
+                            "low_balance_threshold": low_balance_threshold(plan),
+                        }
+                        break
+            except Exception as e:  # noqa: BLE001 — honest degrade
+                logger.warning("see_config plan lookup failed: %s", e)
+            msg = (f"Config — plan: {plan}. {tokens:g} tokens left in the usage budget, "
+                   f"{credits:g} credits (discount money), {micro:g} micro-credits.")
+            if features:
+                msg += "\nPlan features:\n" + "\n".join(f"  • {f}" for f in features)
+            return {"action": action_type, "status": "completed", "message": msg,
+                    "config": {"plan": plan, "token_balance": tokens, "credits": credits,
+                               "micro_credits": micro, "features": features, "limits": limits}}
+
+        elif action_type == "request_feature":
+            text = str(payload.get("text") or "").strip()
+            if not text:
+                return {"action": action_type, "status": "failed",
+                        "message": "Tell me what feature or improvement you want."}
+            try:
+                from .datalake import DataLakeManager
+                entry = DataLakeManager().record_feedback(
+                    category="feature_request", urgency="low",
+                    message=text, user_id=user.public_id,
+                )
+            except Exception as e:  # noqa: BLE001 — honest in-band failure
+                return {"action": action_type, "status": "failed",
+                        "message": f"I couldn't log that feature request: {e}"}
+            return {"action": action_type, "status": "completed",
+                    "feature_request_id": entry.get("feedback_id"),
+                    "message": f"Feature request logged in the Data Lake "
+                               f"({entry.get('feedback_id')}) — the team reviews "
+                               f"every request."}
+
+        elif action_type == "mark_assignment_done":
+            _aid = payload.get("assignment_id") or assignment_id
+            _row = db.query(Assignment).filter(Assignment.id == _aid,
+                                               Assignment.user_id == user.id).first()
+            if _row is None:
+                return {"action": action_type, "status": "failed",
+                        "message": f"No assignment #{_aid} found."}
+            _row.status = "completed"
+            db.commit()
+            return {"action": action_type, "status": "completed", "assignment_id": _row.id,
+                    "message": f"Assignment #{_row.id} '{_row.title}' marked done."}
+
+        elif action_type == "archive_assignment":
+            _aid = payload.get("assignment_id") or assignment_id
+            _row = db.query(Assignment).filter(Assignment.id == _aid,
+                                               Assignment.user_id == user.id).first()
+            if _row is None:
+                return {"action": action_type, "status": "failed",
+                        "message": f"No assignment #{_aid} found."}
+            _row.status = "archived"
+            db.commit()
+            return {"action": action_type, "status": "completed", "assignment_id": _row.id,
+                    "message": f"Assignment #{_row.id} '{_row.title}' archived into history."}
+
+        elif action_type == "export_assignment_data":
+            _aid = payload.get("assignment_id")
+            _bubble = str(payload.get("bubble") or "").strip()
+            query = db.query(Assignment).filter(Assignment.user_id == user.id)
+            if _aid:
+                try:
+                    query = query.filter(Assignment.id == int(_aid))
+                except (TypeError, ValueError):
+                    return {"action": action_type, "status": "failed",
+                            "message": "assignment_id must be a number."}
+            elif _bubble:
+                query = query.filter(Assignment.title.ilike(f"%{_bubble}%"))
+            assign_rows = query.order_by(Assignment.id.asc()).limit(20).all()
+            if not assign_rows:
+                return {"action": action_type, "status": "failed",
+                        "message": "No assignment matched that — name a bubble or pass its id."}
+            mats = (db.query(StudyMaterial)
+                    .filter(StudyMaterial.user_id == user.id)
+                    .order_by(StudyMaterial.created_at.desc()).all())
+            def _exports(mat) -> str:
+                kind = mat.kind or ""
+                if kind == "flashcards":
+                    return f"/api/export/flashcards/{mat.id}/quizlet"
+                if kind == "practice_test":
+                    return f"/api/export/practice-test/{mat.id}/json"
+                if kind == "study_guide":
+                    return f"/api/export/study-guide/{mat.id}/markdown"
+                if kind == "summary":
+                    return f"/api/export/summary/{mat.id}/txt"
+                return ""
+            out_assignments = []
+            for a in assign_rows:
+                a_mats = [m for m in mats if m.assignment_id == a.id]
+                out_assignments.append({
+                    "assignment_id": a.id, "title": a.title, "status": a.status,
+                    "due_date": a.due_date,
+                    "progress": dict(a.progress or {}),
+                    "generated_at": a.created_at.isoformat() if a.created_at else None,
+                    "materials": [
+                        {"material_id": m.id, "kind": m.kind,
+                         "preview": str(m.content or "")[:200].replace("\n", " "),
+                         "export_url": _exports(m) or None}
+                        for m in a_mats
+                    ],
+                })
+            all_mats = [m for m in mats if m.assignment_id is None]
+            payload_data = {
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "assignments": out_assignments,
+                "library_orphan_materials": [
+                    {"material_id": m.id, "kind": m.kind, "export_url": _exports(m) or None}
+                    for m in all_mats
+                ],
+            }
+            first_url = next((m["export_url"] for a in out_assignments for m in a["materials"]
+                              if m.get("export_url")), None)
+            material_total = sum(len(a["materials"]) for a in out_assignments)
+            msg = (f"Exported {len(out_assignments)} assignment"
+                   f"{'s' if len(out_assignments) != 1 else ''} (+{material_total} materials). "
+                   + (f"Download: {first_url}" if first_url else
+                      "No downloadable material yet — generate flashcards, a quiz, a study guide or a summary first."))
+            return {"action": action_type, "status": "completed", "message": msg,
+                    "data": payload_data, "download_url": first_url,
+                    "export_url": first_url}
+
+        elif action_type == "choose_assignment_direction":
+            _aid = payload.get("assignment_id") or assignment_id
+            direction = str(payload.get("direction") or "").strip().lower()
+            custom_text = str(payload.get("custom_text") or "").strip()
+            if not direction:
+                return {"action": action_type, "status": "failed",
+                        "message": "Pick a direction: do_it_for_me, study_guide, "
+                                   "quiz, flashcards, summary or custom."}
+            _row = db.query(Assignment).filter(Assignment.id == _aid,
+                                               Assignment.user_id == user.id).first()
+            if _row is None:
+                return {"action": action_type, "status": "failed",
+                        "message": f"No assignment #{_aid} found to run that on."}
+            # 09-01 (Bob): a picked direction starts REAL work — the bubble moves
+            # to in_progress FIRST, then the team runs (progress stays truthful).
+            try:
+                if _row.status in ("pending_approval", "tracked", "not_started"):
+                    _row.status = "in_progress"
+                    progress = dict(_row.progress or {})
+                    progress["dispatch_direction"] = direction
+                    _row.progress = progress
+                    db.commit()
+            except Exception:  # noqa: BLE001 — status flip is cosmetic, never fatal
+                db.rollback()
+            try:
+                from .assignment_direction import apply_direction
+                try:
+                    import inspect
+                    sig = inspect.signature(apply_direction)
+                    kwargs = {"db": db, "user": user, "assignment": _row,
+                              "direction": direction, "custom_text": custom_text}
+                    params = sig.parameters
+                    call_kwargs = {}
+                    for name in ("db", "user", "assignment", "direction", "custom_text"):
+                        if name in params:
+                            call_kwargs[name] = kwargs[name]
+                    result = apply_direction(**call_kwargs)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if isinstance(result, dict):
+                        message = result.get("message") or "Team finished the direction."
+                        if result.get("status") == "failed":
+                            return {"action": action_type, "status": "failed",
+                                    "assignment_id": _row.id, "direction": direction,
+                                    "message": message, "direction_result": result}
+                        return {"action": action_type, "status": "completed",
+                                "assignment_id": _row.id, "direction": direction,
+                                "message": message, "direction_result": result}
+                    return {"action": action_type, "status": "completed",
+                            "assignment_id": _row.id, "direction": direction,
+                            "message": str(result or "Team finished the direction.")}
+                except TypeError:
+                    # apply_direction present but with an unknown shape — fall
+                    # through to the shared dispatch engine below.
+                    raise ImportError("apply_direction signature mismatch")
+            except (ImportError, AttributeError, ValueError):
+                # Contract module missing/not ready — the dispatch engine in
+                # assignment_team.py still does the REAL work (never a 500).
+                from .assignment_team import dispatch_direction
+                note = await dispatch_direction(db, user, _row, direction, custom_text)
+                return {"action": action_type, "status": "completed",
+                        "assignment_id": _row.id, "direction": direction,
+                        "message": note}
+            except Exception as e:  # noqa: BLE001 — honest in-band failure
+                return {"action": action_type, "status": "failed",
+                        "message": f"That direction couldn't run right now: {str(e)[:160]} — try again."}
 
         elif action_type == "admin_lookup_user":
             if not is_admin_user(user):
