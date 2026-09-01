@@ -714,9 +714,11 @@ export default function AppShell({
             {sidebarOpen ? (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-headline-lg text-headline-lg font-bold shrink-0">
-                    H
-                  </div>
+                  <img
+                    src="/HelpoTron_logo.jpeg"
+                    alt="Helpotron Logo"
+                    className="w-10 h-10 rounded-xl object-cover border border-white/10 shadow-sm shrink-0"
+                  />
                   <div>
                     <h1 className="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary leading-tight">Helpotron OS</h1>
                     <p className="font-body-sm text-[11px] text-on-surface-variant">Premium Co-pilot</p>
@@ -740,33 +742,14 @@ export default function AppShell({
                 aria-label="Expand Navigation sidebar"
                 title="Expand sidebar"
               >
-                <span className="font-headline-lg text-headline-lg font-bold leading-none">H</span>
+                <img
+                  src="/HelpoTron_logo.jpeg"
+                  alt="Helpotron Logo"
+                  className="w-8 h-8 rounded-lg object-cover"
+                />
               </button>
             )}
           </div>
-
-          {sidebarOpen ? (
-            <button
-              type="button"
-              onClick={() => onNavigate('overview')}
-              className="mx-6 bg-primary text-on-primary rounded-xl py-3 px-4 flex items-center justify-center gap-2 hover:bg-primary-container transition-colors shadow-sm cursor-pointer min-h-[44px]"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              <span className="font-label-caps text-label-caps uppercase">New Study Session</span>
-            </button>
-          ) : (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => onNavigate('overview')}
-                className="w-10 h-10 bg-primary text-on-primary rounded-xl flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm cursor-pointer"
-                title="New Study Session"
-                aria-label="New Study Session"
-              >
-                <Plus className="w-5 h-5 shrink-0" aria-hidden="true" />
-              </button>
-            </div>
-          )}
 
           <nav className="flex-1 overflow-y-auto space-y-4 px-2" aria-label="Primary">
             {tree.map((group) => (
