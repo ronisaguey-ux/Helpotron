@@ -28,6 +28,9 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
   const [captchaEnabled, setCaptchaEnabled] = useState(false);
   const [turnstileSitekey, setTurnstileSitekey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  // Mirror of the widget token: the signup POST consumes the solve, so the
+  // post-signup auto-login needs a tracked fresh one (state lags a tick).
+  const turnstileTokenRef = useRef('');
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetIdRef = useRef(null);
 
@@ -118,9 +121,9 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
       if (!window.turnstile || turnstileWidgetIdRef.current !== null) return;
       turnstileWidgetIdRef.current = window.turnstile.render(container, {
         sitekey: turnstileSitekey,
-        callback: (token) => setTurnstileToken(token),
-        'expired-callback': () => setTurnstileToken(''),
-        'error-callback': () => setTurnstileToken(''),
+        callback: (token) => { turnstileTokenRef.current = token; setTurnstileToken(token); },
+        'expired-callback': () => { turnstileTokenRef.current = ''; setTurnstileToken(''); },
+        'error-callback': () => { turnstileTokenRef.current = ''; setTurnstileToken(''); },
       });
     };
     let script = document.getElementById('cf-turnstile-script');
@@ -197,6 +200,29 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     }
   };
 
+  // Turnstile tokens are single-use: signup consumed the solve, so the
+  // auto-login right after needs a fresh one. Re-challenge the widget and wait
+  // for the next token (managed mode usually re-solves itself without a click);
+  // bounded so a stalled widget can never hang the signup flow.
+  const getFreshTurnstileToken = () => new Promise((resolve) => {
+    if (!captchaEnabled || !window.turnstile || turnstileWidgetIdRef.current === null) {
+      resolve(null);
+      return;
+    }
+    turnstileTokenRef.current = '';  // drop the consumed solve
+    try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { resolve(null); return; }
+    const started = Date.now();
+    const iv = setInterval(() => {
+      if (turnstileTokenRef.current) {
+        clearInterval(iv);
+        resolve(turnstileTokenRef.current);
+      } else if (Date.now() - started > 15000) {
+        clearInterval(iv);
+        resolve(null);
+      }
+    }, 150);
+  });
+
   const handleSignup = async (e) => {
     e?.preventDefault();
     const u = signupUser.trim();
@@ -220,21 +246,30 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     setLoading(true);
     setLoginError('');
     try {
-      const signupRes = await api.signup(u, signupPass);
+      const signupRes = await api.signup(u, signupPass, turnstileToken || null);
       if (signupRes && (signupRes.public_id || signupRes.message?.includes('User created'))) {
         // Single-consent flow (legal-gate UX fix, 08-28): consent was just given
         // in THIS modal (Step 1) — carry it into the mandatory legal gate
         // (Step 2) so the gate opens with the checkbox pre-checked and needs
         // only one click. The gate still requires an explicit Accept.
         try { localStorage.setItem('helpotron_signup_consent', '1'); } catch (e) { /* storage unavailable */ }
-        // Automatically log in with new credentials (carry the captcha token;
-        // the signup POST itself is not captcha-gated, so the solve is unused
-        // at this point and safe to pass to the login call).
-        const autoLoginRes = await api.login(u, signupPass, null, turnstileToken || null);
+        // Automatically log in with new credentials. Turnstile tokens are
+        // single-use: the signup POST consumed the solve, so re-challenge the
+        // widget and wait for a fresh token (managed mode usually re-solves
+        // instantly without a click) before the auto-login.
+        const loginToken = await getFreshTurnstileToken();
+        const autoLoginRes = await api.login(u, signupPass, null, loginToken);
         if (autoLoginRes && autoLoginRes.message === 'Logged in') {
           sendSessionHandoff(autoLoginRes);
+          onLoginSuccess(u);
+        } else {
+          // Account was created; the auto-login's fresh solve just failed.
+          // Don't lose the user — switch to the Sign in tab with the username
+          // prefilled so they complete a fresh solve there.
+          setLoginUser(u);
+          setTab('login');
+          setLoginError('Account created — complete the security check to sign in.');
         }
-        onLoginSuccess(u);
       } else {
         setLoginError(signupRes?.detail || 'Signup failed.');
       }
@@ -242,6 +277,13 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
       setLoginError(err.message || 'Could not create account. Username may already be taken.');
     } finally {
       setLoading(false);
+      // The signup POST consumed the solve (or the gate never accepted one):
+      // clear it and re-challenge so the next attempt starts clean.
+      setTurnstileToken('');
+      turnstileTokenRef.current = '';
+      if (turnstileWidgetIdRef.current !== null && window.turnstile) {
+        try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
+      }
     }
   };
 

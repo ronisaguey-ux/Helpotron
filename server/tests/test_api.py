@@ -86,6 +86,127 @@ def test_owner_approved_welcome_tokens_grant(client):
     assert r2.status_code == 403
 
 
+def test_signup_captcha_gate_when_configured(client, monkeypatch):
+    """08-31 (operator): /api/signup enforces the same deny-closed Turnstile
+    gate as /api/login once keys are configured — no token (or a bad one) =
+    403, a valid one = created, and the operator bypass header lets test bots
+    through. Purely local: siteverify is stubbed, no network involved."""
+    from server import captcha
+    from server.database import User, SessionLocal
+
+    monkeypatch.setattr(captcha.settings, "turnstile_secret", "test-secret")
+    monkeypatch.setattr(captcha.settings, "turnstile_sitekey", "test-sitekey")
+    monkeypatch.setattr(captcha.settings, "captcha_bypass_secret", "qa-bypass-081")
+    monkeypatch.setattr(
+        "server.main.verify_turnstile_token",
+        lambda token, ip="": token == "test-token",
+    )
+
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.public_id.in_(["CaptchaGate01", "CaptchaGate02"])).delete(
+            synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    # Missing token → 403 (denied before any verification call).
+    r = client.post("/api/signup", json={"public_id": "CaptchaGate01", "password": "Passw0rd99"})
+    assert r.status_code == 403
+    assert "Security check required" in r.json()["detail"]
+
+    # Bad token → 403.
+    r = client.post("/api/signup", json={
+        "public_id": "CaptchaGate01", "password": "Passw0rd99", "turnstile_token": "wrong",
+    })
+    assert r.status_code == 403
+
+    # Valid token → account created.
+    r = client.post("/api/signup", json={
+        "public_id": "CaptchaGate01", "password": "Passw0rd99", "turnstile_token": "test-token",
+    })
+    assert r.status_code == 200, r.text
+
+    # Operator bypass header → created even with a stale token.
+    r = client.post("/api/signup", json={
+        "public_id": "CaptchaGate02", "password": "Passw0rd99", "turnstile_token": "stale",
+    }, headers={"X-Helpotron-Captcha-Bypass": "qa-bypass-081"})
+    assert r.status_code == 200, r.text
+
+
+def test_memguard_stat_file_is_bytes_not_kb():
+    """08-31 (operator): cgroup v2 memory.stat values are in BYTES. A 1024x
+    multiplier here once inflated 'file', pressure clamped to 0, and the RAM
+    queue silently never fired in production (discovered by live E2E) — this
+    pins the raw unit so it can't regress."""
+    from server import memguard
+
+    stat = "anon 512000000\nfile 46926848\nkernel 41648128\n"
+    assert memguard._parse_memory_stat_file(stat) == 46926848
+    assert memguard._parse_memory_stat_file("anon 1\n") == 0
+
+
+def test_memory_budget_queue_and_exemptions(client, monkeypatch):
+    """08-31 (operator): when the server tree's memory usage sits at the 10G
+    budget, NEW requests get the queue message (429, exact copy, Retry-After)
+    and liveness endpoints stay 200 so the wake monitors never queue."""
+    from server import memguard
+    from server.database import User, SessionLocal
+
+    budget = memguard._budget_bytes()
+    # Pin the machine floor so the test never depends on this box's actual RAM.
+    monkeypatch.setattr(memguard, "_box_available_bytes", lambda: 12 * 1024 * 1024 * 1024)
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.public_id == "MemGate01").delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr(memguard, "memory_usage_bytes", lambda: (budget, budget))
+    r = client.post("/api/signup", json={"public_id": "MemGate01", "password": "Passw0rd99"})
+    assert r.status_code == 429
+    assert r.json()["detail"] == memguard.QUEUE_MESSAGE
+    assert r.json()["queued"] is True
+    assert r.headers.get("retry-after") == "3"
+
+    # /health never queues — the tele-wake monitors need a fast 200.
+    r = client.get("/health")
+    assert r.status_code == 200
+
+    # Under budget the request runs normally.
+    monkeypatch.setattr(memguard, "memory_usage_bytes", lambda: (budget // 2, budget))
+    r = client.post("/api/signup", json={"public_id": "MemGate01", "password": "Passw0rd99"})
+    assert r.status_code == 200, r.text
+
+
+def test_memory_budget_machine_floor(client, monkeypatch):
+    """08-31 (operator): even with the app's own usage under budget, when the
+    whole MACHINE is nearly out of RAM new requests queue (small box: a 10G
+    app cap alone can starve everything else — Chrome, the tunnel, this
+    session — before the cgroup ever binds)."""
+    from server import memguard
+    from server.database import User, SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.public_id == "MemGate02").delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr(memguard, "memory_usage_bytes", lambda: None)  # scope unreadable
+    monkeypatch.setattr(memguard, "_box_available_bytes", lambda: 100 * 1024 * 1024)
+    r = client.post("/api/signup", json={"public_id": "MemGate02", "password": "Passw0rd99"})
+    assert r.status_code == 429
+    assert r.json()["detail"] == memguard.QUEUE_MESSAGE
+
+    # Box healthy again → the request passes the guard.
+    monkeypatch.setattr(memguard, "_box_available_bytes", lambda: 6 * 1024 * 1024 * 1024)
+    r = client.post("/api/signup", json={"public_id": "MemGate02", "password": "Passw0rd99"})
+    assert r.status_code == 200, r.text
+
+
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
 
