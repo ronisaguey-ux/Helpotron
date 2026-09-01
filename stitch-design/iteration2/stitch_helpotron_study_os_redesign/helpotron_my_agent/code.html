@@ -1,0 +1,439 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>My Agent - Helpotron</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "on-background": "#0b1c30",
+                      "primary": "#00685f",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#005049",
+                      "outline-variant": "#bcc9c6",
+                      "on-secondary-container": "#fffbff",
+                      "outline": "#6d7a77",
+                      "background": "#f8f9ff",
+                      "surface-container": "#e5eeff",
+                      "secondary": "#4648d4",
+                      "tertiary-container": "#b05e3d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary-fixed-variant": "#2f2ebe",
+                      "secondary-fixed-dim": "#c0c1ff",
+                      "primary-container": "#008378",
+                      "surface-dim": "#cbdbf5",
+                      "secondary-fixed": "#e1e0ff",
+                      "primary-fixed": "#89f5e7",
+                      "on-primary": "#ffffff",
+                      "surface-tint": "#006a61",
+                      "on-secondary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed": "#370e00",
+                      "inverse-primary": "#6bd8cb",
+                      "on-surface-variant": "#3d4947",
+                      "tertiary": "#924628",
+                      "on-surface": "#0b1c30",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb59a",
+                      "secondary-container": "#6063ee",
+                      "tertiary-fixed": "#ffdbce",
+                      "inverse-surface": "#213145",
+                      "on-error": "#ffffff",
+                      "surface-variant": "#d3e4fe",
+                      "on-tertiary-fixed-variant": "#773215",
+                      "on-primary-container": "#f4fffc",
+                      "surface-container-low": "#eff4ff",
+                      "on-primary-fixed": "#00201d",
+                      "primary-fixed-dim": "#6bd8cb",
+                      "surface-container-high": "#dce9ff",
+                      "on-secondary-fixed": "#07006c",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-container": "#fffbff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "container-padding": "24px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "display-xl": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "tabular-stat": [
+                              "JetBrains Mono"
+                      ],
+                      "title-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display-xl": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "tabular-stat": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        /* Minimalist Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #bcc9c6;
+            border-radius: 20px;
+        }
+        
+        .typing-indicator span {
+            animation: blink 1.4s infinite both;
+            height: 6px;
+            width: 6px;
+            background: #00685f;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 1px;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes blink {
+            0% { opacity: .2; transform: scale(0.8); }
+            20% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: .2; transform: scale(0.8); }
+        }
+        
+        /* Glassmorphism for AI */
+        .glass-ai {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background h-full font-body-md overflow-hidden flex flex-col md:flex-row">
+<!-- Mobile TopAppBar -->
+<header class="md:hidden flex justify-between items-center w-full px-container-padding h-16 bg-surface border-b border-outline-variant z-10 sticky top-0">
+<div class="font-headline-lg-mobile font-bold text-primary">Helpotron</div>
+<div class="flex items-center gap-4">
+<span class="font-label-caps text-label-caps text-on-surface-variant font-medium">Credits: 1,240</span>
+<span class="material-symbols-outlined text-primary hover:text-primary transition-colors cursor-pointer" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<!-- Desktop SideNavBar -->
+<nav class="hidden md:flex flex-col h-full py-container-padding gap-gutter bg-surface-container-low w-64 border-r border-outline-variant shrink-0 z-20">
+<div class="px-6 mb-4">
+<h1 class="font-headline-lg font-bold text-primary">Helpotron OS</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Premium Co-pilot</p>
+</div>
+<div class="px-4 mb-6">
+<button class="w-full bg-primary text-on-primary py-3 rounded-xl font-label-caps text-label-caps font-bold hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span> New Study Session
+            </button>
+</div>
+<ul class="flex-1 flex flex-col gap-1 px-3">
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">dashboard</span> Dashboard
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-primary font-bold border-r-4 border-primary bg-primary-container/10 font-label-caps text-label-caps active:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span> My Agent
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">analytics</span> Insights
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">history</span> History
+                </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined">settings</span> Settings
+                </a>
+</li>
+</ul>
+<div class="px-6 mt-auto">
+<div class="flex items-center gap-3 pt-4 border-t border-outline-variant/30">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, circular avatar portrait of a modern student in a library setting, soft focus background, natural lighting, academic and professional tone." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOuR3U6N5m2qXnj-OrvwLAoDAWUQ-HBMpJPnGHE8ZsxAHPGvpD4jcS0_w0VUNzv7yVtEXyOy1RWUQGIw6q7wPBboJoPzJ2DpfDcD9ZO3btuaCNo5iOsuOI58c3mDz8pEdGTZ5Mxe1khKlBfwxrZLfhWkOq8Jgx6Ik2Exr0QhSgItB-MECZgbNHJQgNtXPheGco2bQQWZ3A3ZOB8OCuzYEYoowrj5ZKyc4UET7aq8tQb8I0LM23mfkV8g">
+<div>
+<p class="font-body-sm text-body-sm font-semibold text-on-surface">Alex R.</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Credits: 1,240</p>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Chat Canvas -->
+<main class="flex-1 flex flex-col h-[calc(100vh-64px)] md:h-screen relative bg-surface-bright">
+<!-- Chat Header (Settings/Context) -->
+<div class="h-16 px-container-padding border-b border-outline-variant bg-surface flex items-center justify-between shrink-0 z-10 shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div>
+<h2 class="font-title-md text-title-md text-on-surface leading-tight">Advanced Biology Study Guide</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-tight">Co-pilot Active</p>
+</div>
+</div>
+<!-- Permission Mode Selector -->
+<div class="hidden sm:flex bg-surface-container-low rounded-lg p-1 border border-outline-variant">
+<button class="px-3 py-1 text-label-caps font-label-caps text-on-surface-variant hover:bg-surface-container hover:text-on-surface rounded-md transition-colors">Manual</button>
+<button class="px-3 py-1 text-label-caps font-label-caps bg-surface shadow-sm text-primary font-bold rounded-md transition-colors">Auto</button>
+<button class="px-3 py-1 text-label-caps font-label-caps text-on-surface-variant hover:bg-error-container hover:text-on-error-container rounded-md transition-colors">Yolo</button>
+</div>
+</div>
+<!-- Scrollable Messages Area -->
+<div class="flex-1 overflow-y-auto p-container-padding flex flex-col gap-6" id="chat-container">
+<!-- System/Context Message -->
+<div class="text-center">
+<span class="font-label-caps text-label-caps text-on-surface-variant bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant/50">Session Started: Cellular Respiration Focus</span>
+</div>
+<!-- User Message -->
+<div class="flex justify-end">
+<div class="max-w-[85%] md:max-w-[70%] bg-surface-container text-on-surface rounded-2xl rounded-tr-sm px-5 py-4 border border-outline-variant/30 shadow-sm">
+<p class="font-body-md text-body-md">Can you create a study guide for the Krebs cycle and then draft a quick 5-question quiz to test my understanding?</p>
+</div>
+</div>
+<!-- Agent Tool Call Progress -->
+<div class="flex gap-4 max-w-[90%] md:max-w-[80%]">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div class="flex-1 space-y-3">
+<!-- Tool Call: Study Guide -->
+<div class="bg-surface rounded-xl p-4 border border-outline-variant shadow-sm relative overflow-hidden">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">auto_stories</span>
+<span class="font-label-caps text-label-caps text-primary font-semibold">Generating Study Guide</span>
+</div>
+<span class="font-label-caps text-label-caps px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant">Completed</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Compiled key concepts, enzymes, and ATP yields for the Krebs cycle.</p>
+<!-- Mini card attachment -->
+<div class="mt-3 bg-surface-container-low rounded-lg p-3 border border-outline-variant/50 flex items-center gap-3 cursor-pointer hover:bg-surface-container-high transition-colors">
+<div class="bg-secondary/10 p-2 rounded-md text-secondary">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<h4 class="font-body-sm text-body-sm font-semibold text-on-surface">Krebs Cycle Overview.pdf</h4>
+<p class="font-label-caps text-label-caps text-on-surface-variant">2 Pages • Study Notes</p>
+</div>
+<span class="material-symbols-outlined ml-auto text-on-surface-variant">open_in_new</span>
+</div>
+</div>
+<!-- Tool Call: Quiz Generation (Running) -->
+<div class="bg-surface rounded-xl p-4 border border-outline-variant shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm animate-pulse">quiz</span>
+<span class="font-label-caps text-label-caps text-secondary font-semibold">Drafting Quiz Questions</span>
+</div>
+<span class="font-label-caps text-label-caps px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span> Running
+                            </span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 mt-2 overflow-hidden">
+<div class="bg-secondary h-1.5 rounded-full w-2/3 animate-[pulse_2s_ease-in-out_infinite]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Agent Message (Glassmorphism) -->
+<div class="flex gap-4 max-w-[90%] md:max-w-[80%]">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0 shadow-sm mt-1">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div class="glass-ai rounded-2xl rounded-tl-sm px-5 py-4">
+<p class="font-body-md text-body-md text-on-surface mb-3">I've put together a comprehensive study guide focusing on the Citric Acid Cycle. I'm currently drafting a 5-question quiz to test your recall on the key enzymes involved.</p>
+<p class="font-body-md text-body-md text-on-surface">Would you like me to include questions on ATP accounting as well, or just focus on the biochemical pathway for now?</p>
+</div>
+</div>
+<!-- Agent Tool Permission Request -->
+<div class="flex gap-4 max-w-[90%] md:max-w-[80%] mt-2">
+<div class="w-8 h-8 rounded-full shrink-0 opacity-0"></div> <!-- Spacer -->
+<div class="bg-surface rounded-xl p-4 border-l-4 border-l-tertiary border-y border-r border-outline-variant shadow-sm w-full">
+<div class="flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-tertiary text-sm">security</span>
+<span class="font-label-caps text-label-caps text-tertiary font-bold uppercase tracking-wider">Action Required</span>
+</div>
+<p class="font-body-md text-body-md font-semibold text-on-surface">Save Quiz to Study Sets?</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Agent is requesting permission to write to your `Biology 101` study set database.</p>
+</div>
+</div>
+<div class="flex gap-3 mt-4">
+<button class="px-4 py-2 bg-surface text-on-surface border border-outline-variant rounded-lg font-label-caps text-label-caps font-bold hover:bg-surface-container transition-colors">Deny</button>
+<button class="px-4 py-2 bg-tertiary text-on-tertiary rounded-lg font-label-caps text-label-caps font-bold hover:bg-tertiary-container shadow-sm transition-colors">Approve Action</button>
+</div>
+</div>
+</div>
+<!-- Typing Indicator -->
+<div class="flex gap-4 max-w-[90%] md:max-w-[80%]">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-sm">smart_toy</span>
+</div>
+<div class="bg-surface-container-low rounded-2xl rounded-tl-sm px-4 py-3 border border-outline-variant/30 flex items-center h-[46px]">
+<div class="typing-indicator flex items-center">
+<span></span>
+<span></span>
+<span></span>
+</div>
+</div>
+</div>
+<!-- Spacer for bottom input -->
+<div class="h-24"></div>
+</div>
+<!-- Input Area (Docked Bottom) -->
+<div class="absolute bottom-0 left-0 w-full p-4 bg-surface/90 backdrop-blur-md border-t border-outline-variant z-30 pb-safe">
+<div class="max-w-4xl mx-auto">
+<div class="relative flex items-end gap-2 bg-surface rounded-2xl border border-outline focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-sm p-2 transition-all">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors shrink-0 rounded-full hover:bg-surface-container-low">
+<span class="material-symbols-outlined">add_circle</span>
+</button>
+<textarea class="w-full bg-transparent border-none focus:ring-0 resize-none font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 min-h-[44px] max-h-32 py-2.5 px-2" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'" placeholder="Message your co-pilot..." rows="1"></textarea>
+<div class="flex flex-col gap-1 shrink-0 pb-1">
+<button class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container shadow-sm transition-transform active:scale-95">
+<span class="material-symbols-outlined">arrow_upward</span>
+</button>
+</div>
+</div>
+<div class="text-center mt-2">
+<span class="font-label-caps text-label-caps text-on-surface-variant/70 text-[10px]">Helpotron may produce inaccurate information about people, places, or facts.</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-sm pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-highest p-2 rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+            Home
+        </a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-4 py-1.5 font-label-caps text-label-caps active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-0.5" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+            Agent
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-highest p-2 rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">query_stats</span>
+            Insights
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-highest p-2 rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+            History
+        </a>
+</nav>
+<!-- Fix for iOS safe area if needed -->
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        @media (max-width: 767px) {
+            #chat-container { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+            main > .absolute.bottom-0 { bottom: calc(3.5rem + env(safe-area-inset-bottom)); }
+        }
+    </style>
+
+
+
+
+</body></html>

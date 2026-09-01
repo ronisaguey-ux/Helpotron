@@ -5,6 +5,14 @@
 // shared module so the node test harness can unit-test the real code.
 importScripts('crawl-core.js');
 
+// First-run onboarding (09-01): the design package ships a 3-step welcome page;
+// open it once, on install only (never on update).
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+  }
+});
+
 const DEFAULT_SERVER = 'http://localhost:8000';
 
 async function getServer() {

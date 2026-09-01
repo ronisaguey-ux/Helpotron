@@ -1,0 +1,410 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Helpotron OS - Insights</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#ffdad6",
+                    "on-background": "#0b1c30",
+                    "primary": "#00685f",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-fixed-variant": "#005049",
+                    "outline-variant": "#bcc9c6",
+                    "on-secondary-container": "#fffbff",
+                    "outline": "#6d7a77",
+                    "background": "#f8f9ff",
+                    "surface-container": "#e5eeff",
+                    "secondary": "#4648d4",
+                    "tertiary-container": "#b05e3d",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-secondary-fixed-variant": "#2f2ebe",
+                    "secondary-fixed-dim": "#c0c1ff",
+                    "primary-container": "#008378",
+                    "surface-dim": "#cbdbf5",
+                    "secondary-fixed": "#e1e0ff",
+                    "primary-fixed": "#89f5e7",
+                    "on-primary": "#ffffff",
+                    "surface-tint": "#006a61",
+                    "on-secondary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "surface-bright": "#f8f9ff",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed": "#370e00",
+                    "inverse-primary": "#6bd8cb",
+                    "on-surface-variant": "#3d4947",
+                    "tertiary": "#924628",
+                    "on-surface": "#0b1c30",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb59a",
+                    "secondary-container": "#6063ee",
+                    "tertiary-fixed": "#ffdbce",
+                    "inverse-surface": "#213145",
+                    "on-error": "#ffffff",
+                    "surface-variant": "#d3e4fe",
+                    "on-tertiary-fixed-variant": "#773215",
+                    "on-primary-container": "#f4fffc",
+                    "surface-container-low": "#eff4ff",
+                    "on-primary-fixed": "#00201d",
+                    "primary-fixed-dim": "#6bd8cb",
+                    "surface-container-high": "#dce9ff",
+                    "on-secondary-fixed": "#07006c",
+                    "surface": "#f8f9ff",
+                    "on-tertiary-container": "#fffbff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit": "4px",
+                    "container-padding": "24px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "32px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "display-xl": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-caps": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "tabular-stat": [
+                            "JetBrains Mono"
+                    ],
+                    "title-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "display-xl": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "tabular-stat": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "title-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.outline-variant');
+            border-radius: theme('borderRadius.full');
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline');
+        }
+
+        .chart-bar-animated {
+            transform-origin: bottom;
+            animation: growBar 1s ease-out forwards;
+            transform: scaleY(0);
+        }
+
+        @keyframes growBar {
+            to { transform: scaleY(1); }
+        }
+        
+        .bento-hover {
+            transition: all 0.2s ease;
+        }
+        .bento-hover:hover {
+            transform: translateY(-2px);
+            border-color: theme('colors.outline');
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden bg-background font-body-md text-body-md">
+<!-- Mobile TopAppBar (Visible only on mobile, hidden on md) -->
+<header class="md:hidden flex justify-between items-center w-full px-container-padding h-16 bg-surface border-b border-outline-variant fixed top-0 z-40">
+<div class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">Helpotron</div>
+<div class="flex items-center gap-4">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Credits: 1,240</span>
+<span class="material-symbols-outlined text-primary cursor-pointer">account_circle</span>
+</div>
+</header>
+<!-- SideNavBar (Visible on desktop, hidden on md) -->
+<nav class="hidden md:flex flex-col h-full py-container-padding gap-gutter bg-surface-container-low w-64 border-r border-outline-variant shrink-0">
+<div class="px-container-padding mb-4">
+<div class="flex items-center gap-3">
+<img alt="User Profile Avatar" class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A small, elegant circular user avatar depicting a generic professional silhouette against a soft muted teal background, adhering to a minimalist corporate OS aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOj5IrWRiN30-fwkZvk2k82ql_xIi0wfN4uyPuErusg0y8XqKLEUeASAOzBlNsC43P2YLm039owo8XVBrxNkYOgzo_G-BFVN_VEdhR860RA2TwftMHMayWD3BEGD7GXJeTR0rhEuTzEW_fYhRcko7flRhC86HEtymN9XGy4SHMZCrAHTwNP2myaLndPhMDqJBn2pAftP47tpLW0fu1YLkdjiRJoZbGn2vjOlGMg66eI17hsbpFotBDuQ">
+<div>
+<h1 class="font-headline-lg text-title-md font-bold text-primary truncate">Helpotron OS</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Premium Co-pilot</p>
+</div>
+</div>
+</div>
+<button class="mx-container-padding bg-primary text-on-primary py-3 rounded-lg font-title-md text-title-md hover:bg-primary-container transition-colors shadow-sm flex items-center justify-center gap-2 mb-4">
+<span class="material-symbols-outlined">add</span>
+            New Study Session
+        </button>
+<div class="flex flex-col flex-grow">
+<!-- Nav Items -->
+<a class="flex items-center gap-3 px-container-padding py-3 text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-container-padding py-3 text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-caps text-label-caps">My Agent</span>
+</a>
+<!-- Active Nav Item -->
+<a class="flex items-center gap-3 px-container-padding py-3 text-primary font-bold border-r-4 border-primary bg-primary-container/10" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label-caps text-label-caps">Insights</span>
+</a>
+<a class="flex items-center gap-3 px-container-padding py-3 text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-caps text-label-caps">History</span>
+</a>
+<div class="mt-auto">
+<a class="flex items-center gap-3 px-container-padding py-3 text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto pt-16 md:pt-0 pb-20 md:pb-0">
+<div class="max-w-[1440px] mx-auto px-margin-mobile md:px-margin-desktop py-margin-desktop">
+<!-- Header Section -->
+<div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+<div>
+<h2 class="font-display-xl text-display-xl text-on-background mb-2">Cognitive Insights</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+                        A serene overview of your learning momentum. You're maintaining a steady pace this week, focusing primarily on deep conceptual study.
+                    </p>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-full border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-sm">calendar_month</span>
+<span class="font-label-caps text-label-caps text-on-surface">Last 7 Days</span>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Main Activity Graph (Spans 2 columns) -->
+<div class="md:col-span-2 bg-surface rounded-xl border border-outline-variant p-6 bento-hover shadow-sm">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-md text-title-md text-on-background">Study Volume</h3>
+<span class="font-label-caps text-label-caps text-on-surface-variant bg-surface-container px-3 py-1 rounded-full">Materials Generated</span>
+</div>
+<div class="h-64 flex items-end justify-between gap-2 border-b border-outline-variant pb-2 relative">
+<!-- Y-axis labels -->
+<div class="absolute left-0 top-0 h-full flex flex-col justify-between text-on-surface-variant font-tabular-stat text-tabular-stat text-xs pb-2 pr-2">
+<span class="">40</span>
+<span class="">20</span>
+<span class="">0</span>
+</div>
+<!-- Bars -->
+<div class="w-full flex justify-around items-end h-full pl-8">
+<div class="w-1/12 bg-primary-container/40 rounded-t-sm h-[30%] chart-bar-animated" style="animation-delay: 0.1s;"></div>
+<div class="w-1/12 bg-primary-container/40 rounded-t-sm h-[50%] chart-bar-animated" style="animation-delay: 0.2s;"></div>
+<div class="w-1/12 bg-primary-container/60 rounded-t-sm h-[80%] chart-bar-animated relative group" style="animation-delay: 0.3s;">
+<div class="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-inverse-surface text-inverse-on-surface font-label-caps text-label-caps px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Peak Day</div>
+</div>
+<div class="w-1/12 bg-primary-container/40 rounded-t-sm h-[40%] chart-bar-animated" style="animation-delay: 0.4s;"></div>
+<div class="w-1/12 bg-primary-container/40 rounded-t-sm h-[60%] chart-bar-animated" style="animation-delay: 0.5s;"></div>
+<div class="w-1/12 bg-primary rounded-t-sm h-[95%] chart-bar-animated relative group" style="animation-delay: 0.6s;">
+<div class="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-inverse-surface text-inverse-on-surface font-label-caps text-label-caps px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Today</div>
+</div>
+<div class="w-1/12 bg-surface-container h-full rounded-t-sm border border-dashed border-outline-variant opacity-50"></div>
+</div>
+</div>
+<div class="flex justify-around items-center pl-8 mt-2 text-on-surface-variant font-label-caps text-label-caps text-xs">
+<span class="">M</span><span class="">T</span><span class="">W</span><span class="">T</span><span class="">F</span><span class="text-primary font-bold">S</span><span class="">S</span>
+</div>
+</div>
+<!-- Streaks & Consistency -->
+<div class="bg-surface rounded-xl border border-outline-variant p-6 bento-hover shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-title-md text-title-md text-on-background">Focus Streak</h3>
+<span class="material-symbols-outlined text-tertiary-container">local_fire_department</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Consistent engagement yields mastery.</p>
+</div>
+<div class="my-6 flex items-baseline gap-2">
+<span class="font-display-xl text-display-xl text-primary">12</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Days</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+<div class="bg-tertiary-container h-full rounded-full" style="width: 85%;"></div>
+</div>
+<div class="mt-2 text-right font-label-caps text-label-caps text-on-surface-variant text-xs">
+                        Next milestone: 14 Days
+                    </div>
+</div>
+<!-- Credit Usage (Glassmorphism inspired card) -->
+<div class="bg-surface-container-lowest/80 backdrop-blur-md rounded-xl border border-outline-variant p-6 bento-hover shadow-sm relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
+<h3 class="font-title-md text-title-md text-on-background mb-1 relative z-10">Compute Credits</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6 relative z-10">AI processing budget for this cycle.</p>
+<div class="flex items-center gap-4 relative z-10">
+<div class="relative w-16 h-16 flex items-center justify-center">
+<svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+<path class="text-surface-container-high" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3"></path>
+<path class="text-secondary" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="65, 100" stroke-width="3"></path>
+</svg>
+<span class="absolute font-tabular-stat text-tabular-stat text-sm font-bold text-secondary">65%</span>
+</div>
+<div>
+<div class="font-tabular-stat text-body-md text-on-background font-medium">1,240 / 2,000</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant text-xs">Remaining</div>
+</div>
+</div>
+</div>
+<!-- Topic Distribution -->
+<div class="md:col-span-2 bg-surface rounded-xl border border-outline-variant p-6 bento-hover shadow-sm">
+<h3 class="font-title-md text-title-md text-on-background mb-4">Focus Distribution</h3>
+<div class="flex flex-col gap-4">
+<!-- Bar 1 -->
+<div>
+<div class="flex justify-between text-sm mb-1">
+<span class="font-body-sm text-body-sm text-on-surface">Advanced Calculus</span>
+<span class="font-tabular-stat text-tabular-stat text-on-surface-variant">45%</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 45%;"></div>
+</div>
+</div>
+<!-- Bar 2 -->
+<div>
+<div class="flex justify-between text-sm mb-1">
+<span class="font-body-sm text-body-sm text-on-surface">Cognitive Psychology</span>
+<span class="font-tabular-stat text-tabular-stat text-on-surface-variant">30%</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 30%;"></div>
+</div>
+</div>
+<!-- Bar 3 -->
+<div>
+<div class="flex justify-between text-sm mb-1">
+<span class="font-body-sm text-body-sm text-on-surface">Modern Philosophy</span>
+<span class="font-tabular-stat text-tabular-stat text-on-surface-variant">25%</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-tertiary h-full rounded-full" style="width: 25%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile BottomNavBar (Visible only on mobile, hidden on md) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-sm">
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 hover:bg-surface-container-highest rounded-xl py-1" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-[10px] mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 hover:bg-surface-container-highest rounded-xl py-1" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span class="font-label-caps text-[10px] mt-1">Agent</span>
+</a>
+<!-- Active Tab -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1 w-16 scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">query_stats</span>
+<span class="font-label-caps text-[10px] mt-1">Insights</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 hover:bg-surface-container-highest rounded-xl py-1" href="#">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="font-label-caps text-[10px] mt-1">History</span>
+</a>
+</nav>
+
+
+
+
+</body></html>

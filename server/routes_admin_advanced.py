@@ -246,6 +246,11 @@ class AdminNoticePayload(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
 
 
+class AdminBroadcastPayload(BaseModel):
+    subject: str = Field("Message from Admin", min_length=1, max_length=256)
+    message: str = Field(..., min_length=1, max_length=10000)
+
+
 @router.post("/notify-user")
 async def notify_user_endpoint(payload: AdminNoticePayload, request: Request, db: Session = Depends(get_db)):
     """Admin → user direct message (operator 08-28). Stored as an AdminNotice;
@@ -267,6 +272,29 @@ async def notify_user_endpoint(payload: AdminNoticePayload, request: Request, db
         "status": "success",
         "notice_id": notice.id,
         "message": f"Notice sent to {target.public_id} — it will pop up in their next session.",
+    }
+
+
+@router.post("/broadcast-notify")
+async def broadcast_notify_endpoint(payload: AdminBroadcastPayload, request: Request, db: Session = Depends(get_db)):
+    """Admin → ALL users announcement (operator 09-01): one broadcast
+    AdminNotice row (user_id='*'). Every user's client poll picks it up;
+    per-user dismissal is tracked in admin_notice_reads."""
+    require_admin(request)
+    from .database import AdminNotice
+    notice = AdminNotice(
+        user_id="*",
+        subject=payload.subject,
+        message=payload.message,
+        broadcast=True,
+    )
+    db.add(notice)
+    db.commit()
+    db.refresh(notice)
+    return {
+        "status": "success",
+        "notice_id": notice.id,
+        "message": "Announcement broadcast to all users — it will pop up in their next session.",
     }
 
 
