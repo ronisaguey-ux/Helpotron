@@ -349,7 +349,7 @@ export function CreditsPricingDashboard({
                 <div className="text-2xl font-black text-[var(--accent)] font-mono tabular-nums whitespace-nowrap">
                   {Number(currentTokens).toLocaleString()} tokens
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">usage budget for AI tasks</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">for AI tasks</div>
               </div>
             </div>
             <div className="min-w-0 @xs:text-right">
@@ -489,7 +489,7 @@ export function CreditsPricingDashboard({
         </div>
       }>
         <p className="text-xs text-slate-300 mt-0.5">
-          Every plan includes full access to Universal Assignment Dump, AI Audio Transcription, AI Cognitive Vision & Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines your monthly compute capacity.
+          Every plan includes full access to Universal Assignment Dump, AI Audio Transcription, AI Cognitive Vision & Reasoning, Overlord Multi-Agent Sandboxes, and all 5 AI Integrity Detectors. Your token allocation simply determines how much you can use each month.
         </p>
       </SectionCard>
 
