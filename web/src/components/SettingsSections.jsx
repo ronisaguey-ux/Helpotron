@@ -814,10 +814,10 @@ function PrivacySection({ s, set, scoped, setVariants, subjectRefs, onGoTo }) {
  * (operator 08-27: that card told every user they were on an Elite plan). */
 const BILLING_META = {
   none: { label: 'No plan', sub: 'Dev / beta account — no subscription', badge: 'slate', limit: 0 },
-  trial: { label: 'Free Trial', sub: '7-day trial (SMS verified) — 100 task tokens ($1.00 compute)', badge: 'emerald', limit: 100 },
-  basic: { label: 'Basic', sub: '300 task tokens / mo ($3.00 tool compute budget)', badge: 'blue', limit: 300 },
-  pro: { label: 'Pro', sub: '1,000 task tokens / mo ($10.00 tool compute budget)', badge: 'amber', limit: 1000 },
-  elite: { label: 'Elite', sub: '2,700 task tokens / mo ($27.00 tool compute budget)', badge: 'purple', limit: 2700 },
+  trial: { label: 'Free Trial', sub: '7-day trial (SMS verified) — 100 task tokens', badge: 'emerald', limit: 100 },
+  basic: { label: 'Basic', sub: '300 task tokens / mo', badge: 'blue', limit: 300 },
+  pro: { label: 'Pro', sub: '1,000 task tokens / mo', badge: 'amber', limit: 1000 },
+  elite: { label: 'Elite', sub: '2,700 task tokens / mo', badge: 'purple', limit: 2700 },
 };
 
 function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
@@ -839,12 +839,12 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
         <div className="mt-3">
           {limit > 0 ? (
             <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-              <span>Task tokens balance (1 token = $0.01 compute)</span>
+              <span>Task tokens balance</span>
               <span className="font-mono text-emerald-400 font-bold">{tk.toLocaleString()} / {limit.toLocaleString()}</span>
             </div>
           ) : (
             <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-              <span>Task tokens balance (1 token = $0.01 compute)</span>
+              <span>Task tokens balance</span>
               <span className="font-mono text-emerald-400 font-bold">{tk.toLocaleString()} tokens</span>
             </div>
           )}
@@ -857,7 +857,7 @@ function BillingSection({ onGoTo, plan, credits, tokenBalance }) {
       <div className="flex gap-2">
         <button type="button" onClick={() => onGoTo && onGoTo('billing')} className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer">Open plans &amp; top-ups</button>
       </div>
-      <div className="text-[10px] text-slate-600">1 Task Token = $0.01 in tool API execution (LLMs, audio, vision). Credits are applied as dollar discounts at checkout.</div>
+      <div className="text-[10px] text-slate-600">Task tokens are spent on tool API execution (LLMs, audio, vision). Credits apply as discounts at checkout.</div>
     </div>
   );
 }
