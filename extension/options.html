@@ -209,7 +209,7 @@
   <main class="options-main">
     <div>
       <h2 class="font-headline-lg text-headline-lg text-primary" style="margin:0 0 8px;">Extension Options</h2>
-      <p class="font-body-sm text-body-sm text-on-surface-variant" style="margin:0;">Configure your premium co-pilot experience.</p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant" style="margin:0;">Configure how Helpotron works in your browser.</p>
     </div>
 
     <!-- ── Account ── -->
@@ -234,20 +234,13 @@
     <!-- ── Capture behavior ── -->
     <section class="options-section">
       <h3 class="text-title-md" style="margin:0;">Capture behavior</h3>
-      <label class="switch-row">
-        <div>
-          <div class="font-label-caps text-label-caps" style="margin-bottom:2px;">Default subject: Ask every time</div>
-          <div class="font-body-sm text-body-sm text-on-surface-variant">Prompt for context on manual captures.</div>
-        </div>
-        <span class="switch"><input type="checkbox" id="optAskSubject" /><span class="track"></span></span>
-      </label>
-      <label class="switch-row">
-        <div>
-          <div class="font-label-caps text-label-caps" style="margin-bottom:2px;">Auto-capture on visited assignments</div>
-          <div class="font-body-sm text-body-sm text-on-surface-variant">Automatically save relevant page data.</div>
-        </div>
-        <span class="switch"><input type="checkbox" id="optAutoCapture" /><span class="track"></span></span>
-      </label>
+      <div class="card--inset">
+        <div class="field-label" style="margin-bottom:8px;">When does Helpotron capture a page?</div>
+        <ul class="data-list">
+          <li>Only when you click Scrape in the extension popup (or start a chat-context scrape)</li>
+          <li>Nothing is read or saved on page open, and nothing is captured on its own</li>
+        </ul>
+      </div>
     </section>
 
     <!-- ── Appearance ── -->
@@ -285,40 +278,21 @@
     <section class="options-section">
       <h3 class="text-title-md" style="margin:0;">Privacy</h3>
       <div class="card--inset">
-        <div class="field-label" style="margin-bottom:8px;">Data captured</div>
+        <div class="field-label" style="margin-bottom:8px;">What a capture sends to your Helpotron account</div>
         <ul class="data-list">
-          <li>Page URLs and titles on explicit capture</li>
-          <li>Highlighted text context</li>
-          <li>Assignment metadata when auto-capture is enabled</li>
+          <li>Page URL and title of the page you scrape</li>
+          <li>Assignment prompt and rubric text found on the page</li>
+          <li>Course name and metadata used to file the material</li>
+          <li>File links on the page, plus file size and SHA-256 hash; the file itself when it is under 6 MB</li>
         </ul>
-      </div>
-      <label class="switch-row">
-        <div>
-          <div class="font-label-caps text-label-caps" style="margin-bottom:2px;">Capture only assignment-structured data</div>
-          <div class="font-body-sm text-body-sm text-on-surface-variant">Strict filtering for academic context.</div>
+        <div class="font-body-sm text-body-sm text-on-surface-variant" style="margin-top:8px;">
+          Chat mode sends your messages and, when you turn on “See screen”, a compressed screenshot of the selected tab. Keystrokes you type into pages are never read. Full details: see the privacy policy linked below.
         </div>
-        <span class="switch"><input type="checkbox" id="optStructured" checked /><span class="track"></span></span>
-      </label>
+      </div>
       <div class="link-row">
         <a href="#" id="linkPrivacy">Privacy Policy</a>
         <a href="#" id="linkTerms">Terms of Service</a>
       </div>
-    </section>
-
-    <!-- ── Shortcuts ── -->
-    <section class="options-section">
-      <h3 class="text-title-md" style="margin:0;">Shortcuts</h3>
-      <div class="card--inset" style="gap:0;padding:4px 12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--outline-variant);">
-          <span class="font-body-md">Open Extension</span>
-          <span style="display:flex;gap:4px;align-items:center;"><kbd class="kbd">Alt</kbd><span class="text-on-surface-variant">+</span><kbd class="kbd">H</kbd></span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">
-          <span class="font-body-md">Quick Capture</span>
-          <span style="display:flex;gap:4px;align-items:center;"><kbd class="kbd">Alt</kbd><span class="text-on-surface-variant">+</span><kbd class="kbd">C</kbd></span>
-        </div>
-      </div>
-      <p class="set-note">Shortcuts are managed at chrome://extensions/shortcuts. These match the defaults — set them there if they aren't active.</p>
     </section>
   </main>
 

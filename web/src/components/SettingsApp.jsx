@@ -637,6 +637,21 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
 
   return (
     <div className="space-y-6">
+      {/* Educational Mode (08-26 gate): school-only scope for the agent,
+          mirrored to the server so the backend mode_for_node gate flips —
+          local store stays source of truth. */}
+      <div className="panel p-5">
+        <Toggle
+          checked={s.educationalMode !== false}
+          onChange={(v) => {
+            set('educationalMode', v);
+            api.updateSettings({ educationalMode: v }).catch(() => {});
+          }}
+          label="Educational Mode"
+          description="On: school-only help — off-topic requests are declined. Off: open chat about anything."
+        />
+      </div>
+
       {/* Identity & Personality */}
       <div className="panel p-5 space-y-4">
         <div className="flex items-center gap-3">

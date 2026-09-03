@@ -26,8 +26,55 @@ function httpsRedirect() {
   };
 }
 
+// Security headers for the static app (09-02, independent QA pass): /api
+// responses are hardened by SecurityHeadersMiddleware, but the HTML document
+// was served bare — no CSP/XFO/HSTS, so the app page could be iframed
+// (clickjacking) and skipped HSTS. Same middleware slot as httpsRedirect:
+// preview-server only; /api + /uploads pass through untouched (uvicorn owns
+// those headers). Assets carry dots; SPA routes are extensionless.
+function appSecurityHeaders() {
+  return {
+    name: 'app-security-headers',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url || '/').split('?')[0];
+        if (path.startsWith('/api/') || path.startsWith('/uploads/')) return next();
+        const isHtml = !/\.[a-z0-9]+$/i.test(path);
+        if (isHtml) {
+          res.setHeader(
+            'Content-Security-Policy',
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+              "font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; " +
+              "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; " +
+              "frame-ancestors 'none'; form-action 'self'",
+          );
+          res.setHeader('X-Frame-Options', 'DENY');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+          res.setHeader(
+            'Permissions-Policy',
+            'camera=(), microphone=(), geolocation=()',
+          );
+        }
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), httpsRedirect()],
+  plugins: [react(), tailwindcss(), httpsRedirect(), appSecurityHeaders()],
+  // Visible build stamp (09-01, Logan loop): the user-facing menu shows the
+  // build timestamp, so "which build is the device on?" is a one-look check
+  // instead of guessing from behavior.
+  define: {
+    // Local-time stamp so the menu reads like wall clock on the device
+    // (toISOString is UTC — a 9 PM build showed as 01:00+ "tomorrow").
+    __BUILD_ID__: JSON.stringify(
+      new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19),
+    ),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -97,6 +144,19 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // Public markdown pages served by the FastAPI public_router (no auth):
+      // /privacy-policy and /extension-guide must reach :8000 even when the
+      // site itself is static dist served by vite preview.
+      '/privacy-policy': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/extension-guide': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   // Production mode (08-27): the public site serves the BUILT dist via
@@ -113,6 +173,16 @@ export default defineConfig({
         secure: false,
       },
       '/uploads': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/privacy-policy': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/extension-guide': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,

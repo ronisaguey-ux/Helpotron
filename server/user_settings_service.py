@@ -426,6 +426,12 @@ class UserSettingsService:
                 "effortScore": 500,
                 "effort": "balanced",
                 "autoRouting": True,
+                # 09-02 (extension permission mode): manual/auto/yolo governs
+                # CHAT action approvals in the extension. Declared in defaults
+                # so the schema-derived PATCH allowlist accepts it — same
+                # precedent as educationalMode; the web client (MyAgentView)
+                # already writes it via ai: { ..., mode: next }.
+                "mode": "manual",
                 # Humanizer skill (08-30): unified AI-humanizer rulebook; when a
                 # surface is "on", humanize_skill.humanizer_block() is appended
                 # to that surface's agent system prompt.
@@ -464,6 +470,13 @@ class UserSettingsService:
                     "extensions": {},
                 },
             },
+
+            # Educational Mode (08-26 gate): True = school-only help scope for
+            # the My Agent surface; False = open chat about anything. Declared
+            # here — the 08-29 writable-keys filter is derived from this
+            # defaults schema, so an undeclared key would be silently dropped
+            # at the PATCH boundary and the backend gate could never flip.
+            "educationalMode": True,
 
             # 9. Data Lake & Micro-Credits
             "datalake_opt_in": True,

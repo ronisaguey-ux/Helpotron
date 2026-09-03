@@ -9,9 +9,6 @@
   const SYNC_KEYS = {
     ext_theme: 'dark',
     ext_accent: 'teal',
-    ext_askSubject: false,
-    ext_autoCapture: false,
-    ext_structured: true,
   };
 
   const els = {
@@ -20,9 +17,6 @@
     avatar: $('optAvatar'),
     disconnect: $('btnDisconnect'),
     signIn: $('optSignIn'),
-    askSubject: $('optAskSubject'),
-    autoCapture: $('optAutoCapture'),
-    structured: $('optStructured'),
     themeButtons: document.querySelectorAll('[data-theme-pick]'),
     swatches: document.querySelectorAll('[data-accent]'),
     linkPrivacy: $('linkPrivacy'),
@@ -69,9 +63,6 @@
     chrome.storage.sync.get(SYNC_KEYS, (st) => {
       markTheme(st.ext_theme || 'dark');
       markAccent(st.ext_accent || 'teal');
-      els.askSubject.checked = !!st.ext_askSubject;
-      els.autoCapture.checked = !!st.ext_autoCapture;
-      els.structured.checked = st.ext_structured !== false;
     });
     paintAccount();
   }
@@ -95,11 +86,6 @@
       markAccent(s.dataset.accent);
     });
   });
-
-  // ── Toggles ──
-  els.askSubject.addEventListener('change', () => save({ ext_askSubject: els.askSubject.checked }));
-  els.autoCapture.addEventListener('change', () => save({ ext_autoCapture: els.autoCapture.checked }));
-  els.structured.addEventListener('change', () => save({ ext_structured: els.structured.checked }));
 
   // ── Account actions ──
   els.disconnect.addEventListener('click', async () => {

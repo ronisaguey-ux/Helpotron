@@ -1,9 +1,9 @@
 # PRIVACY POLICY AND DATA GOVERNANCE CHARTER
-### Helpotron Automator Platform
+### Helpotron Academic Companion Platform
 **Effective Date:** August 18, 2026  
-**Last Updated:** August 18, 2026  
+**Last Updated:** September 2, 2026  
 **Document Version:** 4.0.0-PROD  
-**Legal Entity:** Helpotron Automator Systems Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”)  
+**Legal Entity:** Helpotron Academic Companion Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”)  
 **Data Protection Officer (DPO) Contact:** `dpo@helpotron.com`  
 **Security & Legal Compliance:** `compliance@helpotron.com`  
 **Applicable Jurisdictions:** United States (Federal, California CCPA/CPRA, Virginia VCDPA, Colorado CPA, Florida FDBR), European Union & United Kingdom (General Data Protection Regulation - GDPR / UK-GDPR), Canada (PIPEDA), and International Student Data Privacy Standards (FERPA & COPPA compliant frameworks).
@@ -36,7 +36,7 @@
 ## 1. PREAMBLE, SCOPE, AND BINDING NATURE
 
 ### 1.1 Scope and Application
-This Privacy Policy and Comprehensive Data Governance Charter ("Privacy Policy", "Policy") governs the collection, processing, storage, transmission, analysis, anonymization, and deletion of all personal data, academic records, audio streams, text transcripts, technical telemetry, and financial transaction records collected through the Helpotron Automator academic automation platform.
+This Privacy Policy and Comprehensive Data Governance Charter ("Privacy Policy", "Policy") governs the collection, processing, storage, transmission, analysis, anonymization, and deletion of all personal data, academic records, audio streams, text transcripts, technical telemetry, and financial transaction records collected through the Helpotron Academic Companion study platform.
 
 This Policy applies to all services, applications, software extensions, and automated systems operated by Helpotron, including but not limited to:
 - **The Helpotron Web Application & Student Dashboard** (hosted at `https://helpotron.com` and associated subdomains).
@@ -77,17 +77,20 @@ To deliver our high-performance academic assistance tools, autonomous study work
   - *Note on Financial Data Processing*: Helpotron does NOT collect, store, or process raw credit card numbers, CVVs, bank account numbers, or debit card PINs. All payment card information is collected and processed directly by our PCI-DSS Level 1 certified third-party payment partner (Stripe, Inc.) or confirmed via manual peer-to-peer transaction logs.
 
 ### 2.2 Academic & Learning Management System (LMS) Data Collected via Browser Extension
-When the Helpotron Academic Browser Extension is active on authorized Canvas LMS domains (`*.instructure.com` or custom university domains configured by the student), the extension collects:
-- **Assignment Metadata & Requirements**:
-  - Assignment Title, Canvas Assignment ID (`canvas_id`), Course Name, Course ID, and Module Name.
-  - Due dates, lock dates, submission cutoffs, and historical submission statuses.
-  - Complete assignment prompts, rubric criteria, scoring point distributions, and instructor guidelines.
-  - Document URLs and resource hyperlinks referenced within the assignment description.
-- **Autonomous Browser Collection Agent Artifacts**:
-  - When the user explicitly triggers the "Activate Collection Agent" feature, our autonomous collection agent logs interaction events (navigation targets, link traversal paths, and page reading timestamps).
-  - Scraped page text from corresponding syllabus entries, module lecture notes, instructor discussion boards, and attached reading summaries.
-  - Extracted text is transformed into structured academic transcripts (source: "agent") stored within our encrypted PostgreSQL/SQLite database.
-  - *Safety Boundary*: The browser agent operates exclusively within the user's active, authenticated browser session. The agent is strictly restricted to read-only traversal; it is hardcoded to never click submission buttons, alter student responses, or access non-course administrative resources.
+The Helpotron Academic Browser Extension supports Canvas (`*.instructure.com`), Google Classroom, Blackboard, Brightspace/D2L, Moodle, Schoology, Google Docs, Gmail, Notion, Microsoft 365 (Word Online), the Helpotron web app itself, and local development hosts. All capture is **explicit and user-initiated**: the extension never reads or transmits a page's content on page open, and there is no automatic capture mode.
+- **Assignment Capture ("Scrape" — user clicks Scrape in the extension popup)**:
+  - Page URL and title of the page the user chose to capture, the assignment prompt and rubric text found on it, course name and metadata, the platform and inferred subject, and the file links listed on the page.
+  - Per-file metadata: filename, size in bytes, content type, and SHA-256 hash. File bytes themselves are uploaded (≤ 6 MB per file, up to 25 files per capture) when the file can be fetched within the user's own browser session; files above the cap or inaccessible files contribute their URL + hash only.
+  - This data is sent to the Helpotron API over HTTPS and stored in the user's Helpotron account (assignments and file records).
+- **Site Capture (optional course-crawl)**:
+  - A user-started, throttled crawl of the current course page tree (same-origin course URLs). It reads the course `robots.txt` first and refuses to crawl any path it disallows. Each page is captured through the same extraction described above and saved to the same account.
+- **Agent chat in the extension (popup Chat / Agent Mode tab)**:
+  - The user's chat messages, plus — only while the "See screen" switch is on — one compressed JPEG frame (longest side ≤ 1280 px) of the selected tab's live stream, and the page viewport dimensions, sent to `/api/extension/agent_chat` so the agent can see the page. The server's vision analysis and the agent's reply are returned to the extension; the conversation is stored in the user's account chat history and mirrored in the extension's local storage.
+  - Screen control (the agent moving the mouse, clicking, typing, and scrolling in the selected tab) is **opt-in at the moment of use**: the Control toggle starts OFF, enabling it shows an explicit consent dialog, and a Stop button plus mouse-interrupt and Esc always end the session. Credential, OTP/card fields and downloads are hard-blocked for the agent in every mode, and each action is approved by the user unless the user has chosen the documented permissive mode. Agent actions never run on learning-platform (LMS) pages: the scraper agent is restricted to read-only extraction there.
+  - **"Debugger" permission**: agent screen control uses Chrome's "debugger" permission. Installing the extension never requires it — the extension asks for it **only the first time you switch Execute on**, and only in response to that explicit action. If you decline, agent actions stay switched off (every other extension feature keeps working).
+- **Assistive typing**: typing an assistant's draft into a document the user chose (Google Docs, Gmail, Notion, Word Online, or a text field) is performed locally by the extension dispatching keystroke events inside the page. The extension never reads the contents of password, OTP, or card fields, and **never transmits keystrokes** to the Helpotron server.
+- **Account & authentication**: signing in exchanges the user's `public_id` and password with `/api/login` over HTTPS; the returned session tokens are stored only in the browser's extension-local storage (never in sync storage), as is a small local cache of recent chat, crawl state, and UI preferences (theme, accent color sync only).
+- **Fetching file content**: the extension may request the file URLs found on the page from within the user's own browser session (so the user's session cookies apply); this request goes to the course site itself, not to Helpotron.
 
 ### 2.3 Audio Recordings & Lecture Transcripts
 - **Raw Audio Uploads & Microphone Streams**:
@@ -281,7 +284,7 @@ Helpotron reserves the right to revise this Privacy Policy periodically. When ma
 
 ## 13. DATA PROTECTION OFFICER & CONTACT INFORMATION
 
-**Helpotron Automator Systems Inc.**  
+**Helpotron Academic Companion Inc.**  
 *Office of the Data Protection Officer (DPO)*  
 - **DPO Inquiries & Rights Requests:** `dpo@helpotron.com`  
 - **Security Operations & Disclosures:** `security@helpotron.com`  
@@ -312,11 +315,17 @@ Eligible residents may submit requests to confirm processing, access, correct, d
 | `csrf_token` | Double-submit CSRF prevention token | Session / Browser Close | `HttpOnly=False` (JS Readable), `Secure=True` (Prod), `SameSite=Lax` |
 | `theme_preference` | Stores visual preference (Dark/Light mode) | 365 Days | `HttpOnly=False`, `Secure=False`, `SameSite=Lax` |
 
-### 15.2 Client-Side Local Storage Objects (`localStorage`)
-- `helpotron_server`: Active backend API origin URL (e.g. `https://helpotron.com`).
-- `helpotron_public_id`: Student public username pseudonym for UI state persistence.
-- `helpotron_reading_level`: Cached academic reading level.
-- `helpotron_theme`: Selected visual theme token (dark or light mode).
+### 15.2 Client-Side Storage (`chrome.storage`) — Browser Extension
+The Helpotron Academic Browser Extension stores state in Chrome extension storage; nothing crosses site origin boundaries (no `localStorage` keys are written by the extension).
+- `server`, `public_id`, `token`, `session_token`: Active backend API origin (default `https://helpotron.dpdns.org`), the student's public username, and the API session tokens issued at sign-in. Tokens are stored in extension storage only (never synced to the student's Google profile).
+- `helpotron_chat`, `helpotron_chat_seescreen`, `helpotron_chat_execute`: Local mirror of the student's agent-chat conversation and the per-session flags for screen frames and agent screen control.
+- `helpotron_crawl`, `helpotron_crawl_cache`, `helpotron_crawl_tick`: Course-crawl state (enabled flag, queued URLs, throttling timing).
+- `helpotron_last_scrapes`: Recently captured assignment IDs/URLs, for duplicate detection and the popup's recent list.
+- `helpotron_agent_mode`, `helpotron_agent_effort`, `helpotron_agent_model`, `helpotron_agent_model_tier`: Per-session agent mode, and user-saved agent effort/model preferences.
+- `helpotron_hud_config`: Saved overlay/HUD settings for the agent session.
+- `helpotron_approval_*` / `helpotron_appr_*`: Transient, time-limited consent/approval entries for agent actions (each expires after the approval window).
+- `helpotron_update_check`, `whatsnew_last_seen_version`: Release-check state and the last release version the student has seen (drives the "What's New" notification).
+- `ext_theme`, `ext_accent` (sync storage): The student's theme and accent-color preference; the only values synchronized to the browser profile.
 
 ### 15.3 Global Privacy Control (GPC) & Do Not Track (DNT)
 Helpotron honors browser Global Privacy Control (GPC) signals and Do Not Track (DNT) headers.
@@ -353,9 +362,9 @@ Accessibility Coordinator Contact: `accessibility@helpotron.com`.
 
 ## 19. FINAL LEGAL DISCLOSURES AND SUPREMACY
 
-- **Entire Agreement**: This Privacy Policy, together with the Terms of Service, constitutes the entire data governance agreement between the user and Helpotron Automator Systems Inc.
+- **Entire Agreement**: This Privacy Policy, together with the Terms of Service, constitutes the entire data governance agreement between the user and Helpotron Academic Companion Inc.
 - **Dispute Resolution & Governing Law**: Governed by the laws of the State of Florida, United States, or competent EU supervisory tribunals where mandated by GDPR Article 79.
 
 ---
 *Authoritative Document Reference: `PRIVACY_POLICY_2026_V4_MONOLITHIC.MD`*  
-*Helpotron Automator Systems Inc. · Office of the Data Protection Officer*
+*Helpotron Academic Companion Inc. · Office of the Data Protection Officer*

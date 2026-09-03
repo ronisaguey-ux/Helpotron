@@ -52,6 +52,29 @@ def test_user_settings_defaults_and_update():
     assert updated["localization"]["language"] == "es"
 
 
+def test_educational_mode_writable_and_default_on():
+    """Educational Mode (08-26 gate) must be declared in the defaults schema —
+    the PATCH allowlist is derived from it, so an undeclared key would be
+    dropped and the backend agent_prompt.mode_for_node gate could never flip."""
+    headers = _auth_headers("test_student_user")
+    resp = client.get("/api/user/settings", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["settings"].get("educationalMode", True) is True
+
+    # Off — must be accepted (not silently dropped), persisted, readable back.
+    resp = client.patch("/api/user/settings", json={"educationalMode": False}, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["ignored_fields"] == []
+    assert resp.json()["settings"].get("educationalMode") is False
+    resp = client.get("/api/user/settings", headers=headers)
+    assert resp.json()["settings"].get("educationalMode") is False
+
+    # Back on
+    resp = client.patch("/api/user/settings", json={"educationalMode": True}, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["settings"].get("educationalMode") is True
+
+
 def test_writing_personas_lifecycle():
     headers = _auth_headers("test_student_user")
     # Create new persona

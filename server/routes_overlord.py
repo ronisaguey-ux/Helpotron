@@ -21,7 +21,7 @@ from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .agent_prompt import agent_persona_block, agent_system_prompt
 from .database import AgentChatMessage, AgentChatThread, Assignment, StudyMaterial, UniversalDumpItem, User, get_db
-from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_agent, permission_engine
+from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_agent, permission_engine, describe_permission_action
 
 router = APIRouter(prefix="/api", tags=["overlord_and_cards"])
 
@@ -1714,12 +1714,13 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     # run_shell is a read-only, sandboxed compute query — it never asks for
     # permission (like plain_answer); it still pays the credit gate above.
     if not is_approved and intent["action"] != "run_shell":
+        perm_payload = {"text": payload.text, **dict(intent.get("payload") or {})}
         perm = overlord_agent.create_pending_permission(
             user_public_id=user.public_id,
             action_type=intent["action"],
             title=f"Permission Required: {intent['action'].replace('_', ' ').title()}",
-            description=f"Action '{intent['action']}' requires confirmation in {settings.get('operation_mode', 'auto').upper()} mode.",
-            payload={"text": payload.text, **intent["payload"]},
+            description=describe_permission_action(intent["action"], perm_payload),
+            payload=perm_payload,
             assignment_id=thread_key,
         )
         agent_reply = _chat_reply(
