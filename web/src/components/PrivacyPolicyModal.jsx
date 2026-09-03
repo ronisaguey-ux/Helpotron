@@ -136,7 +136,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 1. Acceptance of Terms & Academic Integrity Standard
               </h3>
               <p>
-                By creating an account, accessing, or utilizing the Helpotron platform, Chrome Extension, API endpoints, or autonomous study agents (collectively, the "Services"), you enter into a legally binding agreement with Helpotron Automator Inc. ("Helpotron", "we", "our", or "us").
+                By creating an account, accessing, or utilizing the Helpotron platform, Chrome Extension, API endpoints, or autonomous study agents (collectively, the "Services"), you enter into a legally binding agreement with Helpotron Academic Companion Inc. ("Helpotron", "we", "our", or "us").
               </p>
               <h4 className="font-semibold text-[var(--text-primary)]">1.1 Academic Honor Code & Ethical Assistance</h4>
               <p>

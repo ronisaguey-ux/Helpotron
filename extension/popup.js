@@ -1,18 +1,48 @@
+// Helpotron browser-action popup — 09-02 companion launcher.
+// Exactly two options (SCRAPE / CHAT) with sub-options revealed under each.
+// CHAT carries two switches (See screen / Execute) + the 3-way permission mode
+// (manual / auto / yolo) synced to the backend ai.mode setting, and the popup
+// itself is the approval surface for agent actions when it is open.
+
 const statusEl = document.getElementById('status');
 const serverInput = document.getElementById('server');
 const publicIdInput = document.getElementById('public_id');
-const tabSelect = document.getElementById('tabSelect');
 const unparseableBox = document.getElementById('unparseableBox');
 const unparseableReason = document.getElementById('unparseableReason');
 const btnOpenDataLake = document.getElementById('btnOpenDataLake');
 const openAssignmentBtn = document.getElementById('openAssignmentBtn');
 
-const TABS_CACHE_KEY = 'helpotron_tabs_cache';
 const CRAWL_CACHE_KEY = 'helpotron_crawl_cache';
 const LAST_SCRAPE_KEY = 'helpotron_last_scrapes';
 
+// ── 09-02 CHAT option state (persisted, backend-synced) ───────────────────────
+const SEE_SCREEN_KEY = 'helpotron_chat_seescreen';
+const EXECUTE_KEY = 'helpotron_chat_execute';
+const MODE_KEY = 'helpotron_agent_mode';
+const EFFORT_KEY = 'helpotron_agent_effort';
+const MODEL_KEY = 'helpotron_agent_model';
+const MODEL_TIER_KEY = 'helpotron_agent_model_tier';
+
+const SEE_SCREEN_DEFAULT = true;
+const EXECUTE_DEFAULT = false;
+const MODE_DEFAULT = 'manual';
+const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
+const MODELS = ['manual', 'auto', 'yolo'];
+
+const modelToggles = {
+  toggleSeeScreen: document.getElementById('toggleSeeScreen'),
+  toggleExecute: document.getElementById('toggleExecute'),
+};
+const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
+const modeHintEl = document.getElementById('modeHint');
+const modelEffortEl = document.getElementById('modelEffort');
+const modelNameEl = document.getElementById('modelName');
+const modelTierEl = document.getElementById('modelTier');
+let effortFromServer = null; // true once GET /api/user/settings succeeded
+
 function setStatus(text) {
   statusEl.innerText = text;
+  statusEl.hidden = !text;
 }
 
 function showUnparseable(reason) {
@@ -24,75 +54,373 @@ function hideUnparseable() {
   unparseableBox.style.display = 'none';
 }
 
-// Popup-open latency: the popup paints from cached snapshots first, then
-// refreshes from the service worker / server after first paint. The tab
-// dropdown is the slowest piece today — it waits for a SW message round-trip
-// (cold SW = wake + parse), so cache the last-known tab list in storage and
-// render it synchronously in init().
-function renderTabOptions(tabs) {
-  tabSelect.innerHTML = '';
-  tabs.forEach((t) => {
-    if (t.url && /^https?:/i.test(t.url)) {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      let host = '';
-      try { host = new URL(t.url).hostname; } catch {}
-      opt.innerText = `${t.active ? '👉 ' : ''}${(t.title || '').slice(0, 38)} (${host})`;
-      if (t.active) opt.selected = true;
-      tabSelect.appendChild(opt);
-    }
+// ── Active-tab helper (the new launcher has no tab dropdown: option 1 = the
+// focused tab of the current window, per spec). ───────────────────────────────
+async function activeTabId() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs && tabs[0] ? tabs[0].id : null;
+}
+
+// ── Effort -> vision model mirror of server.screen_vision.resolve_vision_model
+// (same bands, same clamps; unit-tested server-side — kept identical here so
+// the popup hint always agrees with the model the backend will actually use). ─
+function clampEffortScore(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || Number.isNaN(num)) return EFFORT_DEFAULT;
+  return Math.min(1000, Math.max(1, Math.round(num)));
+}
+
+function effortModelInfo(score) {
+  const s = clampEffortScore(score);
+  if (s <= 300) return { tier: 'lite', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
+  if (s <= 500) return { tier: 'mid_lower', label: 'DeepSeek V4 Flash Vision', model: 'deepseek/deepseek-v4-flash-vision' };
+  if (s <= 700) return { tier: 'mid_upper', label: 'Gemini 3.7 Flash', model: 'google/gemini-3.7-flash' };
+  return { tier: 'pro', label: 'DeepSeek V4 Pro Vision', model: 'deepseek/deepseek-v4-pro-vision' };
+}
+
+async function persistAgentState(patch) {
+  await chrome.storage.local.set(patch);
+}
+
+async function readAgentState() {
+  return await chrome.storage.local.get([
+    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY,
+  ]);
+}
+
+const MODE_HINTS = {
+  manual: 'Manual — the agent asks you before EVERY action it wants to take.',
+  auto: 'Automatic — the agent acts on its own; you only get asked for risky actions (credentials, deletions/submits, downloads, leaving this site).',
+  yolo: 'YOLO — the agent never asks. Passwords, OTP and downloads are still out of reach for the agent — those are hard-blocked.',
+};
+
+function applyModeToUI(mode) {
+  const next = MODELS.includes(mode) ? mode : MODE_DEFAULT;
+  modeBtns.forEach((b) => {
+    const on = b.dataset.mode === next;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
-  if (tabSelect.options.length === 0) {
-    tabSelect.innerHTML = '<option value="">No eligible tabs open</option>';
+  if (modeHintEl) modeHintEl.innerText = MODE_HINTS[next] || '';
+}
+
+async function applyAgentStateToUI(st) {
+  applyModeToUI(st[MODE_KEY] || MODE_DEFAULT);
+  if (modelToggles.toggleSeeScreen) {
+    const v = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : st[SEE_SCREEN_KEY];
+    modelToggles.toggleSeeScreen.checked = v;
+    modelToggles.toggleSeeScreen.setAttribute('aria-checked', v ? 'true' : 'false');
+  }
+  if (modelToggles.toggleExecute) {
+    const v = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : st[EXECUTE_KEY];
+    modelToggles.toggleExecute.checked = v;
+    modelToggles.toggleExecute.setAttribute('aria-checked', v ? 'true' : 'false');
+  }
+  // Effort -> model line (mirror of the backend resolver).
+  const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
+  const info = effortModelInfo(score);
+  if (modelEffortEl) modelEffortEl.innerText = `effort ${score}`;
+  if (modelNameEl) modelNameEl.innerText = info.label;
+  if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+}
+
+// ── Backend settings sync (09-02): GET /api/user/settings -> ai.{effortScore,
+// mode}; PATCH ai.mode when the user changes it in the popup. Offline /
+// unauthenticated -> extension-local fallback (effort 500, mode manual).
+async function authToken() {
+  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
+  return session_token || token || '';
+}
+
+async function syncAgentSettingsFromServer() {
+  const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+  const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+  const st = await readAgentState();
+  const haveLocalMode = st[MODE_KEY];
+  if (!public_id || !t) {
+    // Unauthenticated/offline: extension-local fallback.
+    await persistAgentState({ [EFFORT_KEY]: EFFORT_DEFAULT, [MODEL_KEY]: effortModelInfo(EFFORT_DEFAULT).model, [MODEL_TIER_KEY]: 'mid_lower' });
+    effortFromServer = false;
+    await applyAgentStateToUI(await readAgentState());
+    return;
+  }
+  try {
+    const res = await fetch(`${srv}/api/user/settings`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const settings = (data && data.settings) || {};
+    const ai = settings.ai || {};
+    const score = clampEffortScore(ai.effortScore === undefined ? EFFORT_DEFAULT : ai.effortScore);
+    const info = effortModelInfo(score);
+    const serverMode = MODELS.includes(ai.mode) ? ai.mode : MODE_DEFAULT;
+    effortFromServer = true;
+    await persistAgentState({
+      [EFFORT_KEY]: score,
+      [MODEL_KEY]: info.model,
+      [MODEL_TIER_KEY]: info.tier,
+      // Server mode wins unless the user changed it locally just now
+      // (pendingLocalMode guards the in-flight PATCH below).
+      ...(pendingLocalMode ? {} : { [MODE_KEY]: serverMode }),
+    });
+    await applyAgentStateToUI(await readAgentState());
+  } catch (e) {
+    // Network/auth failure: keep whatever local state we had; surface fallback.
+    effortFromServer = false;
+    setStatus(`⚠️ Could not sync agent settings from the server (${String(e).slice(0, 60)}) — using local state (effort ${EFFORT_DEFAULT}, mode manual).`);
   }
 }
 
-async function refreshTabs() {
-  chrome.runtime.sendMessage({ action: 'getTabs' }, (resp) => {
-    if (resp?.ok && resp.tabs) {
-      renderTabOptions(resp.tabs, false);
-      // Cache the snapshot for instant paint on the next popup open.
-      chrome.storage.local.set({ [TABS_CACHE_KEY]: resp.tabs }).catch(() => {});
+let pendingLocalMode = false;
+async function setAgentMode(mode) {
+  if (!MODELS.includes(mode)) return;
+  await persistAgentState({ [MODE_KEY]: mode });
+  applyModeToUI(mode);
+  // Persist to the backend so the web app and the extension agree.
+  const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+  const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+  if (!public_id || !t) {
+    setStatus(`🔒 Mode set to ${mode} locally — sign in for it to sync with your account.`);
+    return;
+  }
+  try {
+    pendingLocalMode = true;
+    const res = await fetch(`${srv}/api/user/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ ai: { mode } }),
+    });
+    if (res.ok) {
+      setStatus(`✅ Permission mode saved to your account: ${mode}`);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setStatus(`⚠️ Saved locally, but the account rejected it: ${d.detail || res.status}`);
     }
+  } catch (e) {
+    setStatus(`⚠️ Saved locally; could not reach the server (${String(e).slice(0, 60)}).`);
+  } finally {
+    pendingLocalMode = false;
+  }
+}
+
+modeBtns.forEach((b) => {
+  b.addEventListener('click', () => setAgentMode(b.dataset.mode));
+});
+
+Object.keys(modelToggles).forEach((id) => {
+  const el = modelToggles[id];
+  if (!el) return;
+  el.addEventListener('change', async () => {
+    const key = id === 'toggleSeeScreen' ? SEE_SCREEN_KEY : EXECUTE_KEY;
+    const val = el.checked;
+    // Execute drives the agent through the browser debugger — an OPTIONAL
+    // permission (manifest.json optional_permissions) requested on first use,
+    // so the install itself stays permission-light for the store review.
+    if (id === 'toggleExecute' && val) {
+      let granted = false;
+      try {
+        granted = await chrome.permissions.request({ permissions: ['debugger'] });
+      } catch { granted = false; }
+      if (!granted) {
+        el.checked = false;
+        el.setAttribute('aria-checked', 'false');
+        await persistAgentState({ [key]: false });
+        setStatus('⚠️ Agent actions need the “debugger” permission — not granted. Execute stays OFF (the agent will only talk, never act).');
+        return;
+      }
+    }
+    el.setAttribute('aria-checked', val ? 'true' : 'false');
+    await persistAgentState({ [key]: val });
+    setStatus(val
+      ? (id === 'toggleSeeScreen' ? '👁 See screen: ON — the agent receives the screen with each chat message.'
+                                   : '✅ Execute: ON — the agent may act with permission mode.')
+      : (id === 'toggleSeeScreen' ? 'See screen: OFF — chat messages carry no screen.'
+                                   : 'Execute: OFF — the agent will only talk, never act.'));
   });
+});
+
+// ── Approval inbox (09-02): the open popup is the approval surface. We signal
+// popup-alive with a runtime Port (MV3 service workers can't see the popup
+// any other way); incoming APPROVAL_PROMPT renders the card, Allow/Deny
+// answer APPROVAL_RESPONSE. Prompts queue: one card at a time.
+const POPUP_PORT_NAME = 'helpotron-popup';
+const pendingApprovals = []; // [{reqId, title, summary}]
+let approvalPort = null;
+
+function renderNextApproval() {
+  const card = document.getElementById('approvalCard');
+  const titleEl = document.getElementById('approvalTitle');
+  const textEl = document.getElementById('approvalText');
+  if (!card || !titleEl || !textEl) return;
+  const item = pendingApprovals[0];
+  if (!item) {
+    card.style.display = 'none';
+    return;
+  }
+  titleEl.innerText = item.title;
+  textEl.innerText = item.summary;
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function answerApproval(reqId, allowed) {
+  const ix = pendingApprovals.findIndex((p) => p.reqId === reqId);
+  if (ix >= 0) {
+    pendingApprovals.splice(ix, 1);
+  }
+  chrome.runtime.sendMessage({ action: 'APPROVAL_RESPONSE', reqId, decision: allowed ? 'allow' : 'deny' })
+    .catch(() => {});
+  setStatus(allowed ? '✅ Allowed the agent action.' : '⛔ Denied the agent action.');
+  renderNextApproval();
+}
+
+document.getElementById('approveBtn').addEventListener('click', () => {
+  const p = pendingApprovals[0];
+  if (p) answerApproval(p.reqId, true);
+});
+document.getElementById('denyBtn').addEventListener('click', () => {
+  const p = pendingApprovals[0];
+  if (p) answerApproval(p.reqId, false);
+});
+
+// ── General popup paint & behavior ───────────────────────────────────────────
+// ── What's new: release notifications (09-03) ────────────────────────────────
+// The server remembers every extension release (auto-synced from manifest.json);
+// unread ones render here as a notification and are acked per user on "Got it"
+// (server-side receipt when signed in + local sentinel as an offline fallback).
+const WHATSNEW_SEEN_KEY = 'whatsnew_last_seen_version';
+
+function versionLessEq(a, b) {
+  const pa = String(a || '0.0.0').split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || '0.0.0').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+  }
+  return true;
+}
+
+async function loadWhatsNew() {
+  const banner = document.getElementById('whatsNewBanner');
+  const body = document.getElementById('whatsNewBody');
+  if (!banner || !body) return;
+  const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+  const st = await chrome.storage.local.get(['session_token', 'token', WHATSNEW_SEEN_KEY]);
+  const cred = st.session_token || st.token;
+  let releases = [];
+  try {
+    const res = await fetch(`${srv}/api/extension/releases`, {
+      headers: cred ? { Authorization: `Bearer ${cred}` } : {},
+    });
+    if (!res.ok) return;
+    releases = (await res.json()).releases || [];
+  } catch { return; } // server unreachable — banner stays hidden
+
+  const myVer = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '0.0.0';
+  const seenLocal = st[WHATSNEW_SEEN_KEY] || '0.0.0';
+  const unread = releases.filter(
+    (r) => versionLessEq(r.version, myVer) && !r.read && !versionLessEq(r.version, seenLocal)
+  );
+  if (!unread.length) return;
+
+  banner.style.display = 'block';
+  body.innerHTML = '';
+  // Newest first; "…and N more" so catch-up stays honest without a scroll wall.
+  const shown = unread.slice(0, 4);
+  const more = unread.length - shown.length;
+  shown.forEach((r) => {
+    const card = document.createElement('div');
+    card.className = 'whatsnew-item';
+    const badge = document.createElement('span');
+    badge.className = r.is_major ? 'whatsnew-badge whatsnew-badge--major' : 'whatsnew-badge';
+    badge.textContent = r.is_major ? `v${r.version} · MAJOR` : `v${r.version}`;
+    const title = document.createElement('div');
+    title.className = 'whatsnew-title';
+    title.textContent = r.title || `Helpotron Extension v${r.version}`;
+    card.appendChild(badge);
+    card.appendChild(title);
+    if (r.notes) {
+      const notes = document.createElement('div');
+      notes.className = 'whatsnew-notes';
+      notes.innerText = r.notes;
+      card.appendChild(notes);
+    }
+    body.appendChild(card);
+  });
+  if (more > 0) {
+    const moreEl = document.createElement('div');
+    moreEl.className = 'whatsnew-more';
+    moreEl.innerText = `…and ${more} more update${more === 1 ? '' : 's'} — sign in to see them all`;
+    body.appendChild(moreEl);
+  }
+
+  document.getElementById('btnWhatsNewDismiss').onclick = async () => {
+    banner.style.display = 'none';
+    await chrome.storage.local.set({ [WHATSNEW_SEEN_KEY]: unread[0].version });
+    if (cred) {
+      for (const r of unread) {
+        await fetch(`${srv}/api/extension/releases/${r.id}/read`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${cred}` },
+        }).catch(() => {});
+      }
+    }
+  };
 }
 
 async function init() {
-  // ONE batched storage read — everything else paints from these snapshots.
+  // ONE batched storage read — everything paints from these snapshots.
   const st = await chrome.storage.local.get([
     'server', 'public_id', 'token', 'session_token',
-    'update_available', 'latest_version', CHAT_KEY,
-    TABS_CACHE_KEY, CRAWL_CACHE_KEY,
+    'update_available', 'latest_version', CRAWL_CACHE_KEY,
+    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY,
   ]);
   serverInput.value = st.server || 'https://helpotron.dpdns.org';
   publicIdInput.value = st.public_id || '';
   publicIdInput.placeholder = 'your Helpotron username';
-  // 08-26: scrape data must land on the right account — force login first.
-  // session_token is the long-lived (7-day sliding) credential returned by
-  // /api/login; the 24h JWT in `token` is only a fallback.
   const loggedIn = !!(st.public_id && (st.token || st.session_token));
-  // Design-v2 shell: account chip mirrors the signed-in identity.
+
   const accountChip = document.getElementById('accountChip');
   if (accountChip) {
     const label = accountChip.querySelector('span');
     if (label) label.textContent = (st.public_id && st.public_id !== 'Guest') ? `@${st.public_id}` : 'Guest';
   }
   if (!loggedIn) {
-    setStatus('⚠️ Login required: enter your Helpotron username & password below and Save (or sign in on the website once — the session syncs here). Scrapes stay disabled until then.');
-    statusEl.classList.remove('hidden');
+    setStatus('⚠️ Login required: use the account chip above, or sign in on the Helpotron website once (session syncs here). Scrapes are gated by your account.');
+  }
+
+  // CHAT options: instant paint from local state, then server sync after paint.
+  await applyAgentStateToUI(st);
+
+  // Agent-actions permission consistency: if Execute is stored ON but the
+  // optional debugger permission is gone (profile reset, revoked, moved to a
+  // new browser), flip the toggle back OFF so the UI can't promise actions
+  // the browser will refuse.
+  if (st[EXECUTE_KEY]) {
+    try {
+      const has = await chrome.permissions.contains({ permissions: ['debugger'] });
+      if (!has) {
+        await persistAgentState({ [EXECUTE_KEY]: false });
+        if (modelToggles.toggleExecute) {
+          modelToggles.toggleExecute.checked = false;
+          modelToggles.toggleExecute.setAttribute('aria-checked', 'false');
+        }
+        setStatus('⚠️ Agent-actions permission was reset — switch Execute on again and approve the prompt.');
+      }
+    } catch { /* permissions API unavailable — keep stored state */ }
   }
 
   const updateBanner = document.getElementById('updateBanner');
   const updateBadge = document.getElementById('updateVersionBadge');
   const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
-
   if (st.update_available && st.latest_version) {
     updateBanner.style.display = 'block';
     if (updateBadge) updateBadge.innerText = `v${st.latest_version}`;
   } else {
     updateBanner.style.display = 'none';
   }
-
   if (btnDownloadUpdate) {
     btnDownloadUpdate.addEventListener('click', async () => {
       const srv = serverInput.value.trim() || 'http://localhost:8000';
@@ -100,38 +428,18 @@ async function init() {
     });
   }
 
-  // Instant paint #1: cached tab dropdown (no SW round-trip needed).
-  if (st[TABS_CACHE_KEY] && st[TABS_CACHE_KEY].length) {
-    renderTabOptions(st[TABS_CACHE_KEY]);
-  }
+  // Instant paint: last-known crawl progress + results.
+  if (st[CRAWL_CACHE_KEY]) renderCrawlStatus(st[CRAWL_CACHE_KEY]);
 
-  // Instant paint #2: cached chat mirror (empty → greeting + help note).
-  renderChat(st[CHAT_KEY]);
-
-  // Instant paint #3: last-known crawl progress.
-  if (st[CRAWL_CACHE_KEY]) {
-    renderCrawlStatus(st[CRAWL_CACHE_KEY]);
-  }
-
-  // Chatbox: enabled only when logged in.
-  chatSendBtn.disabled = !loggedIn;
-
-  // ── Anything requiring the service worker or the network is deferred to
-  // past the first drawn frame; the UI above is already fully informative. ──
+  // Deferred past first paint: crawl re-poll + backend agent-settings sync + release notifications.
   requestAnimationFrame(() => {
-    // Refresh tabs list (also re-caches it) after paint.
-    refreshTabs();
-    // Resume showing an in-flight course crawl (08-28).
     pollCrawlStatus();
-    // Reconcile chat with the server (mirror already painted).
-    if (loggedIn) loadChatHistory();
+    syncAgentSettingsFromServer();
+    loadWhatsNew();
   });
 }
 
-// 08-28 auto-create/return bubble: the server upsert creates the Assignment
-// bubble when the scraped page has none yet (dedupe on canvas_id) and returns
-// its id; remember the payload per tab so the chatbox can pin instructions and
-// follow-up runs to the SAME bubble, and surface an "open bubble" button.
+// ── Scrape option 1: current thing only (focused tab) ────────────────────────
 async function rememberScrape(tabId, resp) {
   if (!tabId || !resp?.assignment_id) return;
   try {
@@ -142,11 +450,10 @@ async function rememberScrape(tabId, resp) {
       payload: resp.payload || null,
       ts: Date.now(),
     };
-    // keep only the newest 40 tabs
     const keys = Object.keys(all);
     if (keys.length > 40) delete all[keys[0]];
     await chrome.storage.local.set({ [LAST_SCRAPE_KEY]: all });
-  } catch { /* storage is best-effort here */ }
+  } catch { /* storage best-effort */ }
 }
 
 function showOpenAssignment(assignmentId) {
@@ -164,20 +471,20 @@ openAssignmentBtn.addEventListener('click', () => {
   setStatus(`📖 Opening bubble #${id} in Helpotron…`);
 });
 
-document.getElementById('startScrape').addEventListener('click', async () => {
+document.getElementById('btnScrapeCurrent').addEventListener('click', async () => {
   hideUnparseable();
   openAssignmentBtn.style.display = 'none';
-  const selectedTabId = tabSelect.value;
-  setStatus('🔍 Deep-scraping page (waiting for load, expanding content, hashing files)…');
-  const resp = await chrome.runtime.sendMessage({ action: 'startScrape', tabId: selectedTabId });
+  const tabId = await activeTabId();
+  if (!tabId) { setStatus('❌ No focused tab to scrape.'); return; }
+  setStatus('🔍 Reading the focused tab (waiting for load, expanding content, hashing files)…');
+  const resp = await chrome.runtime.sendMessage({ action: 'startScrape', tabId }).catch((e) => ({ ok: false, error: String(e) }));
   if (resp?.ok) {
     const bits = [];
     if (resp.promptLen) bits.push(`${resp.promptLen} chars of content`);
     if (resp.filesFound) bits.push(`${resp.filesFound} files found (${resp.filesUploaded || 0} uploaded to dump, ${resp.filesRecorded || 0} URL+hash saved)`);
     const detail = bits.length ? ` — ${bits.join(', ')}` : '';
-    setStatus(`✅ Tracked & Ingested: ${resp.title}${detail} — bubble #${resp.assignment_id}`);
-    const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
-    await rememberScrape(selectedTabId, resp);
+    setStatus(`✅ Saved to Helpotron: ${resp.title}${detail} — bubble #${resp.assignment_id}`);
+    await rememberScrape(tabId, resp);
     showOpenAssignment(resp.assignment_id);
   } else if (resp?.unparseable) {
     setStatus('❌ Nothing could be collected — no content and no files found.');
@@ -187,30 +494,70 @@ document.getElementById('startScrape').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('activateAgent').addEventListener('click', async () => {
-  hideUnparseable();
-  const selectedTabId = tabSelect.value;
-  setStatus('🤖 Spawning AI Subagent with custom tools on selected tab…');
-  const resp = await chrome.runtime.sendMessage({ action: 'activateAgent', tabId: selectedTabId });
-  if (!resp?.ok) {
-    setStatus(`❌ ${resp?.error || 'Failed starting subagent'}`);
-  } else {
-    setStatus(`🤖 Subagent ${resp.session_id} active. Methodically inspecting DOM, rubrics, and attachments…`);
-    pollAgentStatus(resp.session_id);
-  }
-});
-
-// ── Full-course crawl UI (08-28) ──────────────────────────────────────────────
-const btnStartCrawl = document.getElementById('startCrawl');
+// ── Scrape option 2: everything on the tab (site crawl, results revealed) ────
+const btnStartCrawl = document.getElementById('btnScrapeSite');
 const btnStopCrawl = document.getElementById('stopCrawl');
 const crawlProgressEl = document.getElementById('crawlProgress');
+const crawlResultsWrap = document.getElementById('crawlResultsWrap');
+const crawlResultsEl = document.getElementById('crawlResults');
 let crawlPollTimer = null;
+
+function renderCrawlResults(results) {
+  if (!crawlResultsEl) return;
+  crawlResultsEl.innerHTML = '';
+  const list = Array.isArray(results) ? results : [];
+  if (list.length === 0) {
+    crawlResultsWrap.style.display = 'none';
+    return;
+  }
+  crawlResultsWrap.style.display = 'flex';
+  list.forEach((r) => {
+    const row = document.createElement('div');
+    row.className = 'crawl-result-row';
+    const title = document.createElement('div');
+    title.className = 'r-title';
+    title.innerText = String(r.title || r.url || 'page');
+    const meta = document.createElement('div');
+    meta.className = 'r-meta';
+    if (r.status === 'saved') {
+      const ok = document.createElement('span');
+      ok.className = 'r-ok';
+      ok.innerText = `✓ saved #${r.assignment_id || '?'}`;
+      meta.appendChild(ok);
+      if (r.promptLen) {
+        const p = document.createElement('span');
+        p.innerText = `${r.promptLen} chars`;
+        meta.appendChild(p);
+      }
+      const f = r.files || {};
+      if (f.found) {
+        const fl = document.createElement('span');
+        fl.innerText = `${f.found} files (${f.uploaded || 0}↑)`;
+        meta.appendChild(fl);
+      }
+    } else if (r.status === 'unparseable') {
+      const u = document.createElement('span');
+      u.className = 'r-fail';
+      u.innerText = '✗ unparseable';
+      meta.appendChild(u);
+    } else {
+      const f = document.createElement('span');
+      f.className = 'r-fail';
+      f.innerText = `✗ ${r.error || 'failed'}`;
+      meta.appendChild(f);
+    }
+    row.appendChild(title);
+    row.appendChild(meta);
+    crawlResultsEl.appendChild(row);
+  });
+}
 
 function renderCrawlStatus(s) {
   if (!s || !s.phase || s.phase === 'idle') {
     btnStartCrawl.style.display = '';
     btnStopCrawl.style.display = 'none';
     crawlProgressEl.style.display = 'none';
+    crawlResultsWrap.style.display = crawlResultsEl.children.length ? 'flex' : 'none';
     return;
   }
   const active = s.phase === 'queued' || s.phase === 'running' || s.phase === 'stopping';
@@ -238,14 +585,13 @@ function renderCrawlStatus(s) {
     crawlProgressEl.style.color = '#fca5a5';
   }
   crawlProgressEl.innerText = text;
+  renderCrawlResults(s.results);
 }
 
 async function pollCrawlStatus() {
   const resp = await chrome.runtime.sendMessage({ action: 'crawlStatus' }).catch(() => null);
   const state = resp && resp.ok ? resp : { phase: 'idle' };
   renderCrawlStatus(state);
-  // Instant-paint cache: the last-known crawl progress so the next popup open
-  // paints it before the SW reply arrives.
   if (state.phase && state.phase !== 'idle') {
     chrome.storage.local.set({ [CRAWL_CACHE_KEY]: state }).catch(() => {});
   }
@@ -258,58 +604,36 @@ async function pollCrawlStatus() {
 
 btnStartCrawl.addEventListener('click', async () => {
   hideUnparseable();
-  const selectedTabId = tabSelect.value;
-  setStatus('🌐 Scanning course links & index pages… (robots-respecting)');
-  const resp = await chrome.runtime.sendMessage({ action: 'startCrawl', tabId: selectedTabId });
+  const tabId = await activeTabId();
+  if (!tabId) { setStatus('❌ No focused tab to crawl.'); return; }
+  setStatus('🌐 Scanning the tab site links & index pages… (robots-respecting)');
+  const resp = await chrome.runtime.sendMessage({ action: 'startCrawl', tabId }).catch((e) => ({ ok: false, error: String(e) }));
   if (resp?.ok) {
-    setStatus(`🌐 Queued ${resp.total} pages of ${resp.scope} — scraping slowly with the badge showing progress. You can close the popup.`);
+    setStatus(`🌐 Queued ${resp.total} pages of ${resp.scope} — scraping slowly; the Status line shows page-by-page results. You can close the popup.`);
     pollCrawlStatus();
   } else {
-    setStatus(`❌ ${resp?.error || 'Failed to start course crawl'}`);
+    setStatus(`❌ ${resp?.error || 'Failed to start site crawl'}`);
   }
 });
 
 btnStopCrawl.addEventListener('click', async () => {
-  setStatus('⏹ Stopping course crawl…');
+  setStatus('⏹ Stopping site crawl…');
   const resp = await chrome.runtime.sendMessage({ action: 'stopCrawl' });
-  setStatus(resp?.ok ? `⏹ Crawl stopped.` : `❌ ${resp?.error || 'No crawl running'}`);
+  setStatus(resp?.ok ? '⏹ Crawl stopped.' : `❌ ${resp?.error || 'No crawl running'}`);
   pollCrawlStatus();
-});
-
-async function pollAgentStatus(sessionId) {
-  for (let i = 0; i < 120; i++) {
-    await new Promise((r) => setTimeout(r, 6000)); // poll every 6s
-    const s = await chrome.runtime.sendMessage({ action: 'agentStatus' }).catch(() => null);
-    if (!s || !s.active) continue;
-
-    if (s.status === 'done') {
-      setStatus(`✅ Subagent completed (${s.steps} tool calls) — clean coursework ingested into Helpotron!`);
-      return;
-    }
-    if (s.status === 'unparseable') {
-      setStatus('⚠️ Website cannot be parsed by subagent.');
-      showUnparseable(s.result_text || 'Protected webview or missing rubric data.');
-      return;
-    }
-    if (s.status === 'failed' || s.status === 'disconnected') {
-      setStatus(`❌ Subagent ${s.status} — compute credits preserved. Retry on another tab.`);
-      return;
-    }
-    if (s.status === 'running') {
-      setStatus(`🤖 Subagent running [Step ${s.steps}/120] — executing custom tool calls…`);
-    }
-  }
-}
-
-document.getElementById('startRecording').addEventListener('click', async () => {
-  setStatus('Opening audio recorder…');
-  const resp = await chrome.runtime.sendMessage({ action: 'startRecording' });
-  if (!resp?.ok) setStatus(`❌ ${resp?.error || 'failed'}`);
-  else setStatus('🎙️ Audio recorder tab launched.');
 });
 
 btnOpenDataLake.addEventListener('click', () => {
   chrome.runtime.sendMessage({ action: 'openDataLake' });
+});
+
+// ── Login (account chip -> panel) ─────────────────────────────────────────────
+document.getElementById('accountChip').addEventListener('click', () => {
+  const panel = document.getElementById('loginPanel');
+  const chip = document.getElementById('accountChip');
+  const open = panel.hidden;
+  panel.hidden = !open;
+  chip.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 
 document.getElementById('saveSettings').addEventListener('click', async () => {
@@ -317,10 +641,8 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
   const pid = publicIdInput.value.trim();
   const pwd = document.getElementById('password')?.value;
 
-  // 08-31 captcha: when the server enforces Turnstile, this popup cannot solve
-  // it (MV3 blocks remote scripts), so password login here would 403. The web
-  // app login hands the session to the extension (HELPOTRON_SESSION_HANDOFF →
-  // storeSession); here we validate any synced session or route the user there.
+  // Captcha-present servers can't be logged into from MV3 (remote scripts
+  // banned) — validate any synced web session, else route to the website.
   let captchaOn = false;
   try {
     const cfgRes = await fetch(`${srv}/api/public-config`);
@@ -338,8 +660,7 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
         const me = await meRes.json();
         if (meRes.ok && me.public_id) {
           setStatus(`✅ Signed in as ${me.public_id} — web session synced to the extension`);
-          chatSendBtn.disabled = false;
-          loadChatHistory();
+          syncAgentSettingsFromServer();
           return;
         }
       } catch (e) { /* session stale — fall through */ }
@@ -367,8 +688,7 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
           session_token: data.session_token || '',
         });
         setStatus('✅ Logged in & token saved');
-        chatSendBtn.disabled = false;
-        loadChatHistory();
+        syncAgentSettingsFromServer();
         return;
       } else {
         setStatus(`❌ Auth failed: ${data.detail || data.message || 'Invalid credentials'}`);
@@ -380,565 +700,36 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     }
   }
 
-  await chrome.storage.local.set({
-    server: srv,
-    public_id: pid,
-  });
+  await chrome.storage.local.set({ server: srv, public_id: pid });
   setStatus('✅ Settings saved');
 });
 
-// Live-sync: when the web app hands off a session after a captcha login, the
-// popup picks it up without a manual reopen.
+// Live-sync: after a website handoff (captcha login) the popup re-reads
+// identity + agent settings without a manual reopen.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.public_id || changes.session_token || changes.token)) {
     init();
   }
 });
 
-// ── Mini Agent Chatbox (talk to the scraper/capture agent) ───────────────────
-// Messages go to POST /api/extension/agent_chat (same agent pipeline as the
-// web chat, on the 'extensions' surface). History comes from
-// GET /api/extension/agent_chat/history. A local mirror in chrome.storage
-// keeps the conversation visible even when the server is unreachable, and
-// everything also persists server-side (AgentChatMessage), so the popup
-// reopen / restart / web-chat views all agree.
-
-const CHAT_KEY = 'helpotron_chat';
-const chatMessagesEl = document.getElementById('chatMessages');
-const chatInputEl = document.getElementById('chatInput');
-const chatSendBtn = document.getElementById('chatSend');
-const chatScrapeBtn = document.getElementById('chatScrapeTab');
-const chatRefreshBtn = document.getElementById('chatRefresh');
-let chatBusy = false;
-
-async function chatAuthHeaders() {
-  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
-  const auth = session_token || token || '';
-  return auth ? { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` }
-              : { 'Content-Type': 'application/json' };
-}
-
-async function chatIsLoggedIn() {
-  const { public_id, session_token, token } = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
-  return !!(public_id && (session_token || token));
-}
-
-function addChatMessageEl(sender, text, isTyping) {
-  const div = document.createElement('div');
-  div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
-  if (sender === 'user') {
-    const sp = document.createElement('span');
-    sp.className = 'chat-sender';
-    sp.textContent = 'You';
-    div.appendChild(sp);
-  } else if (sender === 'agent') {
-    const sp = document.createElement('span');
-    sp.className = 'chat-sender';
-    sp.textContent = 'Agent';
-    div.appendChild(sp);
-  }
-  const body = document.createElement('span');
-  body.textContent = text;
-  div.appendChild(body);
-  chatMessagesEl.appendChild(div);
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-  return div;
-}
-
-function chatReplyText(data, fallback) {
-  const raw = data && (data.reply || data.message);
-  if (typeof raw === 'string') return raw;
-  if (raw && typeof raw.text === 'string') return raw.text;
-  if (data && data.status === 'insufficient_tokens') return '⚠️ Insufficient tokens — the operator hasn’t granted you tokens yet.';
-  return fallback || '✅ Done.';
-}
-
-async function cacheChat(msgs) {
-  const list = (msgs || []).slice(-80).map((m) => ({
-    sender: m.sender === 'user' ? 'user' : 'agent',
-    text: m.text,
-    ts: m.timestamp || new Date().toISOString(),
-  }));
-  await chrome.storage.local.set({ [CHAT_KEY]: list });
-}
-
-// ── Greeting handling (08-28) ────────────────────────────────────────────────
-// The extension agent chat greets by time of day. Empty-name fix (consistent
-// with the web TodayView fix): a missing, blank or 'Guest' name is NEVER
-// interpolated — it hides the name fragment and falls back to the neutral
-// 'there', so no "Good afternoon , there ." style gap can ever render.
-function greetingNameFallback() {
-  const pid = (publicIdInput.value || '').trim();
-  return (pid && pid !== 'Guest') ? pid : 'there';
-}
-
-function chatGreetingText() {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  return `${greeting}, ${greetingNameFallback()}.`;
-}
-
-function renderChat(msgs) {
-  chatMessagesEl.innerHTML = '';
-  if (!msgs || msgs.length === 0) {
-    // Welcome/onboarding greeting: renders the neutral 'there' when the
-    // account has no display name yet — never an empty-name fragment.
-    addChatMessageEl('note', `👋 ${chatGreetingText()} This chat talks to your Helpotron agent — ask it to scrape, summarize, or plan the page you have open.`);
-    addChatMessageEl('note', '💡 Type an instruction, e.g. “only scrape algebra” — the agent replies here.');
-    return;
-  }
-  msgs.forEach((m) => addChatMessageEl(m.sender === 'user' ? 'user' : 'agent', m.text));
-}
-
-async function loadChatHistory() {
-  // Instant paint from the local mirror, then reconcile with the server.
-  const cached = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY];
-  if (cached && cached.length) renderChat(cached);
-  const srv = serverInput.value.trim() || 'http://localhost:8000';
-  try {
-    const headers = await chatAuthHeaders();
-    if (!headers.Authorization) return; // login required; init() holds the note
-    const res = await fetch(`${srv}/api/extension/agent_chat/history`, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const msgs = ((data && data.chat) || []).map((m) => ({ sender: m.sender, text: m.text }));
-    if (msgs.length) {
-      renderChat(msgs);
-      cacheChat(msgs);
-    } else if (cached && cached.length) {
-      renderChat(cached); // server has nothing (new account) — keep the mirror
-    }
-  } catch (e) {
-    if (!cached || !cached.length) {
-      addChatMessageEl('note', '⚠️ Could not reach server history — is the server up and restarted with the chat route?');
-    }
-  }
-}
-
-async function sendChatMessage() {
-  const text = chatInputEl.value.trim();
-  if (!text || chatBusy) return;
-  if (!(await chatIsLoggedIn())) {
-    setStatus('⚠️ Login required: enter your Helpotron username & password below and save.');
-    return;
-  }
-  const srv = serverInput.value.trim() || 'http://localhost:8000';
-  chatBusy = true;
-  chatSendBtn.disabled = true;
-  chatInputEl.value = '';
-  addChatMessageEl('user', text);
-  const typingEl = addChatMessageEl('agent', '…thinking…');
-  try {
-    const res = await fetch(`${srv}/api/extension/agent_chat`, {
-      method: 'POST',
-      headers: await chatAuthHeaders(),
-      body: JSON.stringify({ text }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-    const reply = chatReplyText(data, '✅ Done.');
-    typingEl.replaceWith(addChatMessageEl('agent', reply));
-    setStatus(`💬 Agent answered (${reply.slice(0, 60)}${reply.length > 60 ? '…' : ''})`);
-    const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
-    await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
-    // 08-28: the agent picked its scrape tool (scrape_assignment on the
-    // extensions surface) — the answer prose is the ack; the REAL capture
-    // runs in the browser, so drive the same local scraper the button uses.
-    // Response shapes accepted: data.scrape_request (route-level contract)
-    // or data.execution.action === 'scrape_assignment' (executor passthrough).
-    const scrapeAsked = !!(data && (data.scrape_request ||
-      (data.execution && data.execution.action === 'scrape_assignment')));
-    if (scrapeAsked) {
-      // scrape_request rides top-level on the route contract and inside
-      // execution on the executor passthrough — accept both.
-      const execReq = data.execution && data.execution.scrape_request;
-      const scrapeReq = data.scrape_request || execReq || {};
-      const instruction = (scrapeReq && typeof scrapeReq.instruction === 'string')
-        ? scrapeReq.instruction.trim() : text;
-      const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
-      const assignmentId = last ? (last[String(tabSelect.value)]?.assignment_id || null) : null;
-      const autoNote = scrapeReq.note || '';
-      if (autoNote) addChatMessageEl('agent', autoNote);
-      await runTabScrapeWithInstruction(instruction || 'scrape the assignment', assignmentId);
-    }
-  } catch (e) {
-    typingEl.replaceWith(addChatMessageEl('agent', `⚠️ ${e.message}`));
-    setStatus('❌ Chat send failed; messages stay in this popup only.');
-  } finally {
-    chatBusy = false;
-    chatSendBtn.disabled = false;
-    chatInputEl.focus();
-  }
-}
-
-chatSendBtn.addEventListener('click', sendChatMessage);
-chatInputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendChatMessage();
-});
-chatRefreshBtn.addEventListener('click', async () => {
-  setStatus('⟳ Reloading conversation…');
-  await loadChatHistory();
-  setStatus('✅ Chat reloaded.');
-});
-
-// Run the REAL tab scrape for an instruction (08-28): sends the instruction
-// into the tab-scraper flow — the same browser agent the 🤖 Spawn button uses,
-// with the given instruction as its mission constraint (e.g. "only scrape
-// algebra"). Shared by the "Scrape selected tab" button and by the chatbox
-// agent's scrape_assignment action (see sendChatMessage).
-async function runTabScrapeWithInstruction(instruction, assignmentId) {
-  const selectedTabId = tabSelect.value;
-  if (!selectedTabId) {
-    setStatus('⚠️ Select a target tab above first.');
-    return { ok: false, error: 'No tab selected' };
-  }
-  setStatus('🤖 Sending instruction to the tab scraper…');
-  const resp = await chrome.runtime.sendMessage({
-    action: 'scrapeWithInstruction',
-    tabId: selectedTabId,
-    instruction,
-    assignmentId,
-  }).catch((e) => ({ ok: false, error: String(e) }));
-  if (resp?.ok) {
-    const bubbleNote = assignmentId ? ` — linked to bubble #${assignmentId}` : '';
-    const note = `🤖 Sent to the tab scraper (session ${resp.session_id})${bubbleNote}: “${instruction}”. Progress shows in the status line.`;
-    addChatMessageEl('agent', note);
-    const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
-    await cacheChat([...cur, { sender: 'user', text: instruction }, { sender: 'agent', text: note }]);
-    // Persist the instruction on the bubble (server keeps the last one) so a
-    // follow-up message re-runs the scrape with full context.
-    const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
-    const lastScrape = last ? last[String(selectedTabId)] : null;
-    if (lastScrape?.payload && assignmentId) {
-      chrome.runtime.sendMessage({
-        action: 'persistInstruction',
-        payload: lastScrape.payload,
-        assignmentId,
-        instruction,
-      }).catch(() => {});
-    }
-    setStatus(`🤖 Scraper ${resp.session_id} running with your instruction — methodical scrape started${assignmentId ? ` for bubble #${assignmentId}` : ''}.`);
-    pollAgentStatus(resp.session_id);
-    return { ok: true };
-  }
-  setStatus(`❌ ${resp?.error || 'Failed to start the scraper'}`);
-  return { ok: false, error: resp?.error || 'Failed to start the scraper' };
-}
-
-// Send the typed instruction into the tab-scraper flow (the same browser
-// agent the 🤖 Spawn button uses, but with the chatbox text as its mission
-// instruction — e.g. "only scrape algebra" constrains what it collects).
-chatScrapeBtn.addEventListener('click', async () => {
-  const instruction = chatInputEl.value.trim();
-  if (!instruction) {
-    setStatus('⚠️ Type the instruction first (e.g. "only scrape algebra"), then press this.');
-    return;
-  }
-  // 08-28: continue the SAME bubble the tab was already scraped into (when
-  // there is one) — the instruction enters the actual agent scrape run AND is
-  // persisted on the assignment for follow-up context.
-  const last = (await chrome.storage.local.get(LAST_SCRAPE_KEY))[LAST_SCRAPE_KEY];
-  const assignmentId = last ? (last[String(tabSelect.value)]?.assignment_id || null) : null;
-  const res = await runTabScrapeWithInstruction(instruction, assignmentId);
-  if (res && res.ok) chatInputEl.value = '';
-});
-
-// ── Scrape tool (08-28): fill the prompt with scraped page context ───────────
-// Given the selected tab, extracts title + URL + visible/main text through the
-// same parser as the Scrape buttons (content.js) and FILLS the chat prompt
-// with the scraped context — no assignment is saved here; the user reviews and
-// sends it to the agent ("scrape into prompt/notes").
-const chatScrapeContextBtn = document.getElementById('chatScrapeContext');
-chatScrapeContextBtn.addEventListener('click', async () => {
-  hideUnparseable();
-  const selectedTabId = tabSelect.value;
-  setStatus('📄 Extracting page content from the selected tab…');
-  const resp = await chrome.runtime.sendMessage({ action: 'scrapeContext', tabId: selectedTabId })
-    .catch((e) => ({ ok: false, error: String(e) }));
-  if (!resp?.ok) {
-    setStatus(`❌ ${resp?.error || 'Scrape failed'}`);
-    return;
-  }
-  chatInputEl.value = resp.text;
-  chatInputEl.focus();
-  chatInputEl.setSelectionRange(0, 0);
-  setStatus(`📄 Scraped "${resp.title}" (${resp.chars} chars) into the prompt — review, add any instruction, then press Send.`);
-  const note = `📋 Scraped page into the prompt: ${resp.title} — ${resp.chars} chars of context ready to send.`;
-  addChatMessageEl('agent', note);
-  const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
-  await cacheChat([...cur, { sender: 'agent', text: note }]);
-});
-
-// ── Launch to Doc Assistive Typing Controller ───────────────────────────────
-const gdocsTabSelect = document.getElementById('gdocsTabSelect');
-const wpmSlider = document.getElementById('wpmSlider');
-const wpmValue = document.getElementById('wpmValue');
-const btnStartLaunchToDoc = document.getElementById('btnStartLaunchToDoc');
-const typingProgressSection = document.getElementById('typingProgressSection');
-const typingStatusText = document.getElementById('typingStatusText');
-const typingPercentText = document.getElementById('typingPercentText');
-const typingProgressBar = document.getElementById('typingProgressBar');
-const btnPauseTyping = document.getElementById('btnPauseTyping');
-const btnCancelTyping = document.getElementById('btnCancelTyping');
-const gdocsTypingBadge = document.getElementById('gdocsTypingBadge');
-
-let isTypingPaused = false;
-let activeGDocsTabId = null;
-
-
-const realismPresetSelect = document.getElementById('realismPreset');
-const chkTypos = document.getElementById('chkTypos');
-const chkFalseStarts = document.getElementById('chkFalseStarts');
-const chkPauses = document.getElementById('chkPauses');
-const chkJitter = document.getElementById('chkJitter');
-const chkBurst = document.getElementById('chkBurst');
-const chkFatigue = document.getElementById('chkFatigue');
-const assignmentSelect = document.getElementById('assignmentSelect');
-
-if (realismPresetSelect) {
-  realismPresetSelect.addEventListener('change', () => {
-    const val = realismPresetSelect.value;
-    if (val === 'gentle') {
-      if (wpmSlider) wpmSlider.value = 35;
-      if (wpmValue) wpmValue.innerText = '35 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkFatigue) chkFatigue.checked = true;
-    } else if (val === 'academic') {
-      if (wpmSlider) wpmSlider.value = 65;
-      if (wpmValue) wpmValue.innerText = '65 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkBurst) chkBurst.checked = true;
-    } else if (val === 'brisk') {
-      if (wpmSlider) wpmSlider.value = 95;
-      if (wpmValue) wpmValue.innerText = '95 WPM';
-      if (chkFalseStarts) chkFalseStarts.checked = false;
-      if (chkBurst) chkBurst.checked = true;
-    } else if (val === 'motor') {
-      if (wpmSlider) wpmSlider.value = 50;
-      if (wpmValue) wpmValue.innerText = '50 WPM';
-      if (chkTypos) chkTypos.checked = true;
-      if (chkFalseStarts) chkFalseStarts.checked = true;
-      if (chkJitter) chkJitter.checked = true;
-      if (chkFatigue) chkFatigue.checked = true;
-    }
-  });
-}
-
-// Assignment picker (Bob flow 08-31): the extension's launch-to-doc section
-// lists the user's Helpotron assignments so they can pick WHICH assignment to
-// type, then pick the editor tab, then start. Text is fetched from the
-// assignment's full view (draft > materials > prompt), same source the web
-// modal uses.
-let selectedAssignmentText = '';
-
-async function refreshAssignments() {
-  if (!assignmentSelect) return;
-  const { server, session_token, token, public_id } = await chrome.storage.local.get([
-    'server', 'session_token', 'token', 'public_id',
-  ]);
-  const srv = server || 'https://helpotron.dpdns.org';
-  if (!srv || !public_id || !(session_token || token)) {
-    assignmentSelect.innerHTML = '<option value="">Log in to Helpotron to pick an assignment…</option>';
-    return;
-  }
-  try {
-    const resp = await fetch(`${srv}/api/assignments`, {
-      headers: { Authorization: `Bearer ${session_token || token}` },
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    assignmentSelect.innerHTML = '';
-    const none = document.createElement('option');
-    none.value = '';
-    none.innerText = 'Select an assignment to type…';
-    assignmentSelect.appendChild(none);
-    (data.assignments || []).slice(0, 50).forEach((a) => {
-      const opt = document.createElement('option');
-      opt.value = a.id;
-      const s = a.status || '';
-      opt.innerText = `(${s}) ${(a.title || `Assignment ${a.id}`).slice(0, 42)}`;
-      assignmentSelect.appendChild(opt);
-    });
-    selectedAssignmentText = '';
-  } catch (e) {
-    assignmentSelect.innerHTML = '<option value="">Could not load assignments</option>';
-  }
-}
-
-if (assignmentSelect) {
-  assignmentSelect.addEventListener('change', async () => {
-    const id = assignmentSelect.value;
-    selectedAssignmentText = '';
-    if (!id) return;
-    const { server, session_token, token } = await chrome.storage.local.get(['server', 'session_token', 'token']);
-    const srv = server || 'https://helpotron.dpdns.org';
-    try {
-      const resp = await fetch(`${srv}/api/assignment/${id}/full-view`, {
-        headers: { Authorization: `Bearer ${session_token || token}` },
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const assign = data.assignment || {};
-      const materials = data.materials || [];
-      let text = assign.do_it_work || '';
-      if (!text && materials.length) {
-        const textMat = materials.find((m) => m.content_text || m.content);
-        if (textMat) text = textMat.content_text || textMat.content;
-      }
-      if (!text) text = assign.prompt || '';
-      selectedAssignmentText = text;
-      setStatus(`📄 Loaded "${(assign.title || 'assignment').slice(0, 30)}" (${text.split(/\s+/).filter(Boolean).length} words)`);
-    } catch (e) {
-      setStatus(`⚠️ Could not load assignment: ${String(e).slice(0, 60)}`);
-    }
-  });
-}
-
-if (wpmSlider && wpmValue) {
-  wpmSlider.addEventListener('input', () => {
-    wpmValue.innerText = `${wpmSlider.value} WPM`;
-  });
-}
-
-async function refreshGDocsTabs() {
-  if (!gdocsTabSelect) return;
-  chrome.runtime.sendMessage({ action: 'getEditableTabs' }, (resp) => {
-    gdocsTabSelect.innerHTML = '';
-    const tabs = (resp && resp.tabs) || [];
-    if (tabs.length === 0) {
-      gdocsTabSelect.innerHTML = '<option value="new">✨ Open New Google Doc (docs.new)</option>';
-      return;
-    }
-    tabs.forEach((t) => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      const appIcon = t.app === 'Google Docs' ? '📄' : t.app === 'Gmail' ? '✉️' : t.app === 'Notion' ? '📝' : '🌐';
-      opt.innerText = `${t.active ? '👉 ' : ''}${appIcon} [${t.app}] ${(t.title || 'Document').slice(0, 26)}`;
-      if (t.active) opt.selected = true;
-      gdocsTabSelect.appendChild(opt);
-    });
-    const newOpt = document.createElement('option');
-    newOpt.value = 'new';
-    newOpt.innerText = '➕ Open New Google Doc (docs.new)';
-    gdocsTabSelect.appendChild(newOpt);
-  });
-}
-
-if (btnStartLaunchToDoc) {
-  btnStartLaunchToDoc.addEventListener('click', async () => {
-    const targetVal = gdocsTabSelect ? gdocsTabSelect.value : null;
-    const targetTabId = targetVal && targetVal !== 'new' ? Number(targetVal) : null;
-    const wpm = Number(wpmSlider ? wpmSlider.value : 65) || 65;
-
-    // Text source: assignment picker first (Bob flow), then chat, then last payload
-    let textToType = selectedAssignmentText || (chatInputEl && chatInputEl.value.trim()) || '';
-    if (!textToType) {
-      const last = (await chrome.storage.local.get('helpotron_last_doc_payload'))['helpotron_last_doc_payload'];
-      textToType = (last && last.text) || 'Helpotron Assistive Typing: Document ready for editing and review.';
-    }
-
-    setStatus('⌨️ Launching assistive typing engine…');
-    if (typingProgressSection) typingProgressSection.style.display = 'block';
-    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
-
-    const resp = await chrome.runtime.sendMessage({
-      action: 'launchToDoc',
-      payload: {
-        tabId: targetTabId,
-        text: textToType,
-        wpm,
-        naturalPauses: chkPauses ? chkPauses.checked : true,
-        jitter: chkJitter ? chkJitter.checked : true,
-        typoRate: chkTypos && chkTypos.checked ? 0.02 : 0.0,
-        falseStartRate: chkFalseStarts && chkFalseStarts.checked ? 0.015 : 0.0,
-        title: assignmentSelect && assignmentSelect.value ? (assignmentSelect.selectedOptions[0] || {}).text || 'Assignment Document' : 'Assignment Document',
-      }
-    }).catch((e) => ({ ok: false, error: String(e) }));
-
-    if (!resp?.ok) {
-      setStatus(`❌ ${resp?.error || 'Could not start assistive typing'}`);
-      if (typingProgressSection) typingProgressSection.style.display = 'none';
-      if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
-    } else {
-      activeGDocsTabId = resp.tabId;
-      setStatus(`⌨️ Assistive typing active at ${wpm} WPM.`);
-    }
-  });
-}
-
-if (btnPauseTyping) {
-  btnPauseTyping.addEventListener('click', async () => {
-    if (isTypingPaused) {
-      await chrome.runtime.sendMessage({ action: 'resumeTyping', tabId: activeGDocsTabId });
-      btnPauseTyping.innerText = '⏸ Pause';
-      isTypingPaused = false;
-      if (typingStatusText) typingStatusText.innerText = 'Typing…';
-    } else {
-      await chrome.runtime.sendMessage({ action: 'pauseTyping', tabId: activeGDocsTabId });
-      btnPauseTyping.innerText = '▶ Resume';
-      isTypingPaused = true;
-      if (typingStatusText) typingStatusText.innerText = 'Paused';
-    }
-  });
-}
-
-if (btnCancelTyping) {
-  btnCancelTyping.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({ action: 'cancelTyping', tabId: activeGDocsTabId });
-    if (typingProgressSection) typingProgressSection.style.display = 'none';
-    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
-    setStatus('⏹ Assistive typing cancelled.');
-  });
-}
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'unparseable_report') {
-    showUnparseable(msg.reason);
-  } else if (msg.action === 'BROADCAST_TYPING_PROGRESS' || msg.action === 'TYPING_PROGRESS') {
-    const payload = msg.payload || msg;
-    if (typingProgressSection) typingProgressSection.style.display = 'block';
-    if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'inline-block';
-    const pct = payload.progressPct || payload.percentage || 0;
-    if (typingProgressBar) typingProgressBar.style.width = `${pct}%`;
-    if (typingPercentText) typingPercentText.innerText = `${pct}% (${payload.wordsTyped || 0}/${payload.totalWords || 0} w)`;
-    if (typingStatusText) {
-      if (!payload.isTyping && pct >= 100) {
-        typingStatusText.innerText = 'Completed ✨';
-        setTimeout(() => {
-          if (typingProgressSection) typingProgressSection.style.display = 'none';
-          if (gdocsTypingBadge) gdocsTypingBadge.style.display = 'none';
-        }, 4000);
-      } else if (payload.isPaused) {
-        typingStatusText.innerText = 'Paused';
-      } else if (!payload.isTyping) {
-        typingStatusText.innerText = 'Stopped';
-      } else {
-        typingStatusText.innerText = `Typing at ${payload.wpm || 65} WPM…`;
-      }
-    }
-  }
-});
-
-refreshGDocsTabs();
-refreshAssignments();
-init();
-
-// ── Design-v2 shell (09-01): segmented tabs, account chip, options button ─────
+// ── Launcher shell: two option cards, sub-options revealed under each ────────
 (function initShell() {
-  const tabs = document.querySelectorAll('.nav-tab');
-  const panes = document.querySelectorAll('.tab-pane');
-  const activate = (btn) => {
-    const target = btn.dataset.target;
-    tabs.forEach((b) => {
-      const on = b === btn;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
+  document.querySelectorAll('.option-card').forEach((card) => {
+    const panelId = card.getAttribute('aria-controls');
+    const panel = panelId ? document.getElementById(panelId) : null;
+    const toggle = () => {
+      const open = card.getAttribute('aria-expanded') === 'true';
+      card.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (panel) panel.hidden = open;
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
     });
-    panes.forEach((p) => { p.hidden = p.id !== target; });
-  };
-  tabs.forEach((btn) => btn.addEventListener('click', () => activate(btn)));
+  });
 
   const optsBtn = document.getElementById('btnOptions');
   if (optsBtn) {
@@ -947,17 +738,47 @@ init();
     });
   }
 
-  // Account chip paints as soon as any stored identity exists (init() also
-  // paints it from its batched storage read — this covers the pre-init gap).
+  const agentBtn = document.getElementById('btnAgentMode');
+  const openChatBtn = document.getElementById('btnOpenChat');
+  const openAgent = () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('agent_mode.html') });
+  };
+  if (agentBtn) agentBtn.addEventListener('click', openAgent);
+  if (openChatBtn) openChatBtn.addEventListener('click', openAgent);
+
   const chip = document.getElementById('accountChip');
   if (chip) {
-    chrome.storage.local.get('public_id', (st) => {
+    chrome.storage.local.get('public_id', (stCache) => {
       const label = chip.querySelector('span');
       if (!label) return;
-      const pid = (st.public_id || '').trim();
+      const pid = (stCache.public_id || '').trim();
       label.textContent = (pid && pid !== 'Guest') ? `@${pid}` : 'Guest';
     });
   }
 })();
 
+// ── Approval inbox wiring ────────────────────────────────────────────────────
+function initApprovalInbox() {
+  // Opening a port marks this popup alive for the approval broker.
+  try {
+    approvalPort = chrome.runtime.connect({ name: POPUP_PORT_NAME });
+    approvalPort.onDisconnect.addListener(() => { approvalPort = null; });
+  } catch (e) { /* broker falls back to notifications */ }
 
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.action === 'APPROVAL_PROMPT') {
+      pendingApprovals.push({
+        reqId: String(msg.reqId || ''),
+        title: msg.title || 'Helpotron agent is waiting',
+        summary: msg.summary || 'Allow this agent action?',
+      });
+      while (pendingApprovals.length > 5) pendingApprovals.shift(); // cap the queue
+      renderNextApproval();
+    } else if (msg && msg.action === 'unparseable_report') {
+      showUnparseable(msg.reason);
+    }
+  });
+}
+
+initApprovalInbox();
+init();

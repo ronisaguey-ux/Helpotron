@@ -815,6 +815,34 @@ html:not([data-bg]) .app-canvas {
 }
 .animate-fadeIn { animation: fadeIn 0.3s ease-out both; }
 
+/* slideUp — permission bottom sheet on mobile (09-01, Bob's Stitch design) */
+@keyframes slideUp {
+  from { transform: translate3d(0, 100%, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+.animate-slideUp { animation: slideUp 0.3s ease-out both; }
+
+/* glassy-navy — permission bottom-sheet surface (09-01, Bob's Stitch design:
+   rgba(11,31,42,0.85) + 12px blur, the sheet's "glass" over the chat). */
+.glassy-navy {
+  background-color: rgba(11, 31, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* focus-glow — the Stitch permission design's teal-glow-focus, on the app's
+   semantic green (permission composer/instruction fields). */
+.focus-glow:focus-within {
+  box-shadow: 0 0 15px rgba(124, 227, 139, 0.15);
+  border-color: #7ce38b;
+}
+
+/* custom-scrollbar — thin overlay scrollbar for modal interiors */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+
 /* view-enter — main-column view transition (08-29).
    Replaces the AnimatePresence + motion.div wrapper in App.jsx: that one
    decorative fade was the only import pinning `motion` (140 KB) into the
@@ -1614,6 +1642,37 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --spacing-margin-mobile: 1rem;         /* 16px */
   --spacing-margin-desktop: 2rem;        /* 32px */
   --spacing-gutter: 1rem;                /* 16px */
+  /* step scale — Stitch design sheet (permission modal 09-01, Bob): the M3
+     xs/sm/md/lg/xl steps his screens use. Additive: no other view uses them. */
+  --spacing-xs: 0.25rem;                 /* 4px  */
+  --spacing-sm: 0.5rem;                  /* 8px  */
+  --spacing-md: 1rem;                    /* 16px */
+  --spacing-lg: 1.5rem;                  /* 24px */
+  --spacing-xl: 2rem;                    /* 32px */
+
+  /* Named-width scale (09-01 bugfix, owner: empty states squeezed to 8px).
+     Tailwind v4.3.3 resolves width utilities namespace-first:
+     w-* = --width-* → --spacing-* → --container-*, and max-w-* the same
+     with --max-width-* first. The M3 spacing steps above define
+     --spacing-xs/sm/md/lg/xl, so `max-w-sm`, `max-w-md`, `max-w-alpha`
+     silently resolved to the SPACING values (0.5rem / 1rem …) instead of
+     the Tailwind default container sizes — this build shipped
+     `.max-w-sm{max-width:.5rem}` (8px!): the empty-state body column.
+     Pins below restore the official Tailwind v4 defaults for every family
+     that shares a name with a spacing step, and the --container-* scale is
+     re-pinned (identical values to node_modules/tailwindcss/theme.css) so
+     the token exists regardless of usage tree-shaking. The spacing steps
+     themselves (p-sm, gap-md, …) are untouched. */
+  --container-3xs: 16rem;  --container-2xs: 18rem;
+  --container-xs: 20rem;   --container-sm: 24rem;  --container-md: 28rem;
+  --container-lg: 32rem;   --container-xl: 36rem;
+  --width-xs: var(--container-xs); --width-sm: var(--container-sm); --width-md: var(--container-md); --width-lg: var(--container-lg); --width-xl: var(--container-xl);
+  --min-width-xs: var(--container-xs); --min-width-sm: var(--container-sm); --min-width-md: var(--container-md); --min-width-lg: var(--container-lg); --min-width-xl: var(--container-xl);
+  --max-width-xs: var(--container-xs); --max-width-sm: var(--container-sm); --max-width-md: var(--container-md); --max-width-lg: var(--container-lg); --max-width-xl: var(--container-xl);
+  --size-xs: var(--container-xs); --size-sm: var(--container-sm); --size-md: var(--container-md); --size-lg: var(--container-lg); --size-xl: var(--container-xl);
+  --height-xs: var(--container-xs); --height-sm: var(--container-sm); --height-md: var(--container-md); --height-lg: var(--container-lg); --height-xl: var(--container-xl);
+  --min-height-xs: var(--container-xs); --min-height-sm: var(--container-sm); --min-height-md: var(--container-md); --min-height-lg: var(--container-lg); --min-height-xl: var(--container-xl);
+  --max-height-xs: var(--container-xs); --max-height-sm: var(--container-sm); --max-height-md: var(--container-md); --max-height-lg: var(--container-lg); --max-height-xl: var(--container-xl);
 
   /* fonts — self-hosted variable families (policy: never Google CDN) */
   --font-display-xl: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
@@ -1624,6 +1683,8 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --font-body-sm: "Inter Variable", system-ui, sans-serif;
   --font-label-caps: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-tabular-stat: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-body-lg: "Inter Variable", system-ui, sans-serif;   /* Stitch: body-lg */
+  --font-code-sm: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* type scale — rem; at the default 16px root these equal the design's px */
   --text-display-xl: 3rem;               /* 48px */
@@ -1646,6 +1707,12 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --text-body-sm: 0.875rem;              /* 14px */
   --text-body-sm--line-height: 1.25rem;
   --text-body-sm--font-weight: 400;
+  --text-body-lg: 1.125rem;              /* 18px (Stitch: body-lg) */
+  --text-body-lg--line-height: 1.75rem;
+  --text-body-lg--font-weight: 400;
+  --text-code-sm: 0.8125rem;             /* 13px (Stitch: code-sm) */
+  --text-code-sm--line-height: 1.125rem;
+  --text-code-sm--font-weight: 400;
   --text-label-caps: 0.75rem;            /* 12px */
   --text-label-caps--line-height: 1rem;
   --text-label-caps--letter-spacing: 0.05em;

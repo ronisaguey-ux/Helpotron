@@ -1,4 +1,4 @@
-"""Helpotron Automator — FastAPI backend.
+"""Helpotron Academic Companion — FastAPI backend.
 
 Study-tools product: assignment tracker (from the browser extension), lecture
 transcription, study guides / flashcards / practice tests / 2-minute summaries
@@ -17,6 +17,7 @@ from typing import Optional, List, Dict, Any, Union
 from sqlalchemy import text
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
@@ -81,6 +82,7 @@ try:
     from .routes_dump import router as dump_router
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
+    from .routes_extension import public_router as extension_public_router
     from .assignments import router as assignments_router
     from .assignment_turnin import router as assignment_turnin_router
     from .routes_assignment_direction import router as assignment_direction_router
@@ -108,6 +110,7 @@ except (ImportError, ValueError):
     from server.routes_dump import router as dump_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
+    from server.routes_extension import public_router as extension_public_router
     from server.assignments import router as assignments_router
     from server.assignment_turnin import router as assignment_turnin_router
     from server.routes_assignment_direction import router as assignment_direction_router
@@ -223,7 +226,7 @@ _redoc_url = None if config.production_mode else "/redoc"
 _openapi_url = None if config.production_mode else "/openapi.json"
 
 app = FastAPI(
-    title="Helpotron Automator",
+    title="Helpotron Academic Companion",
     version="1.0.0",
     lifespan=lifespan,
     docs_url=_docs_url,
@@ -245,6 +248,20 @@ async def global_exception_handler(request: Request, exc: Exception):
             "path": request.url.path,
         },
     )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422 handler (09-02, independent QA pass): FastAPI's default response
+    echoes the offending `input` back to the client — for a bad-typed
+    password field that would replay the submitted secret in the error body
+    (and in any log that records responses). Strip `input`/`ctx` from every
+    error; keep type/loc/msg so clients still render the field problem."""
+    clean = [
+        {k: v for k, v in err.items() if k not in ("input", "ctx")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": clean})
+
 
 # ─── rate limiting (dependency-free, in-memory) ────────────────────────────
 # Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
@@ -362,6 +379,7 @@ app.include_router(simulation_router)
 app.include_router(dump_router)
 app.include_router(math_router)
 app.include_router(extension_router)
+app.include_router(extension_public_router)
 app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
 app.include_router(assignment_direction_router)
 app.include_router(assignments_router)
@@ -416,7 +434,7 @@ async def health_check():
 
     return {
         "status": "ok",
-        "app": "Helpotron Automator",
+        "app": "Helpotron Academic Companion",
         "version": "1.0.0",
         "env": config.ENVIRONMENT,
         "database": db_status,
@@ -902,33 +920,31 @@ def logout(request: Request, response: Response):
 
 
 @app.get("/api/me")
-def me(request: Request, db: Session = Depends(get_db)):
+async def me(request: Request, db: Session = Depends(get_db)):
     """Current user (remediation BATCH-11): identity comes only from the
-    session cookie — the X-Public-ID header is never an identity and no user
-    is ever auto-created from a header."""
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        session = SessionStore.get_session(token)
-        if session:
-            # 08-29 (operator report): /api/me is the ONLY request an idle tab
-            # makes (25s balance poll) — slide the expiry here or sessions die
-            # at the fixed boundary while the tab sits open. This is the
-            # "logged out when I sat idle" fix.
-            SessionStore.refresh_session(token)
-            user = db.query(User).filter(User.id == session['user_id']).first()
-            if user:
-                if is_user_banned(user):
-                    raise HTTPException(403, "Account suspended by the operator")
-                return {
-                    "public_id": user.public_id,
-                    "plan": user.plan or "none",
-                    "credits": _wallet_display_credits(user),
-                    "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
-                    "authenticated": True,
-                    "is_admin": is_admin_user(user),
-                }
+    session cookie or the Bearer session token — the X-Public-ID header is
+    never an identity and no user is ever auto-created from a header.
 
-    raise HTTPException(401, "Not authenticated")
+    09-02: the handler was cookie-only, but the login response documents the
+    Bearer session-token contract for API clients like the browser extension
+    — it got a 401 and was forced into the website re-login flow. Auth now
+    goes through get_current_user (cookie first, then Bearer), which also
+    slides the session window on the 25s idle-tab balance poll (08-29 fix)
+    and enforces the ban choke point at the same place as every other route."""
+    user = await get_current_user(request)
+    return {
+        "public_id": user.public_id,
+        "plan": user.plan or "none",
+        "credits": _wallet_display_credits(db, user),
+        "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
+        "authenticated": True,
+        "is_admin": is_admin_user(user),
+        # Operator 09-01: elite/admin users bypass the token gate
+        # entirely (routes_overlord) — "0 tokens" was shown to the
+        # elite owner, which reads as a zero balance. Frontend
+        # renders "Unlimited" usage instead of the number.
+        "unlimited": bool(user.plan == "elite" or is_admin_user(user)),
+    }
 
 
 @app.get("/api/admin/check")
@@ -954,7 +970,7 @@ def get_admin_users(request: Request, db: Session = Depends(get_db)):
             "id": u.id,
             "public_id": u.public_id,
             "plan": u.plan,
-            "credits": u.credits,
+            "credits": credits.effective_credits_balance(db, u),
             "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
             "is_active": True,
             "role": getattr(u, "role", "user"),
@@ -1507,13 +1523,18 @@ def materials(public_id: str, kind: str,
 
 # ─── dashboard / credits ───────────────────────────────────────────────────
 
-def _wallet_display_credits(user: User) -> float:
-    """Display balance for the UI: real credits + Data Lake micro-credits at
-    1000:1 (operator 08-28) — 1050 micro-credits shows as 1.05 credits.
+def _wallet_display_credits(db: Session, user: User) -> float:
+    """Display balance for the UI: reconciled credits + Data Lake micro-credits
+    at 1000:1 (operator 08-28) — 1050 micro-credits shows as 1.05 credits.
     Storage is untouched: micro-credits stay in settings until the operator
-    redeems them into spendable credits."""
+    redeems them into spendable credits.
+
+    09-01 fix: the raw users.credits column had diverged from the
+    credit_transactions ledger (08-26 grants to max / MasonLohse16 live in
+    the ledger but the column reads 0.0), so every surface showed "0 cr" /
+    "0 credits". effective_credits_balance reconciles the two at read time."""
     micro = (user.settings or {}).get("micro_credits_balance", 0) or 0
-    return round(float(getattr(user, "credits", 0) or 0) + micro / 1000, 3)
+    return round(credits.effective_credits_balance(db, user) + micro / 1000, 3)
 
 
 def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: int = 0) -> dict:
@@ -1524,7 +1545,7 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
     transactions = db.query(credits.CreditTransaction).filter_by(user_id=user.id).order_by(
         credits.CreditTransaction.id.desc()).limit(20).all()
     monthly = credits.TIER_MONTHLY_CREDITS.get(user.plan, 2000)
-    bal = _wallet_display_credits(user)
+    bal = _wallet_display_credits(db, user)
 
     # Real usage aggregate (operator 08-27): tokens_processed used to be
     # fabricated as credits*10000. Pull REAL input+output tokens from the

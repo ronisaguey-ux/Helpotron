@@ -6,7 +6,7 @@
  * ADMIN (Control Center). Legacy views map onto merged destinations
  * (see LEGACY_VIEWS). All existing capabilities preserved.
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { WifiOff } from 'lucide-react';
 import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } from './api.js';
 
@@ -19,6 +19,7 @@ import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } 
  * and lands in its own chunk, fetched the moment the session resolves. */
 import AnonymousLanding from './components/AnonymousLanding.jsx';
 import AuthModal from './components/AuthModal.jsx';
+import NotFound from './components/NotFound.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
 
@@ -183,6 +184,9 @@ export default function App() {
   const [credits, setCredits] = useState(0);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [userPlan, setUserPlan] = useState('none');
+  // 09-01: elite/admin users bypass the token gate server-side — the top bar
+  // must render "Unlimited" usage, never "0 tokens" (owner report: RoniDev).
+  const [userUnlimited, setUserUnlimited] = useState(false);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* Back/forward navigation history — stack of {view, tab, assignment}
@@ -227,6 +231,79 @@ export default function App() {
   };
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
+  /* ─── Client-side path guard (09-01, operator QA round) ────────────────
+     The SPA serves index.html at every pathname (vite preview history
+     fallback), so unknown URLs used to silently render the landing page
+     with the address bar left on the dead path, and protected deep links
+     (/activity …) while logged out showed the landing with no route to
+     sign in. This guard resolves the pathname per auth transition:
+     known authed views → navigate to the view; protected paths while
+     signed out → open the auth modal (this app's sign-in surface) and
+     snap the URL back to '/' if the visitor backs out; /sign-in and
+     /signup → modal with that intent; anything unknown → the 404 page. */
+  const VIEW_PATH_MAP = {
+    '/overview': ['overview', null],
+    '/dashboard': ['overview', null],
+    '/activity': ['activity', null],
+    '/history': ['history', null],
+    '/library': ['library', null],
+    '/agent': ['agent', null],
+    '/monitors': ['monitors', null],
+    '/insights': ['insights', null],
+    '/credits': ['credits', null],
+    '/billing': ['credits', null],
+    '/settings': ['settings', null],
+    '/extension': ['extension', null],
+    '/dump': ['dump', null],
+    '/datalake': ['datalake', null],
+    '/inbox': ['inbox', null],
+    '/automation': ['automation', null],
+    '/message_admin': ['message_admin', null],
+    '/admin': ['admin', null],
+  };
+  /* Paths the anonymous landing page legitimately serves. */
+  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy']);
+  const [notFoundPath, setNotFoundPath] = useState(null);
+  const pendingDeepLink = useRef(null);
+  const resolvePath = (path, status) => {
+    if (path === '/sign-in' || path === '/signup') {
+      pendingDeepLink.current = ['overview', null];
+      if (status === 'signedOut') openAuth(path === '/sign-in' ? 'login' : 'signup');
+      return;
+    }
+    const mapped = VIEW_PATH_MAP[path];
+    if (!mapped) {
+      if (PUBLIC_PATHS.has(path)) return;
+      setNotFoundPath(path);
+      return;
+    }
+    if (status === 'authed') {
+      pendingDeepLink.current = null;
+      handleSelectView(mapped[0], mapped[1]);
+    } else {
+      pendingDeepLink.current = mapped;
+      if (status === 'signedOut') openAuth('login');
+    }
+  };
+  useEffect(() => {
+    const path = (window.location.pathname.replace(/\/+$/, '') || '/');
+    resolvePath(path, authStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus]);
+  /* Closing the modal without signing in: don't leave the visitor stranded
+     on a protected deep-link URL showing an anonymous landing (QA 09-01). */
+  const closeAuthModal = () => {
+    setAuthModalOpen(false);
+    if (pendingDeepLink.current) {
+      pendingDeepLink.current = null;
+      if (window.location.pathname !== '/') window.history.replaceState(null, '', '/');
+    }
+  };
+  const goHomeFromNotFound = () => {
+    setNotFoundPath(null);
+    if (window.location.pathname !== '/') window.history.replaceState(null, '', '/');
+  };
+
   /* Global command palette: ⌘K / Ctrl+K */
   useEffect(() => {
     const onKey = (e) => {
@@ -260,6 +337,7 @@ export default function App() {
         setTokenBalance(Number(data.token_balance ?? 0) || 0);
         setUserPlan(data.plan || 'none');
         setIsAdmin(Boolean(data.is_admin));
+        setUserUnlimited(Boolean(data.unlimited));
         const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
         if (!accepted) {
           setShowPrivacyModal(true);
@@ -290,6 +368,7 @@ export default function App() {
           setTokenBalance(Number(data.token_balance ?? 0) || 0);
           setUserPlan(data.plan || 'none');
           setIsAdmin(Boolean(data.is_admin));
+        setUserUnlimited(Boolean(data.unlimited));
           const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
           if (!accepted) {
             setShowPrivacyModal(true);
@@ -320,6 +399,7 @@ export default function App() {
     setCredits(0);
     setTokenBalance(0);
     setUserPlan('none');
+    setUserUnlimited(false);
   };
 
   useEffect(() => {
@@ -387,6 +467,7 @@ export default function App() {
           setCredits(data.credits ?? 0);
           setTokenBalance(Number(data.token_balance ?? 0) || 0);
           setUserPlan(data.plan || 'basic');
+          setUserUnlimited(Boolean(data.unlimited));
         }
       } catch (e) { /* transient network error — retry next tick */ }
     };
@@ -521,6 +602,11 @@ export default function App() {
 
   const effectiveIsAdmin = isAdmin;
 
+  /* Unknown path → real 404 page, regardless of auth state (QA 09-01). */
+  if (notFoundPath) {
+    return <NotFound onGoHome={goHomeFromNotFound} />;
+  }
+
   return (
     <ErrorBoundary>
       <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
@@ -548,7 +634,7 @@ export default function App() {
           isOpen={authModalOpen}
           mode={authModalMode}
           isMandatory={false}
-          onClose={() => setAuthModalOpen(false)}
+          onClose={closeAuthModal}
           onLoginSuccess={(u) => {
             handleLoginSuccess(u);
           }}
@@ -640,7 +726,7 @@ export default function App() {
           onGoForward={goForward}
           isAdmin={effectiveIsAdmin}
           isLoggedIn={isLoggedIn}
-          user={{ credits, public_id: userId, token_balance: tokenBalance }}
+          user={{ credits, public_id: userId, token_balance: tokenBalance, plan: userPlan, unlimited: userUnlimited }}
           onLogout={handleLogout}
           onOpenSearch={() => setPaletteOpen(true)}
           onOpenAuth={() => openAuth('login')}

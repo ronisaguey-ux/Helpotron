@@ -312,6 +312,7 @@ export const DEFAULT_SETTINGS = {
     personality: 'Coach', aiName: 'Atlas',
     instructions: 'Explain like you are a patient coach. Check my understanding before moving on.',
   },
+  educationalMode: true, // top-level My Agent school-scope gate (backend: agent_prompt.mode_for_node)
   writing: {
     tone: 35, vocabulary: 60, sentenceComplexity: 55, formality: 70, voice: 65,
     profile: 'My normal essay',

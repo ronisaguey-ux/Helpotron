@@ -1,4 +1,4 @@
-# Helpotron Automator — Comprehensive Terms of Service & Acceptable Use Policy
+# Helpotron Academic Companion — Comprehensive Terms of Service & Acceptable Use Policy
 
 **Last Updated:** August 25, 2026  
 **Effective Date:** August 25, 2026  
@@ -7,7 +7,7 @@
 
 ## 1. Acceptance of Terms & Legal Binding Agreement
 
-By accessing, registering for, subscribing to, or utilizing any portion of the **Helpotron Automator** web platform, API endpoints, Chrome Extension, autonomous subagent framework, or associated study tools (collectively, the **"Services"**), you agree to be bound by these **Terms of Service** and all incorporated policies, including our **Privacy Policy**, **Academic Honor Code**, and **Acceptable Use Policy**.
+By accessing, registering for, subscribing to, or utilizing any portion of the **Helpotron Academic Companion** web platform, API endpoints, Chrome Extension, autonomous subagent framework, or associated study tools (collectively, the **"Services"**), you agree to be bound by these **Terms of Service** and all incorporated policies, including our **Privacy Policy**, **Academic Honor Code**, and **Acceptable Use Policy**.
 
 If you do not agree to these terms, you are strictly prohibited from accessing or using the Services.
 
@@ -104,4 +104,4 @@ Any dispute, claim, or controversy arising out of or relating to these Terms or 
 
 For inquiries regarding these Terms, privacy rights, or institutional licensing:
 - **Email:** `legal@helpotron.com` / `privacy@helpotron.com`  
-- **Platform:** Helpotron Automator Inc., Academic Data Governance Group  
+- **Platform:** Helpotron Academic Companion Inc., Academic Data Governance Group  
