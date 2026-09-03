@@ -103,9 +103,9 @@ async def get_moderation_queue_endpoint(
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Fetches flagged content moderation queue."""
+    """Fetches flagged content moderation queue (DB-backed since 09-01)."""
     require_admin(request)
-    items = admin_advanced_service.get_moderation_queue(status)
+    items = admin_advanced_service.get_moderation_queue(db, status)
     return {"status": "success", "count": len(items), "queue": items}
 
 
@@ -116,13 +116,19 @@ async def action_moderation_item_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Approves, rejects, or deletes a flagged content moderation item."""
-    require_admin(request)
+    """Approves, rejects, or deletes a flagged content moderation item.
+
+    Reject actually removes the underlying user content (feedback /
+    micro-credit submission); approve keeps it. Resolved items leave the
+    pending queue.
+    """
+    admin_user = require_admin(request)
     res = admin_advanced_service.action_moderation_item(
         db,
         mod_id=mod_id,
         action=payload.action,
         admin_notes=payload.admin_notes,
+        resolved_by=getattr(admin_user, "public_id", "") or "",
     )
     return res
 

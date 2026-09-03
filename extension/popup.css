@@ -8,3 +8,141 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* ═══ 09-02 companion launcher: exactly two top options, sub-options under each ═══ */
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.option-grid { display: flex; flex-direction: column; gap: 10px; }
+.option-cluster { display: flex; flex-direction: column; gap: 8px; }
+.option-card {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 180ms ease-out, background-color 180ms ease-out;
+}
+.option-card:hover { border-color: var(--primary); background: var(--surface-container-high); }
+.option-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.option-card .option-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface-container-high));
+  color: var(--primary);
+}
+.option-card .option-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.option-card .option-title {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.option-card .option-sub { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+.option-card .option-chevron { color: var(--on-surface-variant); transition: transform 180ms ease-out; }
+.option-card[aria-expanded="true"] .option-chevron { transform: rotate(180deg); }
+.option-panel {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+}
+.option-panel[hidden] { display: none; }
+.option-panel .btn { justify-content: flex-start; width: 100%; }
+.divider-char { opacity: 0.5; }
+
+/* crawl progress + per-page results (revealed to the user, 09-02) */
+.crawl-progress {
+  padding: 10px 12px; border-radius: var(--radius-lg);
+  background: var(--surface-container);
+  font-family: var(--font-mono); font-size: 12px; line-height: 17px;
+  color: var(--on-surface-variant);
+  white-space: pre-wrap;
+}
+#crawlResultsWrap { display: flex; flex-direction: column; gap: 6px; }
+.crawl-results {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 240px; overflow: auto;
+  padding: 2px;
+}
+.crawl-result-row {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 8px; border-radius: var(--radius-lg);
+  font-size: 12px; line-height: 15px;
+}
+.crawl-result-row .r-title { color: var(--on-surface); overflow-wrap: anywhere; }
+.crawl-result-row .r-meta {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--on-surface-variant);
+}
+.crawl-result-row .r-ok { color: var(--sem-green); }
+.crawl-result-row .r-fail { color: var(--error); }
+.crawl-result-row:nth-child(odd) { background: var(--surface-container); }
+
+/* chat options */
+.switch-row .switch-label {
+  font-size: 13px; font-weight: 600; color: var(--on-surface);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.switch-row .switch-label .switch-sub {
+  font-weight: 400; font-size: 11.5px; color: var(--on-surface-variant);
+}
+.mode-seg-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.mode-seg-wrap .seg .seg-btn { flex: 1; justify-content: center; }
+.model-line {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 11px; line-height: 15px;
+  color: var(--on-surface-variant);
+}
+.model-line .model-effort { color: var(--primary); }
+.model-line .model-local { color: var(--sem-amber); }
+
+/* approval card — the popup is the approval surface when open (09-02) */
+.approval-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--sem-amber) 14%, var(--surface-container-low));
+  border: 1px solid color-mix(in srgb, var(--sem-amber) 45%, transparent);
+}
+.approval-card .a-title { font-size: 14px; line-height: 20px; font-weight: 700; color: var(--on-surface); }
+.approval-card .a-text { font-size: 13px; line-height: 18px; color: var(--on-surface-variant); }
+.approval-card .a-actions { display: flex; gap: 8px; }
+.approval-card .a-actions .btn { flex: 1; justify-content: center; }
+
+/* toast-like status */}
+.status { margin-top: auto; }
+
+/* ═══ 09-03 what's-new release notifications ═══
+   Popup banner listing unread extension releases (auto-synced from the server);
+   "Got it" acks them per user. Cyan variant of .update-banner (design.css). */
+.whatsnew-banner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: color-mix(in srgb, var(--sem-cyan) 12%, var(--surface-container-low));
+  border-color: color-mix(in srgb, var(--sem-cyan) 40%, transparent);
+}
+.whatsnew-banner .b-sub { color: var(--sem-cyan); }
+.whatsnew-body { display: flex; flex-direction: column; gap: 8px; width: 100%; max-height: 240px; overflow-y: auto; }
+.whatsnew-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--sem-cyan) 60%, transparent);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-radius: var(--radius-xl);
+}
+.whatsnew-badge { font-family: var(--font-mono); font-size: 11px; color: var(--sem-cyan); }
+.whatsnew-badge--major { color: var(--sem-amber); font-weight: 600; }
+.whatsnew-title { font-size: 13px; font-weight: 600; }
+.whatsnew-notes { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); white-space: pre-line; }
+.whatsnew-more { font-size: 11px; color: var(--on-surface-variant); }

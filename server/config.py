@@ -15,7 +15,7 @@ class Settings(BaseSettings):
                               env_file=os.path.join(BASE_DIR, ".env"), env_file_encoding="utf-8")
 
     # Core
-    project_name: str = "Helpotron Automator"
+    project_name: str = "Helpotron Academic Companion"
     environment: str = os.getenv("ENVIRONMENT", "development")
     debug: bool = os.getenv("DEBUG", "True").lower() == "true"
 

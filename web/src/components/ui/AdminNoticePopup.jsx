@@ -1,9 +1,13 @@
 /* ────────────────────────────────────────────────────────────────────────────
  * AdminNoticePopup.jsx — admin → user direct notices (operator 08-28).
- * Polls /api/user/admin-notices every 20s while signed in; when an unread
- * notice exists, pops a dismissible card top-right of the screen (z-index
- * above everything). Dismissing marks it read server-side so it never
- * re-appears. Multiple queued notices: oldest first, one at a time.
+ * Polls /api/user/admin-notices every 20s while signed in; each notice pops
+ * ONCE per user (09-01, owner report — the same broadcast kept re-showing
+ * across reloads/remounts because read state was only persisted on manual
+ * dismiss). The moment a notice is shown its id is POSTed to the existing
+ * read endpoint (admin_notice_reads row / read_at stamp), so a reload or a
+ * later poll can never re-show it; the manual X / "Got it" dismiss stays for
+ * UX and re-posts as a failsafe. Multiple queued notices: oldest first, one
+ * at a time, single popup instance.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState } from 'react';
 import { Mail, X } from 'lucide-react';
@@ -16,6 +20,8 @@ export default function AdminNoticePopup({ isLoggedIn }) {
   const [visible, setVisible] = useState(null);
   const pollRef = useRef(null);
   const visibleRef = useRef(null); // mirrors `visible` for the poll closure
+  const shownRef = useRef(new Set()); // ids POSTed read on show/dismiss (09-01): a
+  // failed POST can't make this mount re-show a dismissed / displayed notice
 
   const current = visible || queue[0] || null;
 
@@ -27,10 +33,15 @@ export default function AdminNoticePopup({ isLoggedIn }) {
         const unread = (res.unread || []);
         if (unread.length === 0) return;
         setQueue((prev) => {
-          // Dedupe against BOTH the shown notice and the queue (ref, not the
-          // closed-over state, so a poll that runs while a notice is on
-          // screen cannot re-enqueue it and re-pop it after dismissal).
-          const seen = new Set([...(visibleRef.current ? [visibleRef.current.id] : []), ...prev.map((n) => n.id)]);
+          // Dedupe against shown/dismissed ids, the notice on screen AND the
+          // queue (refs, not the closed-over state, so a poll that runs while
+          // a notice is on screen cannot re-enqueue it and re-pop it after
+          // dismissal).
+          const seen = new Set([
+            ...shownRef.current,
+            ...(visibleRef.current ? [visibleRef.current.id] : []),
+            ...prev.map((n) => n.id),
+          ]);
           const fresh = unread.filter((n) => !seen.has(n.id));
           return fresh.length ? [...prev, ...fresh] : prev;
         });
@@ -51,12 +62,18 @@ export default function AdminNoticePopup({ isLoggedIn }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
 
-  /* Promote the queue's head into `visible` when nothing is showing. */
+  /* Promote the queue's head into `visible` when nothing is showing, and
+   * persist read state the instant it is shown (09-01): the server-side
+   * per-user read state is the guarantee that survives a reload, so the same
+   * notice is never re-shown — dismiss already POSTs too (idempotent). */
   useEffect(() => {
     visibleRef.current = visible;
     if (!visible && queue.length > 0) {
-      setVisible(queue[0]);
+      const next = queue[0];
+      setVisible(next);
       setQueue((prev) => prev.slice(1));
+      shownRef.current.add(next.id);
+      api.markAdminNoticesRead([next.id]).catch(() => {});
     }
   }, [queue, visible]);
 
@@ -64,6 +81,7 @@ export default function AdminNoticePopup({ isLoggedIn }) {
     const n = current;
     setVisible(null);
     if (n) {
+      shownRef.current.add(n.id);
       try { await api.markAdminNoticesRead([n.id]); } catch (e) { /* non-fatal */ }
     }
   };

@@ -23,6 +23,13 @@ import DevContactModal from './DevContactModal.jsx';
 
 const EFFORT_LABELS = { low: 'Low', balanced: 'Balanced', high: 'High' };
 
+/* 09-01 (owner report): the top bar showed "Credits: 0 tokens" for the
+ * elite owner — elite/admin users bypass the token gate server-side, so
+ * rendering their (0) token_balance read as an empty wallet. Format the
+ * usage part as "Unlimited" for those accounts. */
+const usageTokenLabel = (u) =>
+  u?.unlimited ? 'Unlimited' : `${Number(u?.token_balance ?? 0).toLocaleString()} tokens`;
+
 /* ── Navigation tree ─────────────────────────────────────────────────────── */
 const NAV_TREE = (isAdmin) => [
   {
@@ -137,7 +144,7 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
           <div className="text-xs font-semibold text-white truncate">{settings.profile.displayName || user.public_id}</div>
           <div className="text-[10px] text-slate-500">{user.public_id}</div>
         </div>
-        <span className="ml-auto text-[10px] font-mono text-[var(--accent-2)]">{Number(user.token_balance ?? 0).toLocaleString()} tk · {Number(user.credits).toLocaleString()} cr</span>
+        <span className="ml-auto text-[10px] font-mono text-[var(--accent-2)]">{user.unlimited ? '∞' : Number(user.token_balance ?? 0).toLocaleString()} tk · {Number(user.credits ?? 0).toLocaleString()} cr</span>
       </div>
 
       <div className="flex items-center justify-between">
@@ -381,6 +388,33 @@ export default function AppShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
+  /* Avatar quick-settings dropdown (09-01, owner report): the old `fixed
+   * inset-0` backdrop is trapped inside the sticky header — `backdrop-blur-md`
+   * on the header creates a containing block for fixed descendants, so the
+   * "full-screen" overlay only covered the 64px header strip and clicks below
+   * it could never dismiss the menu. Same proven pattern as the notification
+   * bell: outside mousedown/touchstart + Escape close it, so all four exits
+   * work (toggle click, outside click, Esc, menu item). */
+  const quickMenuRef = useRef(null);
+  useEffect(() => {
+    if (!quickOpen) return;
+    const handleClickOutside = (e) => {
+      if (quickMenuRef.current && !quickMenuRef.current.contains(e.target)) {
+        setQuickOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setQuickOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [quickOpen]);
   /* Live settings from the settings view (saved via saveSettings → custom
    * event) — AppShell is the single owner of <html> attribute application. */
   useEffect(() => {
@@ -513,14 +547,14 @@ export default function AppShell({
               type="button"
               onClick={() => onNavigate('credits')}
               className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/30 hover:border-outline/50 transition cursor-pointer"
-              aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
+              aria-label={`${user.unlimited ? 'unlimited' : `${Number(user.token_balance ?? 0).toLocaleString()} tokens`} (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
             >
               <Star className="w-4 h-4 text-primary shrink-0" fill="currentColor" aria-hidden="true" />
               <span className="font-tabular-stat text-tabular-stat font-medium text-on-surface truncate">
                 Credits: {Number(user?.credits ?? 0).toLocaleString()}
               </span>
               <span className="font-tabular-stat text-tabular-stat text-on-surface-variant shrink-0">
-                {Number(user?.token_balance ?? 0).toLocaleString()} tokens
+                {usageTokenLabel(user)}
               </span>
             </button>
 
@@ -529,52 +563,60 @@ export default function AppShell({
 
             {/* Avatar / quick settings */}
             {isLoggedIn ? (
-              <div className="relative">
+              <div className="relative" ref={quickMenuRef}>
                 <button
                   type="button"
                   onClick={() => setQuickOpen((o) => !o)}
                   className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white border-2 border-outline-variant/40 hover:border-primary transition cursor-pointer"
                   style={{ backgroundImage: 'var(--accent-mix)' }}
                   aria-label="Quick settings"
+                  aria-haspopup="menu"
+                  aria-expanded={quickOpen}
                 >
                   {user.public_id?.[0] || 'R'}
                 </button>
                 <AnimatePresence>
                   {quickOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setQuickOpen(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={{ duration: 0.12 }}
-                        className="absolute right-0 mt-2 clean-card p-0 shadow-2xl shadow-black/50 z-50"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <QuickSettings
-                          settings={settings}
-                          onChange={persistSettings}
-                          onOpenFull={() => { setQuickOpen(false); onNavigate('settings'); }}
-                          user={user}
-                        />
-                        <div className="border-t border-white/8 p-2 space-y-0.5">
-                          <button
-                            type="button"
-                            onClick={() => { setQuickOpen(false); onOpenPrivacy(); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" /> Privacy Policy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setQuickOpen(false); onLogout(); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                          >
-                            <LogOut className="w-3.5 h-3.5" /> Sign out
-                          </button>
+                    /* top-full pins the menu below the avatar so it can never
+                       cover the trigger; outside-click close is handled by the
+                       document listener above (no full-screen backdrop). */
+                    <motion.div
+                      key="quick-settings-menu"
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute top-full right-0 mt-2 clean-card p-0 shadow-2xl shadow-black/50 z-50"
+                    >
+                      <QuickSettings
+                        settings={settings}
+                        onChange={persistSettings}
+                        onOpenFull={() => { setQuickOpen(false); onNavigate('settings'); }}
+                        user={user}
+                      />
+                      <div className="border-t border-white/8 p-2 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => { setQuickOpen(false); onOpenPrivacy(); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-slate-400 hover:text-slate-200 hover:bg-white/5 transition cursor-pointer"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" /> Privacy Policy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setQuickOpen(false); onLogout(); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                        >
+                          <LogOut className="w-3.5 h-3.5" /> Sign out
+                        </button>
+                        {/* Visible build stamp (09-01): confirms which bundle
+                            this browser is running — a one-look check instead
+                            of guessing from behavior. */}
+                        <div className="px-3 pt-1 text-[9px] text-slate-500 font-mono select-none">
+                          build {__BUILD_ID__}
                         </div>
-                      </motion.div>
-                    </>
+                      </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -669,10 +711,10 @@ export default function AppShell({
                     onNavigate('credits');
                   }}
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs font-semibold font-mono text-on-surface-variant"
-                  aria-label={`${Number(user.token_balance ?? 0).toLocaleString()} tokens (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
+                  aria-label={`${user.unlimited ? 'unlimited' : `${Number(user.token_balance ?? 0).toLocaleString()} tokens`} (usage), ${Number(user.credits ?? 0).toLocaleString()} credits (discounts), open wallet`}
                 >
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
-                  <span className="text-primary">{Number(user.token_balance ?? 0).toLocaleString()} tokens</span>
+                  <span className="text-primary">{usageTokenLabel(user)}</span>
                   <span className="text-on-surface-variant font-normal">·</span>
                   <span className="text-on-surface-variant">{Number(user?.credits ?? 0).toLocaleString()} credits</span>
                 </button>
@@ -801,7 +843,7 @@ export default function AppShell({
                     {isLoggedIn ? (user?.public_id || 'Guest') : 'Guest'}
                   </span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant block truncate">
-                    {isLoggedIn ? `${Number(user?.credits ?? 0).toLocaleString()} credits` : 'Sign in'}
+                    {isLoggedIn ? `${Number(user?.credits ?? 0).toLocaleString()} credits${user?.unlimited ? ' · Unl. usage' : ''}` : 'Sign in'}
                   </span>
                 </span>
               </button>
@@ -866,7 +908,7 @@ export default function AppShell({
           button, leaving the 'terms' route effectively unreachable. */}
       <footer role="contentinfo" className="text-center text-[11px] text-[var(--text-muted)] px-4 pt-2 pb-20 md:pb-4">
         <div className="flex items-center justify-center gap-x-5 gap-y-1 flex-wrap">
-          <span>© 2026 Helpotron Automator</span>
+          <span>© 2026 Helpotron Academic Companion</span>
           <button
             type="button"
             onClick={() => onNavigate('privacy')}

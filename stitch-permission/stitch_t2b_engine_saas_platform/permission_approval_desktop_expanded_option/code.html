@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Helpotron OS - Permission Approval</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-dim": "#131314",
+                        "surface-container-highest": "#343536",
+                        "on-primary": "#20333e",
+                        "on-tertiary": "#422c18",
+                        "outline": "#8d9195",
+                        "tertiary": "#e3c0a4",
+                        "primary": "#b5c9d8",
+                        "surface-tint": "#b5c9d8",
+                        "on-tertiary-container": "#9e7f66",
+                        "on-secondary": "#003915",
+                        "surface-bright": "#39393a",
+                        "outline-variant": "#43474b",
+                        "secondary-container": "#06c85d",
+                        "tertiary-fixed": "#ffdcc1",
+                        "surface-container-high": "#292a2b",
+                        "on-secondary-container": "#004d1f",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#002109",
+                        "on-tertiary-fixed": "#2a1706",
+                        "secondary-fixed-dim": "#3de273",
+                        "on-secondary-fixed-variant": "#005322",
+                        "tertiary-container": "#2c1907",
+                        "secondary-fixed": "#66ff8e",
+                        "inverse-on-surface": "#303031",
+                        "inverse-surface": "#e4e2e3",
+                        "on-primary-fixed-variant": "#364955",
+                        "inverse-primary": "#4e616e",
+                        "background": "#131314",
+                        "surface-container-low": "#1b1c1c",
+                        "on-surface": "#e4e2e3",
+                        "on-surface-variant": "#c3c7cb",
+                        "tertiary-fixed-dim": "#e3c0a4",
+                        "on-primary-container": "#748895",
+                        "surface-container-lowest": "#0d0e0f",
+                        "on-background": "#e4e2e3",
+                        "on-primary-fixed": "#091e29",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#41e575",
+                        "surface": "#131314",
+                        "on-tertiary-fixed-variant": "#5a422c",
+                        "primary-container": "#0b1f2a",
+                        "surface-variant": "#343536",
+                        "primary-fixed": "#d1e5f5",
+                        "primary-fixed-dim": "#b5c9d8",
+                        "surface-container": "#1f2020",
+                        "error-container": "#93000a"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "container-margin": "40px"
+                    },
+                    fontFamily: {
+                        "headline-md": ["Space Grotesk"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-md": ["Inter"],
+                        "code-sm": ["JetBrains Mono"],
+                        "display-lg": ["Space Grotesk"],
+                        "display-lg-mobile": ["Space Grotesk"],
+                        "body-sm": ["Inter"]
+                    },
+                    fontSize: {
+                        "headline-md": ["24px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "600" }],
+                        "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
+                        "label-caps": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "600" }],
+                        "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+                        "code-sm": ["13px", { lineHeight: "18px", fontWeight: "400" }],
+                        "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "display-lg-mobile": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "body-sm": ["14px", { lineHeight: "20px", fontWeight: "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(17, 41, 54, 0.7); /* surface-low equivalent */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(36, 67, 82, 0.5); /* surface-high equivalent */
+        }
+        .teal-glow-focus:focus-within {
+            box-shadow: 0 0 0 2px rgba(65, 229, 117, 0.3); /* secondary color glow */
+            border-color: #41e575;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen w-full flex items-center justify-center overflow-hidden relative">
+<!-- Blurred/Darkened Background (simulating chat interface behind modal) -->
+<div class="absolute inset-0 z-0 bg-background/90 flex flex-col p-lg pointer-events-none">
+<div class="w-full max-w-4xl mx-auto opacity-30 blur-sm">
+<div class="flex items-start gap-sm mb-lg">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-outline">person</span>
+</div>
+<div class="bg-surface-container-low p-md rounded-2xl rounded-tl-none border border-outline-variant max-w-2xl">
+<p class="font-body-md text-body-md text-on-surface">Can you optimize the database queries for the user authentication flow?</p>
+</div>
+</div>
+<div class="flex items-start gap-sm mb-lg flex-row-reverse">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-primary">smart_toy</span>
+</div>
+<div class="bg-surface-container-high p-md rounded-2xl rounded-tr-none border border-outline-variant max-w-2xl">
+<p class="font-body-md text-body-md text-on-surface mb-sm">I have analyzed the authentication module. I am ready to implement the caching layer using Redis and refactor the primary SQL joins.</p>
+<div class="bg-surface-dim p-sm rounded-lg border border-outline-variant font-code-sm text-code-sm text-primary mb-sm">
+                        &gt; EXECUTING PRE-FLIGHT ANALYSIS...<br/>
+                        &gt; TARGET: auth_service.py<br/>
+                        &gt; ACTION: REWRITE
+                    </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Requesting permission to write changes to main branch.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Overlay -->
+<div class="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm flex items-center justify-center p-md">
+<!-- Modal Container (Expanded State) -->
+<div class="glass-panel w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+<!-- Modal Header -->
+<div class="p-lg border-b border-outline-variant/30 flex items-center justify-between">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-tertiary/10 border border-tertiary/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Permission Required</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Helpotron is requesting authorization to proceed.</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-sm rounded-full hover:bg-surface-container-highest">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Modal Content - Proposed Action -->
+<div class="p-lg bg-surface-container-low/50">
+<div class="mb-sm">
+<span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Proposed Action</span>
+</div>
+<div class="bg-surface-dim border-l-2 border-tertiary p-md rounded-r-lg mb-lg">
+<div class="flex items-start gap-sm mb-sm">
+<span class="material-symbols-outlined text-tertiary text-sm mt-xs">code</span>
+<span class="font-code-sm text-code-sm text-on-surface">Refactor SQL queries and implement Redis caching in <code class="text-primary bg-primary-container/20 px-1 rounded">auth_service.py</code></span>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pl-7">
+                        This action will modify 142 lines of code in the authentication flow. It requires write access to the main branch repository.
+                    </div>
+</div>
+<!-- Expanded Edit Area -->
+<div class="mt-md border-t border-outline-variant/30 pt-md">
+<label class="block font-label-caps text-label-caps text-primary mb-sm" for="alternative-instruction">What should the agent do instead?</label>
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-sm teal-glow-focus transition-all duration-200">
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-on-surface font-body-md text-body-md resize-none placeholder:text-outline" id="alternative-instruction" placeholder="E.g., Just show me the proposed code changes first before modifying the file..." rows="4"></textarea>
+</div>
+<!-- Action Buttons -->
+<div class="flex justify-end gap-md mt-lg">
+<button class="px-md py-sm rounded-lg font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors border border-transparent">
+                            Cancel
+                        </button>
+<button class="px-lg py-sm rounded-lg font-label-caps text-label-caps bg-secondary text-on-secondary-fixed-variant hover:bg-secondary-fixed transition-colors flex items-center gap-xs shadow-[0_0_15px_rgba(65,229,117,0.2)]">
+<span class="material-symbols-outlined text-sm">send</span>
+                            Send Instead
+                        </button>
+</div>
+</div>
+</div>
+<!-- Original buttons hidden in this state -->
+<div class="hidden p-lg border-t border-outline-variant/30 flex justify-between items-center bg-surface-container-lowest/50">
+<button class="font-body-sm text-body-sm text-primary hover:text-primary-fixed transition-colors underline underline-offset-4 decoration-primary/30">
+                        Write something else
+                  </button>
+<div class="flex gap-md">
+<button class="px-md py-sm rounded-lg font-label-caps text-label-caps border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors">
+                           Deny
+                       </button>
+<button class="px-md py-sm rounded-lg font-label-caps text-label-caps bg-primary text-primary-container hover:bg-primary-fixed transition-colors">
+                           Approve Action
+                       </button>
+</div>
+</div>
+</div>
+</div>
+</body></html>
