@@ -417,9 +417,12 @@ def _enforce_not_banned(user):
 
 
 async def get_current_user(request: Request = None, websocket: WebSocket = None):
-    """Authenticate via session cookie, Bearer JWT, or WebSocket token param.
-    Hardened: the X-Public-ID header is never an identity. Banned accounts
-    (ban / tempban) are rejected here — one choke point for all routes."""
+    """Authenticate via session cookie, Bearer JWT/session token, or WebSocket
+    token query param. Hardened: the X-Public-ID header is never an identity.
+    Banned accounts (ban / tempban) are rejected here — one choke point."""
+    # 09-02: /api/me documented the Bearer session-token contract for API
+    # clients (login response) but authenticated cookie-only — the extension
+    # got 401 and forced a website re-login. It now goes through this route.
     conn = request or websocket
     if conn is None:
         raise HTTPException(401, "Not authenticated: valid session token required")
@@ -464,18 +467,22 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
             finally:
                 db.close()
 
-    query_params = getattr(conn, "query_params", {})
-    query_token = query_params.get("token")
-    if query_token:
-        payload = verify_jwt_token(query_token)
-        if payload and 'sub' in payload:
-            db = SessionLocal()
-            try:
-                user = db.query(User).filter(User.id == payload['sub']).first()
-                if user:
-                    return _enforce_not_banned(user)
-            finally:
-                db.close()
+    # Query-string tokens are a websocket-transport convenience (headers are
+    # awkward on upgrades); for HTTP routes a secret in the URL lands in the
+    # access log — so the param path is websocket-only. 09-02.
+    if websocket is not None:
+        query_params = getattr(conn, "query_params", {})
+        query_token = query_params.get("token")
+        if query_token:
+            payload = verify_jwt_token(query_token)
+            if payload and 'sub' in payload:
+                db = SessionLocal()
+                try:
+                    user = db.query(User).filter(User.id == payload['sub']).first()
+                    if user:
+                        return _enforce_not_banned(user)
+                finally:
+                    db.close()
 
     raise HTTPException(401, "Not authenticated: valid session token required")
 

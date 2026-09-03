@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import {
   Send, Paperclip, Mic, ShieldCheck, Shield, Flame, RefreshCw,
   Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, ChevronUp, User as UserIcon, Undo2, Pin, Pencil,
-  Settings2, ArrowUpRight, Sparkles, Keyboard,
+  Settings2, ArrowUpRight, Sparkles, Keyboard, GraduationCap, Copy, Check,
 } from 'lucide-react';
 import api, { getCsrfToken } from '../api.js';
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
@@ -22,6 +22,7 @@ import { AgentAvatar } from './ui/AgentAvatar.jsx';
 import SectionCard from './SectionCard.jsx';
 import AgentConfigsSidebar, { DEFAULT_IDENTITIES, DEFAULT_SKILLS } from './AgentConfigsSidebar.jsx';
 import LaunchToDocModal from './LaunchToDocModal.jsx';
+import PermissionModal from './PermissionModal.jsx';
 
 const FILE_KINDS = [
   { key: 'skill', label: 'Skill', icon: '🧩', hint: 'Teach the agent new abilities (.md/.txt)' },
@@ -126,6 +127,33 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   /* ── voice: native Web Speech API (reliable, zero-dependency, works everywhere) ── */
   const [recording, setRecording] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState(null);
+  const [copiedMsgId, setCopiedMsgId] = useState(null); // which message just got copied (flash "Copied")
+  const copyTimer = useRef(null);
+
+  /* Copy one chat message to the clipboard — available on agent AND user
+   * bubbles. Falls back to a hidden textarea when the async clipboard API is
+   * unavailable (insecure context). */
+  function copyMessage(id, text) {
+    if (!text) return;
+    const markCopied = () => {
+      setCopiedMsgId(id);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopiedMsgId(null), 1200);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(markCopied).catch(markCopied);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* best effort */ }
+      document.body.removeChild(ta);
+      markCopied();
+    }
+  }
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -213,8 +241,6 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [autoApprove, setAutoApprove] = useState(true);
   const [busy, setBusy] = useState(false);
   const [effort, setEffort] = useState(500);
-  const [feedbackFor, setFeedbackFor] = useState('');          // '' | 'approve' | 'reject'
-  const [approvalFeedback, setApprovalFeedback] = useState('');
   const [autoApproveThis, setAutoApproveThis] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [autoList, setAutoList] = useState(() =>
@@ -268,6 +294,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [renameOpenId, setRenameOpenId] = useState(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [pendingPermissions, setPendingPermissions] = useState([]);
+  const [permOpenId, setPermOpenId] = useState(null); // which pending id the full popup shows
+  const shownPermsRef = useRef(new Set());            // ids already auto-popped
+  const dismissedPermsRef = useRef(new Set());        // ids the user closed/reopened manually
   const [ledger, setLedger] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
@@ -516,9 +545,23 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     api.agentMode().then((d) => d?.operation_mode && setMode(d.operation_mode)).catch(() => {});
     api.getAgentMemory().then((d) => setMemory(d.entries || [])).catch(() => {});
     api.listAgentFiles().then((d) => setFiles(d.files || [])).catch(() => {});
-    const poll = setInterval(() => {
+    /* Permission popup (09-01, Bob): any pending id the user hasn't already
+     * seen or dismissed auto-opens the FULL modal. The chat response path
+     * handles the immediate case; this covers pending requests from earlier
+     * (e.g. a page reload with a still-pending action). */
+    const pollPerms = () => {
       api.agentPermissionsPending()
-        .then((d) => setPendingPermissions(d.pending || []))
+        .then((d) => {
+          const list = d.pending || [];
+          setPendingPermissions(list);
+          const next = list.find(
+            (p) => !shownPermsRef.current.has(p.id) && !dismissedPermsRef.current.has(p.id)
+          );
+          if (next) {
+            shownPermsRef.current.add(next.id);
+            setPermOpenId(next.id);
+          }
+        })
         .catch((e) => {
           /* Dead/expired session (401) or ban (403): stop polling so a stale
            * signed-out tab doesn't spam 401s into the access log forever
@@ -527,7 +570,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           if (e && (e.status === 401 || e.status === 403)) clearInterval(poll);
           /* transient network — next tick retries */
         });
-    }, 12000);
+    };
+    const poll = setInterval(pollPerms, 12000);
+    pollPerms();
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -549,6 +594,16 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       await api.updateSettings({ operation_mode: next, ai: { ...settings.ai, mode: next } });
     } catch (e) { /* session override already applied client-side */ }
     pushAssistant(`⚙️ Execution mode updated to: ${next.toUpperCase()}`);
+  }
+
+  /* Educational Mode quick toggle (08-26 gate): flips the top-level per-user
+   * switch locally and mirrors it to the server settings store so the
+   * backend mode_for_node gate agrees with the UI. */
+  function toggleEducationalMode() {
+    const next = settings.educationalMode === false;
+    const updated = { ...settings, educationalMode: next };
+    persist(updated);
+    api.updateSettings({ educationalMode: next }).catch(() => {});
   }
 
   /* Auto-approved actions list: persisted to settings + backend. */
@@ -629,8 +684,24 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
       pushAssistant(replyText);
       handleActionResult(res);
+      // Full permission popup ON THE SPOT (09-01 fix): the chat response
+      // itself carries the pending request — show it now instead of waiting
+      // for the 12s poll (the old behavior left only a quiet inline banner).
+      if (res?.permission_request?.id) {
+        const pr = res.permission_request;
+        setPendingPermissions((prev) => (prev.some((p) => p.id === pr.id) ? prev : [pr, ...prev]));
+        shownPermsRef.current.add(pr.id);
+        setPermOpenId(pr.id);
+      }
     } catch (e) {
-      pushAssistant(`⚠️ The agent couldn't reach the backend right now (${e.message}). In demo mode responses are simulated.`);
+      /* The api layer throws the raw response body; pull the server's own
+       * "message" out so users see "An unexpected server error occurred."
+       * instead of a wall of JSON (09-01, seen live on prod). */
+      const raw = (e && e.message) || '';
+      const pretty = raw.trim().startsWith('{')
+        ? (() => { try { return JSON.parse(raw).message || raw; } catch { return raw; } })()
+        : raw;
+      pushAssistant(`⚠️ The agent couldn't reach the backend right now (${pretty}). In demo mode responses are simulated.`);
     } finally {
       setBusy(false);
       loadThreads(); // refresh updated_at / auto-title
@@ -1006,24 +1077,42 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   }
 
   async function handlePermissionAction(permId, decision, feedback = '') {
+    let res;
     try {
-      await api.agentPermissionRespond({
+      res = await api.agentPermissionRespond({
         permission_id: permId,
         decision,
         comment: feedback.trim() || undefined,
       });
-    } catch (e) {}
+    } catch (e) {
+      /* Rethrow so the popup can show the error strip (its own catch) rather
+       * than silently succeeding while the action stays pending (09-01). */
+      throw new Error(e?.message || 'The approval could not be sent. Try again.');
+    }
     if (decision === 'always_approve') {
       const next = [...new Set([...autoList, pending?.action_type].filter(Boolean))];
       saveAutoList(next);
     }
-    setFeedbackFor('');
-    setApprovalFeedback('');
+    /* Agent-side settings the action applied (09-01, Bob): the server returns
+     * the full post-execution settings — push them through the normal persist
+     * path so localStorage, MyAgent and AppShell all agree and the font/theme
+     * change applies LIVE. Without this the approve closed the popup while the
+     * UI kept its old values: "i clicked approve and it didnt work". */
+    const execRes = res?.execution_result;
+    if (execRes?.settings) persist(execRes.settings);
+    if (execRes?.message) {
+      pushAssistant(execRes.status === 'failed'
+        ? `⚠️ Approval sent, but the action didn't apply: ${execRes.message}`
+        : `✅ ${execRes.message}`);
+    }
+    setAutoApproveThis(false);
+    setPermOpenId((cur) => (cur === permId ? null : cur));
     setPendingPermissions((prev) => prev.filter((p) => p.id !== permId));
   }
 
   const fileKindMeta = FILE_KINDS.find((k) => k.key === fileKind) || FILE_KINDS[0];
   const pending = pendingPermissions[0];
+  const modalPermission = pendingPermissions.find((p) => p.id === permOpenId) || null;
 
   const renderThreadRow = (t) => (
     <div key={t.id} className={`group rounded-[var(--radius-md)] transition border ${
@@ -1176,18 +1265,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               <span className="truncate max-w-[140px]">{currentIdentity.name}</span>
               <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfigsOpen(true)}
-              className="px-3 py-2 rounded-xl border border-dashed border-outline-variant/40 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:border-outline flex items-center gap-2 transition cursor-pointer"
-              title="No custom identity active — click to configure"
-            >
-              <span>🎭</span>
-              <span>Set Identity</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-            </button>
-          )}
+          ) : null}
 
           <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 flex items-center gap-1">
             {Object.entries(MODE_META).map(([k, m]) => {
@@ -1209,6 +1287,26 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
               );
             })}
           </div>
+
+          {/* Educational Mode quick toggle — same gate as Settings ▸ AI & Intelligence */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.educationalMode !== false}
+            onClick={toggleEducationalMode}
+            title="Educational Mode — On: school-only help. Off: open chat about anything."
+            className={`px-3.5 py-2 rounded-xl border font-label-caps text-xs uppercase tracking-wider flex items-center gap-2 transition cursor-pointer ${
+              settings.educationalMode !== false
+                ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
+                : 'bg-surface-container-low border-outline-variant/30 text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            Edu Mode
+            <span className={`relative w-7 h-4 rounded-full transition-colors duration-200 ${settings.educationalMode !== false ? 'bg-primary' : 'bg-surface-container-highest'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200 ${settings.educationalMode !== false ? 'left-[15px]' : 'left-0.5'}`} />
+            </span>
+          </button>
 
           <button
             type="button"
@@ -1247,14 +1345,21 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
-              onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve')}
+              onClick={() => { dismissedPermsRef.current.delete(pending.id); setPermOpenId(pending.id); }}
+              className="px-3 py-1.5 rounded-[var(--radius-sm)] border border-amber-500/40 text-amber-300 hover:bg-amber-500/15 text-xs font-semibold transition cursor-pointer"
+            >
+              Review
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve').catch(() => {})}
               className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer"
             >
               Approve
             </button>
             <button
               type="button"
-              onClick={() => handlePermissionAction(pending.id, 'reject')}
+              onClick={() => handlePermissionAction(pending.id, 'reject').catch(() => {})}
               className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer"
             >
               Reject
@@ -1440,6 +1545,21 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                   </div>
                   <div className="flex items-center gap-2.5 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
                     <span>{m.time}</span>
+                    {m.text && (
+                      <button
+                        type="button"
+                        onClick={() => copyMessage(m.id, m.text)}
+                        className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
+                          copiedMsgId === m.id
+                            ? 'text-emerald-400 font-semibold'
+                            : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
+                        }`}
+                        title="Copy this message"
+                      >
+                        {copiedMsgId === m.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        {copiedMsgId === m.id ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
                     {!isUser && m.text && (
                       <>
                         <button
@@ -1600,6 +1720,20 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         initialText={launchToDocTarget?.text || ''}
         onClose={() => setLaunchToDocTarget(null)}
       />
+
+      {/* Full Permission Approval Popup (09-01, Bob's Stitch design) */}
+      {modalPermission && (
+        <PermissionModal
+          permission={modalPermission}
+          onDecision={handlePermissionAction}
+          onClose={() => {
+            setPermOpenId((cur) => {
+              if (cur) dismissedPermsRef.current.add(cur);
+              return null;
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

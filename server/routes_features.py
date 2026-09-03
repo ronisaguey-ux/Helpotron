@@ -23,7 +23,11 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
 
     The login flow issues an opaque session token (SessionStore / UserSession
     table), so the cookie path is resolved through the session store first;
-    the Bearer JWT path is kept for API clients."""
+    the Bearer JWT path is kept for API clients. 09-02 additive extension
+    contract: a Bearer token that is NOT a JWT may still be the extension's
+    long-lived DB session token (security.get_current_user accepts the same
+    trio — cookie / JWT / DB session token, see security.py) — without this
+    fallback the extension's stored credential 401s on /api/user/settings."""
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if session_token:
         session = SessionStore.get_session(session_token)
@@ -44,9 +48,23 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
 
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith('Bearer '):
-        payload = verify_jwt_token(auth_header.split(' ', 1)[1])
+        token = auth_header.split(' ', 1)[1]
+        payload = verify_jwt_token(token)
         if payload and 'sub' in payload:
             user = db.query(User).filter(User.id == payload['sub']).first()
+            if user:
+                if is_user_banned(user):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail='Account suspended'
+                    )
+                return user
+        # 09-02 additive fallback (JWT rejected / not a JWT at all): the
+        # extension's stored DB session token.
+        session = SessionStore.get_session(token)
+        if session:
+            SessionStore.refresh_session(token)
+            user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
                 if is_user_banned(user):
                     raise HTTPException(

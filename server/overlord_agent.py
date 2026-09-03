@@ -286,6 +286,61 @@ def _coerce_flag(v: Any) -> Optional[bool]:
     return None
 
 
+# 09-01 (Bob): the permission prompt must say WHAT will change, not just which
+# mode is on. These labels humanize the payload keys the intent resolver emits
+# for change_settings (see the contract in routes_overlord.py) so the popup can
+# render "font scale → 1" instead of "fontScale: 1".
+_SETTING_LABELS = {
+    "agent_name": "agent name", "name": "agent name",
+    "personality": "personality", "instructions": "instructions",
+    "effort_score": "effort score", "operation_mode": "operation mode",
+    "auto_approved_actions": "auto-approved actions",
+    "school_name": "school", "major": "major", "goal": "goal",
+    "font_size": "font size", "font_scale": "font scale", "fontScale": "font scale",
+    "theme": "theme", "accent": "accent color", "density": "density",
+    "compact_mode": "compact mode", "uiStyle": "UI style", "ui_style": "UI style",
+    "animation": "animations", "background": "background",
+    "custom_color": "custom color", "language": "language", "timezone": "timezone",
+    "reducedMotion": "reduced motion", "reduced_motion": "reduced motion",
+    "highContrast": "high contrast", "high_contrast": "high contrast",
+    "largeText": "large text", "large_text": "large text",
+    "dyslexiaFriendly": "dyslexia-friendly mode", "dyslexia_friendly": "dyslexia-friendly mode",
+    "screenReader": "screen reader", "screen_reader": "screen reader",
+}
+
+
+def describe_permission_action(action_type: str, payload: Dict[str, Any]) -> str:
+    """Human-readable description for a pending permission — the user sees this
+    inside the approval popup, so it names the concrete change (e.g. "font
+    scale → 1"), never just the mode the request was gated in."""
+    payload = payload or {}
+    if action_type == "change_settings":
+        updates = payload.get("settings")
+        if isinstance(updates, dict) and updates:
+            parts = []
+            for k, v in updates.items():
+                label = _SETTING_LABELS.get(k, str(k).replace("_", " "))
+                if isinstance(v, bool):
+                    val = "on" if v else "off"
+                elif isinstance(v, (dict, list)):
+                    val = json.dumps(v, ensure_ascii=False)[:60]
+                else:
+                    val = str(v)
+                parts.append(f"{label} → {val}")
+            noun = "change" if len(parts) == 1 else "changes"
+            return f"Apply {len(parts)} setting {noun}: {', '.join(parts)}."
+        return "Apply your requested setting changes."
+    if action_type == "generate_flashcards":
+        prompt = str(payload.get("prompt") or "").strip()[:80]
+        return f"Generate an active-recall flashcard deck from: {prompt}." if prompt else \
+            "Generate an active-recall flashcard deck."
+    if action_type == "create_assignment":
+        return "Create a new assignment from your request."
+    if action_type == "message_assignment_team":
+        return "Send an instruction to the assignment's agent team."
+    return f"Action '{action_type.replace('_', ' ')}' requires your confirmation before execution."
+
+
 # 09-01 (Bob, full-capability): see_settings dumps the user's settings to the
 # LLM — secrets must never leave the server. Mask any key that names a
 # credential (api_key, password, secret, access/refresh token) and any value

@@ -9,9 +9,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 try:
-    from .database import Assignment, CreditTransaction, StudyMaterial, User
+    from .database import Assignment, CreditTransaction, ModerationItem, StudyMaterial, User
 except (ImportError, ValueError):
-    from server.database import Assignment, CreditTransaction, StudyMaterial, User
+    from server.database import Assignment, CreditTransaction, ModerationItem, StudyMaterial, User
 
 
 logger = logging.getLogger("helpotron.admin_advanced")
@@ -22,26 +22,6 @@ class AdminAdvancedService:
 
     def __init__(self) -> None:
         self._start_time = time.time()
-        self._moderation_queue: List[Dict[str, Any]] = [
-            {
-                "id": "mod_001",
-                "assignment_id": 101,
-                "user_public_id": "student_alpha",
-                "reason": "Suspected excessive off-topic generation",
-                "flagged_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
-                "status": "pending",  # pending | approved | rejected | deleted
-                "snippet": "Analysis of quantum entanglement in relativistic systems...",
-            },
-            {
-                "id": "mod_002",
-                "assignment_id": 104,
-                "user_public_id": "test_user_77",
-                "reason": "Language filter false positive check",
-                "flagged_at": (datetime.now(timezone.utc) - timedelta(minutes=45)).isoformat(),
-                "status": "pending",
-                "snippet": "Comparative critique of geopolitical policies...",
-            },
-        ]
         self._model_routing_overrides: Dict[str, str] = {
             "essay": "deepseek-v4-flash",
             "stem": "deepseek-v4-flash",
@@ -128,20 +108,80 @@ class AdminAdvancedService:
         }
 
     # ─── 3. Content Moderation Queue ────────────────────────────────────────
+    # 09-01 (operator): the old in-memory mock queue (mod_001/mod_002) is
+    # gone. Items are real rows in moderation_items, created by
+    # moderation.flag_content whenever user text hits a safety rule at write
+    # time (datalake feedback / micro-credit submissions).
 
-    def get_moderation_queue(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_moderation_queue(self, db: Session, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Returns the queue. Defaults to pending, so resolved items leave the
+        admin's view — that is the visible approve/reject effect."""
+        query = db.query(ModerationItem)
         if status:
-            return [m for m in self._moderation_queue if m.get("status") == status]
-        return self._moderation_queue
+            query = query.filter(ModerationItem.status == status)
+        else:
+            query = query.filter(ModerationItem.status == "pending")
+        items = query.order_by(ModerationItem.flagged_at.asc()).all()
+        return [self._moderation_item_to_dict(i) for i in items]
 
-    def action_moderation_item(self, db: Session, mod_id: str, action: str, admin_notes: str = "") -> Dict[str, Any]:
-        for item in self._moderation_queue:
-            if item["id"] == mod_id:
-                item["status"] = action  # approved | rejected | deleted
-                item["resolved_at"] = datetime.now(timezone.utc).isoformat()
-                item["admin_notes"] = admin_notes
-                return {"status": "success", "item": item}
-        return {"status": "not_found", "message": f"Moderation item {mod_id} not found"}
+    @staticmethod
+    def _moderation_item_to_dict(item: ModerationItem) -> Dict[str, Any]:
+        return {
+            "id": item.public_id,
+            "type": item.content_type,
+            "content_ref": item.content_ref,
+            "user_public_id": item.user_public_id,
+            "reason": item.reason,
+            "snippet": item.snippet,
+            "risk_score": item.risk_score,
+            "title": item.reason,  # dashboard renders "{type}: {title || id}"
+            "flagged_at": item.flagged_at.isoformat() if item.flagged_at else None,
+            "status": item.status,
+            "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
+            "resolved_by": item.resolved_by,
+        }
+
+    def action_moderation_item(
+        self,
+        db: Session,
+        mod_id: str,
+        action: str,
+        admin_notes: str = "",
+        resolved_by: str = "",
+    ) -> Dict[str, Any]:
+        """Resolves a flagged item. approve keeps the content; reject actually
+        deletes the underlying user content (feedback / micro-credit submission)."""
+        valid = {"approved", "rejected", "deleted"}
+        if action not in valid:
+            return {"status": "error", "message": f"Unknown action '{action}'"}
+        item = db.query(ModerationItem).filter(ModerationItem.public_id == mod_id).first()
+        if not item or item.status != "pending":
+            return {"status": "not_found", "message": f"Moderation item {mod_id} not found"}
+
+        content_removed = None
+        if action in ("rejected", "deleted"):
+            from .datalake import datalake_manager
+            if item.content_type == "user_feedback":
+                content_removed = datalake_manager.delete_feedback(item.content_ref)
+            elif item.content_type == "data_submission":
+                content_removed = datalake_manager.delete_microcredit_submission(item.content_ref)
+            # Entry already absent counts as removed — either way the content
+            # is gone once the item resolves.
+            content_removed = True if content_removed is None else content_removed
+        if content_removed is None:
+            content_removed = False  # content type with no underlying store
+
+        item.status = action
+        item.resolved_at = datetime.now(timezone.utc)
+        item.resolved_by = resolved_by or None
+        item.admin_notes = (admin_notes or "")[:2000]
+        db.commit()
+        db.refresh(item)
+        return {
+            "status": "success",
+            "item": self._moderation_item_to_dict(item),
+            "content_removed": bool(content_removed),
+        }
 
     # ─── 4. Model Performance Metrics ───────────────────────────────────────
 
@@ -228,12 +268,14 @@ def get_user_360_profile(target_user_id: int, db: Session) -> Dict[str, Any]:
     spend_rows = db.query(ApiUsageLog).filter(ApiUsageLog.user_id == user.id).all()
     total_spend_cents = round(sum(r.charged_cost_usd for r in spend_rows) * 100)
 
+    from .credits import effective_credits_balance
+
     return {
         'id': user.id,
         'email': getattr(user, 'email', ''),
         'role': getattr(user, 'role', 'user'),
         'is_active': getattr(user, 'is_active', True),
-        'billing_balance': getattr(user, 'credits', 0),
+        'billing_balance': effective_credits_balance(db, user),
         'created_at': str(getattr(user, 'created_at', '')),
         'assignments_count': assignments,
         'materials_count': materials,

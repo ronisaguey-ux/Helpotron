@@ -224,9 +224,18 @@ def _effort_cascade(primary_model: str, effort: int = 500) -> List[str]:
 async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
     try:
         from .cost_tracking import cost_engine
+        # 09-01 fix: the call passed user_id=/model=/input_tokens= kwargs that
+        # don't exist on CostEngine.log_api_call (its real signature takes
+        # db, public_id, tool_or_model, category, ...) — every attempt raised
+        # TypeError and NO routing row reached api_usage_logs, so admin
+        # analytics and the credits/tokens ledger-of-record silently missed
+        # all agent-model traffic. Mirror transcription.py's correct call.
         cost_engine.log_api_call(
-            user_id=user_id,
-            model=route_info.get("model", "unknown"),
+            db=db_session,
+            public_id=user_id,
+            tool_or_model=route_info.get("model", "unknown"),
+            category="llm",
+            duration_seconds=0.0,
             input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
             output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
         )

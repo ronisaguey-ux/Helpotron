@@ -497,6 +497,148 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return true;
   }
+
+  // ── 09-02 approval broker: the agent page asks, the popup (or a system
+  // notification) answers. REQ_APPROVAL resolves asynchronously (allow/deny),
+  // always with a result — pending prompts auto-deny after ~60s.
+  if (message.action === 'REQ_APPROVAL') {
+    brokerApproval(message, sendResponse);
+    return true;
+  }
+  if (message.action === 'APPROVAL_RESPONSE') {
+    resolveApproval(message.reqId, message.decision === 'allow');
+    sendResponse({ ok: true });
+    return false;
+  }
+});
+
+// ─── Action-approval broker (09-02) ──────────────────────────────────────────
+// CHAT-action approvals (MANUAL mode asks per action; AUTO asks for risky
+// ones). Delivery preference: the popup, when it is open (checked via a
+// runtime Port — chrome.extension.getViews returns [] from a MV3 service
+// worker, so the popup CONNECTS on open and its onDisconnect is the reliable
+// "popup closed" signal); otherwise a chrome.notifications card with
+// Allow/Deny buttons. Every pending request auto-denies after ~60s
+// (setTimeout + a one-shot chrome.alarms mirror, so a killed worker still
+// expires it). Deny is ALWAYS the default.
+const APPROVAL_TTL_MS = 60_000;
+const POPUP_PORT_NAME = 'helpotron-popup';
+const PENDING_APPROVALS = new Map(); // reqId -> {resolve, timer, alarm, notifId, via}
+let popupPort = null;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === POPUP_PORT_NAME) {
+    popupPort = port;
+    port.onDisconnect.addListener(() => {
+      if (popupPort === port) popupPort = null;
+      // The popup that was showing prompts is gone — deny-default everything
+      // it was holding (notification-backed prompts keep their own timeouts).
+      for (const [reqId, p] of PENDING_APPROVALS) {
+        if (p.via === 'popup') settleApproval(reqId, false, 'popup-closed');
+      }
+    });
+  }
+});
+
+function popupAlive() {
+  return !!popupPort;
+}
+
+function settleApproval(reqId, approved, reason) {
+  const p = PENDING_APPROVALS.get(reqId);
+  if (!p) return;
+  PENDING_APPROVALS.delete(reqId);
+  if (p.timer) clearTimeout(p.timer);
+  if (p.alarm) chrome.alarms.clear(p.alarm).catch(() => {});
+  if (p.notifId) {
+    try { chrome.notifications.clear(p.notifId); } catch (e) { /* already closed */ }
+  }
+  p.resolve({ approved, reason });
+}
+
+function resolveApproval(reqId, approved) {
+  settleApproval(reqId, approved, approved ? 'user-allow' : 'user-deny');
+}
+
+// The agent page called REQ_APPROVAL — produce a single {approved, reason}.
+async function brokerApproval(req, sendResponse) {
+  const reqId = req.reqId || `appr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  if (PENDING_APPROVALS.has(reqId)) {
+    sendResponse({ ok: false, approved: false, error: 'duplicate request id' });
+    return;
+  }
+  const summary = String(req.summary || 'Allow this agent action?');
+  const title = String(req.title || 'Helpotron agent is waiting');
+  const decision = await new Promise((resolve) => {
+    // 1) Popup-first: a live popup renders the prompt card.
+    if (popupAlive()) {
+      const pending = {
+        resolve, via: 'popup', notifId: null,
+        timer: setTimeout(() => settleApproval(reqId, false, 'timed-out'), APPROVAL_TTL_MS),
+        alarm: `helpotron_approval_${reqId}`,
+      };
+      PENDING_APPROVALS.set(reqId, pending);
+      chrome.alarms.create(pending.alarm, { delayInMinutes: APPROVAL_TTL_MS / 60_000 }).catch(() => {});
+      chrome.runtime.sendMessage({ action: 'APPROVAL_PROMPT', reqId, title, summary })
+        .then(() => {
+          // delivered — the popup answers via APPROVAL_RESPONSE.
+        })
+        .catch(() => settleApproval(reqId, false, 'popup-unreachable'));
+      return;
+    }
+    // 2) Popup closed/missing: system notification with Allow/Deny buttons.
+    const notifId = `helpotron_appr_${reqId}`;
+    const pending = {
+      resolve, via: 'notification', notifId,
+      timer: setTimeout(() => settleApproval(reqId, false, 'timed-out'), APPROVAL_TTL_MS),
+      alarm: `helpotron_approval_${reqId}`,
+    };
+    PENDING_APPROVALS.set(reqId, pending);
+    chrome.alarms.create(pending.alarm, { delayInMinutes: APPROVAL_TTL_MS / 60_000 }).catch(() => {});
+    try {
+      chrome.notifications.create(notifId, {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icon128.png'),
+        title,
+        message: summary,
+        priority: 2,
+        buttons: [{ title: 'Allow' }, { title: 'Deny' }],
+        requireInteraction: true,
+      }, () => {
+        // Chrome may refuse (e.g. notifications disabled) — deny-default so
+        // the agent never hangs on a silent pending prompt.
+        if (chrome.runtime.lastError) {
+          settleApproval(reqId, false, 'notification-unavailable');
+        }
+      });
+    } catch (e) {
+      settleApproval(reqId, false, 'notification-unavailable');
+    }
+  });
+  sendResponse({ ok: true, approved: decision.approved, reason: decision.reason, reqId });
+}
+
+chrome.notifications.onButtonClicked.addListener((notifId, buttonIndex) => {
+  const reqId = notifId.replace(/^helpotron_appr_/, '');
+  if (notifId.startsWith('helpotron_appr_') && PENDING_APPROVALS.has(reqId)) {
+    resolveApproval(reqId, buttonIndex === 0); // button 0 = Allow, any other = Deny
+  }
+});
+
+chrome.notifications.onClosed.addListener((notifId) => {
+  const reqId = notifId.replace(/^helpotron_appr_/, '');
+  if (notifId.startsWith('helpotron_appr_') && PENDING_APPROVALS.has(reqId)) {
+    // Closed without a button (user dismissed, or system would not show
+    // buttons at all) — deny-default.
+    settleApproval(reqId, false, 'notification-closed');
+  }
+});
+
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name && a.name.startsWith('helpotron_approval_')) {
+    const reqId = a.name.slice('helpotron_approval_'.length);
+    settleApproval(reqId, false, 'timed-out');
+  }
 });
 
 async function launchToDoc(payload) {
@@ -1069,6 +1211,15 @@ async function waitTabComplete(tabId, timeoutMs = 20000) {
   return false;
 }
 
+// 09-02: every crawled page attempt lands in state.results (the visible
+// per-page list the popup renders). Capped so a long crawl cannot balloon the
+// storage blob beyond reason (500 pages of compact rows ≈ 100KB).
+function recordCrawlResult(state, url, entry) {
+  state.results = state.results || [];
+  state.results.push(Object.assign({ url, ts: Date.now() }, entry));
+  if (state.results.length > 500) state.results = state.results.slice(-500);
+}
+
 async function processCrawlPage(state, url) {
   let tab = null;
   try {
@@ -1080,19 +1231,34 @@ async function processCrawlPage(state, url) {
     if (res.unparseable) {
       state.failed += 1;
       state.lastError = `Unparseable: ${url}`;
+      recordCrawlResult(state, url, { kind: 'content', status: 'unparseable', title: `(unparseable) ${url}` });
       return { ok: false, unparseable: true };
     }
     if (!res.ok) {
       state.failed += 1;
       state.lastError = res.error || url;
+      recordCrawlResult(state, url, { kind: 'content', status: 'failed', title: `(failed) ${url}`, error: String(res.error || '') });
       return { ok: false, error: res.error };
     }
     state.done += 1;
     state.lastTitle = res.data ? res.data.title : 'page';
+    recordCrawlResult(state, url, {
+      kind: 'content',
+      status: 'saved',
+      title: res.title || (res.data ? res.data.title : 'page'),
+      assignment_id: res.assignment_id,
+      promptLen: res.promptLen || 0,
+      files: {
+        found: res.filesFound || 0,
+        uploaded: res.filesUploaded || 0,
+        recorded: res.filesRecorded || 0,
+      },
+    });
     return { ok: true, assignment_id: res.assignment_id };
   } catch (e) {
     state.failed += 1;
     state.lastError = `${url}: ${String(e)}`;
+    recordCrawlResult(state, url, { kind: 'content', status: 'failed', title: `(failed) ${url}`, error: String(e) });
     return { ok: false, error: String(e) };
   } finally {
     if (tab && tab.id) {
@@ -1236,6 +1402,10 @@ async function startCrawl(chosenTabId) {
     lastTitle: '',
     tabs: [],
     visited_indexes: [],
+    // 09-02: per-page crawl results (the "revealed to the user" list the popup
+    // renders — every page attempt, saved or skipped, with its assignment id
+    // and any files found).
+    results: [],
     startedAt: Date.now(),
   };
   await writeCrawlState(state);
@@ -1279,6 +1449,8 @@ async function crawlStatus() {
     queued: (state.queue || []).length,
     scope: state.scope ? state.scope.courseUrl : '',
     startedAt: state.startedAt,
+    // 09-02: the per-page crawl results list (revealed in the popup).
+    results: (state.results || []).slice(-200),
   };
 }
 
