@@ -1460,3 +1460,55 @@ if (
     }
   });
 }
+
+// ── Agent Mode (09-01): user-activity interrupt reporter (additive) ──────────
+// Appended as a fully isolated IIFE with only try/catch-guarded chrome.* calls,
+// so nothing in this file can break it and it cannot break the file.
+//
+// Protocol with agent_mode.js (the drive window):
+//   {type:'agent-drive', mode:'arm'|'window'|'disarm', active:boolean}
+// Any 'agent-drive' message with active=true masks interrupts: while the agent
+// is driving, the user's incidental mouse motion must NOT pause it. The first
+// genuine user gesture AFTER the drive window (disarm) fires:
+//   {type:'agent:user-interrupt'}
+// throttled to one per 500 ms (spec). CDP-synthesized input is NEVER isTrusted,
+// so the agent's own clicks/keys/moves can never self-interrupt.
+(function () {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.onMessage) return;
+
+    let driveArmed = false;          // masked window (agent is driving)
+    let lastInterruptAt = 0;         // ms epoch of the last sent interrupt
+    const INTERRUPT_THROTTLE_MS = 500;
+
+    chrome.runtime.onMessage.addListener((msg) => {
+      try {
+        if (!msg || msg.type !== 'agent-drive') return;
+        driveArmed = !!msg.active;
+      } catch (ignored) { /* never propagate listener errors */ }
+    });
+
+    const reportInterrupt = (ev) => {
+      try {
+        if (!ev.isTrusted) return;       // CDP/synthetic events never interrupt
+        if (driveArmed) return;          // inside the drive window: masked
+        const now = Date.now();
+        if (now - lastInterruptAt < INTERRUPT_THROTTLE_MS) return;
+        lastInterruptAt = now;
+        chrome.runtime.sendMessage({ type: 'agent:user-interrupt' }, () => {
+          void chrome.runtime.lastError; // swallow "receiving end does not exist"
+        });
+      } catch (ignored) { /* ok */ }
+    };
+
+    const onMove = (ev) => reportInterrupt(ev);
+    const onDown = (ev) => reportInterrupt(ev);
+    const onWheel = (ev) => reportInterrupt(ev);
+    const onKey = (ev) => reportInterrupt(ev);
+
+    document.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mousedown', onDown, { passive: true });
+    document.addEventListener('wheel', onWheel, { passive: true });
+    document.addEventListener('keydown', onKey);
+  } catch (ignored) { /* file-level guard: never throw at parse time either */ }
+})();

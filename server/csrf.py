@@ -40,6 +40,17 @@ def generate_csrf_token() -> str:
 def set_csrf_cookie(response: Response, request: Request | None = None) -> str:
     """Set a CSRF cookie and return the token."""
     token = generate_csrf_token()
+    # Match the session cookie lifetime (operator 09-01, Logan's demo-mode
+    # chat): helpotron_session carries max_age (7 days) but this cookie was
+    # browser-session only — a browser restart within the session window kept
+    # the login, dropped the token, and EVERY state-changing request bounced
+    # 403 "CSRF token missing" (the client then fell back to demo-mode
+    # replies). Same window so a login always has a live token.
+    try:
+        from .security import SessionStore
+        _lifetime = SessionStore._session_expiry
+    except Exception:
+        _lifetime = 7 * 24 * 3600
     response.set_cookie(
         key=CSRF_COOKIE_NAME,
         value=token,
@@ -47,6 +58,7 @@ def set_csrf_cookie(response: Response, request: Request | None = None) -> str:
         secure=request.url.is_secure if request is not None else getattr(config, 'production_mode', False),
         samesite="lax",
         path="/",
+        max_age=_lifetime,
     )
     return token
 

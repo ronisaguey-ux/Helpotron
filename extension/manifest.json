@@ -1,21 +1,26 @@
 {
   "manifest_version": 3,
-  "name": "Helpotron Academic OS Companion & Assistive Typing Engine",
-  "version": "2.3.0",
+  "name": "Helpotron Academic Companion",
+  "version": "2.5.1",
   "browser_specific_settings": {
     "gecko": {
       "id": "helpotron-companion@ronisaguey-ux.dev",
       "strict_min_version": "121.0"
     }
   },
-  "description": "Autonomous study companion, LMS assignment solver, and humanized assistive typing engine for Google Docs, Gmail & Notion.",
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
   "permissions": [
     "storage",
     "activeTab",
     "tabs",
     "scripting",
     "alarms",
-    "downloads"
+    "tabCapture",
+    "desktopCapture",
+    "notifications"
+  ],
+  "optional_permissions": [
+    "debugger"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
@@ -27,7 +32,6 @@
     "https://*.schoology.com/*",
     "https://docs.google.com/*",
     "https://mail.google.com/*",
-    "https://*.google.com/*",
     "https://*.notion.so/*",
     "https://*.notion.site/*",
     "https://*.office.com/*",
@@ -77,15 +81,5 @@
       "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ],
-  "externally_connectable": {
-    "matches": [
-      "https://docs.google.com/*",
-      "https://mail.google.com/*",
-      "https://*.notion.so/*",
-      "https://helpotron.dpdns.org/*",
-      "http://localhost/*",
-      "http://127.0.0.1/*"
-    ]
-  }
+  ]
 }

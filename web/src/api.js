@@ -73,6 +73,30 @@ export function getCsrfToken() {
   return localStorage.getItem('helpotron_csrf_token') || null;
 }
 
+/* CSRF self-heal (operator 09-01, Logan's demo-mode chat): the csrf_token
+ * cookie used to be browser-session-only while helpotron_session lives 7
+ * days — a browser restart kept the login, dropped the token, and EVERY
+ * state-changing request bounced 403 "CSRF token missing" (the My Agent chat
+ * silently fell back to demo-mode replies). Mint a fresh token once when the
+ * session is present, and callers retry the original request after it. */
+let _csrfHealInFlight = null;
+function healCsrfToken() {
+  if (!_csrfHealInFlight) {
+    _csrfHealInFlight = (async () => {
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/csrf`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.csrf_token) {
+            localStorage.setItem('helpotron_csrf_token', data.csrf_token);
+          }
+        }
+      } catch (e) { /* best-effort — the original request surfaces the real error */ }
+    })();
+  }
+  return _csrfHealInFlight;
+}
+
 /* Blob download helper (09-01): an <a download> click + revoke — the jump
  * the JSON export endpoints need for their attachments. */
 function triggerDownload(blob, filename) {
@@ -175,6 +199,13 @@ export async function request(endpoint, options = {}) {
     // surfaced in the UI meanwhile (see QueueNoticeBanner).
     if (isQueueError(err)) {
       return queueRetry(() => doRequest(cleanEndpoint, options, headers));
+    }
+    // CSRF self-heal (09-01, Logan): 403 missing/invalid = the token cookie
+    // was lost on a browser restart while the session survived — mint a
+    // fresh one and retry THIS request once (no loop: __csrfRetried).
+    if (err.status === 403 && /csrf/i.test(err.message || '') && !options.__csrfRetried) {
+      await healCsrfToken();
+      return request(cleanEndpoint, { ...options, __csrfRetried: true });
     }
     throw err;
   }

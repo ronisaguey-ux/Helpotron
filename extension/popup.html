@@ -6,31 +6,6 @@
   <title>Helpotron Companion</title>
   <!-- Design system (dark-first; theme.js applies [data-theme]) -->
   <link rel="stylesheet" href="popup.css" />
-  <style>
-    /* Popup-shell adjustments only (no tokens here) */
-    body { width: 380px; max-height: 600px; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .chat-send { width: 44px; padding: 0; flex-shrink: 0; }
-    .typing-actions { display: flex; gap: 8px; }
-    .typing-actions .btn { flex: 1; }
-    .wpm-row { display: flex; align-items: center; gap: 12px; }
-    .wpm-row input[type='range'] { flex: 1; accent-color: var(--primary); }
-    .wpm-val {
-      font-family: var(--font-mono); font-size: 13px; color: var(--primary);
-      white-space: nowrap;
-    }
-    details.realism summary {
-      cursor: pointer;
-      font-family: var(--font-mono); font-size: 12px; line-height: 16px;
-      font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
-      color: var(--on-surface-variant);
-      padding: 8px 4px; border-radius: 8px; list-style: none;
-    }
-    details.realism summary::-webkit-details-marker { display: none; }
-    details.realism summary::before { content: '▸ '; }
-    details.realism[open] summary::before { content: '▾ '; }
-    details.realism > .check-row { margin-top: 6px; }
-  </style>
 </head>
 <body>
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
@@ -38,6 +13,17 @@
     <symbol id="i-capture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
       <circle cx="12" cy="13" r="4"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 3v18l5.2-4.6 2 6.1 3-1-2-6.1H17L4 3z"/>
     </symbol>
     <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -47,125 +33,35 @@
       <circle cx="12" cy="8" r="4"/>
       <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
     </symbol>
-    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
-      <path d="M4 9h16"/>
-    </symbol>
-    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m6 9 6 6 6-6"/>
-    </symbol>
     <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/>
       <path d="m8 12.5 2.5 2.5L16 9.5"/>
     </symbol>
-    <symbol id="i-search-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"/>
-      <path d="m21 21-4.3-4.3"/>
-      <path d="m8.5 11 2 2M12.5 8l2 2"/>
-    </symbol>
-    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-      <path d="M3 3v5h5"/>
-      <path d="M12 7v5l4 2"/>
-    </symbol>
-    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 8V4H8"/>
-      <rect x="4" y="8" width="16" height="12" rx="2"/>
-      <circle cx="9" cy="14" r="1"/>
-      <circle cx="15" cy="14" r="1"/>
-      <path d="M2 14h2M20 14h2"/>
-    </symbol>
-    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <path d="M2 12h20"/>
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-    </symbol>
-    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="9" y="2" width="6" height="11" rx="3"/>
-      <path d="M5 10v1a7 7 0 0 0 14 0v-1"/>
-      <path d="M12 18v4"/>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
     </symbol>
     <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
-    </symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
-      <path d="M21 3v6h-6"/>
-    </symbol>
-    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 2 11 13"/>
-      <path d="m22 2-7 20-4-9-9-4z"/>
-    </symbol>
-    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="5" y="4" width="14" height="17" rx="2"/>
-      <path d="M9 2h6v4H9z"/>
-    </symbol>
-    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <path d="M14 2v6h6"/>
-    </symbol>
-    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M10 4H6v16h4zM18 4h-4v16h4z"/>
-    </symbol>
-    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 6 6 18M6 6l12 12"/>
-    </symbol>
-    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3v12"/>
-      <path d="m7 10 5 5 5-5"/>
-      <path d="M5 21h14"/>
-    </symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m12 3 1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2L12 3z"/>
-    </symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
-    </symbol>
-    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 20h9"/>
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-    </symbol>
-    <symbol id="i-sigma" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 5H7l6 6-6 8h11"/>
-    </symbol>
-    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <ellipse cx="12" cy="5" rx="8" ry="3"/>
-      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
-      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
-    </symbol>
-    <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="4" width="18" height="12" rx="2"/>
-      <path d="M8 20h8M12 16v4"/>
-    </symbol>
-    <symbol id="i-light-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="4"/>
-      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
-    </symbol>
-    <symbol id="i-dark-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
-    </symbol>
-    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 12h14"/>
-      <path d="m13 6 6 6-6 6"/>
-    </symbol>
-    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
-    </symbol>
-    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/>
-      <path d="M1 14h6M9 8h6M17 16h6"/>
     </symbol>
     <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="7.5" cy="15.5" r="4.5"/>
       <path d="m11 12 9-9"/>
       <path d="m16 7 3 3"/>
     </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"/>
+      <path d="m7 10 5 5 5-5"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+    </symbol>
     <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="6" y="6" width="12" height="12" rx="2"/>
     </symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
-      <path d="M12 9v4M12 17h.01"/>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
     </symbol>
   </defs>
 </svg>
@@ -174,9 +70,16 @@
     <svg class="ic ic--sm"><use href="#i-download" /></svg>
     <div>
       <div class="b-sub">NEW VERSION AVAILABLE</div>
-      <div class="font-body-sm">Helpotron v<span id="updateVersionBadge">2.2.0</span> — download the update</div>
+      <div class="font-body-sm">Helpotron v<span id="updateVersionBadge">2.5.1</span> — download the update</div>
     </div>
     <button class="btn btn--ghost btn--sm" id="btnDownloadUpdate">Get</button>
+  </div>
+
+  <!-- ============ What's new (release notifications; popup.js renders unread, acks on Got it) ============ -->
+  <div class="update-banner whatsnew-banner" id="whatsNewBanner" style="display:none">
+    <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+    <div class="whatsnew-body" id="whatsNewBody"></div>
+    <button class="btn btn--primary btn--sm" id="btnWhatsNewDismiss">Got it</button>
   </div>
 
   <!-- ============ App bar ============ -->
@@ -184,217 +87,170 @@
     <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" />
     <div class="app-title">Helpotron</div>
     <div class="spacer"></div>
-    <button class="account-chip" id="accountChip" type="button" title="Account">
+    <button class="account-chip" id="accountChip" type="button" title="Account" aria-expanded="false" aria-controls="loginPanel">
       <svg class="ic"><use href="#i-user" /></svg>
       <span>Guest</span>
+    </button>
+    <button class="icon-btn" id="btnAgentMode" type="button" title="CHAT — the agent can see your screen and, with your approval, act on the selected tab" aria-label="Open Agent chat">
+      <svg class="ic"><use href="#i-cursor" /></svg>
     </button>
     <button class="icon-btn" id="btnOptions" type="button" title="Extension options" aria-label="Open extension options">
       <svg class="ic"><use href="#i-settings" /></svg>
     </button>
   </header>
 
-  <!-- ============ Segmented tabs (Scrape / Type / Chat / Settings) ============ -->
-  <nav class="seg" role="tablist" aria-label="Helpotron companion sections">
-    <button class="seg-btn nav-tab active" data-target="pane-scrape" role="tab" aria-selected="true" type="button">Scrape</button>
-    <button class="seg-btn nav-tab" data-target="pane-type" role="tab" aria-selected="false" type="button">Type</button>
-    <button class="seg-btn nav-tab" data-target="pane-chat" role="tab" aria-selected="false" type="button">Chat</button>
-    <button class="seg-btn nav-tab" data-target="pane-settings" role="tab" aria-selected="false" type="button">Settings</button>
-  </nav>
+  <!-- ============ Login panel (opened from the account chip) ============ -->
+  <section class="card option-panel" id="loginPanel" hidden aria-labelledby="loginTitle">
+    <span class="field-label" id="loginTitle">Sign in to Helpotron</span>
+    <div class="field">
+      <label class="field-label" for="server">Server</label>
+      <input class="input" id="server" type="url" placeholder="https://helpotron.dpdns.org" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="public_id">Public ID</label>
+      <input class="input" id="public_id" type="text" placeholder="your Helpotron username" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="password">Password</label>
+      <input class="input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn btn--primary" id="saveSettings" type="button">
+      <svg class="ic"><use href="#i-key" /></svg>
+      Save &amp; Connect
+    </button>
+    <p class="field-hint">
+      Security-check accounts: sign in on the Helpotron website once — the session syncs here automatically.
+    </p>
+  </section>
 
-  <!-- ============ Main ============ -->
+  <!-- ============ Launcher: exactly two options (SCRAPE / CHAT) ============ -->
   <main class="app-main">
+    <div class="option-grid" id="launcher">
 
-    <!-- ────────────── SCRAPE ────────────── -->
-    <section class="tab-pane" id="pane-scrape" role="tabpanel">
-      <div class="card">
-        <div class="field">
-          <label class="field-label" for="tabSelect">Target tab</label>
-          <select class="select" id="tabSelect" aria-label="Target tab">
-            <option value="">No eligible tabs open</option>
-          </select>
-        </div>
-
-        <button class="btn btn--primary" id="startScrape" type="button">
-          <svg class="ic"><use href="#i-capture" /></svg>
-          Capture Assignment
+      <!-- ───────────── SCRAPE ───────────── -->
+      <section class="option-cluster" aria-label="Scrape">
+        <button class="option-card" id="option-scrape" type="button" role="button" aria-expanded="true" aria-controls="scrape-options">
+          <span class="option-icon"><svg class="ic"><use href="#i-globe" /></svg></span>
+          <span class="option-body">
+            <span class="option-title">Scrape</span>
+            <span class="option-sub">Pull the page (or the whole site) into Helpotron</span>
+          </span>
+          <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
         </button>
-        <button class="btn btn--secondary" id="activateAgent" type="button">
-          <svg class="ic"><use href="#i-bot" /></svg>
-          AI Subagent
-        </button>
-        <button class="btn btn--secondary" id="startCrawl" type="button">
-          <svg class="ic"><use href="#i-globe" /></svg>
-          Crawl Entire Course
-        </button>
-        <button class="btn btn--danger-outline" id="stopCrawl" type="button" style="display:none">
-          <svg class="ic"><use href="#i-stop" /></svg>
-          Stop Crawl
-        </button>
-        <button class="btn btn--outline" id="startRecording" type="button">
-          <svg class="ic"><use href="#i-mic" /></svg>
-          Record Lecture Audio
-        </button>
-
-        <!-- Crawl progress (hidden; pollCrawlStatus fills + shows) -->
-        <div class="card--inset font-tabular-stat text-tabular-stat text-primary" id="crawlProgress" role="status" style="display:none"></div>
-
-        <!-- Unparseable page (hidden; showUnparseable/hideUnparseable) -->
-        <div class="error-card" id="unparseableBox" style="display:none">
-          <div class="e-title">
-            <svg class="ic ic--sm"><use href="#i-alert" /></svg>
-            Unparseable website
-          </div>
-          <div class="e-body" id="unparseableReason">Unsupported DOM or protected webview.</div>
-          <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
-            <svg class="ic ic--sm"><use href="#i-folder" /></svg>
-            Open Data Lake
+        <div class="option-panel" id="scrape-options">
+          <button class="btn btn--primary" id="btnScrapeCurrent" type="button">
+            <svg class="ic"><use href="#i-capture" /></svg>
+            <span>Scrape current thing only</span>
           </button>
-        </div>
+          <button class="btn btn--secondary" id="btnScrapeSite" type="button">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span>Scrape everything on the tab</span>
+          </button>
+          <button class="btn btn--danger-outline" id="stopCrawl" type="button" style="display:none">
+            <svg class="ic"><use href="#i-stop" /></svg>
+            Stop crawl
+          </button>
 
-        <!-- Success: open the created bubble (hidden; showOpenAssignment) -->
-        <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
-          <svg class="ic"><use href="#i-check-circle" /></svg>
-          <span>Open bubble in Helpotron</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- ────────────── TYPE (assistive typing engine) ────────────── -->
-    <section class="tab-pane" id="pane-type" role="tabpanel" hidden>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <span class="field-label">Assistive typing engine</span>
-          <span class="chip chip--green" id="gdocsTypingBadge" style="display:none"><span class="dot"></span>Typing</span>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="assignmentSelect">Assignment to type</label>
-          <select class="select" id="assignmentSelect" aria-label="Assignment to type">
-            <option value="">Log in to Helpotron to pick an assignment…</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="gdocsTabSelect">Target editor</label>
-          <select class="select" id="gdocsTabSelect" aria-label="Target editor tab">
-            <option value="new">Open New Google Doc (docs.new)</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="realismPreset">Realism preset</label>
-          <select class="select" id="realismPreset" aria-label="Realism preset">
-            <option value="academic" selected>Academic — balanced (65 WPM)</option>
-            <option value="gentle">Gentle — slowed, with pauses (35 WPM)</option>
-            <option value="brisk">Brisk — fast & clean (95 WPM)</option>
-            <option value="motor">Motor — steady + typos (50 WPM)</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="wpmSlider">Typing speed</label>
-          <div class="wpm-row">
-            <input type="range" id="wpmSlider" min="20" max="140" value="65" step="1" aria-label="Words per minute" />
-            <span class="wpm-val" id="wpmValue">65 WPM</span>
+          <!-- Crawl progress + per-page results (revealed to the user, 09-02) -->
+          <div class="crawl-progress" id="crawlProgress" role="status" style="display:none"></div>
+          <div id="crawlResultsWrap" class="hidden">
+            <span class="field-label">Pages scraped so far</span>
+            <div class="crawl-results" id="crawlResults" aria-live="polite"></div>
           </div>
-        </div>
 
-        <details class="realism">
-          <summary>9 Realism Dimensions</summary>
-          <label class="check-row"><input type="checkbox" id="chkTypos" checked /><label for="chkTypos">Typos &amp; corrections</label></label>
-          <label class="check-row"><input type="checkbox" id="chkFalseStarts" checked /><label for="chkFalseStarts">False starts</label></label>
-          <label class="check-row"><input type="checkbox" id="chkPauses" checked /><label for="chkPauses">Natural pauses</label></label>
-          <label class="check-row"><input type="checkbox" id="chkJitter" checked /><label for="chkJitter">Timing jitter</label></label>
-          <label class="check-row"><input type="checkbox" id="chkBurst" checked /><label for="chkBurst">Burst / scurry rhythm</label></label>
-          <label class="check-row"><input type="checkbox" id="chkFatigue" checked /><label for="chkFatigue">Fatigue slowdowns</label></label>
-        </details>
-
-        <button class="btn btn--primary" id="btnStartLaunchToDoc" type="button">
-          <svg class="ic"><use href="#i-edit" /></svg>
-          Launch to Doc
-        </button>
-
-        <!-- Typing progress (hidden; BROADCAST_TYPING_PROGRESS fills + shows) -->
-        <div class="typing-track" id="typingProgressSection" style="display:none">
-          <div class="typing-status" id="typingStatusText">Typing…</div>
-          <div class="font-tabular-stat text-tabular-stat text-on-surface-variant" id="typingPercentText">0% (0/0 w)</div>
-          <div class="progress" role="progressbar" aria-label="Assistive typing progress">
-            <div class="progress-bar" id="typingProgressBar"></div>
-          </div>
-          <div class="typing-actions">
-            <button class="btn btn--secondary btn--sm" id="btnPauseTyping" type="button">
-              <svg class="ic ic--sm"><use href="#i-pause" /></svg>
-              Pause
-            </button>
-            <button class="btn btn--danger-outline btn--sm" id="btnCancelTyping" type="button">
-              <svg class="ic ic--sm"><use href="#i-x" /></svg>
-              Cancel
+          <!-- Unparseable page -->
+          <div class="error-card" id="unparseableBox" style="display:none">
+            <div class="e-title">
+              <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+              Unparseable website
+            </div>
+            <div class="e-body" id="unparseableReason">Unsupported DOM or protected webview.</div>
+            <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
+              <svg class="ic ic--sm"><use href="#i-folder" /></svg>
+              Open Data Lake
             </button>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- ────────────── CHAT (agent chatbox) ────────────── -->
-    <section class="tab-pane" id="pane-chat" role="tabpanel" hidden>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <span class="field-label">Agent chat</span>
-          <button class="icon-btn" id="chatRefresh" type="button" title="Reload conversation" aria-label="Reload conversation">
-            <svg class="ic"><use href="#i-refresh" /></svg>
+          <!-- Success: open the created bubble -->
+          <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
+            <svg class="ic"><use href="#i-check-circle" /></svg>
+            <span>Open bubble in Helpotron</span>
           </button>
         </div>
+      </section>
 
-        <div class="chat-msgs" id="chatMessages" aria-live="polite"></div>
-
-        <div class="chat-composer">
-          <textarea class="input" id="chatInput" placeholder="Ask the agent to scrape, summarize, or plan…" rows="2" aria-label="Chat message"></textarea>
-          <button class="btn btn--primary chat-send" id="chatSend" type="button" aria-label="Send message">
-            <svg class="ic"><use href="#i-send" /></svg>
-          </button>
-        </div>
-
-        <div class="grid-2">
-          <button class="btn btn--outline btn--sm" id="chatScrapeTab" type="button">
-            <svg class="ic ic--sm"><use href="#i-bot" /></svg>
-            Send to Tab Scraper
-          </button>
-          <button class="btn btn--outline btn--sm" id="chatScrapeContext" type="button">
-            <svg class="ic ic--sm"><use href="#i-clipboard" /></svg>
-            Insert Page Context
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ────────────── SETTINGS (server connection) ────────────── -->
-    <section class="tab-pane" id="pane-settings" role="tabpanel" hidden>
-      <div class="card">
-        <span class="field-label">Server connection</span>
-
-        <div class="field">
-          <label class="field-label" for="server">Server</label>
-          <input class="input" id="server" type="url" placeholder="https://helpotron.dpdns.org" spellcheck="false" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="public_id">Public ID</label>
-          <input class="input" id="public_id" type="text" placeholder="your Helpotron username" autocomplete="username" />
-        </div>
-        <div class="field">
-          <label class="field-label" for="password">Password</label>
-          <input class="input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
-        </div>
-
-        <button class="btn btn--primary" id="saveSettings" type="button">
-          <svg class="ic"><use href="#i-key" /></svg>
-          Save &amp; Connect
+      <!-- ───────────── CHAT ───────────── -->
+      <section class="option-cluster" aria-label="Chat">
+        <button class="option-card" id="option-chat" type="button" role="button" aria-expanded="true" aria-controls="chat-options">
+          <span class="option-icon"><svg class="ic"><use href="#i-chat" /></svg></span>
+          <span class="option-body">
+            <span class="option-title">Chat</span>
+            <span class="option-sub">Tell the agent what to do on your screen</span>
+          </span>
+          <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
         </button>
+        <div class="option-panel" id="chat-options">
+          <!-- Toggle 1: See screen -->
+          <div class="switch-row">
+            <span class="switch-label">
+              See screen
+              <span class="switch-sub">Attach the current screen to every chat message</span>
+            </span>
+            <span class="switch">
+              <input type="checkbox" id="toggleSeeScreen" role="switch" aria-checked="true" aria-label="See screen" />
+              <span class="track" aria-hidden="true"></span>
+            </span>
+          </div>
+          <!-- Toggle 2: Execute -->
+          <div class="switch-row">
+            <span class="switch-label">
+              Execute
+              <span class="switch-sub">The agent can click, type and scroll — gated by the mode below (never credentials)</span>
+            </span>
+            <span class="switch">
+              <input type="checkbox" id="toggleExecute" role="switch" aria-checked="false" aria-label="Execute actions" />
+              <span class="track" aria-hidden="true"></span>
+            </span>
+          </div>
 
-        <p class="field-hint">
-          Security-check accounts: sign in on the Helpotron website once — the session syncs here automatically.
-        </p>
-      </div>
-    </section>
+          <!-- Permission mode: 3-way segmented control -->
+          <div class="mode-seg-wrap">
+            <div class="seg" id="modeSeg" role="group" aria-label="Permission mode for agent actions">
+              <button type="button" class="seg-btn mode-btn" data-mode="manual" aria-pressed="false">Manual</button>
+              <button type="button" class="seg-btn mode-btn" data-mode="auto" aria-pressed="false">Automatic</button>
+              <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
+            </div>
+            <div class="field-hint" id="modeHint">Manual — the agent asks before every action.</div>
+          </div>
+
+          <!-- Effort-driven vision model line (backend agrees; local fallback shown) -->
+          <div class="model-line" id="modelLine">
+            <span class="model-effort" id="modelEffort">effort 500</span>
+            <span class="divider-char">·</span>
+            <span id="modelName">DeepSeek V4 Flash Vision</span>
+            <span id="modelTier" class="model-tier">(mid_lower)</span>
+          </div>
+
+          <button class="btn btn--primary" id="btnOpenChat" type="button">
+            <svg class="ic"><use href="#i-cursor" /></svg>
+            <span>Open agent chat</span>
+          </button>
+
+          <!-- Approval card: the popup IS the approval surface when open (09-02) -->
+          <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
+            <div class="a-title">
+              <svg class="ic ic--sm" style="color:var(--sem-amber)"><use href="#i-shield" /></svg>
+              <span id="approvalTitle">The agent wants to act</span>
+            </div>
+            <div class="a-text" id="approvalText"></div>
+            <div class="a-actions">
+              <button class="btn btn--secondary" id="denyBtn" type="button">Deny</button>
+              <button class="btn btn--primary" id="approveBtn" type="button">Allow</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <!-- ============ Status strip ============ -->

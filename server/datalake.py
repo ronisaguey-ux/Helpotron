@@ -319,6 +319,51 @@ class DataLakeManager:
 
         return updated
 
+    def delete_feedback(self, feedback_id: str) -> bool:
+        """Deletes one feedback item from the JSONL store (moderation reject, 09-01)."""
+        removed = self._rewrite_jsonl_without(self.feedback_file, "feedback_id", feedback_id)
+        if removed:
+            logger.info("Moderation: deleted feedback %s", feedback_id)
+        return removed
+
+    def delete_microcredit_submission(self, submission_id: str) -> bool:
+        """Deletes one micro-credit submission from the JSONL store (moderation reject, 09-01)."""
+        removed = self._rewrite_jsonl_without(self.microcredits_file, "submission_id", submission_id)
+        if removed:
+            logger.info("Moderation: deleted micro-credit submission %s", submission_id)
+        return removed
+
+    def _rewrite_jsonl_without(self, path, id_key: str, target_id: str) -> bool:
+        """Atomically rewrites one JSONL file minus the entry with id_key == target_id."""
+        if not path.exists():
+            return False
+        kept, removed = [], False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if item.get(id_key) == target_id and not removed:
+                        removed = True
+                        continue
+                    kept.append(item)
+            if removed:
+                tmp = path.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    for item in kept:
+                        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                tmp.replace(path)
+        except Exception as e:
+            logger.error("Error rewriting %s: %s", path, e)
+            return False
+        return removed
+
     def get_raw_telemetry(self, event_type: Optional[str] = None, limit: int = 500) -> List[Dict[str, Any]]:
         """Fetches raw telemetry events."""
         if not self.telemetry_file.exists():
