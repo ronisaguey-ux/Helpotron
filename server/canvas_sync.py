@@ -28,7 +28,7 @@ class CanvasSyncEngine:
         self.headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
-            "User-Agent": "HelpotronAutomator/2.0 (Academic Study Copilot)"
+            "User-Agent": "HelpotronAcademicCompanion/2.0 (Academic Study Copilot)"
         }
         self.timeout = timeout_seconds
 

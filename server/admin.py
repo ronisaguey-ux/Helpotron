@@ -15,10 +15,12 @@ try:
     from .config import config
     from .database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
     from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
+    from .credits import effective_credits_balance
 except (ImportError, ValueError):
     from server.config import config
     from server.database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
     from server.security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
+    from server.credits import effective_credits_balance
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -165,7 +167,7 @@ async def list_users(request: Request, db: Session = Depends(get_db)):
         "id": u.id,
         "public_id": u.public_id,
         "plan": u.plan,
-        "credits": u.credits,
+        "credits": effective_credits_balance(db, u),
         "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
         "telegram_id": u.telegram_id,
         "created_at": u.created_at.isoformat(),
@@ -186,7 +188,7 @@ async def get_user_detail(public_id: str, request: Request, db: Session = Depend
         "id": user.id,
         "public_id": user.public_id,
         "plan": user.plan,
-        "credits": user.credits,
+        "credits": effective_credits_balance(db, user),
         "telegram_id": user.telegram_id,
         "settings": user.settings,
         "created_at": user.created_at.isoformat(),

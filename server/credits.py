@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import update, text
+from sqlalchemy import func, update, text
 from server.database import CreditTransaction, DataSubmission, User
 
 logger = logging.getLogger('helpotron.credits')
@@ -47,6 +47,36 @@ def calculate_task_token_cost(cost_usd: float) -> int:
 def get_balance(user: User) -> int:
     """Retrieve available credit balance for user."""
     return getattr(user, 'credits', 0)
+
+def effective_credits_balance(db: Session, user: User) -> float:
+    """Reconciled credit balance for DISPLAY (and audits), never below either
+    source of truth.
+
+    credit_transactions is the durable ledger every grant/charge path records
+    into, but it has historically diverged from the users.credits column in
+    BOTH directions:
+      - column lost: 08-26 grants to `max` / `MasonLohse16` (+30 each) were
+        committed into the ledger while users.credits sits at 0.0 (displaying
+        the raw column showed "0 cr" for users who were genuinely granted);
+      - ledger gap: the datalake micro-credit redemption and the overlord
+        agent's admin_adjust_credits action write users.credits WITHOUT a
+        ledger row.
+    So the displayed balance is max(ledger_sum, column): when the two agree
+    (normal state) it equals both; when they diverge it shows the side that
+    proves the larger balance — never a phantom 0.
+    """
+    ledger = float(
+        db.query(func.coalesce(func.sum(CreditTransaction.delta), 0.0))
+        .filter(CreditTransaction.user_id == user.id)
+        .scalar() or 0.0
+    )
+    column = float(getattr(user, "credits", 0.0) or 0.0)
+    return max(ledger, column)
+
+
+def is_usage_unlimited(user: User) -> bool:
+    """elite plan = metered usage disabled (token gate skipped, charges no-op)."""
+    return bool(getattr(user, "plan", "") == "elite")
 
 def charge_with_rollback(
     user: User,

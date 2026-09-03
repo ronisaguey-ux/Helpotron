@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Helpotron OS - Permission Approval</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Space Grotesk & Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@400&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#131314",
+                        "surface-container-highest": "#343536",
+                        "on-primary": "#20333e",
+                        "on-tertiary": "#422c18",
+                        "outline": "#8d9195",
+                        "tertiary": "#e3c0a4",
+                        "primary": "#b5c9d8",
+                        "surface-tint": "#b5c9d8",
+                        "on-tertiary-container": "#9e7f66",
+                        "on-secondary": "#003915",
+                        "surface-bright": "#39393a",
+                        "outline-variant": "#43474b",
+                        "secondary-container": "#06c85d",
+                        "tertiary-fixed": "#ffdcc1",
+                        "surface-container-high": "#292a2b",
+                        "on-secondary-container": "#004d1f",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#002109",
+                        "on-tertiary-fixed": "#2a1706",
+                        "secondary-fixed-dim": "#3de273",
+                        "on-secondary-fixed-variant": "#005322",
+                        "tertiary-container": "#2c1907",
+                        "secondary-fixed": "#66ff8e",
+                        "inverse-on-surface": "#303031",
+                        "inverse-surface": "#e4e2e3",
+                        "on-primary-fixed-variant": "#364955",
+                        "inverse-primary": "#4e616e",
+                        "background": "#131314",
+                        "surface-container-low": "#1b1c1c",
+                        "on-surface": "#e4e2e3",
+                        "on-surface-variant": "#c3c7cb",
+                        "tertiary-fixed-dim": "#e3c0a4",
+                        "on-primary-container": "#748895",
+                        "surface-container-lowest": "#0d0e0f",
+                        "on-background": "#e4e2e3",
+                        "on-primary-fixed": "#091e29",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#41e575",
+                        "surface": "#131314",
+                        "on-tertiary-fixed-variant": "#5a422c",
+                        "primary-container": "#0b1f2a",
+                        "surface-variant": "#343536",
+                        "primary-fixed": "#d1e5f5",
+                        "primary-fixed-dim": "#b5c9d8",
+                        "surface-container": "#1f2020",
+                        "error-container": "#93000a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "container-margin": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Space Grotesk"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-md": ["Inter"],
+                        "code-sm": ["JetBrains Mono"],
+                        "display-lg": ["Space Grotesk"],
+                        "display-lg-mobile": ["Space Grotesk"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: theme('colors.surface-container-lowest'); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-container-high'); 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline-variant'); 
+        }
+
+        /* Subtle Teal Glow for Primary Elements */
+        .teal-glow-focus:focus-within {
+            box-shadow: 0 0 15px rgba(65, 229, 117, 0.15);
+            border-color: theme('colors.secondary');
+        }
+        
+        /* Amber Glow for Warning State */
+        .amber-glow {
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.1);
+        }
+        
+        /* Animated gradient background for dashboard simulation */
+        .bg-animated-mesh {
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(11, 31, 42, 0.8) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(27, 28, 28, 0.9) 0px, transparent 50%);
+            background-color: theme('colors.surface-container-lowest');
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface antialiased min-h-screen flex flex-col font-body-md overflow-hidden relative selection:bg-secondary selection:text-on-secondary">
+<!-- Background Simulation: Dark Dashboard Context -->
+<div class="absolute inset-0 z-0 bg-animated-mesh">
+<div class="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgZmlsbD0ibm9uZSIvPgo8Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxIiBmaWxsPSIjNDM0NzRiIi8+Cjwvc3ZnPg==')]"></div>
+</div>
+<!-- Main Content Area: Centered Modal -->
+<main class="flex-grow flex items-center justify-center p-md relative z-10 w-full h-full">
+<!-- Modal Overlay / Backdrop -->
+<div class="absolute inset-0 bg-surface-container-lowest/60 backdrop-blur-sm z-10 pointer-events-none"></div>
+<!-- Modal Container -->
+<div class="relative z-20 w-full max-w-2xl bg-surface-container-low/90 backdrop-blur-xl rounded-xl border border-outline-variant amber-glow overflow-hidden shadow-2xl flex flex-col transform transition-all duration-300 scale-100">
+<!-- Modal Header -->
+<header class="p-lg border-b border-outline-variant flex items-start gap-md">
+<div class="flex-shrink-0 w-12 h-12 rounded-lg bg-surface-container-high border border-amber-500/30 flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-[28px]" data-icon="warning">warning</span>
+</div>
+<div class="flex-grow">
+<div class="flex items-center gap-sm mb-xs flex-wrap">
+<span class="font-label-caps text-label-caps text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 rounded-sm">CHANGE_SETTINGS</span>
+<span class="font-code-sm text-code-sm text-outline-variant">ref #42</span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface">Permission Required: Change Settings</h1>
+</div>
+</header>
+<!-- Modal Body -->
+<div class="p-lg flex flex-col gap-lg">
+<!-- Action Description -->
+<div class="font-body-lg text-body-lg text-on-surface-variant">
+                    Apply <span class="text-on-surface font-bold">1</span> setting change: font scale → 1.
+                </div>
+<!-- Data Table / List -->
+<div class="border border-outline-variant rounded-lg bg-surface-container-highest/30 overflow-hidden">
+<table class="w-full text-left border-collapse">
+<tbody>
+<tr class="border-b border-outline-variant last:border-b-0 hover:bg-surface-container-high/50 transition-colors">
+<td class="py-sm px-md font-body-md text-on-surface border-r border-outline-variant w-1/2">
+                                    font scale
+                                </td>
+<td class="py-sm px-md font-code-sm text-code-sm text-secondary w-1/2 flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px] text-outline-variant" data-icon="arrow_right_alt">arrow_right_alt</span>
+                                    1
+                                </td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Input Area -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-caps text-label-caps text-outline" for="agent-instruction">Instruction Override (Optional)</label>
+<div class="relative teal-glow-focus transition-all duration-200 rounded-lg">
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md text-on-surface font-body-sm text-body-sm placeholder:text-outline-variant focus:outline-none focus:ring-0 focus:border-secondary resize-none" id="agent-instruction" placeholder="Add an instruction for the agent..." rows="3"></textarea>
+</div>
+</div>
+</div>
+<!-- Modal Footer (Actions) -->
+<footer class="p-lg border-t border-outline-variant bg-surface-container-low flex flex-wrap items-center justify-between gap-md">
+<!-- Secondary / Subtle Actions (Left aligned) -->
+<div class="flex gap-sm">
+<button class="px-md py-sm rounded-DEFAULT border border-amber-500/50 text-amber-500 font-label-caps text-label-caps hover:bg-amber-500/10 transition-colors duration-200 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="all_inclusive">all_inclusive</span>
+                        ALWAYS ALLOW
+                    </button>
+<button class="px-md py-sm rounded-DEFAULT text-primary font-label-caps text-label-caps hover:bg-surface-container-high transition-colors duration-200 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span>
+                        WRITE SOMETHING ELSE
+                    </button>
+</div>
+<!-- Primary / Critical Actions (Right aligned) -->
+<div class="flex gap-sm">
+<button class="px-md py-sm rounded-DEFAULT bg-error/10 border border-error/50 text-error font-label-caps text-label-caps hover:bg-error hover:text-on-error transition-colors duration-200 flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="block">block</span>
+                        REJECT
+                    </button>
+<button class="px-md py-sm rounded-DEFAULT bg-secondary text-on-secondary font-label-caps text-label-caps hover:bg-secondary-fixed-dim transition-colors duration-200 flex items-center gap-xs font-bold shadow-[0_0_10px_rgba(65,229,117,0.3)]">
+<span class="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+                        APPROVE
+                    </button>
+</div>
+</footer>
+</div>
+</main>
+<!-- Shared Navigation Components Suppressed: Transactional/Task-Focused Intent -->
+<!-- Navigation shell is intentionally hidden as this is a focused, modal-driven interaction blocking the main canvas. -->
+</body></html>

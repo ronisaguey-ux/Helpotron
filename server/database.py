@@ -290,6 +290,30 @@ class Payment(Base):
     user = relationship("User", back_populates="payments")
 
 
+class ModerationItem(Base):
+    """Flagged user content awaiting admin review (Control Center → Moderation).
+
+    Replaces the old hardcoded in-memory mock queue (09-01, operator): entries
+    are created by server/moderation.py when user text hits a safety rule, and
+    resolved through POST /api/admin/moderation/{id}/action.
+    """
+    __tablename__ = "moderation_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # mod_<hex8>
+    content_type: Mapped[str] = mapped_column(String(32))        # user_feedback | data_submission
+    content_ref: Mapped[str] = mapped_column(String(64))         # fb_<hex8> / mc_<hex8> (JSONL id)
+    user_public_id: Mapped[str] = mapped_column(String(64), default="")
+    reason: Mapped[str] = mapped_column(String(255))
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | approved | rejected
+    flagged_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    admin_notes: Mapped[str] = mapped_column(Text, default="")
+
+
 class DataSubmission(Base):
     __tablename__ = "data_submissions"
 
@@ -468,6 +492,33 @@ class AdminNoticeRead(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     notice_id: Mapped[int] = mapped_column(Integer, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ExtensionRelease(Base):
+    """Remembered extension release announcement (operator 09-03): rows are
+    auto-synced from extension/manifest.json so EVERY version bump is
+    recorded and every user gets a What's-new notification; an admin can
+    annotate any row with human release notes."""
+    __tablename__ = "extension_releases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(256), default="Helpotron Extension")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    is_major: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ExtensionReleaseRead(Base):
+    """Per-user read receipts for extension release notifications (mirrors
+    AdminNoticeRead): one row per (release, user) — acking is per-user, never
+    global, so one user dismissing never silences the notice for others."""
+    __tablename__ = "extension_release_reads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    release_id: Mapped[int] = mapped_column(Integer, index=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True)
     read_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

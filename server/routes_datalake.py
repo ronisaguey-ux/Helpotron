@@ -10,6 +10,7 @@ from .database import DataSubmission, User, get_db
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
 from .datalake import datalake_manager, datalake_agent
+from .moderation import flag_content, screen_content
 from .user_settings_service import user_settings_service
 
 router = APIRouter(prefix="/api", tags=["datalake"])
@@ -45,7 +46,11 @@ class MicroCreditRedeemPayload(BaseModel):
 # ─── Feedback Routes ─────────────────────────────────────────────────────────
 
 @router.post("/feedback/submit")
-async def submit_user_feedback(payload: FeedbackSubmission, current_user: User = Depends(get_current_authenticated_user)):
+async def submit_user_feedback(
+    payload: FeedbackSubmission,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
     """Submits user feedback into the Data Lake with categorization and urgency tagging."""
     entry = datalake_manager.record_feedback(
         category=payload.category,
@@ -54,6 +59,19 @@ async def submit_user_feedback(payload: FeedbackSubmission, current_user: User =
         user_id=current_user.public_id,
         feature_tag=payload.feature_tag,
     )
+    # Real moderation hook (09-01): user feedback is user-generated text —
+    # anything hitting a safety rule lands in the admin moderation queue.
+    flagged, reason, score = screen_content(payload.message or "")
+    if flagged:
+        flag_content(
+            db,
+            content_type="user_feedback",
+            content_ref=entry.get("feedback_id", ""),
+            user_public_id=current_user.public_id,
+            text=payload.message or "",
+            reason=reason,
+            risk_score=score,
+        )
     return {"status": "success", "feedback": entry}
 
 
@@ -118,6 +136,20 @@ async def submit_data_for_microcredits(
         data_content=payload.data_content,
         metadata=payload.metadata,
     )
+
+    # Real moderation hook (09-01): screen the submission text at write time;
+    # hits land in the admin moderation queue (approve keeps, reject deletes).
+    flagged, reason, score = screen_content(f"{payload.title or ''} {payload.data_content or ''}")
+    if flagged:
+        flag_content(
+            db,
+            content_type="data_submission",
+            content_ref=result.get("submission_id", ""),
+            user_public_id=user_id,
+            text=payload.data_content or "",
+            reason=reason,
+            risk_score=score,
+        )
 
     # Balance is NOT incremented yet (only estimated pending review)
     user = db.query(User).filter(User.public_id == user_id).first()
