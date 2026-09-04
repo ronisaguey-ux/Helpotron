@@ -33,34 +33,29 @@ const usageTokenLabel = (u) =>
 /* ── Navigation tree ─────────────────────────────────────────────────────── */
 const NAV_TREE = (isAdmin) => [
   {
-    group: 'HOME',
+    group: 'CORE PILLARS',
     items: [
-      { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard },
-      { key: 'activity', label: 'Activity', Icon: Activity },
-      { key: 'extension', label: 'Extension', Icon: Puzzle },
-      { key: 'guide', label: 'Guide', Icon: HelpCircle },
+      { key: 'overview', label: 'My Assignments', Icon: LayoutDashboard },
+      { key: 'dump', label: 'Drop Assignment', Icon: Inbox },
+      { key: 'library', label: 'Study Library', Icon: BookOpen },
+      { key: 'credits', label: 'Balance & Tokens', Icon: CreditCard },
     ],
   },
   {
     group: 'WORKSPACE',
     items: [
       { key: 'agent', id: 'my_agent', label: 'My Agent', Icon: Brain },
-      { key: 'library', label: 'Library', Icon: BookOpen },
-      { key: 'dump', label: 'Assignment Dump', Icon: Inbox },
+      { key: 'activity', label: 'Activity', Icon: Activity },
       { key: 'datalake', label: 'Data Lake', Icon: Database },
-    ],
-  },
-  {
-    group: 'INTELLIGENCE',
-    items: [
       { key: 'insights', label: 'Insights', Icon: BarChart3 },
     ],
   },
   {
-    group: 'ACCOUNT',
+    group: 'SYSTEM',
     items: [
-      { key: 'credits', label: 'Credits', Icon: CreditCard },
       { key: 'settings', label: 'Settings', Icon: Settings },
+      { key: 'extension', label: 'Extension', Icon: Puzzle },
+      { key: 'guide', label: 'Guide', Icon: HelpCircle },
     ],
   },
   ...(isAdmin
@@ -74,14 +69,14 @@ const NAV_TREE = (isAdmin) => [
     : []),
 ];
 
-// Unified 6-Item Navigation Shell (August 23 Simplified IA)
+// Unified Navigation Shell — 4 primary pillars + core utilities
 export const NAV_ITEMS = [
-  { id: 'today', label: 'Today', icon: LayoutDashboard },
-  { id: 'assignments', label: 'Assignments', icon: FileText },
-  { id: 'library', label: 'Library', icon: BookOpen },
+  { id: 'overview', label: 'My Assignments', icon: LayoutDashboard },
+  { id: 'dump', label: 'Drop Assignment', icon: Inbox },
+  { id: 'library', label: 'Study Library', icon: BookOpen },
+  { id: 'credits', label: 'Balance & Tokens', icon: CreditCard },
   { id: 'my_agent', label: 'My Agent', icon: Brain, isPrimaryAgent: true },
   { id: 'activity', label: 'Activity', icon: Activity },
-  { id: 'billing', label: 'Billing', icon: CreditCard },
   { id: 'settings', label: 'Settings', icon: Settings }
 ];
 
@@ -933,10 +928,10 @@ export default function AppShell({
         aria-label="Mobile Bottom Navigation"
       >
         {[
-          { key: 'overview', label: 'Home', Icon: LayoutDashboard },
-          { key: 'agent', label: 'Agent', Icon: Brain },
-          { key: 'insights', label: 'Insights', Icon: BarChart3 },
-          { key: 'activity', label: 'History', Icon: Activity },
+          { key: 'overview', label: 'Assignments', Icon: LayoutDashboard },
+          { key: 'dump', label: 'Drop', Icon: Inbox },
+          { key: 'library', label: 'Library', Icon: BookOpen },
+          { key: 'credits', label: 'Tokens', Icon: CreditCard },
         ].map((t) => {
           const selected = activeView === t.key;
           return (

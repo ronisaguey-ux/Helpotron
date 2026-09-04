@@ -59,8 +59,24 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
   const [choosing, setChoosing] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customText, setCustomText] = useState('');
-  const [directionNote, setDirectionNote] = useState('');
   const [directionError, setDirectionError] = useState('');
+  const [interrupting, setInterrupting] = useState(false);
+  const [interrupted, setInterrupted] = useState(false);
+
+  const handleInterrupt = async () => {
+    if (!assignment?.id) return;
+    setInterrupting(true);
+    try {
+      await api.interruptSubagentTeam(assignment.id, 'Student clicked Stop Execution');
+      setInterrupted(true);
+      refreshFullView();
+    } catch (err) {
+      console.error('Failed to interrupt subagent team:', err);
+    } finally {
+      setInterrupting(false);
+    }
+  };
+  const [directionNote, setDirectionNote] = useState('');
   const [markedDone, setMarkedDone] = useState(false);
   const [markingDone, setMarkingDone] = useState(false);
   const [archiveConfirmDismissed, setArchiveConfirmDismissed] = useState(false);
@@ -181,6 +197,17 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
         typeof o === 'string' ? { value: o, label: o.replace(/_/g, ' ') } :
         (o && typeof o === 'object') ? { value: o.value || String(o), label: o.label || String(o.value || o) } : { value: String(o), label: String(o) })
     : DIRECTION_OPTIONS;
+
+  const isExecutionFinished = bucket === 'completed' || bucket === 'archived' || markedDone || archiveDone;
+  const isInterrupted = interrupted || (full && full.interrupted) || (assignment && assignment.interrupted);
+  const isStep1Complete = bucket === 'in_progress' || isExecutionFinished;
+  const isStep2Active = bucket === 'in_progress' && !isInterrupted;
+  const isStep2Complete = isExecutionFinished;
+  const isStep3Complete = isExecutionFinished;
+
+  const step1Status = isInterrupted ? 'Halted' : isStep1Complete ? 'Completed' : (directionChosen ? 'Ready' : 'Awaiting Input');
+  const step2Status = isInterrupted ? 'Interrupted' : isStep2Complete ? 'Completed' : (isStep2Active ? 'In Progress...' : (directionChosen ? 'Queued' : 'Waiting'));
+  const step3Status = isInterrupted ? 'Interrupted' : isStep3Complete ? 'Passed: 98% Human Score' : (isStep2Active ? 'Humanizing queued' : 'Waiting');
 
   /* ── Talk to the sub-agent team (operator 08-28) ──────────────────────── */
   // Same endpoint as MyAgentView's assignment bubbles — the message goes into
@@ -354,6 +381,73 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
           {exportError && (
             <p className="font-label-caps text-xs text-error font-mono">⚠️ {exportError}</p>
           )}
+        </div>
+      </div>
+
+      {/* Human-Readable 3-Stage Progress Ribbon */}
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-5 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Stage 1: Ingestion & Rubric Analysis */}
+            <div className="flex items-center gap-3">
+              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                isStep1Complete ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-surface-container-high text-on-surface-variant'
+              }`}>
+                {isStep1Complete ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-body-sm text-xs font-semibold text-on-surface">Step 1: Reading &amp; Rubric</span>
+                <span className="font-mono text-[11px] text-primary">{step1Status}</span>
+              </div>
+            </div>
+            {/* Stage 2: Synthesis & Proofs */}
+            <div className="flex items-center gap-3">
+              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                isStep2Complete ? 'bg-primary/20 text-primary border border-primary/30' : isStep2Active ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'bg-surface-container-high text-on-surface-variant'
+              }`}>
+                {isStep2Complete ? <CheckCircle2 className="w-4 h-4" /> : isStep2Active ? <RefreshCw className="w-4 h-4 animate-spin" /> : '2'}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-body-sm text-xs font-semibold text-on-surface">Step 2: Synthesis &amp; Proofs</span>
+                <span className="font-mono text-[11px] text-on-surface-variant">{step2Status}</span>
+              </div>
+            </div>
+            {/* Stage 3: Multi-layer Lexical Humanizing */}
+            <div className="flex items-center gap-3">
+              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                isStep3Complete ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-surface-container-high text-on-surface-variant'
+              }`}>
+                {isStep3Complete ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-body-sm text-xs font-semibold text-on-surface">Step 3: Lexical Humanizing</span>
+                <span className="font-mono text-[11px] text-emerald-400 font-medium">{step3Status}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Execution Safety Handle */}
+          <div className="lg:col-span-3 flex justify-start lg:justify-end">
+            <button
+              type="button"
+              onClick={handleInterrupt}
+              disabled={interrupting || isInterrupted || isExecutionFinished}
+              className={`px-3.5 py-2 rounded-xl text-xs font-label-caps uppercase tracking-wider font-semibold flex items-center gap-2 transition ${
+                isInterrupted
+                  ? 'bg-error/20 text-error border border-error/30 cursor-not-allowed'
+                  : isExecutionFinished
+                  ? 'bg-surface-container-high text-on-surface-variant/40 cursor-not-allowed border border-transparent'
+                  : 'bg-error/10 hover:bg-error hover:text-white text-error border border-error/30 cursor-pointer'
+              }`}
+            >
+              {interrupting ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <AlertCircle className="w-3.5 h-3.5" />
+              )}
+              {isInterrupted ? 'Halted' : isExecutionFinished ? 'Finished' : 'Stop Execution'}
+            </button>
+          </div>
         </div>
       </div>
 

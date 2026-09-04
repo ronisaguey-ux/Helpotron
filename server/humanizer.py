@@ -558,7 +558,7 @@ Strict Anti-AI-Slop Directives:
             except Exception as e:
                 logger.warning("Humanizer LLM rewrite pass failed, using heuristic cleaned text: %s", e)
 
-        # Final Step: Multi-Detector Verification Suite (Pangram, Sapling, Originality, Copyleaks, Winston)
+        # Final Step: Multi-Detector Verification Suite (Pangram, Sapling)
         avg_ai_score, results, passed = await score_text(current_text, threshold=100.0 - self.threshold)
         final_burstiness = KimhonsHumanizeEngine.calculate_burstiness_metrics(current_text)
         final_pattern_audit = KimhonsHumanizeEngine.audit_38_patterns(current_text)

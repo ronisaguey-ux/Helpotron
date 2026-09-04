@@ -238,8 +238,19 @@ async def redeem_microcredits(
     # Strict platform compute credit policy: credits cannot be cashed out to external accounts
     method = "compute_credits"
 
+    # Owner rule A11 / 09-04: Earning micro-credits works in testing, but redemption
+    # is live-only after platform launch (LAUNCH_ENABLED flag).
+    from .config import config
+    from .database import CreditTransaction
+    if not getattr(config, "launch_enabled", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Micro-credit redemption is disabled until the platform officially launches. "
+                   "You can continue earning micro-credits via Data Lake submissions during testing.",
+        )
+
     # Operator 08-26: nothing converts without an actually-implemented Data Lake
-    # submission history — and the conversion is 1:1 (no ×10 inflation).
+    # submission history — and the conversion is 1000:1.
     history = datalake_manager.list_microcredit_submissions(user_id=current_user.public_id)
     implemented = [s for s in history if s.get("status") == "implemented"]
     if not implemented:
@@ -248,7 +259,7 @@ async def redeem_microcredits(
             detail="Nothing to convert yet — micro-credits are only earned once your Data Lake submissions are reviewed and implemented by the operator.",
         )
 
-    compute_credits_gained = credits_to_redeem / 1000  # 1000 micro-credits = 1 credit (operator 08-28)
+    compute_credits_gained = credits_to_redeem / 1000  # 1000 micro-credits = 1 credit ($1.00 discount)
 
     if user:
         settings = user_settings_service.get_user_settings(user)
@@ -260,6 +271,11 @@ async def redeem_microcredits(
         user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
 
         user.credits = (user.credits or 0) + compute_credits_gained
+        db.add(CreditTransaction(
+            user_id=user.id,
+            delta=compute_credits_gained,
+            reason=f"datalake:redeem:{credits_to_redeem}_microcredits",
+        ))
         db.commit()
 
     return {

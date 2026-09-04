@@ -120,7 +120,8 @@ def test_ai_key_writable_and_defaults():
     assert d["ai"]["detection"]["enabled"] == "off"
     assert d["ai"]["detection"]["min_human"] == 70
     assert d["ai"]["detection"]["detectors"]["sapling"] is True
-    assert d["ai"]["detection"]["detectors"]["winston_ai"] is False  # 08-31: off until topped up
+    assert d["ai"]["detection"]["detectors"]["pangram"] is True
+    assert "winston_ai" not in d["ai"]["detection"]["detectors"]  # 09-04 A8: purged
     assert d["ai"]["style"]["enabled"] == "off"
     assert d["ai"]["style"]["selection"] == []
     assert d["ai"]["style"]["samples"] == {}
@@ -157,12 +158,11 @@ def test_detection_min_human_clamped():
 
 
 def test_detection_detectors_default_and_toggles():
-    # 08-31: default set is Sapling + Pangram — Winston is expensive
-    # (1 credit/word) and off until the account is topped up.
+    # 09-04 A8: default set is Sapling + Pangram — Winston purged.
     assert detection_detectors(_settings()) == ["sapling", "pangram"]
     s = _settings(detection={"enabled": "on", "min_human": 70,
-                             "detectors": {"sapling": False, "winston_ai": True, "pangram": False}})
-    assert detection_detectors(s) == ["winston_ai"]
+                             "detectors": {"sapling": False, "pangram": True}})
+    assert detection_detectors(s) == ["pangram"]
 
 
 @pytest.mark.asyncio
@@ -206,10 +206,8 @@ async def test_ensure_human_standard_excludes_error_votes(monkeypatch):
 
     async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None):
         if "v2" in text:
-            return (0.0, [_res("sapling", 0.0), _res("pangram", 0.0),
-                          _res("winston_ai", 20.0, "HTTP 400")], True)
-        return (40.0, [_res("sapling", 100.0), _res("pangram", 0.0),
-                       _res("winston_ai", 20.0, "HTTP 400")], False)
+            return (0.0, [_res("sapling", 0.0), _res("pangram", 0.0)], True)
+        return (40.0, [_res("sapling", 100.0), _res("pangram", 0.0), _res("sapling", 20.0, "HTTP 400")], False)
 
     async def fake_call_llm(**kwargs):
         return "rewritten v2 draft " * 12

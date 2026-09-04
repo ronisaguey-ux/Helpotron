@@ -39,7 +39,6 @@ class ModelTieringEngine:
     DETECTOR_PRICING = {
         "pangram": {"name": "Pangram Cadence", "cost_usd": 0.0020, "tier": "cheap"},
         "sapling": {"name": "Sapling Academic", "cost_usd": 0.0015, "tier": "cheap"},
-        "winston_ai": {"name": "Winston AI", "cost_usd": 0.0020, "tier": "cheap"},
     }
 
     @staticmethod
@@ -96,9 +95,9 @@ class ModelTieringEngine:
         else:
             model_cost = (est_tokens / 1_000_000.0) * 2.50 + (est_tokens / 1_000_000.0) * 7.50
 
-        # Detectors Cost
+        # Detectors Cost (Pangram + Sapling only)
         detector_cost = 0.0
-        active_detectors = enabled_detectors or ["pangram", "sapling", "winston_ai"]
+        active_detectors = enabled_detectors or ["pangram", "sapling"]
         for d in active_detectors:
             if d in ModelTieringEngine.DETECTOR_PRICING:
                 detector_cost += ModelTieringEngine.DETECTOR_PRICING[d]["cost_usd"]

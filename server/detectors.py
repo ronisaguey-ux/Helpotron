@@ -248,33 +248,6 @@ class CopyleaksDetector(Detector):
             return DetectorResult(self.name, 20.0, {"error": str(e)})
 
 
-class WinstonAIDetector(Detector):
-    """Winston AI Content Detector (api.gowinston.ai)."""
-
-    def __init__(self, api_key: Optional[str] = None):
-        from .config import config
-        super().__init__("winston_ai", api_key or getattr(config, "winston_api_key", "") or os.getenv("WINSTON_API_KEY", ""))
-
-    async def detect(self, text: str) -> DetectorResult:
-        if not self.api_key or self.api_key.startswith("your_"):
-            return DetectorResult(self.name, 0.0, {"configured": False, "unavailable": True, "reason": "API key not configured"})
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.gowinston.ai/v2/ai-content-detection",
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                    json={"text": text, "sentences": True, "language": "auto"},
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        score = float(data.get("score", 0.0))
-                        return DetectorResult(self.name, score, data)
-                    return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
-        except Exception as e:
-            return DetectorResult(self.name, 20.0, {"error": str(e)})
-
-
 # Default registry
 # 08-28 BUG-4 fix: DummyDetector was registered BY DEFAULT and returned a
 # random score (uniform(5,25)) — averaged into every real score_text result,
@@ -286,15 +259,13 @@ registry = DetectorRegistry()
 registry.register(PerplexityCadenceDetector())
 registry.register(StatisticalBurstinessDetector())
 
-# Only the fetched detectors are available (owner 08-26). Heuristic detectors
-# always run; API-backed detectors are gated on their API key being present.
+# Only the fetched detectors are available (owner 08-26; 09-04 A8 purge: Pangram + Sapling only).
+# Heuristic detectors always run; API-backed detectors are gated on their API key being present.
 _cfg = __import__('server.config', fromlist=['config']).config
 if getattr(_cfg, 'pangram_api_key', ''):
     registry.register(PangramDetector())
 if getattr(_cfg, 'sapling_api_key', ''):
     registry.register(SaplingDetector())
-if getattr(_cfg, 'winston_api_key', ''):
-    registry.register(WinstonAIDetector())
 
 # Originality.ai and Copyleaks are intentionally not registered when no key is
 # fetched (owner 08-26 directive: only the fetched detectors are available).
