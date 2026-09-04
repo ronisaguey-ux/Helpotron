@@ -3,7 +3,22 @@
 
 // Pure crawl logic (scope/robots/index parsing/payload builder) lives in a
 // shared module so the node test harness can unit-test the real code.
-importScripts('crawl-core.js');
+// MV3 classic worker: importScripts. Firefox MV3 has NO background.service_worker
+// support — with the dual-key manifest (service_worker + scripts) Firefox loads
+// background.js as an EVENT PAGE (Window context), where importScripts is
+// undefined and would crash the whole background at load ("Uncaught
+// ReferenceError: importScripts is not defined"). Load crawl-core.js as a
+// regular script there instead; the script's function declarations become
+// globals before any message event is dispatched (all uses of the exports are
+// inside listeners/async handlers, never at top level).
+if (typeof importScripts === 'function') {
+  importScripts('crawl-core.js');
+} else if (typeof document !== 'undefined' && document.documentElement) {
+  const s = document.createElement('script');
+  s.src = chrome.runtime.getURL('crawl-core.js');
+  s.async = false;
+  document.documentElement.appendChild(s);
+}
 
 // First-run onboarding (09-01): the design package ships a 3-step welcome page;
 // open it once, on install only (never on update).
@@ -13,7 +28,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-const DEFAULT_SERVER = 'http://localhost:8000';
+const DEFAULT_SERVER = 'https://helpotron.dpdns.org';
 
 async function getServer() {
   const localData = await chrome.storage.local.get('server');
@@ -382,7 +397,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'startRecording') {
     chrome.tabs.create({ url: chrome.runtime.getURL('recorder.html') }, (tab) => {
-      sendResponse({ ok: true, tabId: tab?.id });
+      if (chrome.runtime.lastError || !tab) {
+        sendResponse({
+          ok: false,
+          error: (chrome.runtime.lastError && chrome.runtime.lastError.message) || 'Could not open the recorder',
+        });
+      } else {
+        sendResponse({ ok: true, tabId: tab.id });
+      }
     });
     return true;
   }
@@ -469,8 +491,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'openDataLake') {
     getServer().then((srv) => {
-      chrome.tabs.create({ url: srv });
+      // Tab creation itself can fail (fetch of an unreachable host etc.) — it is
+      // async and its rejection must not become an unhandled rejection in the SW.
+      chrome.tabs.create({ url: srv }).catch((err) => {
+        console.warn('[helpotron] openDataLake: tab create failed:', String(err).slice(0, 120));
+      });
       sendResponse({ ok: true });
+    }).catch((err) => {
+      sendResponse({ ok: false, error: String(err).slice(0, 160) });
     });
     return true;
   }
@@ -1411,7 +1439,9 @@ async function startCrawl(chosenTabId) {
   await writeCrawlState(state);
   setCrawlBadge(state);
   chrome.alarms.create(CRAWL_ALARM, { periodInMinutes: 0.5 }); // 30s ticks (MV3 minimum)
-  crawlTick(); // kick off immediately instead of waiting for the first tick
+  // Kick off immediately instead of waiting for the first tick; the alarm-path
+  // tick already catches, this direct kick must not reject unhandled either.
+  crawlTick().catch((e) => console.error('[helpotron] crawl start error:', e));
   return { ok: true, total: state.total, scope: scope.courseUrl };
 }
 

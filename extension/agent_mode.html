@@ -13,7 +13,14 @@
       display: flex; flex-direction: column;
       min-height: 100vh; margin: 0; background: var(--surface); color: var(--on-surface);
     }
-    .agent-appbar { position: sticky; top: 0; z-index: 20; }
+    .agent-appbar { position: sticky; top: 0; z-index: 20; flex-wrap: wrap; row-gap: 6px; }
+    .appbar-controls {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      flex: 1 1 100%; width: 100%;
+    }
+    /* All .btn variants carry width:100% (design system); inside the controls
+       row they share the line instead, so neutralize the full width. */
+    .appbar-controls .btn { flex: 1; width: auto; min-width: 110px; }
     .agent-banner {
       display: flex; align-items: center; gap: 10px;
       background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-high));
@@ -26,10 +33,12 @@
     }
     .agent-main {
       flex: 1; display: grid; grid-template-columns: minmax(300px, 5fr) minmax(280px, 4fr);
-      gap: 12px; padding: 12px 16px; align-items: start;
+      grid-template-rows: 1fr; gap: 12px; padding: 12px 16px;
     }
     @media (max-width: 860px) { .agent-main { grid-template-columns: 1fr; } }
     .capture-card { display: flex; flex-direction: column; gap: 10px; }
+    .capture-note { margin-top: auto; }
+    .log-empty { font-family: var(--font-body); font-size: 13px; font-style: italic; padding: 6px 0; }
     .video-frame {
       width: 100%; border-radius: var(--radius-lg); background: var(--surface-container-lowest);
       border: 1px solid var(--surface-container-high); min-height: 140px; max-height: 56vh;
@@ -94,6 +103,12 @@
       border-top: 1px solid var(--surface-container-high); background: var(--surface-container-lowest);
       min-height: 16px;
     }
+    /* .hidden must beat the component display rules above: design.css defines
+       .hidden { display:none } (0,1,0) but rules later in the cascade with the
+       same specificity (e.g. .modal-overlay/.agent-banner display:flex, here in
+       this <style>) win by order — overlays/banner stayed permanently visible
+       and "Cancel"/"Close" could never dismiss them. !important settles it. */
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -102,24 +117,28 @@
     <div class="app-title">Agent Mode</div>
     <span class="chip chip--gray" id="captureChip"><span class="dot"></span>No screen selected</span>
     <span class="chip chip--gray" id="modeChip" title="Permission mode for agent actions (Manual / Automatic / YOLO) — set in the popup">mode — manual</span>
+    <span class="chip chip--gray" id="seescreenChip" title="Attach your screen to every message you send — set in the popup"><span class="dot"></span>See screen: OFF</span>
+    <span class="chip chip--gray" id="executeChip" title="Let the agent click, type and scroll — set in the popup"><span class="dot"></span>Execute: OFF</span>
     <div class="spacer"></div>
-    <button class="btn btn--outline btn--sm" id="selectTabBtn" type="button" title="Capture a tab to drive">
-      Select tab
-    </button>
-    <button class="btn btn--outline btn--sm" id="pickScreenBtn" type="button" title="Pick a screen or window (native picker)">
-      Pick screen
-    </button>
-    <button class="btn btn--secondary btn--sm" id="lookBtn" type="button" title="Analyze the current frame (vision)">
-      Look now
-    </button>
-    <label class="switch" id="controlSwitchWrap" title="Toggle agent mouse/keyboard control">
-      <input type="checkbox" id="controlToggle" />
-      <span class="switch-track" aria-hidden="true"></span>
-      <span class="switch-label">Control</span>
-    </label>
-    <button class="btn btn--danger-outline btn--sm" id="stopBtn" type="button" title="Stop the agent immediately" aria-label="Stop the agent">
-      Stop
-    </button>
+    <div class="appbar-controls">
+      <button class="btn btn--outline btn--sm" id="selectTabBtn" type="button" title="Capture a tab to drive">
+        Select tab
+      </button>
+      <button class="btn btn--outline btn--sm" id="pickScreenBtn" type="button" title="Pick a screen or window (native picker)">
+        Pick screen
+      </button>
+      <button class="btn btn--secondary btn--sm" id="lookBtn" type="button" title="Analyze the current frame (vision)">
+        Look now
+      </button>
+      <label class="switch" id="controlSwitchWrap" title="Toggle agent mouse/keyboard control">
+        <input type="checkbox" id="controlToggle" />
+        <span class="switch-track" aria-hidden="true"></span>
+        <span class="switch-label">Control</span>
+      </label>
+      <button class="btn btn--danger-outline btn--sm" id="stopBtn" type="button" title="Stop the agent immediately" aria-label="Stop the agent">
+        Stop
+      </button>
+    </div>
   </header>
 
   <!-- Control banner: always visible while control is enabled (spec) -->
@@ -145,7 +164,7 @@
         </button>
       </div>
       <div class="vision-out hidden" id="visionOutput" aria-live="polite"></div>
-      <div class="muted-note">
+      <div class="muted-note capture-note">
         The newest frame is attached to every message you send — the agent "sees" this screen through it, and drives the selected tab only when Control is ON.
       </div>
     </section>
