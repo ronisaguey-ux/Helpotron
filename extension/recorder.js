@@ -2,7 +2,7 @@
 // Helpotron server with dynamic real-time audio waveform visualizer.
 
 const params = new URLSearchParams(window.location.search);
-const SERVER = params.get('server') || 'http://localhost:8000';
+const SERVER = params.get('server') || 'https://helpotron.dpdns.org';
 const PUBLIC_ID = params.get('public_id') || 'dev-user';
 
 const timerEl = document.getElementById('timer');

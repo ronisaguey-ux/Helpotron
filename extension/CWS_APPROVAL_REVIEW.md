@@ -109,8 +109,8 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 
 **Short summary (≤132):** Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.
 
-**Detailed description:**
-> Helpotron turns the course pages you already have open — Canvas, Google Classroom, Blackboard, Brightspace/D2L, Moodle, Schoology, Google Docs, Gmail, Notion, Microsoft 365, or the Helpotron web app — into a study session.
+**Detailed description:** (2026-09-02 rejection "Yellow Argon" = keyword spam from the brand list; NOW BRAND-FREE)
+> Helpotron turns the course pages and documents you already have open into a study session you can come back to anytime.
 >
 > What it does:
 > - **Scrape** an assignment, rubric, or course page you open: Helpotron saves the prompt, due info, course context, and listed file links (with size and SHA-256; file bytes are uploaded up to 6 MB each) into your Helpotron account. A course-site mode reads the site's robots.txt first and respects it.
@@ -132,7 +132,7 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 > - **Host permissions** — each listed LMS/document host (Canvas, Classroom, Blackboard, Brightspace, Moodle, Schoology, Google Docs, Gmail, Notion, Office) plus your own Helpotron server (https://helpotron.dpdns.org) and localhost for local development; permission is required so the extension can read the page you asked it to capture.
 
 **Privacy policy URL:** `https://helpotron.dpdns.org/privacy-policy`
-**Supported sites (metadata):** Canvas, Google Classroom, Blackboard, Brightspace/D2L (API), Moodle, Schoology, Google Docs, Gmail, Notion, Microsoft 365 (Word Online), misc.
+**Supported sites (metadata):** ⚠️ INACTIVE — brand enumeration in the store description caused the keyword-spam rejection (Yellow Argon). Keep it out of ALL store-facing text. (Active-host list lives in manifest.json `host_permissions` and is fine there.)
 **Visibility:** Unlisted (intended; not published at review time). Unlisted items still undergo the human review.
 
 ---

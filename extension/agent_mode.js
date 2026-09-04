@@ -144,6 +144,13 @@ function pushLog(kind, text) {
 function renderLogs() {
   const list = els.actionLogList;
   list.innerHTML = '';
+  if (state.logs.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'log-empty';
+    empty.textContent = 'No actions yet — the agent writes its steps here.';
+    list.appendChild(empty);
+    return;
+  }
   for (const entry of state.logs) {
     const div = document.createElement('div');
     const time = new Date(entry.ts).toLocaleTimeString([], { hour12: false });
@@ -208,10 +215,20 @@ function applyAgentState(st) {
 }
 
 function updateModeChip() {
-  const chip = document.getElementById('modeChip');
-  if (!chip) return;
-  chip.textContent = `mode — ${state.agentMode} · seescreen ${state.seescreen ? 'ON' : 'OFF'} · execute ${state.execute ? 'ON' : 'OFF'}`;
-  chip.classList.toggle('chip--green', state.execute && !state.paused);
+  const modeChip = document.getElementById('modeChip');
+  if (modeChip) modeChip.textContent = `mode — ${state.agentMode}`;
+  const set = (id, label, on, onClass) => {
+    const chip = document.getElementById(id);
+    if (!chip) return;
+    chip.textContent = '';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(`${label}: ${on ? 'ON' : 'OFF'}`));
+    chip.classList.toggle(onClass, !!on);
+  };
+  set('seescreenChip', 'See screen', state.seescreen, 'chip--blue');
+  set('executeChip', 'Execute', state.execute, 'chip--amber');
 }
 
 async function loadAgentState() {
@@ -317,7 +334,7 @@ function refreshLoginNote() {
   isLoggedIn().then((ok) => {
     note.classList.toggle('hidden', ok);
     els.chatSend.disabled = !ok;
-    els.chatInput.placeholder = ok ? 'Tell the agent what to do on this screen…' : 'Login required — open the popup and sign in first';
+    els.chatInput.placeholder = 'Tell the agent what to do on this screen…';
   });
 }
 
@@ -393,7 +410,11 @@ function pickScreen() {
   }
   stopVideo();
   // Callback form: streamId arrives when the user picks; '' on cancel.
-  chrome.desktopCapture.chooseDesktopMedia({ targetTypes: ['screen', 'window'] }, (streamId) => {
+  // NOTE: first arg is the classic source ARRAY (['screen','window']) — the
+  // documented Chromium signature since forever and the only form Firefox
+  // accepts; a `{targetTypes:[...]}` options object is not part of either
+  // browser's chooseDesktopMedia schema.
+  chrome.desktopCapture.chooseDesktopMedia(['screen', 'window'], (streamId) => {
     if (!streamId) {
       pushLog('info', 'screen picker cancelled');
       setStatus('Screen picker cancelled.');

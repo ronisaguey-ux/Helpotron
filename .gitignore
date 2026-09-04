@@ -49,3 +49,6 @@ data/sandboxes/
 
 # runtime log rotation artifacts (winston-daily-rotate-file)
 logs/
+
+# CWS upload packages (build artifacts)
+/helpotron-extension-v*.zip

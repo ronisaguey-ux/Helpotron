@@ -49,7 +49,7 @@ def get_current_manifest() -> Dict[str, Any]:
                 return json.load(f)
         except Exception:
             pass
-    return {"version": "2.5.1", "name": "Helpotron Academic Companion"}
+    return {"version": "2.5.2", "name": "Helpotron Academic Companion"}
 
 
 class VersionCheckRequest(BaseModel):
@@ -136,6 +136,11 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.5.2": [
+        "🔧 Fixed login, chat, and site scraping — the extension now connects to the Helpotron server from the popup, the background service, and the recorder (they all pointed at a dead local address).",
+        "✨ Agent page overhaul — clean two-row top bar with live See-screen / Execute chips, a chat composer that actually fits (input + send side by side), and an action-log empty state.",
+        "🖥️ Popup polish — compact release banner, clearer status messages, and the correct chat icon for Agent mode.",
+    ],
     "2.5.1": [
         "🛡️ Safer permissions — agent actions (type/click/move) now ask for the debugger permission the first time you switch Execute on; install is much lighter with no untrusted permission grants.",
         "🌐 Renamed to Helpotron Academic Companion — store listing, app, and policy now use one name.",

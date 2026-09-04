@@ -140,7 +140,7 @@ async function syncAgentSettingsFromServer() {
   const haveLocalMode = st[MODE_KEY];
   if (!public_id || !t) {
     // Unauthenticated/offline: extension-local fallback.
-    await persistAgentState({ [EFFORT_KEY]: EFFORT_DEFAULT, [MODEL_KEY]: effortModelInfo(EFFORT_DEFAULT).model, [MODEL_TIER_KEY]: 'mid_lower' });
+    await persistAgentState({ [EFFORT_KEY]: EFFORT_DEFAULT, [MODEL_KEY]: effortModelInfo(EFFORT_DEFAULT).model, [MODEL_TIER_KEY]: effortModelInfo(EFFORT_DEFAULT).tier });
     effortFromServer = false;
     await applyAgentStateToUI(await readAgentState());
     return;
@@ -167,9 +167,12 @@ async function syncAgentSettingsFromServer() {
     });
     await applyAgentStateToUI(await readAgentState());
   } catch (e) {
-    // Network/auth failure: keep whatever local state we had; surface fallback.
+    // Network/auth failure: keep whatever local state we had; surface fallback
+    // with the ACTUAL saved local values (not assumed defaults).
     effortFromServer = false;
-    setStatus(`⚠️ Could not sync agent settings from the server (${String(e).slice(0, 60)}) — using local state (effort ${EFFORT_DEFAULT}, mode manual).`);
+    const localScore = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
+    const localMode = MODELS.includes(st[MODE_KEY]) ? st[MODE_KEY] : MODE_DEFAULT;
+    setStatus(`⚠️ Could not sync agent settings from the server (${String(e).slice(0, 60)}) — using saved local state (effort ${localScore}, mode ${localMode}).`);
   }
 }
 
@@ -277,14 +280,20 @@ function answerApproval(reqId, allowed) {
   renderNextApproval();
 }
 
-document.getElementById('approveBtn').addEventListener('click', () => {
-  const p = pendingApprovals[0];
-  if (p) answerApproval(p.reqId, true);
-});
-document.getElementById('denyBtn').addEventListener('click', () => {
-  const p = pendingApprovals[0];
-  if (p) answerApproval(p.reqId, false);
-});
+const approveBtnEl = document.getElementById('approveBtn');
+const denyBtnEl = document.getElementById('denyBtn');
+if (approveBtnEl) {
+  approveBtnEl.addEventListener('click', () => {
+    const p = pendingApprovals[0];
+    if (p) answerApproval(p.reqId, true);
+  });
+}
+if (denyBtnEl) {
+  denyBtnEl.addEventListener('click', () => {
+    const p = pendingApprovals[0];
+    if (p) answerApproval(p.reqId, false);
+  });
+}
 
 // ── General popup paint & behavior ───────────────────────────────────────────
 // ── What's new: release notifications (09-03) ────────────────────────────────
@@ -306,7 +315,7 @@ async function loadWhatsNew() {
   const banner = document.getElementById('whatsNewBanner');
   const body = document.getElementById('whatsNewBody');
   if (!banner || !body) return;
-  const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+  const srv = (serverInput.value.trim() || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
   const st = await chrome.storage.local.get(['session_token', 'token', WHATSNEW_SEEN_KEY]);
   const cred = st.session_token || st.token;
   let releases = [];
@@ -388,7 +397,7 @@ async function init() {
     if (label) label.textContent = (st.public_id && st.public_id !== 'Guest') ? `@${st.public_id}` : 'Guest';
   }
   if (!loggedIn) {
-    setStatus('⚠️ Login required: use the account chip above, or sign in on the Helpotron website once (session syncs here). Scrapes are gated by your account.');
+    setStatus('⚠️ Login required — tap the account chip above, or sign in once on the Helpotron website (session syncs here).');
   }
 
   // CHAT options: instant paint from local state, then server sync after paint.
@@ -423,7 +432,7 @@ async function init() {
   }
   if (btnDownloadUpdate) {
     btnDownloadUpdate.addEventListener('click', async () => {
-      const srv = serverInput.value.trim() || 'http://localhost:8000';
+      const srv = serverInput.value.trim() || 'https://helpotron.dpdns.org';
       chrome.tabs.create({ url: `${srv}/api/extension/download` });
     });
   }
@@ -463,15 +472,15 @@ function showOpenAssignment(assignmentId) {
   openAssignmentBtn.dataset.assignmentId = String(assignmentId);
 }
 
-openAssignmentBtn.addEventListener('click', () => {
+openAssignmentBtn?.addEventListener('click', () => {
   const id = openAssignmentBtn.dataset.assignmentId;
   if (!id) return;
-  const srv = (serverInput.value.trim() || 'http://localhost:8000').replace(/\/+$/, '');
+  const srv = (serverInput.value.trim() || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
   chrome.tabs.create({ url: `${srv}/#assignment=${id}` });
   setStatus(`📖 Opening bubble #${id} in Helpotron…`);
 });
 
-document.getElementById('btnScrapeCurrent').addEventListener('click', async () => {
+document.getElementById('btnScrapeCurrent')?.addEventListener('click', async () => {
   hideUnparseable();
   openAssignmentBtn.style.display = 'none';
   const tabId = await activeTabId();
@@ -602,7 +611,7 @@ async function pollCrawlStatus() {
   }
 }
 
-btnStartCrawl.addEventListener('click', async () => {
+btnStartCrawl?.addEventListener('click', async () => {
   hideUnparseable();
   const tabId = await activeTabId();
   if (!tabId) { setStatus('❌ No focused tab to crawl.'); return; }
@@ -616,28 +625,29 @@ btnStartCrawl.addEventListener('click', async () => {
   }
 });
 
-btnStopCrawl.addEventListener('click', async () => {
+btnStopCrawl?.addEventListener('click', async () => {
   setStatus('⏹ Stopping site crawl…');
   const resp = await chrome.runtime.sendMessage({ action: 'stopCrawl' });
   setStatus(resp?.ok ? '⏹ Crawl stopped.' : `❌ ${resp?.error || 'No crawl running'}`);
   pollCrawlStatus();
 });
 
-btnOpenDataLake.addEventListener('click', () => {
+btnOpenDataLake?.addEventListener('click', () => {
   chrome.runtime.sendMessage({ action: 'openDataLake' });
 });
 
 // ── Login (account chip -> panel) ─────────────────────────────────────────────
-document.getElementById('accountChip').addEventListener('click', () => {
+document.getElementById('accountChip')?.addEventListener('click', () => {
   const panel = document.getElementById('loginPanel');
   const chip = document.getElementById('accountChip');
+  if (!panel || !chip) return;
   const open = panel.hidden;
   panel.hidden = !open;
   chip.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 
-document.getElementById('saveSettings').addEventListener('click', async () => {
-  const srv = serverInput.value.trim() || 'http://localhost:8000';
+document.getElementById('saveSettings')?.addEventListener('click', async () => {
+  const srv = serverInput.value.trim() || 'https://helpotron.dpdns.org';
   const pid = publicIdInput.value.trim();
   const pwd = document.getElementById('password')?.value;
 

@@ -997,46 +997,22 @@ class GoogleDocsAssistiveTypingEngine {
 
   renderFloatingHUD() {
     this.removeFloatingHUD();
-    const hud = document.createElement('div');
-    hud.id = 'helpotron-assistive-hud';
-    hud.style.cssText = `
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 2147483647;
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      border-radius: 14px;
-      padding: 14px 18px;
-      box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(139, 92, 246, 0.25);
-      color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13px;
-      min-width: 280px;
-      max-width: 340px;
-      transition: all 0.25s ease;
-      user-select: none;
-    `;
-    this.state.hudElement = hud;
-    document.body.appendChild(hud);
-    this.updateFloatingHUD();
+    this.injectCrossTabHUD();
   }
 
-  updateFloatingHUD(customStatus = null) {
-    const hud = this.state.hudElement || document.getElementById('helpotron-assistive-hud');
-    if (!hud) return;
+  removeFloatingHUD() {
+    const el = this.state.hudElement || this.hudElement || document.getElementById('helpotron-assistive-hud');
+    if (el) { try { el.remove(); } catch (e) { /* ok */ } }
+    this.state.hudElement = null;
+    this.hudElement = null;
+  }
 
-    const pct = this.state.totalChars > 0
-      ? Math.min(100, Math.round((this.state.currentIndex / this.state.totalChars) * 100))
-      : 0;
-    const statusText = customStatus || (this.state.isPaused ? 'Paused' : `Typing at ${this.state.wpm} WPM…`);
-
-    hud.innerHTML = `
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      display: none;
-    `;
-
+  // Rich HUD card (drag bar, controls, realism drawer, drop zone). Built once
+  // per typing run into a container appended to the page; wireHUDEvents() binds
+  // its buttons after injection.
+  injectCrossTabHUD() {
+    const container = document.createElement('div');
+    container.id = 'helpotron-assistive-hud';
     container.innerHTML = `
       <div id="hud-card" style="
         background: rgba(15, 23, 42, 0.92);
@@ -1134,7 +1110,28 @@ class GoogleDocsAssistiveTypingEngine {
 
     document.body.appendChild(container);
     this.hudElement = container;
+    this.state.hudElement = container; // keep both holders in sync: startTyping()
+    // zeroes state.hudElement and updateFloatingHUD/updateHUD read different
+    // fields (merge artifact), which silently froze the HUD at its first paint.
     this.wireHUDEvents();
+    this.updateHUD();
+  }
+
+  // Live status updates for the injected HUD. Never rebuilds or hides the
+  // card: 'Thinking…' / 'Completed ✨' / 'Paused ⏸' / 'Resuming… ▶' /
+  // 'Cancelled ⏹' land in the card title on top of the normal per-char
+  // progress refresh (updateHUD()).
+  updateFloatingHUD(customStatus = null) {
+    const hud = this.hudElement || this.state.hudElement;
+    if (!hud) return;
+    this.updateHUD();
+    const titleEl = hud.querySelector('#hud-title');
+    if (titleEl) {
+      titleEl.textContent = customStatus || (this.state.isPaused ? 'Paused' : `Typing at ${this.state.wpm} WPM…`);
+      titleEl.style.color = customStatus ? '#fde047' : '#f1f5f9';
+    }
+    const toggleBtn = hud.querySelector('#hud-btn-toggle');
+    if (toggleBtn) toggleBtn.textContent = this.state.isPaused ? '▶ Resume' : '⏸ Pause';
   }
 
   wireHUDEvents() {
@@ -1278,7 +1275,7 @@ class GoogleDocsAssistiveTypingEngine {
   updateHUD() {
     if (!this.hudElement) return;
 
-    const status = this.getStatus();
+    const status = this.getStatus(); // -> { percentage, currentIndex, totalChars, wpm, … }
     const titleEl = this.hudElement.querySelector('#hud-title');
     const badgeEl = this.hudElement.querySelector('#hud-wpm-badge');
     const targetBadgeEl = this.hudElement.querySelector('#hud-target-badge');
@@ -1288,16 +1285,24 @@ class GoogleDocsAssistiveTypingEngine {
     const etaEl = this.hudElement.querySelector('#hud-eta');
     const toggleBtn = this.hudElement.querySelector('#hud-btn-toggle');
 
+    // ETA is display-only — derived here (getStatus() has no such field; the
+    // old code read status.progressPct/status.remainingSeconds which never
+    // existed, so the HUD showed "undefined%" / "ETA: undefineds").
+    const remainingChars = Math.max(0, (this.state.totalChars || 0) - (this.state.currentIndex || 0));
+    const remainingSeconds = this.state.wpm > 0 && this.state.totalChars > 0
+      ? Math.ceil(remainingChars / (this.state.wpm / 60))
+      : 0;
+
     if (titleEl) titleEl.textContent = this.state.assignmentTitle || 'Document';
     if (badgeEl) badgeEl.textContent = `${this.config.wpm} WPM`;
     if (targetBadgeEl) {
       const appMap = { gdocs: 'Google Docs', gmail: 'Gmail', notion: 'Notion', word_online: 'Word Online', universal: 'Text Field' };
       targetBadgeEl.textContent = appMap[this.state.targetApp] || 'Editor';
     }
-    if (fillEl) fillEl.style.width = `${status.progressPct}%`;
-    if (pctEl) pctEl.textContent = `${status.progressPct}%`;
+    if (fillEl) fillEl.style.width = `${status.percentage}%`;
+    if (pctEl) pctEl.textContent = `${status.percentage}%`;
     if (wordsEl) wordsEl.textContent = `${status.wordsTyped} / ${status.totalWords} w`;
-    if (etaEl) etaEl.textContent = `ETA: ${status.remainingSeconds}s`;
+    if (etaEl) etaEl.textContent = `ETA: ${remainingSeconds}s`;
 
     if (toggleBtn) {
       if (this.state.isPaused) {
