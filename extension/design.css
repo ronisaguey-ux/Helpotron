@@ -433,6 +433,7 @@ button { font-family: inherit; }
   font-family: var(--font-mono);
   font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.05em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--on-surface-variant);
   transition: background-color 180ms ease-out, border-color 180ms ease-out;
 }
@@ -583,7 +584,8 @@ textarea.input { resize: vertical; min-height: 68px; }
 }
 .chat-msg.user .chat-sender { color: color-mix(in srgb, var(--on-primary-container) 75%, transparent); }
 .chat-composer { display: flex; gap: 8px; align-items: flex-end; }
-.chat-composer .input { flex: 1; }
+.chat-composer .input { flex: 1; min-width: 0; }
+.chat-send { flex: 0 0 auto; width: 44px; padding-left: 0; padding-right: 0; }
 
 /* ---------- Error card / unparseable ---------- */
 .error-card {

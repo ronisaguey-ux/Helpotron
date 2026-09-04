@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "root": "/home/roni/Roni_workspace/helpotron",
+  "ignore": [
+    "node_modules",
+    "dist",
+    "build",
+    ".git",
+    "bin",
+    "obj",
+    "logs",
+    "coverage",
+    ".contextcache"
+  ],
+  "default_budget_tokens": 8000
+}
