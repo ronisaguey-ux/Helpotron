@@ -399,7 +399,6 @@ class UserSettingsService:
             "ai_detectors": {
                 "pangram": True,
                 "sapling": True,
-                "winston_ai": True,
                 "perplexity_cadence": True,
                 "statistical_burstiness": True,
             },
@@ -444,11 +443,8 @@ class UserSettingsService:
                 "detection": {
                     "enabled": "off",
                     "min_human": 70,
-                    # 08-31 (operator): Sapling+Panagram only for now — Winston
-                    # is expensive (1 credit per word, bulk-buy only) and its
-                    # key errors out when the balance is spent. The toggle stays
-                    # so it can be re-enabled after a top-up.
-                    "detectors": {"sapling": True, "winston_ai": False, "pangram": True},
+                    # 09-04 (owner A8 purge): Pangram + Sapling only
+                    "detectors": {"sapling": True, "pangram": True},
                 },
                 # Sample Voice (08-31, operator): "write like a sample" — the
                 # user adds samples (paste or upload) and the agent writes in

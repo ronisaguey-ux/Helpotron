@@ -425,6 +425,7 @@ export const api = {
   agentChatHistory: (key) => request(`/api/agent/chat/${key}`, { method: 'GET' }),
   updateAssignment: (id, updates) => request(`/api/assignments/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),
   getSubagentTeam: (id) => request(`/api/assignments/${id}/subagent-team`, { method: 'GET' }),
+  interruptSubagentTeam: (id, reason = 'Interrupted by student') => request(`/api/assignments/${id}/subagent-team/interrupt`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   // ── Direction picker & lifecycle (09-01): choose what the subagent team
   // should build, mark the work done, archive to history, export as JSON.

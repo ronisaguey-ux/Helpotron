@@ -3,7 +3,7 @@
 Rules:
 1. Free trial is 1-time only per account and 1-time only per phone number.
 2. Phone number must be SMS-verified via a 6-digit OTP (15 min TTL) before trial activation.
-3. Upon verification, the user receives 500 trial credits, plan is set to 'trial',
+3. Upon verification, the user receives 100 task tokens ($1.00 USD tool budget), plan is set to 'trial',
    subscription_status is 'trialing', and a ClaimedTrialPhone record is persisted.
 """
 from __future__ import annotations

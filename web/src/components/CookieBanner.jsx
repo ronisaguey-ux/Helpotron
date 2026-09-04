@@ -35,27 +35,43 @@ export function CookieBanner() {
   return (
     <div
       role="region"
-      aria-label="Cookie consent notice"
-      className="fixed bottom-16 md:bottom-0 inset-x-0 z-50 border-t border-[var(--border-subtle)] surface-glass-strong shadow-2xl"
+      aria-label="Student Privacy & Cookie Choice"
+      className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-50 bg-[#10121f] border border-white/10 rounded-2xl shadow-2xl p-5 backdrop-blur-xl"
     >
-      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-        <p className="text-xs sm:text-sm text-slate-300 flex-1 text-center sm:text-left">
-          We use cookies to improve your experience. By continuing you agree to our use of cookies.
-        </p>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white tracking-tight">Student Privacy &amp; Cookie Choice</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase font-semibold">
+              FERPA Compliant
+            </span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            We use essential cookies for secure login and strictly optional anonymous telemetry to improve AI humanizing accuracy.
+            We <strong className="text-white">never sell student data</strong>, harvest personal essays, or track browsing across external sites.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
           <button
             type="button"
             onClick={() => choose('rejected')}
-            className="px-4 py-2 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/5 hover:text-white transition text-sm font-medium"
+            className="px-3 py-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition text-xs font-medium"
           >
-            Reject
+            Reject All Optional
+          </button>
+          <button
+            type="button"
+            onClick={() => choose('necessary')}
+            className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white transition text-xs font-semibold border border-white/10"
+          >
+            Necessary Only
           </button>
           <button
             type="button"
             onClick={() => choose('accepted')}
-            className="px-4 py-2 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition text-sm font-semibold"
+            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transition text-xs font-bold shadow-lg shadow-purple-500/25"
           >
-            Accept
+            Accept All &amp; Support Dev
           </button>
         </div>
       </div>

@@ -89,7 +89,7 @@ async def verify_trial_sms(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Verifies the 6-digit SMS code and activates the 1-time Free Trial (granting 500 credits)."""
+    """Verifies the 6-digit SMS code and activates the 1-time Free Trial (granting 100 task tokens)."""
     user = get_current_authenticated_user(request, db)
     client_ip = _get_client_ip(request)
 
