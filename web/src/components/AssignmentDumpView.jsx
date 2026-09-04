@@ -30,18 +30,17 @@ const AURORA_CHIP_TINTS = `
 // "what typa assignment the user wants to do, like a flashcard, practice quiz,
 // or just actually do it").
 const FINALIZE_OPTIONS = [
-  { action: 'flashcards', label: 'Flashcards', icon: '📇' },
-  { action: 'practice_quiz', label: 'Practice quiz', icon: '🧪' },
-  { action: 'study_guide', label: 'Study guide', icon: '📗' },
-  { action: 'summary', label: 'Summary', icon: '📄' },
-  { action: 'do_it', label: 'Do it for me', icon: '▶️' },
+  { action: 'do_it', label: 'Complete the Assignment (Do It For Me)', icon: '✍️', cost: '~20 Tokens ($0.20)', subagent: 'Researched Synthesis', desc: 'Generates full finished essay, problem set solutions, or paper according to rubric.' },
+  { action: 'study_guide', label: 'Exam Study Guide', icon: '📖', cost: '~10 Tokens ($0.10)', subagent: 'Semantic Condenser', desc: 'Summarizes key terms, critical dates, formulas, and concepts into a clean guide.' },
+  { action: 'practice_quiz', label: 'Practice Exam & Quiz', icon: '🧠', cost: '~8 Tokens ($0.08)', subagent: 'Psychometric Evaluation', desc: 'Creates 10 multiple-choice questions with full answer keys and explanations.' },
+  { action: 'flashcards', label: 'Spaced Flashcard Deck', icon: '🗂️', cost: '~5 Tokens ($0.05)', subagent: 'Anki / Leitner Engine', desc: 'Builds interactive review cards ready for active-recall memorization.' },
 ];
 const FINALIZE_BADGE = {
-  flashcards: '📇 Flashcards',
-  practice_quiz: '🧪 Practice quiz',
-  study_guide: '📗 Study guide',
+  do_it: '✍️ Do It For Me',
+  study_guide: '📖 Study Guide',
+  practice_quiz: '🧠 Practice Quiz',
+  flashcards: '🗂️ Flashcards',
   summary: '📄 Summary',
-  do_it: '▶️ Do it',
 };
 
 export default function AssignmentDumpView({ userId = '', onSelectAssignment }) {
@@ -549,16 +548,26 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                         <div className="text-[11px] font-semibold text-[var(--text-primary)]">
                           What do you want to do this assignment as?
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {FINALIZE_OPTIONS.map((opt) => (
                             <button
                               key={opt.action}
                               type="button"
                               onClick={() => handleFinalize(item, opt.action)}
                               disabled={finalizingId === item.id}
-                              className="px-2 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-subtle)] border border-[var(--border-subtle)] hover:border-[rgba(139,92,246,0.4)] text-[var(--text-secondary)] text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                              className="p-3 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-subtle)] border border-[var(--border-subtle)] hover:border-purple-500/50 text-left transition cursor-pointer disabled:opacity-50 flex flex-col justify-between gap-2 shadow-sm"
                             >
-                              {opt.icon} {opt.label}
+                              <div className="space-y-1">
+                                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <span>{opt.icon}</span>
+                                  <span>{opt.label}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-snug">{opt.desc}</p>
+                              </div>
+                              <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px] font-mono">
+                                <span className="text-purple-300 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-500/20">{opt.subagent}</span>
+                                <span className="text-emerald-400 font-bold">{opt.cost}</span>
+                              </div>
                             </button>
                           ))}
                         </div>

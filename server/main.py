@@ -387,6 +387,149 @@ app.include_router(privacy_router)
 app.include_router(trial_router)
 
 
+@app.get("/api/capabilities")
+def get_capabilities():
+    """Authoritative runtime capabilities query endpoint."""
+    from .capabilities import capabilities
+    return capabilities.get_capabilities()
+
+
+class CanvasTestIn(BaseModel):
+    base_url: str = Field(..., max_length=256)
+    access_token: str = Field(..., max_length=512)
+
+
+class CanvasSyncIn(BaseModel):
+    base_url: str = Field(..., max_length=256)
+    access_token: str = Field(..., max_length=512)
+    course_ids: Optional[List[str]] = None
+
+
+@app.post("/api/canvas/test")
+async def canvas_test_connection(body: CanvasTestIn, current_user: User = Depends(get_current_user)):
+    """Test Canvas LMS credentials and connectivity."""
+    from .canvas_sync import CanvasSyncEngine
+    try:
+        engine = CanvasSyncEngine(base_url=body.base_url, access_token=body.access_token)
+        profile = await engine.validate_token()
+        if not profile.get("valid"):
+            raise HTTPException(400, profile.get("error", "Canvas validation failed"))
+        courses = await engine.fetch_active_courses()
+        return {
+            "status": "success",
+            "profile": profile,
+            "courses_count": len(courses),
+            "courses": courses[:10],
+        }
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.warning("Canvas connection test failed: %s", e)
+        raise HTTPException(502, f"Canvas connection test failed: {str(e)}")
+
+
+@app.post("/api/canvas/sync")
+async def canvas_sync_assignments(body: CanvasSyncIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Sync active assignments from Canvas LMS courses into Helpotron assignment bubbles."""
+    from .canvas_sync import CanvasSyncEngine
+    try:
+        engine = CanvasSyncEngine(base_url=body.base_url, access_token=body.access_token)
+        profile = await engine.validate_token()
+        if not profile.get("valid"):
+            raise HTTPException(400, profile.get("error", "Canvas validation failed"))
+
+        courses = await engine.fetch_active_courses()
+        selected_courses = [
+            c for c in courses
+            if not body.course_ids or str(c.get("course_id")) in body.course_ids
+        ]
+
+        imported_count = 0
+        created_assignments = []
+        for course in selected_courses:
+            c_id = course["course_id"]
+            c_name = course.get("name", "Canvas Course")
+            items = await engine.fetch_course_assignments(c_id)
+            for item in items:
+                title = item.get("title", "Untitled Canvas Assignment")
+                existing = db.query(Assignment).filter(
+                    Assignment.user_id == current_user.id,
+                    Assignment.title == title,
+                ).first()
+                if not existing:
+                    new_a = Assignment(
+                        user_id=current_user.id,
+                        title=title,
+                        prompt=item.get("description_html") or f"Imported from Canvas course: {c_name}",
+                        status="tracked",
+                        progress={
+                            "subject": c_name,
+                            "canvas_id": item.get("assignment_id"),
+                            "due_at": item.get("due_at"),
+                            "points": item.get("points_possible"),
+                            "has_rubric": item.get("has_rubric"),
+                            "imported_from": "canvas",
+                        },
+                    )
+                    db.add(new_a)
+                    imported_count += 1
+                    created_assignments.append(title)
+
+        return {
+            "status": "success",
+            "imported_count": imported_count,
+            "created_assignments": created_assignments[:20],
+            "total_courses_synced": len(selected_courses),
+        }
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.warning("Canvas sync failed: %s", e)
+        raise HTTPException(502, f"Canvas sync failed: {str(e)}")
+
+
+class SubagentInterruptIn(BaseModel):
+    reason: Optional[str] = "Interrupted by student"
+
+
+@app.get("/api/assignments/{assignment_id}/subagent-team/status")
+def get_assignment_subagent_team_status(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve live subagent tasks, progress, and working status for an assignment bubble."""
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id,
+        Assignment.user_id == current_user.id,
+    ).first()
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+    from .assignment_team import get_subagent_team_status
+    return get_subagent_team_status(db, current_user, assignment)
+
+
+@app.post("/api/assignments/{assignment_id}/subagent-team/interrupt")
+def interrupt_assignment_subagent_team(
+    assignment_id: int,
+    body: Optional[SubagentInterruptIn] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Interrupt / cancel running subagents on an assignment bubble."""
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id,
+        Assignment.user_id == current_user.id,
+    ).first()
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+    from .assignment_team import interrupt_subagent_team
+    reason = (body.reason if body else None) or "Interrupted by student"
+    return interrupt_subagent_team(db, current_user, assignment, reason=reason)
+
+
+
+
 @app.get("/api/insights/snapshot")
 async def get_insights_snapshot_alias(
     request: Request,
@@ -1299,9 +1442,9 @@ async def ai_detect(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Real AI-detection verdict for any text (BUG 4): runs the actual detector
-    registry (perplexity + burstiness heuristics always; Pangram/Sapling/
-    Originality/Copyleaks/Winston when their API keys are configured) through
+    """Real AI-detection verdict for any text: runs the actual detector
+    registry (perplexity + burstiness heuristics always; Pangram/Sapling
+    when their API keys are configured) through
     the same 24h cache as everything else. Returns the same 0-1 risk scale the
     cards read (progress.detector_risk), plus 0-100 average and per-detector
     breakdown. Optionally persists the verdict onto an owned assignment."""
@@ -1572,6 +1715,8 @@ def _build_dashboard_payload(user: User, db: Session, limit: int = 50, offset: i
         # Operator 08-31: one-time order discount from a redeemed referral
         # code (30% new user / 15% existing) — server-side truth for the UI.
         "referral_discount_pct": float(getattr(user, "referral_discount_pct", 0.0) or 0.0),
+        "two_factor_enabled": bool((user.settings or {}).get("2fa_enabled")),
+        "two_factor_recommended": not bool((user.settings or {}).get("2fa_enabled")),
         "pagination": {"limit": limit, "offset": offset},
         "user": {
             "public_id": user.public_id,
@@ -1643,7 +1788,7 @@ def credits_balance(public_id: str, db: Session = Depends(get_db), current_user:
 # ─── payments / discounts ──────────────────────────────────────────────────
 
 def _purchase_2fa_required(user: User) -> None:
-    """Owner directive 08-31: when purchases_require_2fa is on, every buyer must
+    """Owner directive 08-31 / 09-04: when purchases_require_2fa is on, every buyer must
     have 2FA enabled (settings flag — same source login reads) before paying."""
     if config.purchases_require_2fa and not (user.settings or {}).get("2fa_enabled"):
         raise HTTPException(
@@ -1651,6 +1796,7 @@ def _purchase_2fa_required(user: User) -> None:
             "Two-factor authentication must be enabled before making purchases — "
             "enable it in Account > Settings and try again.",
         )
+
 
 
 @app.post("/api/payments")

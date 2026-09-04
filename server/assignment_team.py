@@ -439,3 +439,72 @@ async def dispatch_direction(db: Session, user, assignment, direction: str,
     except Exception as e:  # noqa: BLE001 — the contract never raises
         logger.exception("dispatch_direction failed: %s", e)
         return (f"⚠️ That team run hit a snag: {str(e)[:120]} — try again in a moment.")
+
+
+def get_subagent_team_status(db: Session, user, assignment) -> dict:
+    """Retrieve live subagent tasks, progress, and working status for an assignment bubble."""
+    progress = dict(getattr(assignment, "progress", None) or {})
+    steps = list(progress.get("subagent_steps") or [])
+    direction = progress.get("direction") or progress.get("dispatch_direction") or "none"
+    dispatch_note = progress.get("dispatch_note") or ""
+
+    is_running = any(s.get("status") in ("in_progress", "working") for s in steps)
+
+    return {
+        "status": "success",
+        "assignment_id": assignment.id,
+        "direction": direction,
+        "dispatch_note": dispatch_note,
+        "is_running": is_running,
+        "tasks": steps,
+        "artifacts": {
+            "first_draft": progress.get("first_draft"),
+            "study_guide": progress.get("study_guide"),
+            "quiz": progress.get("quiz"),
+            "flashcards": progress.get("flashcards"),
+            "summary": progress.get("summary"),
+        },
+    }
+
+
+def interrupt_subagent_team(db: Session, user, assignment, reason: str = "Interrupted by user") -> dict:
+    """Idempotently interrupt/cancel running subagents on an assignment bubble."""
+    progress = dict(getattr(assignment, "progress", None) or {})
+    steps = list(progress.get("subagent_steps") or [])
+
+    interrupted_count = 0
+    updated_steps = []
+    for s in steps:
+        st = dict(s)
+        if st.get("status") in ("in_progress", "working", "pending"):
+            st["status"] = "interrupted"
+            st["note"] = f"{reason} ({_now()[:19]})"
+            interrupted_count += 1
+        updated_steps.append(st)
+
+    # Append cancellation event step
+    cancel_step = _step("Team Coordinator", status="interrupted", progress=0, note=f"Interrupted: {reason}")
+    updated_steps.append(cancel_step)
+
+    progress["subagent_steps"] = updated_steps
+    progress["dispatch_note"] = f"⚠️ Subagent team execution stopped: {reason}"
+    progress["is_interrupted"] = True
+    assignment.progress = progress
+    db.commit()
+
+    _team_chat(assignment.id, "overlord",
+               f"🛑 Subagent team interrupted: {reason}. You can choose a new direction or resume whenever ready.",
+               user.id)
+    _ledger(db, user, "interrupt_subagent_team",
+            f"Interrupted subagents on assignment #{assignment.id}", assignment.id,
+            {"reason": reason, "interrupted_count": interrupted_count})
+
+    return {
+        "status": "success",
+        "assignment_id": assignment.id,
+        "interrupted": True,
+        "interrupted_tasks_count": interrupted_count,
+        "message": f"Subagent team interrupted on assignment #{assignment.id}.",
+        "tasks": updated_steps,
+    }
+

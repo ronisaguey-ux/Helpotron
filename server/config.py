@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     enable_2fa: bool = os.getenv("ENABLE_2FA", "true").lower() == "true"
     enable_sms_2fa: bool = os.getenv("ENABLE_SMS_2FA", "true").lower() == "true"
     enable_totp_2fa: bool = os.getenv("ENABLE_TOTP_2FA", "true").lower() == "true"
+    launch_enabled: bool = os.getenv("LAUNCH_ENABLED", "false").lower() == "true"
 
     # Uppercase aliases for settings
     @property

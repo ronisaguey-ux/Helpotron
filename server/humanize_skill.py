@@ -233,14 +233,11 @@ def humanizer_block(settings: Optional[Dict[str, Any]], node: str = "my_agent",
 
 DETECTOR_DISPLAY = {
     "sapling": "Sapling",
-    "winston_ai": "Winston AI",
     "pangram": "Pangram",
 }
 
-# 08-31 (operator): Sapling + Pangram only for now — Winston is expensive
-# (1 credit per word; bulk-buy later after cash flow). Same values as the
-# service defaults so settings without a detectors dict get this set.
-DETECTOR_DEFAULTS = {"sapling": True, "winston_ai": False, "pangram": True}
+# 09-04 (owner A8 purge): Sapling + Pangram only — Winston purged from system.
+DETECTOR_DEFAULTS = {"sapling": True, "pangram": True}
 
 
 def detection_enabled(settings: Optional[Dict[str, Any]], node: str = "my_agent",
