@@ -312,7 +312,9 @@ The Helpotron Chrome Extension (`extension/`) is built on **Chrome Manifest V3**
 ## 12. Web Scraping Sidecar
 
 For web assignments on arbitrary URLs, Helpotron runs a dedicated scraping sidecar (`scrape_sidecar/`):
-- **Isolation**: Runs Playwright and ScrapeGraphAI in an isolated process at `127.0.0.1:9778`.
+- **Isolation**: Runs its own venv (uv-managed, `scrape_sidecar/.venv`) in an isolated process at `127.0.0.1:9778`, started by the `envy-scrape-sidecar` user unit.
+- **Fetch lanes** (first readable content wins; each scrape reports `fetched_by`): Agent-Reach zero-config channels for platforms (`yt-dlp` on YouTube — title/description/captions, `feedparser` on RSS/Atom feeds), Scrapling (`Fetcher` TLS impersonation → `StealthyFetcher` for Cloudflare → `DynamicFetcher` for JS-shelled pages), legacy `requests`/Playwright fallbacks, then the `r.jina.ai` reader as last resort. `GET /platforms` reports lane availability (doctor-style).
+- **Extraction**: ScrapeGraphAI `SmartScraperGraph` over the fetched content — one LLM call on the FREE OpenRouter deepseek key (the paid key is never routed here); `SCRAPEGRAPHAI_TELEMETRY_ENABLED=false`.
 - **Security Gatekeeper (`server/routes_import_url.py`)**: The primary FastAPI server acts as the trusted gatekeeper. It checks authentication, enforces SSRF validations, verifies the `IMPORT_FROM_URL_ENABLED` setting, and deducts appropriate task credits before calling `SIDECAR_URL`.
 - **Pipeline Integration**: The scraped text and images are funneled through the standard `UniversalDumpItem` ingestion pipeline, seamlessly generating assignment bubbles.
 
