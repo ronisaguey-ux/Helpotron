@@ -358,59 +358,54 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         )}
       </header>
 
-      {/* ── Hero (design: pt-32 pb-20 / md:pt-40 md:pb-28, tone blobs,
-             badge chip, gradient headline, dual CTA, dashboard mockup) */}
-      <section className="relative pt-32 pb-16 md:pt-40 md:pb-24 overflow-hidden max-w-[1440px] mx-auto px-container-padding">
-        {/* Abstract background elements — Stitch's translucent tone blobs,
-            far subtler than the old aurora, no animation cost. */}
+      {/* ── Hero (v3 split layout: left copy / right visual) */}
+      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden max-w-[1440px] mx-auto px-container-padding">
+        {/* Abstract background elements — Stitch's translucent tone blobs */}
         <div className="absolute top-16 right-0 w-1/2 h-[420px] sm:h-[500px] bg-primary-container/10 rounded-full blur-[100px] -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none" aria-hidden="true" />
         <div className="absolute bottom-24 left-0 w-1/3 h-[400px] bg-secondary-container/10 rounded-full blur-[80px] -z-10 -translate-x-1/4 translate-y-1/4 pointer-events-none" aria-hidden="true" />
 
-        <div className="flex flex-col items-center text-center max-w-4xl mx-auto mb-12 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/30 mb-6">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
-            <span className="font-label-caps text-label-caps text-on-surface-variant">Helpotron OS 2.0 is Live</span>
+        <div className="grid lg:grid-cols-12 gap-10 lg:gap-8 items-center mb-12 sm:mb-16">
+          {/* Left Column: Copy & Actions */}
+          <div className="lg:col-span-6 flex flex-col items-start text-left">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/30 mb-6">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+              <span className="font-label-caps text-label-caps text-on-surface-variant font-medium">Academic Co-pilot 2.0</span>
+            </div>
+
+            <h1
+              className="font-display-xl text-display-xl text-on-surface mb-6 leading-tight tracking-tight"
+              style={{ fontSize: 'clamp(2.2rem, 5vw, 3.25rem)', textWrap: 'balance' }}
+            >
+              Your Academic <span className="whitespace-nowrap">Co-pilot,</span>{' '}
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">Redefined</span>
+            </h1>
+
+            <p className="font-body-md text-body-md sm:text-[18px] text-on-surface-variant max-w-xl mb-8 leading-relaxed">
+              Helpotron captures your coursework, sorts it into subject bubbles, and gives
+              every assignment its own AI agent — while keeping an honest ledger of what
+              you actually completed.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <button type="button" onClick={() => openAuth('signup')} className={`${BTN_PRIMARY} px-8 py-3.5 w-full sm:w-auto`}>
+                Start Free Trial <ArrowRight className="w-4 h-4" />
+              </button>
+              <button type="button" onClick={() => setGuideOpen(true)} className={`${BTN_SECONDARY} px-8 py-3.5 w-full sm:w-auto`}>
+                <BookOpen className="w-4 h-4 text-primary" /> Read the Guide
+              </button>
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-body-sm text-on-surface-variant">
+              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-sem-green" /> No credit card</span>
+              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-sem-green" /> No email required</span>
+              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-sem-green" /> Nothing personal before sign-in</span>
+            </div>
           </div>
 
-          {/* Fluid size: the design's 48px display-xl hyphen-splits "Co-pilot"
-              at 390px; clamp keeps the design size on desktop and 30-34px on
-              phones, and balance stops single-word orphans (09-01). */}
-          <h1
-            className="font-display-xl text-display-xl text-on-surface mb-6 leading-tight"
-            style={{ fontSize: 'clamp(1.9rem, 7vw, 3rem)', textWrap: 'balance' }}
-          >
-            Your Academic <span className="whitespace-nowrap">Co-pilot,</span>{' '}
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">Redefined</span>
-          </h1>
-
-          <p className="font-body-md text-body-md sm:text-[18px] text-on-surface-variant max-w-2xl mb-8 sm:mb-10 leading-relaxed">
-            Helpotron captures your coursework, sorts it into subject bubbles, and gives
-            every assignment its own AI agent — while keeping an honest ledger of what
-            you actually completed.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-            <button type="button" onClick={() => openAuth('signup')} className={`${BTN_PRIMARY} px-8 py-3.5 w-full sm:w-auto`}>
-              Start Free Trial <ArrowRight className="w-4 h-4" />
-            </button>
-            {/* No demo reel exists yet, so this is "See how it works" — it
-                scrolls to the real feature section instead of a fake video. */}
-            <button type="button" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className={`${BTN_SECONDARY} px-8 py-3.5 w-full sm:w-auto`}>
-              <PlayCircle className="w-4 h-4" /> See how it works
-            </button>
+          {/* Right Column: High-fidelity workspace mockup */}
+          <div className="lg:col-span-6 relative w-full">
+            <ProductPreview />
           </div>
-
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-body-sm text-on-surface-variant">
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-sem-green" /> No credit card</span>
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-sem-green" /> No email required</span>
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-sem-green" /> Nothing personal shown before sign-in</span>
-          </div>
-        </div>
-
-        {/* High-fidelity dashboard mockup — the design frames it max-w-5xl
-            with a glow; the contents are the real product's depiction. */}
-        <div className="relative w-full max-w-5xl mx-auto z-10">
-          <ProductPreview />
         </div>
       </section>
 

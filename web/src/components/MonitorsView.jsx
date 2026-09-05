@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Gauge, Activity, Database, Coins, RefreshCw, TrendingUp, Server, Wifi,
+  Gauge, Activity, Database, Coins, RefreshCw, TrendingUp, Server, Wifi, Check, MessageSquare, AlertCircle, FileText,
 } from 'lucide-react';
 import SectionCard from './SectionCard.jsx';
+import { api } from '../api.js';
 
 const REFRESH_MS = 30000;
 
@@ -32,18 +33,21 @@ function Sparkline({ values, height = 36 }) {
 export default function MonitorsView({ userId = '' }) {
   const [overview, setOverview] = useState(null);
   const [history, setHistory] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [error, setError] = useState('');
   const timerRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
-      const [ov, hi] = await Promise.all([
-        fetch('/api/monitors/overview').then((r) => r.json()),
-        fetch('/api/monitors/history?limit=48').then((r) => r.json()),
+      const [ov, hi, fbRes] = await Promise.all([
+        fetch('/api/monitors/overview').then((r) => r.json()).catch(() => null),
+        fetch('/api/monitors/history?limit=48').then((r) => r.json()).catch(() => ({ snapshots: [] })),
+        api.listFeedback({ limit: 50 }).catch(() => ({ feedback: [] })),
       ]);
-      setOverview(ov);
-      setHistory(hi.snapshots || []);
+      if (ov) setOverview(ov);
+      setHistory(hi?.snapshots || []);
+      setFeedback(Array.isArray(fbRes?.feedback) ? fbRes.feedback : []);
       setUpdatedAt(new Date());
       setError('');
     } catch (e) {
@@ -51,6 +55,15 @@ export default function MonitorsView({ userId = '' }) {
       setError('Could not reach the monitors API — is the server up?');
     }
   }, []);
+
+  const handleResolveFeedback = async (id) => {
+    try {
+      await api.updateFeedbackStatus(id, 'resolved');
+      setFeedback((prev) => prev.map((f) => (f.id === id ? { ...f, status: 'resolved' } : f)));
+    } catch (e) {
+      console.warn('Failed to resolve feedback', e);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -276,6 +289,107 @@ export default function MonitorsView({ userId = '' }) {
           <div className="mt-6 pt-4 border-t border-outline-variant/20 flex justify-between gap-2 font-tabular-stat text-xs text-on-surface-variant">
             <span className="min-w-0 truncate">{fmt(cost.input_tokens)} in-tokens</span>
             <span className="min-w-0 truncate">{fmt(cost.output_tokens)} out-tokens</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Control Center & Feedback Inbox */}
+      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <div>
+              <h3 className="font-title-md text-title-md text-on-surface">Feedback & Operator Action Queue</h3>
+              <p className="font-body-sm text-xs text-on-surface-variant">Live submissions from Data Lake feedback pipeline</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-label-caps text-xs uppercase px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant border border-outline-variant/30">
+              {feedback.length} {feedback.length === 1 ? 'entry' : 'entries'}
+            </span>
+          </div>
+        </div>
+
+        <div className="border border-outline-variant/30 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Message / Payload</th>
+                  <th className="px-4 py-3">User / Source</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/20">
+                {feedback.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-on-surface-variant font-body-sm text-xs">
+                      No feedback submissions found in the data lake inbox.
+                    </td>
+                  </tr>
+                ) : (
+                  feedback.map((item) => {
+                    const cat = (item.category || item.type || 'feedback').toLowerCase();
+                    const isBug = cat.includes('bug') || cat.includes('error');
+                    const isFeature = cat.includes('feat') || cat.includes('request');
+                    const isResolved = item.status === 'resolved' || item.status === 'done';
+
+                    return (
+                      <tr key={item.id || item._id || Math.random()} className="hover:bg-surface-container-low/50 transition">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`font-label-caps text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border ${
+                            isBug
+                              ? 'bg-error/15 text-error border-error/30'
+                              : isFeature
+                                ? 'bg-secondary/15 text-secondary border-secondary/30'
+                                : 'bg-primary/15 text-primary border-primary/30'
+                          }`}>
+                            {isBug ? 'Bug Report' : isFeature ? 'Feature' : 'Feedback'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 max-w-md">
+                          <div className="font-body-sm text-xs text-on-surface font-medium truncate" title={item.message || item.text || item.title || 'No message content'}>
+                            {item.message || item.text || item.title || 'No message content'}
+                          </div>
+                          {item.details && (
+                            <div className="font-body-sm text-[11px] text-on-surface-variant truncate mt-0.5">{item.details}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap font-tabular-stat text-on-surface-variant">
+                          {item.user_id || item.source || 'Data Lake'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`font-label-caps text-[10px] uppercase px-2 py-0.5 rounded-full ${
+                            isResolved
+                              ? 'bg-primary/15 text-primary font-semibold'
+                              : 'bg-surface-container-high text-on-surface-variant'
+                          }`}>
+                            {item.status || 'open'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          {!isResolved ? (
+                            <button
+                              type="button"
+                              onClick={() => handleResolveFeedback(item.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 font-label-caps text-[11px] uppercase transition cursor-pointer"
+                              title="Mark resolved"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Done</span>
+                            </button>
+                          ) : (
+                            <span className="font-label-caps text-[10px] uppercase text-on-surface-variant">Resolved</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
