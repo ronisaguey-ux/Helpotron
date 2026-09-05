@@ -91,8 +91,17 @@ def _get_auth_headers_for_user(public_id: str, plan: str = "none") -> dict:
     try:
         user = db.query(User).filter(User.public_id == public_id).first()
         if not user:
-            user = User(public_id=public_id, plan=plan, credits=100.0 if plan in ("basic", "pro", "elite") else 0.0)
+            user = User(
+                public_id=public_id,
+                plan=plan,
+                credits=100.0 if plan in ("basic", "pro", "elite") else 0.0,
+                settings={"2fa_enabled": True},
+            )
             db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not (user.settings or {}).get("2fa_enabled"):
+            user.settings = {**(user.settings or {}), "2fa_enabled": True}
             db.commit()
             db.refresh(user)
         token = create_jwt_token({"sub": user.id, "public_id": user.public_id})

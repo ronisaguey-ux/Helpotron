@@ -141,8 +141,12 @@ def test_payments_endpoint_blocks_direct_stripe(monkeypatch):
     try:
         user = db.query(User).filter(User.public_id == "test_security_user").first()
         if not user:
-            user = User(public_id="test_security_user", password_hash="dummy_hash", credits=10.0)
+            user = User(public_id="test_security_user", password_hash="dummy_hash", credits=10.0, settings={"2fa_enabled": True})
             db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            user.settings = {**(user.settings or {}), "2fa_enabled": True}
             db.commit()
             db.refresh(user)
 
@@ -169,8 +173,12 @@ def test_payments_endpoint_rejects_negative_and_zero_amount():
     try:
         user = db.query(User).filter(User.public_id == "test_security_user").first()
         if not user:
-            user = User(public_id="test_security_user", password_hash="dummy_hash", credits=10.0)
+            user = User(public_id="test_security_user", password_hash="dummy_hash", credits=10.0, settings={"2fa_enabled": True})
             db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            user.settings = {**(user.settings or {}), "2fa_enabled": True}
             db.commit()
             db.refresh(user)
 
@@ -190,6 +198,42 @@ def test_payments_endpoint_rejects_negative_and_zero_amount():
             headers=headers,
         )
         assert res_neg.status_code in (400, 422, 403)
+    finally:
+        db.close()
+
+
+def test_purchase_requires_2fa_enforcement():
+    """Verify POST /api/payments and /api/checkout enforce 2FA when purchases_require_2fa is active."""
+    import uuid
+    db = SessionLocal()
+    try:
+        no_2fa_user = f"user_no_2fa_{uuid.uuid4().hex[:6]}"
+        user = User(public_id=no_2fa_user, password_hash="dummy_hash", credits=10.0, settings={"2fa_enabled": False})
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        token = create_access_token({"sub": user.id})
+        headers = {"Authorization": f"Bearer {token}", "X-Public-ID": user.public_id}
+
+        res = client.post(
+            "/api/payments",
+            json={"public_id": user.public_id, "provider": "cashapp", "amount_cents": 500},
+            headers=headers,
+        )
+        assert res.status_code == 403
+        assert "Two-factor authentication must be enabled" in res.text
+
+        # Enable 2FA and verify access succeeds past the 2FA gate
+        user.settings = {"2fa_enabled": True}
+        db.commit()
+
+        res_after = client.post(
+            "/api/payments",
+            json={"public_id": user.public_id, "provider": "cashapp", "amount_cents": 500},
+            headers=headers,
+        )
+        assert res_after.status_code == 200
     finally:
         db.close()
 
