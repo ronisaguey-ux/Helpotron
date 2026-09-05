@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -308,14 +309,19 @@ async def finalize_dump_item(
     if item.user_id != current_user.id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Cannot finalize dump items owned by another user")
 
-    # Token gate (operator 08-26): generation costs tokens; nothing runs on zero.
+    # Token gate (owner A3/A14 rule): cost determined by task CONTENT (1 token = 1 cent), never flat task-type.
+    source_text = (item.extracted_text or "").strip()
+    est_input_tokens = max(100, int(len(source_text) / 4))
+    est_output_tokens = max(250, min(4000, int(est_input_tokens * 0.6)))
+    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))
+
     if not is_admin_user(current_user) and current_user.plan != "elite":
         token_bal = float((current_user.settings or {}).get("token_balance", 0) or 0)
-        if token_bal < 5:
+        if token_bal < est_cost_tokens:
             return {
                 "status": "insufficient_tokens",
-                "detail": "⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet. "
-                          "Ask them to grant you tokens (or upgrade) to generate assignment work.",
+                "detail": f"⚠️ Insufficient tokens (Estimated cost: {est_cost_tokens} tokens based on content length, balance: {int(token_bal)} tokens). "
+                          "Ask the operator to grant you tokens (or upgrade) to generate assignment work.",
             }
 
     # 1. Ensure the item has an assignment (create one from the dump if not routed).
@@ -558,13 +564,26 @@ async def finalize_dump_item(
 
     response_status = "success" if generated or action == "do_it" else "finalized_no_content"
 
-    # Charge tokens for the generation work (operator 08-26: tokens = usage).
+    # Charge tokens strictly based on actual content consumed and produced (owner A3/A14 rule: 1 token = 1 cent)
+    actual_input_tokens = max(1, int(len(source_text) / 4))
+    actual_output_tokens = max(1, int(len(content or "") / 4)) if content else est_output_tokens
+    actual_token_cost = max(1, int(math.ceil((actual_input_tokens + actual_output_tokens * 1.5) / 1000.0)))
+
     if not is_admin_user(current_user) and current_user.plan != "elite":
         settings = dict(current_user.settings or {})
         bal = float(settings.get("token_balance", 0) or 0)
-        settings["token_balance"] = max(0.0, bal - 5)
+        settings["token_balance"] = max(0.0, bal - actual_token_cost)
         current_user.settings = settings
         db.commit()
+
+    assignment.progress = {
+        **(assignment.progress or {}),
+        "tokens_charged": actual_token_cost,
+        "cost_usd": round(actual_token_cost * 0.01, 2),
+        "input_tokens": actual_input_tokens,
+        "output_tokens": actual_output_tokens,
+    }
+    db.commit()
 
     return {
         "status": response_status,
@@ -572,6 +591,8 @@ async def finalize_dump_item(
         "assignment_id": assignment.id,
         "material_id": material_id,
         "generated": generated,
+        "tokens_charged": actual_token_cost,
+        "cost_usd": round(actual_token_cost * 0.01, 2),
         # Only present when generated: the actual content (solution/study
         # material) so the client can show the work without a second fetch.
         # 08-28 BUG-1: was 40000 — a long multi-chunk material arrived sliced;

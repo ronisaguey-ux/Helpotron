@@ -53,7 +53,8 @@ feature/function in Helpotron. It is written for a review swarm that diffs *supp
   ledger rows (from top-ups, trial, referral, admin grants, pay-in, generation spend, humanizer,
   detection costs); `cost_control.py` / `cost_tracking.py` enforce spend guardrails (user budget,
   auto-refill note, cost-intelligence stats); `credits_compat.py` / `credits_patch.py` keep
-  legacy credit paths compatible.
+  legacy credit paths compatible. Token cost is dynamic and determined strictly by task content length
+  (input/rubric chars + output chars; 1 token = 1 cent / $0.01 compute cost), never flat per task type.
 - **WHERE:** `server/credits.py`, `server/credits_patch.py`, `server/credits_compat.py`,
   `server/cost_control.py`, `server/cost_tracking.py`, main.py dashboard/credits routes.
 - **TAGS:** live
@@ -185,8 +186,9 @@ feature/function in Helpotron. It is written for a review swarm that diffs *supp
 
 ### A.14 Telegram integration
 - **SUPPOSED:** Global product bot (server-side service) + per-user link
-  (`telegram_agent_router`, `/api/telegram-agent/status|connect|disconnect` — 1 credit per
-  instruction); `features_router` (`/api/features/telegram/inspect` BotFather token check,
+  (`telegram_agent_router`, `/api/telegram-agent/status|connect|disconnect` — instruction compute
+  cost adheres to dynamic token pricing: 1 token = $0.01 compute cost, determined strictly by content
+  length without arbitrary flat markups); `features_router` (`/api/features/telegram/inspect` BotFather token check,
   `/find-chat`, `/configure`, `/test`, `/disconnect`); the ops bot carries admin/user notices
   and messaging to the operator.
 - **WHERE:** `server/features.py`, `server/telegram_agent`-related router, `server/routes_features.py`.
@@ -777,7 +779,7 @@ feature/function in Helpotron. It is written for a review swarm that diffs *supp
 
 | # | Item | Supposed | Actual / finding | Remediation Status (2026-09-04) |
 |---|------|----------|------------------|--------------------------------|
-| D-01 | Plan token allocations | One truth per plan | UI 300/1,000/2,700 · README 500/2,000/6,000 · CHANGELOG 300/600/1,500 · banner thresholds 30/100/280. Only UI numbers user-visible. | **RESOLVED**: Aligned strictly to canonical 300 (Free) / 1,000 (Scholar) / 2,700 (Mastery) tokens with 20 TT / 10 TT / 8 TT / 5 TT deliverable costs. |
+| D-01 | Plan token allocations & token pricing | One truth per plan | UI 300/1,000/2,700 · README 500/2,000/6,000 · CHANGELOG 300/600/1,500 · banner thresholds 30/100/280. Only UI numbers user-visible. | **RESOLVED**: Aligned strictly to canonical 300 (Free) / 1,000 (Scholar) / 2,700 (Mastery) tokens. Flat per-type token pricing permanently eliminated: token charges are strictly computed from content length (input/rubric chars + output chars; 1 token = 1 cent / $0.01 compute cost). |
 | D-02 | Real checkout | Stripe/PayPal charged | Prototype allocation: banner "not available yet", cashapp provider, custom 2FA challenge flow. | **RESOLVED**: AuthModal refactored to tabbed 2FA challenge modal with 6-digit numeric input, password reset, and honest solo dev prototype notice. |
 | D-03 | Referral rewards | One rule | UI 2/5/10 + redeemer +10; README + PricingDashboard "+50 cr". | **RESOLVED**: Unified referral rewards: issuer 2/5/10 by tier + redeemer +10 tokens. |
 | D-04 | 5 AI detectors | README list | UI toggles only sapling/winston_ai/pangram. | **RESOLVED**: Winston AI permanently purged; dual-consensus Sapling + Pangram engine with robust error-vote rejection. |
