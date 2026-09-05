@@ -20,6 +20,7 @@ import { Kbd, Badge, timeAgo } from './ui/os.jsx';
 import Button from './Button.jsx';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 import DevContactModal from './DevContactModal.jsx';
+import NewAssignmentModal from './NewAssignmentModal.jsx';
 
 const EFFORT_LABELS = { low: 'Low', balanced: 'Balanced', high: 'High' };
 
@@ -381,6 +382,7 @@ export default function AppShell({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
   /* Avatar quick-settings dropdown (09-01, owner report): the old `fixed
@@ -662,6 +664,19 @@ export default function AppShell({
                   </button>
                 </div>
 
+                {/* Primary CTA */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setNewSessionOpen(true);
+                  }}
+                  className="w-full bg-primary text-on-primary rounded-xl py-3 px-4 flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-sm min-h-[44px] cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="font-label-caps text-xs uppercase tracking-wider font-semibold">New Study Session</span>
+                </button>
+
                 {/* Mobile Navigation Links */}
                 <div className="space-y-3">
                   {tree.map((group) => (
@@ -787,6 +802,31 @@ export default function AppShell({
               </button>
             )}
           </div>
+
+          {sidebarOpen ? (
+            <div className="px-6">
+              <button
+                type="button"
+                onClick={() => setNewSessionOpen(true)}
+                className="w-full bg-primary text-on-primary rounded-xl py-3 px-4 flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-sm min-h-[44px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="font-label-caps text-xs uppercase tracking-wider font-semibold">New Study Session</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setNewSessionOpen(true)}
+                className="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center hover:bg-primary/90 transition-colors shadow-sm focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
+                title="New Study Session"
+                aria-label="New Study Session"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
           <nav className="flex-1 overflow-y-auto space-y-4 px-2" aria-label="Primary">
             {tree.map((group) => (
@@ -966,6 +1006,16 @@ export default function AppShell({
         </button>
       </nav>
       {!isAdmin && <DevContactModal />}
+      {newSessionOpen && (
+        <NewAssignmentModal
+          onClose={() => setNewSessionOpen(false)}
+          onCreated={(newAssign) => {
+            setNewSessionOpen(false);
+            onNavigate('overview');
+            window.dispatchEvent(new CustomEvent('helpotron:assignment-created', { detail: newAssign }));
+          }}
+        />
+      )}
     </>
   );
 }

@@ -212,35 +212,35 @@ export default function DataLakeView({ userId = '' }) {
 
         {/* Live Subagent Valuation Output */}
         {valuationResult && (
-          <div className="p-5 rounded-2xl bg-white/4 border border-white/8 text-xs space-y-3 animate-fadeIn">
+          <div className="p-5 rounded-2xl bg-surface-container-low border border-outline-variant/30 text-xs space-y-3 animate-fadeIn">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                <span className="font-bold text-white text-sm break-words">Subagent Classification & Estimated Score</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse shrink-0" />
+                <span className="font-title-md text-sm font-bold text-on-surface break-words">Subagent Classification & Estimated Score</span>
               </div>
-              <span className="font-mono text-xs px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+              <span className="font-tabular-stat text-xs px-3 py-1 rounded-full bg-primary/15 border border-primary/30 text-primary font-bold">
                 Est. ~{valuationResult.estimated_credits || valuationResult.credits_awarded || 0} / 25 Micro-Credits
               </span>
             </div>
 
-            <div className="p-3 bg-white/4 rounded-xl border border-white/8 space-y-1.5">
+            <div className="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/20 space-y-1.5">
               <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-slate-400 font-medium">Classified Category:</span>
-                <span className="text-emerald-300 font-semibold font-mono">
+                <span className="text-on-surface-variant font-medium">Classified Category:</span>
+                <span className="text-primary font-semibold font-mono">
                   {valuationResult.valuation?.category || valuationResult.data_type}
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-slate-400 font-medium shrink-0">Auto Title:</span>
-                <span className="text-white font-semibold min-w-0 break-words">{valuationResult.title}</span>
+                <span className="text-on-surface-variant font-medium shrink-0">Auto Title:</span>
+                <span className="text-on-surface font-semibold min-w-0 break-words">{valuationResult.title}</span>
               </div>
-              <p className="text-slate-300 text-[11px] leading-relaxed pt-1">
+              <p className="font-body-sm text-[11px] text-on-surface-variant leading-relaxed pt-1">
                 {valuationResult.valuation?.reasoning}
               </p>
             </div>
 
-            <div className="text-[11px] text-amber-300/90 font-mono flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 shrink-0" />
+            <div className="text-[11px] text-on-surface-variant font-tabular-stat flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 shrink-0 text-primary" />
               <span>Status: Pending Review & Implementation (Actual credits awarded upon integration)</span>
             </div>
           </div>

@@ -347,50 +347,71 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
   return (
     <div className="h-full flex flex-col max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Workspace Header */}
-      <div className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-outline-variant/50 pb-6">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-            <h2 className="font-headline-lg text-headline-lg text-on-surface">{title}</h2>
-            <span className="font-label-caps text-label-caps uppercase px-3 py-1 rounded-full bg-secondary-container/20 text-secondary border border-secondary/30">{course}</span>
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <span className="font-label-caps text-label-caps bg-secondary-container/15 text-secondary px-3 py-1 rounded-full border border-secondary-container/30 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+              {status || 'In Progress'}
+            </span>
+            <span className="font-label-caps text-label-caps text-on-surface-variant">
+              Assignment ID: #{assignment.id}
+            </span>
+            {course && (
+              <span className="font-label-caps text-label-caps uppercase px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/30">
+                {course}
+              </span>
+            )}
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition cursor-pointer underline underline-offset-2"
+                className="font-label-caps text-xs text-on-surface-variant hover:text-primary transition cursor-pointer underline underline-offset-2 ml-2"
               >
                 ← Back to dashboard
               </button>
             )}
           </div>
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Due: <span className="font-tabular-stat text-on-surface">{due}</span> • Teacher: <span className="text-on-surface">{teacher}</span> • Status: <span className="font-semibold text-primary">{status}</span>
+          <h2 className="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background">
+            {title}
+          </h2>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-2 max-w-2xl">
+            {prompt || `Study workspace and subagent dispatch for ${title}.`}
+          </p>
+          <p className="font-body-sm text-xs text-on-surface-variant mt-1">
+            Due: <span className="font-tabular-stat text-on-surface font-medium">{due}</span> • Instructor: <span className="text-on-surface font-medium">{teacher}</span>
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="flex items-center gap-2">
-            {/* Export assignment (09-01): whole-assignment JSON attachment */}
-            <button
-              type="button"
-              onClick={handleExportAssignment}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/30 bg-surface-container-low hover:border-primary/50 hover:text-primary text-on-surface-variant font-label-caps text-label-caps uppercase transition cursor-pointer disabled:opacity-40"
-            >
-              {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>Export</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowLaunchToDocModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-on-primary font-label-caps text-label-caps uppercase shadow-sm transition cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Launch to Doc</span>
-            </button>
-          </div>
-          {exportError && (
-            <p className="font-label-caps text-xs text-error font-mono">⚠️ {exportError}</p>
-          )}
+        <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-end">
+          <button
+            type="button"
+            onClick={handleExportAssignment}
+            disabled={exporting}
+            className="min-h-[44px] px-4 py-2 rounded-2xl border border-outline-variant text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+            title="Export JSON"
+          >
+            {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span>Export</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLaunchToDocModal(true)}
+            className="min-h-[44px] px-4 py-2 rounded-2xl border border-outline-variant text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            title="Launch to Doc"
+          >
+            <Sparkles className="w-4 h-4 text-secondary" />
+            <span>Launch to Doc</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleMarkDone}
+            disabled={markingDone || markedDone}
+            className="min-h-[44px] px-5 py-2.5 rounded-2xl bg-primary text-on-primary font-label-caps text-label-caps hover:bg-primary-container transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{markedDone ? 'Completed' : 'Mark as done'}</span>
+          </button>
         </div>
       </div>
 

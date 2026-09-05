@@ -12,10 +12,14 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
@@ -1567,22 +1571,9 @@ def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:
     return msg
 
 
-@router.post("/agent/chat")
-async def send_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
-    """One agent, any request: the LLM picks the action, the pipeline executes it."""
-    user = _get_current_user(request, db)
+def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> Dict[str, Any]:
     settings = dict(user.settings or {})
-    from .security import is_admin_user
-    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
-    # Chat threads (operator 08-26): thread_id selects a conversation; none =
-    # the legacy single conversation (key 0).
     thread_key = payload.thread_id if payload.thread_id is not None else payload.assignment_id
-    # Surface node + assignment grounding (operator 08-28): an assignment
-    # bubble (assignment_id > 0, no thread) IS the per-assignment subagent
-    # team surface; everything else is the My Agent surface. The bubble gets
-    # the REAL assignment context block injected into the system prompt —
-    # name/subject/class/teacher/status/provenance + a short excerpt of the
-    # extracted sheet text — so "question 3" has the actual material behind it.
     bubble_assignment_id = (payload.assignment_id
                             if payload.thread_id is None
                             and payload.assignment_id not in (None, 0)
@@ -1597,9 +1588,6 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             ).first()
             if _assign_row is not None:
                 assignment_ctx = _agent_assignment_context(db, user, _assign_row)
-                # Scoped-setting context (operator 08-31): subject/assignment
-                # humanizer overrides resolve against the REAL bubble — the
-                # names here are what the assignment bubble is grounded with.
                 _prog = _assign_row.progress or {}
                 humanizer_ctx = {
                     "assignment": _assign_row.title,
@@ -1609,14 +1597,139 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
                 if not humanizer_ctx:
                     humanizer_ctx = None
         except Exception:
-            assignment_ctx = ""  # context injection never breaks the chat
+            assignment_ctx = ""
             humanizer_ctx = None
-    # Restore conversation context from the durable store (operator 08-26).
     try:
         from .overlord_agent import load_chat_history_from_db
         load_chat_history_from_db(db, user.id, thread_key)
     except Exception:
         pass
+
+    system_prompt = agent_system_prompt(user, settings, node=agent_node, ctx=humanizer_ctx)
+    if assignment_ctx:
+        system_prompt += "\n" + assignment_ctx
+
+    return {
+        "settings": settings,
+        "thread_key": thread_key,
+        "bubble_assignment_id": bubble_assignment_id,
+        "agent_node": agent_node,
+        "assignment_ctx": assignment_ctx,
+        "humanizer_ctx": humanizer_ctx,
+        "system_prompt": system_prompt,
+    }
+
+
+@router.post("/agent/chat/stream")
+async def stream_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
+    """Streaming chat endpoint: live reasoning and tokens with seamless fallback to non-streaming."""
+    user = _get_current_user(request, db)
+    from .security import is_admin_user
+    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
+
+    ctx = _build_agent_chat_prompt(user, payload, db)
+    settings = ctx["settings"]
+    thread_key = ctx["thread_key"]
+    agent_node = ctx["agent_node"]
+    humanizer_ctx = ctx["humanizer_ctx"]
+    system_prompt = ctx["system_prompt"]
+
+    # Token check
+    if not is_admin and user.plan != "elite":
+        token_bal = float((user.settings or {}).get("token_balance", 0) or 0)
+        if token_bal <= 0:
+            async def _insufficient_stream():
+                msg = "⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet."
+                yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+            return StreamingResponse(_insufficient_stream(), media_type="text/event-stream")
+
+    # If the message appears to be a tool/action or shell compute:
+    shell_cmd = _extract_shell_query(payload.text)
+    if shell_cmd or payload.text.strip().startswith("/"):
+        async def _actions_stream():
+            yield f"data: {json.dumps({'type': 'unavailable', 'reason': 'actions'})}\n\n"
+        return StreamingResponse(_actions_stream(), media_type="text/event-stream")
+
+    # Record user message
+    user_msg = overlord_agent.add_chat_message(thread_key, sender="user", text=payload.text, user_id=user.id)
+    try:
+        from .overlord_agent import persist_chat_message
+        persist_chat_message(db, user.id, thread_key, "user", payload.text)
+    except Exception:
+        pass
+
+    effort_score = int(settings.get("default_effort_level", 5) or 5) * 100
+
+    async def event_generator():
+        from .llm import stream_llm
+        full_reply = ""
+        stream_failed = False
+        try:
+            async for chunk in stream_llm(
+                user_prompt=payload.text,
+                system_prompt=system_prompt,
+                effort="auto",
+                effort_score=effort_score,
+                user_id=str(user.id),
+                db=db,
+            ):
+                if chunk.get("type") == "fallback":
+                    stream_failed = True
+                    break
+                elif chunk.get("type") == "reasoning":
+                    yield f"data: {json.dumps({'type': 'reasoning', 'delta': chunk['text']})}\n\n"
+                elif chunk.get("type") == "content":
+                    full_reply += chunk["text"]
+                    yield f"data: {json.dumps({'type': 'delta', 'delta': chunk['text']})}\n\n"
+        except Exception as err:
+            logger.warning("stream_chat_message exception: %s", err)
+            stream_failed = True
+
+        if stream_failed or not full_reply.strip():
+            yield f"data: {json.dumps({'type': 'unavailable', 'reason': 'actions'})}\n\n"
+            return
+
+        # Deduct tokens and persist final reply
+        if not is_admin and user.plan != "elite":
+            _charge_tokens(user, db, 1.0)
+
+        # AI Detection Standard
+        if full_reply and not full_reply.startswith(("⚠️", "✅", "❌")):
+            full_reply = await _apply_detection_standard(
+                settings, user, full_reply, node=agent_node, humanizer_ctx=humanizer_ctx, db=db,
+            )
+
+        _chat_reply(db, user, thread_key, text=full_reply)
+        await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
+
+        yield f"data: {json.dumps({'type': 'done', 'reply': full_reply})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/agent/chat")
+async def send_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
+    """One agent, any request: the LLM picks the action, the pipeline executes it."""
+    user = _get_current_user(request, db)
+    from .security import is_admin_user
+    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
+
+    ctx = _build_agent_chat_prompt(user, payload, db)
+    settings = ctx["settings"]
+    thread_key = ctx["thread_key"]
+    bubble_assignment_id = ctx["bubble_assignment_id"]
+    agent_node = ctx["agent_node"]
+    assignment_ctx = ctx["assignment_ctx"]
+    humanizer_ctx = ctx["humanizer_ctx"]
+    system_prompt = ctx["system_prompt"]
 
     # Token gate (operator 08-26): nothing runs until the operator grants tokens.
     # Credits remain for discounts; token_balance is the usage budget.
