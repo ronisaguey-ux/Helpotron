@@ -187,7 +187,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
       {/* ─── Header Banner ───────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background dark:text-inverse-on-surface mb-1">
+          <h2 className="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background mb-1">
             Submission Ledger
           </h2>
           <p className="font-body-md text-body-md text-on-surface-variant">

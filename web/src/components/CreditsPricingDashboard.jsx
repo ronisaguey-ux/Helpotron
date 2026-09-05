@@ -169,9 +169,9 @@ export function CreditsPricingDashboard({
   const tiers = [
     {
       name: 'Basic',
-      basePrice: 10,
-      annualBasePrice: 100,
-      maxDiscount: 5, // 50% of $10
+      basePrice: 5,
+      annualBasePrice: 50,
+      maxDiscount: 2, // ≈50% of $5 (integer cap keeps the -X.00 USD format)
       credits: '300 Task Tokens / mo',
       creditsAward: 300,
       popular: false,
@@ -180,9 +180,9 @@ export function CreditsPricingDashboard({
     },
     {
       name: 'Pro',
-      basePrice: 20,
-      annualBasePrice: 200,
-      maxDiscount: 10, // 50% of $20
+      basePrice: 15,
+      annualBasePrice: 150,
+      maxDiscount: 7, // ≈50% of $15 (integer cap keeps the -X.00 USD format)
       credits: '1,000 Task Tokens / mo',
       creditsAward: 1000,
       popular: true,
@@ -191,9 +191,9 @@ export function CreditsPricingDashboard({
     },
     {
       name: 'Elite',
-      basePrice: 40,
-      annualBasePrice: 400,
-      maxDiscount: 20, // 50% of $40
+      basePrice: 30,
+      annualBasePrice: 300,
+      maxDiscount: 15, // 50% of $30
       credits: '2,700 Task Tokens / mo',
       creditsAward: 2700,
       popular: false,

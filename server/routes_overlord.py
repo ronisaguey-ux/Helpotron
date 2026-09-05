@@ -1702,7 +1702,10 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
         _chat_reply(db, user, thread_key, text=full_reply)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
 
-        yield f"data: {json.dumps({'type': 'done', 'reply': full_reply})}\n\n"
+        # Post-charge balance rides the done frame so the top-bar widget
+        # updates live after streamed chats (same contract as the non-stream
+        # reply's token_balance, operator 08-27).
+        yield f"data: {json.dumps({'type': 'done', 'reply': full_reply, 'token_balance': _tk_balance(user)})}\n\n"
 
     return StreamingResponse(
         event_generator(),

@@ -751,6 +751,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         const replyText = streamRes.reply || '✅ Done.';
         setThinking({ visible: false, minimized: false, text: '' });
         pushAssistant(replyText);
+        // Post-charge balance rides the done frame (same contract as the
+        // non-stream reply) — keep the top-bar widget live.
+        if (streamRes.token_balance != null) onTokenBalance(Number(streamRes.token_balance) || 0);
         streamedSuccess = true;
       }
     } catch {
