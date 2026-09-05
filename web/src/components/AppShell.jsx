@@ -14,7 +14,7 @@ import {
   Search, Settings, Bell, LogOut, ChevronLeft, ChevronRight,
   Plus, ShieldCheck, LayoutDashboard, Brain,
   BarChart3, Shield, Gauge, X, History, Home, Inbox, Database,
-  Coins,
+  CreditCard, Puzzle, HelpCircle, Coins,
 } from "lucide-react";
 import { NOTIFICATIONS, loadSettings, saveSettings } from "../demoData.js";
 import { Badge, timeAgo } from "./ui/os.jsx";
@@ -35,6 +35,9 @@ export const getNavItems = (isAdmin) => [
   { key: "settings", label: "Settings", Icon: Settings },
   { key: "dump", label: "Drop Assignment", Icon: Inbox },
   { key: "datalake", label: "Data Lake", Icon: Database },
+  { key: "credits", label: "Billing", Icon: CreditCard },
+  { key: "extension", label: "Extension", Icon: Puzzle },
+  { key: "guide", label: "Guide", Icon: HelpCircle },
   ...(isAdmin
     ? [
         { key: "admin", label: "Control Center", Icon: Shield },
