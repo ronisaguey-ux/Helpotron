@@ -495,3 +495,125 @@ ROUTING_TELEMETRY = {
     "grunt_offload_pct": 82.5,
     "p95_latency_ms": 12.4
 }
+
+
+async def stream_llm(
+    user_prompt: str,
+    system_prompt: str = "",
+    effort: str = "auto",
+    modality: str = "text",
+    required_capabilities: Optional[List[str]] = None,
+    complexity_score: float = 3.0,
+    user_id: str = "system",
+    model: Optional[str] = None,
+    db = None,
+    effort_score: Optional[int] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+):
+    """Live-stream LLM completions yielding dicts:
+    {"type": "reasoning", "text": "..."} or {"type": "content", "text": "..."}.
+    On error or empty stream, yields a single {"type": "fallback"} dict."""
+    route = resolve_model_routing(
+        effort=effort,
+        modality=modality,
+        required_capabilities=required_capabilities,
+        complexity_score=complexity_score,
+        effort_score=effort_score,
+    )
+    model_id = MODELS.get(model, model) if model else route["model"]
+
+    for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
+        if prohibited in model_id:
+            yield {"type": "fallback"}
+            return
+
+    try:
+        from .config import config
+        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or getattr(config, "omniroute_api_key", "") or OPENROUTER_API_KEY
+    except Exception:
+        api_key = os.getenv("OPENROUTER_API_KEY", "") or OPENROUTER_API_KEY
+
+    headers = {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://helpotron.app",
+        "X-Title": "Helpotron Study OS"
+    }
+
+    payload = {
+        "model": model_id,
+        "temperature": temperature if temperature is not None else 0.7,
+        "stream": True,
+    }
+    if max_tokens:
+        payload["max_tokens"] = int(max_tokens)
+    elif model_id in ModelPolicy.GRUNT_CANDIDATES:
+        payload["max_tokens"] = 4096
+
+    attempt_models = _effort_cascade(model_id, effort=effort_score or 500)
+
+    streamed_any = False
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for cand_id in attempt_models:
+                cand_payload = dict(payload)
+                openrouter_model = {
+                    "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
+                    "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
+                }.get(cand_id, cand_id)
+                cand_payload["model"] = openrouter_model
+
+                ident_notice = format_model_identity_prompt(cand_id)
+                cand_messages = []
+                if system_prompt:
+                    cand_messages.append({"role": "system", "content": f"{ident_notice}\n\n{system_prompt}"})
+                else:
+                    cand_messages.append({"role": "system", "content": ident_notice})
+                cand_messages.append({"role": "user", "content": user_prompt})
+                cand_payload["messages"] = cand_messages
+
+                try:
+                    async with client.stream(
+                        "POST",
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=cand_payload,
+                        timeout=60.0,
+                    ) as response:
+                        if response.status_code != 200:
+                            continue
+                        async for line in response.aiter_lines():
+                            line = line.strip()
+                            if not line or not line.startswith("data: "):
+                                continue
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                            except Exception:
+                                continue
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta") or {}
+                            reasoning = delta.get("reasoning_content") or delta.get("reasoning")
+                            content = delta.get("content")
+                            if reasoning:
+                                streamed_any = True
+                                yield {"type": "reasoning", "text": reasoning}
+                            if content:
+                                streamed_any = True
+                                yield {"type": "content", "text": content}
+                    if streamed_any:
+                        return
+                except Exception as e:
+                    logger.warning("stream_llm error on model %s: %s", cand_id, e)
+                    continue
+    except Exception as e:
+        logger.warning("stream_llm client error: %s", e)
+
+    if not streamed_any:
+        yield {"type": "fallback"}
+

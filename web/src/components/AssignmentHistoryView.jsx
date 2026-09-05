@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api.js';
-import SectionCard from './SectionCard.jsx';
 import NewAssignmentModal from './NewAssignmentModal.jsx';
 import Button from './Button';
 import {
-  History as HistoryIcon,
   Search,
   Download,
   Filter,
-  ShieldCheck,
   RefreshCw,
   Archive,
   BookOpen,
@@ -16,14 +13,61 @@ import {
   Calendar,
   ExternalLink,
   Plus,
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 
-/* Aurora semantic chip tints (scoped): .aurora-chip keeps its glass pill
-   base from index.css; these modifiers recolor it for status semantics. */
-const AURORA_CHIP_TINTS = `
-.aurora-chip.ok    { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.32); color: #6ee7b7; }
-.aurora-chip.tight { padding: 0.15rem 0.6rem; font-size: 0.75rem; }
-`;
+function getSubjectChipStyle(course = '') {
+  const c = String(course).toLowerCase();
+  if (/psych|bio|life|chem|med/.test(c)) {
+    return 'bg-sem-cyan/10 text-sem-cyan border-sem-cyan/25';
+  }
+  if (/math|calc|phys|stat|algebra/.test(c)) {
+    return 'bg-sem-indigo/10 text-sem-indigo border-sem-indigo/25';
+  }
+  if (/hist|eng|lit|gov|soc|phil/.test(c)) {
+    return 'bg-sem-amber/10 text-sem-amber border-sem-amber/25';
+  }
+  if (/cs|code|comp|software|data/.test(c)) {
+    return 'bg-sem-green/10 text-sem-green border-sem-green/25';
+  }
+  return 'bg-secondary-container/10 text-secondary border-secondary/20';
+}
+
+function getHistoryStatusChip(status = '') {
+  const s = String(status).toLowerCase();
+  if (s.includes('completed') || s.includes('submitted') || s.includes('graded')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sem-green/15 text-sem-green border border-sem-green/25 font-medium font-label-caps text-[11px] uppercase">
+        <span className="w-1.5 h-1.5 rounded-full bg-sem-green" />
+        Completed
+      </span>
+    );
+  }
+  if (s.includes('archived')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/30 font-medium font-label-caps text-[11px] uppercase">
+        <span className="w-1.5 h-1.5 rounded-full bg-outline" />
+        Archived
+      </span>
+    );
+  }
+  if (s.includes('overdue')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error-container/20 text-error border border-error/30 font-medium font-label-caps text-[11px] uppercase">
+        <AlertTriangle className="w-3 h-3 text-error" />
+        Overdue
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary border border-primary/25 font-medium font-label-caps text-[11px] uppercase">
+      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+      {status || 'Recorded'}
+    </span>
+  );
+}
 
 export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
   const [historyList, setHistoryList] = useState([]);
@@ -33,9 +77,6 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
   const [exportNotice, setExportNotice] = useState('');
   const [showNewAssignment, setShowNewAssignment] = useState(false);
   const [createNotice, setCreateNotice] = useState('');
-  // Archived tab (09-01): archived rows may only exist in the cards payload
-  // (they are not part of the turn-in ledger) — pull the cards snapshot and
-  // filter client-side on status === 'archived'.
   const [historyTab, setHistoryTab] = useState('ledger'); // 'ledger' | 'archived'
   const [archivedCards, setArchivedCards] = useState([]);
   const [archivedLoading, setArchivedLoading] = useState(false);
@@ -55,7 +96,6 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
 
   useEffect(() => {
     if (historyTab === 'archived') fetchArchived();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyTab, userId]);
 
   const fetchHistory = async (subj) => {
@@ -103,45 +143,64 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
     setTimeout(() => setExportNotice(''), 4000);
   };
 
+  const handleExportAll = async () => {
+    try {
+      const data = await api.exportAllUserData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `helpotron_user_archive_${userId}_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice('✅ Complete user data archive exported.');
+      setTimeout(() => setExportNotice(''), 4000);
+    } catch (e) {
+      setExportNotice('❌ Export failed.');
+      setTimeout(() => setExportNotice(''), 4000);
+    }
+  };
+
+  const handleExportAssignment = async (assignmentId, e) => {
+    if (e) e.stopPropagation();
+    try {
+      await api.exportAssignmentData({ assignment_id: assignmentId });
+      setExportNotice(`✅ Assignment #${assignmentId} export downloaded.`);
+      setTimeout(() => setExportNotice(''), 4000);
+    } catch (err) {
+      setExportNotice(`❌ Export failed: ${err.message || 'try again.'}`);
+      setTimeout(() => setExportNotice(''), 4000);
+    }
+  };
+
   const filteredHistory = historyList.filter((item) => {
     const matchesSearch =
       !searchQuery ||
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.course || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.teacher_name && item.teacher_name.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesSearch;
   });
 
-  // Honest aggregates over REAL ledger data only (operator 08-27): null/absent
-  // grades and detector scores count as "not graded" / "not checked" — no
-  // fabricated A/92 defaults anywhere.
-  const gradedScores = historyList
-    .map((h) => (h.score_predicted != null && Number.isFinite(Number(h.score_predicted)) ? Number(h.score_predicted) : null))
-    .filter((n) => n != null);
-  const gradedCount = gradedScores.length;
-  const avgScore = gradedCount > 0 ? Math.round(gradedScores.reduce((a, b) => a + b, 0) / gradedCount) : null;
-  const detectorScores = historyList
-    .map((h) => (h.detector_score != null && Number.isFinite(Number(h.detector_score)) ? Number(h.detector_score) : null))
-    .filter((n) => n != null);
-  const avgDetector = detectorScores.length > 0 ? Math.round((detectorScores.reduce((a, b) => a + b, 0) / detectorScores.length) * 100) : null;
-
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-[1440px] mx-auto p-4 md:p-6">
       {/* ─── Header Banner ───────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface">Submission Ledger</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+          <h2 className="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background dark:text-inverse-on-surface mb-1">
+            Submission Ledger
+          </h2>
+          <p className="font-body-md text-body-md text-on-surface-variant">
             Review and analyze your archived study assignments and generated insights.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             onClick={() => setShowNewAssignment(true)}
             variant="primary"
             size="sm"
-            className="rounded-xl font-label-caps uppercase tracking-wider"
+            className="rounded-xl font-label-caps uppercase tracking-wider text-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Assignment</span>
@@ -152,11 +211,20 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             disabled={historyList.length === 0}
             variant="secondary"
             size="sm"
-            className="rounded-xl font-label-caps uppercase tracking-wider"
+            className="rounded-xl font-label-caps uppercase tracking-wider text-xs"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export</span>
+            <span>Export CSV</span>
           </Button>
+
+          <button
+            onClick={handleExportAll}
+            className="p-2.5 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+            title="Export complete archive"
+            aria-label="Export complete archive"
+          >
+            <Download className="w-4 h-4" />
+          </button>
 
           <Button
             onClick={() => fetchHistory(subjectFilter)}
@@ -183,7 +251,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
         </div>
       )}
 
-      {/* ─── Tab: Submission Ledger vs Archived (09-01) ───────────────────── */}
+      {/* ─── Tab: Submission Ledger vs Archived ───────────────────── */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -214,7 +282,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
 
       {historyTab === 'archived' ? (
         <>
-          {/* ─── Archived tab (09-01) ─────────────────────────────────────── */}
+          {/* ─── Archived tab ─────────────────────────────────────── */}
           <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-secondary/15 flex items-center justify-center text-secondary">
@@ -222,11 +290,15 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
               </div>
               <div>
                 <h3 className="font-title-md text-title-md text-on-surface">Archived Assignments</h3>
-                <p className="font-body-sm text-body-sm text-on-surface-variant">Assignments you moved to history from their workspace — openable, revisitable and exportable.</p>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                  Assignments you moved to history from their workspace — openable, revisitable and exportable.
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-3 py-1 text-xs shrink-0">{`${archivedCards.length} archived`}</span>
+              <span className="font-tabular-stat text-tabular-stat text-on-surface-variant bg-surface-container-low rounded-full px-3 py-1 text-xs shrink-0">
+                {`${archivedCards.length} archived`}
+              </span>
               <Button
                 onClick={fetchArchived}
                 disabled={archivedLoading}
@@ -255,16 +327,16 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
               </p>
             </div>
           ) : (
-            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-sm overflow-hidden">
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/30 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-container-low/50 border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-surface/50 border-b border-outline-variant/40 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
                     <tr>
                       <th className="py-4 px-6">Assignment Title</th>
-                      <th className="py-4 px-6">Course</th>
+                      <th className="py-4 px-6">Subject</th>
                       <th className="py-4 px-6">Due Date</th>
-                      <th className="py-4 px-6">AI Risk</th>
-                      <th className="py-4 px-6 text-right">Action</th>
+                      <th className="py-4 px-6">Status</th>
+                      <th className="py-4 px-6 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20 font-body-sm text-body-sm text-on-surface">
@@ -281,7 +353,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <span className="font-label-caps text-[11px] px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant uppercase">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border font-label-caps text-[11px] uppercase ${getSubjectChipStyle(card.course || card.subject)}`}>
                             {card.course || card.subject || 'General'}
                           </span>
                         </td>
@@ -289,18 +361,17 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                           {card.due_date || '—'}
                         </td>
                         <td className="py-4 px-6">
-                          {card.score_ai != null ? (
-                            <span className="font-label-caps text-[11px] text-primary">
-                              {(Number(card.score_ai) * 100).toFixed(0)}% AI Risk
-                            </span>
-                          ) : (
-                            <span className="font-label-caps text-[11px] text-outline">Not checked</span>
-                          )}
+                          {getHistoryStatusChip(card.status || 'Archived')}
                         </td>
                         <td className="py-4 px-6 text-right">
-                          <span className="inline-flex items-center gap-1.5 font-label-caps text-[11px] uppercase text-secondary group-hover:translate-x-0.5 transition-transform">
-                            Open <ArrowRight className="w-3.5 h-3.5" />
-                          </span>
+                          <button
+                            onClick={(e) => handleExportAssignment(card.id, e)}
+                            className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded-xl transition-colors inline-flex items-center justify-center min-h-[44px] min-w-[44px]"
+                            title="Export assignment"
+                            aria-label="Export assignment"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -312,203 +383,144 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
         </>
       ) : (
         <>
-      {/* ─── Metric Cards ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
-            <span>Total Completed</span>
-            <BookOpen className="w-4 h-4 text-primary" />
-          </div>
-          <div className="text-3xl font-bold text-on-surface font-tabular-stat">{historyList.length}</div>
-          <div className="font-body-sm text-xs text-on-surface-variant mt-1">Submitted coursework</div>
-        </div>
+          {/* ─── Search & Subject Filter Bar ───────────────────────────────── */}
+          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
+              <input
+                type="text"
+                placeholder="Search assignments by title, subject, or teacher..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
-            <span>Average Recorded Score</span>
-            <Award className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Filter className="w-4 h-4 text-outline shrink-0" />
+              <select
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+                className="w-full sm:w-56 bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="ALL">All Subjects & Modules</option>
+                <option value="Mathematics">Mathematics</option>
+                <option value="English">English & Literature</option>
+                <option value="History">History & Social Studies</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Biology">Biology & Life Sciences</option>
+                <option value="Psychology">Psychology</option>
+              </select>
+            </div>
           </div>
-          {avgScore != null ? (
-            <>
-              <div className="text-3xl font-bold text-on-surface font-tabular-stat">{avgScore}%</div>
-              <div className="font-body-sm text-xs text-on-surface-variant mt-1">
-                {`Across ${gradedCount} graded assignment${gradedCount === 1 ? '' : 's'}`}
-              </div>
-            </>
+
+          {/* ─── Ledger Table Area ────────────────────────────────────────── */}
+          {loading ? (
+            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center text-xs text-primary font-label-caps uppercase flex items-center justify-center gap-2 shadow-sm">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Loading assignment history ledger…
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center space-y-3 shadow-sm">
+              <Archive className="w-10 h-10 text-outline mx-auto" />
+              <h4 className="font-title-md text-title-md text-on-surface">No historical assignments found</h4>
+              <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm mx-auto">
+                New assignments record into this archive once completed; finished coursework lands here automatically.
+              </p>
+            </div>
           ) : (
-            <>
-              <div className="text-3xl font-bold text-outline font-tabular-stat">Not graded</div>
-              <div className="font-body-sm text-xs text-on-surface-variant mt-1">Scores are recorded when an instructor publishes grades</div>
-            </>
-          )}
-        </div>
-
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between text-xs text-on-surface-variant mb-2 font-label-caps uppercase">
-            <span>Average AI Detection Risk</span>
-            <ShieldCheck className="w-4 h-4 text-primary" />
-          </div>
-          {avgDetector != null ? (
-            <>
-              <div className="text-3xl font-bold text-on-surface font-tabular-stat">{avgDetector}%</div>
-              <div className="font-body-sm text-xs text-on-surface-variant mt-1">Average detection score on file</div>
-            </>
-          ) : (
-            <>
-              <div className="text-3xl font-bold text-outline font-tabular-stat">Not checked</div>
-              <div className="font-body-sm text-xs text-on-surface-variant mt-1">No detector scores recorded for these assignments</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ─── Search & Subject Filter Bar ───────────────────────────────── */}
-      <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
-          <input
-            type="text"
-            placeholder="Search assignments by title, subject, or teacher..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-outline shrink-0" />
-          <select
-            value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
-            className="w-full sm:w-56 bg-surface-container-low border border-outline-variant/30 rounded-xl px-3.5 py-2.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="ALL">All Subjects & Modules</option>
-            <option value="Mathematics">Mathematics</option>
-            <option value="English">English & Literature</option>
-            <option value="History">History & Social Studies</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Biology">Biology & Life Sciences</option>
-            <option value="Psychology">Psychology</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ─── Archive Table ────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center text-xs text-primary font-label-caps uppercase flex items-center justify-center gap-2 shadow-sm">
-          <RefreshCw className="w-4 h-4 animate-spin" />
-          Loading assignment history ledger…
-        </div>
-      ) : filteredHistory.length === 0 ? (
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-12 text-center space-y-3 shadow-sm">
-          <Archive className="w-10 h-10 text-outline mx-auto" />
-          <h4 className="font-title-md text-title-md text-on-surface">No historical assignments found</h4>
-          <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm mx-auto">
-            New assignments record into this archive once completed; finished coursework lands here automatically.
-          </p>
-        </div>
-      ) : (
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface-container-low/50 border-b border-outline-variant/30 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
-                <tr>
-                  <th className="py-4 px-6">Assignment Title</th>
-                  <th className="py-4 px-6">Subject / Course</th>
-                  <th className="py-4 px-6">Instructor</th>
-                  <th className="py-4 px-6">Grade Output</th>
-                  <th className="py-4 px-6">AI Evasion Check</th>
-                  <th className="py-4 px-6">Date Completed</th>
-                  <th className="py-4 px-6 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/20 font-body-sm text-body-sm text-on-surface">
-                {filteredHistory.map((item) => (
-                  <tr
-                    key={item.id}
-                    onClick={() => onSelectAssignment && item.id != null && onSelectAssignment({
-                      id: item.id,
-                      name: item.title,
-                      title: item.title,
-                      subject: item.course,
-                      teacher_name: item.teacher_name,
-                      status: item.status,
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/50 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-outline-variant/40 bg-surface/50">
+                      <th className="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Assignment Title</th>
+                      <th className="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Subject</th>
+                      <th className="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Date</th>
+                      <th className="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Status</th>
+                      <th className="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant/30">
+                    {filteredHistory.map((item) => {
+                      const isItemOverdue = String(item.status || '').toLowerCase().includes('overdue');
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => onSelectAssignment && item.id != null && onSelectAssignment({
+                            id: item.id,
+                            name: item.title,
+                            title: item.title,
+                            subject: item.course,
+                            teacher_name: item.teacher_name,
+                            status: item.status,
+                          })}
+                          className={`hover:bg-surface-container-low/50 transition-colors group ${onSelectAssignment && item.id != null ? 'cursor-pointer' : ''}`}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="font-title-md text-body-md text-on-background flex items-center gap-2">
+                              <span className={onSelectAssignment && item.id != null ? 'group-hover:text-primary transition-colors font-medium' : 'font-medium'}>
+                                {item.title}
+                              </span>
+                              {onSelectAssignment && item.id != null && (
+                                <ExternalLink className="w-3.5 h-3.5 text-outline group-hover:text-primary" />
+                              )}
+                            </div>
+                            {item.teacher_name && (
+                              <div className="text-on-surface-variant font-body-sm text-xs mt-0.5">
+                                Instructor: {item.teacher_name}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border font-label-caps text-[11px] uppercase ${getSubjectChipStyle(item.course)}`}>
+                              {item.course || 'General'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 font-tabular-stat text-tabular-stat text-on-surface-variant">
+                            <div className={`flex items-center gap-1.5 ${isItemOverdue ? 'text-error font-medium' : ''}`}>
+                              {isItemOverdue ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-error" />
+                              ) : (
+                                <Calendar className="w-3.5 h-3.5 text-outline" />
+                              )}
+                              <span>{item.completed_at || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            {getHistoryStatusChip(item.status)}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <button
+                              onClick={(e) => handleExportAssignment(item.id, e)}
+                              className="text-on-surface-variant hover:text-primary transition-colors p-2 min-h-[44px] min-w-[44px] rounded-2xl hover:bg-primary-container/10 focus:outline-none focus:ring-2 focus:ring-primary inline-flex items-center justify-center cursor-pointer"
+                              title="Export assignment data"
+                              aria-label={`Export assignment #${item.id}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
                     })}
-                    className={`hover:bg-surface-container-low/50 transition-colors ${onSelectAssignment && item.id != null ? 'cursor-pointer group' : ''}`}
-                    title={onSelectAssignment && item.id != null ? 'Open assignment in workspace' : undefined}
-                  >
-                    <td className="py-4 px-6 font-semibold text-on-surface">
-                      <div className="flex items-center gap-2">
-                        <span className={onSelectAssignment && item.id != null ? 'group-hover:text-primary transition-colors' : ''}>
-                          {item.title}
-                        </span>
-                        {onSelectAssignment && item.id != null && (
-                          <ExternalLink className="w-3.5 h-3.5 text-outline group-hover:text-primary" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="font-label-caps text-[11px] px-2.5 py-1 rounded-full bg-secondary-container/10 text-secondary border border-secondary/20">
-                        {item.course || '—'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-on-surface-variant">
-                      {item.teacher_name || '—'}
-                    </td>
-                    <td className="py-4 px-6">
-                      {item.grade_letter || item.score_predicted != null ? (
-                        <span className="font-tabular-stat font-semibold text-on-surface">
-                          {item.grade_letter || `${Math.round(item.score_predicted)}%`}
-                          {item.grade_letter && item.score_predicted != null ? ` (${Math.round(item.score_predicted)}%)` : ''}
-                        </span>
-                      ) : (
-                        <span className="font-body-sm text-outline italic text-xs">Not graded</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      {item.detector_score != null ? (
-                        <span className="inline-flex items-center gap-1.5 font-label-caps text-[11px] text-primary">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          {(item.detector_score * 100).toFixed(0)}% AI Risk
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-label-caps text-[11px] text-outline">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          Not checked
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 font-tabular-stat text-tabular-stat text-on-surface-variant">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-outline shrink-0" />
-                        <span>{item.completed_at || '—'}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary font-label-caps text-[11px] uppercase font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
-                        {item.status || 'Tracked'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-      </>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* ─── New Assignment modal (operator 08-28) ──────────────────────── */}
+      {/* ─── New Assignment modal ────────────────────────────────────────── */}
       {showNewAssignment && (
         <NewAssignmentModal
+          isOpen={showNewAssignment}
           onClose={() => { setShowNewAssignment(false); setCreateNotice(''); }}
           onCreated={({ assignment_id, rubric_saved, imported, subject }) => {
             setShowNewAssignment(false);
             setCreateNotice(imported
               ? `✅ Imported from the link — assignment #${assignment_id} landed in the ${subject || 'assigned'} bubble.`
-              : `✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace and will appear in this ledger once completed.`);
+              : `✅ Assignment #${assignment_id} created${rubric_saved ? ' with rubric' : ''}. It now lives in your workspace.`);
             setTimeout(() => setCreateNotice(''), 6000);
             fetchHistory(subjectFilter);
           }}

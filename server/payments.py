@@ -23,7 +23,7 @@ STRIPE_PRICE_IDS = {
 }
 
 TIER_CREDITS = {"trial": 100, "basic": 300, "pro": 1000, "elite": 2700}
-TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
+TIER_PRICE_CENTS = {"basic": 500, "pro": 1500, "elite": 3000}
 
 
 def _stripe_enabled() -> bool:

@@ -402,6 +402,90 @@ export const api = {
   addAgentPermissionRule: (rule) => request('/api/agent/permissions/rules', { method: 'POST', body: JSON.stringify({ rule }) }),
   deleteAgentPermissionRule: (rule) => request('/api/agent/permissions/rules/delete', { method: 'POST', body: JSON.stringify({ rule }) }),
   agentChat: (data) => request('/api/agent/chat', { method: 'POST', body: JSON.stringify(data) }),
+  agentChatStream: async (data, onEvent) => {
+    if (isDemoMode()) {
+      if (typeof onEvent === 'function') {
+        onEvent({ type: 'reasoning', delta: 'Analyzing study request in demo mode...\n' });
+        await new Promise((r) => setTimeout(r, 200));
+        onEvent({ type: 'delta', delta: 'Hello! I am your study assistant. How can I help you today?' });
+        onEvent({ type: 'done', reply: 'Hello! I am your study assistant. How can I help you today?' });
+      }
+      return { status: 'success', reply: 'Hello! I am your study assistant. How can I help you today?' };
+    }
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Public-ID': getUserId(),
+    };
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${getServer()}/api/agent/chat/stream`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let message = text;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.detail) message = parsed.detail;
+      } catch {}
+      const err = new Error(message);
+      err.status = response.status;
+      throw err;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalReply = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop();
+      for (const frame of frames) {
+        const line = frame.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+        if (evt.type === 'reasoning') {
+          if (typeof onEvent === 'function') onEvent(evt);
+        } else if (evt.type === 'delta') {
+          finalReply += evt.delta || '';
+          if (typeof onEvent === 'function') onEvent(evt);
+        } else if (evt.type === 'done') {
+          finalReply = evt.reply || finalReply;
+          if (typeof onEvent === 'function') onEvent(evt);
+          return evt;
+        } else if (evt.type === 'unavailable') {
+          if (typeof onEvent === 'function') onEvent(evt);
+          return { status: 'unavailable', reason: evt.reason };
+        } else if (evt.type === 'error') {
+          if (typeof onEvent === 'function') onEvent(evt);
+          throw new Error(evt.message || 'Streaming error');
+        }
+      }
+    }
+    return { status: 'success', reply: finalReply };
+  },
+  importFromUrl: async (data) => {
+    if (isDemoMode()) {
+      await new Promise((r) => setTimeout(r, 400));
+      return {
+        id: Math.floor(Math.random() * 1000) + 100,
+        title: data?.title || 'Imported Assignment',
+        subject: data?.subject || 'General Study',
+        prompt: data?.url || 'Imported from URL',
+        status: 'pending',
+      };
+    }
+    return request('/api/assignments/import-from-url', { method: 'POST', body: JSON.stringify(data) });
+  },
   // Composer paperclip (operator 08-28): the REAL file goes to the agent —
   // FormData {file, text} → server OCR/extracts and forwards to the chat.
   agentChatAttach: async (formData) => {
@@ -562,6 +646,14 @@ export const api = {
   submitDataLakeMicrocredits: (data) => request('/api/datalake/microcredits/submit', { method: 'POST', body: JSON.stringify(data) }),
   getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId}`, { method: 'GET' }),
   redeemMicrocredits: (data) => request('/api/datalake/microcredits/redeem', { method: 'POST', body: JSON.stringify(data) }),
+  listFeedback: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/datalake/feedback/list${q ? '?' + q : ''}`, { method: 'GET' });
+  },
+  updateFeedbackStatus: (id, status) => request(`/api/datalake/feedback/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  }),
 
   // Referrals (40-digit single-use codes)
   getReferralCode: () => request('/api/referrals/code', { method: 'GET' }),

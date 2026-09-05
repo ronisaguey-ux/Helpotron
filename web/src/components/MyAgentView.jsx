@@ -70,6 +70,66 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   );
 }
 
+function ThinkingBubble({ thinking, setThinking }) {
+  if (!thinking?.visible || !thinking?.text) return null;
+  const isMin = !!thinking.minimized;
+  return (
+    <div className="w-full sm:max-w-[80ch] my-2 transition-all duration-200">
+      {isMin ? (
+        <button
+          type="button"
+          onClick={() => setThinking((prev) => ({ ...prev, minimized: false }))}
+          aria-expanded="false"
+          aria-label="Expand thinking reasoning"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/40 text-on-surface-variant hover:text-on-surface text-xs font-mono shadow-sm transition cursor-pointer"
+        >
+          <span>💭 Thinking…</span>
+          <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+        </button>
+      ) : (
+        <div
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setThinking((prev) => ({ ...prev, minimized: true }));
+          }}
+          className="rounded-2xl bg-surface-container-high border border-outline-variant/40 p-3 shadow-md focus:outline-none focus:ring-1 focus:ring-primary/50"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20 mb-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-on-surface-variant">
+              <span>💭</span>
+              <span className="font-mono text-[11px] font-semibold text-primary">Model Reasoning</span>
+              <span className="text-[10px] text-on-surface-variant/70 animate-pulse">Live</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setThinking((prev) => ({ ...prev, minimized: true }))}
+              aria-expanded="true"
+              aria-label="Minimize thinking reasoning"
+              className="p-1 rounded hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition cursor-pointer"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div
+            className="max-h-64 overflow-y-auto font-mono text-[11px] leading-relaxed text-on-surface-variant whitespace-pre-wrap select-text pr-1"
+            ref={(el) => {
+              if (el && !el._userScrolled) {
+                el.scrollTop = el.scrollHeight;
+              }
+            }}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              el._userScrolled = el.scrollHeight - el.scrollTop - el.clientHeight > 20;
+            }}
+          >
+            {thinking.text}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {}, onTokenBalance = () => {}, onOpenAssignment = () => {} }) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [threads, setThreads] = useState([]);
@@ -240,6 +300,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const [mode, setMode] = useState('auto');
   const [autoApprove, setAutoApprove] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [thinking, setThinking] = useState({ visible: false, minimized: false, text: '' });
   const [effort, setEffort] = useState(500);
   const [autoApproveThis, setAutoApproveThis] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -669,43 +730,73 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     }]);
     setInput('');
     setBusy(true);
+    setThinking({ visible: false, minimized: false, text: '' });
+
+    let streamedSuccess = false;
     try {
-      const res = await api.agentChat({
-        assignment_id: 0,
-        text: query,
-        session_mode_override: mode,
-        thread_id: activeThread ?? undefined,
-      });
-      // Live token balance (08-27): the chat response carries the post-charge
-      // balance — reflect it in the top-bar widget immediately, no refresh.
-      if (res && res.token_balance != null) onTokenBalance(Number(res.token_balance) || 0);
-      // reply may be a plain string OR the message object (gate/status replies)
-      const replyRaw = res?.reply ?? res?.message;
-      const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
-      pushAssistant(replyText);
-      handleActionResult(res);
-      // Full permission popup ON THE SPOT (09-01 fix): the chat response
-      // itself carries the pending request — show it now instead of waiting
-      // for the 12s poll (the old behavior left only a quiet inline banner).
-      if (res?.permission_request?.id) {
-        const pr = res.permission_request;
-        setPendingPermissions((prev) => (prev.some((p) => p.id === pr.id) ? prev : [pr, ...prev]));
-        shownPermsRef.current.add(pr.id);
-        setPermOpenId(pr.id);
+      const streamRes = await api.agentChatStream(
+        {
+          assignment_id: 0,
+          text: query,
+          session_mode_override: mode,
+          thread_id: activeThread ?? undefined,
+        },
+        (evt) => {
+          if (evt.type === 'reasoning' && evt.delta) {
+            setThinking((prev) => ({ visible: true, minimized: prev.minimized, text: prev.text + evt.delta }));
+          }
+        }
+      );
+      if (streamRes && (streamRes.status === 'success' || streamRes.type === 'done')) {
+        const replyText = streamRes.reply || '✅ Done.';
+        setThinking({ visible: false, minimized: false, text: '' });
+        pushAssistant(replyText);
+        streamedSuccess = true;
       }
-    } catch (e) {
-      /* The api layer throws the raw response body; pull the server's own
-       * "message" out so users see "An unexpected server error occurred."
-       * instead of a wall of JSON (09-01, seen live on prod). */
-      const raw = (e && e.message) || '';
-      const pretty = raw.trim().startsWith('{')
-        ? (() => { try { return JSON.parse(raw).message || raw; } catch { return raw; } })()
-        : raw;
-      pushAssistant(`⚠️ The agent couldn't reach the backend right now (${pretty}). In demo mode responses are simulated.`);
-    } finally {
-      setBusy(false);
-      loadThreads(); // refresh updated_at / auto-title
+    } catch {
+      // streaming fallback to standard agentChat
     }
+
+    if (!streamedSuccess) {
+      setThinking({ visible: false, minimized: false, text: '' });
+      try {
+        const res = await api.agentChat({
+          assignment_id: 0,
+          text: query,
+          session_mode_override: mode,
+          thread_id: activeThread ?? undefined,
+        });
+        // Live token balance (08-27): the chat response carries the post-charge
+        // balance — reflect it in the top-bar widget immediately, no refresh.
+        if (res && res.token_balance != null) onTokenBalance(Number(res.token_balance) || 0);
+        // reply may be a plain string OR the message object (gate/status replies)
+        const replyRaw = res?.reply ?? res?.message;
+        const replyText = typeof replyRaw === 'string' ? replyRaw : (replyRaw?.text || '✅ Done.');
+        pushAssistant(replyText);
+        handleActionResult(res);
+        // Full permission popup ON THE SPOT (09-01 fix): the chat response
+        // itself carries the pending request — show it now instead of waiting
+        // for the 12s poll (the old behavior left only a quiet inline banner).
+        if (res?.permission_request?.id) {
+          const pr = res.permission_request;
+          setPendingPermissions((prev) => (prev.some((p) => p.id === pr.id) ? prev : [pr, ...prev]));
+          shownPermsRef.current.add(pr.id);
+          setPermOpenId(pr.id);
+        }
+      } catch (e) {
+        /* The api layer throws the raw response body; pull the server's own
+         * "message" out so users see "An unexpected server error occurred."
+         * instead of a wall of JSON (09-01, seen live on prod). */
+        const raw = (e && e.message) || '';
+        const pretty = raw.trim().startsWith('{')
+          ? (() => { try { return JSON.parse(raw).message || raw; } catch { return raw; } })()
+          : raw;
+        pushAssistant(`⚠️ The agent couldn't reach the backend right now (${pretty}). In demo mode responses are simulated.`);
+      }
+    }
+
+    setBusy(false);
+    loadThreads(); // refresh updated_at / auto-title
   }
 
   /* ── composer paperclip (operator 08-28): images/pdf/docs/txt are uploaded
@@ -872,6 +963,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
     if (activeIdentityId === id) {
       setActiveIdentityId(null);
       try { localStorage.removeItem('helpotron.agent.active_identity_id'); } catch {}
+      set('ai.personality', 'Coach');
+      set('ai.instructions', 'Explain like you are a patient coach. Check my understanding before moving on.');
+      pushAssistant('🎭 Active persona deleted — personality reset to the default Coach.');
     }
   }
 
@@ -1588,6 +1682,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 </div>
               );
             })}
+
+            <ThinkingBubble thinking={thinking} setThinking={setThinking} />
 
             {busy && (
               <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] w-fit animate-pulse">

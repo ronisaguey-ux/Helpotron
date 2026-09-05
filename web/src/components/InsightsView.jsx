@@ -14,7 +14,19 @@ export default function InsightsView({ userId, onGoTo, initialTab }) {
   const [tab, setTab] = useState(initialTab || 'overview');
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 max-w-[1440px] mx-auto p-2 sm:p-4">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
+        <div>
+          <h2 className="font-display-xl text-display-xl text-on-background mb-1">
+            Cognitive Insights
+          </h2>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+            A serene overview of your learning momentum, task completion, and study analytics.
+          </p>
+        </div>
+      </div>
+
       <Tabs
         tabs={[
           { key: 'overview', label: 'Overview' },

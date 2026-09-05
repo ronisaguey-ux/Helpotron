@@ -177,6 +177,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
         setPhase('saving_rubric');
         try {
           await assignmentRequest('PATCH', `/api/assignments/${id}`, { progress: { rubric: rubric.trim() } });
+          window.dispatchEvent(new CustomEvent('helpotron:assignment-created', { detail: { assignment_id: id, title: title.trim() } }));
           onCreated({ assignment_id: id, title: title.trim(), rubric_saved: true });
         } catch (e) {
           setPhase('saving_rubric');
@@ -184,6 +185,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
         }
         return;
       }
+      window.dispatchEvent(new CustomEvent('helpotron:assignment-created', { detail: { assignment_id: id, title: title.trim() } }));
       onCreated({ assignment_id: id, title: title.trim(), rubric_saved: false });
     } catch (e) {
       setPhase('idle');
@@ -197,6 +199,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
     setPhase('saving_rubric');
     try {
       await assignmentRequest('PATCH', `/api/assignments/${createdId}`, { progress: { rubric: rubric.trim() } });
+      window.dispatchEvent(new CustomEvent('helpotron:assignment-created', { detail: { assignment_id: createdId, title: title.trim() } }));
       onCreated({ assignment_id: createdId, title: title.trim(), rubric_saved: true });
     } catch (e) {
       setPhase('saving_rubric');
@@ -227,6 +230,7 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
         setError('The scrape finished but no assignment id came back. Try again.');
         return;
       }
+      window.dispatchEvent(new CustomEvent('helpotron:assignment-created', { detail: { assignment_id: id, title: res.title || impUrl.trim(), subject: res.subject } }));
       onCreated({
         assignment_id: id,
         title: res.title || impUrl.trim(),
@@ -400,6 +404,28 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
             </button>
           </div>
         </form>
+        ) : importPhase === 'importing' ? (
+          <div className="py-10 flex flex-col items-center justify-center gap-6 text-center animate-fadeIn">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="absolute inset-0 border-4 border-surface-container-high rounded-full" />
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              <Link2 className="w-6 h-6 text-primary" />
+            </div>
+            <div className="space-y-1.5 max-w-sm">
+              <div className="font-title-md text-sm font-semibold text-on-surface flex items-center justify-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                Reading portal page structure…
+              </div>
+              <p className="font-body-sm text-xs text-on-surface-variant">
+                Extracting assignment instructions, due dates, and grading rubrics.
+              </p>
+            </div>
+            <div className="w-full max-w-xs space-y-2.5 opacity-40">
+              <div className="h-2 bg-on-surface-variant/30 rounded-full animate-pulse w-full" />
+              <div className="h-2 bg-on-surface-variant/30 rounded-full animate-pulse w-4/5 mx-auto" />
+              <div className="h-2 bg-on-surface-variant/30 rounded-full animate-pulse w-3/5 mx-auto" />
+            </div>
+          </div>
         ) : (
         <form
           className="space-y-4"
@@ -407,15 +433,17 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
         >
           <div>
             <label htmlFor="na-url" className={labelCls}>Assignment link *</label>
-            <input
-              id="na-url"
-              type="url"
-              maxLength={2048}
-              placeholder="https://yourclassportal.example.com/assignment/123"
-              value={impUrl}
-              onChange={(e) => setImpUrl(e.target.value)}
-              className={inputCls}
-            />
+            <div className="relative">
+              <input
+                id="na-url"
+                type="url"
+                maxLength={2048}
+                placeholder="https://yourclassportal.example.com/assignment/123"
+                value={impUrl}
+                onChange={(e) => setImpUrl(e.target.value)}
+                className={inputCls}
+              />
+            </div>
             <p className="font-body-sm text-xs text-on-surface-variant mt-1.5">
               Paste the page that holds the assignment — a class portal, syllabus page, or
               public doc. Helpo reads it, pulls the instructions, and drops it in the right
@@ -460,8 +488,8 @@ export default function NewAssignmentModal({ onClose, onCreated }) {
               disabled={impUrl.trim().length < 8 || importPhase !== 'idle'}
               className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary hover:bg-primary-container disabled:opacity-40 rounded-xl font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm"
             >
-              {importPhase === 'importing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-              <span>{importPhase === 'importing' ? 'Importing…' : 'Import Assignment'}</span>
+              <Link2 className="w-3.5 h-3.5" />
+              <span>Import Assignment</span>
             </button>
           </div>
         </form>

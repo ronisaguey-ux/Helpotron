@@ -1208,7 +1208,17 @@ export function SettingsApp({ userId, onGoTo, plan, credits, tokenBalance, isAdm
   );
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto p-2 sm:p-4">
+      {/* Header */}
+      <div className="mb-4">
+        <h1 className="font-display-xl text-headline-lg-mobile md:text-display-xl text-on-background mb-1">
+          Settings
+        </h1>
+        <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+          Manage your preferences, account details, and study co-pilot configurations to optimize your learning environment.
+        </p>
+      </div>
+
       {/* Toolbar: search + save flash */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">

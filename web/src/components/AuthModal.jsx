@@ -419,7 +419,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
 
         {/* Error Notification */}
         {loginError && (
-          <div className="mb-4 p-3 rounded-[var(--radius-md)] bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+          <div className="mb-4 p-3.5 rounded-2xl bg-error/15 border border-error/30 text-error text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{loginError}</span>
           </div>
@@ -428,8 +428,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
         {/* SIGN UP FORM */}
         {tab === 'signup' && (
           <form onSubmit={handleSignup} method="post" action="#" className="space-y-4" autoComplete="on">
-            <div className="space-y-1">
-              <label htmlFor="signup-username" className="text-xs font-semibold text-[var(--text-secondary)]">Public ID / Username</label>
+            <div className="space-y-1.5">
+              <label htmlFor="signup-username" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Public ID / Username</label>
               <div className="relative">
                 <input
                   id="signup-username"
@@ -442,12 +442,12 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   onChange={(e) => setSignupUser(e.target.value)}
                   className={INPUT}
                 />
-                <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
+                <User className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="signup-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
+            <div className="space-y-1.5">
+              <label htmlFor="signup-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Password</label>
               <div className="relative">
                 <input
                   id="signup-password"
@@ -460,15 +460,15 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   onChange={(e) => setSignupPass(e.target.value)}
                   className={INPUT}
                 />
-                <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
-                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <Key className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
+                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
                   {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="signup-confirm-password" className="text-xs font-semibold text-[var(--text-secondary)]">Confirm Password</label>
+            <div className="space-y-1.5">
+              <label htmlFor="signup-confirm-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Confirm Password</label>
               <div className="relative">
                 <input
                   id="signup-confirm-password"
@@ -481,8 +481,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                   onChange={(e) => setSignupPassConfirm(e.target.value)}
                   className={INPUT}
                 />
-                <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
-                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <Lock className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
+                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
                   {showSignupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -494,9 +494,9 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                 required
                 checked={consentAgreed}
                 onChange={(e) => setConsentAgreed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
+                className="mt-0.5 w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
               />
-              <span className="text-[11px] text-[var(--text-muted)] leading-tight">
+              <span className="font-body-sm text-[11px] text-on-surface-variant leading-tight">
                 I agree to the <strong>Academic Honor Code</strong> and <strong>FERPA / GDPR Terms</strong>.
                 {!consentAgreed && (
                   <em className="not-italic block text-[10px] mt-0.5 text-amber-300/90">
@@ -509,7 +509,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             <button
               type="submit"
               disabled={loading || !signupUser || !signupPass || !consentAgreed}
-              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
+              className="w-full py-3 bg-primary hover:bg-primary-container disabled:opacity-40 text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center gap-2"
             >
               {loading ? 'Creating Account…' : 'Create Free Account →'}
             </button>
@@ -521,8 +521,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
           <form onSubmit={handleLogin} method="post" action="#" className="space-y-4" autoComplete="on">
             {!requires2FA ? (
               <>
-                <div className="space-y-1">
-                  <label htmlFor="login-username" className="text-xs font-semibold text-[var(--text-secondary)]">Public ID / Username</label>
+                <div className="space-y-1.5">
+                  <label htmlFor="login-username" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Public ID / Username</label>
                   <div className="relative">
                     <input
                       id="login-username"
@@ -535,17 +535,17 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       onChange={(e) => setLoginUser(e.target.value)}
                       className={INPUT}
                     />
-                    <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
+                    <User className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
-                    <label htmlFor="login-password">Password</label>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label htmlFor="login-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Password</label>
                     <button
                       type="button"
                       onClick={() => { setTab('reset'); setLoginError(''); }}
-                      className="text-[var(--accent)] hover:underline text-xs cursor-pointer font-normal"
+                      className="text-primary hover:underline text-xs cursor-pointer font-normal"
                     >
                       Forgot password?
                     </button>
@@ -562,8 +562,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                       onChange={(e) => setLoginPass(e.target.value)}
                       className={INPUT}
                     />
-                    <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
-                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <Key className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
+                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
                       {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
@@ -576,15 +576,15 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-on-surface">Two-Factor Authentication</h4>
-                    <p className="text-xs text-on-surface-variant mt-0.5">
+                    <h4 className="font-title-md text-sm font-semibold text-on-surface">Two-Factor Authentication</h4>
+                    <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
                       Enter the 6-digit code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} or phone.
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="two-factor-code" className="text-xs font-semibold text-on-surface-variant">Security Code (6 Digits)</label>
+                  <label htmlFor="two-factor-code" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Security Code (6 Digits)</label>
                   <div className="relative">
                     <input
                       id="two-factor-code"
@@ -601,8 +601,8 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
                     />
                   </div>
                   <div className="flex items-center justify-between text-xs pt-1">
-                    <span className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="flex items-center gap-1.5 text-primary font-mono text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                       Hardware / TOTP Synced
                     </span>
                     <button
@@ -620,7 +620,7 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
             <button
               type="submit"
               disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 6)}
-              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
+              className="w-full py-3 bg-primary hover:bg-primary-container disabled:opacity-40 text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center gap-2"
             >
               {loading ? 'Verifying…' : (requires2FA ? 'Verify 6-Digit Code & Sign In →' : 'Sign in to Workspace →')}
             </button>
