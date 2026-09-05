@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Helpotron Academic Companion",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "helpotron-companion@ronisaguey-ux.dev",
@@ -58,7 +58,9 @@
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "content_scripts": [
     {
@@ -78,7 +80,9 @@
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
