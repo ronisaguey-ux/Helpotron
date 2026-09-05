@@ -13,7 +13,7 @@ import { resolveScopedValue } from "./ScopedSetting.jsx";
 import {
   Search, Settings, Bell, LogOut, ChevronLeft, ChevronRight,
   Plus, ShieldCheck, LayoutDashboard, Brain,
-  BarChart3, Shield, Gauge, X, History, Home,
+  BarChart3, Shield, Gauge, X, History, Home, Inbox, Database,
   Coins,
 } from "lucide-react";
 import { NOTIFICATIONS, loadSettings, saveSettings } from "../demoData.js";
@@ -27,12 +27,20 @@ const EFFORT_LABELS = { low: "Low", balanced: "Balanced", high: "High" };
 const usageTokenLabel = (u) =>
   u?.unlimited ? "Unlimited" : `${Number(u?.token_balance ?? 0).toLocaleString()} tokens`;
 
-export const getNavItems = () => [
+export const getNavItems = (isAdmin) => [
   { key: "overview", label: "Dashboard", Icon: LayoutDashboard },
   { key: "agent", id: "my_agent", label: "My Agent", Icon: Brain },
   { key: "insights", label: "Insights", Icon: BarChart3 },
   { key: "history", label: "History", Icon: History },
   { key: "settings", label: "Settings", Icon: Settings },
+  { key: "dump", label: "Drop Assignment", Icon: Inbox },
+  { key: "datalake", label: "Data Lake", Icon: Database },
+  ...(isAdmin
+    ? [
+        { key: "admin", label: "Control Center", Icon: Shield },
+        { key: "monitors", label: "Monitors", Icon: Gauge },
+      ]
+    : []),
 ];
 /* ── Quick settings (avatar menu) ─────────────────────────────────────────── */
 function QuickSettings({ settings, onChange, onOpenFull, user }) {
@@ -383,7 +391,7 @@ export default function AppShell({
     saveSettings(next);
   };
 
-  const navItems = getNavItems();
+  const navItems = getNavItems(isAdmin);
   const current = navItems.find((i) => i.key === activeView);
 
   return (
@@ -499,24 +507,6 @@ export default function AppShell({
                           user={user}
                         />
                         <div className="border-t border-outline-variant/20 p-2 space-y-0.5">
-                          {isAdmin && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => { setQuickOpen(false); onNavigate("admin"); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
-                              >
-                                <Shield className="w-3.5 h-3.5" /> Control Center
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setQuickOpen(false); onNavigate("monitors"); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
-                              >
-                                <Gauge className="w-3.5 h-3.5" /> Monitors
-                              </button>
-                            </>
-                          )}
                           <button
                             type="button"
                             onClick={() => { setQuickOpen(false); onOpenPrivacy(); }}
