@@ -1,18 +1,17 @@
 /* ────────────────────────────────────────────────────────────────────────────
- * AgentConfigsSidebar.jsx — Comprehensive Agent Configuration Manager
+ * AgentConfigsSidebar.jsx — Comprehensive Agent Configuration Manager (v3 M3 Tokens)
  * Provides full ADD, DELETE, and SELECT / ACTIVATE controls for:
  *   1. Identities & Personas (Presets + Custom created personas)
  *   2. Skills & Capabilities (Presets + Custom prompt templates + Uploads)
  *   3. Permanent Memories (Facts, study goals, deadlines)
  *   4. Rules & Automations (Uploaded rule files, automated triggers)
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from "react";
 import {
   SlidersHorizontal, User as UserIcon, Database, FileText, Send, Trash2, Plus,
-  Upload, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, BookOpen, Cpu, Wand2, Edit3,
-  Layers, Bot, X
-} from 'lucide-react';
-import { Badge, timeAgo } from './ui/os.jsx';
+  Upload, ChevronDown, ChevronRight, Check, Cpu, Edit3, X,
+} from "lucide-react";
+import { timeAgo } from "./ui/os.jsx";
 
 export const DEFAULT_IDENTITIES = [];
 export const DEFAULT_SKILLS = [];
@@ -36,7 +35,7 @@ export default function AgentConfigsSidebar({
   onDeleteSkill = () => {},
   onSelectSkill = () => {},
   memory = [],
-  memoryText = '',
+  memoryText = "",
   setMemoryText = () => {},
   addMemory = () => {},
   onUpdateMemory = () => {},
@@ -53,35 +52,35 @@ export default function AgentConfigsSidebar({
   saveInstructions = () => {},
   onCollapse = () => {},
 }) {
-  const [activeTab, setActiveTab] = useState('identities'); // 'identities' | 'skills' | 'memories' | 'files'
+  const [activeTab, setActiveTab] = useState("identities"); // "identities" | "skills" | "memories" | "files"
 
-  const [agentNameInput, setAgentNameInput] = useState(ai.aiName || 'Atlas');
+  const [agentNameInput, setAgentNameInput] = useState(ai.aiName || "Atlas");
   const [nameSavedFeedback, setNameSavedFeedback] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
 
   // Editing state for existing items
-  const [editingIdentity, setEditingIdentity] = useState(null); // { id, name, icon, persona, instructions }
-  const [editingSkill, setEditingSkill] = useState(null); // { id, name, icon, category, description, promptTemplate }
+  const [editingIdentity, setEditingIdentity] = useState(null);
+  const [editingSkill, setEditingSkill] = useState(null);
   const [editingMemoryId, setEditingMemoryId] = useState(null);
-  const [editingMemoryText, setEditingMemoryText] = useState('');
+  const [editingMemoryText, setEditingMemoryText] = useState("");
 
   const toggleExpand = (id) => {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Modal / Inline creator states
+  // Modal states
   const [showNewIdentityModal, setShowNewIdentityModal] = useState(false);
-  const [newIdName, setNewIdName] = useState('');
-  const [newIdIcon, setNewIdIcon] = useState('🧠');
-  const [newIdInstructions, setNewIdInstructions] = useState('');
+  const [newIdName, setNewIdName] = useState("");
+  const [newIdIcon, setNewIdIcon] = useState("🧠");
+  const [newIdInstructions, setNewIdInstructions] = useState("");
 
   const [showNewSkillModal, setShowNewSkillModal] = useState(false);
-  const [newSkillName, setNewSkillName] = useState('');
-  const [newSkillIcon, setNewSkillIcon] = useState('⚡');
-  const [newSkillTemplate, setNewSkillTemplate] = useState('');
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillIcon, setNewSkillIcon] = useState("⚡");
+  const [newSkillTemplate, setNewSkillTemplate] = useState("");
 
   const fileInputRef = useRef(null);
-  const [uploadKind, setUploadKind] = useState('skill');
+  const [uploadKind, setUploadKind] = useState("skill");
 
   const handleCreateIdentity = (e) => {
     e?.preventDefault();
@@ -89,14 +88,14 @@ export default function AgentConfigsSidebar({
     const newId = {
       id: `custom_id_${Date.now()}`,
       name: newIdName.trim(),
-      icon: newIdIcon || '🧠',
+      icon: newIdIcon || "🧠",
       persona: newIdName.trim(),
-      instructions: newIdInstructions.trim() || 'Provide helpful and customized assistance.',
+      instructions: newIdInstructions.trim() || "Provide helpful and customized assistance.",
       isBuiltin: false,
     };
     onAddIdentity(newId);
-    setNewIdName('');
-    setNewIdInstructions('');
+    setNewIdName("");
+    setNewIdInstructions("");
     setShowNewIdentityModal(false);
   };
 
@@ -106,7 +105,7 @@ export default function AgentConfigsSidebar({
     onUpdateIdentity({
       ...editingIdentity,
       name: editingIdentity.name.trim(),
-      icon: editingIdentity.icon || '🧠',
+      icon: editingIdentity.icon || "🧠",
       persona: editingIdentity.name.trim(),
       instructions: editingIdentity.instructions.trim(),
     });
@@ -119,15 +118,15 @@ export default function AgentConfigsSidebar({
     const newSk = {
       id: `custom_sk_${Date.now()}`,
       name: newSkillName.trim(),
-      icon: newSkillIcon || '⚡',
-      category: 'skill',
+      icon: newSkillIcon || "⚡",
+      category: "skill",
       description: newSkillName.trim(),
       promptTemplate: newSkillTemplate.trim() || `${newSkillName}:\n`,
       isBuiltin: false,
     };
     onAddSkill(newSk);
-    setNewSkillName('');
-    setNewSkillTemplate('');
+    setNewSkillName("");
+    setNewSkillTemplate("");
     setShowNewSkillModal(false);
   };
 
@@ -137,7 +136,7 @@ export default function AgentConfigsSidebar({
     onUpdateSkill({
       ...editingSkill,
       name: editingSkill.name.trim(),
-      icon: editingSkill.icon || '⚡',
+      icon: editingSkill.icon || "⚡",
       description: editingSkill.name.trim(),
       promptTemplate: editingSkill.promptTemplate.trim(),
     });
@@ -148,17 +147,19 @@ export default function AgentConfigsSidebar({
   const allSkills = skills || [];
 
   return (
-    <div className="panel h-full flex flex-col overflow-hidden bg-[var(--bg-base)]">
+    <div className="bg-surface-container-low border border-outline-variant/30 rounded-2xl h-full flex flex-col overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+      <div className="px-4 py-3.5 border-b border-outline-variant/30 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <SlidersHorizontal className="w-4 h-4 text-[var(--accent)]" />
-          <h2 className="text-xs font-bold uppercase tracking-wider text-white">Agent Configurations</h2>
+          <SlidersHorizontal className="w-4 h-4 text-primary" />
+          <h2 className="font-label-caps text-label-caps text-on-surface uppercase tracking-wider font-bold">
+            Agent Configurations
+          </h2>
         </div>
         <button
           type="button"
           onClick={onCollapse}
-          className="p-1 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition cursor-pointer"
+          className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer"
           title="Close panel"
         >
           <X className="w-4 h-4" />
@@ -169,54 +170,53 @@ export default function AgentConfigsSidebar({
       <div
         role="tablist"
         aria-label="Agent configuration sections"
-        className="flex items-center border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 pt-1 gap-1 shrink-0 overflow-x-auto"
+        className="flex items-center border-b border-outline-variant/30 bg-surface-container-low px-2 pt-1 gap-1 shrink-0 overflow-x-auto"
       >
-        {/* Real icons rather than emoji: emoji render at inconsistent widths
-         * across platforms (which is part of why this row overflowed) and
-         * carry no accessible meaning. */}
         {[
-          { key: 'identities', label: 'Identities', Icon: UserIcon, count: allIdentities.length },
-          { key: 'skills', label: 'Skills', Icon: Cpu, count: allSkills.length },
-          { key: 'memories', label: 'Memories', Icon: Database, count: memory.length },
-          { key: 'files', label: 'Rules & Files', Icon: FileText, count: files.length },
-        ].map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setActiveTab(t.key)}
-            aria-selected={activeTab === t.key}
-            role="tab"
-            className={`flex items-center gap-1.5 px-2 py-2 text-xs font-medium border-b-2 transition cursor-pointer whitespace-nowrap ${
-              activeTab === t.key
-                ? 'border-[var(--accent)] text-white font-semibold'
-                : 'border-transparent text-[var(--text-muted)] hover:text-slate-200'
-            }`}
-          >
-            <t.Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span>{t.label}</span>
-            {/* A "0" badge is noise on every empty tab, and four of them are
-             * what pushed this row past the panel width. Show a count only
-             * when there is something to count. */}
-            {t.count > 0 && (
-              <span className="text-[10px] opacity-70 px-1 rounded-full bg-white/5 font-mono">{t.count}</span>
-            )}
-          </button>
-        ))}
+          { key: "identities", label: "Identities", Icon: UserIcon, count: allIdentities.length },
+          { key: "skills", label: "Skills", Icon: Cpu, count: allSkills.length },
+          { key: "memories", label: "Memories", Icon: Database, count: memory.length },
+          { key: "files", label: "Rules & Files", Icon: FileText, count: files.length },
+        ].map((t) => {
+          const isActive = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              aria-selected={isActive}
+              role="tab"
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-label-caps uppercase tracking-wider rounded-t-xl transition cursor-pointer whitespace-nowrap min-h-[44px] ${
+                isActive
+                  ? "bg-surface-container-lowest text-primary font-semibold border-b-2 border-primary shadow-xs"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border-b-2 border-transparent"
+              }`}
+            >
+              <t.Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>{t.label}</span>
+              {t.count > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-mono">
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Contents */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {/* ── TAB 1: IDENTITIES ─────────────────────────────────────────── */}
-        {activeTab === 'identities' && (
+        {activeTab === "identities" && (
           <div className="space-y-4">
             {/* Customize Agent Display Name */}
-            <div className="p-3.5 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
+            <div className="p-3.5 rounded-xl bg-surface-container-lowest border border-outline-variant/20 space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <label className="font-label-caps text-xs font-bold text-on-surface flex items-center gap-1.5 uppercase tracking-wider">
                   <span>🏷️</span> Agent Display Name
                 </label>
                 {nameSavedFeedback && (
-                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 animate-fadeIn">
+                  <span className="text-[10px] text-sem-green font-semibold flex items-center gap-1">
                     <Check className="w-3 h-3" /> Saved
                   </span>
                 )}
@@ -227,26 +227,23 @@ export default function AgentConfigsSidebar({
                   value={agentNameInput}
                   onChange={(e) => setAgentNameInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      onSaveAgentName(agentNameInput.trim() || 'Atlas');
+                    if (e.key === "Enter") {
+                      onSaveAgentName(agentNameInput.trim() || "Atlas");
                       setNameSavedFeedback(true);
                       setTimeout(() => setNameSavedFeedback(false), 2000);
                     }
                   }}
                   placeholder="e.g. Atlas, Socrates, JARVIS"
-                  /* min-w-0: without it the input keeps its intrinsic
-                   * placeholder width and shoves Save Name out of the panel
-                   * once this renders in the narrower docked column. */
-                  className="clean-input flex-1 min-w-0 px-3 py-1.5 text-xs text-white outline-none rounded-[var(--radius-sm)]"
+                  className="bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary flex-1 min-w-0"
                 />
                 <button
                   type="button"
                   onClick={() => {
-                    onSaveAgentName(agentNameInput.trim() || 'Atlas');
+                    onSaveAgentName(agentNameInput.trim() || "Atlas");
                     setNameSavedFeedback(true);
                     setTimeout(() => setNameSavedFeedback(false), 2000);
                   }}
-                  className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer shrink-0"
+                  className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition shadow-sm shrink-0 min-h-[44px]"
                 >
                   Save Name
                 </button>
@@ -255,30 +252,30 @@ export default function AgentConfigsSidebar({
 
             <div className="flex items-start justify-between gap-3 pt-1">
               <div className="min-w-0">
-                <h3 className="text-xs font-bold text-white">Agent Identities</h3>
-                <p className="text-[11px] text-[var(--text-muted)]">Select an active persona or expand to view details.</p>
+                <h3 className="font-label-caps text-xs font-bold text-on-surface uppercase tracking-wider">Agent Identities</h3>
+                <p className="font-body-sm text-[11px] text-on-surface-variant">Select an active persona or expand to view details.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewIdentityModal(true)}
-                className="shrink-0 whitespace-nowrap px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-sm"
+                className="bg-primary text-on-primary rounded-xl px-3 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center gap-1.5 shrink-0 min-h-[44px]"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Identity
+                <Plus className="w-4 h-4" /> Add Identity
               </button>
             </div>
 
             <div className="space-y-2">
               {allIdentities.length === 0 && (
-                <div className="p-8 text-center border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)] space-y-2">
+                <div className="p-8 text-center border border-dashed border-outline-variant/30 rounded-xl space-y-2">
                   <div className="text-2xl">🎭</div>
-                  <div className="text-xs font-semibold text-white">No custom identities yet</div>
-                  <p className="text-[11px] text-[var(--text-muted)] max-w-xs mx-auto">
+                  <div className="font-headline-lg text-xs font-semibold text-on-surface">No custom identities yet</div>
+                  <p className="font-body-sm text-[11px] text-on-surface-variant max-w-xs mx-auto">
                     Create your own agent persona with custom instructions, tone, and traits.
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowNewIdentityModal(true)}
-                    className="mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer"
+                    className="mt-2 px-4 py-2 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold hover:opacity-90 transition min-h-[44px]"
                   >
                     + Create Persona
                   </button>
@@ -290,10 +287,10 @@ export default function AgentConfigsSidebar({
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-[var(--radius-md)] border transition overflow-hidden ${
+                    className={`rounded-xl border transition overflow-hidden ${
                       isActive
-                        ? 'border-[rgba(139,92,246,0.5)] bg-[var(--accent-subtle)] shadow-sm'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-white/20'
+                        ? "border-primary/40 bg-surface-container-lowest shadow-sm"
+                        : "border-outline-variant/20 bg-surface-container-lowest hover:border-outline-variant/50"
                     }`}
                   >
                     {/* Compact Header Row */}
@@ -301,17 +298,17 @@ export default function AgentConfigsSidebar({
                       <button
                         type="button"
                         onClick={() => toggleExpand(item.id)}
-                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer min-h-[44px]"
                       >
-                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                        <span className="text-on-surface-variant hover:text-on-surface transition">
                           {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </span>
                         <span className="text-lg">{item.icon}</span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+                            <h4 className="font-title-md text-xs font-bold text-on-surface truncate">{item.name}</h4>
                             {isActive && (
-                              <span className="chip chip-accent text-[9px] flex items-center gap-1 font-bold">
+                              <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[9px] font-label-caps font-bold flex items-center gap-1">
                                 <Check className="w-2.5 h-2.5" /> Active
                               </span>
                             )}
@@ -325,42 +322,42 @@ export default function AgentConfigsSidebar({
                           type="button"
                           onClick={() => onSelectIdentity(item)}
                           disabled={isActive}
-                          className={`px-2.5 py-1 rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer ${
+                          className={`px-3 py-1.5 rounded-xl font-label-caps text-xs font-semibold transition cursor-pointer min-h-[44px] ${
                             isActive
-                              ? 'bg-[var(--accent)] text-white opacity-80 cursor-default'
-                              : 'bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10'
+                              ? "bg-primary text-on-primary opacity-80 cursor-default"
+                              : "bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface border border-outline-variant/30"
                           }`}
                         >
-                          {isActive ? 'Active' : 'Select'}
+                          {isActive ? "Active" : "Select"}
                         </button>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setEditingIdentity({ ...item }); }}
-                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                          className="p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Edit identity"
                           aria-label={`Edit ${item.name}`}
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteIdentity(item.id); }}
-                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error-container/20 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Delete identity"
                           aria-label={`Delete ${item.name}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
                     {/* Expandable Details */}
                     {isExpanded && (
-                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-outline-variant/10 bg-surface-container-low text-xs">
                         {item.instructions && (
                           <div>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">System Instructions</span>
-                            <div className="p-2 rounded bg-black/30 border border-white/5 text-[10px] text-slate-300 font-mono whitespace-pre-wrap">
+                            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider block mb-0.5">System Instructions</span>
+                            <div className="p-2.5 rounded-xl bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface font-mono whitespace-pre-wrap">
                               {item.instructions}
                             </div>
                           </div>
@@ -369,9 +366,9 @@ export default function AgentConfigsSidebar({
                           <button
                             type="button"
                             onClick={() => setEditingIdentity({ ...item })}
-                            className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                            className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition cursor-pointer flex items-center gap-1.5 border border-outline-variant/30 min-h-[44px]"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit Identity
+                            <Edit3 className="w-3.5 h-3.5" /> Edit Identity
                           </button>
                         </div>
                       </div>
@@ -384,36 +381,34 @@ export default function AgentConfigsSidebar({
         )}
 
         {/* ── TAB 2: SKILLS ─────────────────────────────────────────────── */}
-        {activeTab === 'skills' && (
+        {activeTab === "skills" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xs font-bold text-white">Skills & Capabilities</h3>
-                <p className="text-[11px] text-[var(--text-muted)]">Select, apply to prompt, or expand to edit blueprint.</p>
+                <h3 className="font-label-caps text-xs font-bold text-on-surface uppercase tracking-wider">Skills & Capabilities</h3>
+                <p className="font-body-sm text-[11px] text-on-surface-variant">Select, apply to prompt, or expand to edit blueprint.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewSkillModal(true)}
-                  className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Skill
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewSkillModal(true)}
+                className="bg-primary text-on-primary rounded-xl px-3 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center gap-1.5 min-h-[44px]"
+              >
+                <Plus className="w-4 h-4" /> Add Skill
+              </button>
             </div>
 
             <div className="space-y-2">
               {allSkills.length === 0 && (
-                <div className="p-8 text-center border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)] space-y-2">
+                <div className="p-8 text-center border border-dashed border-outline-variant/30 rounded-xl space-y-2">
                   <div className="text-2xl">⚡</div>
-                  <div className="text-xs font-semibold text-white">No custom skills yet</div>
-                  <p className="text-[11px] text-[var(--text-muted)] max-w-xs mx-auto">
+                  <div className="font-headline-lg text-xs font-semibold text-on-surface">No custom skills yet</div>
+                  <p className="font-body-sm text-[11px] text-on-surface-variant max-w-xs mx-auto">
                     Build prompt blueprints and automated capabilities tailored to your workflow.
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowNewSkillModal(true)}
-                    className="mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer"
+                    className="mt-2 px-4 py-2 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold hover:opacity-90 transition min-h-[44px]"
                   >
                     + Create Skill
                   </button>
@@ -425,10 +420,10 @@ export default function AgentConfigsSidebar({
                 return (
                   <div
                     key={sk.id}
-                    className={`rounded-[var(--radius-md)] border transition overflow-hidden ${
+                    className={`rounded-xl border transition overflow-hidden ${
                       isSelected
-                        ? 'border-[rgba(139,92,246,0.4)] bg-[var(--accent-subtle)]'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-white/20'
+                        ? "border-primary/40 bg-surface-container-lowest shadow-sm"
+                        : "border-outline-variant/20 bg-surface-container-lowest hover:border-outline-variant/50"
                     }`}
                   >
                     {/* Compact Header Row */}
@@ -436,14 +431,14 @@ export default function AgentConfigsSidebar({
                       <button
                         type="button"
                         onClick={() => toggleExpand(sk.id)}
-                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer min-h-[44px]"
                       >
-                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                        <span className="text-on-surface-variant hover:text-on-surface transition">
                           {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </span>
                         <span className="text-lg">{sk.icon}</span>
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-xs font-bold text-white truncate">{sk.name}</h4>
+                          <h4 className="font-title-md text-xs font-bold text-on-surface truncate">{sk.name}</h4>
                         </div>
                       </button>
 
@@ -452,7 +447,7 @@ export default function AgentConfigsSidebar({
                         <button
                           type="button"
                           onClick={() => onSelectSkill(sk)}
-                          className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10 text-[11px] font-semibold transition cursor-pointer flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface border border-outline-variant/30 font-label-caps text-xs font-semibold transition cursor-pointer flex items-center gap-1 min-h-[44px]"
                           title="Inject this skill into the prompt box"
                         >
                           <Send className="w-3 h-3" /> Select
@@ -460,43 +455,43 @@ export default function AgentConfigsSidebar({
                         <button
                           type="button"
                           onClick={() => onToggleSkill(sk.id)}
-                          className={`px-2 py-1 rounded-[var(--radius-sm)] text-[10px] font-semibold transition cursor-pointer border ${
+                          className={`px-3 py-1.5 rounded-xl font-label-caps text-xs font-semibold transition cursor-pointer min-h-[44px] ${
                             isSelected
-                              ? 'bg-[var(--accent)] text-white border-transparent'
-                              : 'bg-black/20 text-[var(--text-muted)] border-white/5 hover:text-white'
+                              ? "bg-primary text-on-primary"
+                              : "bg-surface-container text-on-surface-variant border border-outline-variant/30 hover:text-on-surface"
                           }`}
-                          title={isSelected ? 'Disable skill' : 'Enable skill'}
+                          title={isSelected ? "Disable skill" : "Enable skill"}
                         >
-                          {isSelected ? 'Enabled' : 'Enable'}
+                          {isSelected ? "Enabled" : "Enable"}
                         </button>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setEditingSkill({ ...sk }); }}
-                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                          className="p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Edit skill"
                           aria-label={`Edit ${sk.name}`}
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteSkill(sk.id); }}
-                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error-container/20 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Delete skill"
                           aria-label={`Delete ${sk.name}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
                     {/* Expandable Details */}
                     {isExpanded && (
-                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-outline-variant/10 bg-surface-container-low text-xs">
                         {sk.promptTemplate && (
                           <div>
-                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Prompt Blueprint</span>
-                            <div className="p-2 rounded bg-black/30 border border-white/5 text-[10px] text-slate-300 font-mono whitespace-pre-wrap">
+                            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider block mb-0.5">Prompt Blueprint</span>
+                            <div className="p-2.5 rounded-xl bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface font-mono whitespace-pre-wrap">
                               {sk.promptTemplate}
                             </div>
                           </div>
@@ -505,9 +500,9 @@ export default function AgentConfigsSidebar({
                           <button
                             type="button"
                             onClick={() => setEditingSkill({ ...sk })}
-                            className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                            className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition cursor-pointer flex items-center gap-1.5 border border-outline-variant/30 min-h-[44px]"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit Blueprint
+                            <Edit3 className="w-3.5 h-3.5" /> Edit Blueprint
                           </button>
                         </div>
                       </div>
@@ -520,11 +515,11 @@ export default function AgentConfigsSidebar({
         )}
 
         {/* ── TAB 3: MEMORIES ───────────────────────────────────────────── */}
-        {activeTab === 'memories' && (
+        {activeTab === "memories" && (
           <div className="space-y-4">
             <div>
-              <h3 className="text-xs font-bold text-white">Permanent Memories</h3>
-              <p className="text-[11px] text-[var(--text-muted)]">Facts, preferences, and deadlines your agent always remembers.</p>
+              <h3 className="font-label-caps text-xs font-bold text-on-surface uppercase tracking-wider">Permanent Memories</h3>
+              <p className="font-body-sm text-[11px] text-on-surface-variant">Facts, preferences, and deadlines your agent always remembers.</p>
             </div>
 
             {/* Add memory form */}
@@ -532,16 +527,16 @@ export default function AgentConfigsSidebar({
               <input
                 value={memoryText}
                 onChange={(e) => setMemoryText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addMemory()}
+                onKeyDown={(e) => e.key === "Enter" && addMemory()}
                 placeholder="Add a new memory or fact…"
                 aria-label="New memory entry"
-                className="clean-input flex-1 px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)]"
+                className="bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary flex-1 min-w-0"
               />
               <button
                 type="button"
                 onClick={addMemory}
                 disabled={!memoryText.trim()}
-                className="px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition shadow-sm disabled:opacity-40 min-h-[44px]"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -549,7 +544,7 @@ export default function AgentConfigsSidebar({
 
             <div className="space-y-2">
               {memory.length === 0 && (
-                <div className="p-6 text-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)]">
+                <div className="p-6 text-center text-xs text-on-surface-variant border border-dashed border-outline-variant/30 rounded-xl">
                   No memories yet. Add facts about your courses, style, or preferences.
                 </div>
               )}
@@ -560,23 +555,23 @@ export default function AgentConfigsSidebar({
                 return (
                   <div
                     key={m.id}
-                    className="rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-white/20 transition overflow-hidden"
+                    className="rounded-xl bg-surface-container-lowest border border-outline-variant/20 hover:border-outline-variant/50 transition overflow-hidden"
                   >
                     {isEditing ? (
-                      <div className="p-3 space-y-2.5 bg-black/30">
+                      <div className="p-3 space-y-2.5 bg-surface-container-low">
                         <textarea
                           rows={2}
                           value={editingMemoryText}
                           onChange={(e) => setEditingMemoryText(e.target.value)}
                           placeholder="Edit memory content..."
-                          className="clean-input w-full p-2.5 text-xs outline-none rounded-[var(--radius-sm)] resize-none text-white leading-relaxed"
+                          className="w-full p-2.5 text-xs bg-surface-container border border-outline-variant/30 rounded-xl resize-none text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary leading-relaxed"
                           autoFocus
                         />
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => setEditingMemoryId(null)}
-                            className="px-3 py-1 text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                            className="px-3 py-1.5 text-xs text-on-surface-variant hover:text-on-surface transition cursor-pointer min-h-[44px]"
                           >
                             Cancel
                           </button>
@@ -587,7 +582,7 @@ export default function AgentConfigsSidebar({
                               setEditingMemoryId(null);
                             }}
                             disabled={!editingMemoryText.trim()}
-                            className="px-3.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white text-xs font-semibold hover:bg-[var(--accent-hover)] transition cursor-pointer disabled:opacity-40"
+                            className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition cursor-pointer disabled:opacity-40 min-h-[44px]"
                           >
                             Save Memory
                           </button>
@@ -600,15 +595,15 @@ export default function AgentConfigsSidebar({
                           <button
                             type="button"
                             onClick={() => toggleExpand(m.id)}
-                            className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                            className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer min-h-[44px]"
                           >
-                            <span className="text-[var(--text-muted)] hover:text-white transition">
+                            <span className="text-on-surface-variant hover:text-on-surface transition">
                               {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                             </span>
                             <span className="text-base">🧠</span>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs text-slate-200 truncate">{m.text}</p>
-                              <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(m.created_at)}</span>
+                              <p className="font-body-md text-xs text-on-surface truncate">{m.text}</p>
+                              <span className="text-[10px] text-on-surface-variant">{timeAgo(m.created_at)}</span>
                             </div>
                           </button>
 
@@ -616,7 +611,7 @@ export default function AgentConfigsSidebar({
                             <button
                               type="button"
                               onClick={() => useMemory(m)}
-                              className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 text-[10px] font-semibold border border-white/10 transition cursor-pointer flex items-center gap-1"
+                              className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface border border-outline-variant/30 font-label-caps text-xs font-semibold transition cursor-pointer flex items-center gap-1 min-h-[44px]"
                               title="Load memory into prompt box"
                             >
                               <Send className="w-3 h-3" /> Select
@@ -624,38 +619,38 @@ export default function AgentConfigsSidebar({
                             <button
                               type="button"
                               onClick={() => { setEditingMemoryId(m.id); setEditingMemoryText(m.text); }}
-                              className="p-1.5 text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 rounded transition cursor-pointer border border-transparent hover:border-amber-500/20"
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-xl transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                               title="Edit memory"
                               aria-label="Edit memory"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
+                              <Edit3 className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }}
-                              className="p-1.5 text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 rounded transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                              className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-xl transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                               title="Delete memory"
                               aria-label="Delete memory"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
 
                         {/* Expanded view */}
                         {isExpanded && (
-                          <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
+                          <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-outline-variant/10 bg-surface-container-low text-xs">
                             <div>
-                              <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">Full Memory</span>
-                              <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{m.text}</p>
+                              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider block mb-1">Full Memory</span>
+                              <p className="text-xs text-on-surface leading-relaxed whitespace-pre-wrap break-words">{m.text}</p>
                             </div>
                             <div className="pt-1 flex items-center justify-end">
                               <button
                                 type="button"
                                 onClick={() => { setEditingMemoryId(m.id); setEditingMemoryText(m.text); }}
-                                className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-200 text-[11px] font-medium transition cursor-pointer flex items-center gap-1 border border-white/10"
+                                className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition cursor-pointer flex items-center gap-1.5 border border-outline-variant/30 min-h-[44px]"
                               >
-                                <Edit3 className="w-3 h-3" /> Edit Memory
+                                <Edit3 className="w-3.5 h-3.5" /> Edit Memory
                               </button>
                             </div>
                           </div>
@@ -670,30 +665,30 @@ export default function AgentConfigsSidebar({
         )}
 
         {/* ── TAB 4: RULES & FILES ──────────────────────────────────────── */}
-        {activeTab === 'files' && (
+        {activeTab === "files" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xs font-bold text-white">Rules, Automations & Files</h3>
-                <p className="text-[11px] text-[var(--text-muted)]">Upload custom `.md`, `.txt`, `.json` rule files.</p>
+                <h3 className="font-label-caps text-xs font-bold text-on-surface uppercase tracking-wider">Rules, Automations & Files</h3>
+                <p className="font-body-sm text-[11px] text-on-surface-variant">Upload custom `.md`, `.txt`, `.json` rule files.</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <select
                   value={uploadKind}
                   onChange={(e) => setUploadKind(e.target.value)}
-                  className="clean-input text-[11px] px-2 py-1 outline-none rounded-[var(--radius-sm)]"
+                  className="bg-surface-container border border-outline-variant/30 rounded-xl text-xs px-2.5 py-1.5 text-on-surface outline-none cursor-pointer"
                 >
-                  <option value="rule">Rule</option>
-                  <option value="skill">Skill</option>
-                  <option value="automation">Automation</option>
-                  <option value="personality">Personality</option>
+                  <option value="rule" className="bg-surface text-on-surface">Rule</option>
+                  <option value="skill" className="bg-surface text-on-surface">Skill</option>
+                  <option value="automation" className="bg-surface text-on-surface">Automation</option>
+                  <option value="personality" className="bg-surface text-on-surface">Personality</option>
                 </select>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  className="bg-primary text-on-primary rounded-xl px-3 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition shadow-sm flex items-center gap-1.5 min-h-[44px]"
                 >
-                  <Upload className="w-3.5 h-3.5" /> Upload
+                  <Upload className="w-4 h-4" /> Upload
                 </button>
               </div>
             </div>
@@ -706,7 +701,7 @@ export default function AgentConfigsSidebar({
 
             <div className="space-y-2">
               {files.length === 0 && (
-                <div className="p-6 text-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-subtle)] rounded-[var(--radius-md)]">
+                <div className="p-6 text-center text-xs text-on-surface-variant border border-dashed border-outline-variant/30 rounded-xl">
                   No files uploaded yet. Upload custom `.md` rule or capability files.
                 </div>
               )}
@@ -716,25 +711,27 @@ export default function AgentConfigsSidebar({
                 return (
                   <div
                     key={f.id}
-                    className="rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-white/20 transition overflow-hidden"
+                    className="rounded-xl bg-surface-container-lowest border border-outline-variant/20 hover:border-outline-variant/50 transition overflow-hidden"
                   >
                     {/* Compact Header Row */}
                     <div className="p-3 flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => toggleExpand(f.id)}
-                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer"
+                        className="flex items-center gap-2.5 min-w-0 text-left flex-1 cursor-pointer min-h-[44px]"
                       >
-                        <span className="text-[var(--text-muted)] hover:text-white transition">
+                        <span className="text-on-surface-variant hover:text-on-surface transition">
                           {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </span>
-                        <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                        <FileText className="w-4 h-4 text-primary shrink-0" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-white truncate">{f.file_name}</span>
-                            <span className="chip chip-neutral text-[9px] uppercase">{f.kind}</span>
+                            <span className="text-xs font-semibold text-on-surface truncate">{f.file_name}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant text-[9px] uppercase font-mono">
+                              {f.kind}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-[var(--text-muted)]">{fmt(f.size_bytes)} bytes</span>
+                          <span className="text-[10px] text-on-surface-variant">{fmt(f.size_bytes)} bytes</span>
                         </div>
                       </button>
 
@@ -742,7 +739,7 @@ export default function AgentConfigsSidebar({
                         <button
                           type="button"
                           onClick={() => openFile(f)}
-                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-white/10 text-slate-200 text-[10px] font-medium border border-white/10 transition cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium border border-outline-variant/30 transition cursor-pointer min-h-[44px]"
                           title="Read file contents"
                         >
                           View
@@ -750,7 +747,7 @@ export default function AgentConfigsSidebar({
                         <button
                           type="button"
                           onClick={() => useFileInPrompt(f)}
-                          className="px-2 py-1 rounded-[var(--radius-sm)] bg-white/5 hover:bg-[var(--accent)] hover:text-white text-slate-200 border border-white/10 text-[10px] font-semibold transition cursor-pointer flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface border border-outline-variant/30 font-label-caps text-xs font-semibold transition cursor-pointer flex items-center gap-1 min-h-[44px]"
                           title="Load file into prompt"
                         >
                           <Send className="w-3 h-3" /> Select
@@ -758,26 +755,26 @@ export default function AgentConfigsSidebar({
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); deleteFile(f.id); }}
-                          className="p-1.5 rounded text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer border border-transparent hover:border-rose-500/20"
+                          className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error-container/20 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Delete file"
                           aria-label={`Delete ${f.file_name}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
                     {/* Expanded Info */}
                     {isExpanded && (
-                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-white/5 bg-black/20 text-xs animate-fadeIn">
-                        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                          <span>Kind: <strong className="text-white uppercase">{f.kind}</strong></span>
-                          <span>Size: <strong className="text-white">{fmt(f.size_bytes)} bytes</strong></span>
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-outline-variant/10 bg-surface-container-low text-xs">
+                        <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
+                          <span>Kind: <strong className="text-on-surface uppercase">{f.kind}</strong></span>
+                          <span>Size: <strong className="text-on-surface">{fmt(f.size_bytes)} bytes</strong></span>
                         </div>
                         <button
                           type="button"
                           onClick={() => openFile(f)}
-                          className="w-full py-1.5 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 font-medium transition cursor-pointer text-center"
+                          className="w-full py-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-xs text-on-surface font-medium transition cursor-pointer text-center min-h-[44px]"
                         >
                           Open Full Viewer
                         </button>
@@ -793,17 +790,17 @@ export default function AgentConfigsSidebar({
 
       {/* ── Add Identity Modal ────────────────────────────────────────── */}
       {showNewIdentityModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 space-y-4 shadow-2xl border border-outline-variant/30 w-full max-w-md">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🎭</span>
-                <h3 className="text-sm font-bold text-white">Create Custom Identity</h3>
+                <h3 className="font-title-md text-sm font-bold text-on-surface">Create Custom Identity</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewIdentityModal(false)}
-                className="text-[var(--text-muted)] hover:text-white"
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg"
               >
                 ✕
               </button>
@@ -811,12 +808,12 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleCreateIdentity} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Title</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Identity Title</label>
                 <div className="flex gap-2">
                   <input
                     value={newIdIcon}
                     onChange={(e) => setNewIdIcon(e.target.value)}
-                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    className="w-12 text-center text-base py-2 bg-surface-container border border-outline-variant/30 rounded-xl outline-none text-on-surface"
                     title="Emoji Icon"
                   />
                   <input
@@ -824,34 +821,34 @@ export default function AgentConfigsSidebar({
                     onChange={(e) => setNewIdName(e.target.value)}
                     placeholder="e.g. History Professor"
                     required
-                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                    className="flex-1 px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Custom System Instructions</label>
                 <textarea
                   rows={4}
                   value={newIdInstructions}
                   onChange={(e) => setNewIdInstructions(e.target.value)}
                   placeholder="Specific rules for how this identity must behave and answer coursework..."
-                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                  className="w-full px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
                 <button
                   type="button"
                   onClick={() => setShowNewIdentityModal(false)}
-                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-on-surface bg-surface-container hover:bg-surface-container-high transition cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!newIdName.trim()}
-                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition cursor-pointer disabled:opacity-40 min-h-[44px]"
                 >
                   Save & Add Identity
                 </button>
@@ -863,17 +860,17 @@ export default function AgentConfigsSidebar({
 
       {/* ── Add Skill Modal ───────────────────────────────────────────── */}
       {showNewSkillModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 space-y-4 shadow-2xl border border-outline-variant/30 w-full max-w-md">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
                 <span className="text-xl">⚡</span>
-                <h3 className="text-sm font-bold text-white">Create Custom Skill</h3>
+                <h3 className="font-title-md text-sm font-bold text-on-surface">Create Custom Skill</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNewSkillModal(false)}
-                className="text-[var(--text-muted)] hover:text-white"
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg"
               >
                 ✕
               </button>
@@ -881,12 +878,12 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleCreateSkill} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Title</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Skill Title</label>
                 <div className="flex gap-2">
                   <input
                     value={newSkillIcon}
                     onChange={(e) => setNewSkillIcon(e.target.value)}
-                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    className="w-12 text-center text-base py-2 bg-surface-container border border-outline-variant/30 rounded-xl outline-none text-on-surface"
                     title="Emoji Icon"
                   />
                   <input
@@ -894,34 +891,34 @@ export default function AgentConfigsSidebar({
                     onChange={(e) => setNewSkillName(e.target.value)}
                     placeholder="e.g. Lab Report Formatter"
                     required
-                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                    className="flex-1 px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Blueprint / Template</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Prompt Blueprint / Template</label>
                 <textarea
                   rows={4}
                   value={newSkillTemplate}
                   onChange={(e) => setNewSkillTemplate(e.target.value)}
                   placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
-                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                  className="w-full px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
                 <button
                   type="button"
                   onClick={() => setShowNewSkillModal(false)}
-                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-on-surface bg-surface-container hover:bg-surface-container-high transition cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!newSkillName.trim()}
-                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition cursor-pointer disabled:opacity-40 min-h-[44px]"
                 >
                   Save & Add Skill
                 </button>
@@ -933,17 +930,17 @@ export default function AgentConfigsSidebar({
 
       {/* ── Edit Identity Modal ───────────────────────────────────────── */}
       {editingIdentity && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 space-y-4 shadow-2xl border border-outline-variant/30 w-full max-w-md">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
                 <span className="text-xl">✏️</span>
-                <h3 className="text-sm font-bold text-white">Edit Identity</h3>
+                <h3 className="font-title-md text-sm font-bold text-on-surface">Edit Identity</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingIdentity(null)}
-                className="text-[var(--text-muted)] hover:text-white"
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg"
               >
                 ✕
               </button>
@@ -951,47 +948,47 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleSaveEditIdentity} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Identity Title</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Identity Title</label>
                 <div className="flex gap-2">
                   <input
-                    value={editingIdentity.icon || '🧠'}
+                    value={editingIdentity.icon || "🧠"}
                     onChange={(e) => setEditingIdentity({ ...editingIdentity, icon: e.target.value })}
-                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    className="w-12 text-center text-base py-2 bg-surface-container border border-outline-variant/30 rounded-xl outline-none text-on-surface"
                     title="Emoji Icon"
                   />
                   <input
-                    value={editingIdentity.name || ''}
+                    value={editingIdentity.name || ""}
                     onChange={(e) => setEditingIdentity({ ...editingIdentity, name: e.target.value })}
                     placeholder="e.g. History Professor"
                     required
-                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                    className="flex-1 px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Custom System Instructions</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Custom System Instructions</label>
                 <textarea
                   rows={4}
-                  value={editingIdentity.instructions || ''}
+                  value={editingIdentity.instructions || ""}
                   onChange={(e) => setEditingIdentity({ ...editingIdentity, instructions: e.target.value })}
                   placeholder="Specific rules for how this identity must behave and answer coursework..."
-                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                  className="w-full px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
                 <button
                   type="button"
                   onClick={() => setEditingIdentity(null)}
-                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-on-surface bg-surface-container hover:bg-surface-container-high transition cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!editingIdentity.name?.trim()}
-                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition cursor-pointer disabled:opacity-40 min-h-[44px]"
                 >
                   Save Changes
                 </button>
@@ -1003,17 +1000,17 @@ export default function AgentConfigsSidebar({
 
       {/* ── Edit Skill Modal ──────────────────────────────────────────── */}
       {editingSkill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="panel w-full max-w-md bg-[var(--bg-surface)] p-5 space-y-4 shadow-2xl border border-[var(--border-subtle)]">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 space-y-4 shadow-2xl border border-outline-variant/30 w-full max-w-md">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
                 <span className="text-xl">✏️</span>
-                <h3 className="text-sm font-bold text-white">Edit Skill</h3>
+                <h3 className="font-title-md text-sm font-bold text-on-surface">Edit Skill</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingSkill(null)}
-                className="text-[var(--text-muted)] hover:text-white"
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg"
               >
                 ✕
               </button>
@@ -1021,47 +1018,47 @@ export default function AgentConfigsSidebar({
 
             <form onSubmit={handleSaveEditSkill} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Skill Title</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Skill Title</label>
                 <div className="flex gap-2">
                   <input
-                    value={editingSkill.icon || '⚡'}
+                    value={editingSkill.icon || "⚡"}
                     onChange={(e) => setEditingSkill({ ...editingSkill, icon: e.target.value })}
-                    className="clean-input w-12 text-center text-base py-1.5 outline-none rounded-[var(--radius-sm)]"
+                    className="w-12 text-center text-base py-2 bg-surface-container border border-outline-variant/30 rounded-xl outline-none text-on-surface"
                     title="Emoji Icon"
                   />
                   <input
-                    value={editingSkill.name || ''}
+                    value={editingSkill.name || ""}
                     onChange={(e) => setEditingSkill({ ...editingSkill, name: e.target.value })}
                     placeholder="e.g. Lab Report Formatter"
                     required
-                    className="clean-input flex-1 px-3 py-1.5 text-xs outline-none rounded-[var(--radius-sm)]"
+                    className="flex-1 px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1">Prompt Blueprint / Template</label>
+                <label className="block text-xs font-semibold text-on-surface mb-1">Prompt Blueprint / Template</label>
                 <textarea
                   rows={4}
-                  value={editingSkill.promptTemplate || ''}
+                  value={editingSkill.promptTemplate || ""}
                   onChange={(e) => setEditingSkill({ ...editingSkill, promptTemplate: e.target.value })}
                   placeholder="Please format this lab report into Hypothesis, Methodology, Data Table, and Error Analysis:\n\n"
-                  className="clean-input w-full px-3 py-2 text-xs outline-none rounded-[var(--radius-sm)] resize-none"
+                  className="w-full px-3 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface outline-none focus:border-primary resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
                 <button
                   type="button"
                   onClick={() => setEditingSkill(null)}
-                  className="px-3.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-on-surface bg-surface-container hover:bg-surface-container-high transition cursor-pointer min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!editingSkill.name?.trim()}
-                  className="px-4 py-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] text-xs font-semibold transition cursor-pointer disabled:opacity-40"
+                  className="bg-primary text-on-primary rounded-xl px-4 py-2 font-label-caps text-xs font-semibold hover:opacity-90 transition cursor-pointer disabled:opacity-40 min-h-[44px]"
                 >
                   Save Changes
                 </button>
