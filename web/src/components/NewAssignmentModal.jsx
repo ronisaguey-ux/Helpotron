@@ -112,7 +112,7 @@ async function assignmentRequest(method, path, body) {
 const inputCls = 'w-full px-3.5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
 const labelCls = 'block font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider mb-1.5';
 
-export default function NewAssignmentModal({ isOpen = true, onClose, onCreated }) {
+function NewAssignmentModalInner({ isOpen = true, onClose, onCreated }) {
   if (!isOpen) return null;
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -502,4 +502,12 @@ export default function NewAssignmentModal({ isOpen = true, onClose, onCreated }
       </div>
     </div>
   );
+}
+
+/** Hooks-safe wrapper: the dashboard renders this unconditionally and toggles
+ *  isOpen, so the body must mount only while open — otherwise the first open
+ *  flips the hook count 0 → N on the same instance (Rules-of-Hooks crash). */
+export default function NewAssignmentModal(props) {
+  if (!props.isOpen) return null;
+  return <NewAssignmentModalInner {...props} />;
 }
