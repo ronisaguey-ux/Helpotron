@@ -305,11 +305,10 @@ const INTELLIGENCE = [
 
 const PERSONALITIES = ['Tutor', 'Strict Grader', 'Socratic Coach', 'Researcher', 'Professional', 'Minimalist'];
 
-/* The 3 plugged-in AI detectors (operator 08-31) — detector-registry keys,
+/* The plugged-in AI detectors — detector-registry keys,
  * server-side gated on their API keys being configured. */
 const DETECTORS = [
   ['sapling', 'Sapling'],
-  ['winston_ai', 'Winston AI'],
   ['pangram', 'Pangram'],
 ];
 
@@ -810,8 +809,7 @@ function AISection({ s, set, scoped, setVariants, subjectRefs }) {
             ))}
           </div>
           <p className="text-[9px] text-slate-500 mt-1.5 leading-relaxed">
-            In use: Sapling + Pangram (08-31). Winston AI costs 1 credit per word and stays off
-            until the account is topped up — flip it on whenever. The two built-in readability
+            In use: Sapling + Pangram. The two built-in readability
             analyzers always run; detectors without a configured key are skipped automatically.
           </p>
         </div>

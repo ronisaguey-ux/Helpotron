@@ -156,7 +156,7 @@ export function CreditsPricingDashboard({
     'AI Audio Transcription (Timestamps & Speaker Labels)',
     'AI Cognitive Vision & Reasoning Passes',
     'Overlord Multi-Agent Autonomous Routing & Sandbox Execution',
-    'AI Detector Integrity Suite (Pangram, Sapling, Winston — fetched detectors only)',
+    'AI Detector Integrity Suite (Pangram, Sapling — fetched detectors only)',
     'Data Lake Empirical Rubric Ingestion & Micro-Credits Earning (+25 cr)',
     'Study Tools (Active Recall Flashcards, Practice Tests, Study Guides, Summaries)',
     '40-Digit Single-Use Referral Code Generation (+50 cr / referral)',

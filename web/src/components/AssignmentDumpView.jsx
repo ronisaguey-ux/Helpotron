@@ -28,13 +28,22 @@ const AURORA_CHIP_TINTS = `
 
 // Assignment type choices shown when a dumped item is finalized (user flow:
 // "what typa assignment the user wants to do, like a flashcard, practice quiz,
-// or just actually do it").
+// or just actually do it"). Cost is computed from content length (A3/A14 rule: 1 token = 1 cent).
 const FINALIZE_OPTIONS = [
-  { action: 'do_it', label: 'Complete the Assignment (Do It For Me)', icon: '✍️', cost: '~20 Tokens ($0.20)', subagent: 'Researched Synthesis', desc: 'Generates full finished essay, problem set solutions, or paper according to rubric.' },
-  { action: 'study_guide', label: 'Exam Study Guide', icon: '📖', cost: '~10 Tokens ($0.10)', subagent: 'Semantic Condenser', desc: 'Summarizes key terms, critical dates, formulas, and concepts into a clean guide.' },
-  { action: 'practice_quiz', label: 'Practice Exam & Quiz', icon: '🧠', cost: '~8 Tokens ($0.08)', subagent: 'Psychometric Evaluation', desc: 'Creates 10 multiple-choice questions with full answer keys and explanations.' },
-  { action: 'flashcards', label: 'Spaced Flashcard Deck', icon: '🗂️', cost: '~5 Tokens ($0.05)', subagent: 'Anki / Leitner Engine', desc: 'Builds interactive review cards ready for active-recall memorization.' },
+  { action: 'do_it', label: 'Complete the Assignment (Do It For Me)', icon: '✍️', subagent: 'Researched Synthesis', desc: 'Generates full finished essay, problem set solutions, or paper according to rubric.' },
+  { action: 'study_guide', label: 'Exam Study Guide', icon: '📖', subagent: 'Semantic Condenser', desc: 'Summarizes key terms, critical dates, formulas, and concepts into a clean guide.' },
+  { action: 'practice_quiz', label: 'Practice Exam & Quiz', icon: '🧠', subagent: 'Psychometric Evaluation', desc: 'Creates 10 multiple-choice questions with full answer keys and explanations.' },
+  { action: 'flashcards', label: 'Spaced Flashcard Deck', icon: '🗂️', subagent: 'Anki / Leitner Engine', desc: 'Builds interactive review cards ready for active-recall memorization.' },
 ];
+
+function estimateContentTokens(item) {
+  const textLen = (item?.extracted_text || '').length;
+  if (!textLen) return 'Est. ~1 Token ($0.01)';
+  const inputTokens = Math.max(100, Math.round(textLen / 4));
+  const estOutputTokens = Math.max(250, Math.min(4000, Math.round(inputTokens * 0.6)));
+  const estTokens = Math.max(1, Math.ceil((inputTokens + estOutputTokens * 1.5) / 1000));
+  return `Est. ~${estTokens} ${estTokens === 1 ? 'Token' : 'Tokens'} ($${(estTokens * 0.01).toFixed(2)})`;
+}
 const FINALIZE_BADGE = {
   do_it: '✍️ Do It For Me',
   study_guide: '📖 Study Guide',
@@ -266,12 +275,13 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       if (res.status === 'insufficient_tokens') {
         showToast(res.detail || '⚠️ Insufficient tokens — ask the operator to grant tokens first.', false);
       } else if (res.status === 'success') {
+        const costNote = res.tokens_charged ? ` (${res.tokens_charged} tokens charged)` : '';
         if (res.work) {
           setResultView({ title: item.file_name || 'Assignment', work: res.work });
-          showToast(`${opt.icon} ${opt.label} done — the work is ready.`, true);
+          showToast(`${opt.icon} ${opt.label} done${costNote} — the work is ready.`, true);
         } else {
           showToast(res.generated
-            ? `${opt.icon} ${opt.label} ready — study material generated.`
+            ? `${opt.icon} ${opt.label} ready${costNote} — study material generated.`
             : `${opt.icon} ${opt.label} finalized.`);
         }
       } else {
@@ -566,7 +576,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                               </div>
                               <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px] font-mono">
                                 <span className="text-purple-300 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-500/20">{opt.subagent}</span>
-                                <span className="text-emerald-400 font-bold">{opt.cost}</span>
+                                <span className="text-emerald-400 font-bold">{estimateContentTokens(item)}</span>
                               </div>
                             </button>
                           ))}

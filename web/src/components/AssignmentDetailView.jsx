@@ -205,9 +205,19 @@ export const AssignmentWorkspace = ({ assignment, userId, onBack, onGoToHistory 
   const isStep2Complete = isExecutionFinished;
   const isStep3Complete = isExecutionFinished;
 
+  const progressObj = (full && full.progress) || (assignment && assignment.progress) || {};
+  const rawHumanScore = (typeof progressObj.human_score === 'number')
+    ? progressObj.human_score
+    : (typeof progressObj.human === 'number')
+    ? progressObj.human
+    : (typeof progressObj.ai_score === 'number')
+    ? Math.max(0, 100 - progressObj.ai_score)
+    : null;
+  const realScoreLabel = rawHumanScore !== null ? `Passed: ${rawHumanScore}% Human Score` : 'Passed (no AI-detection score recorded)';
+
   const step1Status = isInterrupted ? 'Halted' : isStep1Complete ? 'Completed' : (directionChosen ? 'Ready' : 'Awaiting Input');
   const step2Status = isInterrupted ? 'Interrupted' : isStep2Complete ? 'Completed' : (isStep2Active ? 'In Progress...' : (directionChosen ? 'Queued' : 'Waiting'));
-  const step3Status = isInterrupted ? 'Interrupted' : isStep3Complete ? 'Passed: 98% Human Score' : (isStep2Active ? 'Humanizing queued' : 'Waiting');
+  const step3Status = isInterrupted ? 'Interrupted' : isStep3Complete ? realScoreLabel : (isStep2Active ? 'Humanizing queued' : 'Waiting');
 
   /* ── Talk to the sub-agent team (operator 08-28) ──────────────────────── */
   // Same endpoint as MyAgentView's assignment bubbles — the message goes into
