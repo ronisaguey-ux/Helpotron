@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Download, Puzzle, Copy, CheckCircle2, Globe, Cpu, RefreshCw, 
-  ExternalLink, Sparkles, ShieldCheck, Zap, BookOpen, Mic, 
+import {
+  Puzzle, Copy, Globe, Cpu, RefreshCw,
+  ExternalLink, Sparkles, ShieldCheck, Zap, BookOpen, Mic,
   ChevronRight, ArrowRight, Layers, HelpCircle, Check
 } from 'lucide-react';
 import api, { getServer } from '../api';
@@ -15,6 +15,7 @@ export default function ExtensionInstallView() {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const serverUrl = getServer() || window.location.origin;
+  const STORE_URL = 'https://chromewebstore.google.com/detail/helpotron-academic-compan/nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk';
 
   useEffect(() => {
     api.getExtensionVersion()
@@ -156,7 +157,7 @@ export default function ExtensionInstallView() {
         <div className="relative z-10 space-y-6">
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              <Sparkles className="w-3.5 h-3.5" /> Helpotron Companion v{versionData?.latest_version || '2.0.1'}
+              <Sparkles className="w-3.5 h-3.5" /> Chrome Web Store v2.5.1
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               <ShieldCheck className="w-3.5 h-3.5" /> Manifest V3 Ready
@@ -177,25 +178,15 @@ export default function ExtensionInstallView() {
 
           {/* Primary Action Row */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
-            <button
-              onClick={handleDownloadZip}
-              disabled={isDownloading}
-              className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer disabled:opacity-50"
+            <a
+              href={STORE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer"
             >
-              {isDownloading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Packaging Extension…
-                </>
-              ) : downloadSuccess ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300" /> Download Started!
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" /> Download Extension (.zip)
-                </>
-              )}
-            </button>
+              <Puzzle className="w-4 h-4" /> Install from Chrome Web Store
+              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+            </a>
 
             {/* Quick Connection Server Pill */}
             <div className="flex items-center justify-between sm:justify-start gap-2 px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
@@ -219,6 +210,23 @@ export default function ExtensionInstallView() {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Store version note + manual zip fallback */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1 text-xs text-slate-400">
+            <span>
+              The Chrome Web Store listing is <span className="text-slate-200 font-semibold">v2.5.1</span> (approved &amp; live). Newer versions — including 2.6.0 — appear there automatically as soon as they pass review.
+            </span>
+            <span className="sm:ml-auto shrink-0">
+              Manual install instead?{' '}
+              <button
+                onClick={handleDownloadZip}
+                disabled={isDownloading}
+                className="underline decoration-indigo-400/60 underline-offset-2 hover:text-indigo-300 transition cursor-pointer disabled:opacity-50"
+              >
+                {isDownloading ? 'Packaging…' : downloadSuccess ? 'Download started ✓' : `Download .zip (v${versionData?.latest_version || '2.0.1'})`}
+              </button>
+            </span>
           </div>
         </div>
       </div>
@@ -394,7 +402,7 @@ export default function ExtensionInstallView() {
           <div className="space-y-1 bg-slate-900/50 p-3.5 rounded-xl border border-white/5">
             <div className="font-semibold text-white">How do I update when a new version is released?</div>
             <p className="text-slate-400">
-              Simply download the new zip file and extract it into your existing extension folder, replacing the files. Then click the reload button in <code className="text-indigo-300">chrome://extensions</code>.
+              Installed from the Chrome Web Store? It updates automatically once a new version is approved — no action needed. Installed the manual .zip? Download the new zip, replace the files in your extension folder, and hit reload in <code className="text-indigo-300">chrome://extensions</code>.
             </p>
           </div>
         </div>
