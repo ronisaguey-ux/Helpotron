@@ -429,4 +429,13 @@ export const SLASH_COMMANDS = [
   { cmd: '/agent', label: 'Open My Agent', target: 'agent' },
   { cmd: '/insights', label: 'Open insights', target: 'insights' },
   { cmd: '/credits', label: 'Credit wallet & plans', target: 'credits' },
+  { cmd: '/home', label: 'Open dashboard', target: 'overview' },
+  { cmd: '/history', label: 'Open assignment history', target: 'history' },
+  { cmd: '/activity', label: 'Open activity', target: 'activity' },
+  { cmd: '/library', label: 'Open study library', target: 'library' },
+  { cmd: '/drop', label: 'Drop an assignment', target: 'dump' },
+  { cmd: '/datalake', label: 'Open data lake', target: 'datalake' },
+  { cmd: '/extension', label: 'Install / manage extension', target: 'extension' },
+  { cmd: '/guide', label: 'Open user guide', target: 'guide' },
+  { cmd: '/monitors', label: 'Open monitors', target: 'monitors' },
 ];
