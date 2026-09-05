@@ -12,8 +12,8 @@ import { applyAppearance, applyAccessibility, applyFontScale } from "./SettingsA
 import { resolveScopedValue } from "./ScopedSetting.jsx";
 import {
   Search, Settings, Bell, LogOut, ChevronLeft, ChevronRight,
-  Plus, ShieldCheck, LayoutDashboard, Activity, Brain, BookOpen,
-  BarChart3, CreditCard, Shield, Puzzle, Inbox, Database, Gauge, X, HelpCircle,
+  Plus, ShieldCheck, LayoutDashboard, Brain,
+  BarChart3, Shield, Gauge, X, History, Home,
   Coins,
 } from "lucide-react";
 import { NOTIFICATIONS, loadSettings, saveSettings } from "../demoData.js";
@@ -27,36 +27,13 @@ const EFFORT_LABELS = { low: "Low", balanced: "Balanced", high: "High" };
 const usageTokenLabel = (u) =>
   u?.unlimited ? "Unlimited" : `${Number(u?.token_balance ?? 0).toLocaleString()} tokens`;
 
-export const getNavItems = (isAdmin) => [
-  { key: "overview", label: "My Assignments", Icon: LayoutDashboard },
-  { key: "dump", label: "Drop Assignment", Icon: Inbox },
-  { key: "library", label: "Study Library", Icon: BookOpen },
-  { key: "credits", label: "Balance & Tokens", Icon: CreditCard },
+export const getNavItems = () => [
+  { key: "overview", label: "Dashboard", Icon: LayoutDashboard },
   { key: "agent", id: "my_agent", label: "My Agent", Icon: Brain },
-  { key: "activity", label: "Activity", Icon: Activity },
-  { key: "datalake", label: "Data Lake", Icon: Database },
   { key: "insights", label: "Insights", Icon: BarChart3 },
+  { key: "history", label: "History", Icon: History },
   { key: "settings", label: "Settings", Icon: Settings },
-  { key: "extension", label: "Extension", Icon: Puzzle },
-  { key: "guide", label: "Guide", Icon: HelpCircle },
-  ...(isAdmin
-    ? [
-        { key: "admin", label: "Control Center", Icon: Shield },
-        { key: "monitors", label: "Monitors", Icon: Gauge },
-      ]
-    : []),
 ];
-
-export const NAV_ITEMS = [
-  { id: "overview", label: "My Assignments", icon: LayoutDashboard },
-  { id: "dump", label: "Drop Assignment", icon: Inbox },
-  { id: "library", label: "Study Library", icon: BookOpen },
-  { id: "credits", label: "Balance & Tokens", icon: CreditCard },
-  { id: "my_agent", label: "My Agent", icon: Brain, isPrimaryAgent: true },
-  { id: "activity", label: "Activity", icon: Activity },
-  { id: "settings", label: "Settings", icon: Settings },
-];
-
 /* ── Quick settings (avatar menu) ─────────────────────────────────────────── */
 function QuickSettings({ settings, onChange, onOpenFull, user }) {
   const set = (path, value) => {
@@ -406,7 +383,7 @@ export default function AppShell({
     saveSettings(next);
   };
 
-  const navItems = getNavItems(isAdmin);
+  const navItems = getNavItems();
   const current = navItems.find((i) => i.key === activeView);
 
   return (
@@ -522,6 +499,24 @@ export default function AppShell({
                           user={user}
                         />
                         <div className="border-t border-outline-variant/20 p-2 space-y-0.5">
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => { setQuickOpen(false); onNavigate("admin"); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                              >
+                                <Shield className="w-3.5 h-3.5" /> Control Center
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setQuickOpen(false); onNavigate("monitors"); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                              >
+                                <Gauge className="w-3.5 h-3.5" /> Monitors
+                              </button>
+                            </>
+                          )}
                           <button
                             type="button"
                             onClick={() => { setQuickOpen(false); onOpenPrivacy(); }}
@@ -848,10 +843,10 @@ export default function AppShell({
         aria-label="Mobile Bottom Navigation"
       >
         {[
-          { key: "overview", label: "Assignments", Icon: LayoutDashboard },
-          { key: "dump", label: "Drop", Icon: Inbox },
-          { key: "library", label: "Library", Icon: BookOpen },
-          { key: "credits", label: "Tokens", Icon: CreditCard },
+          { key: "overview", label: "Home", Icon: Home },
+          { key: "agent", label: "Agent", Icon: Brain },
+          { key: "insights", label: "Insights", Icon: BarChart3 },
+          { key: "history", label: "History", Icon: History },
         ].map((t) => {
           const selected = activeView === t.key;
           return (
