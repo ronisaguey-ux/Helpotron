@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import {
   Send, Paperclip, Mic, ShieldCheck, Shield, Flame, RefreshCw,
   Trash2, Plus, Cpu, Database, FileText, Upload, Camera, ChevronDown, ChevronUp, User as UserIcon, Undo2, Pin, Pencil,
-  Settings2, ArrowUpRight, Sparkles, Keyboard, GraduationCap, Copy, Check,
+  Settings2, ArrowUpRight, Sparkles, Keyboard, GraduationCap, Copy, Check, ArrowUp,
 } from 'lucide-react';
 import api, { getCsrfToken } from '../api.js';
 import { loadSettings, saveSettings, EFFORT_SCORES } from '../demoData.js';
@@ -45,7 +45,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
   const ref = useRef(null);
   return (
     <div className="relative shrink-0 group">
-      <div className="w-14 h-14 rounded-[var(--radius-md)] overflow-hidden bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] border border-[var(--border-subtle)] flex items-center justify-center text-2xl">
+      <div className="w-14 h-14 rounded-2xl overflow-hidden bg-primary-container text-on-primary-container border border-outline-variant/30 flex items-center justify-center text-2xl">
         {url
           ? <img src={url} alt={label} className="w-full h-full object-cover" />
           : <span>{initial}</span>}
@@ -55,7 +55,7 @@ function AvatarUpload({ url, onUpload, label, initial }) {
         onClick={() => ref.current?.click()}
         aria-label={`Upload ${label}`}
         title={`Upload ${label} (PNG/JPG)`}
-        className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface)] flex items-center justify-center transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest flex items-center justify-center transition cursor-pointer opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Camera className="w-3 h-3" />
       </button>
@@ -1211,62 +1211,99 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
   const pending = pendingPermissions[0];
   const modalPermission = pendingPermissions.find((p) => p.id === permOpenId) || null;
 
-  const renderThreadRow = (t) => (
-    <div key={t.id} className={`group rounded-[var(--radius-md)] transition border ${
-      activeThread === t.id
-        ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.40)]'
-        : t.pinned
-          ? 'border-amber-500/30 bg-amber-500/[0.05]'
-          : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]'
-    }`}>
-      <button type="button" onClick={() => openThread(t)} className="w-full text-left px-2.5 py-2 flex items-center gap-2">
-        <span className="text-sm">{t.pinned ? '📌' : '💬'}</span>
-        <span className="flex-1 min-w-0">
-          <span className={`block text-[11px] font-semibold truncate ${activeThread === t.id ? 'text-[var(--accent)]' : t.pinned ? 'text-amber-200' : 'text-[var(--text-secondary)]'}`}>
-            {renameOpenId === t.id ? (
-              <input
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') renameThread(t); if (e.key === 'Escape') setRenameOpenId(null); }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-[var(--bg-surface)] border border-[rgba(139,92,246,0.4)] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
-                autoFocus
-              />
-            ) : t.title}
+  const renderThreadRow = (t) => {
+    const isActive = activeThread === t.id;
+    return (
+      <div
+        key={t.id}
+        className={`group rounded-xl transition border ${
+          isActive
+            ? 'bg-surface-container-lowest border-primary/30 shadow-sm'
+            : t.pinned
+              ? 'border-outline-variant/20 bg-surface-container-lowest/50 hover:bg-surface-container-lowest'
+              : 'border-transparent hover:bg-surface-container-lowest'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => openThread(t)}
+          className="w-full text-left px-3 py-2.5 flex items-center gap-2.5 cursor-pointer"
+        >
+          <span className="text-sm">{t.pinned ? '📌' : '💬'}</span>
+          <span className="flex-1 min-w-0">
+            <span className={`block text-xs font-semibold truncate ${isActive ? 'text-primary' : 'text-on-surface'}`}>
+              {renameOpenId === t.id ? (
+                <input
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') renameThread(t);
+                    if (e.key === 'Escape') setRenameOpenId(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-surface-container-lowest border border-primary rounded-lg px-1.5 py-0.5 text-xs text-on-surface outline-none"
+                  autoFocus
+                />
+              ) : (
+                t.title
+              )}
+            </span>
+            <span
+              className="block font-tabular-stat text-[10px] text-on-surface-variant mt-0.5"
+              title={t.last_message_at || t.updated_at || ''}
+            >
+              {timeShort(t.last_message_at || t.updated_at)}
+            </span>
           </span>
-          <span className="block text-[9px] text-[var(--text-muted)]" title={t.last_message_at || t.updated_at || ''}>{timeShort(t.last_message_at || t.updated_at)}</span>
-        </span>
-      </button>
-      <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition">
-        {renameOpenId !== t.id && (
+          {isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+          )}
+        </button>
+        <div className="flex items-center justify-end gap-1 px-2 pb-2 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition">
+          {renameOpenId !== t.id && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenameOpenId(t.id);
+                setRenameDraft(t.title);
+              }}
+              className="p-1 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition cursor-pointer"
+              title="Rename chat"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => { setRenameOpenId(t.id); setRenameDraft(t.title); }}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--accent)] transition cursor-pointer"
-            title="Rename chat"
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePin(t);
+            }}
+            className={`p-1 rounded-lg transition cursor-pointer ${
+              t.pinned
+                ? 'text-sem-amber hover:bg-surface-container'
+                : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
+            }`}
+            title={t.pinned ? 'Unpin' : 'Pin chat'}
           >
-            <Pencil className="w-3 h-3" />
+            <Pin className="w-3.5 h-3.5" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => togglePin(t)}
-          className={`p-1 transition cursor-pointer ${t.pinned ? 'text-amber-300' : 'text-[var(--text-muted)] hover:text-[var(--accent)]'}`}
-          title={t.pinned ? 'Unpin' : 'Pin chat'}
-        >
-          <Pin className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          onClick={() => deleteThread(t)}
-          className="p-1 text-[var(--text-muted)] hover:text-red-400 transition cursor-pointer"
-          title="Delete chat"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteThread(t);
+            }}
+            className="p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-surface-container transition cursor-pointer"
+            title="Delete chat"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const allIdentitiesList = identities;
   const currentIdentity = identities.find((id) => id.id === activeIdentityId) || null;
@@ -1401,7 +1438,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             <GraduationCap className="w-3.5 h-3.5" />
             Edu Mode
             <span className={`relative w-7 h-4 rounded-full transition-colors duration-200 ${settings.educationalMode !== false ? 'bg-primary' : 'bg-surface-container-highest'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200 ${settings.educationalMode !== false ? 'left-[15px]' : 'left-0.5'}`} />
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-on-primary shadow transition-all duration-200 ${settings.educationalMode !== false ? 'left-[15px]' : 'left-0.5'}`} />
             </span>
           </button>
 
@@ -1430,43 +1467,47 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
 
       {/* ── Pending Permission Banner (if any action requires confirmation) ── */}
       {pending && (
-        <div className="panel p-4 border-amber-500/40 bg-amber-500/10 space-y-3 animate-fadeIn">
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5 border-l-4 border-l-sem-amber space-y-3 shadow-sm animate-fadeIn">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-              ⚠️ Action pending approval: <span className="font-mono">{pending.action_type}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sem-amber text-sm font-bold">⚠️</span>
+              <span className="font-label-caps text-label-caps text-sem-amber font-bold uppercase tracking-wider">Action Required</span>
+              <span className="font-mono text-xs text-on-surface">({pending.action_type})</span>
             </div>
-            <span className="text-[11px] text-[var(--text-muted)]">Assignment #{pending.assignment_id}</span>
+            <span className="font-tabular-stat text-[11px] text-on-surface-variant">Assignment #{pending.assignment_id}</span>
           </div>
-          <p className="text-xs text-slate-200 leading-relaxed">{pending.description || 'The agent requested permission to perform this action on your behalf.'}</p>
+          <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+            {pending.description || 'The agent requested permission to perform this action on your behalf.'}
+          </p>
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <button
               type="button"
               onClick={() => { dismissedPermsRef.current.delete(pending.id); setPermOpenId(pending.id); }}
-              className="px-3 py-1.5 rounded-[var(--radius-sm)] border border-amber-500/40 text-amber-300 hover:bg-amber-500/15 text-xs font-semibold transition cursor-pointer"
+              className="min-h-[44px] px-4 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-container-low font-label-caps text-xs font-semibold transition cursor-pointer"
             >
               Review
             </button>
             <button
               type="button"
-              onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve').catch(() => {})}
-              className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer"
+              onClick={() => handlePermissionAction(pending.id, 'reject').catch(() => {})}
+              className="min-h-[44px] px-5 bg-surface text-on-surface border border-outline-variant/30 rounded-xl font-label-caps text-label-caps font-bold hover:bg-surface-container-low transition cursor-pointer"
             >
-              Approve
+              Deny
             </button>
             <button
               type="button"
-              onClick={() => handlePermissionAction(pending.id, 'reject').catch(() => {})}
-              className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition cursor-pointer"
+              onClick={() => handlePermissionAction(pending.id, autoApproveThis ? 'always_approve' : 'approve').catch(() => {})}
+              className="min-h-[44px] px-5 bg-sem-amber text-on-sem-amber rounded-xl font-label-caps text-label-caps font-bold hover:opacity-90 transition cursor-pointer shadow-sm"
             >
-              Reject
+              Approve Action
             </button>
-            <label className="flex items-center gap-2 text-xs text-[var(--text-muted)] ml-2 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-on-surface-variant ml-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={autoApproveThis}
                 onChange={(e) => setAutoApproveThis(e.target.checked)}
-                className="accent-[var(--accent)] w-3.5 h-3.5 cursor-pointer"
+                className="accent-primary w-3.5 h-3.5 cursor-pointer"
               />
               <span>Always auto-approve {pending.action_type}</span>
             </label>
@@ -1483,7 +1524,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         }`}
       >
         {/* Left Rail: Threads List & Quick Effort Slider */}
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-4 flex flex-col justify-between overflow-hidden shadow-sm">
+        <div className="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4 flex flex-col justify-between overflow-hidden shadow-sm">
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             <div className="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant px-2 py-1 flex items-center justify-between">
               <span>Conversations</span>
@@ -1526,26 +1567,48 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
         </div>
 
         {/* Right Canvas: Message Stream + Floating Composer */}
-        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-0 flex flex-col overflow-hidden shadow-sm">
+        <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-0 flex flex-col overflow-hidden shadow-sm">
           {/* Active Chat Header */}
-          <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <AgentAvatar
-                size="sm"
-                status={busy ? 'working' : 'ready'}
-                src={ai.avatarUrl || '/My_Agent_logo.jpeg'}
-              />
-              <span className="font-title-md text-sm text-on-surface truncate">
-                {activeThread ? threads.find((t) => t.id === activeThread)?.title || 'Current Chat' : `Chat with ${agentName}`}
-              </span>
+          <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 shadow-sm">
+                <Cpu className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-headline-lg text-title-md text-on-surface leading-tight truncate">
+                  {activeThread ? threads.find((t) => t.id === activeThread)?.title || 'Current Chat' : `Chat with ${agentName}`}
+                </h2>
+                <p className="font-label-caps text-label-caps text-on-surface-variant leading-tight">Co-pilot Active</p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="hidden sm:flex bg-surface-container-low rounded-2xl p-1 border border-outline-variant/30">
+                {Object.entries(MODE_META).map(([k, m]) => {
+                  const Icon = m.icon;
+                  const isActive = mode === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => handleSwitchMode(k)}
+                      className={`px-3.5 py-1.5 rounded-xl font-label-caps text-xs uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
+                        isActive
+                          ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" /> {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <button
                 type="button"
                 onClick={handleCompact}
                 disabled={!!compactMsg}
-                className="px-2.5 py-1 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-xs text-[var(--text-muted)] hover:text-white transition cursor-pointer flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-xl border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer flex items-center gap-1.5"
                 title="Compact conversation history"
               >
                 <RefreshCw className={`w-3 h-3 ${compactMsg ? 'animate-spin' : ''}`} />
@@ -1579,15 +1642,26 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBubbleAssign(); }
                       }}
-                      className={`w-full sm:max-w-[85%] rounded-[var(--radius-lg)] border border-[rgba(139,92,246,0.35)] bg-gradient-to-br from-[rgba(139,92,246,0.14)] via-[var(--bg-surface)] to-[rgba(34,211,238,0.10)] p-3.5 space-y-2 ${m.assignment && m.assignment.id != null ? 'cursor-pointer hover:border-[rgba(139,92,246,0.6)] transition-colors focus:outline-none focus-visible:border-[rgba(139,92,246,0.8)]' : ''}`}
+                      className={`w-full sm:max-w-[85%] rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 space-y-3 shadow-sm ${
+                        m.assignment && m.assignment.id != null
+                          ? 'cursor-pointer hover:border-primary/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                          : ''
+                      }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{evtMeta.icon}</span>
-                        <span className="chip chip-accent text-[10px] font-mono">{evtMeta.label}</span>
-                        <span className="ml-auto text-[10px] text-[var(--text-muted)] font-mono">{m.time}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base">{evtMeta.icon}</span>
+                          <span className="font-label-caps text-label-caps font-semibold text-primary truncate">{evtMeta.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-label-caps text-label-caps px-3 py-1 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center gap-1.5 border border-outline-variant/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sem-green" /> Completed
+                          </span>
+                          <span className="font-tabular-stat text-[10px] text-on-surface-variant">{m.time}</span>
+                        </div>
                       </div>
-                      <div className="text-xs font-semibold text-white leading-relaxed">{m.text}</div>
-                      {m.detail && <div className="text-xs text-[var(--text-muted)]">{m.detail}</div>}
+                      <div className="font-body-md text-xs font-semibold text-on-surface leading-relaxed">{m.text}</div>
+                      {m.detail && <div className="font-body-sm text-xs text-on-surface-variant">{m.detail}</div>}
                       <div className="pt-1 flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
@@ -1598,9 +1672,9 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                               text: m.assignment?.prompt || m.text || '',
                             });
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-sm)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm transition cursor-pointer border border-violet-400/30"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-label-caps text-xs font-semibold shadow-sm transition cursor-pointer"
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-violet-200" /> Launch to Doc
+                          <Sparkles className="w-3.5 h-3.5" /> Launch to Doc
                         </button>
                         {m.assignment && m.assignment.id != null ? (
                           <button
@@ -1609,7 +1683,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                               e.stopPropagation();
                               onOpenAssignment(m.assignment);
                             }}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface font-label-caps text-xs font-semibold border border-outline-variant/30 transition cursor-pointer"
                           >
                             <ArrowUpRight className="w-3.5 h-3.5" /> Open Assignment
                           </button>
@@ -1620,7 +1694,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                               e.stopPropagation();
                               onGoTo('overview');
                             }}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-slate-300 text-xs font-semibold border border-[var(--border-subtle)] transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface font-label-caps text-xs font-semibold border border-outline-variant/30 transition cursor-pointer"
                           >
                             <ArrowUpRight className="w-3.5 h-3.5" /> View in Dashboard
                           </button>
@@ -1631,56 +1705,76 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
                 );
               }
 
-              return (
-                <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[80ch] min-w-0 break-words rounded-[var(--radius-lg)] px-4 py-3 text-xs leading-relaxed border ${
-                    isUser
-                      ? 'bg-[var(--accent-subtle)] border-[rgba(139,92,246,0.30)] text-white'
-                      : 'panel text-slate-200'
-                  }`}>
-                    {m.text}
+              if (isUser) {
+                return (
+                  <div key={m.id} className="flex flex-col items-end">
+                    <div className="max-w-[85%] md:max-w-[70%] bg-surface-container text-on-surface rounded-3xl rounded-tr-sm px-5 py-4 border border-outline-variant/30 shadow-sm transition-colors text-xs leading-relaxed break-words">
+                      {m.text}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 px-1 font-tabular-stat text-[10px] text-on-surface-variant">
+                      <span>{m.time}</span>
+                      {m.text && (
+                        <button
+                          type="button"
+                          onClick={() => copyMessage(m.id, m.text)}
+                          className="p-1 rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-container-low transition cursor-pointer"
+                          title="Copy this message"
+                        >
+                          {copiedMsgId === m.id ? <Check className="w-3 h-3 text-sem-green" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2.5 mt-1 px-1 text-[10px] text-[var(--text-muted)]">
-                    <span>{m.time}</span>
-                    {m.text && (
-                      <button
-                        type="button"
-                        onClick={() => copyMessage(m.id, m.text)}
-                        className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
-                          copiedMsgId === m.id
-                            ? 'text-emerald-400 font-semibold'
-                            : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
-                        }`}
-                        title="Copy this message"
-                      >
-                        {copiedMsgId === m.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        {copiedMsgId === m.id ? 'Copied' : 'Copy'}
-                      </button>
-                    )}
-                    {!isUser && m.text && (
-                      <>
+                );
+              }
+
+              return (
+                <div key={m.id} className="flex gap-4 max-w-[90%] md:max-w-[80%] items-start">
+                  <div className="w-11 h-11 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 shadow-sm mt-1">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/20 p-4 shadow-sm text-xs leading-relaxed text-on-surface break-words">
+                      {m.text}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-on-surface-variant font-tabular-stat flex-wrap">
+                      <span className="font-semibold text-primary">{agentName}</span>
+                      <span className="opacity-40">•</span>
+                      <span>{m.time}</span>
+                      {m.text && (
+                        <button
+                          type="button"
+                          onClick={() => copyMessage(m.id, m.text)}
+                          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors shrink-0 rounded-full hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                          title="Copy this message"
+                        >
+                          {copiedMsgId === m.id ? <Check className="w-4 h-4 text-sem-green" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      )}
+                      {m.text && (
                         <button
                           type="button"
                           onClick={() => speakText(m.id, m.text)}
-                          className={`transition cursor-pointer flex items-center gap-1 text-[10px] ${
-                            speakingMessageId === m.id
-                              ? 'text-amber-400 font-semibold animate-pulse'
-                              : 'hover:text-[var(--accent)] text-[var(--text-muted)]'
+                          className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors shrink-0 rounded-full hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer ${
+                            speakingMessageId === m.id ? 'text-sem-amber font-semibold animate-pulse' : 'text-on-surface-variant hover:text-primary'
                           }`}
                           title={speakingMessageId === m.id ? 'Stop audio' : 'Listen to this reply'}
                         >
-                          {speakingMessageId === m.id ? '⏹ Stop' : '🔊 Listen'}
+                          {speakingMessageId === m.id ? <span className="text-xs">⏹</span> : <Mic className="w-4 h-4" />}
                         </button>
+                      )}
+                      {m.text && (
                         <button
                           type="button"
                           onClick={() => setLaunchToDocTarget({ text: m.text })}
-                          className="hover:text-violet-300 text-violet-400/90 transition cursor-pointer flex items-center gap-1 text-[10px]"
+                          className="min-h-[44px] px-3 flex items-center gap-1.5 text-on-surface-variant hover:text-primary transition-colors shrink-0 rounded-full hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer font-label-caps text-xs"
                           title="Launch this response to Google Doc with assistive typing"
                         >
-                          <Sparkles className="w-3 h-3" /> Launch to Doc
+                          <Sparkles className="w-4 h-4" />
+                          <span>Launch to Doc</span>
                         </button>
-                      </>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1689,8 +1783,8 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             <ThinkingBubble thinking={thinking} setThinking={setThinking} />
 
             {busy && (
-              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] p-2.5 rounded-[var(--radius-md)] border border-[var(--border-subtle)] w-fit animate-pulse">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
+              <div className="flex items-center gap-2 text-xs text-on-surface-variant bg-surface-container-low px-4 py-2.5 rounded-2xl border border-outline-variant/30 w-fit animate-pulse">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
                 <span>{agentName} is thinking & generating…</span>
               </div>
             )}
@@ -1698,62 +1792,71 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
 
           {/* Bottom Floating Composer */}
           <div className="p-4 border-t border-outline-variant/30 bg-surface-container-lowest">
-            <form
-              onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-              className="flex items-end gap-2 bg-surface-container-low border border-outline-variant/30 rounded-2xl px-4 py-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary transition"
-            >
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach file"
-                title="Attach document or media"
-                className="text-on-surface-variant hover:text-primary transition cursor-pointer p-1.5"
+            <div className="max-w-4xl mx-auto">
+              <form
+                onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
+                className="flex items-center gap-2 bg-surface-container border border-outline-variant/30 rounded-full px-3 py-1.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary shadow-sm transition"
               >
-                <Paperclip className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={toggleRecord}
-                aria-label={recording ? 'Stop recording' : 'Record voice'}
-                className={`text-on-surface-variant hover:text-primary transition cursor-pointer p-1.5 ${recording ? 'text-error animate-pulse' : ''}`}
-                title={recording ? 'Stop voice recording' : 'Dictate message'}
-              >
-                <Mic className="w-4 h-4" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleComposerAttach(f);
-                  e.target.value = '';
-                }}
-              />
-              <textarea
-                ref={chatInputRef}
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (input.trim()) sendMessage();
-                  }
-                }}
-                placeholder={`Message ${agentName} (Enter to send, Shift+Enter for newline)…`}
-                aria-label="Agent prompt input"
-                className="flex-1 min-w-0 bg-transparent border-none text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none resize-none leading-relaxed py-1.5 max-h-[160px] overflow-y-auto"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || busy}
-                aria-label="Send prompt"
-                className="p-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container disabled:opacity-30 transition cursor-pointer shadow-sm"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach file"
+                  title="Attach document or media"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors shrink-0 rounded-full hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleRecord}
+                  aria-label={recording ? 'Stop recording' : 'Record voice'}
+                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors shrink-0 rounded-full hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer ${
+                    recording ? 'text-error animate-pulse' : 'text-on-surface-variant hover:text-primary'
+                  }`}
+                  title={recording ? 'Stop voice recording' : 'Dictate message'}
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleComposerAttach(f);
+                    e.target.value = '';
+                  }}
+                />
+                <textarea
+                  ref={chatInputRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim()) sendMessage();
+                    }
+                  }}
+                  placeholder="Message your co-pilot…"
+                  aria-label="Agent prompt input"
+                  className="w-full bg-transparent border-none focus:ring-0 resize-none font-body-md text-sm text-on-surface placeholder:text-on-surface-variant/50 min-h-[40px] max-h-32 py-2 px-2 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || busy}
+                  aria-label="Send prompt"
+                  className="min-h-[44px] min-w-[44px] w-11 h-11 rounded-full bg-primary text-on-primary flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container disabled:opacity-30 shadow-sm transition-transform active:scale-95 shrink-0 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                >
+                  <ArrowUp className="w-5 h-5" />
+                </button>
+              </form>
+              <div className="text-center mt-2">
+                <span className="font-label-caps text-label-caps text-on-surface-variant/70 text-[11px]">
+                  Helpotron may produce inaccurate information about people, places, or facts.
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1786,7 +1889,7 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
             role="dialog"
             aria-modal="true"
             aria-label="Agent configurations"
-            className="relative w-full max-w-lg bg-[var(--bg-base)] border-l border-[var(--border-subtle)] h-full flex flex-col shadow-2xl z-10"
+            className="relative w-full max-w-lg bg-surface-container-low border-l border-outline-variant/30 h-full flex flex-col shadow-2xl z-10"
           >
             <AgentConfigsSidebar {...configsSidebarProps} onCollapse={() => setConfigsOpen(false)} />
           </div>
@@ -1796,16 +1899,16 @@ export default function MyAgentView({ userId = '', userCredits, onGoTo = () => {
       {/* File viewer modal */}
       {viewFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" onClick={() => setViewFile(null)}>
-          <div className="panel w-full max-w-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
-              <div className="text-sm font-bold text-white flex items-center gap-2 truncate">
-                <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
+          <div className="bg-surface-container-low rounded-2xl border border-outline-variant/30 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-outline-variant/20">
+              <div className="text-sm font-bold text-on-surface flex items-center gap-2 truncate">
+                <FileText className="w-4 h-4 text-primary shrink-0" />
                 <span className="truncate">{viewFile.file_name}</span>
-                <span className="chip chip-neutral text-[10px]">{viewFile.kind}</span>
+                <span className="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-caps text-[10px]">{viewFile.kind}</span>
               </div>
-              <button type="button" onClick={() => setViewFile(null)} className="text-[var(--text-muted)] hover:text-white transition cursor-pointer">✕</button>
+              <button type="button" onClick={() => setViewFile(null)} className="text-on-surface-variant hover:text-on-surface transition cursor-pointer">✕</button>
             </div>
-            <div className="overflow-y-auto p-4 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-mono">
+            <div className="overflow-y-auto p-4 text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap font-mono">
               {viewFile.content}
             </div>
           </div>
