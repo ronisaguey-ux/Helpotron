@@ -323,10 +323,10 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-background dark:text-[#e2e2e6] mb-1">
+          <h2 className="font-headline-lg text-headline-lg text-on-background mb-1">
             Active Subjects
           </h2>
-          <p className="font-body-md text-body-md text-on-surface-variant dark:text-[#c4c7cf]">
+          <p className="font-body-md text-body-md text-on-surface-variant">
             Manage and review your study tasks grouped by domain.
           </p>
         </div>
@@ -437,17 +437,17 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
           return (
             <section
               key={bubble.id}
-              className="bg-surface-container-lowest dark:bg-[#0b0e0f] rounded-3xl p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-outline-variant/20 dark:border-[#44474e]/20"
+              className="bg-surface-container-lowest rounded-3xl p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-outline-variant/20"
             >
               {/* Subject Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 border-b border-outline-variant/20 dark:border-[#44474e]/20 pb-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 border-b border-outline-variant/20 pb-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-[#bfc2ff]/10 flex items-center justify-center text-secondary dark:text-[#bfc2ff] text-2xl shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary text-2xl shrink-0">
                     {bubble.icon || '📚'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-title-md text-title-md text-on-surface dark:text-[#e2e2e6]">
+                      <h3 className="font-title-md text-title-md text-on-surface">
                         {bubble.title}
                       </h3>
                       {bubble.is_custom && (
@@ -456,7 +456,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         </span>
                       )}
                     </div>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant dark:text-[#c4c7cf]">
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">
                       {`${subjectCards.length} active ${subjectCards.length === 1 ? 'assignment' : 'assignments'}`}
                     </p>
                   </div>
@@ -466,7 +466,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                   <button
                     onClick={() => handleExportBubble(bubble.title)}
                     disabled={bubbleExporting}
-                    className="font-label-caps text-label-caps text-secondary dark:text-[#bfc2ff] hover:bg-secondary/10 dark:hover:bg-[#bfc2ff]/10 px-4 py-2 rounded-xl transition-colors flex items-center gap-2 border border-secondary/20 dark:border-[#bfc2ff]/20 min-h-[44px] focus:ring-2 focus:ring-secondary dark:focus:ring-[#bfc2ff] focus:outline-none cursor-pointer"
+                    className="font-label-caps text-label-caps text-secondary hover:bg-secondary/10 px-4 py-2 rounded-xl transition-colors flex items-center gap-2 border border-secondary/20 min-h-[44px] focus:ring-2 focus:ring-secondary focus:outline-none cursor-pointer"
                   >
                     {bubbleExporting ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -492,19 +492,19 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
               {/* Bento Grid or Empty State */}
               {subjectCards.length === 0 ? (
-                <div className="bg-surface-container-low/50 dark:bg-[#1d2024]/50 rounded-2xl border border-dashed border-outline-variant/50 dark:border-[#44474e]/50 p-8 flex flex-col items-center justify-center text-center">
-                  <div className="w-16 h-16 rounded-full bg-surface-container-highest dark:bg-[#363a3f] flex items-center justify-center mb-4 text-outline dark:text-[#8e9199]">
+                <div className="bg-surface-container-low/50 rounded-2xl border border-dashed border-outline-variant/50 p-8 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center mb-4 text-outline">
                     <Plus className="w-8 h-8" />
                   </div>
-                  <h4 className="font-body-md text-body-md font-semibold text-on-surface dark:text-[#e2e2e6] mb-2">
+                  <h4 className="font-body-md text-body-md font-semibold text-on-surface mb-2">
                     Ready to study {bubble.title}?
                   </h4>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant dark:text-[#c4c7cf] max-w-sm mb-6">
+                  <p className="font-body-sm text-body-sm text-on-surface-variant max-w-sm mb-6">
                     Import an assignment prompt, reading materials, or start a new problem set to populate this subject.
                   </p>
                   <button
                     onClick={() => setShowImportModal(true)}
-                    className="bg-primary dark:bg-[#59d8c9] text-on-primary dark:text-[#003732] font-body-md text-body-md px-6 py-3 rounded-xl hover:bg-primary-container dark:hover:bg-[#005049] transition-colors shadow-sm flex items-center gap-2 min-h-[44px] focus:ring-2 focus:ring-primary dark:focus:ring-[#59d8c9] focus:outline-none cursor-pointer"
+                    className="bg-primary text-on-primary font-body-md text-body-md px-6 py-3 rounded-xl hover:bg-primary-container transition-colors shadow-sm flex items-center gap-2 min-h-[44px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Import Assignment</span>
@@ -514,13 +514,13 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {/* In Progress Column */}
                   <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-4">
-                    <h4 className="font-label-caps text-label-caps text-on-surface-variant dark:text-[#c4c7cf] uppercase tracking-wider">
+                    <h4 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
                       In Progress ({inProgressCards.length})
                     </h4>
 
                     {inProgressCards.length === 0 ? (
-                      <div className="bg-surface dark:bg-[#1a1c1e] rounded-2xl p-5 border border-dashed border-outline-variant/30 text-center">
-                        <p className="font-body-sm text-body-sm text-on-surface-variant dark:text-[#c4c7cf]">
+                      <div className="bg-surface rounded-2xl p-5 border border-dashed border-outline-variant/30 text-center">
+                        <p className="font-body-sm text-body-sm text-on-surface-variant">
                           No active assignments currently in progress.
                         </p>
                       </div>
@@ -530,7 +530,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                         return (
                           <div
                             key={card.id}
-                            className="card-lift bg-surface dark:bg-[#1a1c1e] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-outline-variant/20 dark:border-[#44474e]/20 hover:border-outline-variant/50 transition-all"
+                            className="card-lift bg-surface rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-outline-variant/20 hover:border-outline-variant/50 transition-all"
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -539,7 +539,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                                   className={`font-body-sm text-body-sm flex items-center gap-1 ${
                                     overdue
                                       ? 'text-error font-medium'
-                                      : 'text-on-surface-variant dark:text-[#c4c7cf]'
+                                      : 'text-on-surface-variant'
                                   }`}
                                 >
                                   {overdue ? (
@@ -554,13 +554,13 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                                 onClick={() => {
                                   if (onSelectAssignment) onSelectAssignment(card);
                                 }}
-                                className="font-body-md text-body-md font-semibold text-on-surface dark:text-[#e2e2e6] hover:text-primary dark:hover:text-[#59d8c9] cursor-pointer transition-colors truncate"
+                                className="font-body-md text-body-md font-semibold text-on-surface hover:text-primary cursor-pointer transition-colors truncate"
                                 title={card.name}
                               >
                                 {card.name || 'Untitled Assignment'}
                               </h5>
                               {(card.subject || card.class_code) && (
-                                <p className="font-body-sm text-xs text-on-surface-variant dark:text-[#c4c7cf] mt-0.5 truncate">
+                                <p className="font-body-sm text-xs text-on-surface-variant mt-0.5 truncate">
                                   {[card.subject, card.class_code].filter(Boolean).join(' · ')}
                                 </p>
                               )}
@@ -569,7 +569,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             <div className="flex items-center gap-2 shrink-0">
                               <button
                                 onClick={(e) => handleExportAssignment(card.id, e)}
-                                className="p-2 text-on-surface-variant dark:text-[#c4c7cf] hover:text-primary dark:hover:text-[#59d8c9] transition-colors bg-surface-container-low dark:bg-[#1d2024] rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center focus:ring-2 focus:ring-primary dark:focus:ring-[#59d8c9] focus:outline-none cursor-pointer"
+                                className="p-2 text-on-surface-variant hover:text-primary transition-colors bg-surface-container-low rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer"
                                 title="Export assignment JSON"
                                 aria-label="Export assignment JSON"
                               >
@@ -579,7 +579,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                                 onClick={() => {
                                   if (onSelectAssignment) onSelectAssignment(card);
                                 }}
-                                className="bg-primary/10 dark:bg-[#59d8c9]/10 text-primary dark:text-[#59d8c9] font-body-sm text-body-sm px-4 py-2 rounded-xl hover:bg-primary dark:hover:bg-[#59d8c9] hover:text-on-primary dark:hover:text-[#003732] transition-colors min-h-[44px] focus:ring-2 focus:ring-primary dark:focus:ring-[#59d8c9] focus:outline-none cursor-pointer font-medium"
+                                className="bg-primary/10 text-primary font-body-sm text-body-sm px-4 py-2 rounded-xl hover:bg-primary hover:text-on-primary transition-colors min-h-[44px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer font-medium"
                               >
                                 {actionLabel(card.status)}
                               </button>
@@ -592,18 +592,18 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
 
                   {/* Pending Approval Column */}
                   <div className="col-span-1 space-y-4">
-                    <h4 className="font-label-caps text-label-caps text-on-surface-variant dark:text-[#c4c7cf] uppercase tracking-wider flex items-center gap-2">
+                    <h4 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
                       Pending Approval
                       {pendingCards.length > 0 && (
-                        <span className="bg-error-container dark:bg-[#93000a] text-on-error-container dark:text-[#ffdad6] w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">
+                        <span className="bg-error-container text-on-error-container w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">
                           {pendingCards.length}
                         </span>
                       )}
                     </h4>
 
                     {pendingCards.length === 0 ? (
-                      <div className="bg-surface-bright dark:bg-[#36393e]/40 rounded-2xl p-5 border border-dashed border-outline-variant/30 text-center">
-                        <p className="font-body-sm text-body-sm text-on-surface-variant dark:text-[#c4c7cf]">
+                      <div className="bg-surface-bright rounded-2xl p-5 border border-dashed border-outline-variant/30 text-center">
+                        <p className="font-body-sm text-body-sm text-on-surface-variant">
                           No actions awaiting approval
                         </p>
                       </div>
@@ -611,7 +611,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                       pendingCards.map((card) => (
                         <div
                           key={card.id}
-                          className="card-lift bg-surface-bright dark:bg-[#36393e] rounded-2xl p-5 border-l-4 border-error/50 dark:border-[#ffb4ab]/50 space-y-3"
+                          className="card-lift bg-surface-bright rounded-2xl p-5 border-l-4 border-error/50 space-y-3"
                         >
                           <div>
                             <span className="px-2 py-0.5 bg-sem-amber/10 text-sem-amber border border-sem-amber/20 font-label-caps text-[10px] rounded-lg uppercase inline-block font-medium">
@@ -622,18 +622,18 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
                             onClick={() => {
                               if (onSelectAssignment) onSelectAssignment(card);
                             }}
-                            className="font-body-md text-body-md font-semibold text-on-surface dark:text-[#e2e2e6] hover:text-primary cursor-pointer line-clamp-2"
+                            className="font-body-md text-body-md font-semibold text-on-surface hover:text-primary cursor-pointer line-clamp-2"
                           >
                             {card.name || 'Untitled Assignment'}
                           </h5>
-                          <p className="font-body-sm text-xs text-on-surface-variant dark:text-[#c4c7cf] line-clamp-2">
+                          <p className="font-body-sm text-xs text-on-surface-variant line-clamp-2">
                             {card.description || 'Requires manual review of constraints or output before continuing.'}
                           </p>
                           <button
                             onClick={() => {
                               if (onSelectAssignment) onSelectAssignment(card);
                             }}
-                            className="w-full bg-surface-container-low dark:bg-[#1d2024] text-on-surface dark:text-[#e2e2e6] font-body-sm text-body-sm px-4 py-2 rounded-xl hover:bg-surface-container dark:hover:bg-[#212428] transition-colors border border-outline-variant/50 dark:border-[#44474e]/50 min-h-[44px] focus:ring-2 focus:ring-primary dark:focus:ring-[#59d8c9] focus:outline-none cursor-pointer font-medium"
+                            className="w-full bg-surface-container-low text-on-surface font-body-sm text-body-sm px-4 py-2 rounded-xl hover:bg-surface-container transition-colors border border-outline-variant/50 min-h-[44px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer font-medium"
                           >
                             Review Now
                           </button>
@@ -649,16 +649,16 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
       </div>
 
       {/* Pointer row to Assignment History */}
-      <section className="bg-surface-container-lowest dark:bg-[#0b0e0f] rounded-3xl p-6 border border-outline-variant/20 dark:border-[#44474e]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <section className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-surface-container-high dark:bg-[#2b2f33] flex items-center justify-center text-outline dark:text-[#8e9199] shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-outline shrink-0">
             <Archive className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-title-md text-title-md text-on-surface dark:text-[#e2e2e6]">
+            <h3 className="font-title-md text-title-md text-on-surface">
               Submission Ledger & Archive
             </h3>
-            <p className="font-body-sm text-body-sm text-on-surface-variant dark:text-[#c4c7cf]">
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
               Review turned-in papers, completed problem sets, and full submission history.
             </p>
           </div>
@@ -668,7 +668,7 @@ export function AssignmentCardDashboard({ userId = 'student_demo', isGuest = fal
           <button
             type="button"
             onClick={onOpenHistory}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low dark:bg-[#1d2024] hover:bg-surface-container text-secondary dark:text-[#bfc2ff] font-label-caps text-xs uppercase tracking-wider border border-outline-variant/30 transition-colors min-h-[44px] cursor-pointer shrink-0"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-secondary font-label-caps text-xs uppercase tracking-wider border border-outline-variant/30 transition-colors min-h-[44px] cursor-pointer shrink-0"
           >
             <Archive className="w-4 h-4" />
             <span>View Submission Ledger</span>
