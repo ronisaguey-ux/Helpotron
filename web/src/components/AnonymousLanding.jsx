@@ -246,7 +246,7 @@ function ProductPreview() {
 
 /* ── Pricing (never-die honest failure line, Spec 3.3.1) ──────────────────────
  * Reads GET /api/plans. If offline or network blips, falls back to standard
- * catalogue ($0, $5, $15, $30) with an honest muted status indicator. */
+ * catalogue ($0, $10, $20, $40) with an honest muted status indicator. */
 function Pricing({ onOpenAuth }) {
   const [plans, setPlans] = useState(FALLBACK_PLANS);
   const [isLive, setIsLive] = useState(false);
