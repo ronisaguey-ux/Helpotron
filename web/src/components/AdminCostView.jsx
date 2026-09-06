@@ -303,7 +303,7 @@ export default function AdminCostView() {
         </div>
       </div>
 
-      {/* Strict 0 / 5 / 15 / 30 Plan Economics Grid */}
+      {/* Plan Economics Grid — Free Trial / $10 / $20 / $40 (0/10/20/40) */}
       <div className="rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
