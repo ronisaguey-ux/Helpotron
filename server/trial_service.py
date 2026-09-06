@@ -18,7 +18,7 @@ from typing import Any, Dict, Tuple
 
 from sqlalchemy.orm import Session
 
-from .database import CreditTransaction, User, utcnow
+from .database import User, utcnow
 
 logger = logging.getLogger("helpotron.trial")
 
@@ -61,15 +61,16 @@ class TrialVerificationService:
         user.plan = "trial"
         user.subscription_status = "trialing"
         user.trial_expires_at = utcnow() + timedelta(days=TRIAL_DURATION_DAYS)
-        user.credits = (user.credits or 0.0) + TRIAL_CREDITS_GRANT
-
-        db.add(
-            CreditTransaction(
-                user_id=user.id,
-                delta=TRIAL_CREDITS_GRANT,
-                reason="free_trial_2fa_payment_activation",
-            )
+        # Task tokens live in settings["token_balance"] — the usage budget the
+        # chat/extension/dump gates enforce. user.credits is a separate discount
+        # currency (routes_overlord: "Credits remain for discounts..."), so the
+        # trial grant must land in token_balance, never in credits.
+        user_settings = dict(user.settings or {})
+        user_settings["token_balance"] = (
+            float(user_settings.get("token_balance", 0) or 0) + TRIAL_CREDITS_GRANT
         )
+        user.settings = user_settings
+
         db.commit()
         db.refresh(user)
 

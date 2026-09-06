@@ -639,8 +639,8 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         if token_bal <= 0:
             agent_reply = _chat_reply(
                 db, user, thread_key,
-                text="⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet. "
-                     "Ask them to grant you tokens (or upgrade your account) to use My Agent.",
+                text="⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial "
+                     "or top up in Billing to use My Agent.",
                 suggested_actions=[])
             return {"status": "insufficient_tokens", "message": agent_reply, "reply": agent_reply,
                     "token_balance": _tk_balance(user)}

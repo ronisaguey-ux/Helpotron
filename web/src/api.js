@@ -301,6 +301,7 @@ async function doRequest(cleanEndpoint, options, headers) {
       });
     }
   }
+  return data;
 }
 
 // ── Honest Error Helpers (b1-s4, Stitch v6) ────────────────────────────────
@@ -471,6 +472,7 @@ export const api = {
       credentials: 'include',
       headers,
       body: JSON.stringify(data),
+      signal: data?.signal || undefined,
     });
     if (!response.ok) {
       const text = await response.text();
