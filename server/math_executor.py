@@ -410,12 +410,18 @@ def sanitize_math_hallucinations_in_text(text: str) -> str:
         try:
             # Map operator
             py_op = op.replace("×", "*").replace("÷", "/")
-            py_code = f"print({left_expr} {py_op} {right_expr})"
-            ok, out = run_python_math_bash(py_code)
-            if ok and out:
-                computed = out.strip()
-                if claimed_res:
-                    return f"{left_expr} {op} {right_expr} = {computed}"
+            arith_expr = f"{left_expr} {py_op} {right_expr}"
+            computed = None
+            try:
+                val = safe_eval_math_expr(arith_expr)
+                computed = str(int(val)) if isinstance(val, (int, float)) and int(val) == val else str(val)
+            except Exception:
+                py_code = f"print({arith_expr})"
+                ok, out = run_python_math_bash(py_code, timeout=10.0)
+                if ok and out:
+                    computed = out.strip()
+            if computed and claimed_res:
+                return f"{left_expr} {op} {right_expr} = {computed}"
         except Exception:
             pass
         return match.group(0)
