@@ -506,7 +506,6 @@ export default function MonitorsView({ userId = "" }) {
                 <span className="text-primary font-medium">Live data</span>
               </div>
             </div>
-          </div>
 
           {/* Live service status — real numbers from /api/monitors/overview
               (owner 09-06: the v4 "fleet matrix" claimed a 67B local model with

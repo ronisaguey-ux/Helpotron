@@ -84,9 +84,9 @@ async def import_from_url(
         if token_bal < 5:
             return {
                 "status": "insufficient_tokens",
-                "detail": "⚠️ Insufficient tokens — the operator hasn't granted you "
-                          "any tokens yet. Ask them to grant you tokens (or upgrade) "
-                          "to import assignments from links.",
+                "detail": "⚠️ Insufficient tokens — your token balance is 0. Activate "
+                          "the Free Trial or top up in Billing to import assignments "
+                          "from links.",
             }
 
     # ── Scrape via the sidecar (bounded one-shot; never fan out). ──

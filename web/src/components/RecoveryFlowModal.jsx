@@ -279,7 +279,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               <input
                 id="recovery-public-id"
                 type="text"
-                placeholder="HLP-XXXX-XX or username"
+                placeholder="Your public ID"
                 value={targetId}
                 onChange={(e) => {
                   setTargetId(e.target.value);
@@ -516,7 +516,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                   id="recovery-new-pass"
                   type={showPass ? 'text' : 'password'}
                   required
-                  placeholder="Minimum 8 characters or 4 random words..."
+                  placeholder="Minimum 8 characters — a letter and a number"
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   className="w-full h-11 px-3.5 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"

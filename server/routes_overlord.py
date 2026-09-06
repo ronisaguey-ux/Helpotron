@@ -42,7 +42,7 @@ class TaskRequest(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
-    assignment_id: int
+    assignment_id: int = 0  # 0 = generic chat (no assignment bubble); server treats 0/None as no assignment
     text: str
     action_type: Optional[str] = None
     session_mode_override: Optional[str] = None
@@ -1024,8 +1024,8 @@ def _insufficient_tokens_response(target_key, user, required, db=None) -> Dict[s
     """Non-upgraded user without token budget: friendly refusal, action NOT run.
     Tokens = usage; credits = discounts (operator 08-26)."""
     reply = (
-        "⚠️ Insufficient tokens — the operator hasn't granted you enough tokens yet. "
-        "Ask them to grant you tokens (or upgrade your account) to use My Agent."
+        "⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial "
+        "or top up in Billing to use My Agent."
     )
     msg = overlord_agent.add_chat_message(target_key, sender="overlord", text=reply, user_id=user.id)
     if db is not None:  # 08-27: refusals persist too, so the reloaded chat matches
@@ -1639,7 +1639,7 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
         token_bal = float((user.settings or {}).get("token_balance", 0) or 0)
         if token_bal <= 0:
             async def _insufficient_stream():
-                msg = "⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet."
+                msg = "⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial or top up in Billing to use My Agent."
                 yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
             return StreamingResponse(_insufficient_stream(), media_type="text/event-stream")
 
@@ -1741,8 +1741,8 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         if token_bal <= 0:
             agent_reply = _chat_reply(
                 db, user, thread_key,
-                text="⚠️ Insufficient tokens — the operator hasn't granted you any tokens yet. "
-                     "Ask them to grant you tokens (or upgrade your account) to use My Agent.",
+                text="⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial "
+                     "or top up in Billing to use My Agent.",
                 suggested_actions=[])
             return {"status": "insufficient_tokens", "message": agent_reply, "reply": agent_reply,
                     "token_balance": _tk_balance(user)}

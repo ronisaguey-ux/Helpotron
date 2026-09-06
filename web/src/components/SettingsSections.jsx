@@ -6,10 +6,11 @@
 import React, { useState } from 'react';
 import {
   User, Moon, Sun, Laptop, Bell, Shield, CreditCard, Send,
-  Key, RefreshCw, Copy, Check, CheckCircle2, AlertCircle, Trash2, ExternalLink
+  Key, Copy, Check, CheckCircle2, AlertCircle, Trash2, ExternalLink
 } from 'lucide-react';
 import AppearancePreview from './AppearancePreview.jsx';
 import TelegramIntegration from './TelegramIntegration.jsx';
+import TwoFactorSetup from './TwoFactorSetup.jsx';
 
 export function SettingsSections({
   section = 'all',
@@ -22,26 +23,13 @@ export function SettingsSections({
   isAdmin = false,
   onGoTo = () => {},
 }) {
-  const [copiedKey, setCopiedKey] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
-  const [rotatedFeedback, setRotatedFeedback] = useState(false);
   const [clearedCache, setClearedCache] = useState(false);
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText('hp_live_9481a8b2c4e7f10239485761a72f');
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(userId || 'usr_0941');
     setCopiedId(true);
     setTimeout(() => setCopiedId(false), 2000);
-  };
-
-  const handleRotateKey = () => {
-    setRotatedFeedback(true);
-    setTimeout(() => setRotatedFeedback(false), 2500);
   };
 
   const handleClearCache = () => {
@@ -67,7 +55,7 @@ export function SettingsSections({
                 Account Identity
               </h2>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                Cryptographic user identifier and developer API keys.
+                Cryptographic user identifier and account security controls.
               </p>
             </div>
           </div>
@@ -105,37 +93,18 @@ export function SettingsSections({
             </div>
           </div>
 
-          {/* API Key Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 gap-unit-3">
+          {/* Developer API Key — honest: no per-user API keys are issued yet */}
+          <div className="flex items-center justify-between p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 gap-unit-3">
             <div className="flex items-center gap-unit-3 min-w-0">
-              <Key className="w-5 h-5 text-primary shrink-0" />
+              <Key className="w-5 h-5 text-on-surface-variant shrink-0" />
               <div className="min-w-0">
                 <span className="font-body-sm text-xs text-on-surface font-medium block">
-                  Live Developer API Token
+                  Developer API Key
                 </span>
                 <span className="font-code-sm text-xs text-outline truncate block">
-                  hp_live_9481******************a72f
+                  Not provisioned — keys ship with the API program when it launches.
                 </span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleCopyKey}
-                className="h-9 px-unit-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 text-on-surface font-label-caps text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                {copiedKey ? <Check className="w-3.5 h-3.5 text-sem-green" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedKey ? 'Copied' : 'Copy Key'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleRotateKey}
-                className="h-9 px-unit-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 text-on-surface font-label-caps text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>{rotatedFeedback ? 'Token Rotated' : 'Rotate Key'}</span>
-              </button>
             </div>
           </div>
         </section>
@@ -325,26 +294,8 @@ export function SettingsSections({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-unit-4">
-            <div className="p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col justify-between gap-unit-3">
-              <div>
-                <span className="font-body-sm text-xs font-semibold text-on-surface block">
-                  Two-Factor Authentication (2FA)
-                </span>
-                <span className="font-code-sm text-[11px] text-outline block mt-0.5">
-                  Required for token purchases and sensitive model overrides.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => set({ twoFactorEnabled: !settings.twoFactorEnabled })}
-                className={`h-9 px-unit-3 rounded-xl font-label-caps text-xs transition-colors self-start cursor-pointer ${
-                  settings.twoFactorEnabled
-                    ? 'bg-sem-green/20 text-sem-green border border-sem-green/30'
-                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/25'
-                }`}
-              >
-                {settings.twoFactorEnabled ? '2FA Enabled' : 'Enable 2FA'}
-              </button>
+            <div className="p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col justify-between gap-unit-3 sm:col-span-2">
+              <TwoFactorSetup s={settings} set={set} />
             </div>
 
             <div className="p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col justify-between gap-unit-3">
@@ -382,7 +333,7 @@ export function SettingsSections({
                   Credits &amp; Billing Ledger
                 </h2>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Deterministic token balances and 0 / 5 / 15 / 30 tier invariant.
+                  Deterministic token balances and current plan rates.
                 </p>
               </div>
             </div>
@@ -399,10 +350,10 @@ export function SettingsSections({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-unit-3">
             {[
-              { label: 'Trial', price: '$0 / 7d', desc: '100 task tokens' },
-              { label: 'Basic', price: '$5 / mo', desc: '300 task tokens' },
-              { label: 'Pro', price: '$15 / mo', desc: '1,000 task tokens' },
-              { label: 'Elite', price: '$30 / mo', desc: '2,700 task tokens' },
+              { label: 'Trial', price: '$0 / 7 days', desc: '150 task tokens' },
+              { label: 'Basic', price: '$10 / mo', desc: '300 task tokens' },
+              { label: 'Pro', price: '$20 / mo', desc: '1,000 task tokens' },
+              { label: 'Elite', price: '$40 / mo', desc: '2,700 task tokens' },
             ].map((tier) => {
               const isCurrent = (plan || 'pro').toLowerCase() === tier.label.toLowerCase();
               return (

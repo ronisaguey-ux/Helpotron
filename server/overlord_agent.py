@@ -491,7 +491,7 @@ class OverlordAgent:
             {
                 "id": "init_msg",
                 "sender": "overlord",
-                "text": f"🤖 {agent_display_name(user)} Agent online. Today is {_today_label()}. Full ecosystem control and Virtual Sandboxes armed.",
+                "text": f"🤖 {agent_display_name(user)} Agent online. Today is {_today_label()}. Ask a question to begin.",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "suggested_actions": ["Run Sandbox Script", "Modify User Settings", "Generate Flashcards", "Check System Status"],
             }
