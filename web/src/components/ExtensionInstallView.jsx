@@ -1,34 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Puzzle, Copy, Globe, Cpu, RefreshCw,
-  ExternalLink, Sparkles, ShieldCheck, Zap, BookOpen, Mic,
-  ChevronRight, ArrowRight, ArrowLeft, Layers, HelpCircle, Check
+  Puzzle,
+  Copy,
+  Globe,
+  Cpu,
+  RefreshCw,
+  ExternalLink,
+  Sparkles,
+  ShieldCheck,
+  Zap,
+  BookOpen,
+  Mic,
+  ChevronRight,
+  ArrowRight,
+  ArrowLeft,
+  Layers,
+  HelpCircle,
+  Check,
+  Download,
+  Terminal,
+  Shield,
 } from 'lucide-react';
-import api, { getServer } from '../api';
-import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
+import api, { getServer } from '../api.js';
 
 export default function ExtensionInstallView({ publicMode = false, onBack = null, onGoTo = null }) {
   const [versionData, setVersionData] = useState(null);
-  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [versionLoading, setVersionLoading] = useState(true);
+  const [versionError, setVersionError] = useState(false);
+  const [copiedOrigin, setCopiedOrigin] = useState(false);
   const [copiedChromeUrl, setCopiedChromeUrl] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [activeBrowser, setActiveBrowser] = useState('chromium');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const serverUrl = getServer() || window.location.origin;
   const STORE_URL = 'https://chromewebstore.google.com/detail/helpotron-academic-compan/nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk';
 
   useEffect(() => {
+    setVersionLoading(true);
+    setVersionError(false);
     api.getExtensionVersion()
-      .then(setVersionData)
-      .catch(() => setVersionData({ latest_version: '2.0.1' }));
+      .then((data) => {
+        setVersionData(data);
+      })
+      .catch(() => {
+        setVersionError(true);
+      })
+      .finally(() => {
+        setVersionLoading(false);
+      });
   }, []);
+
+  const liveVersion = versionData?.latest_version || (versionLoading ? 'Loading...' : 'v4.2.0');
 
   const handleDownloadZip = () => {
     setIsDownloading(true);
     const link = document.createElement('a');
     link.href = `${serverUrl}/api/extension/download`;
-    link.download = `helpotron-extension-v${versionData?.latest_version || '2.0.1'}.zip`;
+    link.download = `helpotron-extension-${liveVersion}.zip`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -59,385 +87,311 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
     }
   };
 
-  const BROWSERS = [
+  const FAQ_ITEMS = [
     {
-      id: 'chromium',
-      name: 'Chrome / Brave / Edge',
-      badge: 'Recommended (95% of students)',
-      icon: Globe,
-      color: 'text-indigo-400',
-      description: 'Native Chromium Manifest V3 with full hardware-accelerated assistive typing.',
-      steps: [
-        {
-          num: '1',
-          title: 'Download & Unpack',
-          desc: 'Download the extension zip file and extract it into a permanent folder on your computer (e.g., Documents/helpotron-extension).',
-          hint: 'Chrome loads from an unzipped folder, not the raw .zip file.'
-        },
-        {
-          num: '2',
-          title: 'Open Extensions Manager',
-          desc: 'In your browser address bar, navigate to the extensions page and toggle Developer Mode ON in the top-right corner.',
-          action: {
-            label: 'chrome://extensions',
-            copyText: 'chrome://extensions',
-            copiedState: copiedChromeUrl,
-            setter: setCopiedChromeUrl
-          }
-        },
-        {
-          num: '3',
-          title: 'Load Unpacked & Connect',
-          desc: 'Click "Load unpacked", select your extracted folder, and pin Helpotron to your toolbar. Click the puzzle icon to begin scraping or assistive typing.',
-          hint: 'The popup automatically connects to this workspace!'
-        }
-      ]
+      q: 'Does the extension collect my browsing history or passwords?',
+      a: 'Zero tracking or telemetry. The Helpotron companion operates entirely in 100% local context. It only reads the specific DOM nodes of assignments you explicitly click "Synthesize" or "Scrape" on.',
     },
     {
-      id: 'firefox',
-      name: 'Firefox',
-      badge: 'Gecko Engine',
-      icon: RefreshCw,
-      color: 'text-orange-400',
-      description: 'Works via Firefox developer runtime debugging with complete CORS isolation.',
-      steps: [
-        {
-          num: '1',
-          title: 'Download & Unzip',
-          desc: 'Download the universal extension zip file and extract it to a permanent folder on your machine.'
-        },
-        {
-          num: '2',
-          title: 'Open Debugging Dashboard',
-          desc: 'In Firefox, type about:debugging#/runtime/this-firefox into the URL bar and press Enter.'
-        },
-        {
-          num: '3',
-          title: 'Load Temporary Add-on',
-          desc: 'Click "Load Temporary Add-on" and select the manifest.json file inside your unzipped folder.'
-        }
-      ]
+      q: 'Which learning management systems (LMS) are supported?',
+      a: 'Canvas LMS, Blackboard Learn, Brightspace D2L, Google Classroom, Moodle, and standalone PDF syllabus pages.',
     },
     {
-      id: 'safari',
-      name: 'Safari (macOS)',
-      badge: 'Apple WebKit',
-      icon: Cpu,
-      color: 'text-purple-400',
-      description: 'Native macOS companion converted via Xcode Web Extension tools.',
-      steps: [
-        {
-          num: '1',
-          title: 'Download Project Package',
-          desc: 'Download the universal zip archive and unpack it to your local Projects directory.'
-        },
-        {
-          num: '2',
-          title: 'Import in Xcode',
-          desc: 'Open Xcode → File → New → Project → Web Extension, and select the unzipped directory.'
-        },
-        {
-          num: '3',
-          title: 'Enable in Safari',
-          desc: 'Run the project (⌘R) and check "Allow Unsigned Extensions" under Safari Settings → Advanced → Develop menu.'
-        }
-      ]
-    }
+      q: 'How does the extension connect to my workspace?',
+      a: 'The extension pairs directly via your Server Sync Origin URL. Once configured, assignments and captured rubrics sync straight into your Assignment Dump.',
+    },
   ];
 
-  const currentBrowser = BROWSERS.find(b => b.id === activeBrowser) || BROWSERS[0];
-
   return (
-    <div className="w-full min-h-screen bg-background text-on-surface font-sans">
-      {publicMode && (
-        <header className="sticky top-0 z-30 w-full border-b border-outline-variant/30 bg-surface/80 backdrop-blur-md mb-6">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-            {onBack && (
-              <button
-                type="button"
-                onClick={onBack}
-                className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-primary transition cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" /> Back to Helpotron
-              </button>
-            )}
-            <div className="flex items-center gap-2">
-              <AnimatedLogo size="sm" showWordmark={false} />
-              <span className="font-bold text-sm text-primary tracking-tight">Extension Companion</span>
-            </div>
-            {onGoTo && (
-              <button
-                type="button"
-                onClick={() => onGoTo('signup')}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-semibold text-xs transition cursor-pointer active:scale-95 shadow-sm"
-              >
-                Get Started <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </header>
+    <div className="space-y-8 max-w-5xl mx-auto p-2 sm:p-4 animate-fadeIn">
+      {/* Header bar (with Back button if provided) */}
+      {onBack && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center justify-center w-11 h-11 rounded-xl bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all shadow-sm"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">
+            Return to Workspace
+          </span>
+        </div>
       )}
 
-      <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6 space-y-10 animate-fadeIn">
-        {/* ─── Hero Section ──────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-surface-container-low p-6 sm:p-10 border border-outline-variant/30 shadow-2xl">
-          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-64 h-64 bg-secondary/10 rounded-full blur-3xl pointer-events-none" />
+      {/* SECTION 1: HERO GLASS BANNER (§3.14) */}
+      <section className="relative rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-10 md:p-12 shadow-2xl overflow-hidden">
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute top-10 right-10 w-[350px] h-[180px] bg-sem-cyan/10 rounded-full blur-[80px] pointer-events-none" />
 
-          <div className="relative z-10 space-y-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/20">
-                <Sparkles className="w-3.5 h-3.5" /> Chrome Web Store v2.5.1
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sem-green/15 text-sem-green border border-sem-green/20">
-                <ShieldCheck className="w-3.5 h-3.5" /> Manifest V3 Ready
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-secondary/15 text-secondary border border-secondary/20">
-                <Zap className="w-3.5 h-3.5" /> 100% Local &amp; Private
-              </span>
-            </div>
+        <div className="relative flex flex-col items-start gap-6 max-w-3xl">
+          {/* Badge Trio */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/15 text-primary font-chip-status text-[10px] uppercase tracking-wider font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Chrome Web Store Verified
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sem-green/15 text-sem-green font-chip-status text-[10px] uppercase tracking-wider font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-sem-green"></span>
+              Manifest V3 Compliant
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sem-cyan/15 text-sem-cyan font-chip-status text-[10px] uppercase tracking-wider font-semibold">
+              <Shield className="w-3.5 h-3.5" />
+              100% Local &amp; Zero PII
+            </span>
+          </div>
 
-            <div className="space-y-2 max-w-3xl">
-              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
-                Supercharge your browser with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-primary">Helpotron OS</span>
-              </h1>
-              <p className="text-sm sm:text-base text-on-surface-variant leading-relaxed">
-                Extract Canvas coursework, record lecture audio, and inject human-like assistive typing directly into Google Docs — without ever leaving your active course tabs.
-              </p>
-            </div>
+          {/* Heading with Teal Accent */}
+          <div className="space-y-2">
+            <h1 className="font-headline-lg-mobile md:font-headline-lg text-2xl sm:text-4xl md:text-5xl text-on-surface font-bold tracking-tight leading-tight">
+              Helpotron Companion <span className="text-primary">Extension</span>
+            </h1>
+            <p className="font-body-md text-sm sm:text-base text-on-surface-variant max-w-xl leading-relaxed">
+              Seamlessly capture syllabi, Canvas / Blackboard assignments, and research papers straight from your browser into Helpotron OS.
+            </p>
+          </div>
 
-            {/* Primary Action Row */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
-              {!publicMode && (
-                <a
-                  href={STORE_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-bold text-sm shadow-md transition duration-200 cursor-pointer active:scale-95"
-                >
-                  <Puzzle className="w-4 h-4" /> Install from Chrome Web Store
-                  <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-                </a>
+          {/* Live Version Indicator (§3.14 Honesty Rule: ONE live value) */}
+          <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-surface-container-high/60 border border-outline-variant/15 text-xs">
+            <span className={`w-2 h-2 rounded-full ${versionError ? 'bg-sem-amber' : 'bg-primary animate-pulse'}`} />
+            <span className="font-code-sm text-on-surface">
+              {versionLoading ? (
+                'Fetching live release...'
+              ) : versionError ? (
+                'Live release server unreachable · Local fallback'
+              ) : (
+                `Live Release ${liveVersion} · Manifest V3`
               )}
+            </span>
+          </div>
 
-              {/* Quick Connection Server Pill */}
-              <div className="flex items-center justify-between sm:justify-start gap-2 px-4 py-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs">
-                <span className="text-on-surface-variant shrink-0 font-medium">Server Sync Origin:</span>
-                <code className="font-mono text-primary font-semibold truncate max-w-[200px] sm:max-w-xs">{serverUrl}</code>
-                <button
-                  onClick={() => copyToClipboard(serverUrl, setCopiedUrl)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition cursor-pointer shrink-0"
-                  title="Copy Server URL"
-                >
-                  {copiedUrl ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-sem-green" />
-                      <span className="text-[11px] font-semibold text-sem-green">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span className="text-[11px] font-semibold">Copy</span>
-                    </>
-                  )}
-                </button>
+          {/* Primary Action Row (Hidden or simplified in publicMode if requested) */}
+          {!publicMode && (
+            <div className="flex flex-wrap items-center gap-3 pt-2 w-full sm:w-auto">
+              <a
+                href={STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto min-h-[44px] px-6 py-3 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold shadow-[0_0_24px_rgba(120,245,229,0.25)] hover:brightness-105 active:scale-[0.98] transition flex items-center justify-center gap-2"
+              >
+                <Globe className="w-4 h-4 text-on-primary" />
+                <span>Add to Chrome (Free)</span>
+              </a>
+
+              <button
+                type="button"
+                disabled={isDownloading}
+                onClick={handleDownloadZip}
+                className="w-full sm:w-auto min-h-[44px] px-5 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4 text-on-surface-variant" />
+                <span>{isDownloading ? 'Downloading Zip...' : downloadSuccess ? 'Downloaded!' : 'Download Zip Build'}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* SECTION 2: BROWSER ENCLAVE LANES (§3.14) */}
+      <section className="space-y-4">
+        <div className="space-y-0.5">
+          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Platform Channels</span>
+          <h2 className="font-title-md text-lg text-on-surface font-semibold">Supported Runtime Enclaves</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: Google Chrome (Official Primary) */}
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border-2 border-primary/40 shadow-[0_0_20px_rgba(120,245,229,0.12)] flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/15 px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-semibold">
+                  <span className="w-1 h-1 rounded-full bg-sem-green"></span>
+                  Official Store Release
+                </span>
+              </div>
+              <div>
+                <h3 className="font-title-md text-base text-on-surface font-semibold">Google Chrome &amp; Chromium</h3>
+                <p className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
+                  Native runtime for Chrome, Brave, Arc, Microsoft Edge, and Opera GX with hardware-accelerated text capture.
+                </p>
               </div>
             </div>
 
-            {/* Store version note + manual zip fallback */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1 text-xs text-on-surface-variant">
-              <span>
-                The Chrome Web Store listing is <span className="text-on-surface font-semibold">v2.5.1</span> (approved &amp; live). Newer versions — including 2.6.0 — appear there automatically as soon as they pass review.
-              </span>
-              <span className="sm:ml-auto shrink-0">
-                Manual install instead?{' '}
-                <button
-                  onClick={handleDownloadZip}
-                  disabled={isDownloading}
-                  className="underline decoration-primary/60 underline-offset-2 hover:text-primary transition cursor-pointer disabled:opacity-50 font-medium"
-                >
-                  {isDownloading ? 'Packaging…' : downloadSuccess ? 'Download started ✓' : `Download .zip (v${versionData?.latest_version || '2.0.1'})`}
-                </button>
-              </span>
+            <div className="pt-2">
+              <a
+                href={STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.98] transition shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span>Install from Store</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Card 2: Mozilla Firefox (Experimental) */}
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-2xl bg-sem-amber/10 border border-sem-amber/20 flex items-center justify-center text-sem-amber">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <span className="font-chip-status text-[10px] text-sem-amber bg-sem-amber/15 px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-semibold">
+                  <span className="w-1 h-1 rounded-full bg-sem-amber"></span>
+                  Experimental Dev Build
+                </span>
+              </div>
+              <div>
+                <h3 className="font-title-md text-base text-on-surface font-semibold">Mozilla Firefox</h3>
+                <p className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
+                  Gecko runtime loader truth. Requires loading unpacked add-on or direct developer debugging runner.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleDownloadZip}
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider transition"
+              >
+                Download Gecko Zip
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Apple Safari (Developer Preview) */}
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <span className="font-chip-status text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full uppercase font-semibold">
+                  Developer Preview
+                </span>
+              </div>
+              <div>
+                <h3 className="font-title-md text-base text-on-surface font-semibold">Apple Safari</h3>
+                <p className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
+                  WebExtension converter format. Requires Xcode signing and macOS developer certificate to deploy locally.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-surface-container-high/50 text-on-surface-variant font-label-caps text-xs uppercase tracking-wider cursor-not-allowed"
+              >
+                Xcode Build Only
+              </button>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* ─── Interactive Installation Guide ────────────────────────────── */}
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/30 pb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold text-on-surface tracking-tight">Easy 3-Step Installation</h2>
-              <p className="text-xs sm:text-sm text-on-surface-variant">Select your browser to view tailored step-by-step setup instructions.</p>
-            </div>
-            
-            {/* Browser Selection Tabs */}
-            <div className="flex gap-2 p-1 rounded-xl bg-surface-container-low border border-outline-variant/30 self-start sm:self-auto">
-              {BROWSERS.map(b => {
-                const Icon = b.icon;
-                const isSelected = activeBrowser === b.id;
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => setActiveBrowser(b.id)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary text-on-primary shadow-sm'
-                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="hidden sm:inline">{b.name}</span>
-                    <span className="sm:hidden">{b.id.toUpperCase()}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selected Browser Instructions Card */}
-          <div className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <currentBrowser.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-on-surface">{currentBrowser.name} Setup</h3>
-                  <p className="text-xs text-on-surface-variant">{currentBrowser.description}</p>
-                </div>
-              </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-surface-container text-on-surface-variant border border-outline-variant/30 hidden sm:inline-block">
-                {currentBrowser.badge}
-              </span>
-            </div>
-
-            {/* Steps Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
-              {currentBrowser.steps.map((s, idx) => (
-                <div key={idx} className="relative p-5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col justify-between space-y-3">
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary border border-primary/25 font-mono font-bold text-xs flex items-center justify-center">
-                        {s.num}
-                      </span>
-                      <span className="text-[10px] uppercase font-mono tracking-widest text-on-surface-variant">Step {s.num} of 3</span>
-                    </div>
-                    <h4 className="text-sm font-bold text-on-surface">{s.title}</h4>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">{s.desc}</p>
-                  </div>
-
-                  {s.action && (
-                    <div className="pt-2">
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container border border-outline-variant/30">
-                        <code className="text-xs text-primary font-mono select-all truncate">{s.action.label}</code>
-                        <button
-                          onClick={() => copyToClipboard(s.action.copyText, s.action.setter)}
-                          className="p-1 rounded text-on-surface-variant hover:text-on-surface transition cursor-pointer"
-                          title="Copy to clipboard"
-                        >
-                          {s.action.copiedState ? <Check className="w-3.5 h-3.5 text-sem-green" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {s.hint && (
-                    <div className="pt-1">
-                      <span className="text-[11px] text-primary/90 italic flex items-center gap-1">
-                        💡 {s.hint}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* SECTION 3: 3 STEP INSTALL CARDS */}
+      <section className="space-y-4">
+        <div className="space-y-0.5">
+          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Manual Setup Guide</span>
+          <h2 className="font-title-md text-lg text-on-surface font-semibold">3-Step Developer Mode Deployment</h2>
         </div>
 
-        {/* ─── What the Extension Unlocks (Feature Highlights) ─────────── */}
-        <div className="space-y-6">
-          <div className="border-b border-outline-variant/30 pb-4">
-            <h2 className="text-lg sm:text-xl font-bold text-on-surface tracking-tight">Four Powerful In-Browser Capabilities</h2>
-            <p className="text-xs sm:text-sm text-on-surface-variant">Everything runs client-side inside your browser with maximum speed and zero friction.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 space-y-3">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary font-tabular-stat text-sm font-bold flex items-center justify-center">
+              1
+            </div>
+            <h3 className="font-title-md text-sm text-on-surface font-semibold">Download &amp; Unzip</h3>
+            <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+              Download the extension zip file and extract it into a permanent folder on your machine (e.g. Documents/helpotron-extension).
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Feature 1 */}
-            <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:border-primary/40 transition space-y-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-                <BookOpen className="w-4 h-4" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-on-surface">Universal LMS Auto-Scraper</h3>
-                <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Extracts complete assignment rubrics, due dates, and prompt criteria from Canvas, Blackboard, Brightspace, and Google Classroom into structured workspace cards in 1 click.
-                </p>
-              </div>
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 space-y-3">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary font-tabular-stat text-sm font-bold flex items-center justify-center">
+              2
             </div>
+            <h3 className="font-title-md text-sm text-on-surface font-semibold">Open Extensions Manager</h3>
+            <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+              Navigate to the extension manager in your browser and toggle Developer Mode ON in the top-right corner.
+            </p>
+            <button
+              type="button"
+              onClick={() => copyToClipboard('chrome://extensions', setCopiedChromeUrl)}
+              className="w-full min-h-[38px] px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-code-sm text-primary flex items-center justify-between transition"
+            >
+              <span>chrome://extensions</span>
+              {copiedChromeUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
 
-            {/* Feature 2 */}
-            <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:border-primary/40 transition space-y-3">
-              <div className="w-9 h-9 rounded-lg bg-secondary/15 text-secondary flex items-center justify-center">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-on-surface">Launch to Doc (Assistive Typing)</h3>
-                <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Paces and types synthesized drafts directly into Google Docs or Word with 9 natural human-like cadence dimensions (typos, pauses, burst rhythm, and fatigue curve).
-                </p>
-              </div>
+          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 space-y-3">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary font-tabular-stat text-sm font-bold flex items-center justify-center">
+              3
             </div>
-
-            {/* Feature 3 */}
-            <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:border-primary/40 transition space-y-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-                <Mic className="w-4 h-4" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-on-surface">Live Lecture Audio Recorder</h3>
-                <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Record classroom lectures or video conferences directly from the tab, automatically generating timestamped transcripts, summaries, and flashcards in your Library.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="p-5 rounded-xl bg-surface-container-low border border-outline-variant/30 hover:border-primary/40 transition space-y-3">
-              <div className="w-9 h-9 rounded-lg bg-sem-green/15 text-sem-green flex items-center justify-center">
-                <Zap className="w-4 h-4" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-on-surface">Autonomous In-Browser Subagent</h3>
-                <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Give natural language directions directly to your scraper (e.g. <em>"Only scrape calculus problem sets"</em>) to selectively extract exactly what you need.
-                </p>
-              </div>
-            </div>
+            <h3 className="font-title-md text-sm text-on-surface font-semibold">Load Unpacked &amp; Sync</h3>
+            <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+              Click "Load unpacked", select your extracted folder, and pin Helpotron to your browser toolbar.
+            </p>
           </div>
         </div>
+      </section>
 
-        {/* ─── Frequently Asked Questions ────────────────────────────────── */}
-        <div className="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-4">
-          <h3 className="text-sm font-bold text-on-surface flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-primary" /> Frequently Asked Questions
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-on-surface-variant leading-relaxed">
-            <div className="space-y-1 bg-surface-container-lowest p-3.5 rounded-xl border border-outline-variant/20">
-              <div className="font-semibold text-on-surface">Does the extension store my school login passwords?</div>
-              <p>
-                No. The extension operates completely locally in your browser. It never accesses, stores, or transmits your university credentials or administrative Canvas passwords.
+      {/* SECTION 4: SERVER SYNC ORIGIN PILL */}
+      <section className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">
+            Companion Pairing Origin
+          </span>
+          <p className="font-body-sm text-xs text-on-surface-variant">
+            Paste this URL into the extension settings popup if prompted to synchronize with this workspace.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => copyToClipboard(serverUrl, setCopiedOrigin)}
+          className="min-h-[44px] px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container text-xs font-code-sm text-on-surface flex items-center gap-2 border border-outline-variant/20 transition self-start sm:self-center"
+        >
+          <span className="select-all">{serverUrl}</span>
+          {copiedOrigin ? <Check className="w-4 h-4 text-sem-green" /> : <Copy className="w-4 h-4 text-on-surface-variant" />}
+        </button>
+      </section>
+
+      {/* SECTION 5: FAQ ACCORDIONS */}
+      <section className="rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8 space-y-4">
+        <div className="space-y-1">
+          <h2 className="font-title-md text-lg text-on-surface font-semibold">Frequently Asked Questions</h2>
+          <p className="font-body-sm text-xs text-on-surface-variant">
+            Everything you need to know about browser companion security and privacy.
+          </p>
+        </div>
+
+        <div className="space-y-3 pt-2">
+          {FAQ_ITEMS.map((item, idx) => (
+            <details
+              key={idx}
+              className="group p-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/15 transition cursor-pointer"
+            >
+              <summary className="font-title-md text-xs sm:text-sm font-semibold text-on-surface list-none flex items-center justify-between">
+                <span>{item.q}</span>
+                <ChevronRight className="w-4 h-4 text-on-surface-variant group-open:rotate-90 transition-transform" />
+              </summary>
+              <p className="font-body-sm text-xs text-on-surface-variant mt-2 leading-relaxed">
+                {item.a}
               </p>
-            </div>
-            <div className="space-y-1 bg-surface-container-lowest p-3.5 rounded-xl border border-outline-variant/20">
-              <div className="font-semibold text-on-surface">How do I update when a new version is released?</div>
-              <p>
-                Installed from the Chrome Web Store? It updates automatically once a new version is approved — no action needed. Installed the manual .zip? Download the new zip, replace the files in your extension folder, and hit reload in <code className="text-primary font-mono">chrome://extensions</code>.
-              </p>
-            </div>
-          </div>
+            </details>
+          ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

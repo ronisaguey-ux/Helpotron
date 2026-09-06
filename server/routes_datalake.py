@@ -1,12 +1,13 @@
 """FastAPI routes for Training & Feedback Data Lake, Micro-Credits System, and Intelligence Agent."""
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .database import DataSubmission, User, get_db
+from .database import DataSubmission, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
 from .datalake import datalake_manager, datalake_agent
@@ -222,6 +223,56 @@ async def get_microcredits_history(
         "balance": balance,
         "history": history,
     }
+
+
+@router.get("/datalake/export.json")
+async def export_my_datalake_entries(
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Exports current user's Data Lake contributions and micro-credit submissions as JSON.
+    Returns clean, standardized format suitable for backup or export."""
+    submissions = datalake_manager.list_microcredit_submissions(user_id=current_user.public_id, limit=1000)
+    db_entries = db.query(DataSubmission).filter(DataSubmission.user_id == current_user.id).all()
+
+    entries = []
+    for s in submissions:
+        entries.append({
+            "id": s.get("id") or s.get("submission_id"),
+            "title": s.get("title"),
+            "data_type": s.get("data_type"),
+            "status": s.get("status"),
+            "estimated_credits": s.get("estimated_credits", 0),
+            "actual_credits": s.get("actual_credits", 0),
+            "scores": s.get("scores", {}),
+            "created_at": s.get("created_at"),
+            "source": "microcredits_log",
+        })
+    for d in db_entries:
+        entries.append({
+            "id": f"db_{d.id}",
+            "title": (d.payload or {}).get("title") or f"Submission #{d.id}",
+            "data_type": (d.payload or {}).get("data_type") or "empirical_data",
+            "status": "implemented" if d.discount_earned > 0 else "pending",
+            "estimated_credits": int((d.discount_earned or 0) * 10),
+            "actual_credits": int((d.discount_earned or 0) * 10),
+            "scores": (d.payload or {}).get("scores", {}),
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "source": "database",
+        })
+
+    payload = {
+        "user_id": current_user.public_id,
+        "exported_at": utcnow().isoformat(),
+        "total_entries": len(entries),
+        "entries": entries,
+    }
+    content = json.dumps(payload, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=datalake_entries.json"},
+    )
 
 
 @router.post("/datalake/microcredits/redeem")
