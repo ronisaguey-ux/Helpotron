@@ -32,7 +32,7 @@ export default function InsightsView({ userId, onGoTo, initialTab }) {
       {/* Tabs Bar */}
       <div className="flex items-center gap-2 p-1 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 overflow-x-auto">
         {[
-          { key: "overview", label: "Overview & Visx Analytics", icon: BarChart3 },
+          { key: "overview", label: "Overview", icon: BarChart3 },
           { key: "progress", label: "Academic Progress", icon: TrendingUp },
           { key: "recommendations", label: "Smart Recommendations", icon: Sparkles },
         ].map(({ key, label, icon: Icon }) => {
