@@ -167,7 +167,9 @@ export default function BillingView({ userId = '' }) {
     }
   };
 
-  // Pricing invariant: $0 Trial, $5 Basic, $15 Pro, $30 Elite
+  // Pricing (owner 09-06): $0 Trial, $10 Basic, $20 Pro, $40 Elite.
+  // Token allowances come from the same /api/plans table the landing page
+  // bills against; no USD-value disclosure, token counts only.
   const TIERS = [
     {
       id: 'trial',
@@ -175,10 +177,10 @@ export default function BillingView({ userId = '' }) {
       name: 'Free Trial',
       priceMonthly: 0,
       priceYearly: 0,
-      tokens: 100,
-      desc: '7-day evaluation period for new students.',
+      tokens: 150,
+      desc: '7-day evaluation period for new students (2FA + $0.01 payment verification required).',
       features: [
-        '100 starter tokens ($1.00 compute)',
+        '150 starter tokens',
         'Full universal assignment dump',
         'Spaced repetition flashcard engine',
         'Academic integrity verification',
@@ -191,12 +193,12 @@ export default function BillingView({ userId = '' }) {
       id: 'basic',
       planId: 'basic',
       name: 'Student Basic',
-      priceMonthly: 5,
-      priceYearly: 50,
-      tokens: 500,
+      priceMonthly: 10,
+      priceYearly: 100,
+      tokens: 300,
       desc: 'Predictable coursework assistance for regular semesters.',
       features: [
-        '500 monthly tokens ($5.00 compute)',
+        '300 monthly tokens',
         'Standard LLM speed & precision',
         'Interactive quizzes & study guides',
         'Full assignment history ledger',
@@ -209,12 +211,12 @@ export default function BillingView({ userId = '' }) {
       id: 'pro',
       planId: 'pro',
       name: 'Academic Pro',
-      priceMonthly: 15,
-      priceYearly: 150,
-      tokens: 1500,
+      priceMonthly: 20,
+      priceYearly: 200,
+      tokens: 1000,
       desc: 'High-throughput synthesis for rigorous STEM & humanities.',
       features: [
-        '1,500 monthly tokens ($15.00 compute)',
+        '1,000 monthly tokens',
         'Priority high-reasoning pipeline',
         'Full multi-source assignment synthesis',
         'LaTeX proof formatting & OCR',
@@ -228,12 +230,12 @@ export default function BillingView({ userId = '' }) {
       id: 'elite',
       planId: 'elite',
       name: 'Researcher Elite',
-      priceMonthly: 30,
-      priceYearly: 300,
-      tokens: 3000,
+      priceMonthly: 40,
+      priceYearly: 400,
+      tokens: 2700,
       desc: 'Unlimited priority lane for graduate thesis & heavy workloads.',
       features: [
-        '3,000 monthly tokens ($30.00 compute)',
+        '2,700 monthly tokens',
         'Top-tier reasoning without queuing',
         'Unlimited audio & lecture transcription',
         'Personalized agent fine-tuning',
@@ -288,7 +290,7 @@ export default function BillingView({ userId = '' }) {
               Transparent Compute Policy
             </span>
             <span className="text-on-surface-variant font-body-sm">
-              All plans have full access to tools and models. You only pay for the deterministic compute tokens your tasks use ($0.01 per token).
+              All plans have full access to tools and models. You only pay for the deterministic compute tokens your tasks use.
             </span>
           </div>
         </div>
@@ -439,7 +441,7 @@ export default function BillingView({ userId = '' }) {
         <div>
           <h3 className="font-title-md text-title-md text-on-surface font-semibold">On-Demand Token Top-ups</h3>
           <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-            Instantly add tokens to your compute reservoir. Never expires. ($0.01 per token rate).
+            Instantly add tokens to your compute reservoir. Never expires.
           </p>
         </div>
 

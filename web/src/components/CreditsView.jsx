@@ -14,6 +14,7 @@ import BillingView from './BillingView.jsx';
 import ReferralSection from './ReferralSection.jsx';
 import CreditLeaderboard from './CreditLeaderboard.jsx';
 import CreditsCostTab from './CreditsCostTab.jsx';
+import TrialActivationCard from './TrialActivationCard.jsx';
 
 export default function CreditsView({ userId = '', initialTab = 'plans', userCredits = 0 }) {
   const [activeTab, setActiveTab] = useState(
@@ -45,7 +46,6 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
 
   const tokenVal = tokens !== null ? tokens : 0;
   const creditVal = credits !== null ? credits : 0;
-  const usdEquiv = (tokenVal * 0.01).toFixed(2);
 
   return (
     <div className="space-y-6 max-w-[1240px] mx-auto p-2 sm:p-4">
@@ -68,6 +68,9 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
           Deterministic token allocation, compute runway forecasting, and subscription management.
         </p>
       </div>
+
+      {/* Free Trial activation (owner 09-06): 2FA + 1-cent payment verification */}
+      <TrialActivationCard userId={userId} />
 
       {/* SECTION 3.11.1: ALWAYS-VISIBLE PROMINENT BALANCE STRIP */}
       <section className="relative rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8 shadow-xl overflow-hidden">
@@ -97,9 +100,9 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
                 )}
               </div>
               <div className="flex items-center gap-2 font-code-sm text-xs text-on-surface-variant">
-                <span>Compute equivalency:</span>
+                <span>Compute metering:</span>
                 <span className="font-tabular-stat text-on-surface font-semibold text-sm">
-                  ${usdEquiv} USD
+                  task tokens
                 </span>
               </div>
             </div>
@@ -121,7 +124,7 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
                 />
               </div>
               <div className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
-                <span>Deterministic rate: $0.01 / token</span>
+                <span>Metered by task content</span>
                 <span>Auto-rollback active</span>
               </div>
             </div>

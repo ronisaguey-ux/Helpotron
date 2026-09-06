@@ -810,10 +810,10 @@ export const api = {
   getExtensionVersion: () => request('/api/extension/version', { method: 'GET' }),
   checkExtensionUpdate: (currentVersion) => request('/api/extension/check-update', { method: 'POST', body: JSON.stringify({ current_version: currentVersion }) }),
 
-  // Free Trial & SMS Verification
+  // Free Trial (2FA + 1-cent payment verification, owner 09-06)
   getTrialStatus: () => request('/api/trial/status', { method: 'GET' }),
-  requestTrialSms: (phoneNumber) => request('/api/trial/sms/request', { method: 'POST', body: JSON.stringify({ phone_number: phoneNumber }) }),
-  verifyTrialSms: (phoneNumber, code) => request('/api/trial/sms/verify', { method: 'POST', body: JSON.stringify({ phone_number: phoneNumber, code }) }),
+  verifyTrialPayment: () => request('/api/trial/payment-verify', { method: 'POST' }),
+  activateTrial: () => request('/api/trial/activate', { method: 'POST' }),
 
   // FERPA / GDPR Self-Service Account Deletion
   deleteAccount: () => request('/api/user/account', { method: 'DELETE' }),

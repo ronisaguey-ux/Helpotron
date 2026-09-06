@@ -137,7 +137,7 @@ async def download_extension_zip():
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
     "2.6.0": [
-        "🎉 Helpotron 2.6 — the big clean-up: simpler 4-pillar navigation, a live 3-stage progress ribbon on every assignment (watch agents work, send messages, upload files, interrupt them), and honest open pricing (1 token = $0.01, cost shown by task content — no hidden flat fees).",
+        "🎉 Helpotron 2.6 — the big clean-up: simpler 4-pillar navigation, a live 3-stage progress ribbon on every assignment (watch agents work, send messages, upload files, interrupt them), and honest open pricing — you always see the task-token cost before you approve (no hidden flat fees).",
         "🛡️ Safety first: two-factor authentication is now required for any purchase, and a clear FERPA banner lets you choose exactly what you allow.",
         "🏷️ Brand-wide: Helpotron logo everywhere, no more stock AI imagery, and detector toggles only show what's really running.",
         "💬 Assignment work now auto-routes to the right deliverable (do-it-for-me, study guide, practice quiz, flashcards) with real cost estimates before you approve.",
