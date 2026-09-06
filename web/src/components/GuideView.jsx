@@ -63,12 +63,12 @@ const SECTIONS = [
     steps: [
       'Pick a public ID (3–64 chars, letters/digits/_/-) and a password (8+ chars with at least one letter and one number). No email and no card.',
       'Log in — you land on the Dashboard (Active Subjects). Add coursework manually or capture it with the extension.',
-      'Settings → Academic Profile: your education, subjects, learning style, and goals.',
-      'Settings → Writing & Output: writing DNA (tone, vocabulary, sentence complexity, formality, voice), saved profiles, and citation style.',
+      'My Agent → Configs: describe your subjects, learning style, and goals.',
+      'Dashboard → Subject Settings: tone, writing samples, vocabulary, and citation style.',
       'Settings → Privacy & Security: two-factor authentication (authenticator app or SMS codes), usage analytics, Data Lake opt-in and strict anonymity, "Export all data", and GDPR account deletion.',
-      'Settings → Notifications: choose what pings you — assignment/draft/deadline alerts, low-balance and monthly statements, study reminders — and where (browser push, in-app, email digests, Telegram bot alerts).',
+      'Settings → Notifications: choose what pings you — assignment/draft/deadline alerts, low-balance and monthly statements, study reminders — and where (browser push, in-app, Telegram alerts).',
       'Settings → Integrations: connect a real Telegram bot (the built-in 4-step setup walks you through @BotFather, the token, and your chat ID).',
-      'Settings → Appearance: theme, accent, density, background, and UI style.',
+      'Settings → Appearance: color mode, font scaling, and accessibility.',
     ],
     tips: [
       'No email is required; save your password in your password manager.',
@@ -306,9 +306,9 @@ const SECTIONS = [
     chip: 'Settings',
     what: 'Complete operational controls: AI behavior, academic profiles, writing DNA, appearance, push/Telegram notifications, privacy toggles, and mandatory safety approval gates.',
     steps: [
-      'Settings → AI & Intelligence: execution mode (Manual, Auto-Pilot, YOLO), auto-approved actions, Model Effort, and AI detection scoring threshold.',
-      'Settings → Safety Gates: require confirmation before spending >100 tokens, invoking flagship models, or submitting external API calls.',
-      'Settings → Academic Profile & Writing DNA: customize tone, style samples, vocabulary complexity, and citation standards (APA, MLA, Chicago).',
+      'My Agent: execution mode (Manual, Auto-Pilot, YOLO), Model Effort, and the minimum human score are picked right in the chat workspace.',
+      'My Agent: you approve every task before it runs — the token cost is shown first, and the effort/mode pickers control how much the agent attempts.',
+      'Dashboard → Subject Settings: personality, effort, writing samples, and citation standards (APA, MLA, Chicago) per subject.',
       'Settings → Integrations: bind a private Telegram bot for asynchronous study alerts.',
     ],
     tips: [
@@ -341,9 +341,9 @@ const SECTIONS = [
     faqs: [
       { q: 'My assignment shows no subagent progress. What is wrong?', a: 'Most dumps arrive without a direction. Open the assignment and pick one — the team starts the moment you choose. Progress appears in the ribbon only once it is really recorded, so give it a moment.' },
       { q: 'My dump went to the wrong assignment. Can I re-route it?', a: 'Check the dump provenance line in the workspace first (file name, type, status: auto-routed / matched / manual-routed / finalized). The most reliable fix is to drop the file directly into the assignment\'s chat bubble — uploads there bind to that assignment.' },
-      { q: 'I ran out of tokens. What now?', a: 'Your plan refills monthly (Basic 300, Pro 1,000, Elite 2,700 tokens). Message Admin to request a grant, or open Billing to top up. Big spends can also be gated to ask you first — set that in Settings → Safety & Approval Gates.' },
+      { q: 'I ran out of tokens. What now?', a: 'Your plan refills monthly (Basic 300, Pro 1,000, Elite 2,700 tokens). Message Admin to request a grant, or open Billing to top up. Big spends can also be gated to ask you first — set that in My Agent (Mode & Effort pickers, or Dashboard → Subject Settings).' },
       { q: 'Launch to Doc is not typing anything.', a: 'The browser extension must be installed and pinned. Check the popup\'s server sync origin matches this site, pick a target tab (or the new docs.new option), and make sure the doc tab is the selected tab.' },
-      { q: 'My essay got flagged by AI detection. What can I do?', a: 'The pipeline\'s Step 3 humanizes the draft, and the workspace records the human score it passed at ("Passed: X% Human Score"). If it falls short of your Minimum human score in Settings → AI & Intelligence, tighten the Humanizer Skill, the "Write Like a Sample" standard, and the 9-dimension realism settings on the typing side. Reports vary by detector — treat scores as guidance.' },
+      { q: 'My essay got flagged by AI detection. What can I do?', a: 'The pipeline\'s Step 3 humanizes the draft, and the workspace records the human score it passed at ("Passed: X% Human Score"). If it falls short of your Minimum human score in Dashboard → Subject Settings, tighten the Humanizer Skill, the "Write Like a Sample" standard, and the 9-dimension realism settings on the typing side. Reports vary by detector — treat scores as guidance.' },
       { q: 'Where did my flashcards and quiz go?', a: 'Library (Dashboard → Study OS & Library) holds generated materials under their assignment; each assignment additionally lists its own under "Saved Materials" in the workspace.' },
       { q: 'Does the extension store my school password?', a: 'No. It runs locally in your browser, never accesses or transmits your university credentials, and powers only scraping, lecture recording, and assistive typing.' },
       { q: 'What is the difference between credits and tokens?', a: 'Tokens are usage — each task spends an amount sized to the work. Credits are discount money — $1.00 off each at checkout — earned via payments, referrals, and micro-credit redemption.' },
