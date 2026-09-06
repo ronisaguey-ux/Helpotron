@@ -19,6 +19,7 @@ import {
 import { NOTIFICATIONS, loadSettings, saveSettings } from "../demoData.js";
 import { Badge, timeAgo } from "./ui/os.jsx";
 import Button from "./Button.jsx";
+import { AvatarWidget } from "./ui/AvatarWidget.jsx";
 import DevContactModal from "./DevContactModal.jsx";
 import NewAssignmentModal from "./NewAssignmentModal.jsx";
 
@@ -92,11 +93,7 @@ function QuickSettings({ settings, onChange, onOpenFull, user }) {
   return (
     <div className="w-64 p-4 space-y-3">
       <div className="flex items-center gap-3 pb-3 border-b border-outline-variant/20">
-        <div className="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-sm font-bold overflow-hidden border border-outline-variant/30">
-          {settings.profile.avatarUrl
-            ? <img src={settings.profile.avatarUrl} alt="" className="w-full h-full object-cover" />
-            : (settings.profile.displayName?.[0] || "R")}
-        </div>
+        <AvatarWidget user={user} avatarUrl={settings.profile?.avatarUrl} size="sm" />
         <div className="min-w-0">
           <div className="text-xs font-semibold text-on-surface truncate">{settings.profile.displayName || user.public_id}</div>
           <div className="text-[10px] text-on-surface-variant">{user.public_id}</div>
@@ -486,12 +483,12 @@ export default function AppShell({
                   <button
                     type="button"
                     onClick={() => setQuickOpen((o) => !o)}
-                    className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container border border-outline-variant/30 hover:ring-2 hover:ring-primary flex items-center justify-center font-bold text-sm transition cursor-pointer"
+                    className="rounded-full border border-outline-variant/30 hover:ring-2 hover:ring-primary flex items-center justify-center transition cursor-pointer overflow-hidden p-0"
                     aria-label="Quick settings"
                     aria-haspopup="menu"
                     aria-expanded={quickOpen}
                   >
-                    {user?.public_id?.[0] || "R"}
+                    <AvatarWidget user={user} avatarUrl={settings.profile?.avatarUrl} size="md" />
                   </button>
                   <AnimatePresence>
                     {quickOpen && (
@@ -779,9 +776,11 @@ export default function AppShell({
                 className="w-full flex items-center gap-3 text-left cursor-pointer group"
                 aria-label="Open settings"
               >
-                <span className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold shrink-0">
-                  {isLoggedIn ? (user?.public_id?.[0] || "R") : "R"}
-                </span>
+                <AvatarWidget
+                  user={isLoggedIn ? user : null}
+                  avatarUrl={isLoggedIn ? settings.profile?.avatarUrl : null}
+                  size="sm"
+                />
                 <span className="min-w-0">
                   <span className="font-body-sm text-body-sm text-on-surface block truncate">
                     {isLoggedIn ? (user?.public_id || "Guest") : "Guest"}
@@ -793,9 +792,11 @@ export default function AppShell({
               </button>
             ) : (
               <div className="flex justify-center">
-                <span className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold">
-                  {isLoggedIn ? (user?.public_id?.[0] || "R") : "R"}
-                </span>
+                <AvatarWidget
+                  user={isLoggedIn ? user : null}
+                  avatarUrl={isLoggedIn ? settings.profile?.avatarUrl : null}
+                  size="sm"
+                />
               </div>
             )}
           </div>
