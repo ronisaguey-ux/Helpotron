@@ -281,7 +281,29 @@ async function doRequest(cleanEndpoint, options, headers) {
       });
     }
   }
-  return data;
+}
+
+// ── Honest Error Helpers (b1-s4, Stitch v6) ────────────────────────────────
+export const isAuthError = (err) => !!err && err.status === 401;
+export const isPermissionError = (err) => !!err && err.status === 403;
+export const isNotFoundError = (err) => !!err && err.status === 404;
+export const isRateLimitError = (err) => !!err && err.status === 429;
+export const isServerError = (err) => !!err && typeof err.status === 'number' && err.status >= 500 && err.status <= 599;
+
+export function getErrorMessage(err, fallback = 'Operation failed. Please try again.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.detail) return typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+  return fallback;
+}
+
+export function createHonestError(status, message, code = 'API_ERROR') {
+  const err = new Error(message || `API error ${status}`);
+  err.status = status;
+  err.code = code;
+  err.timestamp = new Date().toISOString();
+  return err;
 }
 
 export const api = {
