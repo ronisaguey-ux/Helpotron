@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   Scale, Shield, BookOpen, Coins, Sparkles, Gavel, FileCode, AlertOctagon,
-  ArrowLeft, CheckCircle2, Ban, ShieldOff, RefreshCw, Landmark
+  ArrowLeft, ArrowRight, CheckCircle2, Ban, ShieldOff, RefreshCw, Landmark
 } from 'lucide-react';
 import SectionCard from './SectionCard.jsx';
+import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
-export default function TermsOfServiceView({ onBack = null }) {
+export default function TermsOfServiceView({ onBack = null, publicMode = false, onGoTo = null }) {
   const [activeSection, setActiveSection] = useState('all');
 
   const SECTIONS = [
@@ -345,96 +346,129 @@ export default function TermsOfServiceView({ onBack = null }) {
   ];
 
   return (
-    <div className="space-y-6 text-slate-100 max-w-5xl mx-auto animate-fadeIn pb-16 font-sans">
-      {/* Header Card */}
-      <SectionCard
-        id="terms-header"
-        padding="p-6 sm:p-8"
-        className="bg-slate-950/80 border border-white/10 relative overflow-hidden"
-        header={
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                <Scale className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Terms of Service &amp; End-User License Agreement</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Last updated: September 5, 2026 &bull; Helpotron, LLC (New Orleans, LA, USA)</p>
-              </div>
+    <div className="w-full min-h-screen bg-background text-on-surface font-sans">
+      {publicMode && (
+        <header className="sticky top-0 z-30 w-full border-b border-outline-variant/30 bg-surface/80 backdrop-blur-md mb-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-primary transition cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back to Helpotron
+            </button>
+            <div className="flex items-center gap-2">
+              <AnimatedLogo size="sm" showWordmark={false} />
+              <span className="font-bold text-sm text-primary tracking-tight">Terms of Service</span>
             </div>
-            {onBack && (
+            {onGoTo && (
               <button
                 type="button"
-                onClick={onBack}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition cursor-pointer self-start sm:self-auto"
+                onClick={() => onGoTo('signup')}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-semibold text-xs transition cursor-pointer active:scale-95 shadow-sm"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+                Get Started <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        }
-      >
-        <p className="text-xs text-slate-300 leading-relaxed pt-2">
-          This Agreement governs your use of Helpotron — an AI-assisted study companion for your
-          coursework and course materials. It covers who may use the Service, how credits and
-          subscriptions work, your content rights, acceptable use, and the limits of our
-          liability. Please read it in full, and review the Privacy Policy too.
-        </p>
-      </SectionCard>
+        </header>
+      )}
 
-      {/* Filter / Jump Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveSection('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeSection === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-900/60 text-slate-400 hover:text-white border border-white/10'
-          }`}
+      <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 pb-16">
+        {/* Header Card */}
+        <SectionCard
+          id="terms-header"
+          padding="p-6 sm:p-8"
+          className="bg-surface-container-low border border-outline-variant/30 relative overflow-hidden"
+          header={
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-on-surface tracking-tight">Terms of Service &amp; End-User License Agreement</h1>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Last updated: September 5, 2026 &bull; Helpotron, LLC (New Orleans, LA, USA)</p>
+                </div>
+              </div>
+              {onBack && !publicMode && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 transition cursor-pointer self-start sm:self-auto"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+                </button>
+              )}
+            </div>
+          }
         >
-          View All Sections
-        </button>
-        {SECTIONS.map(sec => (
+          <p className="text-xs text-on-surface-variant leading-relaxed pt-2">
+            This Agreement governs your use of Helpotron — an AI-assisted study companion for your
+            coursework and course materials. It covers who may use the Service, how credits and
+            subscriptions work, your content rights, acceptable use, and the limits of our
+            liability. Please read it in full, and review the Privacy Policy too.
+          </p>
+        </SectionCard>
+
+        {/* Filter / Jump Buttons */}
+        <div className="flex flex-wrap gap-2">
           <button
-            key={sec.id}
-            onClick={() => setActiveSection(sec.id)}
+            onClick={() => setActiveSection('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              activeSection === sec.id ? 'bg-indigo-600 text-white' : 'bg-slate-900/60 text-slate-400 hover:text-white border border-white/10'
+              activeSection === 'all'
+                ? 'bg-primary text-on-primary shadow-sm'
+                : 'bg-surface-container-low text-on-surface-variant hover:text-on-surface border border-outline-variant/30'
             }`}
           >
-            {sec.title.split('.')[1]?.trim() || sec.title}
+            View All Sections
           </button>
-        ))}
-      </div>
-
-      {/* Sections List */}
-      <div className="space-y-4">
-        {SECTIONS.filter(sec => activeSection === 'all' || activeSection === sec.id).map(sec => {
-          const Icon = sec.icon;
-          return (
-            <SectionCard
+          {SECTIONS.map(sec => (
+            <button
               key={sec.id}
-              id={`terms-${sec.id}`}
-              padding="p-6"
-              className="rounded-2xl space-y-3 bg-slate-950/60 border border-white/10"
-              title={
-                <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
-                  <Icon className={`w-5 h-5 ${sec.color}`} />
-                  <span>{sec.title}</span>
-                </div>
-              }
+              onClick={() => setActiveSection(sec.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                activeSection === sec.id
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'bg-surface-container-low text-on-surface-variant hover:text-on-surface border border-outline-variant/30'
+              }`}
             >
-              {sec.content}
-            </SectionCard>
-          );
-        })}
-      </div>
+              {sec.title.split('.')[1]?.trim() || sec.title}
+            </button>
+          ))}
+        </div>
 
-      {/* Contact Footer */}
-      <div className="glass-panel p-6 border border-white/10 text-center space-y-2">
-        <div className="text-xs text-slate-400 font-mono">Helpotron, LLC &bull; New Orleans, Louisiana, USA</div>
-        <div className="text-xs text-slate-300">
-          Questions about these Terms? Contact us at{' '}
-          <a href="mailto:legal@helpotron.com" className="text-indigo-400 hover:underline">legal@helpotron.com</a>{' '}
-          or <a href="mailto:support@helpotron.com" className="text-indigo-400 hover:underline">support@helpotron.com</a>
+        {/* Sections List */}
+        <div className="space-y-4">
+          {SECTIONS.filter(sec => activeSection === 'all' || activeSection === sec.id).map(sec => {
+            const Icon = sec.icon;
+            return (
+              <SectionCard
+                key={sec.id}
+                id={`terms-${sec.id}`}
+                padding="p-6"
+                className="rounded-2xl space-y-3 bg-surface-container-low border border-outline-variant/30"
+                title={
+                  <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-on-surface">
+                    <Icon className={`w-5 h-5 ${sec.color}`} />
+                    <span>{sec.title}</span>
+                  </div>
+                }
+              >
+                {sec.content}
+              </SectionCard>
+            );
+          })}
+        </div>
+
+        {/* Contact Footer */}
+        <div className="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/30 text-center space-y-2">
+          <div className="text-xs text-on-surface-variant font-mono">Helpotron, LLC &bull; New Orleans, Louisiana, USA</div>
+          <div className="text-xs text-on-surface-variant">
+            Questions about these Terms? Contact us at{' '}
+            <a href="mailto:legal@helpotron.com" className="text-primary hover:underline font-semibold">legal@helpotron.com</a>{' '}
+            or <a href="mailto:support@helpotron.com" className="text-primary hover:underline font-semibold">support@helpotron.com</a>
+          </div>
         </div>
       </div>
     </div>

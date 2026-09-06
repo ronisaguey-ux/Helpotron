@@ -306,22 +306,22 @@ export default function GuideView({ onGoTo, publicMode = false }) {
         className="space-y-4"
         header={
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent)] shrink-0" aria-hidden="true">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0" aria-hidden="true">
               <BookOpen className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Guide</h2>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              <h2 className="text-xl font-bold text-on-surface tracking-tight">Guide</h2>
+              <p className="text-xs text-on-surface-variant mt-0.5">
                 Every feature in plain words — click any section to open it. Start with "Start here".
               </p>
             </div>
           </div>
         }
       >
-        <dl className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-[var(--text-muted)]">
+        <dl className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-on-surface-variant">
           {TERMS.map((t) => (
             <div key={t.term} className="flex gap-1.5">
-              <dt className="font-semibold text-[var(--text-secondary)]">{t.term}</dt>
+              <dt className="font-semibold text-on-surface">{t.term}</dt>
               <dd>{t.gloss}</dd>
             </div>
           ))}
@@ -337,8 +337,8 @@ export default function GuideView({ onGoTo, publicMode = false }) {
                 onClick={() => jump(s.id)}
                 className={
                   primary
-                    ? 'inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition cursor-pointer'
-                    : 'inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-full bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] text-[var(--text-secondary)] transition cursor-pointer'
+                    ? 'inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold rounded-full bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container transition active:scale-95 cursor-pointer shadow-sm'
+                    : 'inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/50 text-on-surface-variant transition active:scale-95 cursor-pointer'
                 }
               >
                 <Icon className="w-3 h-3" /> {s.chip}
@@ -360,33 +360,33 @@ export default function GuideView({ onGoTo, publicMode = false }) {
             className="scroll-mt-6"
             header={
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent)] shrink-0" aria-hidden="true">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0" aria-hidden="true">
                   <Icon className="w-4 h-4" />
                 </div>
-                <h2 className="min-w-0 text-base font-bold text-[var(--text-primary)] tracking-tight">{s.title}</h2>
+                <h2 className="min-w-0 text-base font-bold text-on-surface tracking-tight">{s.title}</h2>
               </div>
             }
           >
             <div className="space-y-4">
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{s.what}</p>
+              <p className="text-sm text-on-surface-variant leading-relaxed">{s.what}</p>
 
               {s.faqs ? (
                 <div className="space-y-5">
                   {s.faqs.map((f, i) => (
                     <div key={i} className="space-y-1">
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-snug">{f.q}</h3>
-                      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{f.a}</p>
+                      <h3 className="text-sm font-semibold text-on-surface leading-snug">{f.q}</h3>
+                      <p className="text-sm text-on-surface-variant leading-relaxed">{f.a}</p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <>
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">How to use it</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">How to use it</h3>
                     <ol className="space-y-1.5">
                       {s.steps.map((step, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)] leading-relaxed">
-                          <span className="font-mono text-[11px] font-bold text-[var(--accent)] mt-0.5 shrink-0 tabular-nums">{i + 1}.</span>
+                        <li key={i} className="flex gap-2 text-sm text-on-surface-variant leading-relaxed">
+                          <span className="font-mono text-[11px] font-bold text-primary mt-0.5 shrink-0 tabular-nums">{i + 1}.</span>
                           <span>{step}</span>
                         </li>
                       ))}
@@ -394,11 +394,11 @@ export default function GuideView({ onGoTo, publicMode = false }) {
                   </div>
                   {s.tips && s.tips.length > 0 && (
                     <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Pro tips</h3>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">Pro tips</h3>
                       <ul className="space-y-1.5">
                         {s.tips.map((tip, i) => (
-                          <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)] leading-relaxed">
-                            <span className="text-[var(--accent)] shrink-0 mt-0.5" aria-hidden="true">•</span>
+                          <li key={i} className="flex gap-2 text-sm text-on-surface-variant leading-relaxed">
+                            <span className="text-primary shrink-0 mt-0.5" aria-hidden="true">•</span>
                             <span>{tip}</span>
                           </li>
                         ))}
@@ -412,32 +412,62 @@ export default function GuideView({ onGoTo, publicMode = false }) {
         );
       })}
 
+      {/* Guest Mode CTA Band (Spec 3.3.2) */}
+      {publicMode && (
+        <div className="rounded-2xl p-6 sm:p-8 bg-surface-container-low border border-outline-variant/30 text-center space-y-4 shadow-lg">
+          <h3 className="font-headline-lg text-lg sm:text-xl font-bold text-on-surface tracking-tight">
+            Ready to start your sovereign study node?
+          </h3>
+          <p className="text-body-sm text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto">
+            Join Helpotron with a public ID and password. No credit card, no personal email, and 100 free task tokens on your 7-day trial.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => go('signup')}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-title-md text-sm font-semibold px-6 py-2.5 transition active:scale-95 cursor-pointer shadow-sm"
+            >
+              Create account <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => go('pricing')}
+              className="inline-flex items-center gap-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-title-md text-sm font-semibold px-6 py-2.5 transition active:scale-95 cursor-pointer"
+            >
+              See plans
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Still stuck — account actions; hidden in publicMode (pre-signup), where
           a visitor has no Message Admin / My Agent yet */}
-      {!publicMode && <SectionCard
-        id="guide-help"
-        className="space-y-3"
-        title="Still stuck?"
-        subtitle="The agent knows the app, and the admin can grant tokens or fix anything."
-        padding="p-6 sm:p-8"
-      >
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => go('message_admin')}
-            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold px-4 py-2 transition cursor-pointer glow-accent"
-          >
-            <MessageSquare className="w-4 h-4" /> Message Admin <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => go('agent')}
-            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] text-[var(--text-primary)] text-sm font-semibold px-4 py-2 transition cursor-pointer"
-          >
-            <Brain className="w-4 h-4" /> Ask My Agent <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </SectionCard>}
+      {!publicMode && (
+        <SectionCard
+          id="guide-help"
+          className="space-y-3"
+          title="Still stuck?"
+          subtitle="The agent knows the app, and the admin can grant tokens or fix anything."
+          padding="p-6 sm:p-8"
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => go('message_admin')}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container text-sm font-semibold px-4 py-2 transition cursor-pointer shadow-sm active:scale-95"
+            >
+              <MessageSquare className="w-4 h-4" /> Message Admin <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => go('agent')}
+              className="inline-flex items-center gap-2 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/50 text-on-surface text-sm font-semibold px-4 py-2 transition cursor-pointer active:scale-95"
+            >
+              <Brain className="w-4 h-4 text-primary" /> Ask My Agent <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
