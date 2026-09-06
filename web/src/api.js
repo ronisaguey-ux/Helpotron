@@ -348,6 +348,9 @@ export const api = {
   telegramAgentDisconnect: () => request('/api/telegram-agent/disconnect', { method: 'POST', body: JSON.stringify({}) }),
   sendChallenge2FA: (method) => request('/api/auth/2fa/send-challenge', { method: 'POST', body: JSON.stringify({ method }) }),
   disable2FA: (code) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
+  // Owner 09-06: a redeemable referral code = one-time order discount (30% new
+  // user / 15% existing). Never awards tokens.
+  referralRedeem: (code) => request('/api/referrals/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
   
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),

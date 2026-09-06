@@ -427,7 +427,7 @@ export default function MyAgentView({
           onDeleteThread={handleDeleteThread}
           effortScore={effortScore}
           onEffortChange={handleEffortChange}
-          modelBadge="Claude 3.5 Sonnet + Z3 SMT Prover"
+          modelBadge="Gemini Flash · effort-routed"
         />
 
         {/* Center/Main Column: Chat Canvas & Controls */}
@@ -633,7 +633,7 @@ export default function MyAgentView({
                   type="submit"
                   disabled={!inputQuery.trim()}
                   className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Transmit to Prover Pipeline"
+                  title="Send to Agent"
                 >
                   <Send className="w-5 h-5 text-on-primary" />
                 </button>

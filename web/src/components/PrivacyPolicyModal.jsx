@@ -166,14 +166,14 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               <p>
                 Helpotron adheres to the statutory guidelines set forth by the Family Educational Rights and Privacy Act (FERPA) (34 CFR Part 99) and state educational privacy standards.
               </p>
-              <h4 className="font-semibold text-[var(--text-primary)]">2.1 Client-Side De-Identification & PII Scrubbing</h4>
+              <h4 className="font-semibold text-[var(--text-primary)]">2.1 Automated De-Identification & PII Scrubbing</h4>
               <p>
-                When you connect your Canvas LMS or upload coursework assignments, our automated intake filters execute deterministic redaction heuristics to strip Personally Identifiable Information (PII), including:
+                When contributions are sent to the data lake, deterministic redaction heuristics strip Personally Identifiable Information (PII) before storage, including:
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Student ID numbers, Social Security Numbers, and government identification records.</li>
-                <li>Full student names in extracted assignment rubrics, replacing them with randomized cryptographic pseudonym tags.</li>
-                <li>Institutional directory emails and personal phone records.</li>
+                <li>Full student names in extracted assignment rubrics, replaced with [NAME_REDACTED] markers.</li>
+                <li>Directory emails and personal phone records.</li>
               </ul>
               <h4 className="font-semibold text-[var(--text-primary)]">2.2 Zero Data Sale & Non-Commercial Educational Mandate</h4>
               <p>

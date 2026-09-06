@@ -21,7 +21,7 @@ export default function EffortDial({
   score = 600,
   onChange = () => {},
   disabled = false,
-  modelBadge = 'Claude 3.5 Sonnet + Z3 SMT Prover',
+  modelBadge = 'Gemini Flash · effort-routed',
 }) {
   const currentLevel = getEffortLevelFromScore(score);
 
@@ -88,7 +88,7 @@ export default function EffortDial({
         </div>
       </div>
 
-      {/* Prover Model Badge */}
+      {/* Model Badge */}
       <div className="flex items-center gap-micro-2 p-2 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/15 mt-1">
         <Cpu className="w-3.5 h-3.5 text-primary shrink-0" />
         <span className="font-code-sm text-code-sm text-on-surface-variant truncate">

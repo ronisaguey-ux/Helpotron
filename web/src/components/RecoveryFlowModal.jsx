@@ -469,15 +469,15 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               </button>
             </div>
 
-            {/* Enclave Security Notice */}
+            {/* Security Notice */}
             <div className="p-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex items-start gap-2.5">
               <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
               <div className="space-y-0.5">
                 <div className="font-mono text-[10px] uppercase tracking-wider text-primary font-semibold">
-                  Zero-Knowledge Enclave Dispatch
+                  Security Notice
                 </div>
                 <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                  Existing session tokens will be systematically invalidated across all nodes upon cryptographic password renewal.
+                  Existing sessions are invalidated when you set a new password.
                 </p>
               </div>
             </div>

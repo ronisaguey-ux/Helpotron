@@ -136,7 +136,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                 Privacy &amp; Data Governance
               </h1>
               <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
-                Radical transparency: We store only what is required to synthesize your coursework, we execute local WebGPU models where enabled, and you retain absolute one-click cryptographic data deletion.
+                Clear storage: We store only what is required to run and bill your workspace. You keep control of your own data — nothing is sold, and you can delete your workspace data from the account settings.
               </p>
             </div>
 
@@ -156,13 +156,13 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                 <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-3">
                   <Cpu className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-bold text-on-surface mb-1">Client-Side First</h3>
+                <h3 className="text-sm font-bold text-on-surface mb-1">Encrypted Session Storage</h3>
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  In-browser WebAssembly and WebGPU parsing strips PII, identifiers, and sensitive metadata directly inside the sandbox before server ingestion occurs.
+                  Your workspace data is stored in a local database. Passwords are stored only as hashes, sessions use signed cookies over HTTPS, and coursework is sent only to the model service configured for the task you asked for.
                 </p>
               </div>
               <div className="mt-4 pt-3 border-t border-outline-variant/20 flex items-center justify-between text-[11px] font-mono text-primary">
-                <span>WASM SHA-256 Validated</span>
+                <span>HTTPS Only · Encrypted Storage</span>
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
@@ -210,7 +210,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                   <span className="font-mono text-xs text-primary font-bold uppercase tracking-wider">Operator Control Center</span>
                   <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-mono text-[10px]">Encrypted Transport</span>
                 </div>
-                <h2 className="text-lg font-bold text-on-surface">Self-Service Sovereign Data Controls</h2>
+                <h2 className="text-lg font-bold text-on-surface">Self-Service Data Controls</h2>
                 <p className="text-xs text-on-surface-variant">Export everything your account holds or permanently wipe all data in one click.</p>
               </div>
 
@@ -428,7 +428,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
           <div className="space-y-6">
             <div className="p-5 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30">
               <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-sem-green" /> Sovereign User Rights
+                <UserCheck className="w-5 h-5 text-sem-green" /> Your Data Rights
               </h2>
               <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
                 Full adherence to GDPR (Articles 15-22) and US State Privacy Statutes (CCPA/CPRA, VCDPA, CPA).
