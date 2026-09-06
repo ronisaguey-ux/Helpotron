@@ -33,6 +33,7 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
+  Library as LibraryIcon,
 } from 'lucide-react';
 import api from '../api.js';
 import { applyAppearance, applyAccessibility, applyFontScale } from './SettingsApp.jsx';
@@ -54,7 +55,7 @@ export const getNavItems = () => [
   { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'insights', label: 'Insights', Icon: BarChart3, group: 'Workspace Core' },
   { key: 'history', label: 'History', Icon: History, group: 'Workspace Core' },
-  { key: 'library', label: 'Library', Icon: HelpCircle, group: 'Workspace Core' },
+  { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
   { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
   { key: 'credits', label: 'Billing', Icon: CreditCard, group: 'Platform System' },
 ];
