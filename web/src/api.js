@@ -263,6 +263,26 @@ async function doRequest(cleanEndpoint, options, headers) {
     }
     const err = new Error(message);
     err.status = response.status; // so callers can branch on 401 (session expiry) etc.
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const isAuthEndpoint =
+        cleanEndpoint.includes('/api/login') ||
+        cleanEndpoint.includes('/api/signup') ||
+        cleanEndpoint.includes('/api/me') ||
+        cleanEndpoint.includes('/api/public-config');
+      if (!isAuthEndpoint) {
+        window.dispatchEvent(
+          new CustomEvent('helpotron:session-expired', {
+            detail: {
+              endpoint: cleanEndpoint,
+              isBackground:
+                cleanEndpoint.includes('notifications') ||
+                cleanEndpoint.includes('telemetry') ||
+                cleanEndpoint.includes('monitors'),
+            },
+          })
+        );
+      }
+    }
     throw err;
   }
 
@@ -281,7 +301,29 @@ async function doRequest(cleanEndpoint, options, headers) {
       });
     }
   }
-  return data;
+}
+
+// ── Honest Error Helpers (b1-s4, Stitch v6) ────────────────────────────────
+export const isAuthError = (err) => !!err && err.status === 401;
+export const isPermissionError = (err) => !!err && err.status === 403;
+export const isNotFoundError = (err) => !!err && err.status === 404;
+export const isRateLimitError = (err) => !!err && err.status === 429;
+export const isServerError = (err) => !!err && typeof err.status === 'number' && err.status >= 500 && err.status <= 599;
+
+export function getErrorMessage(err, fallback = 'Operation failed. Please try again.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.detail) return typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+  return fallback;
+}
+
+export function createHonestError(status, message, code = 'API_ERROR') {
+  const err = new Error(message || `API error ${status}`);
+  err.status = status;
+  err.code = code;
+  err.timestamp = new Date().toISOString();
+  return err;
 }
 
 export const api = {
@@ -654,6 +696,8 @@ export const api = {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   }),
+  deleteDataLakeEntry: (id) => request(`/api/datalake/${id}`, { method: 'DELETE' }),
+  exportDataLakeEntries: () => request('/api/datalake/export.json', { method: 'GET' }),
 
   // Referrals (40-digit single-use codes)
   getReferralCode: () => request('/api/referrals/code', { method: 'GET' }),
@@ -758,6 +802,8 @@ export const api = {
   getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
   routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId}`, { method: 'POST', body: JSON.stringify(payload) }),
   finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }) }),
+  batchEstimateDumpItems: (ids = '') => request(`/api/dump/batch/estimate${ids ? `?ids=${encodeURIComponent(ids)}` : ''}`, { method: 'GET' }),
+  batchFinalizeDumpItems: (payload) => request('/api/dump/batch/finalize', { method: 'POST', body: JSON.stringify(payload) }),
   deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
 
   // Extension Version & Updates

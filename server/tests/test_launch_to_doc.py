@@ -35,10 +35,19 @@ def test_launch_to_doc_typing_simulator():
     assert len(delays) > 0
     assert all(d >= 0 for d in delays)
 
-    # Check total text reconstructed matches original
-    typed_content = "".join(e.get("text", "") for e in events if e.get("action") == "insert")
-    assert "Assistive typing" in typed_content
-    assert "equal access" in typed_content
+    # Check total text reconstructed matches original (accounting for delete actions)
+    buffer = []
+    for e in events:
+        if e.get("action") == "insert":
+            buffer.append(e.get("text", ""))
+        elif e.get("action") == "delete":
+            chars_to_delete = e.get("chars", 0)
+            curr = "".join(buffer)
+            curr = curr[:-chars_to_delete] if chars_to_delete > 0 else curr
+            buffer = [curr]
+    reconstructed = "".join(buffer)
+    assert "Assistive typing" in reconstructed
+    assert "equal access" in reconstructed
 
 
 def test_launch_to_doc_payload_endpoint():
