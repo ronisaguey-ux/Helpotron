@@ -1,35 +1,43 @@
 /* ────────────────────────────────────────────────────────────────────────────
- * GuideView.jsx — the Guide section: every feature, what it does, and how
- * to use it (v2, 09-05, mission A1 regeneration pass). Reference-first, same
- * pattern: the landing header is a scannable index — one line, a short
- * glossary, jump chips (with a suggested starting point), then one collapsed
- * card per feature area. Each card carries a plain-words explanation
- * ("what"), numbered steps ("how to use it"), and a short "Pro tips" list.
- * A separate FAQ / troubleshooting card closes the page, and a "Still stuck?"
- * card (hidden pre-signup) points at Message Admin and My Agent.
- * Every claim maps to real code: the assignment workspace's direction picker
- * and 3-stage pipeline, My Agent's modes/effort/permissions/configs, Launch
- * to Doc's 9-dimension realism controls, the extension's real capabilities,
- * and Settings' real sections. Nothing described here is invented.
+ * GuideView.jsx — Helpotron Field Guide (v3 Stitch v6 LUMINOUS GLASS M3)
+ * Operational manual, architectural specifications, and prompt heuristics
+ * for autonomous academic co-piloting. Two-column sticky rail layout (>=1280px),
+ * search & category filter combobox, accordion disclosures with first card open,
+ * pro tips callout strips, 10-item FAQ accordion, guest CTA band, and support links.
  * ────────────────────────────────────────────────────────────────────────── */
-import React from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   GraduationCap, Brain, Inbox, BookOpen, PenLine, Database, CreditCard,
   Share2, BarChart3, Puzzle, MessageSquare, ArrowRight, History, Gauge,
-  Compass, ShieldCheck, Settings2, HelpCircle,
+  Compass, ShieldCheck, Settings2, HelpCircle, Search, ChevronDown,
+  ChevronRight, Lightbulb, CheckCircle2, Send, X
 } from 'lucide-react';
-import SectionCard from './SectionCard.jsx';
 
 const TERMS = [
-  { term: 'Credits', gloss: 'discount money — $1.00 each, applied at checkout. Earn them with payments, referrals, and data-lake rewards.' },
-  { term: 'Tokens', gloss: 'your usage meter — every task spends a fixed amount sized to the work it does.' },
-  { term: 'Micro-credits', gloss: 'Data Lake points; 1,000 convert into 1 credit ($1.00 off).' },
-  { term: 'Public ID', gloss: 'your handle — sign up with it and a password; no email needed.' },
+  { term: 'Credits', gloss: 'Discount balance — $1.00 each, applied at checkout. Earned via payments, referrals, and data-lake rewards.' },
+  { term: 'Tokens', gloss: 'Your usage meter — every task spends a fixed amount sized to the compute/API work it does.' },
+  { term: 'Micro-credits', gloss: 'Data Lake contribution points; 1,000 convert into 1 credit ($1.00 off).' },
+  { term: 'Public ID', gloss: 'Your sovereign pseudonym — sign up with it and a password; zero email required.' },
+];
+
+const CATEGORIES = [
+  { id: 'all', label: 'All (16)' },
+  { id: 'quickstart', label: 'Quickstart' },
+  { id: 'agent', label: 'Agent & Prompts' },
+  { id: 'workspace', label: 'Workspace & Ingestion' },
+  { id: 'study', label: 'Study OS & Typing' },
+  { id: 'economy', label: 'Economy & Rewards' },
+  { id: 'system', label: 'System & Safety' },
+  { id: 'faq', label: 'FAQ' },
 ];
 
 const SECTIONS = [
   {
-    id: 'guide-start', icon: GraduationCap, title: 'Getting started (first 30 minutes)', chip: 'Start here',
+    id: 'guide-start',
+    cat: 'quickstart',
+    icon: GraduationCap,
+    title: 'Getting started (first 30 minutes)',
+    chip: 'Start here',
     what: 'The whole pipeline in order: create an account, get coursework into Helpotron, tell the team what to build, study the results, and Launch to Doc for essays. You can skip steps or do them in a different order — this is just the shortest path.',
     steps: [
       'Sign up with a public ID and a password (no email, no card) — you start on a 7-day free trial with 100 task tokens.',
@@ -46,7 +54,11 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-account', icon: ShieldCheck, title: 'Sign up & your account', chip: 'My account',
+    id: 'guide-account',
+    cat: 'quickstart',
+    icon: ShieldCheck,
+    title: 'Sign up & your account',
+    chip: 'My account',
     what: 'Account basics and everything under Settings. Public-ID/password signup, a profile that teaches Helpotron about you, writing preferences, security (two-factor), privacy toggles, and notifications.',
     steps: [
       'Pick a public ID (3–64 chars, letters/digits/_/-) and a password (8+ chars with at least one letter and one number). No email and no card.',
@@ -59,13 +71,16 @@ const SECTIONS = [
       'Settings → Appearance: theme, accent, density, background, and UI style.',
     ],
     tips: [
-      'Use the top-bar search (⌘K / Ctrl+K) to jump straight to any screen.',
-      'Enable 2FA from Settings → Privacy & Security — recovery also works via email or phone code.',
-      'Account deletion is real and permanent: it wipes assignments, materials, credits, and history, and anonymizes your data-lake contributions.',
+      'No email is required; save your password in your password manager.',
+      'Two-factor is optional but recommended if you share a device.',
     ],
   },
   {
-    id: 'guide-agent', icon: Brain, title: 'My Agent', chip: 'My Agent',
+    id: 'guide-agent',
+    cat: 'agent',
+    icon: Brain,
+    title: 'My Agent',
+    chip: 'My Agent',
     what: 'One personal agent that does the rest. Pick an assignment or just chat — it drafts sections, humanizes writing, analyzes rubrics and attachments, and answers questions about the material. Execution modes decide how independent it is; the Model Effort slider trades speed for depth.',
     steps: [
       'Start a chat in the main room or open an assignment bubble. Replies stream in; a live "Model Reasoning" box shows its thinking.',
@@ -84,7 +99,11 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-configs', icon: Settings2, title: 'Configs: identity, skills, memory & files', chip: 'Agent Configs',
+    id: 'guide-configs',
+    cat: 'agent',
+    icon: Settings2,
+    title: 'Configs: identity, skills, memory & files',
+    chip: 'Agent Configs',
     what: 'Shape the agent itself: name, personality and instructions (presets or your own personas), skills you can activate, a permanent memory it always reads, and uploaded files it can follow — skills, rules, automations, and personality files.',
     steps: [
       'Open ⚙ Configs beside the chat — on wide screens it docks as a panel next to the conversation; on smaller screens it slides over as a drawer.',
@@ -101,7 +120,11 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-workspace', icon: Compass, title: 'Assignment workspace & directions', chip: 'Workspace',
+    id: 'guide-workspace',
+    cat: 'workspace',
+    icon: Compass,
+    title: 'Assignment workspace & directions',
+    chip: 'Workspace',
     what: 'Mission control for one assignment. Pick what the team should build, watch it work through three stages, chat to redirect it, stop it if it goes wrong, then mark it done and file it in History. The workspace also shows the prompt, rubric, attached files, and the materials it produced.',
     steps: [
       'Open an assignment bubble from the Dashboard to enter its workspace.',
@@ -119,7 +142,11 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-dump', icon: Inbox, title: 'Drop Assignment', chip: 'Drop Assignment',
+    id: 'guide-dump',
+    cat: 'workspace',
+    icon: Inbox,
+    title: 'Drop Assignment',
+    chip: 'Drop Assignment',
     what: 'The front door for coursework: PDF, Word, TXT, slide decks (real slide text is read), lecture audio (auto-transcribed), images (OCR), or video — plus voice recording and pasted text. The AI pairs the dump with the right assignment or creates a new bubble for it.',
     steps: [
       'Open Drop Assignment and drop a file, record audio, or paste the assignment text.',
@@ -134,7 +161,11 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-library', icon: BookOpen, title: 'Library & Study OS', chip: 'Library',
+    id: 'guide-library',
+    cat: 'study',
+    icon: BookOpen,
+    title: 'Library & Study OS',
+    chip: 'Library',
     what: 'Every generated study material in one place — flashcards, practice quizzes (multiple choice + answer + explanation per question), study guides, and summaries — filed under the assignment they came from, plus your own uploaded lectures/PDFs/scans and an upcoming-deadlines calendar.',
     steps: [
       'Open Dashboard → Study OS & Library (the "Study OS & Library" panel), or navigate to Library.',
@@ -149,131 +180,164 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'guide-launch', icon: PenLine, title: 'Launch to Doc', chip: 'Launch to Doc',
-    what: 'Turn a draft or answer into a real Google Doc — typed with human-typing realism instead of a copy-paste dump. Works from assignments, agent replies, and assignment bubbles.',
+    id: 'guide-launch',
+    cat: 'study',
+    icon: PenLine,
+    title: 'Launch to Doc (assistive typing)',
+    chip: 'Launch to Doc',
+    what: 'Takes a finalized draft or an agent reply and types it into a real Google Doc, Word Online, Notion, or any textarea as human keystrokes through the browser extension. Includes 9 realism dimensions (WPM, pause cadence, typo frequency, burst length, backspace behavior) so the revision history reads as natural student work.',
     steps: [
-      'Make sure the browser extension is installed (see the Extension section) — Launch to Doc drives the typing through it.',
-      'Click "Launch to Doc": on the assignment card, in the workspace, on a chat reply, or on an assignment bubble in My Agent.',
-      'Pick the target — a Google Doc tab you already have open, or a fresh docs.new doc.',
-      'Choose a typing speed (WPM) and an accessibility cadence preset.',
-      'Open "Fine-Tuned Realism Controls (9 Dimensions)" to tweak individual behaviors: punctuation & paragraph pauses, Gaussian keystroke jitter, false starts & micro-backspaces, burst rhythm, fatigue curve, neighbor typo rate, and more.',
-      'Open the Doc tab and watch it type; pause, resume, or cancel from the modal. The finished Doc is yours — no tracking.',
+      'Make sure the browser extension is installed and pinned.',
+      'Open the document you want to type into (e.g. docs.new) in another tab.',
+      'Click "Launch to Doc" on any drafted assignment, or choose "Launch to Doc" from an agent reply.',
+      'Pick the destination tab from the extension dropdown, tune typing speed/bursts if desired, and click "Start Typing".',
+      'Keep the target tab active while typing proceeds. You can pause or abort at any moment.',
     ],
     tips: [
-      'Type into a new docs.new doc to start clean; existing tabs are listed and the active one is marked.',
-      'Fine-tune the realism sliders per assignment — a short response, for example, rarely needs a long fatigue curve.',
-      'The word count and an estimated typing time are shown before you start.',
+      'The extension never touches passwords or payment inputs; typing operates strictly inside the page DOM.',
+      'Natural pause cadence matches typical drafting bursts — great for genuine version history creation.',
     ],
   },
   {
-    id: 'guide-ext', icon: Puzzle, title: 'Browser extension', chip: 'Extension',
-    what: 'The bridge between your browser and Helpotron. It scrapes assignments off your class pages, records lectures for automatic transcripts, and powers Launch to Doc.',
+    id: 'guide-ext',
+    cat: 'study',
+    icon: Puzzle,
+    title: 'Browser Extension',
+    chip: 'Extension',
+    what: 'The companion bridge for Chrome and Chromium browsers: one-click syllabus and assignment scraping from Canvas, Blackboard, and Google Classroom, real-time microphone lecture transcription, tab capture, and assistive typing.',
     steps: [
-      'Open the Extension view and install from the Chrome Web Store listing — or download the manual .zip and load unpacked to run the newest build right away.',
-      'Install per browser: Chrome/Brave/Edge — chrome://extensions → Developer mode → Load unpacked (pick the extracted folder, never the .zip) and pin Helpotron. Firefox — about:debugging#/runtime/this-firefox → Load Temporary Add-on → manifest.json. Safari — the Xcode project route.',
-      'Open a class page: the scraper detects assignments with rubrics, due dates, and prompts from Canvas, Blackboard, Brightspace, and Google Classroom in one click.',
-      'Click the puzzle icon to scrape or to run assistive typing; the popup auto-connects to this workspace\'s server origin.',
-      'Give the scraper plain-language direction to narrow the job (eg. "only scrape calculus problem sets").',
-      'Record lecture audio from a tab for timestamped transcripts — the summaries and flashcards land in your Library.',
+      'Download and install the extension from the Extension Install page or Chrome Web Store.',
+      'Open any LMS assignment page — click the Helpotron puzzle icon to scrape prompt and rubrics instantly.',
+      'Use the lecture recorder during classes to record audio; the AI automatically transcribes and attaches it to the right course.',
+      'The extension connects to the web app via your local token; no separate login required.',
     ],
     tips: [
-      'The extension is local and private: it never accesses or stores your school login or passwords.',
-      'Web Store installs update automatically once a version is approved; manual .zip installs need re-downloading and hitting Reload in chrome://extensions.',
-      'The popup shows the server sync origin — if capture fails, check it matches the address in your address bar.',
+      'The extension operates 100% locally; it never phones home to third parties or leaks institution credentials.',
     ],
   },
   {
-    id: 'guide-datalake', icon: Database, title: 'Data Lake & micro-credits', chip: 'Data Lake',
-    what: 'Contribute anything that could make Helpotron better — class material, study resources, notes, feedback, ideas, corrections. An AI reviewer classifies it and estimates 0–25 micro-credits; when your entry is actually used, your real points are calculated and rewarded. Redeem 1,000 micro-credits as 1 credit — $1.00 off at checkout.',
+    id: 'guide-datalake',
+    cat: 'economy',
+    icon: Database,
+    title: 'Data Lake & rewards',
+    chip: 'Data Lake',
+    what: 'Contribute anonymized assignments, rubrics, and novel syllabus formats to the shared knowledge base. Earn micro-credits for every validated contribution, which convert directly into compute credits for your account.',
     steps: [
-      'Open Data Lake and submit almost anything; entries are stored under an anonymous ID, never your public ID.',
-      'Read the estimated score right away — the entry sits in Pending until it gets used, then the real points are awarded.',
-      'Redeem inside Data Lake: 1,000 micro-credits convert to 1 credit, your discount money.',
-      'Opt in or out anytime in Settings → Privacy & Security ("Contribute to the Data Lake", "Strict anonymity"); opting out never deletes submissions already in review.',
+      'Open Data Lake from the navigation menu.',
+      'Submit coursework rubrics, exam guidelines, or novel problem types with PII stripped.',
+      'Submissions are scored on rarity, clarity, and utility by the valuation engine.',
+      'Accumulate micro-credits (1,000 micro-credits = 1.00 USD credit) and redeem them toward token top-ups or plans.',
     ],
     tips: [
-      'Submitting an idea the app can\'t do yet (from the workspace\'s custom direction box) routes it here automatically — "Request sent to Data Lake".',
-      'Contributions power the free training pool; if you never want your profile attached, keep strict anonymity on.',
+      'PII is automatically sanitized client-side before upload.',
+      'You can export your complete submission history at any time as JSON.',
     ],
   },
   {
-    id: 'guide-credits', icon: CreditCard, title: 'Credits, tokens & plans', chip: 'Credits & Tokens',
-    what: 'Two balances, one job each. Tokens pay for usage — every task spends a fixed amount sized to the work (heavier jobs like transcription and multi-step synthesis cost more). Credits apply as discounts at checkout: $1.00 off each. Plans: 7-day trial (100 task tokens), Basic 300/mo, Pro 1,000/mo, Elite 2,700/mo.',
+    id: 'guide-credits',
+    cat: 'economy',
+    icon: CreditCard,
+    title: 'Credits & tokens',
+    chip: 'Credits',
+    what: 'Understanding the economic model: Tokens represent compute expenditure (1 token = $0.01 compute equivalency); Credits represent earned discounts from referrals, payments, and data lake contributions.',
     steps: [
-      'Track both in the top bar — tokens (usage) and credits (discounts).',
-      'Every task deducts its cost automatically; a safety gate can require your approval above 100 task tokens.',
-      'Open Billing to see your plan, the token balance bar, and top-ups.',
-      'Earn credits from payments and referrals, and by redeeming Data Lake micro-credits — they apply as $1.00 off when you check out.',
+      'Check your balance strip at the top of any screen: live tokens, compute dollar equivalency, and projected runway.',
+      'Open Billing to view your current tier: Free Trial ($0/7d, 100 tokens), Basic ($5/mo, 300 tokens), Pro ($15/mo, 1,000 tokens), or Elite ($30/mo, 2,700 tokens).',
+      'All tiers enjoy identical full-model access — zero feature gating between plans.',
+      'Top up on-demand with non-expiring token packs if needed.',
     ],
     tips: [
-      'Task tokens are spent on the real tool API work behind the scenes (LLMs, audio, vision) — that is why costs differ per task.',
-      'Run out at an unlucky time? Message Admin and request a grant.',
-      'The plan label in Billing shows a real account value (No plan / Free Trial / Basic / Pro / Elite) — and the discount balance line shows exactly how many credits you hold.',
+      'Tokens never expire while your account remains active.',
+      'Run out during an urgent deadline? Use Message Admin to request an emergency compute grant.',
     ],
   },
   {
-    id: 'guide-referral', icon: Share2, title: 'Referral codes', chip: 'Referrals',
-    what: 'Invite classmates with a single-use 40-character code. The friend gets a one-time discount when they redeem — 30% for a new user, 15% for an existing one — and when they buy a plan with your code, you earn credits: 2 for Basic, 5 for Pro, 10 for Elite.',
+    id: 'guide-referral',
+    cat: 'economy',
+    icon: Share2,
+    title: 'Referral codes',
+    chip: 'Referrals',
+    what: 'Invite classmates with single-use attribution codes. Your peer gets an instant discount (30% new / 15% renewal), and you earn credits immediately upon their plan activation: 2 for Basic, 5 for Pro, 10 for Elite.',
     steps: [
-      'Open Credits → Referrals and issue a code — each code is single-use and attributed to you.',
-      'Share the code with a classmate or friend.',
-      'When they redeem it and buy a plan, their order is discounted and your credits land: Basic 2, Pro 5, Elite 10.',
+      'Open Credits → Earn & Referrals to generate a unique single-use referral code.',
+      'Share the code or copy the direct invitation link.',
+      'When your peer signs up and subscribes, your credits are automatically deposited into your account ledger.',
     ],
     tips: [
-      'Codes are single-use by design — issue a fresh one per person so attribution stays clean.',
+      'Each referral code is strictly single-use to guarantee pristine attribution.',
     ],
   },
   {
-    id: 'guide-insights', icon: BarChart3, title: 'Insights', chip: 'Insights',
-    what: 'Progress analytics: how you are doing across subjects, what has been completed, and what the app recommends next.',
+    id: 'guide-insights',
+    cat: 'economy',
+    icon: BarChart3,
+    title: 'Insights',
+    chip: 'Insights',
+    what: 'Progress analytics: track study velocity, rubric adherence across course subjects, completed tasks, and AI suggestions for impending deadlines.',
     steps: [
-      'Open Insights from the left nav; charts update as assignments turn in.',
-      'Use the recommendations to decide what to start next.',
+      'Navigate to Insights to inspect charts across active courses and assignments.',
+      'Review the recommended actions queue to prioritize work with high grade impact.',
     ],
     tips: [
-      'Pair it with Assignment History — past assignments still open and export from there.',
+      'Completed work moves to Assignment History, keeping Insights uncluttered.',
     ],
   },
   {
-    id: 'guide-history', icon: History, title: 'Assignment History', chip: 'History',
-    what: 'Where assignments go after you finish them: marked done and moved out of the active dashboard, but never lost — open, review, and export them anytime.',
+    id: 'guide-history',
+    cat: 'workspace',
+    icon: History,
+    title: 'Assignment History',
+    chip: 'History',
+    what: 'Permanent archive for completed coursework. Once an assignment is finalized, move it to History to keep the Active Subjects dashboard focused while retaining full access to generated materials, chats, and exports.',
     steps: [
-      'In the assignment workspace, press "Mark as done", then "Move to history" (confirm it — it leaves the dashboard sections).',
-      'Open History to revisit past assignments; they are still openable and exportable from there.',
-      'Turned-in work is tracked separately from active work, so the dashboard always shows what is still open.',
+      'In the assignment workspace, click "Mark as done" → "Move to history".',
+      'Browse past work in History; inspect rubrics, synthesized essays, flashcard decks, and full audit logs.',
+      'Export any past assignment data as JSON or re-open materials at any time.',
     ],
     tips: [
-      '"Not now" on the move prompt leaves the assignment marked done in place until you visit History later.',
+      'Choosing "Not now" on the history prompt leaves the assignment marked done in place until you archive it later.',
     ],
   },
   {
-    id: 'guide-settings', icon: Gauge, title: 'Settings & safety gates', chip: 'Settings',
-    what: 'Everything configurable: AI behavior, academic and writing profiles, appearance, notifications, privacy/security, integrations — and the approval gates that can require a human click before sensitive actions happen.',
+    id: 'guide-settings',
+    cat: 'system',
+    icon: Gauge,
+    title: 'Settings & safety gates',
+    chip: 'Settings',
+    what: 'Complete operational controls: AI behavior, academic profiles, writing DNA, appearance, push/Telegram notifications, privacy toggles, and mandatory safety approval gates.',
     steps: [
-      'Settings → AI & Intelligence: execution mode, auto-approve toggle and the auto-approved actions list, Model Effort, Educational Mode, AI Detection Standard ("Write Like a Sample"), Minimum human score, and Humanizer Skill.',
-      'Settings → Safety & Approval Gates: require manual confirmation before submitting coursework to the LMS, sending external notifications or emails, spending more than 100 task tokens, invoking flagship high-compute models, and overwriting finalized drafts.',
-      'Settings → Academic Profile, Writing & Output, Appearance, Notifications, Privacy & Security, and Integrations (Telegram) — see the "Sign up & your account" section for the details.',
+      'Settings → AI & Intelligence: execution mode (Manual, Auto-Pilot, YOLO), auto-approved actions, Model Effort, and AI detection scoring threshold.',
+      'Settings → Safety Gates: require confirmation before spending >100 tokens, invoking flagship models, or submitting external API calls.',
+      'Settings → Academic Profile & Writing DNA: customize tone, style samples, vocabulary complexity, and citation standards (APA, MLA, Chicago).',
+      'Settings → Integrations: bind a private Telegram bot for asynchronous study alerts.',
     ],
     tips: [
-      'The gates default to safe: everything on. Turn a gate off only when you trust the pattern and want fewer prompts.',
-      'The Minimum human score is the number the humanizing stage is held to — raise it and regenerations aim higher.',
-      'Changes made through the agent\'s permissions flow apply live (including appearance changes), so you can simply ask the agent to flip a setting.',
+      'Safety gates default to enabled for maximum user control and protection against accidental spend.',
     ],
   },
   {
-    id: 'guide-admin', icon: MessageSquare, title: 'Message Admin', chip: 'Message Admin',
-    what: 'A direct channel to the admin — use it for token requests, bug reports, or anything the guide does not answer.',
+    id: 'guide-admin',
+    cat: 'system',
+    icon: MessageSquare,
+    title: 'Message Admin',
+    chip: 'Message Admin',
+    what: 'Direct encrypted operator channel for compute grants, technical discrepancies, or urgent support requirements.',
     steps: [
-      'Open Message Admin and write your message.',
-      'Expect the reply in the same place; serious issues get an admin popup notice.',
+      'Open Message Admin from the navigation menu.',
+      'Compose your message detailing any issue or request.',
+      'Responses arrive directly in your conversation thread and trigger an in-app notice.',
     ],
     tips: [
-      'When something looks broken, say what you clicked and what you expected — that is enough to reproduce it.',
+      'Including specific assignment IDs or error codes accelerates resolution.',
     ],
   },
   {
-    id: 'guide-faq', icon: HelpCircle, title: 'Troubleshooting & FAQ', chip: 'FAQ',
-    what: 'The most common questions — from "why is nothing happening" to credits and AI detection.',
+    id: 'guide-faq',
+    cat: 'faq',
+    icon: HelpCircle,
+    title: 'Troubleshooting & FAQ',
+    chip: 'FAQ',
+    what: 'Answers to the 10 most common operational questions — from pipeline execution to credits and AI detection.',
     faqs: [
       { q: 'My assignment shows no subagent progress. What is wrong?', a: 'Most dumps arrive without a direction. Open the assignment and pick one — the team starts the moment you choose. Progress appears in the ribbon only once it is really recorded, so give it a moment.' },
       { q: 'My dump went to the wrong assignment. Can I re-route it?', a: 'Check the dump provenance line in the workspace first (file name, type, status: auto-routed / matched / manual-routed / finalized). The most reliable fix is to drop the file directly into the assignment\'s chat bubble — uploads there bind to that assignment.' },
@@ -290,184 +354,460 @@ const SECTIONS = [
 ];
 
 export default function GuideView({ onGoTo, publicMode = false }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [openSections, setOpenSections] = useState(() => ({ 'guide-start': true }));
+  const [openFaqs, setOpenFaqs] = useState(() => ({ 0: true }));
+  const searchInputRef = useRef(null);
+
   const go = (key) => onGoTo && onGoTo(key);
-  const jump = (id) => {
-    // Expand the target section first (SectionCard listens), then scroll to it.
-    window.dispatchEvent(new CustomEvent('helpotron:open-section', { detail: id }));
-    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+
+  const toggleSection = (id) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const toggleFaq = (idx) => {
+    setOpenFaqs((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const jump = (id) => {
+    setOpenSections((prev) => ({ ...prev, [id]: true }));
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  };
+
+  // Keyboard shortcut: Cmd/Ctrl + K focuses search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Filter sections by search query and category
+  const filteredSections = useMemo(() => {
+    return SECTIONS.filter((s) => {
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        (selectedCategory === 'faq' ? s.id === 'guide-faq' : s.cat === selectedCategory);
+
+      if (!matchesCategory) return false;
+
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      const matchTitle = s.title.toLowerCase().includes(q);
+      const matchWhat = s.what.toLowerCase().includes(q);
+      const matchSteps = s.steps?.some((step) => step.toLowerCase().includes(q));
+      const matchTips = s.tips?.some((tip) => tip.toLowerCase().includes(q));
+      const matchFaqs = s.faqs?.some(
+        (f) => f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q)
+      );
+
+      return matchTitle || matchWhat || matchSteps || matchTips || matchFaqs;
+    });
+  }, [searchQuery, selectedCategory]);
+
   return (
-    <div className="space-y-3">
-      {/* Header: one line, the glossary, and the jump row */}
-      <SectionCard
-        id="guide-intro"
-        padding="p-6 sm:p-8"
-        className="space-y-4"
-        header={
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0" aria-hidden="true">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 text-on-surface">
+      {/* Top Header & Context */}
+      <header className="mb-8 flex flex-col gap-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-sm" aria-hidden="true">
               <BookOpen className="w-5 h-5" />
             </div>
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold text-on-surface tracking-tight">Guide</h2>
-              <p className="text-xs text-on-surface-variant mt-0.5">
-                Every feature in plain words — click any section to open it. Start with "Start here".
-              </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-primary font-bold tracking-wider uppercase">HELPO-SPEC // DOCS</span>
+                <span className="text-outline-variant/40">/</span>
+                <span className="text-[10px] font-mono text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">v4.2</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-on-surface">
+                Helpotron Field Guide
+              </h1>
             </div>
           </div>
-        }
-      >
-        <dl className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-on-surface-variant">
-          {TERMS.map((t) => (
-            <div key={t.term} className="flex gap-1.5">
-              <dt className="font-semibold text-on-surface">{t.term}</dt>
-              <dd>{t.gloss}</dd>
-            </div>
-          ))}
-        </dl>
-        <div className="flex flex-wrap gap-1.5" role="navigation" aria-label="Guide sections">
-          {SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const primary = s.id === 'guide-start';
-            return (
+
+          <div className="flex items-center gap-3">
+            {!publicMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => go('message_admin')}
+                  className="min-h-[44px] px-4 rounded-xl bg-surface-container/60 hover:bg-surface-container-high text-on-surface text-xs font-semibold flex items-center gap-2 transition cursor-pointer border border-outline-variant/30"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-on-surface-variant" />
+                  <span>Report Discrepancy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go('agent')}
+                  className="min-h-[44px] px-4 rounded-xl bg-primary text-on-primary font-semibold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-primary-container hover:text-on-primary-container active:scale-95 transition cursor-pointer shadow-sm"
+                >
+                  <Brain className="w-4 h-4" />
+                  <span>Ask My Agent</span>
+                </button>
+              </>
+            )}
+            {publicMode && (
               <button
-                key={s.chip}
                 type="button"
-                onClick={() => jump(s.id)}
-                className={
-                  primary
-                    ? 'inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold rounded-full bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container transition active:scale-95 cursor-pointer shadow-sm'
-                    : 'inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/50 text-on-surface-variant transition active:scale-95 cursor-pointer'
-                }
+                onClick={() => go('signup')}
+                className="min-h-[44px] px-5 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-primary-container hover:text-on-primary-container active:scale-95 transition cursor-pointer shadow-sm"
               >
-                <Icon className="w-3 h-3" /> {s.chip}
+                <span>Get Started</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
-      </SectionCard>
 
-      {/* One card per feature — starts collapsed, expands on click */}
-      {SECTIONS.map((s) => {
-        const Icon = s.icon;
-        return (
-          <SectionCard
-            key={s.id}
-            id={s.id}
-            defaultOpen={false}
-            padding="p-6 sm:p-8"
-            className="scroll-mt-6"
-            header={
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0" aria-hidden="true">
-                  <Icon className="w-4 h-4" />
-                </div>
-                <h2 className="min-w-0 text-base font-bold text-on-surface tracking-tight">{s.title}</h2>
+        <p className="text-sm text-on-surface-variant max-w-3xl leading-relaxed">
+          Operational manual, architectural specifications, and prompt heuristics for autonomous academic co-piloting. Every row is verified against real code behavior.
+        </p>
+
+        {/* Search Bar & Category Filter Pills */}
+        <div className="flex flex-col gap-3 pt-2">
+          <div className="relative w-full max-w-2xl">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/70" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="⌘K to find a feature, specification, or question..."
+              className="w-full h-11 pl-10 pr-24 rounded-xl bg-surface-container-lowest/80 backdrop-blur-xl text-on-surface text-sm placeholder:text-on-surface-variant/50 border border-outline-variant/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-inner"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1 rounded-md cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant border border-outline-variant/30">⌘</kbd>
+                <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant border border-outline-variant/30">K</kbd>
               </div>
-            }
-          >
-            <div className="space-y-4">
-              <p className="text-sm text-on-surface-variant leading-relaxed">{s.what}</p>
+            )}
+          </div>
 
-              {s.faqs ? (
-                <div className="space-y-5">
-                  {s.faqs.map((f, i) => (
-                    <div key={i} className="space-y-1">
-                      <h3 className="text-sm font-semibold text-on-surface leading-snug">{f.q}</h3>
-                      <p className="text-sm text-on-surface-variant leading-relaxed">{f.a}</p>
+          {/* Category Pills (Mobile Scrollable) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" role="tablist" aria-label="Guide Categories">
+            {CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer active:scale-95 ${
+                    active
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'bg-surface-container-low/70 hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant/20'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Quick Glossary Strip */}
+        <div className="p-4 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30">
+          <div className="text-[11px] font-mono uppercase tracking-wider text-primary font-bold mb-2">Core Nomenclature</div>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-on-surface-variant">
+            {TERMS.map((t) => (
+              <div key={t.term} className="p-2.5 rounded-xl bg-surface-container-low/50 border border-outline-variant/20">
+                <dt className="font-bold text-on-surface mb-0.5">{t.term}</dt>
+                <dd className="leading-snug">{t.gloss}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </header>
+
+      {/* Two-Column Grid Layout (Sticky Rail >= 1280px) */}
+      <div className="flex flex-col xl:flex-row items-start gap-8 relative">
+        {/* Left Navigation Rail (Sticky) */}
+        <aside className="w-full xl:w-72 xl:sticky xl:top-20 flex flex-col gap-4 shrink-0 order-2 xl:order-1">
+          <div className="p-4 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between pb-2 border-b border-outline-variant/30">
+              <span className="font-mono text-xs text-on-surface-variant font-bold uppercase tracking-wider">Guide Index</span>
+              <span className="font-mono text-xs text-primary font-bold">{SECTIONS.length - 1} SECTIONS</span>
+            </div>
+            <nav className="flex flex-col gap-1 max-h-[50vh] xl:max-h-[60vh] overflow-y-auto pr-1" aria-label="Sections index">
+              {SECTIONS.map((s, idx) => {
+                const isSelected = openSections[s.id];
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => jump(s.id)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-left transition cursor-pointer min-h-[36px] ${
+                      isSelected
+                        ? 'bg-primary/15 text-primary font-semibold'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/40'
+                    }`}
+                  >
+                    <span className="truncate">
+                      {idx + 1}. {s.chip}
+                    </span>
+                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 ml-2" />}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* System Telemetry & Operational Channels */}
+          <div className="p-4 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 flex flex-col gap-3">
+            <span className="font-mono text-[11px] text-on-surface-variant font-bold uppercase tracking-wider">Operational Channels</span>
+            <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-surface-container-low/60">
+              <div className="flex items-center gap-2 text-on-surface">
+                <CheckCircle2 className="w-4 h-4 text-sem-green" />
+                <span>Status &amp; SLA</span>
+              </div>
+              <span className="font-mono text-xs text-sem-green font-bold">99.98%</span>
+            </div>
+            <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-surface-container-low/60">
+              <div className="flex items-center gap-2 text-on-surface">
+                <Send className="w-4 h-4 text-primary" />
+                <span>Telegram Bot</span>
+              </div>
+              <span className="font-mono text-[11px] text-primary">@HelpoRelay</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content Stream */}
+        <main className="flex-1 w-full min-w-0 flex flex-col gap-6 order-1 xl:order-2">
+          {filteredSections.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 text-center space-y-3">
+              <Search className="w-10 h-10 text-on-surface-variant/50 mx-auto" />
+              <h3 className="text-base font-bold text-on-surface">No guide entries match "{searchQuery}"</h3>
+              <p className="text-xs text-on-surface-variant">Try adjusting your query or resetting category filters.</p>
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                className="mt-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-semibold"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            filteredSections.map((s, idx) => {
+              const Icon = s.icon;
+              const isOpen = !!openSections[s.id];
+              const isHero = s.id === 'guide-start';
+
+              return (
+                <section
+                  key={s.id}
+                  id={s.id}
+                  className={`rounded-3xl bg-surface-container-lowest/70 backdrop-blur-xl border transition-all duration-200 scroll-mt-24 overflow-hidden ${
+                    isOpen ? 'border-primary/40 shadow-lg' : 'border-outline-variant/30 hover:border-outline-variant/50'
+                  }`}
+                >
+                  {/* Card Header (Click to Toggle) */}
+                  <div
+                    onClick={() => toggleSection(s.id)}
+                    className="p-5 sm:p-6 flex items-start justify-between gap-4 cursor-pointer select-none hover:bg-surface-container-high/10 transition"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(s.id); } }}
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                        isHero
+                          ? 'bg-primary/20 text-primary border-primary/30'
+                          : 'bg-surface-container-high text-primary border-outline-variant/30'
+                      }`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="font-mono text-[10px] text-primary font-bold uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded">
+                            {String(idx + 1).padStart(2, '0')} · {s.chip}
+                          </span>
+                        </div>
+                        <h2 className="text-base sm:text-lg font-bold text-on-surface tracking-tight">
+                          {s.title}
+                        </h2>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">How to use it</h3>
-                    <ol className="space-y-1.5">
-                      {s.steps.map((step, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-on-surface-variant leading-relaxed">
-                          <span className="font-mono text-[11px] font-bold text-primary mt-0.5 shrink-0 tabular-nums">{i + 1}.</span>
-                          <span>{step}</span>
-                        </li>
-                      ))}
-                    </ol>
+
+                    <div className="flex items-center gap-2 shrink-0 pt-1">
+                      <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </div>
+                    </div>
                   </div>
-                  {s.tips && s.tips.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">Pro tips</h3>
-                      <ul className="space-y-1.5">
-                        {s.tips.map((tip, i) => (
-                          <li key={i} className="flex gap-2 text-sm text-on-surface-variant leading-relaxed">
-                            <span className="text-primary shrink-0 mt-0.5" aria-hidden="true">•</span>
-                            <span>{tip}</span>
-                          </li>
-                        ))}
-                      </ul>
+
+                  {/* Collapsible Content Body */}
+                  {isOpen && (
+                    <div className="px-5 pb-6 sm:px-6 sm:pb-8 pt-0 space-y-6 border-t border-outline-variant/20">
+                      {/* What explanation */}
+                      <p className="text-sm text-on-surface-variant leading-relaxed pt-4">
+                        {s.what}
+                      </p>
+
+                      {/* Numbered Steps */}
+                      {s.steps && s.steps.length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
+                            Execution Protocol
+                          </h3>
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {s.steps.map((step, stepIdx) => (
+                              <div
+                                key={stepIdx}
+                                className="p-3.5 rounded-2xl bg-surface-container-low/50 border border-outline-variant/20 flex items-start gap-3"
+                              >
+                                <span className="w-6 h-6 rounded-full bg-primary/20 text-primary font-mono text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                  {String(stepIdx + 1).padStart(2, '0')}
+                                </span>
+                                <span className="text-xs sm:text-sm text-on-surface leading-relaxed">
+                                  {step}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pro Tips Callout */}
+                      {s.tips && s.tips.length > 0 && (
+                        <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+                          <Lightbulb className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                          <div className="space-y-1 min-w-0">
+                            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+                              Pro Tip
+                            </span>
+                            <ul className="space-y-1 text-xs text-on-surface leading-relaxed">
+                              {s.tips.map((tip, tipIdx) => (
+                                <li key={tipIdx} className="flex items-start gap-1.5">
+                                  <span className="text-primary">•</span>
+                                  <span>{tip}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Special FAQ Accordion Render */}
+                      {s.faqs && (
+                        <div className="space-y-3 pt-2">
+                          <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
+                            10 Common Inquiries &amp; Answers
+                          </h3>
+                          <div className="space-y-2">
+                            {s.faqs.map((f, faqIdx) => {
+                              const faqOpen = !!openFaqs[faqIdx];
+                              return (
+                                <div
+                                  key={faqIdx}
+                                  className="rounded-xl bg-surface-container-low/50 border border-outline-variant/20 overflow-hidden"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFaq(faqIdx)}
+                                    className="w-full p-3.5 text-left flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold text-on-surface hover:text-primary transition cursor-pointer min-h-[44px]"
+                                  >
+                                    <span>{f.q}</span>
+                                    <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${faqOpen ? 'rotate-180 text-primary' : 'text-on-surface-variant'}`} />
+                                  </button>
+                                  {faqOpen && (
+                                    <div className="px-3.5 pb-3.5 text-xs text-on-surface-variant leading-relaxed border-t border-outline-variant/15 pt-2">
+                                      {f.a}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-                </>
-              )}
+                </section>
+              );
+            })
+          )}
+
+          {/* Guest Mode CTA Band (Spec 3.3.2 / 3.15) */}
+          {publicMode && (
+            <div className="rounded-3xl p-6 sm:p-8 bg-surface-container-lowest/80 backdrop-blur-xl border border-primary/30 text-center space-y-4 shadow-xl">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-on-surface tracking-tight">
+                Ready to activate your sovereign study node?
+              </h3>
+              <p className="text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto leading-relaxed">
+                Join Helpotron with a public ID and password. Zero credit card, zero personal email, and 100 free task tokens on your 7-day trial.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => go('signup')}
+                  className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container text-xs sm:text-sm font-bold px-6 py-2.5 transition active:scale-95 cursor-pointer shadow-sm"
+                >
+                  Create Account <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go('pricing')}
+                  className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface text-xs sm:text-sm font-semibold px-6 py-2.5 transition active:scale-95 cursor-pointer"
+                >
+                  See Plans &amp; Pricing
+                </button>
+              </div>
             </div>
-          </SectionCard>
-        );
-      })}
+          )}
 
-      {/* Guest Mode CTA Band (Spec 3.3.2) */}
-      {publicMode && (
-        <div className="rounded-2xl p-6 sm:p-8 bg-surface-container-low border border-outline-variant/30 text-center space-y-4 shadow-lg">
-          <h3 className="font-headline-lg text-lg sm:text-xl font-bold text-on-surface tracking-tight">
-            Ready to start your sovereign study node?
-          </h3>
-          <p className="text-body-sm text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto">
-            Join Helpotron with a public ID and password. No credit card, no personal email, and 100 free task tokens on your 7-day trial.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => go('signup')}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-title-md text-sm font-semibold px-6 py-2.5 transition active:scale-95 cursor-pointer shadow-sm"
-            >
-              Create account <ArrowRight className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => go('pricing')}
-              className="inline-flex items-center gap-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface font-title-md text-sm font-semibold px-6 py-2.5 transition active:scale-95 cursor-pointer"
-            >
-              See plans
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Still stuck — account actions; hidden in publicMode (pre-signup), where
-          a visitor has no Message Admin / My Agent yet */}
-      {!publicMode && (
-        <SectionCard
-          id="guide-help"
-          className="space-y-3"
-          title="Still stuck?"
-          subtitle="The agent knows the app, and the admin can grant tokens or fix anything."
-          padding="p-6 sm:p-8"
-        >
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => go('message_admin')}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container text-sm font-semibold px-4 py-2 transition cursor-pointer shadow-sm active:scale-95"
-            >
-              <MessageSquare className="w-4 h-4" /> Message Admin <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => go('agent')}
-              className="inline-flex items-center gap-2 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 hover:border-outline-variant/50 text-on-surface text-sm font-semibold px-4 py-2 transition cursor-pointer active:scale-95"
-            >
-              <Brain className="w-4 h-4 text-primary" /> Ask My Agent <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </SectionCard>
-      )}
+          {/* Authenticated Still Stuck Section */}
+          {!publicMode && (
+            <div className="rounded-3xl p-6 sm:p-8 bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 space-y-4 shadow-sm">
+              <div>
+                <h3 className="text-lg font-bold text-on-surface">Still stuck?</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  Your agent knows this platform inside and out, and the admin can grant compute tokens or resolve technical issues directly.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => go('message_admin')}
+                  className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container text-xs sm:text-sm font-bold px-5 py-2.5 transition cursor-pointer shadow-sm active:scale-95"
+                >
+                  <MessageSquare className="w-4 h-4" /> Message Admin <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go('agent')}
+                  className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-on-surface text-xs sm:text-sm font-semibold px-5 py-2.5 transition cursor-pointer active:scale-95"
+                >
+                  <Brain className="w-4 h-4 text-primary" /> Ask My Agent <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

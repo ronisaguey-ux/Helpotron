@@ -23,6 +23,7 @@ import SessionExpiryModal, { Session401Banner } from './components/SessionExpiry
 import NotFound from './components/NotFound.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
+import { ToastContainer, OfflineBanner } from './components/ui/index.js';
 
 /* ── LAZY: with automatic chunk retry for seamless zero-downtime updates ── */
 function lazyWithRetry(componentImport) {
@@ -630,6 +631,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
+        {/* Offline Diagnostic Persistence Banner */}
+        <OfflineBanner />
+
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
@@ -905,6 +909,9 @@ export default function App() {
         {isLoggedIn && termsAccepted && (
           <Suspense fallback={null}><CookieBanner /></Suspense>
         )}
+
+        {/* Global Luminous Glass Toast Stack */}
+        <ToastContainer />
       </div>
     </ErrorBoundary>
   );

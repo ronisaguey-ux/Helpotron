@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Bolt, X, Check, Calendar, ChevronDown, ChevronUp, FileText,
   Globe, Upload, Mic, ArrowRight, ArrowLeft, Sparkles, AlertTriangle,
-  FolderZip, Loader2, Edit2
+  FolderArchive, Loader2, Edit2
 } from 'lucide-react';
 import api from '../api.js';
 
