@@ -19,6 +19,7 @@ import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } 
  * and lands in its own chunk, fetched the moment the session resolves. */
 import AnonymousLanding from './components/AnonymousLanding.jsx';
 import AuthModal from './components/AuthModal.jsx';
+import SessionExpiryModal, { Session401Banner } from './components/SessionExpiryModal.jsx';
 import NotFound from './components/NotFound.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
@@ -231,6 +232,21 @@ export default function App() {
     setAuthModalOpen(true);
   };
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
+  const [silent401Visible, setSilent401Visible] = useState(false);
+
+  useEffect(() => {
+    const onSessionExpired = (e) => {
+      if (authStatus !== 'authed') return;
+      if (e.detail?.isBackground) {
+        setSilent401Visible(true);
+      } else {
+        setSessionExpiredOpen(true);
+      }
+    };
+    window.addEventListener('helpotron:session-expired', onSessionExpired);
+    return () => window.removeEventListener('helpotron:session-expired', onSessionExpired);
+  }, [authStatus]);
 
   /* ─── Client-side path guard (09-01, operator QA round) ────────────────
      The SPA serves index.html at every pathname (vite preview history
@@ -641,6 +657,23 @@ export default function App() {
           }}
         />
 
+        {/* Session Expiry Modal (Spec 3.2.5) */}
+        <SessionExpiryModal
+          isOpen={sessionExpiredOpen}
+          user={{ credits, public_id: userId, token_balance: tokenBalance, plan: userPlan, unlimited: userUnlimited }}
+          onSessionRestored={(u) => {
+            setSessionExpiredOpen(false);
+            setSilent401Visible(false);
+            handleLoginSuccess(u);
+          }}
+          onSwitchAccount={() => {
+            setSessionExpiredOpen(false);
+            setSilent401Visible(false);
+            handleLogout();
+            openAuth('login');
+          }}
+        />
+
         {/* Extension install is a sidebar section now (see ExtensionInstallView) */}
 
         {/* ─── AUTH GATE (audit 08-28) ───────────────────────────────────────
@@ -733,6 +766,14 @@ export default function App() {
           onOpenAuth={() => openAuth('login')}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
         >
+          {/* Silent 401 Telemetry / Sync Pause Banner (Spec 3.2.5) */}
+          {silent401Visible && (
+            <Session401Banner
+              onReconnect={() => setSessionExpiredOpen(true)}
+              onDismiss={() => setSilent401Visible(false)}
+            />
+          )}
+
           {/* Backend unreachable banner */}
           {!connected && (
             <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono mb-5 flex items-center justify-center gap-2">

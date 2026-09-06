@@ -263,6 +263,26 @@ async function doRequest(cleanEndpoint, options, headers) {
     }
     const err = new Error(message);
     err.status = response.status; // so callers can branch on 401 (session expiry) etc.
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const isAuthEndpoint =
+        cleanEndpoint.includes('/api/login') ||
+        cleanEndpoint.includes('/api/signup') ||
+        cleanEndpoint.includes('/api/me') ||
+        cleanEndpoint.includes('/api/public-config');
+      if (!isAuthEndpoint) {
+        window.dispatchEvent(
+          new CustomEvent('helpotron:session-expired', {
+            detail: {
+              endpoint: cleanEndpoint,
+              isBackground:
+                cleanEndpoint.includes('notifications') ||
+                cleanEndpoint.includes('telemetry') ||
+                cleanEndpoint.includes('monitors'),
+            },
+          })
+        );
+      }
+    }
     throw err;
   }
 
