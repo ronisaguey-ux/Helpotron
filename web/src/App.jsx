@@ -67,7 +67,7 @@ const ActivityView = lazyWithRetry(() => import('./components/ActivityView.jsx')
 const AutomationCenter = lazyWithRetry(() => import('./components/AutomationCenter.jsx'));
 const LibraryView = lazyWithRetry(() => import('./components/LibraryView.jsx'));
 const SettingsApp = lazyWithRetry(() => import('./components/SettingsApp.jsx'));
-const AdminPanels = lazyWithRetry(() => import('./components/AdminPanels.jsx'));
+const ControlCenterView = lazyWithRetry(() => import('./components/ControlCenterView.jsx'));
 const InsightsView = lazyWithRetry(() => import('./components/InsightsView.jsx'));
 const CreditsView = lazyWithRetry(() => import('./components/CreditsView.jsx'));
 const MyAgentView = lazyWithRetry(() => import('./components/MyAgentView.jsx'));
@@ -886,7 +886,7 @@ export default function App() {
                   {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
 
                   {/* ADMIN — hard route guard: non-admins get a denial, not a shell */}
-                  {activeView === 'admin' && effectiveIsAdmin && <AdminPanels userId={userId} />}
+                  {activeView === 'admin' && effectiveIsAdmin && <ControlCenterView userId={userId} />}
                   {activeView === 'admin' && !effectiveIsAdmin && (
                     <div className="p-10 text-center">
                       <div className="text-3xl mb-3">🔒</div>
