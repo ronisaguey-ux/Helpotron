@@ -317,7 +317,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             <span className="text-primary font-medium">Assignment Dump</span>
             <span>/</span>
             <span className="font-chip-status text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              §3.13 INTAKE
+              TASK INTAKE
             </span>
           </div>
           <h1 className="font-headline-lg-mobile md:font-headline-lg text-title-md md:text-headline-lg text-on-surface font-semibold tracking-tight">

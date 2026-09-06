@@ -311,7 +311,7 @@ export function AssignmentDetailView({
               <StatusChip status={status} size="default" />
               <DueChip dueDate={dueDate} status={status} size="default" />
               <span className="font-chip-status text-[10px] text-on-surface-variant bg-surface-container-high/80 px-2.5 py-1 rounded-lg">
-                SOVEREIGN BUBBLE NODE
+                ASSIGNMENT AGENT
               </span>
             </div>
           </div>

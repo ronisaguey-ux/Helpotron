@@ -17,7 +17,7 @@ const TERMS = [
   { term: 'Credits', gloss: 'Discount balance — $1.00 each, applied at checkout. Earned via payments, referrals, and data-lake rewards.' },
   { term: 'Tokens', gloss: 'Your usage meter — every task spends a fixed amount sized to the compute/API work it does.' },
   { term: 'Micro-credits', gloss: 'Data Lake contribution points; 1,000 convert into 1 credit ($1.00 off).' },
-  { term: 'Public ID', gloss: 'Your sovereign pseudonym — sign up with it and a password; zero email required.' },
+  { term: 'Public ID', gloss: 'Your public username — sign up with it and a password; zero email required.' },
 ];
 
 const CATEGORIES = [
@@ -755,10 +755,10 @@ export default function GuideView({ onGoTo, publicMode = false }) {
           {publicMode && (
             <div className="rounded-3xl p-6 sm:p-8 bg-surface-container-lowest/80 backdrop-blur-xl border border-primary/30 text-center space-y-4 shadow-xl">
               <h3 className="text-xl sm:text-2xl font-extrabold text-on-surface tracking-tight">
-                Ready to activate your sovereign study node?
+                Ready to start studying?
               </h3>
               <p className="text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto leading-relaxed">
-                Join Helpotron with a public ID and password. Zero credit card, zero personal email, and 100 free task tokens on your 7-day trial.
+                Join Helpotron with a public ID and password — no credit card needed to start. The 7-day trial includes 150 task tokens after you enable two-factor authentication.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button

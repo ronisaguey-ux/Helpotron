@@ -1,17 +1,17 @@
 /* ────────────────────────────────────────────────────────────────────────────
- * AuthModal.jsx — Helpotron OS v4 Auth & Sovereign Account Entry (Spec 3.2.1 / 3.2.2)
+ * AuthModal.jsx — Sign in / create account (owner 09-06: v4 "sovereign" slop
+ * eradicated — plain account naming, honest copy, no fake token awards).
  *
  * Design Spec:
- * - Desktop (>= lg): Two-pane split — Left brand hero ("Master your coursework",
- *   academic intelligence node highlights, system telemetry) + Right glass card.
- * - Mobile (< lg): Stacked mobile sovereign card.
+ * - Desktop (>= lg): Two-pane split — Left brand hero + Right glass card.
+ * - Mobile (< lg): Stacked card.
  * - Sign In: Public ID only (never "Username or Email"), eye toggle, Turnstile
  *   verification below form, Enter submits, inline error strip + shake animation.
- * - Create Account: Self-custodial sovereign account, Public ID hash re-roll,
- *   master passphrase with 4-segment entropy meter, optional institutional pass
- *   chip (+10,000 tokens), protocol consent checkbox.
+ * - Create Account: Public ID with re-roll, password with 4-segment entropy
+ *   meter, optional discount code (wired to /api/referrals/redeem — a referral
+ *   code grants a one-time order discount; NO hardcoded token awards).
  * - 2FA Challenge: Integrated 6-cell segmented OTP stage upon 2fa_required response.
- * - Recovery Entry: Direct access to RecoveryFlowModal (Spec 3.2.4).
+ * - Recovery Entry: Direct access to RecoveryFlowModal.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion';
@@ -60,7 +60,7 @@ function calculateEntropy(passphrase) {
   if (score <= 1) return { score: 1, label: 'Weak Entropy', color: 'bg-error' };
   if (score === 2) return { score: 2, label: 'Moderate', color: 'bg-sem-amber' };
   if (score === 3) return { score: 3, label: 'Strong Entropy', color: 'bg-sem-green' };
-  return { score: 4, label: 'Cryptographic Grade', color: 'bg-primary' };
+  return { score: 4, label: 'Very strong', color: 'bg-primary' };
 }
 
 export default function AuthModal({
@@ -230,7 +230,7 @@ export default function AuthModal({
     e?.preventDefault();
     const id = loginId.trim();
     if (!id || !loginPass) {
-      triggerError('Please enter your Public ID and Master Passphrase.');
+      triggerError('Please enter your Public ID and password.');
       return;
     }
     if (requires2FA && twoFactorCode.trim().length < 6) {
@@ -259,10 +259,10 @@ export default function AuthModal({
         sendSessionHandoff(res, id);
         onLoginSuccess?.(id);
       } else {
-        triggerError('Invalid credentials. Check your Public ID or passphrase.');
+        triggerError('Invalid credentials. Check your Public ID or password.');
       }
     } catch (err) {
-      triggerError(err.message || 'Login failed. Verify your Public ID or passphrase.');
+      triggerError(err.message || 'Login failed. Verify your Public ID or password.');
     } finally {
       setLoading(false);
       setTurnstileToken('');
@@ -279,15 +279,15 @@ export default function AuthModal({
     e?.preventDefault();
     const id = signupId.trim();
     if (!id || !signupPass) {
-      triggerError('Please provide a Public ID and master passphrase.');
+      triggerError('Please provide a Public ID and password.');
       return;
     }
     if (signupPass !== signupPassConfirm) {
-      triggerError('Passphrases do not match. Please re-enter.');
+      triggerError('Passwords do not match. Please re-enter.');
       return;
     }
     if (signupPass.length < 8 || !/[A-Za-z]/.test(signupPass) || !/[0-9]/.test(signupPass)) {
-      triggerError('Passphrase must be at least 8 characters with both letters and numbers.');
+      triggerError('Password must be at least 8 characters with both letters and numbers.');
       return;
     }
     if (!consentAgreed) {
@@ -307,18 +307,38 @@ export default function AuthModal({
         // Auto-login with credentials
         const autoLogin = await api.login(id, signupPass, null, null);
         if (autoLogin && autoLogin.message === 'Logged in') {
+          // Owner 09-06: the discount code redeems a real referral code
+          // (one-time order discount — it never awards tokens). A bad code
+          // must not block the account, so fall through to a sign-in prompt.
+          const code = referralCode.trim();
+          if (code) {
+            try {
+              const refRes = await api.referralRedeem(code);
+              if (!refRes || refRes.status !== 'success') {
+                setLoginId(id);
+                setTab('login');
+                triggerError('Account created — discount code not recognized. Sign in to continue.');
+                return;
+              }
+            } catch {
+              setLoginId(id);
+              setTab('login');
+              triggerError('Account created — discount code not recognized. Sign in to continue.');
+              return;
+            }
+          }
           sendSessionHandoff(autoLogin, id);
           onLoginSuccess?.(id);
         } else {
           setLoginId(id);
           setTab('login');
-          triggerError('Account initialized — please sign in with your passphrase.');
+          triggerError('Account initialized — please sign in with your password.');
         }
       } else {
         triggerError(signupRes?.detail || 'Account initialization failed.');
       }
     } catch (err) {
-      triggerError(err.message || 'Could not initialize node. ID may already exist.');
+      triggerError(err.message || 'Account creation failed. Public ID may already exist.');
     } finally {
       setLoading(false);
       setTurnstileToken('');
@@ -347,7 +367,7 @@ export default function AuthModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label="Helpotron Sovereign Authentication"
+      aria-label="Helpotron sign in"
       onClick={() => {
         if (!isMandatory && !recoveryOpen) onClose?.();
       }}
@@ -374,17 +394,18 @@ export default function AuthModal({
               <div className="flex items-center gap-3">
                 <AnimatedLogo size="md" />
                 <span className="font-mono text-xs text-primary uppercase tracking-widest font-semibold">
-                  Academic Intelligence Node
+                  Academic Co-pilot
                 </span>
               </div>
 
               <div className="space-y-3">
                 <h1 className="font-display-xl text-3xl xl:text-4xl text-on-surface font-bold tracking-tight leading-tight">
-                  Master your coursework.
+                  Your coursework, one smart workspace.
                 </h1>
                 <p className="font-body-md text-sm text-on-surface-variant leading-relaxed">
-                  Deterministic neuro-symbolic assistance configured for computational academics,
-                  laboratory telemetry, and verified source citations.
+                  Imported coursework sorts itself into subject bubbles, every assignment gets
+                  its own agent with dedicated files and memory, and a completion ledger keeps
+                  an honest record of what you submitted.
                 </p>
               </div>
 
@@ -395,8 +416,8 @@ export default function AuthModal({
                     <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-on-surface">100% Local Browser Engine</div>
-                    <div className="font-mono text-[11px] text-on-surface-variant">In-memory model execution via WebGPU threads</div>
+                    <div className="text-xs font-semibold text-on-surface">An agent per assignment</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Dedicated thread, files and memory for every task</div>
                   </div>
                 </div>
 
@@ -405,8 +426,8 @@ export default function AuthModal({
                     <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-on-surface">Zero Hallucination Pipeline</div>
-                    <div className="font-mono text-[11px] text-on-surface-variant">Formal proof grounding & peer-indexed verification</div>
+                    <div className="text-xs font-semibold text-on-surface">Verified math, not guesses</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Every calculation runs in the sandbox and is proven with run artifacts</div>
                   </div>
                 </div>
 
@@ -415,20 +436,20 @@ export default function AuthModal({
                     <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-on-surface">Institutional Grade Security</div>
-                    <div className="font-mono text-[11px] text-on-surface-variant">Self-custodial client isolation & zero tracking</div>
+                    <div className="text-xs font-semibold text-on-surface">Session security</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Two-factor authentication and encrypted sessions</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Substrate Footer Telemetry */}
+            {/* Footer */}
             <div className="pt-6 border-t border-outline-variant/20 flex items-center gap-3 text-[11px] font-mono text-on-surface-variant/70 select-none">
-              <span>Helpotron OS v4.0</span>
+              <span>Helpotron</span>
               <span className="w-1 h-1 rounded-full bg-outline-variant" />
-              <span>NODE: EU-WEST-4B</span>
+              <span>Metered in task tokens</span>
               <span className="w-1 h-1 rounded-full bg-outline-variant" />
-              <span className="text-primary font-medium">STATUS: NOMINAL</span>
+              <span>No hidden fees</span>
             </div>
           </div>
 
@@ -442,15 +463,15 @@ export default function AuthModal({
                     {requires2FA
                       ? 'Two-Factor Challenge'
                       : tab === 'signup'
-                      ? 'Create Sovereign Account'
+                      ? 'Create your account'
                       : 'Sign In'}
                   </h2>
                   <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
                     {requires2FA
                       ? 'Verify your secondary security factor to continue'
                       : tab === 'signup'
-                      ? 'Self-custodial cryptographic academic access'
-                      : 'Access your sovereign academic co-pilot'}
+                      ? 'Start with a free 7-day trial — 150 task tokens.'
+                      : 'Welcome back to your workspace'}
                   </p>
                 </div>
 
@@ -462,7 +483,7 @@ export default function AuthModal({
                         : 'bg-secondary/15 text-secondary'
                     }`}
                   >
-                    {tab === 'signup' ? 'Self-Custodial' : 'Node Auth'}
+                    {tab === 'signup' ? 'Free trial' : 'Secure sign-in'}
                   </span>
                 )}
               </div>
@@ -578,7 +599,7 @@ export default function AuthModal({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <label htmlFor="login-passphrase" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
-                        MASTER PASSPHRASE
+                        PASSWORD
                       </label>
                       <button
                         type="button"
@@ -595,14 +616,14 @@ export default function AuthModal({
                         type={showLoginPass ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
-                        placeholder="Enter master passphrase..."
+                        placeholder="Enter your password"
                         value={loginPass}
                         onChange={(e) => setLoginPass(e.target.value)}
                         className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
                       />
                       <button
                         type="button"
-                        aria-label="Toggle Passphrase Visibility"
+                        aria-label="Toggle password visibility"
                         onClick={() => setShowLoginPass((prev) => !prev)}
                         className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
                       >
@@ -655,15 +676,15 @@ export default function AuthModal({
                   </div>
                 </form>
               ) : (
-                /* ── CREATE SOVEREIGN ACCOUNT (Spec 3.2.2) ─────────────── */
+                /* ── CREATE ACCOUNT ─────────────── */
                 <form onSubmit={handleSignup} className="mt-5 space-y-3.5">
                   {/* Public ID with Re-roll */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
                       <label htmlFor="signup-public-id" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
-                        PUBLIC IDENTITY HASH
+                        PUBLIC ID
                       </label>
-                      <span className="font-mono text-[10px] text-primary">Self-Custodial Moniker</span>
+                      <span className="font-mono text-[10px] text-primary">Auto-generated — re-roll with the dice</span>
                     </div>
                     <div className="relative flex items-center">
                       <input
@@ -678,7 +699,7 @@ export default function AuthModal({
                       <button
                         type="button"
                         onClick={handleRerollId}
-                        title="Re-roll cryptographic hex ID"
+                        title="Re-roll public ID"
                         className="absolute right-1.5 p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition cursor-pointer"
                       >
                         <Dices className="w-4 h-4" />
@@ -686,11 +707,11 @@ export default function AuthModal({
                     </div>
                   </div>
 
-                  {/* Passphrase & Entropy Meter */}
+                  {/* Password & Entropy Meter */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
                       <label htmlFor="signup-passphrase" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
-                        MASTER PASSPHRASE
+                        PASSWORD
                       </label>
                       <span className="font-mono text-[10px] text-on-surface-variant">{entropy.label}</span>
                     </div>
@@ -727,10 +748,10 @@ export default function AuthModal({
                     </div>
                   </div>
 
-                  {/* Confirm Passphrase */}
+                  {/* Confirm Password */}
                   <div className="space-y-1">
                     <label htmlFor="signup-passphrase-confirm" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
-                      CONFIRM MASTER PASSPHRASE
+                      CONFIRM PASSWORD
                     </label>
                     <input
                       id="signup-passphrase-confirm"
@@ -738,14 +759,17 @@ export default function AuthModal({
                       type="password"
                       autoComplete="new-password"
                       required
-                      placeholder="Re-enter passphrase verification..."
+                      placeholder="Re-enter your password"
                       value={signupPassConfirm}
                       onChange={(e) => setSignupPassConfirm(e.target.value)}
                       className="w-full h-11 px-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
                     />
                   </div>
 
-                  {/* Optional Referral / Institutional Pass */}
+                  {/* Optional Discount Code (owner 09-06: was "Institutional or Peer Pass"
+                      with a hardcoded +10,000 TOKENS award — that died here. The field now
+                      redeems a real referral code at /api/referrals/redeem, which grants a
+                      one-time order discount: 30% new user / 15% existing. No token awards.) */}
                   <div className="pt-1">
                     <button
                       type="button"
@@ -754,24 +778,30 @@ export default function AuthModal({
                     >
                       <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider">
                         <Ticket className="w-3.5 h-3.5 text-secondary" />
-                        Institutional or Peer Pass
+                        Discount code (optional)
                       </span>
-                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-semibold">
-                        +10,000 TOKENS
+                      <span className="font-mono text-[10px] text-on-surface-variant/70">
+                        {referralOpen ? 'hide' : 'add'}
                       </span>
                     </button>
                     {referralOpen && (
-                      <input
-                        type="text"
-                        placeholder="e.g. STANFORD-AI-7749"
-                        value={referralCode}
-                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                        className="w-full h-10 px-3 mt-1.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs uppercase text-on-surface focus:outline-none focus:border-secondary transition"
-                      />
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Enter a referral or discount code"
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                          className="w-full h-10 px-3 mt-1.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs uppercase text-on-surface focus:outline-none focus:border-secondary transition"
+                        />
+                        <p className="text-[10px] text-on-surface-variant mt-1">
+                          A referral code grants a one-time discount on your first order. It does
+                          not add tokens.
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {/* Protocol Consent Checkbox */}
+                  {/* Terms Consent Checkbox */}
                   <div className="flex items-start gap-2.5 pt-1 select-none">
                     <input
                       type="checkbox"
@@ -781,8 +811,14 @@ export default function AuthModal({
                       className="w-4 h-4 mt-0.5 rounded text-primary focus:ring-0 cursor-pointer accent-primary"
                     />
                     <label htmlFor="protocol-consent" className="text-[11px] text-on-surface-variant leading-tight cursor-pointer">
-                      I agree to the Protocol Terms and understand that lost local cryptographic keys{' '}
-                      <span className="text-error font-semibold">cannot</span> be recovered by server nodes.
+                      I agree to the{' '}
+                      <a href="#/terms" className="text-primary underline underline-offset-2 hover:opacity-80" onClick={(e) => e.stopPropagation()}>
+                        Terms of Service
+                      </a>{' '}
+                      and{' '}
+                      <a href="#/privacy" className="text-primary underline underline-offset-2 hover:opacity-80" onClick={(e) => e.stopPropagation()}>
+                        Privacy Policy
+                      </a>.
                     </label>
                   </div>
 
@@ -801,7 +837,7 @@ export default function AuthModal({
                     glow={true}
                     className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
                   >
-                    <span>{loading ? 'Initializing Node...' : 'Initialize Sovereign Node'}</span>
+                    <span>{loading ? 'Creating account...' : 'Create account'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
 
@@ -815,18 +851,19 @@ export default function AuthModal({
                       }}
                       className="text-on-surface-variant hover:text-primary transition cursor-pointer"
                     >
-                      Already have an identity? <span className="text-primary font-semibold">Sign in</span>
+                      Already have an account? <span className="text-primary font-semibold">Sign in</span>
                     </button>
                   </div>
                 </form>
               )}
             </div>
 
-            {/* Cryptographic Zero-Telemetry Notice */}
+            {/* Security Notice */}
             <div className="mt-5 pt-3 border-t border-outline-variant/15 flex items-start gap-2 text-on-surface-variant">
               <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
               <span className="font-mono text-[10px] leading-relaxed">
-                Deterministic tokens are validated with Ed25519 local signatures. Zero telemetry emitted to third parties.
+                Your session is protected with encrypted password storage and optional two-factor
+                authentication. If you forget your password, the recovery flow lets you set a new one.
               </span>
             </div>
           </div>
