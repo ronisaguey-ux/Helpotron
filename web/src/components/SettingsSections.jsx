@@ -26,6 +26,14 @@ export function SettingsSections({
   const [copiedId, setCopiedId] = useState(false);
   const [clearedCache, setClearedCache] = useState(false);
 
+  // Appearance settings are nested (settings.appearance.*); fontScale is
+  // stored either as legacy 0–50 (default 50 = 100%) or as a multiplier.
+  const rawFontScale = Number(settings.appearance?.fontScale ?? 50);
+  const normFontScale = Number.isFinite(rawFontScale) && rawFontScale > 0
+    ? (rawFontScale > 2 ? rawFontScale / 50 : rawFontScale)
+    : 1;
+  const shownFontScale = Math.min(1.4, Math.max(0.8, normFontScale));
+
   const handleCopyId = () => {
     navigator.clipboard.writeText(userId || 'usr_0941');
     setCopiedId(true);
@@ -141,13 +149,13 @@ export function SettingsSections({
                     { id: 'light', label: 'Light', icon: Sun },
                     { id: 'system', label: 'System', icon: Laptop },
                   ].map((t) => {
-                    const isSel = (settings.theme || 'dark') === t.id;
+                    const isSel = (settings.appearance?.theme || 'dark') === t.id;
                     const Icon = t.icon;
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => set({ theme: t.id })}
+                        onClick={() => set({ appearance: { theme: t.id } })}
                         className={`py-2 rounded-xl font-label-caps text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           isSel
                             ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm'
@@ -169,7 +177,7 @@ export function SettingsSections({
                     Interface Font Scale
                   </label>
                   <span className="font-code-sm text-xs font-semibold text-primary">
-                    {Math.round((settings.fontScale || 1.0) * 100)}%
+                    {Math.round(shownFontScale * 100)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-unit-3">
@@ -178,8 +186,8 @@ export function SettingsSections({
                     min={0.85}
                     max={1.25}
                     step={0.05}
-                    value={settings.fontScale || 1.0}
-                    onChange={(e) => set({ fontScale: Number(e.target.value) })}
+                    value={shownFontScale}
+                    onChange={(e) => set({ appearance: { fontScale: Number(e.target.value) } })}
                     className="w-full accent-primary cursor-pointer"
                   />
                 </div>
@@ -206,8 +214,8 @@ export function SettingsSections({
                     </div>
                     <input
                       type="checkbox"
-                      checked={!!settings[item.key]}
-                      onChange={(e) => set({ [item.key]: e.target.checked })}
+                      checked={!!(settings.accessibility && settings.accessibility[item.key])}
+                      onChange={(e) => set({ accessibility: { [item.key]: e.target.checked } })}
                       className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
                     />
                   </label>
@@ -218,11 +226,11 @@ export function SettingsSections({
             {/* Right Column: Live AppearancePreview Tile (§3.18.1) */}
             <div className="lg:col-span-6 flex flex-col justify-center">
               <AppearancePreview
-                theme={settings.theme || 'dark'}
-                fontScale={settings.fontScale || 1.0}
-                highContrast={!!settings.highContrast}
-                reducedMotion={!!settings.reducedMotion}
-                dyslexiaFriendly={!!settings.dyslexiaFriendly}
+                theme={settings.appearance?.theme || 'dark'}
+                fontScale={shownFontScale}
+                highContrast={!!(settings.accessibility && settings.accessibility.highContrast)}
+                reducedMotion={!!(settings.accessibility && settings.accessibility.reducedMotion)}
+                dyslexiaFriendly={!!(settings.accessibility && settings.accessibility.dyslexiaFriendly)}
               />
             </div>
           </div>

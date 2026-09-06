@@ -22,6 +22,7 @@ import {
   Lock,
   ChevronRight,
   ExternalLink,
+  ShieldCheck,
 } from 'lucide-react';
 import api from '../api.js';
 
@@ -124,7 +125,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       formData.append('user_id', userId);
 
       setUploadProgress(60);
-      const res = await api.uploadDump(formData);
+      const res = await api.uploadDumpFile(formData);
       setUploadProgress(100);
       showToast(`Uploaded ${file.name} successfully!`);
       await fetchItems();
@@ -149,7 +150,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       formData.append('file', file);
       formData.append('user_id', userId);
 
-      await api.uploadDump(formData);
+      await api.uploadDumpFile(formData);
       setPasteText('');
       showToast('Pasted assignment text uploaded!');
       await fetchItems();
@@ -304,6 +305,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   // Active batch calculations
   const activeBatchItems = (batchEstimate?.items || []).filter((i) => !batchSkipIds.has(i.id));
   const activeBatchTokens = activeBatchItems.reduce((acc, i) => acc + (i.est_tokens || 0), 0);
+  const activeBatchCostUsd = activeBatchItems.reduce((acc, i) => acc + (i.est_cost || 0), 0);
   const remainingTokensAfter = Math.max(0, userTokenBalance - activeBatchTokens);
 
   return (
