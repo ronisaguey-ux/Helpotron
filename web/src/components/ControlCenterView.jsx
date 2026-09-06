@@ -85,6 +85,10 @@ export default function ControlCenterView({ userId = "" }) {
       } else if (actionType === "credits") {
         const amt = parseInt(actionValue, 10) || 50000;
         await api.adminAdjustCredits(targetId, amt, "Admin Control Center adjustment");
+        // 09-06: assignment dump / agent work is gated on settings.token_balance,
+        // not the credits ledger — top up BOTH so a CC grant actually unlocks
+        // features (beta flow: operator grants 100-300 tokens manually).
+        await api.adminGrantTokens(targetId, amt);
         triggerFeedback(`Added ${amt.toLocaleString()} tokens to ${activeUserMenu.alias || targetId}`);
       } else if (actionType === "password") {
         if (!actionValue || actionValue.length < 8) {
@@ -604,7 +608,7 @@ export default function ControlCenterView({ userId = "" }) {
                     }}
                     className="w-full p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high text-on-surface text-left text-xs font-code-sm flex items-center justify-between transition cursor-pointer"
                   >
-                    <span>Change Plan Tier (0/5/15/30)</span>
+                    <span>Change Plan Tier (0/10/20/40)</span>
                     <span className="text-outline">→</span>
                   </button>
                   <button
