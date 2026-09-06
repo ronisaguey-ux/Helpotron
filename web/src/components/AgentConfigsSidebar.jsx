@@ -91,7 +91,7 @@ export default function AgentConfigsSidebar({
       badgeVariant: 'primary',
       reasoningDepth: 'Custom',
       writingStyle: 'User Defined',
-      detectorStealth: '95% Standard',
+      detectorStealth: 'Humanizer ready',
       iconType: 'custom',
     };
     onAddIdentity(newId);
@@ -276,10 +276,10 @@ export default function AgentConfigsSidebar({
                         </div>
                         <div className="bg-surface-container-lowest/70 border border-outline-variant/15 rounded-xl p-2 flex flex-col">
                           <span className="font-label-caps text-[9px] text-outline uppercase">
-                            Stealth
+                            Humanizer
                           </span>
                           <span className="font-tabular-stat-md text-[11px] text-sem-green font-medium mt-0.5 truncate">
-                            {persona.detectorStealth || '95%'}
+                            {persona.detectorStealth || 'Standard'}
                           </span>
                         </div>
                       </div>

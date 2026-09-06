@@ -1,6 +1,12 @@
 /**
  * monitors.js
- * Helpers, formatting, and metric derivation for 3.20 Monitors & Telemetry.
+ * Helpers, formatting, and metric derivation for the Monitors panel.
+ *
+ * Owner 09-06: all fabricated fallbacks removed. The panel came from the v4
+ * "spec 3.20 telemetry" era and fell back to plausible-looking fake numbers
+ * (84.2 req/s, 41.2% memory, 48,290 AST units, "+14.2%" deltas) whenever the
+ * real payload was missing — fake metrics presented as real ones. Now missing
+ * data renders as "—" and deltas are only shown when the server sent them.
  */
 
 export function fmt(v) {
@@ -14,10 +20,10 @@ export function formatPercent(num, decimals = 1) {
 }
 
 export const P95_GLOSSARY_TEXT =
-  "p95 latency is the 95th percentile response time: 95% of learner requests completed faster than this duration. Tail outliers fall in the remaining 5%.";
+  "p95 latency is the 95th percentile response time: 95% of requests completed faster than this duration. Tail outliers fall in the remaining 5%.";
 
 /**
- * Calculates error rate and status badge tier from status counts or direct values.
+ * Calculates error rate and status badge tier from status counts.
  */
 export function calculateErrorRate(statusCounts = {}, totalFallback = 0) {
   const counts = typeof statusCounts === "object" && statusCounts !== null ? statusCounts : {};
@@ -32,16 +38,17 @@ export function calculateErrorRate(statusCounts = {}, totalFallback = 0) {
     }
   }
 
-  const rate = total > 0 ? (errorCount / total) * 100 : 0.04;
-  const formatted = `${rate.toFixed(2)}%`;
+  // No data yet is not "0.04% healthy" — it is simply unknown.
+  const rate = total > 0 ? (errorCount / total) * 100 : null;
+  const formatted = rate === null ? "—" : `${rate.toFixed(2)}%`;
 
-  let tier = "sem-green";
-  let statusLabel = "STABLE";
+  let tier = "outline";
+  let statusLabel = rate === null ? "NO DATA" : "STABLE";
 
-  if (rate > 1.0) {
+  if (rate !== null && rate > 1.0) {
     tier = "error";
     statusLabel = "ELEVATED";
-  } else if (rate > 0.1) {
+  } else if (rate !== null && rate > 0.1) {
     tier = "sem-amber";
     statusLabel = "MONITORING";
   }
@@ -57,18 +64,31 @@ export function calculateErrorRate(statusCounts = {}, totalFallback = 0) {
 }
 
 /**
- * Derives traffic throughput metrics from monitor payload.
+ * Derives traffic metrics from the real monitor payload only.
+ * Every value the server does not supply stays null (rendered "—").
  */
 export function deriveTrafficMetrics(traffic = {}) {
-  const total = Number(traffic.total_requests ?? traffic.total ?? 0);
-  const ratePerSec = Number(traffic.rate_per_sec ?? traffic.req_per_sec ?? (total > 0 ? (total / 86400).toFixed(1) : 84.2));
-  const p95Latency = Number(traffic.p95_latency_ms ?? traffic.p95_latency ?? 18.4);
-  const memoryPressure = Number(traffic.memory_pressure_pct ?? 41.2);
-  const errorRateData = calculateErrorRate(traffic.status_counts, total);
+  const total = Number(traffic.total_requests ?? traffic.total ?? null) || null;
+  const ratePerMin = Number(traffic.requests_per_min ?? null);
+  const ratePerSec =
+    Number(traffic.rate_per_sec ?? traffic.req_per_sec ?? null) ??
+    (ratePerMin !== null && !Number.isNaN(ratePerMin) ? ratePerMin / 60 : null);
+  // p95 / memory pressure are not published by /api/monitors/overview — they
+  // stay unknown rather than being invented.
+  const p95Latency = (() => {
+    const n = Number(traffic.p95_latency_ms ?? traffic.p95_latency);
+    return Number.isFinite(n) ? n : null;
+  })();
+  const memoryPressure = (() => {
+    const n = Number(traffic.memory_pressure_pct);
+    return Number.isFinite(n) ? n : null;
+  })();
+  const errorRateData = calculateErrorRate(traffic.status_counts, 0);
 
   return {
     total,
-    ratePerSec,
+    ratePerSec: ratePerSec === null || Number.isNaN(ratePerSec) ? null : Number(ratePerSec.toFixed(2)),
+    ratePerMin,
     p95Latency,
     memoryPressure,
     errorRateData,
@@ -76,20 +96,36 @@ export function deriveTrafficMetrics(traffic = {}) {
 }
 
 /**
- * Normalizes Data Lake counts & delta badges.
+ * Normalizes Data Lake counts — real server counts only; unknown stays null.
  */
 export function parseDataLakeCounts(datalake = {}) {
-  const events = Number(datalake.operational_events ?? 48290);
-  const feedback = Number(datalake.user_feedback ?? 128);
-  const microcredits = Number(datalake.microcredit_submissions ?? 640);
-  const humanized = Number(datalake.humanized_samples ?? 218);
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const events = num(datalake.operational_events);
+  const feedback = num(datalake.user_feedback);
+  const microcredits = num(datalake.microcredit_submissions);
+  const humanized = num(datalake.humanized_samples);
 
   const deltas = datalake.deltas_last_window || {};
+  const delta = (k) => (Number.isFinite(Number(deltas[k])) ? Number(deltas[k]) : null);
 
   return [
-    { label: "Operational AST Events", value: fmt(events), delta: deltas.operational_events ?? "+14.2%" },
-    { label: "Student Anomaly Reports", value: fmt(feedback), delta: deltas.user_feedback ?? "+2" },
-    { label: "Microcredit Submissions", value: fmt(microcredits), delta: deltas.microcredit_submissions ?? "+48" },
-    { label: "Humanized Proof Samples", value: fmt(humanized), delta: deltas.humanized_samples ?? "+12" },
+    { label: "Operational events", value: fmt(events), delta: delta("operational_events") },
+    { label: "User feedback", value: fmt(feedback), delta: delta("user_feedback") },
+    { label: "Microcredit submissions", value: fmt(microcredits), delta: delta("microcredit_submissions") },
+    { label: "Humanized samples", value: fmt(humanized), delta: delta("humanized_samples") },
   ];
+}
+
+/** Formats seconds as compact human duration, e.g. "4m 12s" / "1h 09m". */
+export function formatUptime(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s < 0) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(Math.round(s % 60)).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${String(m % 60).padStart(2, "0")}m`;
 }

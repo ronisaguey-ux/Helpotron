@@ -247,12 +247,7 @@ export default function BillingView({ userId = '' }) {
     },
   ];
 
-  const TOP_UPS = [
-    { id: 'topup_5', name: 'Micro Pack', price: 5, tokens: 500 },
-    { id: 'topup_10', name: 'Standard Pack', price: 10, tokens: 1000 },
-    { id: 'topup_25', name: 'Power Pack', price: 25, tokens: 2500 },
-    { id: 'topup_50', name: 'Semester Pack', price: 50, tokens: 5000 },
-  ];
+
 
   return (
     <div className="space-y-8">
@@ -436,52 +431,13 @@ export default function BillingView({ userId = '' }) {
         </div>
       </div>
 
-      {/* Token Top-Up Packs */}
-      <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-6 rounded-3xl border border-outline-variant/20 shadow-sm space-y-4">
-        <div>
-          <h3 className="font-title-md text-title-md text-on-surface font-semibold">On-Demand Token Top-ups</h3>
-          <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-            Instantly add tokens to your compute reservoir. Never expires.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {TOP_UPS.map((pack) => (
-            <div
-              key={pack.id}
-              className="p-5 rounded-2xl bg-surface-container-low/70 border border-outline-variant/15 flex flex-col justify-between hover:border-outline-variant/35 transition"
-            >
-              <div className="space-y-2">
-                <span className="font-label-caps text-xs text-on-surface-variant uppercase">{pack.name}</span>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-tabular-stat text-2xl text-on-surface font-bold">${pack.price}</span>
-                  <span className="font-code-sm text-xs text-on-surface-variant">USD</span>
-                </div>
-                <span className="font-tabular-stat text-sm text-primary font-semibold block">
-                  +{pack.tokens.toLocaleString()} Tokens
-                </span>
-              </div>
-              <div className="pt-4">
-                <button
-                  type="button"
-                  onClick={() => openCheckout({ type: 'topup', name: pack.name, price: pack.price, tokens: pack.tokens })}
-                  className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs tracking-wider transition active:scale-[0.98]"
-                >
-                  Purchase Pack
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Credit & Transaction Activity Ledger */}
       <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-6 rounded-3xl border border-outline-variant/20 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-title-md text-title-md text-on-surface font-semibold">Activity &amp; Receipts Ledger</h3>
             <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-              Cryptographically verified compute deduction and credit history.
+              Verified compute deduction and credit history.
             </p>
           </div>
           <span className="font-tabular-stat text-xs text-on-surface-variant bg-surface-container-high px-3 py-1 rounded-full">

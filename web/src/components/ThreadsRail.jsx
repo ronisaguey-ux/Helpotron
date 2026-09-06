@@ -15,7 +15,7 @@ export default function ThreadsRail({
   onDeleteThread = () => {},
   effortScore = 600,
   onEffortChange = () => {},
-  modelBadge = 'Claude 3.5 Sonnet + Z3 SMT Prover',
+  modelBadge = 'Gemini Flash · effort-routed',
 }) {
   const [filterText, setFilterText] = useState('');
   const [editingId, setEditingId] = useState(null);
