@@ -696,6 +696,8 @@ export const api = {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   }),
+  deleteDataLakeEntry: (id) => request(`/api/datalake/${id}`, { method: 'DELETE' }),
+  exportDataLakeEntries: () => request('/api/datalake/export.json', { method: 'GET' }),
 
   // Referrals (40-digit single-use codes)
   getReferralCode: () => request('/api/referrals/code', { method: 'GET' }),
@@ -800,6 +802,8 @@ export const api = {
   getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
   routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId}`, { method: 'POST', body: JSON.stringify(payload) }),
   finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }) }),
+  batchEstimateDumpItems: (ids = '') => request(`/api/dump/batch/estimate${ids ? `?ids=${encodeURIComponent(ids)}` : ''}`, { method: 'GET' }),
+  batchFinalizeDumpItems: (payload) => request('/api/dump/batch/finalize', { method: 'POST', body: JSON.stringify(payload) }),
   deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
 
   // Extension Version & Updates
