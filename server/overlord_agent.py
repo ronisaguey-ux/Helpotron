@@ -786,10 +786,10 @@ class OverlordAgent:
         if re.search(r"\b(ai detector|ai detectors|detector toggles?|originality\.ai|pangram|sapling)\b", text, re.IGNORECASE):
             dets = dict(user_settings.get("ai_detectors", {}))
             if "disable all" in text.lower() or "turn off all" in text.lower():
-                dets = {k: False for k in ["pangram", "sapling", "perplexity_cadence", "statistical_burstiness"]}
+                dets = {k: False for k in ["pangram", "sapling", "perplexity_cadence", "statistical_burstiness", "zippy", "roberta_onnx"]}
                 reply = "🛡️ All AI detector pre-scans disabled."
             else:
-                dets = {k: True for k in ["pangram", "sapling", "perplexity_cadence", "statistical_burstiness"]}
+                dets = {k: True for k in ["pangram", "sapling", "perplexity_cadence", "statistical_burstiness", "zippy", "roberta_onnx"]}
                 reply = "🛡️ All AI detector pre-scans ENABLED with zero-leakage threshold."
             user_settings["ai_detectors"] = dets
             user.settings = dict(user_settings)

@@ -159,10 +159,12 @@ def test_detection_min_human_clamped():
 
 def test_detection_detectors_default_and_toggles():
     # 09-04 A8: default set is Sapling + Pangram — Winston purged.
-    assert detection_detectors(_settings()) == ["sapling", "pangram"]
+    # 09-06 (owner): + the free self-hosted tier (ZipPy, RoBERTa-ONNX).
+    assert detection_detectors(_settings()) == ["sapling", "pangram", "zippy", "roberta_onnx"]
     s = _settings(detection={"enabled": "on", "min_human": 70,
-                             "detectors": {"sapling": False, "pangram": True}})
-    assert detection_detectors(s) == ["pangram"]
+                             "detectors": {"sapling": False, "pangram": True,
+                                           "roberta_onnx": False}})
+    assert detection_detectors(s) == ["pangram", "zippy"]
 
 
 @pytest.mark.asyncio
