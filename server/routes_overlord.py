@@ -330,6 +330,16 @@ async def get_assignment_full_view(assignment_id: int, request: Request, db: Ses
             "teacher_name": progress.get("teacher_name") or "",
             # Completed work from Assignment Dump "do it" finalize (operator 08-26).
             "do_it_work": progress.get("do_it_work"),
+            # Team-direction first draft + real AI-detector verdicts. The
+            # working-draft card renders these; without them it falls back to a
+            # placeholder "88%" and "PASSED STEALTH" no matter what (09-06).
+            "first_draft": progress.get("first_draft"),
+            "ai_score": progress.get("ai_score"),
+            "detector_risk": progress.get("detector_risk"),
+            "detector_passed": progress.get("detector_passed"),
+            "detector_details": progress.get("detector_details"),
+            "detector_scored_chars": progress.get("detector_scored_chars"),
+            "detector_at": progress.get("detector_at"),
             "dump_info": dump_info,
         },
         "materials": _assignment_materials(db, assignment_id),
