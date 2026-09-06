@@ -39,10 +39,10 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
   const cycleTokens = Math.round(Number(cycleSpendUsd) * 100);
 
   const categories = [
-    { label: 'Universal Assignment Dump', key: 'dump', pct: 45, estUsd: (Number(cycleSpendUsd) * 0.45).toFixed(2), tokens: Math.round(cycleTokens * 0.45) },
-    { label: 'Flashcards & Practice Quizzes', key: 'study', pct: 30, estUsd: (Number(cycleSpendUsd) * 0.30).toFixed(2), tokens: Math.round(cycleTokens * 0.30) },
-    { label: 'Research & Essay Synthesis', key: 'synthesis', pct: 18, estUsd: (Number(cycleSpendUsd) * 0.18).toFixed(2), tokens: Math.round(cycleTokens * 0.18) },
-    { label: 'AI Detection & Calibration', key: 'detection', pct: 7, estUsd: (Number(cycleSpendUsd) * 0.07).toFixed(2), tokens: Math.round(cycleTokens * 0.07) },
+    { label: 'Universal Assignment Dump', key: 'dump', pct: 45, tokens: Math.round(cycleTokens * 0.45) },
+    { label: 'Flashcards & Practice Quizzes', key: 'study', pct: 30, tokens: Math.round(cycleTokens * 0.30) },
+    { label: 'Research & Essay Synthesis', key: 'synthesis', pct: 18, tokens: Math.round(cycleTokens * 0.18) },
+    { label: 'AI Detection & Calibration', key: 'detection', pct: 7, tokens: Math.round(cycleTokens * 0.07) },
   ];
 
   return (
@@ -87,16 +87,16 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-2xl md:text-3xl text-on-surface font-bold">${cycleSpendUsd}</span>
-              <span className="font-tabular-stat text-sm text-primary font-semibold">{cycleTokens} TOKENS</span>
+              <span className="font-tabular-stat text-2xl md:text-3xl text-on-surface font-bold">{cycleTokens.toLocaleString()}</span>
+              <span className="font-tabular-stat text-sm text-primary font-semibold">TOKENS</span>
             </div>
             <div className="w-full bg-surface-container-high h-1.5 rounded-full mt-3 overflow-hidden">
               <div className="bg-primary h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(5, (Number(cycleSpendUsd) / 50) * 100))}%` }}></div>
             </div>
           </div>
           <div className="flex items-center justify-between mt-3 pt-2 text-xs font-code-sm text-on-surface-variant border-t border-outline-variant/10">
-            <span>Cycle budget cap: $50.00</span>
-            <span className="text-primary font-tabular-stat">1 token = $0.01</span>
+            <span>Cycle budget cap: 5,000 tokens</span>
+            <span className="text-primary font-tabular-stat">Metered in task tokens</span>
           </div>
         </div>
 
@@ -108,8 +108,8 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-2xl md:text-3xl text-on-surface font-bold">$0.010</span>
-              <span className="font-label-caps text-xs text-on-surface-variant">/ 1 TOKEN</span>
+              <span className="font-tabular-stat text-2xl md:text-3xl text-on-surface font-bold">100%</span>
+              <span className="font-label-caps text-xs text-on-surface-variant">CONTENT-METERED</span>
             </div>
             <div className="inline-flex items-center gap-1.5 mt-3 text-sem-green text-xs font-code-sm">
               <ShieldCheck className="w-4 h-4 text-sem-green" />
@@ -117,7 +117,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
             </div>
           </div>
           <div className="flex items-center justify-between mt-3 pt-2 text-xs font-code-sm text-on-surface-variant border-t border-outline-variant/10">
-            <span>Proof overhead: $0.00</span>
+            <span>Proof overhead: none</span>
             <span className="text-primary">Accuracy: 100%</span>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
               <span className="font-code-sm text-xs text-on-surface-variant">TOKENS</span>
             </div>
             <p className="font-code-sm text-xs text-on-surface-variant mt-2">
-              Equivalency: ${(currentTokens * 0.01).toFixed(2)} USD available compute capacity.
+              Available compute capacity: {currentTokens.toLocaleString()} tokens.
             </p>
           </div>
           <div className="flex items-center justify-between mt-3 pt-2 text-xs font-code-sm text-on-surface-variant border-t border-outline-variant/10">
@@ -216,8 +216,8 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
               </div>
               <div className="flex items-center gap-4 text-right">
                 <div className="flex flex-col">
-                  <span className="font-tabular-stat text-on-surface font-semibold">${cat.estUsd} USD</span>
-                  <span className="font-code-sm text-[11px] text-on-surface-variant">{cat.tokens} tokens</span>
+                  <span className="font-tabular-stat text-on-surface font-semibold">{cat.tokens.toLocaleString()} tokens</span>
+                  <span className="font-code-sm text-[11px] text-on-surface-variant">this cycle</span>
                 </div>
                 <span className="font-chip-status text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-md">
                   {cat.pct}%
