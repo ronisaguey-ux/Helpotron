@@ -47,6 +47,8 @@ import MobileDrawer from './MobileDrawer.jsx';
 import MobileBottomBar from './MobileBottomBar.jsx';
 import DevContactModal from './DevContactModal.jsx';
 import NewAssignmentModal from './NewAssignmentModal.jsx';
+import DemoRibbon from './DemoRibbon.jsx';
+import DemoModeToggle from './DemoModeToggle.jsx';
 
 const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 
@@ -416,6 +418,9 @@ export default function AppShell({
               </span>
             </button>
 
+            {/* Sandbox Demo Environment Toggle */}
+            <DemoModeToggle />
+
             {/* Notifications Bell Trigger */}
             <div className="relative" ref={notificationsRef}>
               <button
@@ -503,6 +508,7 @@ export default function AppShell({
 
         {/* Canvas Body */}
         <main id="main-content" className="flex-1 p-4 sm:p-6 lg:p-8 max-w-page-max mx-auto w-full pb-20 lg:pb-8">
+          <DemoRibbon />
           {children}
         </main>
       </div>
