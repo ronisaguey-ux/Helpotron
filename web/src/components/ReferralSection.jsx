@@ -20,9 +20,9 @@ import {
 
 // Referrer rewards per plan purchased: Basic 2, Pro 5, Elite 10
 const PLAN_REWARDS = [
-  { plan: 'Student Basic ($5)', credits: 2, usd: '$2.00', tokens: '200 tokens' },
-  { plan: 'Academic Pro ($15)', credits: 5, usd: '$5.00', tokens: '500 tokens' },
-  { plan: 'Researcher Elite ($30)', credits: 10, usd: '$10.00', tokens: '1,000 tokens' },
+  { plan: 'Basic ($10)', credits: 2, usd: '$2.00', tokens: '300 tokens' },
+  { plan: 'Pro ($20)', credits: 5, usd: '$5.00', tokens: '1,000 tokens' },
+  { plan: 'Elite ($40)', credits: 10, usd: '$10.00', tokens: '2,700 tokens' },
 ];
 
 export default function ReferralSection({ userId = '' }) {

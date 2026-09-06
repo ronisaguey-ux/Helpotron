@@ -192,7 +192,7 @@ export default function BillingView({ userId = '' }) {
     {
       id: 'basic',
       planId: 'basic',
-      name: 'Student Basic',
+      name: 'Basic',
       priceMonthly: 10,
       priceYearly: 100,
       tokens: 300,
@@ -210,7 +210,7 @@ export default function BillingView({ userId = '' }) {
     {
       id: 'pro',
       planId: 'pro',
-      name: 'Academic Pro',
+      name: 'Pro',
       priceMonthly: 20,
       priceYearly: 200,
       tokens: 1000,
@@ -229,7 +229,7 @@ export default function BillingView({ userId = '' }) {
     {
       id: 'elite',
       planId: 'elite',
-      name: 'Researcher Elite',
+      name: 'Elite',
       priceMonthly: 40,
       priceYearly: 400,
       tokens: 2700,

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Award,
   Zap,
+  Download,
 } from 'lucide-react';
 import { loadSettings, saveSettings } from '../lib/settings.js';
 
@@ -54,6 +55,9 @@ export default function SubjectSettingsPanel({
   isOpen = false,
   onClose,
   onSettingsChanged,
+  onExport = null,
+  onDelete = null,
+  isCustom = false,
 }) {
   const [configs, setConfigs] = useState(null);
   const [overrides, setOverrides] = useState(new Set());
@@ -198,6 +202,28 @@ export default function SubjectSettingsPanel({
           </div>
 
           <div className="flex items-center gap-3 self-end md:self-auto">
+            {onExport && (
+              <button
+                type="button"
+                onClick={onExport}
+                className="h-11 px-4 rounded-xl border border-outline-variant/30 hover:border-primary/40 hover:text-primary text-on-surface-variant font-label-caps text-label-caps transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                title="Export this subject's data"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export</span>
+              </button>
+            )}
+            {onDelete && isCustom && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="h-11 px-4 rounded-xl border border-error/30 hover:bg-error/10 text-error font-label-caps text-label-caps transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                title="Delete this custom subject module"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleResetAllToGlobal}

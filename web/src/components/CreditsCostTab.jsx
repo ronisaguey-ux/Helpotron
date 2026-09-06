@@ -125,7 +125,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
         {/* Token Balance */}
         <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-5 rounded-2xl border border-outline-variant/20 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
-            <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">Available Reservoir</span>
+            <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">Available Credits</span>
             <span className="font-chip-status text-[10px] text-sem-cyan bg-sem-cyan/15 px-2 py-0.5 rounded-lg">RESERVED</span>
           </div>
           <div>
