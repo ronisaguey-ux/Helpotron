@@ -193,11 +193,11 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
         </div>
       </section>
 
-      {/* SECTION 2: BROWSER ENCLAVE LANES (§3.14) */}
+      {/* SECTION 2: BROWSER SUPPORT */}
       <section className="space-y-4">
         <div className="space-y-0.5">
-          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Platform Channels</span>
-          <h2 className="font-title-md text-lg text-on-surface font-semibold">Supported Runtime Enclaves</h2>
+          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Platform Support</span>
+          <h2 className="font-title-md text-lg text-on-surface font-semibold">Supported Browsers</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

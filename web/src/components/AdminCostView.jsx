@@ -62,61 +62,52 @@ export default function AdminCostView() {
     }
   };
 
-  const totalCost = summary?.total_cost_usd ?? 428.12;
-  const totalCharged = summary?.total_charged_usd ?? 890.45;
-  const profitMargin = summary?.platform_profit_summary?.profit_margin_pct ?? 51.9;
-  const totalCalls = summary?.total_logs ?? 2840;
+  const totalCost = Number(summary?.total_cost_usd ?? NaN);
+  const totalCharged = Number(summary?.total_charged_usd ?? NaN);
+  const profitMargin = Number(summary?.platform_profit_summary?.profit_margin_pct ?? NaN);
+  const totalCalls = Number(summary?.total_logs ?? NaN);
 
-  const trends = summary?.trends?.length
-    ? summary.trends
-    : [
-        { date: "Day -6", day_name: "Mon", calls: 1940, cost_usd: 48.2 },
-        { date: "Day -5", day_name: "Tue", calls: 2420, cost_usd: 54.1 },
-        { date: "Day -4", day_name: "Wed", calls: 2890, cost_usd: 62.8 },
-        { date: "Day -3", day_name: "Thu", calls: 3110, cost_usd: 71.4 },
-        { date: "Day -2", day_name: "Fri", calls: 3400, cost_usd: 78.9 },
-        { date: "Day -1", day_name: "Sat", calls: 2120, cost_usd: 52.3 },
-        { date: "Today", day_name: "Sun", calls: 2840, cost_usd: 60.42 },
-      ];
+  // Real server trends only; missing data renders an honest empty chart.
+  const trends = Array.isArray(summary?.trends) ? summary.trends : [];
 
   const maxTrendCost = Math.max(...trends.map((t) => Number(t.cost_usd) || 1), 1);
 
-  // Invariant 0/5/15/30 Plan economics
+  // Plan economics — mirrors server/plans.py (trial 150, $10/300, $20/1000, $40/2700)
   const plans = [
     {
-      name: "Trial",
+      name: "Free Trial",
       price: "$0",
-      cadence: "7-Day Access",
-      cap: "100k tokens",
-      burnRate: "14.2k tok/day",
-      activeCount: usersCosts.filter((u) => u.plan === "trial" || !u.plan).length || 8,
+      cadence: "7-Day",
+      cap: "150 tokens",
+      burnRate: "5 tok/day",
+      activeCount: usersCosts.filter((u) => u.plan === "trial" || !u.plan).length,
       statusClass: "text-on-surface-variant bg-surface-container",
     },
     {
       name: "Basic",
-      price: "$5",
+      price: "$10",
       cadence: "per month",
-      cap: "500k tokens",
-      burnRate: "16.6k tok/day",
-      activeCount: usersCosts.filter((u) => u.plan === "basic").length || 24,
+      cap: "300 tokens",
+      burnRate: "10 tok/day",
+      activeCount: usersCosts.filter((u) => u.plan === "basic").length,
       statusClass: "text-primary bg-primary/10",
     },
     {
       name: "Pro",
-      price: "$15",
+      price: "$20",
       cadence: "per month",
-      cap: "2M tokens",
-      burnRate: "66.7k tok/day",
-      activeCount: usersCosts.filter((u) => u.plan === "pro").length || 42,
+      cap: "1,000 tokens",
+      burnRate: "33 tok/day",
+      activeCount: usersCosts.filter((u) => u.plan === "pro").length,
       statusClass: "text-secondary bg-secondary/15",
     },
     {
       name: "Elite",
-      price: "$30",
+      price: "$40",
       cadence: "per month",
-      cap: "5M tokens",
-      burnRate: "166.7k tok/day",
-      activeCount: usersCosts.filter((u) => u.plan === "elite").length || 18,
+      cap: "2,700 tokens",
+      burnRate: "90 tok/day",
+      activeCount: usersCosts.filter((u) => u.plan === "elite").length,
       statusClass: "text-sem-amber bg-sem-amber/15",
     },
   ];
@@ -128,14 +119,14 @@ export default function AdminCostView() {
       description: "Multi-turn autonomous homework & theorem synthesis runs",
       unitCost: "$0.003 / 1k tokens",
       typicalCost: "~$0.015 / assignment",
-      provider: "Sonnet 3.5 / DeepSeek V3",
+      provider: "Gemini Flash (effort-routed)",
     },
     {
       feature: "Audio Transcription (Lecture Voice)",
-      description: "Whisper speech-to-text chunking for classroom lectures",
+      description: "Speech-to-text chunking for classroom lectures",
       unitCost: "$0.006 / audio min",
       typicalCost: "~$0.36 / 60m lecture",
-      provider: "Whisper Large V3",
+      provider: "Gemini 3.1 Flash-Lite (transcription)",
     },
     {
       feature: "OCR & Multimodal Document Vision",
@@ -145,11 +136,11 @@ export default function AdminCostView() {
       provider: "OCR Vision Engine",
     },
     {
-      feature: "Z3 Proof Engine & Verification",
-      description: "Discrete formal logic solver and invariant constraint checking",
+      feature: "Math Sandbox Verification",
+      description: "Every calculation runs in the sandbox with its run artifact logged",
       unitCost: "Zero API Cost (Local)",
       typicalCost: "Compute runtime only",
-      provider: "Z3 SMT Invariant Engine",
+      provider: "Local sandbox",
     },
   ];
 
@@ -163,7 +154,7 @@ export default function AdminCostView() {
             Compute Cost &amp; Infrastructure Spend
           </h2>
           <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-            Telemetry-driven cost accounting, 7-day burn sparklines, and 0/5/15/30 plan economics.
+            Cost accounting from the admin summary endpoint, 7-day spend trend, and per-plan economics.
           </p>
         </div>
         <button
@@ -191,7 +182,7 @@ export default function AdminCostView() {
           </span>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="font-tabular-stat text-2xl font-bold text-on-surface">
-              ${fmt(totalCost)}
+              {Number.isFinite(totalCost) ? `$${totalCost.toFixed(2)}` : "—"}
             </span>
             <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 px-2 py-0.5 rounded-full">
               NOMINAL
@@ -208,7 +199,7 @@ export default function AdminCostView() {
           </span>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="font-tabular-stat text-2xl font-bold text-primary">
-              ${fmt(totalCharged)}
+              {Number.isFinite(totalCharged) ? `$${totalCharged.toFixed(2)}` : "—"}
             </span>
             <span className="font-code-sm text-[11px] text-primary">
               Token Eq.
@@ -225,7 +216,7 @@ export default function AdminCostView() {
           </span>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="font-tabular-stat text-2xl font-bold text-sem-green">
-              {profitMargin}%
+              {Number.isFinite(profitMargin) ? `${profitMargin.toFixed(1)}%` : "—"}
             </span>
             <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 px-2 py-0.5 rounded-full">
               HEALTHY
@@ -242,14 +233,14 @@ export default function AdminCostView() {
           </span>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="font-tabular-stat text-2xl font-bold text-on-surface">
-              {totalCalls.toLocaleString()}
+              {Number.isFinite(totalCalls) ? totalCalls.toLocaleString() : "—"}
             </span>
             <span className="font-code-sm text-[11px] text-on-surface-variant">
               Invocations
             </span>
           </div>
           <span className="font-code-sm text-[11px] text-outline mt-2">
-            Combined LLM, OCR, whisper, and embeddings
+            Combined LLM, OCR, transcription, and embeddings
           </span>
         </div>
       </div>
@@ -266,12 +257,19 @@ export default function AdminCostView() {
               Real-time daily cost trends across all tenant workloads.
             </p>
           </div>
-          <span className="font-code-sm text-xs text-on-surface-variant">
-            AVG DAILY SPEND: ${(trends.reduce((s, t) => s + (Number(t.cost_usd) || 0), 0) / (trends.length || 1)).toFixed(2)}
-          </span>
+          {trends.length > 0 && (
+            <span className="font-code-sm text-xs text-on-surface-variant">
+              AVG DAILY SPEND: ${(trends.reduce((s, t) => s + (Number(t.cost_usd) || 0), 0) / trends.length).toFixed(2)}
+            </span>
+          )}
         </div>
 
-        {/* CSS/SVG Sparkline Bars */}
+        {/* CSS/SVG Sparkline Bars — real data only */}
+        {trends.length === 0 && (
+          <div className="grid grid-cols-1 place-items-center pt-4 min-h-[140px] text-outline font-code-sm text-xs">
+            No cost history reported by the server yet.
+          </div>
+        )}
         <div className="grid grid-cols-7 gap-2 pt-4 items-end min-h-[140px]">
           {trends.map((t, idx) => {
             const costVal = Number(t.cost_usd) || 0;
@@ -311,7 +309,7 @@ export default function AdminCostView() {
           <div>
             <h3 className="font-title-md text-title-md text-on-surface font-semibold flex items-center gap-2">
               <Users className="w-4 h-4 text-secondary" />
-              Per-Plan Economics ($0 / $5 / $15 / $30 Invariant)
+              Per-Plan Economics (Free Trial / $10 / $20 / $40)
             </h3>
             <p className="font-body-sm text-xs text-on-surface-variant">
               Pricing tiers, token pool caps, and current subscriber distribution.
