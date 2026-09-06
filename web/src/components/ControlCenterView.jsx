@@ -188,7 +188,7 @@ export default function ControlCenterView({ userId = "" }) {
             Control Center
           </h1>
           <p className="font-body-sm text-xs text-on-surface-variant mt-1 max-w-2xl">
-            Who needs help? What’s broken? What am I spending? Live tenant management and fleet instrumentation.
+            Who needs help? What’s broken? What am I spending? Live tenant management and instrumentation.
           </p>
         </div>
 

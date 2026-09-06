@@ -222,7 +222,7 @@ export default function AppShell({
                     Helpotron
                   </span>
                   <span className="font-mono text-[9px] text-primary uppercase tracking-wider">
-                    OS v4.0
+                    Academic Co-pilot
                   </span>
                 </div>
               )}
