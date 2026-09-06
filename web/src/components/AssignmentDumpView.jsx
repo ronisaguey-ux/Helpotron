@@ -35,11 +35,11 @@ const FINALIZE_OPTIONS = [
 
 function estimateContentTokens(item) {
   const textLen = (item?.extracted_text || '').length;
-  if (!textLen) return 'Est. ~1 Token ($0.01)';
+  if (!textLen) return 'Est. ~1 Token';
   const inputTokens = Math.max(100, Math.round(textLen / 4));
   const estOutputTokens = Math.max(250, Math.min(4000, Math.round(inputTokens * 0.6)));
   const estTokens = Math.max(1, Math.ceil((inputTokens + estOutputTokens * 1.5) / 1000));
-  return `Est. ~${estTokens} ${estTokens === 1 ? 'Token' : 'Tokens'} ($${(estTokens * 0.01).toFixed(2)})`;
+  return `Est. ~${estTokens} ${estTokens === 1 ? 'Token' : 'Tokens'}`;
 }
 
 export default function AssignmentDumpView({ userId = '', onSelectAssignment }) {
@@ -304,7 +304,6 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   // Active batch calculations
   const activeBatchItems = (batchEstimate?.items || []).filter((i) => !batchSkipIds.has(i.id));
   const activeBatchTokens = activeBatchItems.reduce((acc, i) => acc + (i.est_tokens || 0), 0);
-  const activeBatchCostUsd = (activeBatchTokens * 0.01).toFixed(2);
   const remainingTokensAfter = Math.max(0, userTokenBalance - activeBatchTokens);
 
   return (
@@ -678,9 +677,9 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                   Est. Cost
                 </div>
                 <div className="font-tabular-stat text-xl text-on-surface font-bold">
-                  ~${activeBatchCostUsd} USD
+                  ~{activeBatchTokens.toLocaleString()} tokens
                 </div>
-                <div className="font-code-sm text-[10px] text-outline mt-0.5">$0.01 per token</div>
+                <div className="font-code-sm text-[10px] text-outline mt-0.5">Metered by task content</div>
               </div>
             </div>
 

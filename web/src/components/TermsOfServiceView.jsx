@@ -1,6 +1,6 @@
 /* ────────────────────────────────────────────────────────────────────────────
  * TermsOfServiceView.jsx — Helpotron Terms of Service (v3 Stitch v6 LUMINOUS GLASS M3)
- * 13 sections kept verbatim (0.01$/token, auto-renew, no-cash-value, refunds, forfeiture),
+ * 13 sections kept verbatim (token-based pricing, auto-renew, no-cash-value, refunds, forfeiture),
  * sticky hero header + telemetry meta bar, quick jump horizontal pill navigator,
  * tinted luminous highlight panels, legal contact card, mono legal audit line.
  * ────────────────────────────────────────────────────────────────────────── */
@@ -136,17 +136,16 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
         <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
             Helpotron uses an internal unit called <strong className="text-on-surface">task credits</strong> (also called task
-            tokens). One credit equals roughly <strong className="text-on-surface">$0.01 of real AI/API tool cost</strong>.
-            Work that costs the Service money (agent runs, quizzes, transcription, drafts) debits
+            tokens). Work that costs the Service money (agent runs, quizzes, transcription, drafts) debits
             credits from your balance.
           </p>
           <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
-            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">Pay Plans (Strict 0 / 5 / 15 / 30 Pricing Invariant):</div>
+            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">Pay Plans:</div>
             <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
-              <li><strong className="text-on-surface">Free Trial:</strong> 7-day, one-time trial with 100 credits (~$1.00 of tool budget), activated via SMS verification (one per phone number).</li>
-              <li><strong className="text-on-surface">Basic:</strong> $5/month — 300 credits/month (~$3.00 tool budget).</li>
-              <li><strong className="text-on-surface">Pro:</strong> $15/month — 1,000 credits/month (~$10.00 tool budget).</li>
-              <li><strong className="text-on-surface">Elite:</strong> $30/month — 2,700 credits/month (~$27.00 tool budget), plus priority execution.</li>
+              <li><strong className="text-on-surface">Free Trial:</strong> 7-day, one-time trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.</li>
+              <li><strong className="text-on-surface">Basic:</strong> $10/month — 300 tokens/month.</li>
+              <li><strong className="text-on-surface">Pro:</strong> $20/month — 1,000 tokens/month.</li>
+              <li><strong className="text-on-surface">Elite:</strong> $40/month — 2,700 tokens/month, plus priority execution.</li>
             </ul>
           </div>
           <div className="bg-surface-container-low/70 border border-outline-variant/30 rounded-2xl p-5 space-y-2.5 shadow-sm">

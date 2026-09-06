@@ -606,6 +606,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus]);
 
+  /* helpotron:nav event bus (09-06): any embedded card (e.g. the trial
+   * activation card's "Enable 2FA" step) can request a view switch without
+   * prop-drilling the navigate handler. */
+  useEffect(() => {
+    const onNav = (e) => {
+      const target = e?.detail;
+      if (typeof target === 'string' && target) handleSelectView(target);
+    };
+    window.addEventListener('helpotron:nav', onNav);
+    return () => window.removeEventListener('helpotron:nav', onNav);
+  }, []);
+
   useEffect(() => {
     window.__helpotron_nav = handleSelectView;
     const onNav = (e) => {

@@ -37,19 +37,19 @@ PLAN_ORDER: List[str] = ["trial", "basic", "pro", "elite"]
 PLAN_COPY: Dict[str, Dict[str, str]] = {
     "trial": {
         "name": "Free Trial",
-        "tagline": "7-day starter trial with 100 task tokens ($1.00 tool budget) — SMS verification required (1 per number).",
+        "tagline": "7-day starter trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.",
     },
     "basic": {
         "name": "Basic",
-        "tagline": "300 task tokens / month ($3.00 tool budget) for steady coursework.",
+        "tagline": "300 task tokens / month for steady coursework.",
     },
     "pro": {
         "name": "Pro",
-        "tagline": "1,000 task tokens / month ($10.00 tool budget) for a full semester load.",
+        "tagline": "1,000 task tokens / month for a full semester load.",
     },
     "elite": {
         "name": "Elite",
-        "tagline": "2,700 task tokens / month ($27.00 tool budget) for heavy research and multi-agent work.",
+        "tagline": "2,700 task tokens / month for heavy research and multi-agent work.",
     },
 }
 
@@ -83,17 +83,17 @@ def get_plan_catalogue() -> List[Dict[str, Any]]:
                 "tagline": copy.get("tagline", ""),
                 "price_cents": cents,
                 "price_monthly": cents / 100,
-                # Task tokens for compute (1 task token = 1 cent = $0.01 tool cost)
                 "monthly_task_tokens": tokens,
                 "monthly_credits": tokens,  # backwards-compatible field
-                "usage_value_usd": round(tokens * 0.01, 2),
                 "popular": plan == "pro",
                 "is_trial": is_trial,
-                "requires_sms": is_trial,
-                "badge": "1-Time Trial (SMS)" if is_trial else ("Most Popular" if plan == "pro" else None),
+                # Owner 09-06: trial requires 2FA + a 1-cent payment verification.
+                "requires_2fa": is_trial,
+                "requires_1c_payment": is_trial,
+                "badge": "1-Time Trial" if is_trial else ("Most Popular" if plan == "pro" else None),
+                # No USD-value disclosure (owner 09-06): token allowances only.
                 "capabilities": [
-                    f"{tokens:,} task tokens / month (1 token = $0.01 API tool cost)",
-                    "Credits are discount dollars ($1.00 off per credit)",
+                    f"{tokens:,} task tokens / month",
                     *SHARED_CAPABILITIES,
                 ],
             }
