@@ -82,7 +82,11 @@ class TrialVerificationService:
             "user": {
                 "public_id": user.public_id,
                 "plan": user.plan,
+                # 09-06 (owner rework): the trial grant lives in token_balance —
+                # surface it (user.credits is a separate discount currency,
+                # 0.0 here, and was previously mistaken for the grant).
                 "credits": user.credits,
+                "token_balance": round(float((user.settings or {}).get("token_balance", 0) or 0), 2),
                 "trial_claimed": True,
                 "trial_expires_at": user.trial_expires_at.isoformat() if user.trial_expires_at else None,
             },

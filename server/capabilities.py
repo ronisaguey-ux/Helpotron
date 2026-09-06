@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 from .config import config
+from .detectors import is_onnx_model_present  # self-hosted tier (owner 09-06)
 
 
 class CapabilitiesEngine:
@@ -43,8 +44,11 @@ class CapabilitiesEngine:
                 "stripe_checkout": has_stripe,
             },
             "ai_detectors": {
-                "active": [d for d, enabled in [("pangram", has_pangram), ("sapling", has_sapling)] if enabled],
-                "supported": ["pangram", "sapling", "perplexity_cadence", "statistical_burstiness"],
+                "active": ([d for d, enabled in [("pangram", has_pangram), ("sapling", has_sapling)] if enabled]
+                           + ["zippy"]
+                           + (["roberta_onnx"] if is_onnx_model_present(getattr(config, "detector_model_dir", "")) else [])),
+                "supported": ["pangram", "sapling", "zippy", "roberta_onnx",
+                              "perplexity_cadence", "statistical_burstiness"],
                 "purged": ["winston_ai"],
             },
             "models": {
