@@ -97,6 +97,18 @@ class Settings(BaseSettings):
     copyleaks_email: str = os.getenv("COPYLEAKS_EMAIL", "")
     winston_api_key: str = os.getenv("WINSTON_API_KEY", "")
 
+    # Self-hosted detectors (owner 09-06): ZipPy compression heuristic +
+    # INT8 ONNX RoBERTa classifier — both run in-process (no API keys, no
+    # outbound calls). ONNX needs the model dir populated by
+    # scripts/fetch_detector_model.sh; without it the registry degrades to
+    # ZipPy-only (tier 2 + paid tier skip accordingly). The funnel makes the
+    # paid API detectors (Pangram/Sapling/…) run ONLY when the local verdict
+    # is ambiguous (15-90 of 100), while 0-15 (= human) and 90-100 (= AI)
+    # short-circuit without any paid call.
+    detector_zippy_enabled: bool = os.getenv("HELPOTRON_DETECTOR_ZIPPY", "true").lower() in ("1", "true", "yes", "on")
+    detector_funnel_enabled: bool = os.getenv("HELPOTRON_DETECTOR_FUNNEL", "true").lower() in ("1", "true", "yes", "on")
+    detector_model_dir: str = os.getenv("HELPOTRON_DETECTOR_MODEL_DIR", str(BASE_DIR / "server" / "detector_models" / "onnx"))
+
     # Email Verification & SMTP
     email_host: str = os.getenv("EMAIL_HOST", "smtp.gmail.com")
     email_port: int = int(os.getenv("EMAIL_PORT", "587"))
