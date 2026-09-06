@@ -70,6 +70,7 @@ const AdminPanels = lazyWithRetry(() => import('./components/AdminPanels.jsx'));
 const InsightsView = lazyWithRetry(() => import('./components/InsightsView.jsx'));
 const CreditsView = lazyWithRetry(() => import('./components/CreditsView.jsx'));
 const MyAgentView = lazyWithRetry(() => import('./components/MyAgentView.jsx'));
+const NotificationsView = lazyWithRetry(() => import('./components/NotificationsView.jsx'));
 
 /* Shown while a lazy view chunk is in flight. Deliberately quiet — a spinner
  * that flashes for 80ms reads as jank, a dimmed placeholder does not. */
@@ -662,7 +663,7 @@ export default function App() {
         <AdminNoticePopup isLoggedIn={isLoggedIn} />
 
         {/* Global command palette */}
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} isAdmin={effectiveIsAdmin} />
 
         {/* Memory-budget queue notice (08-31, operator) — shows while the
             API's 10G RAM budget is consumed and requests are auto-retried */}
@@ -821,6 +822,7 @@ export default function App() {
                   {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} plan={userPlan} credits={credits} tokenBalance={tokenBalance} isAdmin={effectiveIsAdmin} />}
                   {activeView === 'extension' && <ExtensionInstallView />}
                   {activeView === 'guide' && <GuideView onGoTo={handleSelectView} />}
+                  {activeView === 'notifications' && <NotificationsView onNavigate={handleSelectView} user={{ credits, public_id: userId, token_balance: tokenBalance }} />}
 
                   {/* LEGACY + LEGAL */}
                   {activeView === 'dump' && (
