@@ -55,6 +55,8 @@ const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 export const getNavItems = () => [
   { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard, group: 'Workspace Core' },
   { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
+  { key: 'dump', label: 'Assignment Dump', Icon: Inbox, group: 'Workspace Core' },
+  { key: 'datalake', label: 'Data Lake', Icon: Database, group: 'Workspace Core' },
   { key: 'insights', label: 'Insights', Icon: BarChart3, group: 'Workspace Core' },
   { key: 'history', label: 'History', Icon: History, group: 'Workspace Core' },
   { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
