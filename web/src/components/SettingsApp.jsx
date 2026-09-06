@@ -23,10 +23,34 @@ export const SETTINGS_NAV_ITEMS = [
 ];
 
 export function applyFontScale(score) {
+  // Two stored conventions coexist: the legacy 0–50 scale (default 50 = 100%,
+  // used by QuickSettings/DEFAULT_SETTINGS) and the 0.85–1.25 multiplier the
+  // Settings slider writes. Values > 2 are the legacy 0–50 scale.
   const n = Number(score);
-  const m = Number.isFinite(n) && n > 0 ? Math.min(1.6, Math.max(0.8, n / 50)) : 1;
+  let m = 1;
+  if (Number.isFinite(n) && n > 0) {
+    m = n > 2 ? Math.min(1.6, Math.max(0.8, n / 50)) : Math.min(1.4, Math.max(0.8, n));
+  }
   document.documentElement.style.fontSize = `${16 * m}px`;
   document.documentElement.style.setProperty('--font-scale', String(m));
+}
+
+/* Section settings are nested (appearance.*, accessibility.*, ...) while some
+ * callers send flat deltas; merge one level deep so nested deltas like
+ * { appearance: { theme: 'light' } } don't wipe sibling sub-keys. */
+function mergeSettings(prev, delta) {
+  const next = { ...prev };
+  for (const [k, v] of Object.entries(delta || {})) {
+    if (
+      v && typeof v === 'object' && !Array.isArray(v) &&
+      next[k] && typeof next[k] === 'object' && !Array.isArray(next[k])
+    ) {
+      next[k] = { ...next[k], ...v };
+    } else {
+      next[k] = v;
+    }
+  }
+  return next;
 }
 
 export function applyAppearance(appearance) {
@@ -84,8 +108,11 @@ export default function SettingsApp({
 
   const updateSettings = useCallback((delta) => {
     setSettings((prev) => {
-      const next = { ...prev, ...delta };
+      const next = mergeSettings(prev, delta);
       saveSettings(next);
+      // Live-apply appearance/font changes immediately (scale used to only
+      // re-apply on hard reload, which made the slider feel dead).
+      applyAppearance(next);
       return next;
     });
 

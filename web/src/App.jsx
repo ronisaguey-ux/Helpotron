@@ -264,6 +264,7 @@ export default function App() {
     '/dashboard': ['overview', null],
     '/activity': ['activity', null],
     '/history': ['history', null],
+    '/notifications': ['notifications', null],
     '/library': ['library', null],
     '/agent': ['agent', null],
     '/monitors': ['monitors', null],
