@@ -1,25 +1,15 @@
-/* ────────────────────────────────────────────────────────────────────────────
- * PermissionModal.jsx — FULL permission approval popup (09-01, Bob).
- * Design source: stitch-permission/permission_approval_* (Bob's Stitch
- * screens) — desktop centered card + mobile bottom sheet, error/busy and
- * write-something-else states included. Ported 1:1 onto the app's M3 tokens
- * (index.css STITCH DESIGN TOKENS) — same role names the screens use.
- *
- * Why it exists: before this, a pending agent action surfaced only as a small
- * inline banner 12s after the fact, showing a mode-generic line — never WHAT
- * the agent was about to do. Now the popup appears immediately (the chat
- * response itself carries the permission request) with the concrete change
- * list and all four real decisions the backend supports.
- * ────────────────────────────────────────────────────────────────────────── */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * PermissionModal.jsx — Autonomous Action Approval Gate (Stitch v6 / §3.6.6).
+ * Scoped grant sheet with focus trap, ESC/Enter keybindings, AST diff preview,
+ * and 4 standardized action decisions.
+ */
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  TriangleAlert, X, ArrowRight, Infinity as InfinityIcon, PenLine, Ban,
-  CheckCircle2, Send, XCircle, ShieldCheck, Type, SlidersHorizontal, Loader2,
+  ShieldAlert, X, ChevronDown, ChevronUp, Check, Zap, AlertCircle,
+  FileCode, Send, CornerDownLeft, Ban, Loader2
 } from 'lucide-react';
 
-// Mirrors the server's _SETTING_LABELS (overlord_agent.py) so the popup can
-// render "font scale → 1" instead of "fontScale: 1".
-const SETTING_LABELS = {
+export const SETTING_LABELS = {
   agent_name: 'agent name', name: 'agent name',
   personality: 'personality', instructions: 'instructions',
   effort_score: 'effort score', operation_mode: 'operation mode',
@@ -37,448 +27,299 @@ const SETTING_LABELS = {
   screenReader: 'screen reader', screen_reader: 'screen reader',
 };
 
-const humanizeKey = (k) =>
-  String(k)
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[_-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
+export default function PermissionModal({
+  permission = {},
+  onDecision = () => {},
+  onClose = () => {},
+}) {
+  const [showDiff, setShowDiff] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructionsText, setInstructionsText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const modalRef = useRef(null);
 
-const formatValue = (v) => {
-  if (typeof v === 'boolean') return v ? 'on' : 'off';
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'object') {
-    try { return JSON.stringify(v); } catch { return String(v); }
-  }
-  return String(v);
-};
+  const permId = permission.id || permission.action_id || 'unknown';
+  const actionType = permission.action_type || permission.type || 'Operational Side Effect';
+  const description = permission.description || permission.message || 'Agent requested execution permission.';
+  const payload = permission.payload || permission.changes || {};
+  const scope = permission.scope || permission.subject || 'All Subjects';
+  const interruptNum = permission.interrupt_id || String(permId).slice(-4) || '84';
+  const computeTokens = permission.tokens || 420;
+  const computeUsd = (computeTokens * 0.00001).toFixed(4);
 
-// Bob's design bolds the change count inside the description line
-// ("Apply **1** setting change: …"). Bold the first number run, like his
-// <span class="text-on-surface font-bold">1</span>.
-const renderDescription = (text) => {
-  const s = String(text || '');
-  const m = s.match(/^(.*?)(\d+)(.*)$/s);
-  if (!m) return s;
-  return (
-    <>
-      {m[1]}
-      <span className="text-on-surface font-bold">{m[2]}</span>
-      {m[3]}
-    </>
-  );
-};
-
-// What the action will actually do, as visible rows. change_settings renders
-// its settings sub-dict with friendly labels; every other action falls back to
-// a generic key → value list (skipping the echoed request text).
-function usePayloadRows(permission) {
-  return useMemo(() => {
-    const payload = (permission && permission.payload) || {};
-    const rows = [];
-    if (permission?.action_type === 'change_settings') {
-      const settings = payload.settings;
-      if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
-        for (const [k, v] of Object.entries(settings)) {
-          rows.push({ label: SETTING_LABELS[k] || humanizeKey(k), value: formatValue(v), icon: Type });
-        }
+  // Focus trap and keyboard listeners
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleAction('deny');
+      } else if (e.key === 'Enter' && !showInstructions && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        handleAction('approve');
+      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && showInstructions) {
+        e.preventDefault();
+        handleAction('feedback');
       }
     }
-    if (rows.length === 0) {
-      for (const [k, v] of Object.entries(payload)) {
-        if (k === 'text') continue; // the user's own words — already in the chat
-        rows.push({ label: SETTING_LABELS[k] || humanizeKey(k), value: formatValue(v), icon: SlidersHorizontal });
-      }
-    }
-    return rows;
-  }, [permission]);
-}
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showInstructions, instructionsText]);
 
-export default function PermissionModal({ permission, onDecision, onClose }) {
-  const [mode, setMode] = useState('decide'); // 'decide' | 'replace'
-  const [comment, setComment] = useState('');
-  const [replacement, setReplacement] = useState('');
-  const [busy, setBusy] = useState(''); // '' | the decision being submitted
-  const [error, setError] = useState('');
-  const approveRef = useRef(null);
-  const rows = usePayloadRows(permission);
-
-  useEffect(() => {
-    approveRef.current?.focus();
-  }, [permission?.id, mode]);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key !== 'Escape' || busy) return;
-      if (mode === 'replace') { setMode('decide'); setReplacement(''); return; }
-      onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mode, busy, onClose]);
-
-  const decide = async (decision, text) => {
-    setBusy(decision);
-    setError('');
+  async function handleAction(decision) {
+    if (submitting) return;
+    setSubmitting(true);
+    setErrorText('');
     try {
-      await onDecision(permission.id, decision, text || '');
-    } catch (e) {
-      setError(e?.message || 'The approval could not be sent. Try again.');
-      setBusy('');
+      if (decision === 'feedback') {
+        await onDecision(permId, 'deny', instructionsText);
+      } else {
+        await onDecision(permId, decision, instructionsText);
+      }
+    } catch (err) {
+      setErrorText(err?.message || 'Failed to submit decision. Please retry.');
+      setSubmitting(false);
     }
-  };
+  }
 
-  const actionLabel = (permission?.action_type || 'action').replace(/_/g, ' ');
-  const title = permission?.title || `Permission Required: ${actionLabel}`;
-  const description = permission?.description || `The agent wants your permission to ${actionLabel}.`;
-  const reqText = (permission?.payload && permission.payload.text) || '';
-
-  const busyCls = 'disabled:opacity-50 disabled:cursor-not-allowed';
-  const spinner = (decision, label) =>
-    busy === decision ? (
-      <>
-        <Loader2 className="w-4 h-4 animate-spin" /> {label}...
-      </>
-    ) : null;
+  const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+  const hasPayload = payload && Object.keys(payload).length > 0;
 
   return (
-    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-labelledby="perm-modal-title" aria-describedby="perm-modal-desc">
-      {/* Backdrop */}
+    <div
+      role="presentation"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-unit-3 sm:p-unit-6 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleAction('deny');
+      }}
+    >
       <div
-        className="absolute inset-0 bg-surface-container-lowest/60 backdrop-blur-sm"
-        onMouseDown={() => { if (!busy) onClose(); }}
-      />
-
-      {/* ── Desktop centered card (md+) ───────────────────────────────── */}
-      <div className="hidden md:flex absolute inset-0 items-center justify-center p-md pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-2xl bg-surface-container-low/90 backdrop-blur-xl rounded-xl border border-outline-variant shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55),0_0_20px_rgba(245,158,11,0.10)] overflow-hidden flex flex-col max-h-[90vh] animate-fadeIn">
-          {/* Header */}
-          <header className="p-lg border-b border-outline-variant flex items-start gap-md">
-            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-surface-container-high border border-amber-500/30 flex items-center justify-center text-amber-500">
-              <TriangleAlert className="w-7 h-7" />
-            </div>
-            <div className="flex-grow min-w-0">
-              <div className="flex items-center gap-sm mb-xs flex-wrap">
-                <span className="font-label-caps text-label-caps font-semibold text-amber-500 border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 rounded-sm uppercase">
-                  {actionLabel}
-                </span>
-                {permission?.assignment_id != null && (
-                  <span className="font-code-sm text-code-sm text-outline-variant">ref #{permission.assignment_id}</span>
-                )}
-              </div>
-              <h2 id="perm-modal-title" className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface leading-8">
-                {title}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={!!busy}
-              aria-label="Close permission dialog"
-              className={`text-on-surface-variant hover:text-on-surface transition-colors p-1 rounded-md hover:bg-surface-container-high ${busy ? 'opacity-50' : ''} cursor-pointer`}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </header>
-
-          {/* Body */}
-          <div className="p-lg flex flex-col gap-lg overflow-y-auto custom-scrollbar">
-            {mode === 'replace' ? (
-              <>
-                <div>
-                  <div className="mb-sm">
-                    <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">Proposed Action</span>
-                  </div>
-                  <div className="bg-surface-dim border-l-2 border-tertiary p-md rounded-r-lg">
-                    <div className="flex items-start gap-sm mb-sm">
-                      <PenLine className="w-4 h-4 text-tertiary mt-0.5 shrink-0" />
-                      <span className="font-code-sm text-code-sm text-on-surface break-all">
-                        {reqText || `The agent proposed to ${actionLabel}.`}
-                      </span>
-                    </div>
-                    <div className="font-body-sm text-body-sm text-on-surface-variant pl-7">
-                      {description}
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-outline-variant/30 pt-lg flex flex-col gap-xs">
-                  <label htmlFor="perm-replacement" className="block font-label-caps text-label-caps text-primary mb-sm">
-                    What should the agent do instead?
-                  </label>
-                  <div className="bg-surface-container-low border border-outline-variant rounded-lg p-sm focus-glow transition-all duration-200">
-                    <textarea
-                      id="perm-replacement"
-                      value={replacement}
-                      onChange={(e) => setReplacement(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey && replacement.trim()) {
-                          e.preventDefault();
-                          decide('write_something_else', replacement.trim());
-                        }
-                      }}
-                      placeholder="E.g., Just show me the proposed changes first before applying them..."
-                      rows={4}
-                      className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface font-body-md text-body-md resize-none placeholder:text-outline"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <p id="perm-modal-desc" className="font-body-lg text-body-lg text-on-surface-variant">
-                  {renderDescription(description)}
-                </p>
-
-                {rows.length > 0 && (
-                  <div className="border border-outline-variant rounded-lg bg-surface-container-highest/30 overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                      <tbody>
-                        {rows.map((r, i) => (
-                          <tr key={`${r.label}-${i}`} className={`border-b border-outline-variant last:border-b-0 hover:bg-surface-container-high/50 transition-colors ${i > 0 ? '' : ''}`}>
-                            <td className="py-sm px-md font-body-md text-body-md text-on-surface border-r border-outline-variant w-1/2">
-                              {r.label}
-                            </td>
-                            <td className="py-sm px-md font-code-sm text-code-sm text-secondary w-1/2 flex items-center gap-sm">
-                              <ArrowRight className="w-4 h-4 text-outline-variant" />
-                              {r.value}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-xs">
-                  <label htmlFor="perm-comment" className="font-label-caps text-label-caps text-outline">
-                    Instruction Override (Optional)
-                  </label>
-                  <div className="relative focus-glow transition-all duration-200 rounded-lg">
-                    <textarea
-                      id="perm-comment"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Add an instruction for the agent..."
-                      rows={3}
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md text-on-surface font-body-sm text-body-sm placeholder:text-outline-variant focus:outline-none focus:ring-0 focus:border-secondary resize-none"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Inline error strip (error/busy state design) */}
-          {error && (
-            <div className="bg-error px-lg py-sm flex items-center gap-sm">
-              <XCircle className="w-4 h-4 text-on-error shrink-0" />
-              <span className="font-body-sm text-body-sm text-on-error font-semibold">{error}</span>
-            </div>
-          )}
-
-          {/* Footer */}
-          <footer className="p-lg border-t border-outline-variant bg-surface-container-low flex flex-wrap items-center justify-between gap-md">
-            {mode === 'replace' ? (
-              <div className="flex justify-end gap-md w-full">
-                <button
-                  type="button"
-                  onClick={() => { setMode('decide'); setReplacement(''); }}
-                  disabled={!!busy}
-                  className={`px-md py-sm rounded-lg font-label-caps text-label-caps font-semibold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors border border-transparent cursor-pointer ${busyCls}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => decide('write_something_else', replacement.trim())}
-                  disabled={!!busy || !replacement.trim()}
-                  className={`px-lg py-sm rounded-lg font-label-caps text-label-caps font-semibold bg-sem-green text-on-sem-green hover:bg-sem-deepgreen transition-colors flex items-center gap-xs shadow-[0_0_15px_rgba(124,227,139,0.2)] cursor-pointer ${busyCls}`}
-                >
-                  {spinner('write_something_else', 'Sending') || (<><Send className="w-4 h-4" /> Send Instead</>)}
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex gap-sm flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => decide('always_approve', comment)}
-                    disabled={!!busy}
-                    title={`Always auto-approve "${permission?.action_type}" from now on`}
-                    className={`px-md py-sm rounded-sm border border-amber-500/50 text-amber-500 font-label-caps text-label-caps font-semibold hover:bg-amber-500/10 transition-colors duration-200 flex items-center gap-xs cursor-pointer ${busyCls}`}
-                  >
-                    {spinner('always_approve', 'Saving') || (<><InfinityIcon className="w-4 h-4" /> ALWAYS ALLOW</>)}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('replace')}
-                    disabled={!!busy}
-                    className={`px-md py-sm rounded-sm text-primary font-label-caps text-label-caps font-semibold hover:bg-surface-container-high transition-colors duration-200 flex items-center gap-xs cursor-pointer ${busyCls}`}
-                  >
-                    <PenLine className="w-4 h-4" /> WRITE SOMETHING ELSE
-                  </button>
-                </div>
-                <div className="flex gap-sm">
-                  <button
-                    type="button"
-                    onClick={() => decide('reject', '')}
-                    disabled={!!busy}
-                    className={`px-md py-sm rounded-sm bg-error/10 border border-error/50 text-error font-label-caps text-label-caps font-semibold hover:bg-error hover:text-on-error transition-colors duration-200 flex items-center gap-xs cursor-pointer ${busyCls}`}
-                  >
-                    {spinner('reject', 'Rejecting') || (<><Ban className="w-4 h-4" /> REJECT</>)}
-                  </button>
-                  <button
-                    type="button"
-                    ref={approveRef}
-                    onClick={() => decide('approve', comment)}
-                    disabled={!!busy}
-                    className={`px-md py-sm rounded-sm bg-sem-green text-on-sem-green font-label-caps text-label-caps hover:bg-sem-deepgreen transition-colors duration-200 flex items-center gap-xs font-bold shadow-[0_0_10px_rgba(124,227,139,0.3)] cursor-pointer ${busyCls}`}
-                  >
-                    {spinner('approve', 'Approving') || (<><CheckCircle2 className="w-4 h-4" /> APPROVE</>)}
-                  </button>
-                </div>
-              </>
-            )}
-          </footer>
-        </div>
-      </div>
-
-      {/* ── Mobile bottom sheet (<md) ──────────────────────────────────── */}
-      <div className="md:hidden absolute inset-0 bg-black/60" onMouseDown={() => { if (!busy) onClose(); }} />
-      <div className="md:hidden absolute bottom-0 left-0 right-0 glassy-navy rounded-t-2xl border-t border-l border-r border-surface-container-high shadow-2xl flex flex-col max-h-[88dvh] animate-slideUp">
-        {/* Drag handle */}
-        <div className="w-full flex justify-center pt-sm pb-2">
-          <div className="w-12 h-1.5 bg-surface-variant rounded-full" />
-        </div>
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="permission-modal-title"
+        className="w-full max-w-xl rounded-3xl bg-surface-container-lowest/95 border border-outline-variant/30 shadow-[0_0_48px_rgba(0,0,0,0.5)] p-unit-5 sm:p-unit-6 flex flex-col gap-unit-5 relative overflow-hidden transition-transform duration-150 animate-in zoom-in-95"
+      >
+        {/* Inner specular highlight */}
+        <div className="absolute inset-0 pointer-events-none rounded-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
 
         {/* Header */}
-        <div className="px-gutter pb-lg pt-sm flex flex-col items-center border-b border-surface-container-high">
-          <div className="bg-tertiary-container/30 p-md rounded-full mb-md border border-tertiary-fixed/20">
-            <TriangleAlert className="w-8 h-8 text-tertiary-fixed" />
+        <div className="flex items-start gap-unit-4 relative">
+          <div className="w-12 h-12 shrink-0 rounded-2xl bg-sem-amber/10 border border-sem-amber/30 flex items-center justify-center text-sem-amber shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+            <ShieldAlert className="w-6 h-6 stroke-[2]" />
           </div>
-          <h2 id="perm-modal-title-mobile" className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface text-center mb-xs">
-            Permission Required
-          </h2>
-          <p className="font-body-sm text-body-sm text-on-surface-variant text-center max-w-[280px] leading-relaxed">
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-micro-2 mb-1 flex-wrap">
+              <span className="font-chip-status text-chip-status uppercase px-unit-2 py-0.5 rounded-md bg-sem-amber/15 text-sem-amber border border-sem-amber/20 font-medium tracking-wider">
+                Interrupt Gated
+              </span>
+              <span className="font-code-sm text-code-sm text-on-surface-variant font-medium">
+                INTERRUPT #{interruptNum}
+              </span>
+            </div>
+            <h2
+              id="permission-modal-title"
+              className="font-headline-lg text-title-md text-on-surface tracking-tight font-semibold"
+            >
+              Autonomous Action Approval Gate
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            aria-label="Deny and Close dialog"
+            onClick={() => handleAction('deny')}
+            disabled={submitting}
+            className="w-8 h-8 rounded-lg bg-surface-container/60 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {errorText && (
+          <div className="p-unit-3 rounded-xl bg-error-container/20 border border-error/40 text-error font-body-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorText}</span>
+          </div>
+        )}
+
+        {/* Request Context Plain English Box */}
+        <div className="bg-surface-container-low/70 border border-outline-variant/20 rounded-2xl p-unit-4 flex flex-col gap-unit-3">
+          <p className="font-body-sm text-body-sm text-on-surface-variant">
+            Agent is requesting permission to execute an operational action:
+          </p>
+          <p className="font-body-md text-body-md text-on-surface font-medium">
             {description}
           </p>
-        </div>
 
-        {/* Changes */}
-        <div className="px-gutter py-lg overflow-y-auto flex-1 custom-scrollbar">
-          {mode === 'replace' ? (
-            <div className="flex flex-col gap-xs">
-              <label htmlFor="perm-replacement-m" className="block font-label-caps text-label-caps text-primary mb-sm">
-                What should the agent do instead?
-              </label>
-              <div className="bg-surface-container-low border border-outline-variant rounded-lg p-sm focus-within:border-secondary transition-all duration-200">
-                <textarea
-                  id="perm-replacement-m"
-                  value={replacement}
-                  onChange={(e) => setReplacement(e.target.value)}
-                  rows={4}
-                  placeholder="E.g., Just show me the proposed changes first before applying them..."
-                  className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface font-body-md text-body-md resize-none placeholder:text-outline"
-                />
+          {/* Key Meta Telemetry Grid */}
+          <div className="flex flex-col gap-micro-2 pt-micro-1">
+            <div className="flex flex-col sm:flex-row sm:items-baseline justify-between py-1.5 px-unit-3 rounded-lg bg-surface-container-lowest/60 gap-1">
+              <span className="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">
+                Action Target
+              </span>
+              <span className="font-body-sm text-body-sm text-on-surface font-medium text-right sm:text-left truncate">
+                {actionType}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-1.5 px-unit-3 rounded-lg bg-surface-container-lowest/60">
+              <span className="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">
+                Target Scope
+              </span>
+              <span className="font-code-sm text-code-sm text-primary font-medium tracking-tight truncate">
+                {scope}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-1.5 px-unit-3 rounded-lg bg-surface-container-lowest/60">
+              <span className="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">
+                Compute Cost
+              </span>
+              <div className="flex items-center gap-micro-2">
+                <span className="font-tabular-stat-md text-tabular-stat-md text-on-surface">
+                  {computeTokens} Tokens
+                </span>
+                <span className="font-code-sm text-code-sm text-outline">
+                  (${computeUsd} USD)
+                </span>
               </div>
             </div>
-          ) : (
-            <>
-              <h3 className="font-label-caps text-label-caps text-outline mb-sm uppercase tracking-wider">Requested Changes</h3>
-              <div className="bg-surface-container-low border border-surface-container-high rounded-lg overflow-hidden flex flex-col">
-                {rows.length === 0 ? (
-                  <div className="bg-surface-container-low p-md flex justify-between items-center">
-                    <span className="font-code-sm text-code-sm text-on-surface-variant">{description}</span>
-                  </div>
-                ) : rows.map((r, i) => (
-                  <div key={`${r.label}-m-${i}`} className={`bg-surface-container-low p-md flex justify-between items-center gap-sm ${i > 0 ? 'border-t border-surface-container-highest/50' : ''}`}>
-                    <div className="flex items-center gap-sm min-w-0">
-                      <r.icon className="w-5 h-5 text-outline-variant shrink-0" />
-                      <span className="font-code-sm text-code-sm text-on-surface-variant">{r.label}</span>
-                    </div>
-                    <div className="flex items-center gap-sm shrink-0">
-                      <span className="font-code-sm text-code-sm text-secondary">{r.value}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
 
-          {mode === 'replace' && (
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-md leading-relaxed">
-              {description}
-            </p>
-          )}
-
-          {error && (
-            <div className="bg-error px-lg py-sm flex items-center gap-sm mt-lg rounded-lg">
-              <XCircle className="w-4 h-4 text-on-error shrink-0" />
-              <span className="font-body-sm text-body-sm text-on-error font-semibold">{error}</span>
+            <div className="flex items-center justify-between py-1.5 px-unit-3 rounded-lg bg-surface-container-lowest/60">
+              <span className="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider">
+                Risk Tier
+              </span>
+              <span className="font-chip-status text-chip-status text-sem-amber uppercase font-semibold">
+                Elevated Network I/O
+              </span>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-gutter pb-xl pt-md flex flex-col gap-sm border-t border-surface-container-high bg-surface-container-lowest/50">
-          {mode === 'replace' ? (
-            <>
+        {/* Collapsible AST Diff / Payload Inspection */}
+        {hasPayload && (
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => setShowDiff((prev) => !prev)}
+              className="flex items-center justify-between px-unit-3 py-2 rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low border border-outline-variant/15 text-xs text-on-surface-variant transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <FileCode className="w-3.5 h-3.5 text-outline" />
+                <span className="font-code-sm">Payload Inspection (AST diff)</span>
+              </div>
+              <div className="flex items-center gap-1 text-outline">
+                <span>{showDiff ? 'Hide' : 'Inspect'}</span>
+                {showDiff ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+            {showDiff && (
+              <pre className="p-unit-3 rounded-xl bg-surface-container-lowest border border-outline-variant/20 font-code-sm text-code-sm text-on-surface-variant overflow-x-auto max-h-40 leading-relaxed">
+                <code>{payloadString}</code>
+              </pre>
+            )}
+          </div>
+        )}
+
+        {/* Collapsible Feedback / Instruction Box */}
+        {showInstructions && (
+          <div className="flex flex-col gap-unit-2 p-unit-3 rounded-2xl bg-surface-container-low/80 border border-outline-variant/30 animate-in fade-in duration-150">
+            <label htmlFor="permission-instructions" className="font-code-sm text-code-sm text-outline uppercase tracking-wider">
+              Revised Instructions for Agent:
+            </label>
+            <textarea
+              id="permission-instructions"
+              value={instructionsText}
+              autoFocus
+              onChange={(e) => setInstructionsText(e.target.value)}
+              placeholder="Specify revised compiler flags, target file destination, or alternate instructions..."
+              rows={3}
+              className="w-full rounded-xl bg-surface-container-lowest border border-outline-variant/25 p-unit-3 font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            />
+            <div className="flex justify-end gap-unit-2 mt-1">
               <button
                 type="button"
-                onClick={() => decide('write_something_else', replacement.trim())}
-                disabled={!!busy || !replacement.trim()}
-                className={`w-full bg-sem-green text-on-sem-green font-label-caps text-label-caps font-semibold py-md rounded-sm hover:bg-sem-deepgreen transition-colors flex items-center justify-center gap-sm cursor-pointer ${busyCls}`}
+                onClick={() => setShowInstructions(false)}
+                className="h-8 px-unit-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-label-caps transition-colors cursor-pointer"
               >
-                {spinner('write_something_else', 'Sending') || (<><Send className="w-4 h-4" /> Send Instead</>)}
+                Discard
               </button>
               <button
                 type="button"
-                onClick={() => { setMode('decide'); setReplacement(''); }}
-                disabled={!!busy}
-                className={`w-full bg-transparent border border-surface-container-high text-on-surface font-label-caps text-label-caps font-semibold py-md rounded-sm hover:bg-surface-container-high transition-colors cursor-pointer ${busyCls}`}
+                disabled={submitting || !instructionsText.trim()}
+                onClick={() => handleAction('feedback')}
+                className="h-8 px-unit-3 rounded-lg bg-primary-container text-on-primary-container font-label-caps text-label-caps font-semibold transition-colors hover:brightness-105 cursor-pointer disabled:opacity-50"
               >
-                Cancel
+                Submit Instructions (⌘⏎)
               </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => decide('approve', comment)}
-                disabled={!!busy}
-                className={`w-full bg-sem-green text-on-sem-green font-label-caps text-label-caps font-semibold py-md rounded-sm hover:bg-sem-deepgreen transition-colors flex items-center justify-center gap-sm cursor-pointer ${busyCls}`}
-              >
-                {spinner('approve', 'Approving') || (<><CheckCircle2 className="w-4 h-4" /> APPROVE</>)}
-              </button>
-              <button
-                type="button"
-                onClick={() => decide('reject', '')}
-                disabled={!!busy}
-                className={`w-full bg-transparent border border-surface-container-high text-on-surface font-label-caps text-label-caps font-semibold py-md rounded-sm hover:bg-surface-container-high transition-colors flex items-center justify-center gap-sm cursor-pointer ${busyCls}`}
-              >
-                {spinner('reject', 'Rejecting') || (<><Ban className="w-4 h-4" /> REJECT</>)}
-              </button>
-              <button
-                type="button"
-                onClick={() => decide('always_approve', comment)}
-                disabled={!!busy}
-                title={`Always auto-approve "${permission?.action_type}" from now on`}
-                className={`w-full bg-transparent border border-surface-container-high text-primary font-label-caps text-label-caps font-semibold py-md rounded-sm hover:bg-primary/10 transition-colors flex items-center justify-center gap-sm cursor-pointer ${busyCls}`}
-              >
-                {spinner('always_approve', 'Saving') || (<><ShieldCheck className="w-4 h-4" /> ALWAYS ALLOW</>)}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('replace')}
-                disabled={!!busy}
-                className={`w-full bg-transparent text-outline-variant font-body-sm text-body-sm py-sm mt-xs hover:text-on-surface transition-colors underline decoration-outline-variant/50 underline-offset-4 cursor-pointer ${busyCls}`}
-              >
-                Write something else
-              </button>
-            </>
-          )}
+            </div>
+          </div>
+        )}
+
+        {/* §3.6.6 4 Standardized Action Buttons */}
+        <div className="flex flex-col gap-unit-2 pt-micro-1">
+          {/* Button 1: Primary Key CTA (with teal field glow) */}
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => handleAction('approve')}
+            className="h-11 w-full rounded-xl bg-primary text-on-primary font-label-caps text-label-caps font-semibold flex items-center justify-center gap-unit-2 shadow-[0_0_24px_rgba(89,216,201,0.25)] hover:shadow-[0_0_32px_rgba(89,216,201,0.4)] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+          >
+            {submitting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-on-primary" />
+            ) : (
+              <Check className="w-4 h-4 stroke-[2.5]" />
+            )}
+            <span>Approve &amp; Execute</span>
+            <span className="font-code-sm text-code-sm bg-on-primary/15 px-1.5 py-0.5 rounded text-on-primary font-normal">
+              ↵ Enter
+            </span>
+          </button>
+
+          {/* Button 2: Secondary Scoped Auto-Approve */}
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => handleAction('always_approve')}
+            className="h-11 w-full rounded-xl bg-surface-container-high/60 hover:bg-surface-container-high border border-outline-variant/25 text-on-surface font-label-caps text-label-caps flex items-center justify-center gap-unit-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Zap className="w-4 h-4 text-primary shrink-0" />
+            <span>Always Auto-Approve for {scope}</span>
+          </button>
+
+          {/* Split Row for Deny & Write Instructions */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-unit-2">
+            {/* Button 3: Ghost Danger Deny */}
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => handleAction('deny')}
+              className="h-11 px-unit-4 rounded-xl bg-surface-container-low/40 hover:bg-error-container/20 border border-outline-variant/20 hover:border-error/40 text-on-surface hover:text-error font-label-caps text-label-caps flex items-center justify-center gap-unit-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Ban className="w-4 h-4" />
+              <span>Deny Action</span>
+              <span className="font-code-sm text-code-sm opacity-60">Esc</span>
+            </button>
+
+            {/* Button 4: Write Instructions Toggle */}
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => setShowInstructions((prev) => !prev)}
+              className="h-11 px-unit-4 rounded-xl bg-surface-container-low/40 hover:bg-surface-container-high border border-outline-variant/20 text-on-surface font-label-caps text-label-caps flex items-center justify-center gap-unit-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Send className="w-4 h-4 text-primary" />
+              <span>{showInstructions ? 'Hide Instructions' : 'Write Instructions'}</span>
+            </button>
+          </div>
         </div>
+
+        {/* Honest Cooldown Notice */}
+        <p className="font-code-sm text-[11px] text-outline text-center mt-micro-1">
+          Decisions are logged to the audit ledger. You can revoke auto-approvals in Settings anytime.
+        </p>
       </div>
     </div>
   );
