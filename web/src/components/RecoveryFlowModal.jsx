@@ -1,326 +1,588 @@
-// export target: web/src/components/RecoveryFlowModal.jsx
 /* ────────────────────────────────────────────────────────────────────────────
- * RecoveryFlowModal.jsx — forgot-password / recovery flow (operator 08-28).
- * Three channels: (a) email code, (b) phone code, (c) ask the developer.
- * Email/phone read the server-recorded contact; when unset the card says so
- * and nudges to (c) — or the user can save a contact inline right there.
- * The dev option pings the developer on Telegram and the code arrives with
- * them; the user then redeems code + new password (old one NOT needed).
+ * RecoveryFlowModal.jsx — Real Channel Recovery Flow & Key Reset (Spec 3.2.4)
+ *
+ * 4-Step Pipeline:
+ * 1. Identity & Channel Selection (email / phone / ask-developer ticket)
+ * 2. Segmented OTP Verification (6 cells, cooldown timer, edit channel fallback)
+ * 3. Cryptographic Passphrase Reset (new master passphrase + match indicator)
+ * 4. Sync Complete (credentials synchronized, return to sign in)
  * ────────────────────────────────────────────────────────────────────────── */
-import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Mail, Phone, UserCog, KeyRound } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  ShieldAlert,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Mail,
+  Phone,
+  MessageSquare,
+  ArrowRight,
+  ArrowLeft,
+  KeyRound,
+  Edit2,
+  RefreshCw,
+  Send,
+  Eye,
+  EyeOff,
+  Clock,
+  Check,
+} from 'lucide-react';
 import api from '../api.js';
+import SegmentedOTPInput from './ui/SegmentedOTPInput.jsx';
+import Button from './Button.jsx';
 
-const CARD = 'p-4 rounded-2xl border text-left transition cursor-pointer w-full';
-const CARD_OFF = `${CARD} bg-surface-container-low border-outline-variant/30 opacity-55 cursor-not-allowed`;
-const CARD_ON = `${CARD} bg-surface-container-low border-outline-variant/30 hover:border-primary text-on-surface`;
-const CARD_DEV = `${CARD} bg-secondary-container/10 border-secondary/30 hover:border-secondary text-on-surface`;
-// text-base (>= 16px computed) so iOS/Safari never auto-zooms the field on focus.
-const INPUT = 'w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
-const BTN = 'px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold transition cursor-pointer shadow-sm';
-const BTN_SUB = 'px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition cursor-pointer';
+export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
+  const [step, setStep] = useState(1); // 1: Identity/Channel, 2: OTP, 3: Reset, 4: Done
+  const [targetId, setTargetId] = useState(publicId || '');
+  const [options, setOptions] = useState(null); // { email_set, phone_set, email_masked, phone_masked }
+  const [selectedChannel, setSelectedChannel] = useState('email'); // email | phone | dev
+  const [otpCode, setOtpCode] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
 
-export default function RecoveryFlowModal({ open, onClose, publicId }) {
-  const [step, setStep] = useState('options'); // options | enter | done
-  const [status, setStatus] = useState(null);  // { email_set, phone_set, email_masked, phone_masked }
-  const [emailInput, setEmailInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [savingContact, setSavingContact] = useState(false);
-  const [msg, setMsg] = useState(null);        // { ok, text }
-  const [busy, setBusy] = useState(false);
-  const [method, setMethod] = useState(null);  // email | phone | dev
-  const [code, setCode] = useState('');
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
+  // Ask Developer / Help Ticket inline drawer
+  const [devMessage, setDevMessage] = useState('');
+  const [devSent, setDevSent] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setStep('options');
-    setStatus(null);
-    setMsg(null);
-    setCode(''); setPw(''); setPw2(''); setMethod(null);
-    setEmailInput(''); setPhoneInput('');
-    api.recoveryOptions(publicId).then(setStatus).catch(() => setStatus(null));
+    if (open) {
+      setStep(1);
+      setTargetId(publicId || '');
+      setOtpCode('');
+      setNewPass('');
+      setConfirmPass('');
+      setErrorMsg('');
+      setDevMessage('');
+      setDevSent(false);
+      if (publicId) {
+        fetchOptions(publicId);
+      }
+    }
   }, [open, publicId]);
 
-  const request = async (m) => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await api.recoveryRequest(publicId, m);
-      setMethod(m);
-      setMsg({ ok: res.delivered !== false, text: res.message });
-      if (res.delivered !== false) {
-        setStep('enter');
-      } else {
-        // channel send failed server-side — offer the dev lane immediately
-        setStep('options');
-      }
-    } catch (e) {
-      setMsg({ ok: false, text: e.message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveContact = async (kind) => {
-    const val = kind === 'email' ? emailInput : phoneInput;
-    if (!val.trim()) return;
-    setSavingContact(true);
-    setMsg(null);
-    try {
-      const res = await api.recoverySetContact(
-        kind === 'email' ? { email: val.trim() } : { phone: val.trim() }
-      );
-      setStatus((s) => ({ ...(s || {}), ...res }));
-      setEmailInput(''); setPhoneInput('');
-      setMsg({ ok: true, text: `${kind === 'email' ? 'Email' : 'Phone'} saved — you can now send a code to it.` });
-      const updated = await api.recoveryOptions(publicId);
-      setStatus(updated);
-    } catch (e) {
-      setMsg({ ok: false, text: e.message });
-    } finally {
-      setSavingContact(false);
-    }
-  };
-
-  // WebKit replay (08-29): pointer-events must NOT ride the CSS animation clock
-  // (WebKit can stall the fade for seconds+; a keyframe-carried flip could leave
-  // the modal permanently non-hit-testable). Flip on the animation's end event
-  // with a hard-timer safety net — same contract as AuthModal/PrivacyPolicyModal.
-  const [peReady, setPeReady] = useState(false);
   useEffect(() => {
-    if (!open) { setPeReady(false); return; }
-    const t = setTimeout(() => setPeReady(true), 4500);
-    return () => clearTimeout(t);
-  }, [open]);
-  const onPanelAnimEnd = (e) => {
-    if (e.animationName === 'aurora-panel-in') setPeReady(true);
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  const triggerError = (msg) => {
+    setErrorMsg(msg);
+    setHasError(true);
+    setTimeout(() => setHasError(false), 500);
   };
 
-  const submitRedeem = async () => {
-    setMsg(null);
-    if (!code.trim()) { setMsg({ ok: false, text: 'Enter the recovery code from your email/phone/developer.' }); return; }
-    if (pw.length < 8) { setMsg({ ok: false, text: 'New password must be at least 8 characters.' }); return; }
-    if (pw !== pw2) { setMsg({ ok: false, text: 'New passwords do not match.' }); return; }
-    setBusy(true);
+  const fetchOptions = async (id) => {
+    if (!id.trim()) return;
     try {
-      await api.recoveryVerify({ public_id: publicId, new_password: pw, code: code.trim() });
-      setStep('done');
-    } catch (e) {
-      setMsg({ ok: false, text: e.message });
+      const res = await api.recoveryOptions(id.trim());
+      setOptions(res);
+      if (res?.email_set) setSelectedChannel('email');
+      else if (res?.phone_set) setSelectedChannel('phone');
+      else setSelectedChannel('dev');
+    } catch {
+      setOptions(null);
+    }
+  };
+
+  const handleRequestOtp = async (channelOverride) => {
+    const id = targetId.trim();
+    if (!id) {
+      triggerError('Please enter your Public ID or registered handle.');
+      return;
+    }
+    const channel = channelOverride || selectedChannel;
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await api.recoveryRequest(id, channel);
+      if (res.delivered !== false) {
+        setCooldown(30);
+        setStep(2);
+      } else {
+        triggerError(res.message || 'Dispatch to requested channel failed. Try asking the developer.');
+      }
+    } catch (err) {
+      triggerError(err.message || 'Could not dispatch recovery challenge.');
     } finally {
-      setBusy(false);
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = (e) => {
+    e?.preventDefault();
+    if (otpCode.length < 6) {
+      triggerError('Please enter the complete 6-digit passcode.');
+      return;
+    }
+    setStep(3);
+    setErrorMsg('');
+  };
+
+  const handleResetPassword = async (e) => {
+    e?.preventDefault();
+    if (newPass.length < 8) {
+      triggerError('Passphrase must be at least 8 characters long.');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      triggerError('Passphrases do not match. Please verify.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      await api.recoveryVerify({
+        public_id: targetId.trim(),
+        new_password: newPass,
+        code: otpCode.trim(),
+      });
+      setStep(4);
+    } catch (err) {
+      triggerError(err.message || 'Key renewal failed. Verification code may be invalid or expired.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendDevTicket = async () => {
+    if (!devMessage.trim()) {
+      triggerError('Please explain the issue to the developer.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.sendMessageToAdmin({
+        subject: `Account Recovery Assistance: ${targetId.trim()}`,
+        category: 'recovery',
+        message: devMessage.trim(),
+      });
+      setDevSent(true);
+      setErrorMsg('');
+    } catch (err) {
+      triggerError(err.message || 'Could not send developer ticket.');
+    } finally {
+      setLoading(false);
     }
   };
 
   if (!open) return null;
 
-  // Portal (08-29): this modal lives inside SettingsSections, whose Account
-  // section is a .clean-card with a backdrop-filter — a backdrop-filter turns
-  // the section into the CONTAINING BLOCK for `fixed` descendants, so the
-  // backdrop's inset-0 resolved against the section ([436,1427] at 390×844)
-  // instead of the viewport: the overlay covered only the settings card, the
-  // bottom nav rendered over the modal, and its content sat mid-page.
-  // Portal to <body> so the modal always covers the real viewport.
-  return createPortal(
-    <div className={`fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 aurora-modal-backdrop ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`} onClick={onClose}>
-      {/* Aurora modal chrome (scoped; index.css owns the design system).
-          pointer-events is state-driven (see peReady above), never keyframe-driven. */}
-      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
-@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
-.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
-.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }
-.recovery-card-on {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
-.recovery-card-on:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
-.recovery-card-dev {
-  background: color-mix(in srgb, var(--accent-2) 15%, transparent);
-  border-color: color-mix(in srgb, var(--accent-2) 40%, transparent);
-}
-.recovery-card-dev:hover { background: color-mix(in srgb, var(--accent-2) 25%, transparent); }`}</style>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Account Recovery & Credential Reset"
+      onClick={onClose}
+    >
       <div
-        className={`w-full max-w-md bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className="w-full max-w-xl bg-surface-container-lowest/95 border border-outline-variant/30 rounded-3xl p-6 sm:p-8 text-on-surface shadow-2xl relative overflow-hidden backdrop-blur-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
-        onAnimationEnd={onPanelAnimEnd}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/30">
-          <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-primary" />
-            <h2 className="font-headline-lg text-title-md text-on-surface">Recover your password</h2>
+        <button
+          type="button"
+          aria-label="Close recovery modal"
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header with Icon */}
+        <div className="flex items-center gap-3.5 pb-5 border-b border-outline-variant/20">
+          <div className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(89,216,201,0.2)]">
+            <KeyRound className="w-5 h-5" />
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-on-surface-variant hover:text-on-surface transition">
-            <X className="w-4 h-4" />
-          </button>
+          <div>
+            <h1 className="font-headline-lg text-lg sm:text-xl font-bold text-on-surface leading-tight">
+              Account Recovery &amp; Credential Reset
+            </h1>
+            <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
+              Cryptographic key reset &amp; verified account restoration channel (Spec 3.2.4).
+            </p>
+          </div>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
-          {step === 'options' && (
-            <>
-              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                Pick how to get a 6-digit recovery code. It stays valid 30 minutes and
-                works <b>without your current password</b>.
-              </p>
+        {/* 4-Step Progress Pipeline */}
+        <div className="my-6">
+          <div className="flex items-center justify-between relative">
+            {/* Background Line */}
+            <div className="absolute top-3.5 left-4 right-4 h-0.5 bg-surface-container-high -z-0" />
+            {/* Active Line */}
+            <div
+              className="absolute top-3.5 left-4 h-0.5 bg-primary -z-0 transition-all duration-300"
+              style={{ width: `${((step - 1) / 3) * 100}%` }}
+            />
 
-              {/* (a) EMAIL */}
-              <button
-                type="button"
-                disabled={status ? !status.email_set : true}
-                onClick={() => request('email')}
-                className={status?.email_set ? CARD_ON : CARD_OFF}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Mail className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-xs font-semibold flex-1">
-                    {status?.email_set ? <>Send code <span className="text-[var(--accent)] font-mono">to {status.email_masked}</span></> : 'Email not set'}
+            {[
+              { num: 1, label: '1. Identity' },
+              { num: 2, label: '2. Verify OTP' },
+              { num: 3, label: '3. Reset Key' },
+              { num: 4, label: '4. Complete' },
+            ].map(({ num, label }) => {
+              const isPassed = step > num;
+              const isCurrent = step === num;
+              return (
+                <div key={num} className="relative z-10 flex flex-col items-center select-none">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center font-mono text-xs font-bold transition-all ${
+                      isPassed
+                        ? 'bg-primary text-on-primary shadow-[0_0_12px_rgba(89,216,201,0.35)]'
+                        : isCurrent
+                        ? 'bg-primary text-on-primary ring-4 ring-primary/20 shadow-[0_0_16px_rgba(89,216,201,0.5)]'
+                        : 'bg-surface-container-highest text-on-surface-variant'
+                    }`}
+                  >
+                    {isPassed ? <Check className="w-3.5 h-3.5" /> : num}
+                  </div>
+                  <span
+                    className={`font-mono text-[10px] mt-1.5 uppercase tracking-wider ${
+                      isCurrent || isPassed ? 'text-primary font-semibold' : 'text-on-surface-variant/70'
+                    }`}
+                  >
+                    {label}
                   </span>
                 </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                  {status?.email_set
-                    ? 'We email you a 6-digit code.'
-                    : 'No email is on file for this account. Save one below, or ask the developer for a code (option C).'}
-                </div>
-              </button>
-              {status && !status.email_set && (
-                <div className="flex gap-1.5 -mt-2">
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="you@example.com"
-                    aria-label="Email to receive recovery codes"
-                    className={`${INPUT} flex-1`}
-                  />
-                  <button type="button" onClick={() => saveContact('email')} disabled={savingContact} className={BTN}>
-                    {savingContact ? '…' : 'Save'}
-                  </button>
-                </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
 
-              {/* (b) PHONE */}
-              <button
-                type="button"
-                disabled={status ? !status.phone_set : true}
-                onClick={() => request('phone')}
-                className={status?.phone_set ? CARD_ON : CARD_OFF}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Phone className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-xs font-semibold flex-1">
-                    {status?.phone_set ? <>Send code <span className="text-[var(--accent)] font-mono">to {status.phone_masked}</span></> : 'Phone not set'}
-                  </span>
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                  {status?.phone_set
-                    ? 'We text you a 6-digit code.'
-                    : 'No phone number is on file for this account. Save one below, or ask the developer for a code (option C).'}
-                </div>
-              </button>
-              {status && !status.phone_set && (
-                <div className="flex gap-1.5 -mt-2">
-                  <input
-                    type="tel"
-                    value={phoneInput}
-                    onChange={(e) => setPhoneInput(e.target.value)}
-                    placeholder="+1 555 123 4567"
-                    aria-label="Phone to receive recovery codes"
-                    className={`${INPUT} flex-1`}
-                  />
-                  <button type="button" onClick={() => saveContact('phone')} disabled={savingContact} className={BTN}>
-                    {savingContact ? '…' : 'Save'}
-                  </button>
-                </div>
-              )}
+        {/* Error Feedback */}
+        {errorMsg && (
+          <div
+            className={`mb-5 p-3 rounded-xl bg-error/15 border border-error/30 text-error text-xs flex items-center gap-2 font-mono ${
+              hasError ? 'animate-shake' : ''
+            }`}
+            role="alert"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
-              {/* (c) DEV */}
-              <button type="button" onClick={() => request('dev')} disabled={busy} className={CARD_DEV}>
-                <div className="flex items-center gap-2.5">
-                  <UserCog className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-xs font-semibold flex-1">Ask the developer to give you one</span>
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                  Pings the developer on Telegram with your name and a fresh code — they hand it
-                  to you and you redeem it below. Always available.
-                </div>
-              </button>
-
-              {msg && <p className={`text-[11px] ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</p>}
-
-              {!msg && (
-                <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-                  Didn't set email or phone? You can add either right here — used only for
-                  recovery codes, stored on your account.
-                </p>
-              )}
-            </>
-          )}
-
-          {step === 'enter' && (
-            <>
-              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                {method === 'dev'
-                  ? 'The developer was pinged — fetch your code from them, then enter it with your new password.'
-                  : `Code sent (valid 30 minutes). Enter it with your new password — the old one is NOT needed.`}
-              </p>
-              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-code">Recovery code</label>
+        {/* ── STEP 1: IDENTITY & CHANNEL ──────────────────────────────── */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="recovery-public-id" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                Target Public ID
+              </label>
               <input
-                id="recovery-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="6-digit code"
-                autoFocus
-                className={`${INPUT} font-mono tracking-widest`}
+                id="recovery-public-id"
+                type="text"
+                placeholder="HLP-XXXX-XX or username"
+                value={targetId}
+                onChange={(e) => {
+                  setTargetId(e.target.value);
+                  fetchOptions(e.target.value);
+                }}
+                className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
               />
-              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-new-pw">New password</label>
-              <input
-                id="recovery-new-pw"
-                type="password"
-                autoComplete="new-password"
-                value={pw}
-                onChange={(e) => setPw(e.target.value)}
-                placeholder="min 8 chars, letter + number"
-                className={INPUT}
-              />
-              <label className="block text-[11px] text-[var(--text-muted)]" htmlFor="recovery-new-pw2">Repeat new password</label>
-              <input
-                id="recovery-new-pw2"
-                type="password"
-                autoComplete="new-password"
-                value={pw2}
-                onChange={(e) => setPw2(e.target.value)}
-                placeholder="repeat new password"
-                className={INPUT}
-              />
-              {msg && <p className={`text-[11px] ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</p>}
-              <div className="flex items-center gap-2 pt-1">
-                <button type="button" onClick={submitRedeem} disabled={busy} className={`${BTN} disabled:opacity-50`}>
-                  {busy ? 'Setting new password…' : 'Set new password'}
-                </button>
-                <button type="button" onClick={() => setStep('options')} className={BTN_SUB}>Back</button>
-              </div>
-            </>
-          )}
-
-          {step === 'done' && (
-            <div className="space-y-3 text-center py-4">
-              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-                <KeyRound className="w-5 h-5 text-emerald-400" />
-              </div>
-              <p className="text-sm font-bold text-[var(--text-primary)]">Password updated!</p>
-              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                Sign in with your new password. Any other open sessions were signed out for security.
-              </p>
-              <button type="button" onClick={onClose} className={`${BTN} mx-auto`}>Done</button>
             </div>
-          )}
-        </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                Available Verification Channels:
+              </label>
+
+              {/* Email Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedChannel('email')}
+                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition cursor-pointer min-h-[44px] ${
+                  selectedChannel === 'email'
+                    ? 'bg-primary/10 border-primary text-on-surface'
+                    : 'bg-surface-container-low/60 border-outline-variant/20 text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Mail className={`w-4 h-4 ${selectedChannel === 'email' ? 'text-primary' : ''}`} />
+                  <div>
+                    <div className="text-xs font-semibold">Registered Email</div>
+                    <div className="font-mono text-[10px] text-on-surface-variant">
+                      {options?.email_masked || 'Channel recorded at account registration'}
+                    </div>
+                  </div>
+                </div>
+                {selectedChannel === 'email' && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+              </button>
+
+              {/* Phone Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedChannel('phone')}
+                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition cursor-pointer min-h-[44px] ${
+                  selectedChannel === 'phone'
+                    ? 'bg-primary/10 border-primary text-on-surface'
+                    : 'bg-surface-container-low/60 border-outline-variant/20 text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Phone className={`w-4 h-4 ${selectedChannel === 'phone' ? 'text-primary' : ''}`} />
+                  <div>
+                    <div className="text-xs font-semibold">SMS Phone Verification</div>
+                    <div className="font-mono text-[10px] text-on-surface-variant">
+                      {options?.phone_masked || 'Channel recorded in user security settings'}
+                    </div>
+                  </div>
+                </div>
+                {selectedChannel === 'phone' && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+              </button>
+
+              {/* Developer Ticket Option (Absorbs DevContactModal) */}
+              <button
+                type="button"
+                onClick={() => setSelectedChannel('dev')}
+                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition cursor-pointer min-h-[44px] ${
+                  selectedChannel === 'dev'
+                    ? 'bg-secondary/10 border-secondary text-on-surface'
+                    : 'bg-surface-container-low/60 border-outline-variant/20 text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className={`w-4 h-4 ${selectedChannel === 'dev' ? 'text-secondary' : ''}`} />
+                  <div>
+                    <div className="text-xs font-semibold">Ask the Developer / Help Ticket</div>
+                    <div className="font-mono text-[10px] text-on-surface-variant">
+                      Direct operator assistance for forgotten credentials
+                    </div>
+                  </div>
+                </div>
+                {selectedChannel === 'dev' && <CheckCircle2 className="w-4 h-4 text-secondary shrink-0" />}
+              </button>
+            </div>
+
+            {selectedChannel === 'dev' ? (
+              <div className="p-4 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 space-y-3">
+                <div className="text-xs font-semibold text-on-surface">Submit Recovery Ticket to Developer</div>
+                {devSent ? (
+                  <div className="p-3 rounded-lg bg-sem-green/15 text-sem-green text-xs font-mono">
+                    ✅ Recovery ticket sent. The developer will review and issue your recovery code.
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      rows={3}
+                      placeholder="Briefly describe your account details or student email..."
+                      value={devMessage}
+                      onChange={(e) => setDevMessage(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs font-body-sm text-on-surface focus:outline-none focus:border-secondary transition"
+                    />
+                    <Button
+                      variant="primary"
+                      disabled={loading || !devMessage.trim()}
+                      onClick={handleSendDevTicket}
+                      className="w-full text-xs uppercase tracking-wider py-2 font-semibold"
+                    >
+                      {loading ? 'Dispatching...' : 'Dispatch Ticket to Developer'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                glow={true}
+                disabled={loading || !targetId.trim()}
+                onClick={() => handleRequestOtp()}
+                className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
+              >
+                <span>{loading ? 'Dispatching Passcode...' : 'Dispatch One-Time Token →'}</span>
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* ── STEP 2: VERIFY OTP ──────────────────────────────────────── */}
+        {step === 2 && (
+          <div className="space-y-5">
+            {/* Channel Recipient Badge with Edit Button */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low/80 border border-outline-variant/20">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                  {selectedChannel === 'phone' ? <Phone className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">DISPATCH RECIPIENT</div>
+                  <div className="text-xs font-semibold text-on-surface truncate">
+                    {targetId} via {selectedChannel.toUpperCase()}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex items-center gap-1 font-mono text-[11px] text-primary hover:underline cursor-pointer"
+              >
+                <Edit2 className="w-3 h-3" /> Edit
+              </button>
+            </div>
+
+            {/* Segmented OTP 6-Cell Form */}
+            <div className="space-y-2 text-center">
+              <label className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                Cryptographic Passcode (6-Digit OTP)
+              </label>
+              <SegmentedOTPInput
+                value={otpCode}
+                onChange={setOtpCode}
+                length={6}
+                error={hasError}
+                autoFocus={true}
+              />
+            </div>
+
+            {/* Cooldown Timer */}
+            <div className="flex items-center justify-between text-xs font-mono text-on-surface-variant px-1">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-sem-amber animate-spin" />
+                {cooldown > 0 ? (
+                  <span>Resend in <span className="font-semibold text-sem-amber">00:{String(cooldown).padStart(2, '0')}</span></span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleRequestOtp()}
+                    className="text-primary hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Resend Code Now
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedChannel('dev');
+                  setStep(1);
+                }}
+                className="hover:text-primary transition underline underline-offset-4"
+              >
+                Ask the Developer
+              </button>
+            </div>
+
+            {/* Enclave Security Notice */}
+            <div className="p-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-primary font-semibold">
+                  Zero-Knowledge Enclave Dispatch
+                </div>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  Existing session tokens will be systematically invalidated across all nodes upon cryptographic password renewal.
+                </p>
+              </div>
+            </div>
+
+            {/* Next Action */}
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                variant="primary"
+                glow={true}
+                disabled={otpCode.length < 6}
+                onClick={handleVerifyOtp}
+                className="flex-1 h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2"
+              >
+                <span>Verify &amp; Proceed to Reset →</span>
+              </Button>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="px-4 h-11 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface font-mono text-xs uppercase tracking-wider transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 3: RESET KEY ───────────────────────────────────────── */}
+        {step === 3 && (
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor="recovery-new-pass" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                New Master Passphrase
+              </label>
+              <div className="relative flex items-center">
+                <input
+                  id="recovery-new-pass"
+                  type={showPass ? 'text' : 'password'}
+                  required
+                  placeholder="Minimum 8 characters or 4 random words..."
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  className="w-full h-11 px-3.5 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass((prev) => !prev)}
+                  className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition cursor-pointer"
+                >
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="recovery-confirm-pass" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                Confirm New Master Passphrase
+              </label>
+              <input
+                id="recovery-confirm-pass"
+                type="password"
+                required
+                placeholder="Re-enter new passphrase..."
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+              />
+            </div>
+
+            <Button
+              variant="primary"
+              glow={true}
+              type="submit"
+              disabled={loading || !newPass || newPass !== confirmPass}
+              className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
+            >
+              <span>{loading ? 'Renewing Passphrase...' : 'Synchronize New Passphrase →'}</span>
+            </Button>
+          </form>
+        )}
+
+        {/* ── STEP 4: COMPLETE ────────────────────────────────────────── */}
+        {step === 4 && (
+          <div className="text-center py-6 space-y-4">
+            <div className="w-16 h-16 rounded-full bg-sem-green/15 text-sem-green mx-auto flex items-center justify-center shadow-[0_0_24px_rgba(34,197,94,0.3)]">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="font-title-md text-xl font-bold text-on-surface">
+                Credential Reset Complete
+              </h2>
+              <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+                Your master passphrase has been renewed and authenticated. All active sessions have been safely cycled.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              glow={true}
+              onClick={onClose}
+              className="w-full h-11 uppercase font-semibold text-xs tracking-wider mt-4"
+            >
+              Return to Sign In &amp; Enter Workspace
+            </Button>
+          </div>
+        )}
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

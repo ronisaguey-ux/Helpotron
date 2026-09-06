@@ -6,3 +6,4 @@ export { default as Kbd, Kbd } from './Kbd';
 export { default as Skeleton, Skeleton } from './Skeleton';
 export { default as Toast, Toast } from './Toast';
 export { default as AvatarWidget, AvatarWidget } from './AvatarWidget';
+export { default as SegmentedOTPInput, SegmentedOTPInput } from './SegmentedOTPInput';
