@@ -19,7 +19,6 @@ import {
   ShieldAlert,
   User,
   X,
-  Sync,
 } from 'lucide-react';
 import { api } from '../api.js';
 import Button from './Button.jsx';
