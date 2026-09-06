@@ -239,10 +239,10 @@ const SECTIONS = [
     icon: CreditCard,
     title: 'Credits & tokens',
     chip: 'Credits',
-    what: 'Understanding the economic model: Tokens represent compute expenditure (1 token = $0.01 compute equivalency); Credits represent earned discounts from referrals, payments, and data lake contributions.',
+    what: 'Understanding the economic model: Tokens meter the deterministic compute your tasks use; Credits are earned through referrals, payments, and data lake contributions, and top up your token allowance.',
     steps: [
-      'Check your balance strip at the top of any screen: live tokens, compute dollar equivalency, and projected runway.',
-      'Open Billing to view your current tier: Free Trial ($0/7d, 100 tokens), Basic ($5/mo, 300 tokens), Pro ($15/mo, 1,000 tokens), or Elite ($30/mo, 2,700 tokens).',
+      'Check your balance strip at the top of any screen: live tokens and projected runway.',
+      'Open Billing to view your current tier: Free Trial (7 days, 150 tokens), Basic ($10/mo, 300 tokens), Pro ($20/mo, 1,000 tokens), or Elite ($40/mo, 2,700 tokens).',
       'All tiers enjoy identical full-model access — zero feature gating between plans.',
       'Top up on-demand with non-expiring token packs if needed.',
     ],

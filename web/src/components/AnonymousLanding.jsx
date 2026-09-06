@@ -39,15 +39,16 @@ const FALLBACK_PLANS = [
   {
     id: 'trial',
     name: 'Free Trial',
-    tagline: '7-day starter trial with 100 task tokens ($1.00 tool budget) — SMS verification required (1 per number).',
+    tagline: '7-day starter trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.',
     price_cents: 0,
     price_monthly: 0,
-    monthly_task_tokens: 100,
+    monthly_task_tokens: 150,
     is_trial: true,
-    requires_sms: true,
+    requires_2fa: true,
+    requires_1c_payment: true,
     popular: false,
     capabilities: [
-      '100 task tokens (1 token = $0.01 API tool cost)',
+      '150 task tokens',
       'Assignment bubbles with per-assignment agent',
       'Browser extension + paste-in coursework capture',
       'Turn-in ledger with timestamps and undo',
@@ -57,16 +58,16 @@ const FALLBACK_PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    tagline: '300 task tokens / month ($3.00 tool budget) for steady coursework.',
-    price_cents: 500,
-    price_monthly: 5,
+    tagline: '300 task tokens / month for steady coursework.',
+    price_cents: 1000,
+    price_monthly: 10,
     monthly_task_tokens: 300,
     is_trial: false,
-    requires_sms: false,
+    requires_2fa: false,
+    requires_1c_payment: false,
     popular: false,
     capabilities: [
-      '300 task tokens / month (1 token = $0.01 API tool cost)',
-      'Credits are discount dollars ($1.00 off per credit)',
+      '300 task tokens / month',
       'Assignment bubbles with per-assignment agent',
       'Study tools, library and exports (Docs, Markdown, PDF)',
       'Two-factor authentication and session security',
@@ -75,16 +76,16 @@ const FALLBACK_PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    tagline: '1,000 task tokens / month ($10.00 tool budget) for a full semester load.',
-    price_cents: 1500,
-    price_monthly: 15,
+    tagline: '1,000 task tokens / month for a full semester load.',
+    price_cents: 2000,
+    price_monthly: 20,
     monthly_task_tokens: 1000,
     is_trial: false,
-    requires_sms: false,
+    requires_2fa: false,
+    requires_1c_payment: false,
     popular: true,
     capabilities: [
-      '1,000 task tokens / month (1 token = $0.01 API tool cost)',
-      'Credits are discount dollars ($1.00 off per credit)',
+      '1,000 task tokens / month',
       'Assignment bubbles with per-assignment agent',
       'Browser extension + paste-in coursework capture',
       'Turn-in ledger with timestamps and undo',
@@ -95,15 +96,16 @@ const FALLBACK_PLANS = [
   {
     id: 'elite',
     name: 'Elite',
-    tagline: '2,700 task tokens / month ($27.00 tool budget) for heavy research and multi-agent work.',
-    price_cents: 3000,
-    price_monthly: 30,
+    tagline: '2,700 task tokens / month for heavy research and multi-agent work.',
+    price_cents: 4000,
+    price_monthly: 40,
     monthly_task_tokens: 2700,
     is_trial: false,
-    requires_sms: false,
+    requires_2fa: false,
+    requires_1c_payment: false,
     popular: false,
     capabilities: [
-      '2,700 task tokens / month (1 token = $0.01 API tool cost)',
+      '2,700 task tokens / month',
       'High-priority compute and multi-agent pipelines',
       'Assignment bubbles with per-assignment agent',
       'Browser extension + paste-in coursework capture',
@@ -302,8 +304,8 @@ function Pricing({ onOpenAuth }) {
               {p.popular && (
                 <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0 font-semibold">Most popular</span>
               )}
-              {p.requires_sms && (
-                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">SMS verified</span>
+              {p.is_trial && (
+                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">2FA + 1¢ verify</span>
               )}
             </div>
 
@@ -332,8 +334,8 @@ function Pricing({ onOpenAuth }) {
       <p className="mt-6 flex items-start justify-center gap-2 text-xs text-on-surface-variant max-w-[62ch] mx-auto">
         <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-secondary" aria-hidden="true" />
         <span>
-          <span className="font-mono">1 task token = $0.01</span> of usage (transcription, multi-agent
-          passes, vision). Credits apply as <span className="font-mono">$1.00</span> off at checkout.
+          Utilities are metered in task tokens — you always see the token cost of a task before
+          you approve it. Credits top up your token allowance when you need more.
         </span>
       </p>
 

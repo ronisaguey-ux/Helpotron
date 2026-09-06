@@ -247,6 +247,33 @@ async def grant_welcome_tokens(
 
 
 @router.post("/user/{public_id}/plan")
+async def verify_trial_payment(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+    """Owner 09-06: approve the user's 1-cent trial payment verification.
+
+    Manual lane — used when Stripe keys aren't configured: the user requests
+    the verification (POST /api/trial/payment-verify writes a pending
+    Payment), pays the cent by manual provider, and the operator confirms
+    here. Idempotent."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.payment_verified = True
+    pend = (
+        db.query(Payment)
+        .filter(
+            Payment.user_id == user.id,
+            Payment.provider_ref == f"trial_verification_{user.id}",
+            Payment.status == "pending",
+        )
+        .first()
+    )
+    if pend:
+        pend.status = "captured"
+    db.commit()
+    return {"status": "success", "public_id": public_id, "payment_verified": True}
+
+
 async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db)):
     require_admin(request)
     if plan not in ["none", "basic", "pro", "elite"]:

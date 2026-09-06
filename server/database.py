@@ -83,6 +83,10 @@ class User(Base):
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     phone_verified: Mapped[bool] = mapped_column(default=False)
     trial_claimed: Mapped[bool] = mapped_column(default=False)
+    # Owner 09-06: Free Trial requires a 1-cent payment verification
+    # (Stripe checkout when configured, else a manual record the operator
+    # approves). Independent of phone_verified (legacy SMS lane).
+    payment_verified: Mapped[bool] = mapped_column(default=False)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     token_cost_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
     monthly_budget_usd: Mapped[float] = mapped_column(Float, default=50.0)
@@ -666,6 +670,8 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN phone_verified BOOLEAN DEFAULT 0"))
                 if "trial_claimed" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN trial_claimed BOOLEAN DEFAULT 0"))
+                if "payment_verified" not in columns_user:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN payment_verified BOOLEAN DEFAULT 0"))
                 if "last_active_at" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN last_active_at DATETIME"))
                 if "token_cost_multiplier" not in columns_user:

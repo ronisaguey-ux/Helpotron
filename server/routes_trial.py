@@ -1,37 +1,40 @@
-"""Routes for Free Trial SMS verification and 1-time activation."""
+"""Routes for the Free Trial: mandatory 2FA + 1-cent payment verification.
+
+Owner 09-06: the SMS-verified trial is retired. A signup must (1) enable
+2FA in Account > Settings and (2) pass a 1-cent payment verification
+(Stripe checkout when configured, else a manual record the operator
+approves) before activating the 7-day, 150-token trial.
+"""
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .database import get_db, User
+from .database import User, get_db
+from .payments import create_trial_verification
+from .ratelimit import limiter
 from .routes_features import get_current_authenticated_user
-from .trial_service import TrialVerificationService, mask_phone_number
+from .trial_service import TrialVerificationService
 
 logger = logging.getLogger("helpotron.routes_trial")
 
 router = APIRouter(prefix="/api/trial", tags=["Free Trial"])
 
 
-class TrialSmsRequestIn(BaseModel):
-    phone_number: str = Field(..., description="Mobile phone number in E.164 or national format")
-
-
-class TrialSmsVerifyIn(BaseModel):
-    phone_number: str = Field(..., description="Mobile phone number used for SMS challenge")
-    code: str = Field(..., min_length=4, max_length=10, description="6-digit SMS verification code")
-
-
-def _get_client_ip(request: Request) -> str:
-    """Extract client IP respecting forward headers."""
-    fwd = request.headers.get("X-Forwarded-For")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+def _trial_state(user: User) -> dict:
+    """Live trial state for the client's activation card."""
+    two_fa = bool((user.settings or {}).get("2fa_enabled"))
+    return {
+        "trial_claimed": bool(getattr(user, "trial_claimed", False)),
+        "payment_verified": bool(getattr(user, "payment_verified", False)),
+        "requires_2fa": True,
+        "requires_1c_payment": True,
+        "two_fa_enabled": two_fa,
+        "credits_grant": 150,
+        "trial_days": 7,
+    }
 
 
 @router.get("/status")
@@ -39,71 +42,86 @@ async def get_trial_status(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Returns trial eligibility and current activation status for the authenticated user."""
+    """Trial eligibility and activation status for the authenticated user."""
     user = get_current_authenticated_user(request, db)
-    eligible, reason = TrialVerificationService.check_eligibility(user, None, db)
+    eligible, reason = TrialVerificationService.check_eligibility(user, db)
 
     return {
         "status": "success",
         "eligible": eligible,
         "reason": reason if not eligible else None,
-        "trial_claimed": bool(getattr(user, "trial_claimed", False)),
-        "phone_verified": bool(getattr(user, "phone_verified", False)),
-        "phone_masked": mask_phone_number(user.phone_number) if getattr(user, "phone_number", None) else None,
+        **_trial_state(user),
         "plan": getattr(user, "plan", "none"),
         "credits": getattr(user, "credits", 0.0),
         "trial_expires_at": user.trial_expires_at.isoformat() if getattr(user, "trial_expires_at", None) else None,
     }
 
 
-@router.post("/sms/request")
-async def request_trial_sms(
-    payload: TrialSmsRequestIn,
+@router.post("/payment-verify")
+async def request_trial_payment_verification(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Sends a 6-digit SMS verification code to claim the 1-time Free Trial."""
+    """Create a 1-cent payment verification for the Free Trial.
+
+    One pending verification at a time per user (rate-limit lane), and no
+    new verification once payment/activation has completed."""
     user = get_current_authenticated_user(request, db)
-    client_ip = _get_client_ip(request)
+
+    if getattr(user, "trial_claimed", False):
+        raise HTTPException(status_code=400, detail="Free trial already claimed.")
+    if getattr(user, "payment_verified", False):
+        return {
+            "status": "success",
+            "mode": "already_verified",
+            "message": "Payment already verified.",
+        }
+
+    if not limiter.allow(f"trial_verify:{user.public_id}", 5, window=3600.0):
+        raise HTTPException(
+            429,
+            "Too many verification attempts. Try again in a few minutes.",
+        )
 
     try:
-        result = await TrialVerificationService.request_sms_code(
-            user=user,
-            raw_phone=payload.phone_number,
-            ip_address=client_ip,
-            db=db,
-        )
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception as e:
-        logger.error("Error in request_trial_sms: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error processing SMS verification request.")
+        result = create_trial_verification(db, user)
+    except Exception as e:  # Stripe-side failures must not 500 the flow
+        logger.error("Trial payment verification failed for %s: %s", user.public_id, e)
+        raise HTTPException(status_code=502, detail="Could not create the payment verification. Please try again.")
+
+    return {"status": "success", **result}
 
 
-@router.post("/sms/verify")
-async def verify_trial_sms(
-    payload: TrialSmsVerifyIn,
+@router.post("/activate")
+async def activate_free_trial(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Verifies the 6-digit SMS code and activates the 1-time Free Trial (granting 100 task tokens)."""
+    """Activate the 7-day Free Trial (150 task tokens).
+
+    Enforcement: 2FA enabled AND payment verified — otherwise a 403 with the
+    exact missing requirement."""
     user = get_current_authenticated_user(request, db)
-    client_ip = _get_client_ip(request)
+
+    if getattr(user, "trial_claimed", False):
+        raise HTTPException(status_code=400, detail="Free trial already claimed.")
+
+    # 403 with the missing requirement as the detail (client renders the step).
+    if not (user.settings or {}).get("2fa_enabled"):
+        raise HTTPException(
+            403,
+            "Two-factor authentication is required for the Free Trial — enable it in Account > Settings.",
+        )
+    if not getattr(user, "payment_verified", False):
+        raise HTTPException(
+            403,
+            "Complete the 1-cent payment verification before activating the Free Trial.",
+        )
 
     try:
-        result = TrialVerificationService.verify_sms_and_activate_trial(
-            user=user,
-            raw_phone=payload.phone_number,
-            code=payload.code,
-            ip_address=client_ip,
-            db=db,
-        )
-        return result
+        return TrialVerificationService.activate_trial(user, db)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Error in verify_trial_sms: %s", e)
+        logger.error("Trial activation failed for %s: %s", user.public_id, e)
         raise HTTPException(status_code=500, detail="Internal server error activating free trial.")
