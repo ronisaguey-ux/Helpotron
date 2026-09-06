@@ -122,7 +122,7 @@ export function SettingsSections({
                 Appearance &amp; Display
               </h2>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                LUMINOUS GLASS theme, font scaling, and accessibility controls.
+                Theme, font scaling, and accessibility controls.
               </p>
             </div>
           </div>

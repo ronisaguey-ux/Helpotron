@@ -62,10 +62,10 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
           </span>
         </div>
         <h1 className="font-headline-lg-mobile md:font-headline-lg text-title-md md:text-headline-lg text-on-surface font-semibold tracking-tight">
-          Compute Reservoir &amp; Billing
+          Credits &amp; Billing
         </h1>
         <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mt-1">
-          Deterministic token allocation, compute runway forecasting, and subscription management.
+          Token balance, monthly plans, and credit top-ups.
         </p>
       </div>
 
@@ -81,7 +81,7 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
             <div className="flex flex-col gap-1 pr-6 sm:border-r border-outline-variant/15">
               <div className="flex items-center gap-2">
                 <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">
-                  Available Reservoir
+                  Available Credits
                 </span>
                 <span className="font-chip-status text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded uppercase">
                   {plan} TIER
@@ -146,7 +146,7 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
               className="min-h-[44px] px-5 py-2.5 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold transition-all duration-150 flex items-center gap-2 active:scale-[0.98] shadow-[0_0_24px_rgba(120,245,229,0.25)] hover:shadow-[0_0_32px_rgba(120,245,229,0.4)]"
             >
               <Zap className="w-4 h-4 text-on-primary" />
-              <span>Refill Reservoir</span>
+              <span>Refill Credits</span>
             </button>
           </div>
         </div>

@@ -533,7 +533,8 @@ export function AssignmentCardDashboard({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap self-end lg:self-auto">
-                  {/* Subject Settings Button with Amber Dot when Overridden */}
+                  {/* Single per-card action — settings, export and delete live
+                      inside the panel (owner 09-06: one option per card, not three) */}
                   <button
                     type="button"
                     onClick={() => setOpenSettingsSubjectId(isSettingsOpen ? null : bubble.id)}
@@ -550,34 +551,6 @@ export function AssignmentCardDashboard({
                       <span className="w-2 h-2 rounded-full bg-sem-amber shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
                     )}
                   </button>
-
-                  {/* Export All for Subject */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleExportBubble(bubble.title, e)}
-                    disabled={bubbleExporting}
-                    className="h-11 px-4 rounded-xl border border-secondary/30 text-secondary hover:bg-secondary/10 font-label-caps text-xs uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    {bubbleExporting ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                    <span className="hidden sm:inline">Export All</span>
-                  </button>
-
-                  {/* Delete Custom Subject */}
-                  {bubble.is_custom && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteBubble(bubble.id, e)}
-                      className="w-11 h-11 rounded-xl text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors flex items-center justify-center cursor-pointer"
-                      title="Delete custom subject module"
-                      aria-label="Delete custom subject module"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -588,6 +561,9 @@ export function AssignmentCardDashboard({
                   isOpen={isSettingsOpen}
                   onClose={() => setOpenSettingsSubjectId(null)}
                   onSettingsChanged={() => setSettingsVersion((v) => v + 1)}
+                  onExport={() => handleExportBubble(bubble.title)}
+                  onDelete={() => handleDeleteBubble(bubble.id)}
+                  isCustom={bubble.is_custom}
                 />
               )}
 

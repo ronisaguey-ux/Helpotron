@@ -688,9 +688,9 @@ export default function ControlCenterView({ userId = "" }) {
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: "trial", label: "$0 Trial (7d)" },
-                        { id: "basic", label: "$5 Basic" },
-                        { id: "pro", label: "$15 Pro" },
-                        { id: "elite", label: "$30 Elite" },
+                        { id: "basic", label: "$10 Basic" },
+                        { id: "pro", label: "$20 Pro" },
+                        { id: "elite", label: "$40 Elite" },
                       ].map((p) => (
                         <button
                           key={p.id}
