@@ -1,26 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
-/* ── SectionCard: every panel on the site is collapsible ───────────────────
- * Wraps any clean-card block with a header row that carries a minimize /
- * maximize toggle. When collapsed the card shrinks to a slim one-line bar
- * (title + chevron only — no dead space). State persists per id in
- * localStorage, so a section the user collapsed stays collapsed across
- * navigation and reloads.
+/* ── SectionCard: LUMINOUS GLASS Collapsible Container ─────────────────────
+ * Wraps any card block with a header row that carries a minimize / maximize toggle.
+ * When collapsed, the card shrinks to a slim one-line bar (title + chevron only).
+ * State persists per id in localStorage (`helpotron.collapse.${id}`).
  *
  *   <SectionCard id="today-overview" title="Overview" subtitle="…">
  *     …children…
  *   </SectionCard>
- *
- * To keep an existing header (e.g. a <SectionHeader /> or any custom row),
- * pass it as `header` — it renders inside the card with the toggle appended:
- *
- *   <SectionCard id="today-attention" header={<SectionHeader title="…" />}>
- *     …children…
- *   </SectionCard>
- *
- * If neither title nor header is passed, the header row is omitted entirely
- * (no toggle) — pass `headerRight` alone for a bare toggle on a dense card.
  */
 export default function SectionCard({
   id = '',
@@ -31,7 +19,7 @@ export default function SectionCard({
   defaultOpen = true,
   headerRight,
   className = '',
-  padding = 'p-5',
+  padding = 'p-5 md:p-6',
   children,
 }) {
   const storageKey = id ? `helpotron.collapse.${id}` : null;
@@ -57,18 +45,18 @@ export default function SectionCard({
     });
   };
 
-  /* Programmatic open (e.g. Guide jump chips): a window event carrying this
-   * card's id expands it without touching the user's stored preference. */
+  /* Programmatic open (e.g. Guide jump chips): window event expands without
+   * overriding user preference */
   useEffect(() => {
     if (!id) return;
-    const onOpen = (e) => { if (e.detail === id) setOpen(true); };
+    const onOpen = (e) => {
+      if (e.detail === id) setOpen(true);
+    };
     window.addEventListener('helpotron:open-section', onOpen);
     return () => window.removeEventListener('helpotron:open-section', onOpen);
   }, [id]);
 
-  /* Owner (09-01): clicking anywhere on the bar toggles, not just the chevron.
-   * Clicks on real controls inside a custom header (buttons, links, inputs)
-   * are left alone so they keep working. */
+  /* Clicking header bar toggles, excluding interactive elements */
   const onHeaderClick = (e) => {
     if (e.target.closest('button, a, input, select, textarea, label')) return;
     toggle();
@@ -76,32 +64,42 @@ export default function SectionCard({
 
   const hasHeader = !!(header || title || icon || headerRight);
 
-  /* Collapsed headers get `collapsed` forwarded so shared headers like
-   * SectionHeader can drop their subtitle/right content — a minimized
-   * section is always a tight one-line bar, never a tall strip. */
   const headerEl = !open && React.isValidElement(header)
     ? (typeof header.type === 'string' ? header : React.cloneElement(header, { collapsed: true }))
     : header;
 
   return (
-    /* Collapsed = a slim one-line bar (no big padding, no empty box);
-     * open = the normal padded card with content. */
-    <section id={id || undefined} className={`clean-card ${open ? padding : 'p-2'} relative ${className}`}>
+    <section
+      id={id || undefined}
+      className={[
+        'relative rounded-2xl md:rounded-3xl',
+        'bg-surface-container-lowest/70 backdrop-blur-xl',
+        'border border-outline-variant/20',
+        'shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+        'transition-all duration-150',
+        open ? padding : 'p-3 md:p-4',
+        className,
+      ].filter(Boolean).join(' ')}
+    >
       {hasHeader && (
         <div
-          className={`flex gap-2 select-none cursor-pointer ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-3' : '') : ''}`}
+          className={`flex gap-3 select-none cursor-pointer ${open ? 'items-start' : 'items-center'} ${title || header ? (open ? 'mb-4' : '') : ''}`}
           onClick={hasHeader ? onHeaderClick : undefined}
           role="presentation"
         >
-          {icon && <span className="text-[var(--accent)] shrink-0">{icon}</span>}
+          {icon && (
+            <span className="text-primary shrink-0 mt-0.5" aria-hidden="true">
+              {icon}
+            </span>
+          )}
           {title && (
-            <h3 className="text-base font-semibold tracking-wide text-[var(--text-primary)] flex-1 truncate">
+            <h3 className="text-base md:text-lg font-semibold tracking-tight text-on-surface flex-1 truncate">
               {title}
             </h3>
           )}
           {headerEl && <div className="flex-1 min-w-0">{headerEl}</div>}
           {open && subtitle && !title && !header && (
-            <span className="text-[11px] font-mono text-slate-500 flex-1 truncate">{subtitle}</span>
+            <span className="text-xs font-mono text-on-surface-variant flex-1 truncate">{subtitle}</span>
           )}
           {open && headerRight}
           <button
@@ -109,9 +107,9 @@ export default function SectionCard({
             onClick={toggle}
             aria-label={open ? 'Minimize section' : 'Maximize section'}
             title={open ? 'Minimize' : 'Maximize'}
-            className="relative w-7 h-7 -mr-1.5 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/6 transition cursor-pointer shrink-0 after:absolute after:-inset-2 after:content-['']"
+            className="relative w-8 h-8 -mr-1 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer shrink-0"
           >
-            {open ? <ChevronUp width={15} height={15} /> : <ChevronDown width={15} height={15} />}
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
       )}
@@ -119,3 +117,5 @@ export default function SectionCard({
     </section>
   );
 }
+
+export { SectionCard };
