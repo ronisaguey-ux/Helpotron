@@ -401,6 +401,10 @@ class UserSettingsService:
                 "sapling": True,
                 "perplexity_cadence": True,
                 "statistical_burstiness": True,
+                # 09-06 (owner): free self-hosted tier — ZipPy compression
+                # heuristic + INT8 ONNX RoBERTa classifier. No API keys.
+                "zippy": True,
+                "roberta_onnx": True,
             },
 
             # 8. Model Selection & Specialized Task Routing
@@ -443,8 +447,11 @@ class UserSettingsService:
                 "detection": {
                     "enabled": "off",
                     "min_human": 70,
-                    # 09-04 (owner A8 purge): Pangram + Sapling only
-                    "detectors": {"sapling": True, "pangram": True},
+                    # 09-04 (owner A8 purge): Pangram + Sapling only;
+                    # 09-06 (owner): + free self-hosted tier (ZipPy,
+                    # RoBERTa-ONNX — run in-process, funnel-skips the paid
+                    # detectors when the local verdict is clear).
+                    "detectors": {"sapling": True, "pangram": True, "zippy": True, "roberta_onnx": True},
                 },
                 # Sample Voice (08-31, operator): "write like a sample" — the
                 # user adds samples (paste or upload) and the agent writes in
