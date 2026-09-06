@@ -132,7 +132,10 @@ def test_full_activation_flow(client, auth_headers, unique_user):
     data = res.json()
     assert data["status"] == "success"
     assert data["user"]["plan"] == "trial"
-    assert data["user"]["credits"] == 150.0
+    # 09-06 (owner rework): the grant is task tokens in token_balance —
+    # user.credits is discount currency and stays 0.0.
+    assert data["user"]["token_balance"] == 150.0
+    assert data["user"]["credits"] == 0.0
     assert data["user"]["trial_claimed"] is True
 
     post_status = client.get("/api/trial/status", headers=auth_headers).json()

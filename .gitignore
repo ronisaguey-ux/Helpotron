@@ -52,3 +52,6 @@ logs/
 
 # CWS upload packages (build artifacts)
 /helpotron-extension-v*.zip
+
+# fetched ONNX detector binaries (~126 MB) — fetch via scripts/fetch_detector_model.sh
+server/detector_models/onnx/
