@@ -29,7 +29,90 @@ import {
   Puzzle, Sparkles, Check, FileText, BookOpen, X, Menu, PlayCircle,
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
-import GuideView from './GuideView.jsx';
+const CookieBanner = React.lazy(() => import('./CookieBanner.jsx'));
+const GuideView = React.lazy(() => import('./GuideView.jsx'));
+const PrivacyPolicyView = React.lazy(() => import('./PrivacyPolicyView.jsx'));
+const TermsOfServiceView = React.lazy(() => import('./TermsOfServiceView.jsx'));
+const ExtensionInstallView = React.lazy(() => import('./ExtensionInstallView.jsx'));
+
+const FALLBACK_PLANS = [
+  {
+    id: 'trial',
+    name: 'Free Trial',
+    tagline: '7-day starter trial with 100 task tokens ($1.00 tool budget) — SMS verification required (1 per number).',
+    price_cents: 0,
+    price_monthly: 0,
+    monthly_task_tokens: 100,
+    is_trial: true,
+    requires_sms: true,
+    popular: false,
+    capabilities: [
+      '100 task tokens (1 token = $0.01 API tool cost)',
+      'Assignment bubbles with per-assignment agent',
+      'Browser extension + paste-in coursework capture',
+      'Turn-in ledger with timestamps and undo',
+      'Two-factor authentication and session security',
+    ],
+  },
+  {
+    id: 'basic',
+    name: 'Basic',
+    tagline: '300 task tokens / month ($3.00 tool budget) for steady coursework.',
+    price_cents: 500,
+    price_monthly: 5,
+    monthly_task_tokens: 300,
+    is_trial: false,
+    requires_sms: false,
+    popular: false,
+    capabilities: [
+      '300 task tokens / month (1 token = $0.01 API tool cost)',
+      'Credits are discount dollars ($1.00 off per credit)',
+      'Assignment bubbles with per-assignment agent',
+      'Study tools, library and exports (Docs, Markdown, PDF)',
+      'Two-factor authentication and session security',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    tagline: '1,000 task tokens / month ($10.00 tool budget) for a full semester load.',
+    price_cents: 1500,
+    price_monthly: 15,
+    monthly_task_tokens: 1000,
+    is_trial: false,
+    requires_sms: false,
+    popular: true,
+    capabilities: [
+      '1,000 task tokens / month (1 token = $0.01 API tool cost)',
+      'Credits are discount dollars ($1.00 off per credit)',
+      'Assignment bubbles with per-assignment agent',
+      'Browser extension + paste-in coursework capture',
+      'Turn-in ledger with timestamps and undo',
+      'Study tools, library and exports (Docs, Markdown, PDF)',
+      'Two-factor authentication and session security',
+    ],
+  },
+  {
+    id: 'elite',
+    name: 'Elite',
+    tagline: '2,700 task tokens / month ($27.00 tool budget) for heavy research and multi-agent work.',
+    price_cents: 3000,
+    price_monthly: 30,
+    monthly_task_tokens: 2700,
+    is_trial: false,
+    requires_sms: false,
+    popular: false,
+    capabilities: [
+      '2,700 task tokens / month (1 token = $0.01 API tool cost)',
+      'High-priority compute and multi-agent pipelines',
+      'Assignment bubbles with per-assignment agent',
+      'Browser extension + paste-in coursework capture',
+      'Turn-in ledger with timestamps and undo',
+      'Study tools, library and exports (Docs, Markdown, PDF)',
+      'Two-factor authentication and session security',
+    ],
+  },
+];
 
 const FEATURES = [
   {
@@ -159,34 +242,51 @@ function ProductPreview() {
   );
 }
 
-/* ── Pricing ─────────────────────────────────────────────────────────────────
- * Reads GET /api/plans. Renders nothing at all if the call fails: quoting a
- * stale hardcoded price is worse than quoting none, and a visitor who sees no
- * pricing block is strictly better off than one who is quoted a number the
- * checkout will contradict. */
+/* ── Pricing (never-die honest failure line, Spec 3.3.1) ──────────────────────
+ * Reads GET /api/plans. If offline or network blips, falls back to standard
+ * catalogue ($0, $5, $15, $30) with an honest muted status indicator. */
 function Pricing({ onOpenAuth }) {
-  const [plans, setPlans] = useState(null);
+  const [plans, setPlans] = useState(FALLBACK_PLANS);
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
     let alive = true;
     fetch('/api/plans', { credentials: 'omit' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d?.plans?.length) setPlans(d.plans); })
-      .catch(() => { /* offline or backend down — section stays hidden */ });
+      .then((d) => {
+        if (alive && d?.plans?.length) {
+          setPlans(d.plans);
+          setIsLive(true);
+        }
+      })
+      .catch(() => {
+        // Keeps FALLBACK_PLANS without unmounting or failing
+      });
     return () => { alive = false; };
   }, []);
-
-  if (!plans) return null;
 
   const fmt = (n) => n.toLocaleString();
 
   return (
-    <section id="pricing" className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
-      <div className="text-center space-y-2 mb-10">
-        <h2 className="font-headline-lg text-headline-lg tracking-tight">Start free. Upgrade only for volume.</h2>
+    <section id="pricing" style={{ scrollMarginTop: '88px' }} className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+      <div className="text-center space-y-2 mb-4">
+        <h2 className="font-headline-lg text-headline-lg tracking-tight text-on-surface">Start free. Upgrade only for volume.</h2>
         <p className="text-body-md text-on-surface-variant max-w-[60ch] mx-auto">
           Every plan includes every feature. The only difference is how much you can run each month.
         </p>
+      </div>
+
+      {/* Never-die muted status line */}
+      <div className="flex items-center justify-center gap-2 mb-8">
+        {isLive ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant font-mono">
+            <span className="w-2 h-2 rounded-full bg-sem-green animate-pulse" /> Verified live rates from Helpotron billing gateway
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant font-mono">
+            <span className="w-2 h-2 rounded-full bg-outline-variant" /> Standard tier catalogue — confirmed at checkout
+          </span>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -194,26 +294,19 @@ function Pricing({ onOpenAuth }) {
           <div
             key={p.id}
             className={`card-lift p-5 flex flex-col gap-4 rounded-2xl bg-surface-container-lowest relative ${
-              p.popular ? 'border-primary/50' : ''
+              p.popular ? 'border-primary/50 ring-1 ring-primary/30' : 'border border-outline-variant/30'
             }`}
           >
-            {/* Badges sit IN the header row. They used to hang off the card at
-                -top-2.5, one on the left edge and one on the right, so the SMS
-                badge floated in the gutter between two cards and read as
-                belonging to neither (08-30). */}
             <div className="flex items-start justify-between gap-2 min-h-[1.5rem]">
               <div className="text-sm font-semibold text-on-surface">{p.name}</div>
               {p.popular && (
-                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0">Most popular</span>
+                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0 font-semibold">Most popular</span>
               )}
               {p.requires_sms && (
-                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0">SMS verified</span>
+                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">SMS verified</span>
               )}
             </div>
-            {/* Price directly under the name in every card. It previously sat
-                below a free-text tagline of wildly different lengths, so the
-                one number a visitor compares across the row was never on the
-                same baseline twice. */}
+
             <div className="flex items-baseline gap-1">
               <span className="text-3xl font-extrabold tracking-tight text-on-surface">
                 ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
@@ -221,14 +314,14 @@ function Pricing({ onOpenAuth }) {
               <span className="text-xs text-on-surface-variant">/{p.is_trial ? '7 days' : 'mo'}</span>
             </div>
             <div className="text-xs text-on-surface-variant leading-relaxed">{p.tagline}</div>
-            {/* mt-auto pins the differentiator + CTA to a common bottom edge. */}
+
             <div className="text-xs text-on-surface-variant border-t border-outline-variant/30 pt-3 mt-auto">
               <div className="font-semibold text-on-surface font-tabular-stat">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
             </div>
             <button
               type="button"
               onClick={() => onOpenAuth('signup')}
-              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'inline-flex items-center justify-center rounded-xl bg-sem-deepgreen hover:bg-sem-green text-on-sem-deepgreen hover:text-on-sem-deepgreen font-title-md text-body-md font-semibold transition-all active:scale-95 cursor-pointer' : BTN_SECONDARY)} w-full px-4 py-2.5`}
+              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'inline-flex items-center justify-center rounded-xl bg-sem-deepgreen hover:bg-sem-green text-on-sem-deepgreen hover:text-on-sem-deepgreen font-title-md text-body-md font-semibold transition-all active:scale-95 cursor-pointer shadow-sm' : BTN_SECONDARY)} w-full px-4 py-2.5`}
             >
               {p.is_trial ? 'Start free trial' : p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
             </button>
@@ -236,7 +329,7 @@ function Pricing({ onOpenAuth }) {
         ))}
       </div>
 
-      <p className="mt-4 flex items-start justify-center gap-2 text-xs text-on-surface-variant max-w-[62ch] mx-auto">
+      <p className="mt-6 flex items-start justify-center gap-2 text-xs text-on-surface-variant max-w-[62ch] mx-auto">
         <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-secondary" aria-hidden="true" />
         <span>
           <span className="font-mono">1 task token = $0.01</span> of usage (transcription, multi-agent
@@ -265,25 +358,92 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
      users sign up"): any visitor can read the full feature guide before
      creating an account. Static content only — no authed fetches. */
   const [guideOpen, setGuideOpen] = useState(false);
-  /* Mobile menu (09-01): the reference export shipped a menu button with no
-     menu; this one is real — closes on Escape / link click / outside tap. */
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [extensionOpen, setExtensionOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Deep-link navigation handler with pushState
+  const navigatePath = (path) => {
+    setMenuOpen(false);
+    if (path === '/features') {
+      setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      window.history.pushState(null, '', '/features');
+      document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+    } else if (path === '/pricing') {
+      setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      window.history.pushState(null, '', '/pricing');
+      document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+    } else if (path === '/guide') {
+      setGuideOpen(true); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      window.history.pushState(null, '', '/guide');
+    } else if (path === '/privacy') {
+      setPrivacyOpen(true); setGuideOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      window.history.pushState(null, '', '/privacy');
+    } else if (path === '/terms') {
+      setTermsOpen(true); setGuideOpen(false); setPrivacyOpen(false); setExtensionOpen(false);
+      window.history.pushState(null, '', '/terms');
+    } else if (path === '/extension') {
+      setExtensionOpen(true); setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false);
+      window.history.pushState(null, '', '/extension');
+    } else {
+      setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      if (window.location.pathname !== '/') window.history.pushState(null, '', '/');
+    }
+  };
+
+  const closeModal = () => {
+    setGuideOpen(false);
+    setPrivacyOpen(false);
+    setTermsOpen(false);
+    setExtensionOpen(false);
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
+  };
+
   useEffect(() => {
-    if (!guideOpen && !menuOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') { setGuideOpen(false); setMenuOpen(false); } };
+    const handlePopState = () => {
+      const p = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (p === '/guide') {
+        setGuideOpen(true); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      } else if (p === '/privacy') {
+        setPrivacyOpen(true); setGuideOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      } else if (p === '/terms') {
+        setTermsOpen(true); setGuideOpen(false); setPrivacyOpen(false); setExtensionOpen(false);
+      } else if (p === '/extension') {
+        setExtensionOpen(true); setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false);
+      } else if (p === '/features') {
+        setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+        document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+      } else if (p === '/pricing') {
+        setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+        document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        setGuideOpen(false); setPrivacyOpen(false); setTermsOpen(false); setExtensionOpen(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    handlePopState();
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const anyModalOpen = guideOpen || privacyOpen || termsOpen || extensionOpen || menuOpen;
+  useEffect(() => {
+    if (!anyModalOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') closeModal(); };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [guideOpen, menuOpen]);
+  }, [anyModalOpen]);
 
   const navLinks = [
-    { label: 'Features', onClick: () => { setMenuOpen(false); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); } },
-    { label: 'Guide', onClick: () => { setMenuOpen(false); setGuideOpen(true); } },
-    { label: 'Pricing', onClick: () => { setMenuOpen(false); document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' }); } },
+    { label: 'Features', onClick: () => navigatePath('/features') },
+    { label: 'Guide', onClick: () => navigatePath('/guide') },
+    { label: 'Pricing', onClick: () => navigatePath('/pricing') },
   ];
 
   return (
@@ -294,18 +454,17 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         className="fixed top-0 w-full z-40 border-b border-outline-variant/30 transition-all duration-300 bg-surface/80 backdrop-blur-md"
       >
         <div className="max-w-[1440px] mx-auto px-container-padding h-16 flex items-center justify-between gap-3">
-          {/* Brand lockup — one logo + wordmark. AnimatedLogo renders the real
-              logo (HelpoTron_logo.jpeg via the app's asset). */}
-          <a href="#main-content" className="flex items-center gap-3 min-w-0" aria-label="Helpotron home">
+          {/* Brand lockup — one logo + wordmark */}
+          <a href="#main-content" onClick={(e) => { e.preventDefault(); navigatePath('/'); }} className="flex items-center gap-3 min-w-0" aria-label="Helpotron home">
             <AnimatedLogo size="md" wordmarkClassName="hidden" />
             <span className="font-headline-lg text-[22px] font-bold text-primary tracking-tight whitespace-nowrap">Helpotron</span>
           </a>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8" aria-label="Main">
-            <button type="button" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Features</button>
-            <button type="button" onClick={() => setGuideOpen(true)} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Guide</button>
-            <button type="button" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Pricing</button>
+            <button type="button" onClick={() => navigatePath('/features')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Features</button>
+            <button type="button" onClick={() => navigatePath('/guide')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Guide</button>
+            <button type="button" onClick={() => navigatePath('/pricing')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Pricing</button>
           </nav>
 
           {/* Desktop actions */}
@@ -390,7 +549,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               <button type="button" onClick={() => openAuth('signup')} className={`${BTN_PRIMARY} px-8 py-3.5 w-full sm:w-auto`}>
                 Start Free Trial <ArrowRight className="w-4 h-4" />
               </button>
-              <button type="button" onClick={() => setGuideOpen(true)} className={`${BTN_SECONDARY} px-8 py-3.5 w-full sm:w-auto`}>
+              <button type="button" onClick={() => navigatePath('/guide')} className={`${BTN_SECONDARY} px-8 py-3.5 w-full sm:w-auto`}>
                 <BookOpen className="w-4 h-4 text-primary" /> Read the Guide
               </button>
             </div>
@@ -410,7 +569,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
       </section>
 
       {/* ── Features ────────────────────────────────────────────────────────── */}
-      <section id="features" className="max-w-[1100px] mx-auto px-container-padding py-16 sm:py-24">
+      <section id="features" style={{ scrollMarginTop: '88px' }} className="max-w-[1100px] mx-auto px-container-padding py-16 sm:py-24">
         <h2 className="font-headline-lg text-headline-lg tracking-tight text-center mb-10">
           What you actually get
         </h2>
@@ -451,54 +610,57 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         </div>
       </section>
 
-      {/* ── Footer (design: bg-surface-dim, brand + ©, legal links) ─────────── */}
+      {/* ── Footer (design: bg-surface-dim, brand + ©, legal links, Solo Dev Roni) */}
       <footer className="bg-surface-dim border-t border-outline-variant/20">
         <div className="max-w-[1440px] mx-auto w-full py-8 px-container-padding flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <AnimatedLogo size="sm" showWordmark={false} />
-            <span className="font-headline-lg text-[20px] font-bold text-primary">Helpotron</span>
-            <span className="text-body-sm text-on-surface-variant ml-2">© 2026 Helpotron Study OS. All rights reserved.</span>
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <AnimatedLogo size="sm" showWordmark={false} />
+              <span className="font-headline-lg text-[20px] font-bold text-primary">Helpotron</span>
+            </div>
+            <span className="text-body-sm text-on-surface-variant">© 2026 Helpotron Study OS. All rights reserved.</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-mono font-medium text-primary">
+              ⚡ Engineered by Solo Dev Roni
+            </span>
           </div>
-          <div className="flex flex-wrap gap-6 items-center">
-            {onOpenPrivacy && (
-              <button type="button" onClick={onOpenPrivacy} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
-                Privacy Policy
-              </button>
-            )}
-            {onOpenPrivacy && (
-              <button type="button" onClick={onOpenPrivacy} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
-                Terms of Service
-              </button>
-            )}
-            <button type="button" onClick={() => setGuideOpen(true)} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
+          <div className="flex flex-wrap gap-5 items-center justify-center">
+            <button type="button" onClick={() => navigatePath('/privacy')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
+              Privacy Policy
+            </button>
+            <button type="button" onClick={() => navigatePath('/terms')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
+              Terms of Service
+            </button>
+            <button type="button" onClick={() => navigatePath('/guide')} className="font-label-caps text-label-caps text-on-surface-variant hover:text-primary hover:underline transition-all cursor-pointer">
               Help Center
             </button>
-            <span className="inline-flex items-center gap-1 text-body-sm text-on-surface-variant"><Puzzle className="w-3 h-3" /> extension + web</span>
+            <button type="button" onClick={() => navigatePath('/extension')} className="inline-flex items-center gap-1 text-body-sm text-on-surface-variant hover:text-primary transition-all cursor-pointer">
+              <Puzzle className="w-3.5 h-3.5" /> Extension Companion
+            </button>
           </div>
         </div>
       </footer>
 
-      {/* ── Public guide modal (pre-signup access) ─────────────────────────── */}
+      {/* ── Public Guide Modal (pre-signup access) ─────────────────────────── */}
       {guideOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Helpotron guide"
-          onClick={() => setGuideOpen(false)}
+          aria-label="Helpotron Guide"
+          onClick={closeModal}
           className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6"
-          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl mt-2 sm:mt-6 rounded-2xl border border-outline-variant/30 bg-surface shadow-2xl overflow-hidden"
+            className="w-full max-w-3xl mt-2 sm:mt-6 rounded-2xl border border-outline-variant/30 bg-surface shadow-2xl overflow-hidden animate-fadeIn"
           >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3 border-b border-outline-variant/30 bg-surface">
               <span className="inline-flex items-center gap-2 text-sm font-bold text-on-surface">
-                <BookOpen className="w-4 h-4 text-primary" aria-hidden="true" /> Guide
+                <BookOpen className="w-4 h-4 text-primary" aria-hidden="true" /> Helpotron Knowledge Base &amp; Guide
               </span>
               <button
                 type="button"
-                onClick={() => setGuideOpen(false)}
+                onClick={closeModal}
                 aria-label="Close guide"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
               >
@@ -506,11 +668,126 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               </button>
             </div>
             <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
-              <GuideView publicMode onGoTo={() => { setGuideOpen(false); openAuth('signup'); }} />
+              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+                <GuideView publicMode onGoTo={(intent) => { closeModal(); if (intent === 'pricing') { navigatePath('/pricing'); } else { openAuth(intent || 'signup'); } }} />
+              </React.Suspense>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Public Privacy Policy Modal ────────────────────────────────────── */}
+      {privacyOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Helpotron Privacy Policy"
+          onClick={closeModal}
+          className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl mt-2 sm:mt-6 rounded-2xl border border-outline-variant/30 bg-surface shadow-2xl overflow-hidden animate-fadeIn"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3 border-b border-outline-variant/30 bg-surface">
+              <span className="inline-flex items-center gap-2 text-sm font-bold text-on-surface">
+                <ShieldCheck className="w-4 h-4 text-primary" aria-hidden="true" /> Privacy Policy
+              </span>
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="Close privacy policy"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+                <PrivacyPolicyView publicMode={false} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
+              </React.Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Public Terms of Service Modal ──────────────────────────────────── */}
+      {termsOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Helpotron Terms of Service"
+          onClick={closeModal}
+          className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl mt-2 sm:mt-6 rounded-2xl border border-outline-variant/30 bg-surface shadow-2xl overflow-hidden animate-fadeIn"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3 border-b border-outline-variant/30 bg-surface">
+              <span className="inline-flex items-center gap-2 text-sm font-bold text-on-surface">
+                <FileText className="w-4 h-4 text-primary" aria-hidden="true" /> Terms of Service
+              </span>
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="Close terms of service"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+                <TermsOfServiceView publicMode={false} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
+              </React.Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Public Extension Companion Modal ───────────────────────────────── */}
+      {extensionOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Helpotron Extension Companion"
+          onClick={closeModal}
+          className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl mt-2 sm:mt-6 rounded-2xl border border-outline-variant/30 bg-surface shadow-2xl overflow-hidden animate-fadeIn"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-3 border-b border-outline-variant/30 bg-surface">
+              <span className="inline-flex items-center gap-2 text-sm font-bold text-on-surface">
+                <Puzzle className="w-4 h-4 text-primary" aria-hidden="true" /> Browser Extension Companion
+              </span>
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="Close extension companion"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+                <ExtensionInstallView publicMode={true} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
+              </React.Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Student Privacy & Cookie Choice Banner ────────────────────────── */}
+      <React.Suspense fallback={null}>
+        <CookieBanner />
+      </React.Suspense>
     </div>
   );
 }
