@@ -34,7 +34,15 @@ export default function TwoFactorSetup({ s, set }) {
   const [msg, setMsg] = useState({ text: '', type: '' });
   const [hasError, setHasError] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const [enabled, setEnabled] = useState(Boolean(s?.privacy?.twoFactorEnabled));
+  // Server state is authoritative (user.settings["2fa_enabled"] via the
+  // settings sync); the parsed local flag is kept only as the widget's own
+  // just-verified result. The legacy root-level twoFactorEnabled toggle was a
+  // client-only fake and is deliberately NOT counted.
+  const [enabled, setEnabled] = useState(Boolean(s?.['2fa_enabled'] || s?.privacy?.twoFactorEnabled));
+
+  useEffect(() => {
+    setEnabled(Boolean(s?.['2fa_enabled'] || s?.privacy?.twoFactorEnabled));
+  }, [s]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -82,7 +90,7 @@ export default function TwoFactorSetup({ s, set }) {
         setEnabled(true);
         setSetupStep('idle');
         setCode('');
-        set?.('privacy', { ...s?.privacy, twoFactorEnabled: true, twoFactorMethod: method });
+        set?.({ privacy: { ...s?.privacy, twoFactorEnabled: true, twoFactorMethod: method } });
         setMsg({ text: 'Two-Factor Authentication is now active on your account.', type: 'success' });
       } else {
         triggerError(res?.detail || 'Invalid verification passcode.');
@@ -107,7 +115,7 @@ export default function TwoFactorSetup({ s, set }) {
         setEnabled(false);
         setSetupStep('idle');
         setCode('');
-        set?.('privacy', { ...s?.privacy, twoFactorEnabled: false });
+        set?.({ privacy: { ...s?.privacy, twoFactorEnabled: false } });
         setMsg({ text: 'Two-Factor Authentication has been successfully disabled.', type: 'info' });
       } else {
         triggerError(res?.detail || 'Failed to disable 2FA.');
@@ -153,7 +161,7 @@ export default function TwoFactorSetup({ s, set }) {
           <div>
             <div className="font-title-md text-sm font-bold text-on-surface">Two-Factor Authentication</div>
             <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-              Reinforce cryptographic access with secondary verification (Spec 3.2.3).
+              Protect your account with a second verification step (Authenticator App, email, or SMS).
             </p>
           </div>
         </div>
@@ -162,7 +170,7 @@ export default function TwoFactorSetup({ s, set }) {
             enabled ? 'bg-sem-green/15 text-sem-green border border-sem-green/30' : 'bg-surface-container-high text-on-surface-variant'
           }`}
         >
-          {enabled ? 'Active · Protocol Enforced' : 'Disabled'}
+          {enabled ? 'Active' : 'Disabled'}
         </span>
       </div>
 

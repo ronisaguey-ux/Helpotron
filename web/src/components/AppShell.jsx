@@ -369,14 +369,6 @@ export default function AppShell({
               </h1>
             </div>
 
-            {/* Status Indicator */}
-            <div className="hidden md:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-container-high ml-2 border border-outline-variant/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-sem-green animate-pulse" />
-              <span className="font-mono text-[9px] text-on-surface-variant uppercase tracking-wider">
-                SYNTH ACTIVE
-              </span>
-            </div>
-
             {/* Navigation back/forward */}
             <div className="hidden xl:flex items-center gap-0.5 ml-2">
               <button
