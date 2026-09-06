@@ -41,18 +41,36 @@ export default function WorkingDraftCard({
   const [copied, setCopied] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
+  // The full-view payload arrives as `draft` (assignment row w/ progress);
+  // the list-shaped `assignment` prop usually carries no progress — read both.
+  const progress = draft?.progress || assignment?.progress || {};
+
   // Extract draft text from various payload fields
   const content = (
     draft?.text ||
     draft?.content ||
     draft?.body ||
+    draft?.first_draft?.content ||
+    progress?.first_draft?.content ||
+    progress?.do_it_work ||
     assignment?.final_draft ||
     assignment?.draft_text ||
     ''
   ).trim();
 
   const modelUsed = draft?.model_used || assignment?.model_used || 'deepseek-v3';
-  const humanScore = draft?.human_score ?? assignment?.progress?.human_score ?? 88;
+  // Real detector verdicts live on progress as ai_score / detector_passed /
+  // detector_details (assignment_team + orchestrator). Human-score fields are
+  // the extended-pipeline equivalents — fall through to the real score before
+  // the placeholder default so the card never lies (09-06).
+  const detectorDetails = draft?.detector_results || progress?.detector_details || draft?.detector_details || null;
+  const passedDetector = draft?.detector_passed ?? progress?.detector_passed ?? null;
+  const humanScore =
+    draft?.human_score ??
+    progress?.human_score ??
+    draft?.ai_score ??
+    progress?.ai_score ??
+    88;
   const wordCount = content ? content.split(/\s+/).filter(Boolean).length : 0;
 
   const handleCopy = async () => {
@@ -127,10 +145,17 @@ export default function WorkingDraftCard({
             <h3 className="font-title-md text-title-md text-on-surface font-semibold tracking-tight">
               Synthesized Working Draft
             </h3>
-            <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 border border-sem-green/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-sem-green" />
-              <span>PASSED STEALTH</span>
-            </span>
+            {passedDetector === false || assignment?.status === 'draft_risky' ? (
+              <span className="font-chip-status text-[10px] text-sem-amber bg-sem-amber/10 border border-sem-amber/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-sem-amber" />
+                <span>BELOW HUMAN THRESHOLD — RETRY</span>
+              </span>
+            ) : (
+              <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 border border-sem-green/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-sem-green" />
+                <span>PASSED STEALTH</span>
+              </span>
+            )}
           </div>
 
           {/* Monospace Telemetry Strip */}
@@ -142,6 +167,14 @@ export default function WorkingDraftCard({
             <span>
               Human Score: <strong className="text-primary font-mono">{humanScore}%</strong>
             </span>
+            {detectorDetails?.length > 0 && (
+              <>
+                <span className="text-outline">/</span>
+                <span>
+                  Detectors: <strong className="text-on-surface font-mono">{detectorDetails.map((d) => d.detector || d.name).join(' · ')}</strong>
+                </span>
+              </>
+            )}
           </div>
         </div>
 
