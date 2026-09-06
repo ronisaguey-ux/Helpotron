@@ -47,31 +47,26 @@ export default function AppearancePreview({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-            <span className="font-semibold">CS-441 Raft Consensus Invariant</span>
+            <span className="font-semibold">Theme Surface Sample</span>
           </div>
           <span className="font-chip-status text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25 uppercase font-medium">
-            Active
+            Preview
           </span>
         </div>
 
         <p className="text-on-surface-variant text-xs leading-relaxed">
-          State-machine transition bounds verified deterministically with Z3 theorem provers.
+          This sample surface re-renders live as you adjust color mode, font
+          scaling, and accessibility toggles above.
         </p>
 
         <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-          >
-            <span>Launch Monograph</span>
+          <span className="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm">
+            <span>Sample Action</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/20 font-label-caps text-xs"
-          >
-            Inspect Proofs
-          </button>
+          </span>
+          <span className="px-3 py-1.5 rounded-xl bg-surface-container border border-outline-variant/20 font-label-caps text-xs">
+            Secondary Sample
+          </span>
         </div>
       </div>
     </div>

@@ -42,29 +42,13 @@ export default function MyAgentView({
   const [files, setFiles] = useState([]);
 
   // ── Threads State ──
-  const [threads, setThreads] = useState([
-    { id: 1, title: 'CS-441 Raft Invariant Synthesis', messages_count: 14, tokens: 9410 },
-    { id: 2, title: 'BIO-309 Chiral Inversion Reactions', messages_count: 8, tokens: 4280 },
-    { id: 3, title: 'MATH-202 Topology Manifolds', messages_count: 5, tokens: 2150 },
-  ]);
-  const [activeThreadId, setActiveThreadId] = useState(1);
+  // Empty until the server answers — fake seed threads/messages for live
+  // accounts were removed 09-06 (honest app: no fabricated conversations).
+  const [threads, setThreads] = useState([]);
+  const [activeThreadId, setActiveThreadId] = useState(null);
 
   // ── Chat Stream State ──
-  const [messages, setMessages] = useState([
-    {
-      id: 'm1',
-      role: 'user',
-      text: 'Synthesize the Raft consensus safety invariant proofs and prepare the submission package for CS-441. Verify joint consensus state bounds before generating the deliverable monograph.',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: 'm2',
-      role: 'agent',
-      text: "I've synthesized the Raft consensus safety proof tree. Both leader completeness and state machine safety have been rigorously verified with deterministic induction steps. You can launch the final draft into Docs below.",
-      timestamp: new Date(Date.now() - 3500000).toISOString(),
-      tokens: 840,
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -110,6 +94,24 @@ export default function MyAgentView({
         if (mounted && Array.isArray(res?.threads) && res.threads.length > 0) {
           setThreads(res.threads);
           setActiveThreadId(res.threads[0].id);
+        }
+      })
+      .catch(() => {});
+
+    // Load legacy conversation history (key 0) so returning users see their
+    // real thread, never a fabricated one.
+    api.agentChatHistory?.(0)
+      .then((res) => {
+        if (mounted && Array.isArray(res?.chat) && res.chat.length > 0) {
+          setMessages(
+            res.chat.map((m) => ({
+              id: m.id || `msg_${Date.now()}_${Math.random()}`,
+              role: m.role || m.sender || (m.is_user ? 'user' : 'agent'),
+              text: m.text || m.content || '',
+              timestamp: m.timestamp || m.created_at,
+              tokens: m.tokens,
+            }))
+          );
         }
       })
       .catch(() => {});
@@ -215,11 +217,12 @@ export default function MyAgentView({
     setActiveThreadId(threadId);
     try {
       const history = await api.agentChatHistory?.(threadId);
-      if (Array.isArray(history?.messages)) {
+      const records = history?.chat ?? history?.messages ?? [];
+      if (Array.isArray(records)) {
         setMessages(
-          history.messages.map((m) => ({
+          records.map((m) => ({
             id: m.id || `msg_${Date.now()}_${Math.random()}`,
-            role: m.role || (m.is_user ? 'user' : 'agent'),
+            role: m.role || m.sender || (m.is_user ? 'user' : 'agent'),
             text: m.text || m.content || '',
             timestamp: m.timestamp || m.created_at,
             tokens: m.tokens,
@@ -308,28 +311,52 @@ export default function MyAgentView({
     const controller = new AbortController();
     setAbortController(controller);
 
+    // Local buffer mirrors streamed deltas (the `streamingText` state var is a
+    // stale closure value inside the async finally below, so it cannot be used
+    // to persist the completed reply).
+    let replyBuffer = '';
     try {
       // Check if streaming is available
       if (api.agentChatStream) {
-        await api.agentChatStream({
-          text: query,
-          thread_id: activeThreadId,
-          mode,
-          effort: effortScore,
-          persona: activeIdentityId,
-          signal: controller.signal,
-          onThinking: (chunk) => {
-            setThinkingState((prev) => ({
-              ...prev,
-              visible: true,
-              text: (prev.text + ' ' + chunk).trim(),
-              tokens: prev.tokens + 15,
-            }));
+        const streamResult = await api.agentChatStream(
+          {
+            text: query,
+            thread_id: activeThreadId ?? 0,
+            mode,
+            effort: effortScore,
+            persona: activeIdentityId,
+            signal: controller.signal,
           },
-          onDelta: (delta) => {
-            setStreamingText((prev) => prev + delta);
-          },
-        });
+          (evt) => {
+            if (evt.type === 'reasoning') {
+              setThinkingState((prev) => ({
+                ...prev,
+                visible: true,
+                text: (evt.delta ? `${prev.text} ${evt.delta}` : prev.text).trim(),
+                tokens: prev.tokens + 15,
+              }));
+            } else if (evt.type === 'delta') {
+              replyBuffer += evt.delta || '';
+              setStreamingText((prev) => prev + (evt.delta || ''));
+            }
+          }
+        );
+        if (streamResult?.status === 'unavailable') {
+          // The stream lane can't run actions (math/shell queries execute via
+          // the sandbox executor). Fall back to the non-streaming lane, which
+          // runs the action and returns the reply — the server's documented
+          // "seamless fallback" contract.
+          const res = await api.agentChat?.({
+            text: query,
+            thread_id: activeThreadId ?? 0,
+            session_mode_override: mode,
+            effort_score: effortScore,
+            persona: activeIdentityId,
+          });
+          const reply = res?.reply || res?.message || 'Synthesis complete.';
+          replyBuffer = reply;
+          setStreamingText(reply);
+        }
       } else {
         // Direct chat fallback
         const res = await api.agentChat?.({
@@ -365,13 +392,13 @@ export default function MyAgentView({
         ]);
       }
     } finally {
-      if (streamingText) {
+      if (replyBuffer) {
         setMessages((prev) => [
           ...prev,
           {
             id: `agent_${Date.now()}`,
             role: 'agent',
-            text: streamingText,
+            text: replyBuffer,
             timestamp: new Date().toISOString(),
             tokens: 650,
           },
@@ -407,7 +434,7 @@ export default function MyAgentView({
     }
   };
 
-  const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0] || { title: 'CS-445 / BIO-309 Synthesis Co-Pilot' };
+  const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0] || { title: 'New chat' };
 
   return (
     <div className="relative w-full overflow-hidden max-w-page-max-width mx-auto px-gutter-desktop py-gutter-desktop">
@@ -490,6 +517,15 @@ export default function MyAgentView({
             ref={chatScrollRef}
             className="flex-1 flex flex-col gap-unit-4 overflow-y-auto p-unit-4 rounded-2xl bg-surface-container-lowest/50 border border-outline-variant/20 shadow-inner max-h-[560px]"
           >
+            {/* Empty state — honest, no seeded demo conversation */}
+            {messages.length === 0 && !thinkingState.visible && !isStreaming && (
+              <div className="flex flex-col items-center justify-center text-center py-16 px-4 gap-2">
+                <p className="font-body-sm text-sm text-on-surface-variant">
+                  No messages yet — ask a question below to start your session.
+                </p>
+              </div>
+            )}
+
             {/* Render Messages */}
             {messages.map((msg) => (
               <ChatBubble

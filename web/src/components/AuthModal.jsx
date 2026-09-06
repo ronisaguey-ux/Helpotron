@@ -291,7 +291,7 @@ export default function AuthModal({
       return;
     }
     if (!consentAgreed) {
-      triggerError('You must agree to the Protocol Terms before initialization.');
+      triggerError('You must agree to the Terms of Service before creating an account.');
       return;
     }
 
@@ -332,10 +332,10 @@ export default function AuthModal({
         } else {
           setLoginId(id);
           setTab('login');
-          triggerError('Account initialized — please sign in with your password.');
+          triggerError('Account created — please sign in with your password.');
         }
       } else {
-        triggerError(signupRes?.detail || 'Account initialization failed.');
+        triggerError(signupRes?.detail || 'Account creation failed.');
       }
     } catch (err) {
       triggerError(err.message || 'Account creation failed. Public ID may already exist.');
@@ -579,7 +579,7 @@ export default function AuthModal({
                         type={showLoginId ? 'text' : 'password'}
                         autoComplete="username"
                         required
-                        placeholder="HLP-XXXX-XX or username"
+                        placeholder="Your public ID"
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
                         className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
@@ -722,7 +722,7 @@ export default function AuthModal({
                         type={showSignupPass ? 'text' : 'password'}
                         autoComplete="new-password"
                         required
-                        placeholder="Minimum 8 characters or words..."
+                        placeholder="Minimum 8 characters — a letter and a number"
                         value={signupPass}
                         onChange={(e) => setSignupPass(e.target.value)}
                         className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
