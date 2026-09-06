@@ -92,6 +92,8 @@ try:
     from .routes_features import router as features_router
     from .routes_trial import router as trial_router
     from .routes_notifications import router as notifications_router
+    from .routes_library import router as library_router
+    from .routes_study_tools import router as study_tools_router
 except (ImportError, ValueError):
     from server.routes_analytics import router as analytics_router
     from server.routes_referral import router as referral_router
@@ -122,6 +124,8 @@ except (ImportError, ValueError):
     from server.routes_features import router as features_router
     from server.routes_trial import router as trial_router
     from server.routes_notifications import router as notifications_router
+    from server.routes_library import router as library_router
+    from server.routes_study_tools import router as study_tools_router
 
 
 logging.basicConfig(level=logging.INFO)
@@ -391,6 +395,8 @@ app.include_router(assignments_router)
 app.include_router(privacy_router)
 app.include_router(trial_router)
 app.include_router(notifications_router)
+app.include_router(library_router)
+app.include_router(study_tools_router)
 
 
 @app.get("/api/capabilities")
