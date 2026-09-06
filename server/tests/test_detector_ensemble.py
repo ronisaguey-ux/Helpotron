@@ -18,14 +18,32 @@ from server import detectors
 PRELUDE = Path(__file__).resolve().parent.parent / "detector_models" / "human_prelude.txt"
 
 
+# NOTE: samples must be realistic student-scale prose. Feeding the corpus
+# files themselves as samples is degenerate — zippy 0.1.3's delta is a ratio
+# difference that is only meaningful at sentence/paragraph scale (the seed is
+# already in the text, so corpus-scale input flips the sign of the margin).
+_AI_SAMPLE = (
+    "Artificial intelligence is transforming modern education at an unprecedented pace. "
+    "With every advance in large language models, institutions must reconsider assessment "
+    "design, embrace adaptive learning systems, and adopt ethically responsible adoption "
+    "frameworks that consistently align with long-term pedagogical objectives and "
+    "stakeholder interests across diverse communities worldwide."
+)
+_HUMAN_SAMPLE = (
+    "Woke up at 5am and the cat was sitting on the radiator staring at me like I owed her "
+    "money. Gave up on sleep, made coffee the wrong way, and somehow the day still got "
+    "better. Later I spent the evening shelling peas with my grandmother while the radio "
+    "played; she kept mentioning the drought and the price of hay like it was gossip."
+)
+
+
 def _ai_sample() -> str:
     pytest.importorskip("zippy", reason="thinkst-zippy not installed")
-    from importlib.resources import files as _files
-    return _files("zippy").joinpath("ai-generated.txt").read_text(encoding="utf-8")
+    return _AI_SAMPLE
 
 
 def _human_sample() -> str:
-    return PRELUDE.read_text(encoding="utf-8")
+    return _HUMAN_SAMPLE
 
 
 class _FakeDetector(detectors.Detector):
@@ -58,16 +76,23 @@ def _fresh_cache():
 
 @pytest.mark.asyncio
 async def test_zippy_direction_human_vs_ai():
-    """Human corpus must score clearly human; AI corpus clearly AI."""
+    """Human prose must score clear-low (<= FUNNEL_CLEAR_LOW); AI prose clear-high
+    (>= FUNNEL_CLEAR_HIGH), so the funnel short-circuits the paid tier on both.
+    The funnel contract forbids a clear verdict in the wrong direction (a
+    human essay never trips the 'blatant AI' path and vice versa)."""
     pytest.importorskip("zippy", reason="thinkst-zippy not installed")
     det = detectors.ZipPyDetector(str(PRELUDE))
     human = await det.detect(_human_sample())
     ai = await det.detect(_ai_sample())
     assert human.error is None, human.error
     assert ai.error is None, ai.error
-    assert human.score < 40, f"human sample scored AI-ish: {human.score} ({human.details})"
-    assert ai.score > 60, f"AI sample scored human-ish: {ai.score} ({ai.details})"
+    assert human.score <= detectors.FUNNEL_CLEAR_LOW, (
+        f"human sample not clear-low: {human.score} ({human.details})")
+    assert ai.score >= detectors.FUNNEL_CLEAR_HIGH, (
+        f"AI sample not clear-high: {ai.score} ({ai.details})")
     assert ai.score > human.score
+    assert human.details["verdict"] == "HUMAN"
+    assert ai.details["verdict"] == "AI"
 
 
 @pytest.mark.asyncio
@@ -191,7 +216,13 @@ async def test_onnx_direction_when_model_present(monkeypatch):
         pytest.skip("model not fetched (scripts/fetch_detector_model.sh)")
     det = detectors.OnnxAIDetector(model_dir)
     human = await det.detect(_human_sample()[:2500])
-    ai = await det.detect(_ai_sample()[:2500])
+    # The ONNX weights are GPT-2-era: they fire on their own training
+    # distribution (corpus excerpt), NOT on modern polished prose (measured
+    # 0.03 on current model output — see Bob's known-limitations note). So
+    # the AI sample here is a GPT-2-era corpus excerpt, not _ai_sample().
+    from importlib.resources import files as _files
+    gpt2_era = _files("zippy").joinpath("ai-generated.txt").read_text(encoding="utf-8")
+    ai = await det.detect(gpt2_era[:2500])
     assert human.error is None, human.error
     assert ai.error is None, ai.error
     assert human.score < 30, f"human classified AI: {human.score}"

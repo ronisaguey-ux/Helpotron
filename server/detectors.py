@@ -321,15 +321,32 @@ class ZipPyDetector(Detector):
         ai_det, hum_det = self._pair()
         r_ai = ai_det.detector.score_text(text)
         r_hum = hum_det.detector.score_text(text)
-        ai_conf = r_ai[1] if r_ai else 0.0
-        hum_conf = r_hum[1] if r_hum else 0.0
-        # Higher = more AI-likely: the AI-seeded delta's share of the total.
-        score = 100.0 * ai_conf / (ai_conf + hum_conf + 1e-9)
-        return DetectorResult(self.name, round(score, 2), {
+        # zippy 0.1.3 returns (label, abs(delta*100)) with delta = prelude_ratio
+        # − (prelude+sample)_ratio: the LABEL is the actual classifier (delta>0
+        # → 'AI'; delta<0 → 'Human'), the magnitude is a margin that is NOT
+        # monotone across input scales (corpus-scale input flips it), so scoring
+        # on delta ratios was wrong (AI text scored 0.13; human corpus scored
+        # 97). Verdict = the four label combinations, mapped onto the 0-100
+        # funnel scale: two agreements = clear, one disagreement = ambiguous
+        # band (ONNX / paid tier decide there — never a false clearance).
+        ai_label = (r_ai[0] if r_ai else "Human")
+        hum_label = (r_hum[0] if r_hum else "Human")
+        both = (ai_label, hum_label)
+        if both == ("Human", "Human"):
+            score = 5.0              # clear human — funnel skips paid tier
+        elif both == ("AI", "Human"):
+            score = 95.0             # clear AI — funnel skips paid tier
+        elif both == ("AI", "AI"):
+            score = 55.0             # harder than both corpora: lean AI, rare
+        else:                         # ("Human", "AI") — contradictory
+            score = 45.0
+        return DetectorResult(self.name, score, {
             "engine": "brotli",
             "verdict": "AI" if score >= 50.0 else "HUMAN",
-            "ai_delta": round(ai_conf, 4),
-            "human_delta": round(hum_conf, 4),
+            "ai_label": ai_label,
+            "human_label": hum_label,
+            "ai_delta": round(r_ai[1], 5) if r_ai else 0.0,
+            "human_delta": round(r_hum[1], 5) if r_hum else 0.0,
             "scored_chars": len(text),
         })
 
