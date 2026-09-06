@@ -570,9 +570,10 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
             {/* Public Mode CTA if visitor */}
             {publicMode && (
               <div className="p-6 rounded-3xl bg-primary/10 border border-primary/30 space-y-3">
-                <h4 className="text-sm font-bold text-on-surface">Begin Sovereign Execution</h4>
+                <h4 className="text-sm font-bold text-on-surface">Start your free trial</h4>
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Sign up with a public ID and password. 100 free task tokens granted upon SMS trial validation.
+                  Sign up with a public ID and password. 150 task tokens after two-factor
+                  authentication and a 1-cent payment verification.
                 </p>
                 <button
                   type="button"

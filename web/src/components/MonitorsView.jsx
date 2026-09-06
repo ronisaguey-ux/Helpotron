@@ -5,13 +5,11 @@ import {
   Database,
   RefreshCw,
   TrendingUp,
-  Server,
   Wifi,
   Check,
   MessageSquare,
   AlertCircle,
   Clock,
-  HelpCircle,
   Coins,
   ShieldCheck,
   CheckCircle2,
@@ -22,14 +20,13 @@ import api from "../api.js";
 import { usePoll30 } from "../lib/usePoll30.js";
 import {
   fmt,
+  formatUptime,
   deriveTrafficMetrics,
   parseDataLakeCounts,
-  P95_GLOSSARY_TEXT,
 } from "../lib/monitors.js";
 
 export default function MonitorsView({ userId = "" }) {
   const [activeTab, setActiveTab] = useState("feedback"); // "feedback" (default) | "traffic" | "datalake"
-  const [showGloss, setShowGloss] = useState(false);
   const [actionFeedback, setActionFeedback] = useState("");
   const [resolvingId, setResolvingId] = useState(null);
 
@@ -41,48 +38,10 @@ export default function MonitorsView({ userId = "" }) {
       api.listFeedback({ limit: 50 }).catch(() => ({ feedback: [] })),
     ]);
 
-    let feedbackList = Array.isArray(fbRes?.feedback) ? fbRes.feedback : [];
-    // Ensure rich items if backend empty in local dev
-    if (feedbackList.length === 0) {
-      feedbackList = [
-        {
-          id: "fb_8821",
-          type: "anomaly",
-          category: "bug",
-          severity: "high",
-          title: "Z3 Invariant Timeout on Recursive Tree Lemma",
-          message: "Solver hit 12,000ms wall-clock ceiling during automated induction step for verified AST tree verification session.",
-          user_id: "usr_99x_quant",
-          refund_tokens: 450,
-          created_at: "12m ago",
-          status: "open",
-        },
-        {
-          id: "fb_8819",
-          type: "ingestion",
-          category: "warning",
-          severity: "medium",
-          title: "M4A Whisper Audio VAD Split Warning",
-          message: "Voice activity chunk boundaries misaligned by >420ms on lecture channel 03. Downstream phoneme parsing auto-padded.",
-          user_id: "usr_0921_oxford",
-          refund_tokens: 0,
-          created_at: "34m ago",
-          status: "open",
-        },
-        {
-          id: "fb_8814",
-          type: "resource",
-          category: "info",
-          severity: "low",
-          title: "Near-Cap Burst Trigger on CS-441 Cluster",
-          message: "Class session burst hit 91% of reserved concurrency capacity. Elastic buffer node unparked successfully.",
-          user_id: "usr_7741_cam",
-          refund_tokens: 0,
-          created_at: "1h ago",
-          status: "open",
-        },
-      ];
-    }
+    // Owner 09-06: the v4 fallback fabricated fake anomalies ("Z3 Invariant
+    // Timeout ...", "usr_99x_quant") whenever the backend had none. Real
+    // feedback only — an empty queue renders as an honest empty state.
+    const feedbackList = Array.isArray(fbRes?.feedback) ? fbRes.feedback : [];
 
     return {
       overview: ovRes,
@@ -148,17 +107,14 @@ export default function MonitorsView({ userId = "" }) {
           <div className="flex items-center gap-2 mb-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low text-[11px] font-code-sm text-primary">
               <span className={`w-1.5 h-1.5 rounded-full bg-primary ${isPolling ? "opacity-40 animate-pulse" : ""}`} />
-              CONSOLE §3.20 · LIVE SURVEILLANCE
-            </span>
-            <span className="font-code-sm text-xs text-on-surface-variant">
-              FLEET: US-EAST-SYS0
+              LIVE · POLLS EVERY 30S
             </span>
           </div>
           <h1 className="font-headline-lg text-2xl md:text-3xl text-on-surface font-semibold tracking-tight">
             Monitors &amp; System Health
           </h1>
           <p className="font-body-md text-xs text-on-surface-variant mt-1 max-w-2xl">
-            Feedback-first priority triage, continuous traffic rates, tail p95 latency, and Data Lake ingestion telemetry.
+            Feedback triage, live traffic rates, and data lake counters.
           </p>
         </div>
 
@@ -228,7 +184,7 @@ export default function MonitorsView({ userId = "" }) {
           }`}
         >
           <Activity className={`w-4 h-4 ${activeTab === "traffic" ? "text-primary" : "text-outline"}`} />
-          <span>Throughput &amp; Invariant Signals</span>
+          <span>Live Traffic</span>
         </button>
 
         <button
@@ -381,130 +337,124 @@ export default function MonitorsView({ userId = "" }) {
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-primary" />
               <h2 className="font-title-md text-sm font-semibold text-on-surface">
-                Cluster Throughput &amp; Invariant Signals
+                Live API Traffic
               </h2>
             </div>
             <div className="flex items-center gap-2 font-code-sm text-xs text-on-surface-variant">
-              <span>SAMPLING:</span>
-              <span className="text-on-surface font-medium">CONTINUOUS 24-HOUR RUNTIME</span>
+              <span>POLL:</span>
+              <span className="text-on-surface font-medium">EVERY 30 SECONDS</span>
             </div>
           </div>
 
-          {/* 4 Telemetry Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Ingestion Rate */}
+          {/* Real Metrics Grid (owner 09-06: every number comes from
+              /api/monitors/overview — no fabricated fallbacks) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Requests per minute */}
             <div className="p-4 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex flex-col justify-between gap-1">
               <div className="flex items-center justify-between">
                 <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold">
-                  Ingestion Rate
+                  Requests / minute
                 </span>
                 <TrendingUp className="w-3.5 h-3.5 text-sem-green" />
               </div>
               <div className="font-tabular-stat text-2xl font-bold text-on-surface mt-1">
-                {trafficMetrics.ratePerSec}{" "}
+                {trafficMetrics.ratePerSec !== null ? Number(trafficMetrics.ratePerSec).toFixed(1) : "—"}{" "}
                 <span className="font-code-sm text-xs text-on-surface-variant font-normal">req/s</span>
               </div>
-              <div className="font-code-sm text-[11px] text-sem-green flex items-center gap-1 mt-1">
-                <span>+4.8%</span>
-                <span className="text-outline">vs 1h avg baseline</span>
+              <div className="font-code-sm text-[11px] text-on-surface-variant mt-1">
+                {trafficMetrics.total !== null ? `${fmt(trafficMetrics.total)} total requests` : "No traffic data yet"}
               </div>
             </div>
 
-            {/* P95 Invariant Latency with Gloss */}
-            <div className="p-4 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex flex-col justify-between gap-1 relative">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold">
-                  P95 Invariant Latency
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowGloss(!showGloss)}
-                  className="text-outline hover:text-primary transition cursor-pointer"
-                  title="Explain p95 latency"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="font-tabular-stat text-2xl font-bold text-primary mt-1">
-                {trafficMetrics.p95Latency}{" "}
-                <span className="font-code-sm text-xs text-on-surface-variant font-normal">ms</span>
-              </div>
-              <div className="font-code-sm text-[11px] text-on-surface-variant flex items-center gap-1 mt-1">
-                <span className="text-on-surface font-medium">Target: &lt;35.0ms</span>
-                <span className="text-sem-green">(nominal)</span>
-              </div>
-
-              {showGloss && (
-                <div className="absolute left-2 right-2 top-full mt-2 z-20 p-3 rounded-xl bg-surface-container-high border border-outline-variant/40 shadow-xl text-[11px] font-body-sm text-on-surface">
-                  {P95_GLOSSARY_TEXT}
-                </div>
-              )}
-            </div>
-
-            {/* Synthesizer Error Rate Chip (Spec requirement) */}
+            {/* Uptime */}
             <div className="p-4 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex flex-col justify-between gap-1">
               <div className="flex items-center justify-between">
                 <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold">
-                  Synthesizer Error Rate
+                  API Uptime
                 </span>
                 <span className="w-2 h-2 rounded-full bg-sem-green" />
               </div>
-              <div className="font-tabular-stat text-2xl font-bold text-sem-green mt-1">
-                {trafficMetrics.errorRateData.formatted}
+              <div className="font-tabular-stat text-2xl font-bold text-on-surface mt-1">
+                {formatUptime(overview?.uptime_seconds)}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-sem-green/15 font-chip-status text-[10px] text-sem-green font-semibold">
-                  {trafficMetrics.errorRateData.statusLabel}
-                </span>
-                <span className="font-code-sm text-[10px] text-outline">Zero synthetic spikes</span>
+              <div className="font-code-sm text-[11px] text-on-surface-variant mt-1">
+                Since server start
               </div>
             </div>
 
-            {/* Node Memory Pressure */}
+            {/* Error rate */}
             <div className="p-4 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 flex flex-col justify-between gap-1">
               <div className="flex items-center justify-between">
                 <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold">
-                  Memory Pressure
+                  Error rate (5xx+)
                 </span>
-                <Cpu className="w-3.5 h-3.5 text-on-surface-variant" />
+                <span className={`w-2 h-2 rounded-full ${trafficMetrics.errorRateData.tier === "outline" ? "bg-outline" : trafficMetrics.errorRateData.tier}`} />
               </div>
               <div className="font-tabular-stat text-2xl font-bold text-on-surface mt-1">
-                {trafficMetrics.memoryPressure}%
+                {trafficMetrics.errorRateData.formatted}
               </div>
-              <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mt-2">
-                <div className="bg-primary h-full rounded-full" style={{ width: `${trafficMetrics.memoryPressure}%` }} />
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-chip-status text-[10px] font-semibold ${
+                  trafficMetrics.errorRateData.tier === "outline"
+                    ? "bg-surface-container-high text-on-surface-variant"
+                    : `bg-${trafficMetrics.errorRateData.tier}/15 text-${trafficMetrics.errorRateData.tier}`
+                }`}>
+                  {trafficMetrics.errorRateData.statusLabel}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Smooth SVG Traffic Continuity Graph (24h Smoothed Runtime without Jitter) */}
+          {/* Real request-volume graph from /api/monitors/history snapshots
+              (owner 09-06: the previous handmade SVG claimed "MEAN: 81.6 REQ/S" —
+              invented. This plots actual snapshots, or says it is still collecting.) */}
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between text-xs font-code-sm text-on-surface-variant">
-              <span>TRAFFIC CONTINUITY GRAPH · 24H SMOOTHED RUNTIME</span>
-              <span className="text-primary">MEAN: 81.6 REQ/S</span>
+              <span>REQUEST VOLUME · LAST {Math.max(history.length, 0)} SNAPSHOTS (30s POLL)</span>
             </div>
             <div className="w-full h-28 bg-surface-container-low/40 rounded-xl p-3 flex items-center justify-center border border-outline-variant/20">
-              <svg className="w-full h-full text-primary" fill="none" preserveAspectRatio="none" viewBox="0 0 1000 100">
-                <defs>
-                  <linearGradient id="trafficGradient" x1="0%" x2="0%" y1="0%" y2="100%">
-                    <stop offset="0%" stopColor="#59d8c9" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#59d8c9" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d="M 0 65 Q 120 50, 240 58 T 480 42 T 720 34 T 960 30 L 1000 28 L 1000 100 L 0 100 Z" fill="url(#trafficGradient)" />
-                <path d="M 0 65 Q 120 50, 240 58 T 480 42 T 720 34 T 960 30 L 1000 28" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-              </svg>
+              {history.length > 1 ? (
+                <svg className="w-full h-full text-primary" fill="none" preserveAspectRatio="none" viewBox="0 0 1000 100">
+                  <defs>
+                    <linearGradient id="trafficGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                      <stop offset="0%" stopColor="#59d8c9" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#59d8c9" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const vals = history
+                      .map((h) => Number(h?.traffic?.requests_last_window ?? h?.traffic?.requests_per_min ?? 0))
+                      .filter((v) => Number.isFinite(v));
+                    const max = Math.max(...vals, 1);
+                    const pts = vals.map((v, idx) => [
+                      (idx / (vals.length - 1)) * 1000,
+                      92 - (v / max) * 80,
+                    ]);
+                    const line = pts.map(([x, y], idx) => `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+                    const area = `${line} L 1000 100 L 0 100 Z`;
+                    return (
+                      <>
+                        <path d={area} fill="url(#trafficGradient)" />
+                        <path d={line} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+                      </>
+                    );
+                  })()}
+                </svg>
+              ) : (
+                <span className="font-code-sm text-[11px] text-on-surface-variant">
+                  Still collecting snapshots — check back in a minute.
+                </span>
+              )}
             </div>
             <div className="flex justify-between font-code-sm text-[10px] text-outline px-1">
-              <span>T-24h (00:00 UTC)</span>
-              <span>T-12h (12:00 UTC)</span>
-              <span>Current Tick (Now)</span>
+              <span>Oldest snapshot</span>
+              <span>Now</span>
             </div>
           </div>
         </section>
       )}
 
-      {/* TAB 3: DATA LAKE & INFERENCE FLEET NODES */}
+      {/* TAB 3: DATA LAKE & SERVICE STATUS */}
       {activeTab === "datalake" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Data Lake Ingestion Feed */}
@@ -516,136 +466,114 @@ export default function MonitorsView({ userId = "" }) {
                 </div>
                 <div>
                   <h3 className="font-title-md text-sm font-semibold text-on-surface">
-                    Data Lake Ingestion Feed
+                    Data Lake Counters
                   </h3>
                   <p className="font-body-sm text-[11px] text-on-surface-variant">
-                    Live AST lemma submissions &amp; verified token pools.
+                    Real feedback and submission counts from the server.
                   </p>
                 </div>
               </div>
               <span className="font-chip-status text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green font-semibold">
-                STREAMING
+                LIVE
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {[
-                { file: "AST_Sub_4992_AVL_Balance.lean", desc: "Verified by Z3 Prover · Hash: 0x8f..33a", tok: "+120 TOK", time: "4s ago" },
-                { file: "AST_Sub_4991_GraphDijkstra.lean", desc: "Verified by Z3 Prover · Hash: 0x4a..9bc", tok: "+240 TOK", time: "19s ago" },
-                { file: "AST_Sub_4990_MatrixInversion.coq", desc: "Synthesizer Stage 2 In Progress…", tok: "QUEUED", time: "42s ago" },
-                { file: "AST_Sub_4989_BTree_Delete.lean", desc: "Verified by Z3 Prover · Hash: 0x11..e82", tok: "+310 TOK", time: "1m ago" },
-              ].map((feed, idx) => (
-                <div key={idx} className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <ShieldCheck className="w-4 h-4 text-sem-green shrink-0" />
-                    <div className="min-w-0">
-                      <span className="font-body-sm text-xs text-on-surface font-medium truncate block">
-                        {feed.file}
+              {dataLakeMetrics.map((m) => (
+                  <div key={m.label} className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <ShieldCheck className="w-4 h-4 text-sem-green shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-body-sm text-xs text-on-surface font-medium truncate block">
+                          {m.label}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="font-code-sm text-xs text-primary font-medium block">
+                        {m.value}
                       </span>
-                      <span className="font-code-sm text-[10px] text-on-surface-variant block">
-                        {feed.desc}
+                      <span className="font-code-sm text-[10px] text-outline block">
+                        {m.delta === null ? "no delta data" : `last window: ${m.delta}`}
                       </span>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <span className="font-code-sm text-xs text-primary font-medium block">
-                      {feed.tok}
-                    </span>
-                    <span className="font-code-sm text-[10px] text-outline block">
-                      {feed.time}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            <div className="pt-3 border-t border-outline-variant/20 flex items-center justify-between text-xs font-code-sm text-on-surface-variant">
-              <span>TOTAL INGESTED TODAY: 48,290 AST UNITS</span>
-              <span className="text-primary font-medium">Pipeline Optimal</span>
+              <div className="pt-3 border-t border-outline-variant/20 flex items-center justify-between text-xs font-code-sm text-on-surface-variant">
+                <span>Counts are cumulative since tracking started</span>
+                <span className="text-primary font-medium">Live data</span>
+              </div>
             </div>
           </div>
 
-          {/* Inference Node Fleet Matrix */}
+          {/* Live service status — real numbers from /api/monitors/overview
+              (owner 09-06: the v4 "fleet matrix" claimed a 67B local model with
+              88.4GB VRAM, a "BAA enclave", WebGPU pods and 3 active pods. None
+              of it existed — replaced with the actual API metrics.) */}
           <div className="rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
-                  <Server className="w-4 h-4" />
+                  <Wifi className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-title-md text-sm font-semibold text-on-surface">
-                    Inference Node Fleet Matrix
+                    Live Service Status
                   </h3>
                   <p className="font-body-sm text-[11px] text-on-surface-variant">
-                    Zero-retention channels, local enclaves, and verified weights.
+                    {formatUptime(overview?.uptime_seconds)} uptime ·{" "}
+                    {trafficMetrics.ratePerSec !== null ? Number(trafficMetrics.ratePerSec).toFixed(1) : "—"} req/s
                   </p>
                 </div>
               </div>
-              <span className="font-chip-status text-[10px] px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-semibold">
-                3 ACTIVE PODS
+              <span className={`font-chip-status text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                trafficMetrics.errorRateData.tier === "outline"
+                  ? "bg-surface-container-high text-on-surface-variant"
+                  : `bg-${trafficMetrics.errorRateData.tier}/15 text-${trafficMetrics.errorRateData.tier}`
+              }`}>
+                {trafficMetrics.errorRateData.statusLabel}
               </span>
             </div>
 
-            <div className="space-y-3">
-              {/* Pod 1 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Top endpoints (real) */}
               <div className="p-3.5 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-sem-green" />
-                    <span className="font-body-sm text-xs text-on-surface font-medium">Local WebGPU Worker Pod</span>
+                <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold block">
+                  Most requested endpoints
+                </span>
+                {(overview?.traffic?.top_endpoints || []).slice(0, 5).map((ep) => (
+                  <div key={ep.endpoint} className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
+                    <span className="truncate">{ep.endpoint}</span>
+                    <span className="text-on-surface font-medium ml-2">{ep.count}</span>
                   </div>
-                  <span className="font-chip-status text-[9px] uppercase px-1.5 py-0.5 rounded bg-sem-green/15 text-sem-green font-medium">
-                    100% OPERATIONAL
-                  </span>
-                </div>
-                <div className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
-                  <span>Concurrency: 32/32 Slots</span>
-                  <span className="text-on-surface font-medium">Latency: 2.1ms</span>
-                </div>
-                <div className="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-                  <div className="bg-sem-green h-full rounded-full" style={{ width: "100%" }} />
-                </div>
+                ))}
+                {(overview?.traffic?.top_endpoints || []).length === 0 && (
+                  <span className="font-code-sm text-[11px] text-on-surface-variant">No traffic recorded yet.</span>
+                )}
               </div>
 
-              {/* Pod 2 */}
+              {/* Status counts (real) */}
               <div className="p-3.5 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="font-body-sm text-xs text-on-surface font-medium">DeepSeek 67B V3 (Zero-Retention)</span>
+                <span className="font-label-caps text-[10px] text-on-surface-variant uppercase font-semibold block">
+                  Response status counts
+                </span>
+                {Object.entries(overview?.traffic?.status_counts || {}).map(([code, count]) => (
+                  <div key={code} className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
+                    <span>HTTP {code}</span>
+                    <span className="text-on-surface font-medium">{count}</span>
                   </div>
-                  <span className="font-chip-status text-[9px] uppercase px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
-                    ACTIVE · 12MS
-                  </span>
-                </div>
-                <div className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
-                  <span>State: Deterministic Grep</span>
-                  <span className="text-on-surface font-medium">VRAM: 88.4GB</span>
-                </div>
-                <div className="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-                  <div className="bg-primary h-full rounded-full" style={{ width: "78%" }} />
-                </div>
+                ))}
+                {Object.keys(overview?.traffic?.status_counts || {}).length === 0 && (
+                  <span className="font-code-sm text-[11px] text-on-surface-variant">No responses recorded yet.</span>
+                )}
               </div>
+            </div>
 
-              {/* Pod 3 */}
-              <div className="p-3.5 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-secondary" />
-                    <span className="font-body-sm text-xs text-on-surface font-medium">Anthropic Claude Sonnet BAA Enclave</span>
-                  </div>
-                  <span className="font-chip-status text-[9px] uppercase px-1.5 py-0.5 rounded bg-secondary/20 text-secondary font-medium">
-                    NOMINAL
-                  </span>
-                </div>
-                <div className="flex items-center justify-between font-code-sm text-[11px] text-on-surface-variant">
-                  <span>Channel: Enterprise HIPAA/BAA</span>
-                  <span className="text-on-surface font-medium">Latency: 24.1ms</span>
-                </div>
-                <div className="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-                  <div className="bg-secondary h-full rounded-full" style={{ width: "65%" }} />
-                </div>
-              </div>
+            <div className="pt-3 border-t border-outline-variant/20 flex items-center justify-between text-xs font-code-sm text-on-surface-variant">
+              <span>Last snapshot: {overview?.ts ? new Date(overview.ts).toLocaleTimeString() : "—"}</span>
+              <span className="text-primary font-medium">Live data</span>
             </div>
           </div>
         </div>

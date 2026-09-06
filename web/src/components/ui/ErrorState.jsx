@@ -27,8 +27,8 @@ const ERROR_CONFIGS = {
   401: {
     code: '401',
     tag: 'ERR_AUTH_LEASE_EXPIRED',
-    headline: 'Session Lease Expired',
-    description: 'Cryptographic session tokens or database cookies have expired. Re-authenticate to resume sovereign task execution.',
+    headline: 'Session Expired',
+    description: 'Your session has expired. Sign in again to continue your work.',
     icon: Lock,
     accent: 'secondary',
     accentBorder: 'border-secondary/30',

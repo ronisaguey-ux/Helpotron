@@ -72,13 +72,9 @@ export default function AdminToolsView() {
       if (res?.models && Array.isArray(res.models)) {
         setModelMetrics(res.models);
       } else {
-        // Honest fallback from analytics if dedicated endpoint not populated
-        setModelMetrics([
-          { name: "Claude 3.5 Sonnet", provider: "Anthropic", p50_ms: 320, p95_ms: 680, success_rate: 99.8, status: "operational" },
-          { name: "DeepSeek 67B V3", provider: "Zero-Retention Enclave", p50_ms: 180, p95_ms: 410, success_rate: 99.6, status: "operational" },
-          { name: "Gemini 2.5 Flash", provider: "Google DeepMind", p50_ms: 110, p95_ms: 220, success_rate: 99.9, status: "operational" },
-          { name: "Z3 SMT Invariant Engine", provider: "Local Formal Verification", p50_ms: 14, p95_ms: 35, success_rate: 100.0, status: "operational" },
-        ]);
+        // No fabricated scorecards: an unreported endpoint stays empty,
+        // and the table surface below shows an honest "no data" row.
+        setModelMetrics([]);
       }
     } catch (e) {
       setModelMetrics([]);
@@ -91,13 +87,7 @@ export default function AdminToolsView() {
   const loadStorage = async () => {
     try {
       const res = await fetch("/api/admin/system-health").then((r) => (r.ok ? r.json() : null)).catch(() => null);
-      setStorageData(res || {
-        database_size_mb: 28.4,
-        vector_index_size_mb: 142.1,
-        datalake_size_mb: 410.8,
-        storage_limit_mb: 5120.0,
-        temp_sandbox_active: 3,
-      });
+      setStorageData(res || null);
     } catch (e) {
       setStorageData(null);
     }
@@ -196,12 +186,18 @@ export default function AdminToolsView() {
     }
   };
 
-  const dbUsed = storageData?.database_size_mb || 28.4;
-  const vectorUsed = storageData?.vector_index_size_mb || 142.1;
-  const lakeUsed = storageData?.datalake_size_mb || 410.8;
-  const totalStorageUsed = dbUsed + vectorUsed + lakeUsed;
-  const storageLimit = storageData?.storage_limit_mb || 5120.0;
-  const storagePercent = Math.min(100, Math.round((totalStorageUsed / storageLimit) * 100));
+  const numOrNull = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const dbUsed = numOrNull(storageData?.database_size_mb);
+  const vectorUsed = numOrNull(storageData?.vector_index_size_mb);
+  const lakeUsed = numOrNull(storageData?.datalake_size_mb);
+  const totalStorageUsed = [dbUsed, vectorUsed, lakeUsed].every((v) => v !== null)
+    ? dbUsed + vectorUsed + lakeUsed
+    : null;
+  const storageLimit = numOrNull(storageData?.storage_limit_mb);
+  const storagePercent =
+    totalStorageUsed !== null && storageLimit !== null && storageLimit > 0
+      ? Math.min(100, Math.round((totalStorageUsed / storageLimit) * 100))
+      : null;
 
   return (
     <div className="space-y-6">
@@ -336,11 +332,18 @@ export default function AdminToolsView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/15 font-code-sm">
+                  {modelMetrics.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-4 px-3 text-center text-outline text-xs">
+                        No model metrics reported by the server yet — nothing is estimated.
+                      </td>
+                    </tr>
+                  )}
                   {modelMetrics.map((m) => (
                     <tr key={m.name} className="hover:bg-surface-container-low/40">
                       <td className="py-3 px-3">
                         <span className="text-on-surface font-medium block">{m.name}</span>
-                        <span className="text-outline text-[10px]">{m.provider}</span>
+                        <span className="text-outline text-[10px]">{m.provider || "—"}</span>
                       </td>
                       <td className="py-3 px-3 text-on-surface-variant">
                         {m.p50_ms ? `${m.p50_ms}ms` : "—"}
@@ -349,11 +352,17 @@ export default function AdminToolsView() {
                         {m.p95_ms ? `${m.p95_ms}ms` : "—"}
                       </td>
                       <td className="py-3 px-3 text-sem-green">
-                        {m.success_rate != null ? `${m.success_rate}%` : "100%"}
+                        {m.success_rate != null ? `${m.success_rate}%` : "—"}
                       </td>
                       <td className="py-3 px-3 text-right">
-                        <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 px-2 py-0.5 rounded-full">
-                          ONLINE
+                        <span
+                          className={`font-chip-status text-[10px] px-2 py-0.5 rounded-full ${
+                            m.status === "operational"
+                              ? "text-sem-green bg-sem-green/10"
+                              : "text-on-surface-variant bg-surface-container-high/60"
+                          }`}
+                        >
+                          {m.status === "operational" ? "ONLINE" : "NOT REPORTED"}
                         </span>
                       </td>
                     </tr>
@@ -373,14 +382,16 @@ export default function AdminToolsView() {
                 </h3>
               </div>
               <span className="font-code-sm text-[11px] text-on-surface-variant">
-                {totalStorageUsed.toFixed(1)} MB / {storageLimit} MB ({storagePercent}%)
+                {totalStorageUsed !== null
+                  ? `${totalStorageUsed.toFixed(1)} MB / ${storageLimit} MB (${storagePercent}%)`
+                  : "Not reported by server"}
               </span>
             </div>
 
             <div className="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
               <div
                 className="bg-primary h-full rounded-full transition-all duration-500"
-                style={{ width: `${storagePercent}%` }}
+                style={{ width: storagePercent !== null ? `${storagePercent}%` : "0%" }}
               />
             </div>
 
@@ -388,19 +399,19 @@ export default function AdminToolsView() {
               <div className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20">
                 <span className="text-outline text-[10px] block uppercase">SQLite WAL State</span>
                 <span className="text-on-surface text-sm font-semibold mt-1 block">
-                  {dbUsed.toFixed(1)} MB
+                  {dbUsed !== null ? `${dbUsed.toFixed(1)} MB` : "—"}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20">
                 <span className="text-outline text-[10px] block uppercase">Vector Index Cache</span>
                 <span className="text-primary text-sm font-semibold mt-1 block">
-                  {vectorUsed.toFixed(1)} MB
+                  {vectorUsed !== null ? `${vectorUsed.toFixed(1)} MB` : "—"}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20">
                 <span className="text-outline text-[10px] block uppercase">Data Lake Pipeline</span>
                 <span className="text-secondary text-sm font-semibold mt-1 block">
-                  {lakeUsed.toFixed(1)} MB
+                  {lakeUsed !== null ? `${lakeUsed.toFixed(1)} MB` : "—"}
                 </span>
               </div>
             </div>

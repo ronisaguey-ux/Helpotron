@@ -117,7 +117,7 @@ export default function MobileDrawer({
                   </div>
                   <div className="flex flex-col">
                     <span className="font-semibold text-sm text-on-surface leading-tight">Helpotron</span>
-                    <span className="font-mono text-[9px] text-primary uppercase tracking-wider">OS v4.0</span>
+                    <span className="font-mono text-[9px] text-primary uppercase tracking-wider">Academic Co-pilot</span>
                   </div>
                 </div>
                 <button
