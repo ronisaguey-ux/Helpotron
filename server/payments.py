@@ -22,8 +22,9 @@ STRIPE_PRICE_IDS = {
     "elite": os.getenv("STRIPE_PRICE_ELITE", ""),
 }
 
-TIER_CREDITS = {"trial": 100, "basic": 300, "pro": 1000, "elite": 2700}
-TIER_PRICE_CENTS = {"basic": 500, "pro": 1500, "elite": 3000}
+TIER_CREDITS = {"trial": 150, "basic": 300, "pro": 1000, "elite": 2700}
+# Owner 09-06: Basic $10 · Pro $20 · Elite $40 (the original 08-29 audit values)
+TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
 
 
 def _stripe_enabled() -> bool:
@@ -71,6 +72,56 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
     return {"status": "checkout_created", "checkout_url": session.url, "session_id": session.id}
 
 
+def create_trial_verification(db: Session, user: User) -> dict:
+    """Owner 09-06: the Free Trial requires a 1-cent payment verification.
+
+    Stripe online via a 1-cent Checkout Session when keys are configured;
+    otherwise a manual pending record the operator confirms with
+    /api/admin/user/{public_id}/verify-trial-payment. Returns the mode so the
+    client can render the right step. Never grants credits (the verification
+    cent is a gateway check, not a top-up)."""
+    from .database import Payment
+    if not _stripe_enabled():
+        payment = Payment(
+            user_id=user.id,
+            provider="cashapp",
+            amount_cents=1,
+            status="pending",
+            provider_ref=f"trial_verification_{user.id}",  # unique marker for the admin approval lane
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+        return {
+            "mode": "manual",
+            "payment_id": payment.id,
+            "payment_status": payment.status,
+            "verify_cents": 1,
+        }
+    import stripe
+    stripe.api_key = config.stripe_secret_key
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": 1,
+                "product_data": {"name": "Helpotron Free Trial verification"},
+            },
+            "quantity": 1,
+        }],
+        metadata={"public_id": user.public_id, "type": "trial_verification"},
+        success_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?trial=verification:success",
+        cancel_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?trial=verification:cancel",
+    )
+    return {
+        "mode": "stripe",
+        "verification_url": session.url,
+        "payment_status": "pending",
+        "verify_cents": 1,
+    }
+
+
 def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
     """Handle Stripe webhook events."""
     import stripe
@@ -91,6 +142,15 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
     try:
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
+            # Owner 09-06: 1-cent trial verification checkout (mode=payment).
+            if session.get("metadata", {}).get("type") == "trial_verification":
+                pid = session.get("metadata", {}).get("public_id", "")
+                t_user = db.query(User).filter(User.public_id == pid).first() if pid else None
+                if t_user is not None:
+                    t_user.payment_verified = True
+                    db.commit()
+                    logger.info("Trial payment verified for %s", t_user.public_id)
+                return {"status": "ok", "trial_verification": bool(t_user)}
             customer_id = session.get("customer")
             subscription_id = session.get("subscription")
             plan = session.get("metadata", {}).get("plan", "basic")

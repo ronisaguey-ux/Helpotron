@@ -26,11 +26,11 @@ BASE_TASK_COSTS = TASK_COSTS
 import math
 
 TIER_MONTHLY_TASK_TOKENS: Dict[str, int] = {
-    'trial': 100,
+    'trial': 150,  # owner 09-06
     'basic': 300,
     'pro': 1000,
     'elite': 2700,
-    'free': 100,
+    'free': 150,
 }
 TIER_MONTHLY_CREDITS: Dict[str, int] = TIER_MONTHLY_TASK_TOKENS
 

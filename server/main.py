@@ -1192,6 +1192,15 @@ async def admin_user_plan(public_id: str, plan: str, request: Request,
     return await set_user_plan(public_id=public_id, plan=plan, request=request, db=db)
 
 
+@app.post("/api/admin/user/{public_id}/verify-trial-payment")
+async def admin_verify_trial_payment(public_id: str, request: Request,
+                                     db: Session = Depends(get_db)):
+    """Owner 09-06: confirm a user's 1-cent trial payment verification
+    (manual lane when Stripe isn't configured)."""
+    from .admin import verify_trial_payment
+    return await verify_trial_payment(public_id=public_id, request=request, db=db)
+
+
 @app.post("/api/admin/user/{public_id}/reset-password")
 async def admin_user_reset_password(public_id: str, req: ResetPasswordRequest, request: Request,
                                     db: Session = Depends(get_db)):
