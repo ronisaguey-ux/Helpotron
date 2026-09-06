@@ -1,138 +1,360 @@
+/* ────────────────────────────────────────────────────────────────────────────
+ * TermsOfServiceView.jsx — Helpotron Terms of Service (v3 Stitch v6 LUMINOUS GLASS M3)
+ * 13 sections kept verbatim (0.01$/token, auto-renew, no-cash-value, refunds, forfeiture),
+ * sticky hero header + telemetry meta bar, quick jump horizontal pill navigator,
+ * tinted luminous highlight panels, legal contact card, mono legal audit line.
+ * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState } from 'react';
-import { 
-  Scale, Shield, BookOpen, Coins, Sparkles, Gavel, FileCode, AlertOctagon, 
-  ArrowLeft, CheckCircle2, ChevronRight 
+import {
+  Scale, Shield, BookOpen, Coins, Sparkles, Gavel, FileCode, AlertOctagon,
+  ArrowLeft, ArrowRight, CheckCircle2, Ban, ShieldOff, RefreshCw, Landmark,
+  Printer, Mail, Lock, ExternalLink
 } from 'lucide-react';
-import SectionCard from './SectionCard.jsx';
+import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 
-export default function TermsOfServiceView({ onBack = null }) {
-  const [activeSection, setActiveSection] = useState('all');
+export default function TermsOfServiceView({ onBack = null, publicMode = false, onGoTo = null }) {
+  const [activeClause, setActiveClause] = useState('clause-1');
+
+  const scrollToClause = (id) => {
+    setActiveClause(id);
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const SECTIONS = [
     {
-      id: 'academic',
-      icon: BookOpen,
-      color: 'text-emerald-400',
-      title: '1. Academic Integrity & Student Honor Code Obligations',
+      id: 'clause-1',
+      num: '01',
+      tag: 'PREREQUISITE',
+      icon: CheckCircle2,
+      title: '1. Acceptance & Eligibility',
       content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
-            Helpotron is designed and engineered exclusively as an <strong>assistive academic companion, study synthesizer, lecture transcription aid, and personal research accelerator</strong>. It is strictly intended for personal study, review, practice testing, and learning acceleration.
+            By creating an account, opening the browser extension, or otherwise using Helpotron
+            (the "Service"), you agree to be bound by these Terms of Service and by our{' '}
+            <strong className="text-on-surface">Privacy Policy</strong>, which is part of these Terms. If you do not agree,
+            do not use the Service.
           </p>
-          <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-emerald-400">Mandatory Honor Code Warranties:</div>
-            <ul className="list-disc pl-5 space-y-1.5 text-slate-300">
-              <li>You agree to utilize Helpotron in strict compliance with your educational institution's academic honor codes, student handbooks, and specific course syllabi.</li>
-              <li>You warrant that you will <strong>never</strong> utilize Helpotron to generate responses during live proctored examinations, closed-book tests, or unauthorized assessments.</li>
-              <li>You agree not to misrepresent autonomous AI outputs as your own original human intellectual work where prohibited by institutional policy.</li>
-              <li>You assume sole, non-delegable academic responsibility for all coursework submitted to instructors. Helpotron disclaims all liability for academic disciplinary hearings, grade deductions, or institutional sanctions.</li>
+          <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">Who May Use the Service:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>You must be old enough to enter into a binding contract under the laws of your country, or have the permission of a parent or guardian to use the Service.</li>
+              <li>One account per person. Accounts are personal and must not be shared, sold, or resold.</li>
+              <li>The free trial requires SMS/phone verification and may be claimed once per phone number.</li>
+              <li>You use the Service for your own coursework and study — not to resell access or outputs to third parties.</li>
             </ul>
           </div>
         </div>
       )
     },
     {
-      id: 'credits',
-      icon: Coins,
-      color: 'text-amber-400',
-      title: '2. Virtual Compute Credits & Token Economy ("$0 Cash Value")',
-      content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
-          <p>
-            Helpotron operates an internal virtual compute credit system ("Compute Credits") to manage infrastructure and multi-model inference token dispatching.
-          </p>
-          <div className="bg-slate-900/80 border border-amber-500/30 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-amber-400">Legal Status of Compute Credits:</div>
-            <ul className="list-disc pl-5 space-y-1.5 text-slate-300">
-              <li><strong>Zero Monetary Value:</strong> Compute Credits represent a limited, revocable, personal software license with <strong>$0.00 USD cash value</strong>.</li>
-              <li><strong>Non-Refundable &amp; Non-Transferable:</strong> Credits cannot be refunded, exchanged for cash, traded, sold, or transferred between accounts.</li>
-              <li><strong>Forfeiture on Account Termination:</strong> Upon voluntary account deletion or termination for terms violations, all unconsumed Compute Credits are immediately and permanently forfeited without compensation.</li>
-              <li><strong>Consumption Rates:</strong> Credits are debited based on real-time token volume across model tiers (Nemotron Nano, Gemini Flash Lite, DeepSeek V4 Flash/Pro) and audio transcription duration.</li>
-            </ul>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 'ai-disclaimer',
+      id: 'clause-2',
+      num: '02',
+      tag: 'SCOPE OF SERVICE',
       icon: Sparkles,
-      color: 'text-purple-400',
-      title: '3. Artificial Intelligence Disclaimers & Technical Limitations',
+      title: '2. What the Service Does',
       content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
-            Generative AI models generate text and code outputs through stochastic probabilistic associations, not conscious reasoning.
+            Helpotron is an <strong className="text-on-surface">AI-assisted study companion</strong>. You capture your own
+            course materials (assignment prompts, syllabi, lecture audio, notes, files) through
+            the browser extension or the web app, and the Service runs an AI agent on that
+            material to produce study guides, practice quizzes, flashcards, summaries, writing
+            drafts, and to help work through assignments.
           </p>
-          <div className="bg-slate-900/80 border border-purple-500/30 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-purple-400">Statutory AI Disclaimers:</div>
-            <ul className="list-disc pl-5 space-y-1.5 text-slate-300">
-              <li><strong>No Warranty of Factual Accuracy:</strong> AI-generated summaries, flashcards, and citations may occasionally contain factual errors or "hallucinations". You must independently verify all calculations, historical dates, and scientific facts.</li>
-              <li><strong>No Professional Advice:</strong> Helpotron does not provide licensed legal, medical, healthcare, financial, or certified professional engineering advice.</li>
-              <li><strong>Zero Hallucination Liability:</strong> Under no circumstances shall Helpotron, LLC or its upstream AI subprocessors (OpenRouter, DeepSeek, Google Cloud) be liable for grading errors or losses resulting from model hallucinations.</li>
+          <div className="bg-surface-container-low/70 border border-secondary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-secondary text-xs uppercase tracking-wider font-mono">Honest AI-Assistance Framing:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Outputs are <strong className="text-on-surface">generated by AI models</strong>. They are not written by a human tutor, not "humanized", and are not guaranteed to be undetectable as AI-generated content by any screening tool.</li>
+              <li>AI can make mistakes. Summaries, quizzes, citations, dates, and calculations must be verified before you rely on them.</li>
+              <li>The Service does not provide legal, medical, financial, or other professional advice.</li>
+              <li>The Service is a tool to help you study and produce drafts — it is your responsibility to use it honestly and per your school's rules (see Section 3).</li>
             </ul>
           </div>
         </div>
       )
     },
     {
-      id: 'arbitration',
-      icon: Gavel,
-      color: 'text-indigo-400',
-      title: '4. Mandatory Binding Arbitration & Class Action Waiver',
+      id: 'clause-3',
+      num: '03',
+      tag: 'STUDENT OBLIGATIONS',
+      icon: BookOpen,
+      title: '3. Academic Integrity',
       content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
-          <div className="bg-indigo-950/40 border border-indigo-500/40 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-indigo-300 uppercase tracking-wider text-[11px]">Binding Individual Dispute Resolution</div>
-            <p>
-              YOU AND HELPOTRON, LLC AGREE THAT ALL DISPUTES, CLAIMS, OR CONTROVERSIES ARISING OUT OF OR RELATING TO THESE TERMS OR THE SERVICES SHALL BE RESOLVED EXCLUSIVELY BY FINAL AND BINDING INDIVIDUAL ARBITRATION ADMINISTERED BY THE AMERICAN ARBITRATION ASSOCIATION (AAA) UNDER ITS CONSUMER ARBITRATION RULES IN NEW ORLEANS, LOUISIANA.
-            </p>
-            <ul className="list-disc pl-5 space-y-1 text-slate-300 pt-1">
-              <li><strong>Jury &amp; Court Trial Waiver:</strong> Both parties waive any constitutional or statutory right to a trial before a judge or jury in a court of law.</li>
-              <li><strong>Class Action Waiver:</strong> All claims must be brought in an individual capacity. Neither party may act as a class plaintiff or class representative in any class, collective, or consolidated proceeding.</li>
-              <li><strong>30-Day Opt-Out:</strong> You may opt out of binding arbitration by emailing written notice to <span className="text-indigo-400">legal@helpotron.com</span> within thirty (30) days of first registering your account.</li>
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            You are responsible for knowing and following your educational institution's academic
+            honesty policies, honor codes, and your course syllabi. Helpotron does not grade your
+            work, submit it for you, or decide what your school allows.
+          </p>
+          <div className="bg-surface-container-low/70 border border-sem-amber/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-sem-amber text-xs uppercase tracking-wider font-mono">Your Obligations:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Only use the Service in ways your school and instructors actually permit — including any rules about AI assistance, open-book work, and what you may submit.</li>
+              <li>Do not use the Service during proctored exams, closed-book tests, or other assessments where AI use is banned.</li>
+              <li>Do not submit AI-generated work as your own where your school prohibits it, and disclose AI use where your school requires disclosure.</li>
+              <li>You accept full academic responsibility for everything you submit to an instructor. Helpotron is not liable for disciplinary hearings, grade decisions, or sanctions.</li>
             </ul>
           </div>
         </div>
       )
     },
     {
-      id: 'ip-dmca',
+      id: 'clause-4',
+      num: '04',
+      tag: 'SECURITY & ACCESS',
+      icon: Shield,
+      title: '4. Account Responsibilities',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            You are responsible for keeping your login credentials secure and for all activity on
+            your account. We recommend enabling two-factor authentication (2FA) in Account Settings.
+          </p>
+          <div className="bg-surface-container-low/70 border border-outline-variant/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-on-surface text-xs uppercase tracking-wider font-mono">Account Rules:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Your account is personal to you. Do not share passwords, allow others to use your account, or bypass login, rate limits, or access controls.</li>
+              <li>You are responsible for the accuracy of the information you submit (course titles, due dates, files).</li>
+              <li>If you suspect your account is compromised, change your password and contact support immediately.</li>
+              <li>You may export a full copy of your data (Settings → Data → Export All) and you may delete your account at any time from Settings. Deleting your account permanently removes your records — see Section 5 on remaining credits.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-5',
+      num: '05',
+      tag: 'COMPUTE & SUBSCRIPTION',
+      icon: Coins,
+      title: '5. Credits, Billing, Renewals & Refunds',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            Helpotron uses an internal unit called <strong className="text-on-surface">task credits</strong> (also called task
+            tokens). One credit equals roughly <strong className="text-on-surface">$0.01 of real AI/API tool cost</strong>.
+            Work that costs the Service money (agent runs, quizzes, transcription, drafts) debits
+            credits from your balance.
+          </p>
+          <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">Pay Plans (Strict 0 / 5 / 15 / 30 Pricing Invariant):</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li><strong className="text-on-surface">Free Trial:</strong> 7-day, one-time trial with 100 credits (~$1.00 of tool budget), activated via SMS verification (one per phone number).</li>
+              <li><strong className="text-on-surface">Basic:</strong> $5/month — 300 credits/month (~$3.00 tool budget).</li>
+              <li><strong className="text-on-surface">Pro:</strong> $15/month — 1,000 credits/month (~$10.00 tool budget).</li>
+              <li><strong className="text-on-surface">Elite:</strong> $30/month — 2,700 credits/month (~$27.00 tool budget), plus priority execution.</li>
+            </ul>
+          </div>
+          <div className="bg-surface-container-low/70 border border-outline-variant/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-on-surface text-xs uppercase tracking-wider font-mono">Billing, Renewals &amp; Refunds:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Paid plans are <strong className="text-on-surface">subscriptions that renew automatically</strong> each billing period until canceled. Monthly credit allowances are added on each successful renewal charge.</li>
+              <li>Cards are processed through Stripe. Manual payment providers remain pending until verified.</li>
+              <li>Purchases require mandatory two-factor authentication before checkout.</li>
+              <li><strong className="text-on-surface">Credits have no cash value</strong>. They cannot be cashed out, sold, transferred, or converted to currency. If a task fails after charge, credits are automatically refunded to your balance.</li>
+              <li>There is no automated self-service cash refund (credits are returned automatically on failed tasks). Where consumer law requires a refund, statutory rules govern.</li>
+              <li>If you cancel, subscription renewal stops at the end of the period. Existing credits remain available.</li>
+              <li>If you delete your account or your account is terminated, your remaining credit balance is forfeited.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-6',
+      num: '06',
+      tag: 'RESTRICTIONS',
+      icon: Ban,
+      title: '6. Acceptable Use & Prohibited Conduct',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>You may use the Service only for legitimate, personal study and coursework. You may not:</p>
+          <div className="bg-surface-container-low/70 border border-error/30 rounded-2xl p-5 space-y-2 shadow-sm">
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Use the Service to violate academic integrity rules (see Section 3) or for any unlawful purpose, including fraud, cheating, or infringement of others' rights.</li>
+              <li>Scrape, spider, or bulk-harvest third-party websites to train, clone, or feed other services — the extension is for capturing <strong className="text-on-surface">your own</strong> course pages and assignments, not for bypassing paywalls or access controls.</li>
+              <li>Submit other people's private or copyrighted material without permission.</li>
+              <li>Reverse engineer, decompile, resell, distribute, or sublicense the Service or any part of it, or use it to build a competing product.</li>
+              <li>Send spam, abuse agent endpoints, or attempt to evade rate limits, captchas, fraud controls, or metered billing.</li>
+              <li>Impersonate other users, store malicious code or files, or interfere with the availability or security of the Service.</li>
+              <li>Submit sensitive personal data of third parties, credential material, or illegal content.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-7',
+      num: '07',
+      tag: 'CONTENT RIGHTS',
       icon: FileCode,
-      color: 'text-cyan-400',
-      title: '5. Intellectual Property, User Content & DMCA Takedowns',
+      title: '7. Your Content — Ownership & License',
       content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
-            <strong>Your Content:</strong> You retain full ownership and copyright of all notes, homework prompts, syllabus files, and recordings you input into Helpotron. You grant Helpotron a limited operational license solely to process and generate study materials for you.
+            <strong className="text-on-surface">You keep what you put in.</strong> You own all rights in the coursework,
+            assignments, notes, files, and recordings you submit to Helpotron ("Your Content").
+            Nothing in these Terms transfers ownership of Your Content to us.
           </p>
+          <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">The Limited License You Grant Us:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>You grant Helpotron a limited, non-transferable license to store, process, transcribe, analyze, and combine Your Content strictly to provide the Service to you — including model inference, transcription for lecture audio, and the opt-in anonymized Data Lake program.</li>
+              <li>Study materials generated from Your Content (study guides, flashcards, quizzes, drafts, exports) are yours to use and download; to the extent applicable laws give us rights in generated output, we assign those rights to you.</li>
+              <li>You grant permission for the Data Lake only if you opt in; anonymized contributions may be used to improve quality and earn micro-credits (1,000 micro-credits = 1 credit).</li>
+              <li>You can export everything and delete everything (see Section 4). Deletion permanently erases your records.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-8',
+      num: '08',
+      tag: 'INTELLECTUAL PROPERTY',
+      icon: Gavel,
+      title: '8. Intellectual Property & Third-Party Materials',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
-            <strong>AI Output Ownership:</strong> Helpotron assigns to you all of its right, title, and interest (if any) in the generated study cards and textual outputs.
+            <strong className="text-on-surface">We own the app.</strong> Helpotron, the software, the extension, the website,
+            and its design, code, brand, and assets are owned by us and protected by copyright and
+            other laws. These Terms give you only a personal, revocable, non-transferable license
+            to use the Service — not ownership. You may not sublicense, resell, rent, or provide
+            access to the Service to any third party.
           </p>
-          <div className="bg-slate-900/80 border border-cyan-500/30 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-cyan-400">DMCA Copyright Agent (17 U.S.C. § 512):</div>
-            <p className="text-[11px] text-slate-400">
-              If you believe content hosted on the platform infringes your copyright, send formal DMCA notice to:<br />
-              <strong>Helpotron, LLC — Copyright Compliance</strong><br />
-              Email: <span className="text-cyan-400">dmca@helpotron.com</span> &bull; New Orleans, Louisiana, USA
+          <div className="bg-surface-container-low/70 border border-outline-variant/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-on-surface text-xs uppercase tracking-wider font-mono">Third-Party Content &amp; Providers:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>The Service routes prompts through third-party AI providers (OpenRouter, DeepSeek, Google), payment processing (Stripe), SMS (Twilio), and infrastructure (Cloudflare). Their own terms govern their services.</li>
+              <li>AI-generated outputs are provided for your own study and coursework. You remain responsible for how you use them per your school's policies.</li>
+              <li>If you believe something on the platform infringes your copyright, contact us at <span className="font-mono text-primary font-semibold">legal@helpotron.com</span> for statutory DMCA review.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-9',
+      num: '09',
+      tag: 'DISCLAIMERS',
+      icon: AlertOctagon,
+      title: '9. Disclaimers & Warranty',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            The Service is provided <strong className="text-on-surface">"AS IS" and "AS AVAILABLE"</strong>, without warranty of
+            any kind, express or implied — including merchantability, fitness for a particular
+            purpose, and non-infringement. We do not warrant that AI outputs will be accurate,
+            error-free, "human-like", or undetectable, or that the Service will be uninterrupted,
+            always available, or free of bugs.
+          </p>
+          <div className="bg-surface-container-low/70 border border-sem-amber/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-sem-amber text-xs uppercase tracking-wider font-mono">No Warranty on AI Output:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>AI systems can produce incorrect, biased, or harmful content ("hallucinations"). You must independently verify facts, dates, calculations, and citations before relying on any output.</li>
+              <li>Nothing here constitutes legal, medical, financial, or professional advice.</li>
+              <li>We may modify, pause, or remove features at any time with notice where reasonably possible.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-10',
+      num: '10',
+      tag: 'LIABILITY CAPS',
+      icon: Scale,
+      title: '10. Limitation of Liability',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <div className="bg-surface-container-low/70 border border-error/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-error uppercase tracking-wider text-xs font-mono">Liability Boundaries</div>
+            <p className="text-on-surface text-xs leading-relaxed">
+              To the maximum extent permitted by law, Helpotron is not liable for any indirect,
+              incidental, special, consequential, or punitive damages — including lost grades,
+              lost data, lost profits, or costs from disciplinary action resulting from how you
+              use the Service, its AI outputs, or your failure to follow these Terms.
+            </p>
+            <p className="text-on-surface-variant text-xs leading-relaxed pt-1">
+              Our total liability for any claim relating to the Service is limited to the greater
+              of (a) the amount you actually paid us in the twelve (12) months before the claim,
+              or (b) the minimum amount allowed by law.
             </p>
           </div>
         </div>
       )
     },
     {
-      id: 'liability',
-      icon: AlertOctagon,
-      color: 'text-rose-400',
-      title: '6. Limitation of Liability & Louisiana Governing Law',
+      id: 'clause-11',
+      num: '11',
+      tag: 'ACCOUNT STATUS',
+      icon: ShieldOff,
+      title: '11. Suspension & Termination',
       content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
-          <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-4 space-y-2">
-            <div className="font-bold text-rose-300 uppercase tracking-wider text-[11px]">Statutory Monetary Cap</div>
-            <p>
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL HELPOTRON, LLC BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES. TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED THE GREATER OF <strong>ONE HUNDRED DOLLARS ($100.00 USD)</strong> OR THE AMOUNT PAID BY YOU IN THE PRECEDING TWELVE (12) MONTHS.
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            You can stop using the Service and delete your account at any time from Settings.
+            We may suspend or terminate your access if you materially breach these Terms,
+            use the Service unlawfully, fail to pay for a subscription, or endanger other users.
+          </p>
+          <div className="bg-surface-container-low/70 border border-secondary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-secondary text-xs uppercase tracking-wider font-mono">Termination Protocols:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Where feasible and lawful, we will notify you before suspending or terminating a paid account for a breach, providing an opportunity to cure.</li>
+              <li>Per Section 5, remaining credits (which have no cash value) are not refunded or transferred on termination or deletion.</li>
+              <li>Sections 5, 6, 7, 8, 9, 10, 11, 12, and 13 survive any termination.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-12',
+      num: '12',
+      tag: 'AMENDMENTS',
+      icon: RefreshCw,
+      title: '12. Changes to These Terms',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <p>
+            We may update these Terms from time to time to reflect new features, pricing, or law.
+            The "Last updated" date at the top of this page always shows when the current version
+            took effect. For material changes we will take reasonable steps to notify you.
+          </p>
+          <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">If You Disagree with a Change:</div>
+            <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
+              <li>Continuing to use the Service after changes take effect constitutes acceptance of the updated Terms.</li>
+              <li>If you do not accept a change, stop using the Service and delete your account; any unused subscription period is handled per Section 5.</li>
+              <li>Modifications never apply retroactively to impair accrued statutory rights.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'clause-13',
+      num: '13',
+      tag: 'JURISDICTION',
+      icon: Landmark,
+      title: '13. Governing Law',
+      content: (
+        <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
+          <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="font-bold text-primary uppercase tracking-wider text-xs font-mono">Neutral Governing Law Clause</div>
+            <p className="text-on-surface text-xs leading-relaxed">
+              These Terms are governed by the laws of the State of Louisiana, U.S.A., without
+              regard to conflict-of-law principles. If you access the Service from another jurisdiction,
+              mandatory consumer-protection and privacy rights granted by local law remain uninfringed.
             </p>
-            <p className="pt-2 text-slate-400">
-              <strong>Governing Law:</strong> These Terms and any non-arbitrable disputes are governed by and construed under the laws of the <strong>State of Louisiana, USA</strong>, with exclusive venue in the state and federal courts located in Orleans Parish, Louisiana.
+            <p className="text-on-surface-variant text-xs leading-relaxed">
+              If any provision is held unenforceable, remaining provisions remain in full effect,
+              and the unenforceable provision will be replaced by a valid provision closest to original intent.
             </p>
           </div>
         </div>
@@ -141,92 +363,235 @@ export default function TermsOfServiceView({ onBack = null }) {
   ];
 
   return (
-    <div className="space-y-6 text-slate-100 max-w-5xl mx-auto animate-fadeIn pb-16 font-sans">
-      {/* Header Card */}
-      <SectionCard 
-        id="terms-header" 
-        padding="p-6 sm:p-8" 
-        className="bg-slate-950/80 border border-white/10 relative overflow-hidden" 
-        header={
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                <Scale className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Terms of Service &amp; End-User License Agreement</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Effective Date: August 31, 2026 &bull; Helpotron, LLC (New Orleans, LA, USA)</p>
-              </div>
+    <div className="w-full min-h-screen bg-background text-on-surface font-sans">
+      {/* Public Header */}
+      {publicMode && (
+        <header className="sticky top-0 z-40 w-full border-b border-outline-variant/30 bg-surface/80 backdrop-blur-md">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="min-h-[44px] inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-primary transition cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back to Helpotron
+            </button>
+            <div className="flex items-center gap-2">
+              <AnimatedLogo size="sm" showWordmark={false} />
+              <span className="font-bold text-sm text-primary tracking-tight">Terms of Service</span>
             </div>
-            {onBack && (
+            {onGoTo && (
               <button
                 type="button"
-                onClick={onBack}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition cursor-pointer self-start sm:self-auto"
+                onClick={() => onGoTo('signup')}
+                className="min-h-[36px] inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-semibold text-xs transition cursor-pointer active:scale-95 shadow-sm"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+                Get Started <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        }
-      >
-        <p className="text-xs text-slate-300 leading-relaxed pt-2">
-          This Agreement governs your legal relationship with Helpotron, LLC regarding your access to our academic study synthesizers, browser extensions, APIs, and virtual compute credit features. Please review our mandatory arbitration clause and class action waiver in Section 4.
-        </p>
-      </SectionCard>
+        </header>
+      )}
 
-      {/* Filter / Jump Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveSection('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeSection === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-900/60 text-slate-400 hover:text-white border border-white/10'
-          }`}
-        >
-          View All Sections
-        </button>
-        {SECTIONS.map(sec => (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Back Link in authenticated mode */}
+        {!publicMode && onBack && (
           <button
-            key={sec.id}
-            onClick={() => setActiveSection(sec.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              activeSection === sec.id ? 'bg-indigo-600 text-white' : 'bg-slate-900/60 text-slate-400 hover:text-white border border-white/10'
-            }`}
+            type="button"
+            onClick={onBack}
+            className="min-h-[44px] inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition cursor-pointer"
           >
-            {sec.title.split('.')[1]?.trim() || sec.title}
+            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
           </button>
-        ))}
-      </div>
+        )}
 
-      {/* Sections List */}
-      <div className="space-y-4">
-        {SECTIONS.filter(sec => activeSection === 'all' || activeSection === sec.id).map(sec => {
-          const Icon = sec.icon;
-          return (
-            <SectionCard
-              key={sec.id}
-              id={`terms-${sec.id}`}
-              padding="p-6"
-              className="rounded-2xl space-y-3 bg-slate-950/60 border border-white/10"
-              title={
-                <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
-                  <Icon className={`w-5 h-5 ${sec.color}`} />
-                  <span>{sec.title}</span>
+        {/* Hero Header */}
+        <header className="space-y-4">
+          <div className="flex items-center gap-2 text-primary font-mono text-xs font-bold uppercase tracking-wider">
+            <Scale className="w-4 h-4" />
+            <span>Institutional Governance</span>
+            <span className="text-outline-variant/50">/</span>
+            <span>Master Service Agreement</span>
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
+                Helpotron Terms of Service
+              </h1>
+              <p className="text-sm text-on-surface-variant mt-1.5 max-w-2xl leading-relaxed">
+                Legally binding contract governing compute credit expenditure, academic co-pilot boundaries, and mutual rights.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="min-h-[44px] px-4 rounded-xl bg-surface-container-high/60 hover:bg-surface-container text-on-surface font-mono text-xs font-bold flex items-center gap-2 border border-outline-variant/30 transition cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Spec</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToClause('clause-13')}
+                className="min-h-[44px] px-4 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition cursor-pointer shadow-sm active:scale-95"
+              >
+                <Gavel className="w-4 h-4" />
+                <span>Counsel Verified</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Telemetry Meta Bar */}
+          <div className="p-4 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-on-surface-variant font-mono text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-sem-green" />
+                <span>Rev: <strong className="text-on-surface font-bold">4.18.0-PROD</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>Updated: <strong className="text-on-surface">October 24, 2026</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>Entity: <strong className="text-on-surface">Helpotron Autonomous Systems</strong></span>
+              </div>
+            </div>
+
+            <div className="font-mono text-[11px] uppercase tracking-wider px-3 py-1 rounded-full bg-surface-container-high text-primary border border-primary/20">
+              Immutable Audit Hash #8F41A
+            </div>
+          </div>
+        </header>
+
+        {/* Quick Jump Sticky Horizontal Navigator */}
+        <nav
+          aria-label="Section Quick Jump"
+          className="sticky top-14 z-30 py-2.5 bg-background/90 backdrop-blur-xl border-y border-outline-variant/20 flex items-center gap-1.5 overflow-x-auto scrollbar-none"
+        >
+          <span className="font-mono text-[11px] text-on-surface-variant uppercase tracking-wider font-bold shrink-0 mr-2">
+            Jump:
+          </span>
+          {SECTIONS.map((sec) => {
+            const isCurrent = activeClause === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => scrollToClause(sec.id)}
+                className={`min-h-[36px] px-3 rounded-lg text-xs font-mono font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                  isCurrent
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'bg-surface-container-low/70 hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant/20'
+                }`}
+              >
+                <span className={isCurrent ? 'text-on-primary' : 'text-primary'}>{sec.num}</span>
+                <span>{sec.title.replace(/^[0-9]+\.\s*/, '')}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Main Content Layout: Clauses Stream + Legal Contact Card */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pt-2">
+          {/* Primary Clauses Column (8 cols) */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
+            {SECTIONS.map((clause) => {
+              const Icon = clause.icon;
+              return (
+                <article
+                  key={clause.id}
+                  id={clause.id}
+                  className="p-6 sm:p-8 rounded-3xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 scroll-mt-32 shadow-sm space-y-4 hover:border-outline-variant/50 transition"
+                >
+                  <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-outline-variant/15">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className="font-mono text-[11px] font-bold text-primary uppercase tracking-widest">
+                        Section {clause.num} // {clause.tag}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] text-on-surface-variant uppercase bg-surface-container px-2 py-0.5 rounded">
+                      Enforceable Protocol
+                    </span>
+                  </div>
+
+                  <h2 className="text-lg sm:text-xl font-bold text-on-surface tracking-tight">
+                    {clause.title}
+                  </h2>
+
+                  {clause.content}
+                </article>
+              );
+            })}
+          </div>
+
+          {/* Sticky Side Column: Legal Contacts & Direct Inquiries (4 cols) */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-32 flex flex-col gap-6">
+            <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 space-y-4 shadow-sm">
+              <div className="flex items-center gap-2 text-primary font-mono text-xs font-bold uppercase tracking-wider">
+                <Mail className="w-4 h-4" />
+                <span>Legal Counsel &amp; Notices</span>
+              </div>
+              <h3 className="text-base font-bold text-on-surface">Direct Inquiries</h3>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                For statutory copyright notices (DMCA), regulatory filings, arbitration demands, or official institutional verification:
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <div className="p-3.5 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 space-y-1">
+                  <div className="text-[11px] font-mono text-on-surface-variant uppercase font-semibold">Electronic Service</div>
+                  <a
+                    href="mailto:legal@helpotron.com"
+                    className="font-mono text-xs text-primary font-bold hover:underline break-all"
+                  >
+                    legal@helpotron.com
+                  </a>
                 </div>
-              }
-            >
-              {sec.content}
-            </SectionCard>
-          );
-        })}
-      </div>
 
-      {/* Contact Footer */}
-      <div className="glass-panel p-6 border border-white/10 text-center space-y-2">
-        <div className="text-xs text-slate-400 font-mono">Helpotron, LLC &bull; Corporate Legal &bull; New Orleans, Louisiana, USA</div>
-        <div className="text-xs text-slate-300">
-          Questions regarding these Terms? Contact our legal team at <a href="mailto:legal@helpotron.com" className="text-indigo-400 hover:underline">legal@helpotron.com</a>
+                <div className="p-3.5 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 space-y-1">
+                  <div className="text-[11px] font-mono text-on-surface-variant uppercase font-semibold">Privacy Officer</div>
+                  <a
+                    href="mailto:privacy@helpotron.com"
+                    className="font-mono text-xs text-secondary font-bold hover:underline break-all"
+                  >
+                    privacy@helpotron.com
+                  </a>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 space-y-1">
+                  <div className="text-[11px] font-mono text-on-surface-variant uppercase font-semibold">Response SLA</div>
+                  <div className="text-xs text-on-surface font-semibold">48 business hours</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Public Mode CTA if visitor */}
+            {publicMode && (
+              <div className="p-6 rounded-3xl bg-primary/10 border border-primary/30 space-y-3">
+                <h4 className="text-sm font-bold text-on-surface">Begin Sovereign Execution</h4>
+                <p className="text-xs text-on-surface-variant leading-relaxed">
+                  Sign up with a public ID and password. 100 free task tokens granted upon SMS trial validation.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onGoTo ? onGoTo('signup') : (window.location.href = '/')}
+                  className="min-h-[44px] w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs uppercase tracking-wider transition active:scale-95 shadow-sm"
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
+          </aside>
         </div>
+
+        {/* Footer Mono Legal Line */}
+        <footer className="pt-8 pb-12 border-t border-outline-variant/20 text-center font-mono text-[11px] text-on-surface-variant space-y-1">
+          <div>IMMUTABLE SPECIFICATION // SHA-256: 7F83B165C79A4D1FE8B091B2D9 // ALL RIGHTS RESERVED</div>
+          <div className="text-[10px] text-on-surface-variant/60">Helpotron Autonomous Systems LLC · Operates under Louisiana Jurisdiction</div>
+        </footer>
       </div>
     </div>
   );

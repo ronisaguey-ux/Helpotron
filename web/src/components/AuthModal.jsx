@@ -1,136 +1,187 @@
+/* ────────────────────────────────────────────────────────────────────────────
+ * AuthModal.jsx — Helpotron OS v4 Auth & Sovereign Account Entry (Spec 3.2.1 / 3.2.2)
+ *
+ * Design Spec:
+ * - Desktop (>= lg): Two-pane split — Left brand hero ("Master your coursework",
+ *   academic intelligence node highlights, system telemetry) + Right glass card.
+ * - Mobile (< lg): Stacked mobile sovereign card.
+ * - Sign In: Public ID only (never "Username or Email"), eye toggle, Turnstile
+ *   verification below form, Enter submits, inline error strip + shake animation.
+ * - Create Account: Self-custodial sovereign account, Public ID hash re-roll,
+ *   master passphrase with 4-segment entropy meter, optional institutional pass
+ *   chip (+10,000 tokens), protocol consent checkbox.
+ * - 2FA Challenge: Integrated 6-cell segmented OTP stage upon 2fa_required response.
+ * - Recovery Entry: Direct access to RecoveryFlowModal (Spec 3.2.4).
+ * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion';
+import {
+  X,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Check,
+  ShieldCheck,
+  ArrowRight,
+  ArrowLeft,
+  Dices,
+  Sparkles,
+  Lock,
+  Key,
+  Shield,
+  Coins,
+  Cpu,
+  Ticket,
+  ExternalLink,
+} from 'lucide-react';
 import { api } from '../api.js';
-import { Lock, User, Key, Check, AlertCircle, ArrowRight, ShieldCheck, Mail, Phone, Eye, EyeOff, X } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
+import SegmentedOTPInput from './ui/SegmentedOTPInput.jsx';
+import RecoveryFlowModal from './RecoveryFlowModal.jsx';
+import Button from './Button.jsx';
 
-export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMandatory = false, mode = 'signup' }) {
-  /* `mode` is the caller's INTENT for this open ('signup' | 'login'). Before
-   * QA 08-31 the tab was hard-coded to 'signup', so every "Sign in" button
-   * and the ?signin=1 deep link opened the create-account form. */
+function generateRandomPublicId() {
+  const chars = '0123456789ABCDEF';
+  let hex = '';
+  for (let i = 0; i < 8; i++) {
+    hex += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `0x${hex.slice(0, 4)}...${hex.slice(4)}`;
+}
+
+function calculateEntropy(passphrase) {
+  if (!passphrase) return { score: 0, label: 'Empty', color: 'bg-surface-variant' };
+  let score = 0;
+  if (passphrase.length >= 8) score += 1;
+  if (passphrase.length >= 14) score += 1;
+  if (/[A-Z]/.test(passphrase) && /[a-z]/.test(passphrase)) score += 1;
+  if (/[0-9]/.test(passphrase) && /[^A-Za-z0-9]/.test(passphrase)) score += 1;
+
+  if (score <= 1) return { score: 1, label: 'Weak Entropy', color: 'bg-error' };
+  if (score === 2) return { score: 2, label: 'Moderate', color: 'bg-sem-amber' };
+  if (score === 3) return { score: 3, label: 'Strong Entropy', color: 'bg-sem-green' };
+  return { score: 4, label: 'Cryptographic Grade', color: 'bg-primary' };
+}
+
+export default function AuthModal({
+  isOpen = true,
+  onClose,
+  onLoginSuccess,
+  isMandatory = false,
+  mode = 'signup',
+}) {
   const [tab, setTab] = useState(mode === 'login' ? 'login' : 'signup');
-  const [loginUser, setLoginUser] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [loginPass, setLoginPass] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showLoginId, setShowLoginId] = useState(true);
+  const [showLoginPass, setShowLoginPass] = useState(false);
+
+  // Sign up state
+  const [signupId, setSignupId] = useState(() => `HLP-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 4).toUpperCase()}`);
+  const [signupPass, setSignupPass] = useState('');
+  const [signupPassConfirm, setSignupPassConfirm] = useState('');
+  const [showSignupPass, setShowSignupPass] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+  const [consentAgreed, setConsentAgreed] = useState(false);
+
+  // 2FA Challenge state
   const [requires2FA, setRequires2FA] = useState(false);
   const [twoFactorMethod, setTwoFactorMethod] = useState('totp');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [otpCooldown, setOtpCooldown] = useState(0);
 
-  // Password visibility toggles (operator 08-26: toggle on/off while typing)
-  const [showLoginPass, setShowLoginPass] = useState(false);
-  const [showSignupPass, setShowSignupPass] = useState(false);
-  const [showSignupConfirm, setShowSignupConfirm] = useState(false);
+  // Recovery modal state
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
 
-  // Login captcha (08-31, operator): Cloudflare Turnstile, mandatory
-  // server-side once TURNSTILE_SITEKEY/SECRET are configured. The widget is
-  // client-side UX only — the server re-verifies the token on every login,
-  // so a missing/failed widget still results in a clean 403.
+  // General state
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [hasShaked, setHasShaked] = useState(false);
+
+  // Turnstile Captcha
   const [captchaEnabled, setCaptchaEnabled] = useState(false);
   const [turnstileSitekey, setTurnstileSitekey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
-  // Mirror of the widget token: the signup POST consumes the solve, so the
-  // post-signup auto-login needs a tracked fresh one (state lags a tick).
   const turnstileTokenRef = useRef('');
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetIdRef = useRef(null);
 
-  // Sign up state
-  const [signupUser, setSignupUser] = useState('');
-  const [signupPass, setSignupPass] = useState('');
-  const [signupPassConfirm, setSignupPassConfirm] = useState('');
-  const [consentAgreed, setConsentAgreed] = useState(false);
-  const [signupSuccessMsg, setSignupSuccessMsg] = useState('');
+  // Keep tab synced with mode changes
+  useEffect(() => {
+    if (isOpen) {
+      setTab(mode === 'login' ? 'login' : 'signup');
+      setErrorMsg('');
+      setRequires2FA(false);
+      setTwoFactorCode('');
+    }
+  }, [isOpen, mode]);
 
-  // Password reset state
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetSent, setResetSent] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-
+  // Escape listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && onClose && !isMandatory) {
+      if (e.key === 'Escape' && onClose && !isMandatory && !recoveryOpen) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isMandatory]);
+  }, [onClose, isMandatory, recoveryOpen]);
 
-  // WebKit replay (08-28): on a small phone the sign-in submit can sit below the
-  // first fold; bring the form into view by focusing the active tab's first field
-  // when the modal opens or the tab switches (Enter still submits).
-  // NOTE: must stay above the `if (!isOpen) return null` — hooks run unconditionally.
+  // Public config for Captcha
   useEffect(() => {
     if (!isOpen) return;
-    const id = tab === 'signup' ? 'signup-username' : 'login-username';
-    const el = document.getElementById(id);
-    if (el) {
-      el.focus({ preventScroll: false });
-    }
-  }, [isOpen, tab]);
-
-  // WebKit replay (08-29): pointer-events must NOT ride the CSS animation clock.
-  // WebKit can stall the animation for 2s+ (observed up to a full lockout) so a
-  // keyframe-carried pointer-events flip either traps taps in the invisible
-  // fade forever or never arms the modal. Flip on the animation's own end event,
-  // with a hard timer as a clock-independent safety net.
-  const [peReady, setPeReady] = useState(false);
-  useEffect(() => {
-    if (!isOpen) { setPeReady(false); return; }
-    const t = setTimeout(() => setPeReady(true), 4500);
-    return () => clearTimeout(t);
-  }, [isOpen]);
-  const onPanelAnimEnd = (e) => {
-    if (e.animationName === 'aurora-panel-in') setPeReady(true);
-  };
-
-  // QA 08-31: the modal is kept mounted between opens, so the initial useState
-  // above only fires once. Re-sync the tab to the caller's intent each time the
-  // modal is (re)opened, otherwise the second "Sign in" click reopens on
-  // whichever tab the user happened to leave behind.
-  // NOTE: must stay above the `if (!isOpen) return null` — hooks run unconditionally.
-  useEffect(() => {
-    if (!isOpen) return;
-    setTab(mode === 'login' ? 'login' : 'signup');
-  }, [isOpen, mode]);
-
-  // Fetch captcha config each time the modal opens. If this fails we simply
-  // leave the widget off — the server still denies captcha-less logins with 403.
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
+    let active = true;
     api.publicConfig()
       .then((cfg) => {
-        if (cancelled || !cfg) return;
-        setCaptchaEnabled(!!cfg.captcha_enabled);
+        if (!active || !cfg) return;
+        setCaptchaEnabled(Boolean(cfg.captcha_enabled));
         setTurnstileSitekey(cfg.turnstile_sitekey || '');
       })
-      .catch(() => { if (!cancelled) { setCaptchaEnabled(false); } });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (active) setCaptchaEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [isOpen]);
 
-  // Render the Turnstile widget once the loader script is available. The
-  // container lives outside the tab conditionals so the same solve covers
-  // login, 2FA stage 2 and the post-signup auto-login.
+  // Render Turnstile
   useEffect(() => {
-    if (!isOpen || !captchaEnabled) return;
+    if (!isOpen || !captchaEnabled || !turnstileSitekey) return;
     const container = turnstileContainerRef.current;
     if (!container) return;
-    const removeWidget = () => {
+
+    const cleanup = () => {
       if (turnstileWidgetIdRef.current !== null && window.turnstile) {
-        try { window.turnstile.remove(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
+        try {
+          window.turnstile.remove(turnstileWidgetIdRef.current);
+        } catch {}
       }
       turnstileWidgetIdRef.current = null;
     };
+
     const render = () => {
       if (!window.turnstile || turnstileWidgetIdRef.current !== null) return;
-      turnstileWidgetIdRef.current = window.turnstile.render(container, {
-        sitekey: turnstileSitekey,
-        callback: (token) => { turnstileTokenRef.current = token; setTurnstileToken(token); },
-        'expired-callback': () => { turnstileTokenRef.current = ''; setTurnstileToken(''); },
-        'error-callback': () => { turnstileTokenRef.current = ''; setTurnstileToken(''); },
-      });
+      try {
+        turnstileWidgetIdRef.current = window.turnstile.render(container, {
+          sitekey: turnstileSitekey,
+          callback: (tok) => {
+            turnstileTokenRef.current = tok;
+            setTurnstileToken(tok);
+          },
+          'expired-callback': () => {
+            turnstileTokenRef.current = '';
+            setTurnstileToken('');
+          },
+          'error-callback': () => {
+            turnstileTokenRef.current = '';
+            setTurnstileToken('');
+          },
+        });
+      } catch {}
     };
+
     let script = document.getElementById('cf-turnstile-script');
     if (!script) {
       script = document.createElement('script');
@@ -142,562 +193,652 @@ export default function AuthModal({ isOpen = true, onClose, onLoginSuccess, isMa
     } else if (window.turnstile) {
       render();
     }
-    return removeWidget;
-  }, [isOpen, captchaEnabled, turnstileSitekey]);
 
-  if (!isOpen) return null;
+    return cleanup;
+  }, [isOpen, captchaEnabled, turnstileSitekey, tab]);
 
-  // 08-31: share a successful web login's session with the browser extension.
-  // The MV3 extension popup cannot render Cloudflare Turnstile (remote-script
-  // ban), so captcha-gated logins happen here and the session (public_id +
-  // session_token) is handed off through the content script on helpotron
-  // pages (→ background storeSession). Harmless no-op on non-extension pages.
-  const sendSessionHandoff = (res) => {
+  // 2FA countdown timer
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setInterval(() => setOtpCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(t);
+  }, [otpCooldown]);
+
+  const triggerError = (msg) => {
+    setErrorMsg(msg);
+    setHasShaked(true);
+    setTimeout(() => setHasShaked(false), 500);
+  };
+
+  const sendSessionHandoff = (res, id) => {
     try {
-      window.postMessage({
-        type: 'HELPOTRON_SESSION_HANDOFF',
-        requestId: `handoff-${Date.now()}`,
-        public_id: res?.public_id || loginUser.trim() || signupUser.trim(),
-        session_token: res?.session_token,
-        token: res?.token,
-        server: window.location.origin,
-      }, '*');
-    } catch (e) { /* content script not present — popup login still works */ }
+      window.postMessage(
+        {
+          type: 'HELPOTRON_SESSION_HANDOFF',
+          requestId: `handoff-${Date.now()}`,
+          public_id: res?.public_id || id,
+          session_token: res?.session_token,
+          token: res?.token,
+          server: window.location.origin,
+        },
+        '*'
+      );
+    } catch {}
   };
 
   const handleLogin = async (e) => {
     e?.preventDefault();
-    if (!loginUser.trim() || !loginPass) {
-      setLoginError('Please enter both your Public ID / Username and password.');
+    const id = loginId.trim();
+    if (!id || !loginPass) {
+      triggerError('Please enter your Public ID and Master Passphrase.');
       return;
     }
-    if (requires2FA && !twoFactorCode.trim()) {
-      setLoginError('Please enter your 2FA verification code.');
+    if (requires2FA && twoFactorCode.trim().length < 6) {
+      triggerError('Please enter the complete 6-digit verification code.');
       return;
     }
     if (captchaEnabled && !turnstileToken) {
-      setLoginError('Please complete the security check before signing in.');
+      triggerError('Please complete the security check before signing in.');
       return;
     }
+
     setLoading(true);
-    setLoginError('');
+    setErrorMsg('');
     try {
-      const res = await api.login(loginUser.trim(), loginPass, requires2FA ? twoFactorCode.trim() : null, turnstileToken || null);
+      const res = await api.login(
+        id,
+        loginPass,
+        requires2FA ? twoFactorCode.trim() : null,
+        turnstileToken || null
+      );
       if (res && res.status === '2fa_required') {
         setRequires2FA(true);
         setTwoFactorMethod(res.method || 'totp');
-      } else if (res && res.message === 'Logged in') {
-        sendSessionHandoff(res);
-        onLoginSuccess(loginUser.trim());
+        setOtpCooldown(30);
+      } else if (res && (res.message === 'Logged in' || res.status === 'ok')) {
+        sendSessionHandoff(res, id);
+        onLoginSuccess?.(id);
       } else {
-        setLoginError('Invalid credentials. Please verify your username and password.');
+        triggerError('Invalid credentials. Check your Public ID or passphrase.');
       }
     } catch (err) {
-      setLoginError(err.message || 'Login failed. Please check your username and password.');
-    } finally {
-      setLoading(false);
-      // Turnstile tokens are single-use: every attempt (2FA stage 2 included)
-      // needs a fresh solve, so clear the stored token and reset the widget.
-      setTurnstileToken('');
-      if (turnstileWidgetIdRef.current !== null && window.turnstile) {
-        try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
-      }
-    }
-  };
-
-  // Turnstile tokens are single-use: signup consumed the solve, so the
-  // auto-login right after needs a fresh one. Re-challenge the widget and wait
-  // for the next token (managed mode usually re-solves itself without a click);
-  // bounded so a stalled widget can never hang the signup flow.
-  const getFreshTurnstileToken = () => new Promise((resolve) => {
-    if (!captchaEnabled || !window.turnstile || turnstileWidgetIdRef.current === null) {
-      resolve(null);
-      return;
-    }
-    turnstileTokenRef.current = '';  // drop the consumed solve
-    try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { resolve(null); return; }
-    const started = Date.now();
-    const iv = setInterval(() => {
-      if (turnstileTokenRef.current) {
-        clearInterval(iv);
-        resolve(turnstileTokenRef.current);
-      } else if (Date.now() - started > 15000) {
-        clearInterval(iv);
-        resolve(null);
-      }
-    }, 150);
-  });
-
-  const handleSignup = async (e) => {
-    e?.preventDefault();
-    const u = signupUser.trim();
-    if (!u || !signupPass) {
-      setLoginError('Please provide a username and password.');
-      return;
-    }
-    if (signupPass !== signupPassConfirm) {
-      setLoginError('Passwords do not match. Please re-enter.');
-      return;
-    }
-    if (signupPass.length < 8 || !/[A-Za-z]/.test(signupPass) || !/[0-9]/.test(signupPass)) {
-      setLoginError('Password must be at least 8 characters and contain both a letter and a number.');
-      return;
-    }
-    if (!consentAgreed) {
-      setLoginError('You must agree to the Terms of Service & Privacy Policy.');
-      return;
-    }
-
-    setLoading(true);
-    setLoginError('');
-    try {
-      const signupRes = await api.signup(u, signupPass, turnstileToken || null);
-      if (signupRes && (signupRes.public_id || signupRes.message?.includes('User created'))) {
-        // Single-consent flow (legal-gate UX fix, 08-28): consent was just given
-        // in THIS modal (Step 1) — carry it into the mandatory legal gate
-        // (Step 2) so the gate opens with the checkbox pre-checked and needs
-        // only one click. The gate still requires an explicit Accept.
-        try { localStorage.setItem('helpotron_signup_consent', '1'); } catch (e) { /* storage unavailable */ }
-        // Automatically log in with new credentials. Turnstile tokens are
-        // single-use: the signup POST consumed the solve, so re-challenge the
-        // widget and wait for a fresh token (managed mode usually re-solves
-        // instantly without a click) before the auto-login.
-        const loginToken = await getFreshTurnstileToken();
-        const autoLoginRes = await api.login(u, signupPass, null, loginToken);
-        if (autoLoginRes && autoLoginRes.message === 'Logged in') {
-          sendSessionHandoff(autoLoginRes);
-          onLoginSuccess(u);
-        } else {
-          // Account was created; the auto-login's fresh solve just failed.
-          // Don't lose the user — switch to the Sign in tab with the username
-          // prefilled so they complete a fresh solve there.
-          setLoginUser(u);
-          setTab('login');
-          setLoginError('Account created — complete the security check to sign in.');
-        }
-      } else {
-        setLoginError(signupRes?.detail || 'Signup failed.');
-      }
-    } catch (err) {
-      setLoginError(err.message || 'Could not create account. Username may already be taken.');
+      triggerError(err.message || 'Login failed. Verify your Public ID or passphrase.');
     } finally {
       setLoading(false);
       setTurnstileToken('');
       turnstileTokenRef.current = '';
       if (turnstileWidgetIdRef.current !== null && window.turnstile) {
-        try { window.turnstile.reset(turnstileWidgetIdRef.current); } catch (e) { /* noop */ }
+        try {
+          window.turnstile.reset(turnstileWidgetIdRef.current);
+        } catch {}
       }
     }
   };
 
-  const handleReset = (e) => {
+  const handleSignup = async (e) => {
     e?.preventDefault();
-    if (!resetEmail.trim()) {
-      setLoginError('Please enter your registered email or username.');
+    const id = signupId.trim();
+    if (!id || !signupPass) {
+      triggerError('Please provide a Public ID and master passphrase.');
       return;
     }
-    setResetLoading(true);
-    setLoginError('');
-    setTimeout(() => {
-      setResetLoading(false);
-      setResetSent(true);
-    }, 600);
+    if (signupPass !== signupPassConfirm) {
+      triggerError('Passphrases do not match. Please re-enter.');
+      return;
+    }
+    if (signupPass.length < 8 || !/[A-Za-z]/.test(signupPass) || !/[0-9]/.test(signupPass)) {
+      triggerError('Passphrase must be at least 8 characters with both letters and numbers.');
+      return;
+    }
+    if (!consentAgreed) {
+      triggerError('You must agree to the Protocol Terms before initialization.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const signupRes = await api.signup(id, signupPass, turnstileToken || null);
+      if (signupRes && (signupRes.public_id || signupRes.message?.includes('User created'))) {
+        try {
+          localStorage.setItem('helpotron_signup_consent', '1');
+        } catch {}
+
+        // Auto-login with credentials
+        const autoLogin = await api.login(id, signupPass, null, null);
+        if (autoLogin && autoLogin.message === 'Logged in') {
+          sendSessionHandoff(autoLogin, id);
+          onLoginSuccess?.(id);
+        } else {
+          setLoginId(id);
+          setTab('login');
+          triggerError('Account initialized — please sign in with your passphrase.');
+        }
+      } else {
+        triggerError(signupRes?.detail || 'Account initialization failed.');
+      }
+    } catch (err) {
+      triggerError(err.message || 'Could not initialize node. ID may already exist.');
+    } finally {
+      setLoading(false);
+      setTurnstileToken('');
+      turnstileTokenRef.current = '';
+      if (turnstileWidgetIdRef.current !== null && window.turnstile) {
+        try {
+          window.turnstile.reset(turnstileWidgetIdRef.current);
+        } catch {}
+      }
+    }
   };
 
-  // text-base (16px → 17.6px at the 110% root): computed >= 16px so iOS/Safari
-  // does NOT auto-zoom when the field is focused. text-sm (15.4px computed)
-  // triggered the zoom every time a student tapped a field on a phone.
-  const INPUT = 'w-full pl-10 pr-10 py-3 text-base rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary';
+  const handleRerollId = () => {
+    const prefix = 'HLP';
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+    setSignupId(`${prefix}-${randNum}-${suffix}`);
+  };
+
+  if (!isOpen) return null;
+
+  const entropy = calculateEntropy(signupPass);
 
   return (
     <div
-      className={`fixed inset-0 z-[100] flex p-4 bg-black/60 backdrop-blur-sm overflow-y-auto aurora-modal-backdrop ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label="Helpotron Authentication"
-      onClick={() => { if (!isMandatory) onClose?.(); }}
+      aria-label="Helpotron Sovereign Authentication"
+      onClick={() => {
+        if (!isMandatory && !recoveryOpen) onClose?.();
+      }}
     >
-      {/* Aurora modal chrome (scoped; index.css owns the design system).
-          pointer-events is state-driven (see peReady above), never keyframe-driven. */}
-      <style>{`@keyframes aurora-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
-@keyframes aurora-panel-in { from { opacity: 0; transform: translateY(12px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
-.aurora-modal-backdrop { animation: aurora-backdrop-in 0.18s ease-out both }
-.aurora-modal-panel { animation: aurora-panel-in 0.22s ease-out both }`}</style>
       <div
-        className={`w-full max-w-md m-auto bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 sm:p-8 text-on-surface shadow-2xl relative overflow-hidden aurora-modal-panel ${peReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
-        data-modal-container
+        className="w-full max-w-4xl bg-surface-container-lowest/95 border border-outline-variant/30 rounded-3xl text-on-surface shadow-2xl relative overflow-hidden backdrop-blur-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
-        onAnimationEnd={onPanelAnimEnd}
       >
         {!isMandatory && onClose && (
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Close modal"
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+            className="absolute top-4 right-4 z-20 p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         )}
-        {/* Top Brand Banner */}
-        <div className="text-center space-y-2 pb-5 border-b border-outline-variant/30">
-          <div className="flex justify-center">
-            <AnimatedLogo size="lg" />
-          </div>
-          <h2 className="font-headline-lg text-title-md text-on-surface tracking-tight">
-            {tab === 'signup' ? 'Create Student Account' : tab === 'reset' ? 'Reset Account Access' : 'Sign in to Helpotron'}
-          </h2>
-          <p className="font-body-sm text-xs text-on-surface-variant">
-            {tab === 'signup'
-              ? 'Join the autonomous academic operating system & study copilot'
-              : tab === 'reset'
-              ? 'Enter your registered email address to receive a direct 6-digit reset code'
-              : 'Enter your credentials to access your autonomous study workspace'}
-          </p>
-          {tab === 'signup' && (
-            <span className="inline-block font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold">
-              Step 1 of 2 · Legal consent
-            </span>
-          )}
-        </div>
 
-        {/* 3-Tab Switcher */}
-        <div
-          className="flex bg-surface-container-low p-1 rounded-2xl border border-outline-variant/30 my-5 gap-1"
-          role="tablist"
-          aria-label="Create an account, sign in, or reset password"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'login'}
-            onClick={() => { setTab('login'); setLoginError(''); }}
-            className={`flex-1 py-2 font-label-caps text-[11px] uppercase tracking-wider rounded-xl transition cursor-pointer text-center ${
-              tab === 'login' ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold' : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Sign In &amp; 2FA
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'signup'}
-            onClick={() => { setTab('signup'); setLoginError(''); }}
-            className={`flex-1 py-2 font-label-caps text-[11px] uppercase tracking-wider rounded-xl transition cursor-pointer text-center ${
-              tab === 'signup' ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold' : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Create Account
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'reset'}
-            onClick={() => { setTab('reset'); setLoginError(''); }}
-            className={`flex-1 py-2 font-label-caps text-[11px] uppercase tracking-wider rounded-xl transition cursor-pointer text-center ${
-              tab === 'reset' ? 'bg-surface-container-lowest text-primary shadow-sm font-semibold' : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Reset Password
-          </button>
-        </div>
-
-        {/* Security check — Cloudflare Turnstile (shown for both tabs; the
-            server enforces it on /api/login regardless of this widget). */}
-        {captchaEnabled && turnstileSitekey && tab !== 'reset' && (
-          <div className="mb-4">
-            <div
-              ref={turnstileContainerRef}
-              className="flex justify-center"
-              data-turnstile
-            />
-            <p className="text-[10px] text-[var(--text-muted)] text-center mt-1.5">
-              Security check required to keep your account safe.
-            </p>
-          </div>
-        )}
-
-        {/* Error Notification */}
-        {loginError && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-error/15 border border-error/30 text-error text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{loginError}</span>
-          </div>
-        )}
-
-        {/* SIGN UP FORM */}
-        {tab === 'signup' && (
-          <form onSubmit={handleSignup} method="post" action="#" className="space-y-4" autoComplete="on">
-            <div className="space-y-1.5">
-              <label htmlFor="signup-username" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Public ID / Username</label>
-              <div className="relative">
-                <input
-                  id="signup-username"
-                  name="username"
-                  type="text"
-                  required
-                  autoComplete="username"
-                  placeholder="e.g. alex_student24"
-                  value={signupUser}
-                  onChange={(e) => setSignupUser(e.target.value)}
-                  className={INPUT}
-                />
-                <User className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[580px]">
+          {/* ── LEFT PANE: BRAND HERO (Spec 3.2.1) ────────────────────── */}
+          <div className="hidden lg:flex lg:col-span-6 p-8 sm:p-10 flex-col justify-between bg-gradient-to-br from-surface-container-low/90 to-surface-container-lowest/70 border-r border-outline-variant/20 relative overflow-hidden">
+            <div className="space-y-6 relative z-10">
+              <div className="flex items-center gap-3">
+                <AnimatedLogo size="md" />
+                <span className="font-mono text-xs text-primary uppercase tracking-widest font-semibold">
+                  Academic Intelligence Node
+                </span>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="signup-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Password</label>
-              <div className="relative">
-                <input
-                  id="signup-password"
-                  name="password"
-                  type={showSignupPass ? 'text' : 'password'}
-                  required
-                  autoComplete="new-password"
-                  placeholder="Min 8 chars, 1 letter & 1 number"
-                  value={signupPass}
-                  onChange={(e) => setSignupPass(e.target.value)}
-                  className={INPUT}
-                />
-                <Key className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
-                <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} aria-label={showSignupPass ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
-                  {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="space-y-3">
+                <h1 className="font-display-xl text-3xl xl:text-4xl text-on-surface font-bold tracking-tight leading-tight">
+                  Master your coursework.
+                </h1>
+                <p className="font-body-md text-sm text-on-surface-variant leading-relaxed">
+                  Deterministic neuro-symbolic assistance configured for computational academics,
+                  laboratory telemetry, and verified source citations.
+                </p>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="signup-confirm-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Confirm Password</label>
-              <div className="relative">
-                <input
-                  id="signup-confirm-password"
-                  name="confirm-password"
-                  type={showSignupConfirm ? 'text' : 'password'}
-                  required
-                  autoComplete="new-password"
-                  placeholder="Re-enter your password"
-                  value={signupPassConfirm}
-                  onChange={(e) => setSignupPassConfirm(e.target.value)}
-                  className={INPUT}
-                />
-                <Lock className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
-                <button type="button" onClick={() => setShowSignupConfirm(!showSignupConfirm)} aria-label={showSignupConfirm ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
-                  {showSignupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <label className="flex items-start gap-2.5 cursor-pointer pt-1 select-none">
-              <input
-                type="checkbox"
-                required
-                checked={consentAgreed}
-                onChange={(e) => setConsentAgreed(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
-              />
-              <span className="font-body-sm text-[11px] text-on-surface-variant leading-tight">
-                I agree to the <strong>Academic Honor Code</strong> and <strong>FERPA / GDPR Terms</strong>.
-                {!consentAgreed && (
-                  <em className="not-italic block text-[10px] mt-0.5 text-amber-300/90">
-                    Check this box to continue.
-                  </em>
-                )}
-              </span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading || !signupUser || !signupPass || !consentAgreed}
-              className="w-full py-3 bg-primary hover:bg-primary-container disabled:opacity-40 text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center gap-2"
-            >
-              {loading ? 'Creating Account…' : 'Create Free Account →'}
-            </button>
-          </form>
-        )}
-
-        {/* SIGN IN FORM */}
-        {tab === 'login' && (
-          <form onSubmit={handleLogin} method="post" action="#" className="space-y-4" autoComplete="on">
-            {!requires2FA ? (
-              <>
-                <div className="space-y-1.5">
-                  <label htmlFor="login-username" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant block">Public ID / Username</label>
-                  <div className="relative">
-                    <input
-                      id="login-username"
-                      name="username"
-                      type="text"
-                      required
-                      autoComplete="username"
-                      placeholder="Enter your username"
-                      value={loginUser}
-                      onChange={(e) => setLoginUser(e.target.value)}
-                      className={INPUT}
-                    />
-                    <User className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label htmlFor="login-password" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Password</label>
-                    <button
-                      type="button"
-                      onClick={() => { setTab('reset'); setLoginError(''); }}
-                      className="text-primary hover:underline text-xs cursor-pointer font-normal"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      id="login-password"
-                      name="password"
-                      type={showLoginPass ? 'text' : 'password'}
-                      required
-                      autoComplete="current-password"
-                      placeholder="Enter your password"
-                      value={loginPass}
-                      onChange={(e) => setLoginPass(e.target.value)}
-                      className={INPUT}
-                    />
-                    <Key className="w-4 h-4 text-on-surface-variant absolute left-3.5 top-3.5" />
-                    <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} aria-label={showLoginPass ? 'Hide password' : 'Show password'} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
-                      {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4 p-4 rounded-2xl bg-surface-container-low border border-primary/30">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                    <ShieldCheck className="w-5 h-5" />
+              {/* 3 Pillar Highlights */}
+              <div className="space-y-2.5 pt-2">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 shadow-sm">
+                  <div className="w-7 h-7 rounded-lg bg-sem-green/15 flex items-center justify-center text-sem-green shrink-0">
+                    <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="font-title-md text-sm font-semibold text-on-surface">Two-Factor Authentication</h4>
-                    <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                      Enter the 6-digit code from your {twoFactorMethod === 'totp' ? 'authenticator app' : twoFactorMethod} or phone.
-                    </p>
+                    <div className="text-xs font-semibold text-on-surface">100% Local Browser Engine</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">In-memory model execution via WebGPU threads</div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label htmlFor="two-factor-code" className="font-label-caps text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Security Code (6 Digits)</label>
-                  <div className="relative">
-                    <input
-                      id="two-factor-code"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      autoFocus
-                      required
-                      placeholder="000000"
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 shadow-sm">
+                  <div className="w-7 h-7 rounded-lg bg-sem-green/15 flex items-center justify-center text-sem-green shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-on-surface">Zero Hallucination Pipeline</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Formal proof grounding & peer-indexed verification</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/20 shadow-sm">
+                  <div className="w-7 h-7 rounded-lg bg-sem-green/15 flex items-center justify-center text-sem-green shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-on-surface">Institutional Grade Security</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Self-custodial client isolation & zero tracking</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Substrate Footer Telemetry */}
+            <div className="pt-6 border-t border-outline-variant/20 flex items-center gap-3 text-[11px] font-mono text-on-surface-variant/70 select-none">
+              <span>Helpotron OS v4.0</span>
+              <span className="w-1 h-1 rounded-full bg-outline-variant" />
+              <span>NODE: EU-WEST-4B</span>
+              <span className="w-1 h-1 rounded-full bg-outline-variant" />
+              <span className="text-primary font-medium">STATUS: NOMINAL</span>
+            </div>
+          </div>
+
+          {/* ── RIGHT PANE: FORM CARD (Spec 3.2.1 / 3.2.2) ────────────── */}
+          <div className="lg:col-span-6 p-6 sm:p-8 flex flex-col justify-between relative overflow-y-auto max-h-[90vh] custom-scrollbar">
+            <div>
+              {/* Card Header & Tab Switcher */}
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/20">
+                <div>
+                  <h2 className="font-title-md text-xl font-bold text-on-surface">
+                    {requires2FA
+                      ? 'Two-Factor Challenge'
+                      : tab === 'signup'
+                      ? 'Create Sovereign Account'
+                      : 'Sign In'}
+                  </h2>
+                  <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
+                    {requires2FA
+                      ? 'Verify your secondary security factor to continue'
+                      : tab === 'signup'
+                      ? 'Self-custodial cryptographic academic access'
+                      : 'Access your sovereign academic co-pilot'}
+                  </p>
+                </div>
+
+                {!requires2FA && (
+                  <span
+                    className={`font-mono text-[10px] uppercase px-2.5 py-1 rounded-full font-semibold ${
+                      tab === 'signup'
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-secondary/15 text-secondary'
+                    }`}
+                  >
+                    {tab === 'signup' ? 'Self-Custodial' : 'Node Auth'}
+                  </span>
+                )}
+              </div>
+
+              {/* Inline Error Strip with Shake */}
+              <AnimatePresence>
+                {errorMsg && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className={`mt-4 p-3 rounded-xl bg-error/15 border border-error/30 text-error text-xs flex items-center gap-2 ${
+                      hasShaked ? 'animate-shake' : ''
+                    }`}
+                    role="alert"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMsg}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* ── 2FA VERIFICATION STAGE (Spec 3.2.3) ────────────────── */}
+              {requires2FA ? (
+                <form onSubmit={handleLogin} className="mt-6 space-y-6">
+                  <div className="text-center space-y-2">
+                    <p className="font-body-sm text-xs text-on-surface-variant">
+                      Enter the 6-digit verification code generated by your Authenticator App.
+                    </p>
+                    <SegmentedOTPInput
                       value={twoFactorCode}
-                      onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="w-full py-3 px-4 text-center tracking-[0.5em] font-mono text-xl font-bold rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-primary focus:outline-none focus:ring-2 focus:ring-primary shadow-inner"
+                      onChange={setTwoFactorCode}
+                      length={6}
+                      autoFocus={true}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <span className="flex items-center gap-1.5 text-primary font-mono text-[11px]">
-                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      Hardware / TOTP Synced
+
+                  <div className="flex items-center justify-between text-xs font-mono text-on-surface-variant px-1">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                      Authenticator App ({twoFactorMethod.toUpperCase()})
                     </span>
+                    {otpCooldown > 0 ? (
+                      <span className="text-sem-amber font-semibold">Resend in 00:{String(otpCooldown).padStart(2, '0')}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setOtpCooldown(30)}
+                        className="text-primary hover:underline cursor-pointer"
+                      >
+                        Resend Code
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <Button
+                      variant="primary"
+                      type="submit"
+                      disabled={loading || twoFactorCode.length < 6}
+                      glow={true}
+                      className="w-full h-11 uppercase font-semibold text-xs tracking-wider"
+                    >
+                      {loading ? 'Verifying...' : 'Verify & Enter Workspace →'}
+                    </Button>
                     <button
                       type="button"
-                      onClick={() => { setRequires2FA(false); setTwoFactorCode(''); }}
-                      className="text-primary hover:underline text-xs cursor-pointer"
+                      onClick={() => {
+                        setRequires2FA(false);
+                        setTwoFactorCode('');
+                      }}
+                      className="w-full text-center py-2 text-xs text-on-surface-variant hover:text-on-surface transition cursor-pointer"
                     >
-                      ← Back to password
+                      ← Back to credentials
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !loginUser || !loginPass || (requires2FA && twoFactorCode.length < 6)}
-              className="w-full py-3 bg-primary hover:bg-primary-container disabled:opacity-40 text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center gap-2"
-            >
-              {loading ? 'Verifying…' : (requires2FA ? 'Verify 6-Digit Code & Sign In →' : 'Sign in to Workspace →')}
-            </button>
-          </form>
-        )}
-
-        {/* RESET PASSWORD FORM */}
-        {tab === 'reset' && (
-          <form onSubmit={handleReset} className="space-y-4">
-            {resetSent ? (
-              <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs space-y-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <Check className="w-4 h-4" /> Reset Code Dispatched
-                </div>
-                <p>
-                  If an account exists for <span className="font-mono text-white">{resetEmail}</span>, a 6-digit verification code was sent.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setTab('login'); setResetSent(false); }}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-white underline cursor-pointer"
-                >
-                  ← Return to Sign In &amp; 2FA
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <label htmlFor="reset-email" className="text-xs font-semibold text-on-surface-variant">Registered Email or Username</label>
-                  <div className="relative">
-                    <input
-                      id="reset-email"
-                      type="text"
-                      required
-                      placeholder="student@university.edu"
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      className={INPUT}
-                    />
-                    <Mail className="w-4 h-4 text-on-surface-variant/60 absolute left-3 top-3.5" />
+                </form>
+              ) : tab === 'login' ? (
+                /* ── SIGN IN FORM (Spec 3.2.1) ────────────────────────── */
+                <form onSubmit={handleLogin} className="mt-5 space-y-4">
+                  {/* Public ID Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label htmlFor="login-public-id" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
+                        PUBLIC ID
+                      </label>
+                      <span className="font-mono text-[10px] text-on-surface-variant/60">e.g. HLP-9402-TX</span>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        id="login-public-id"
+                        name="username"
+                        type={showLoginId ? 'text' : 'password'}
+                        autoComplete="username"
+                        required
+                        placeholder="HLP-XXXX-XX or username"
+                        value={loginId}
+                        onChange={(e) => setLoginId(e.target.value)}
+                        className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Toggle Public ID Visibility"
+                        onClick={() => setShowLoginId((prev) => !prev)}
+                        className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                      >
+                        {showLoginId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-xs text-on-surface-variant">
-                  <span className="text-primary font-semibold block mb-0.5">Need instant help?</span>
-                  You can also contact Roni directly on Support Chat for immediate account reset.
-                </div>
+                  {/* Password Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label htmlFor="login-passphrase" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
+                        MASTER PASSPHRASE
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setRecoveryOpen(true)}
+                        className="text-[11px] text-primary hover:underline cursor-pointer"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        id="login-passphrase"
+                        name="password"
+                        type={showLoginPass ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        required
+                        placeholder="Enter master passphrase..."
+                        value={loginPass}
+                        onChange={(e) => setLoginPass(e.target.value)}
+                        className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Toggle Passphrase Visibility"
+                        onClick={() => setShowLoginPass((prev) => !prev)}
+                        className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                      >
+                        {showLoginPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={resetLoading || !resetEmail.trim()}
-                  className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-[var(--radius-sm)] transition cursor-pointer glow-accent flex items-center justify-center gap-2"
-                >
-                  {resetLoading ? 'Sending…' : 'Send 6-Digit Reset Code →'}
-                </button>
+                  {/* Turnstile Captcha (if enabled) */}
+                  {captchaEnabled && turnstileSitekey && (
+                    <div className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col items-center">
+                      <div ref={turnstileContainerRef} data-turnstile />
+                      <span className="text-[10px] text-on-surface-variant mt-1 font-mono">
+                        Cloudflare Turnstile verification module
+                      </span>
+                    </div>
+                  )}
 
-                <button
-                  type="button"
-                  onClick={() => setTab('login')}
-                  className="w-full text-center text-xs text-on-surface-variant hover:text-on-surface py-1 cursor-pointer"
-                >
-                  ← Back to Sign In
-                </button>
-              </>
-            )}
-          </form>
-        )}
+                  {/* Submit Button */}
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={loading}
+                    glow={true}
+                    className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
+                  >
+                    <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
 
-        {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-outline-variant/20 flex items-center justify-between text-[11px] text-on-surface-variant">
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-            Zero Tracking Pixels · FERPA
-          </span>
-          <span className="font-mono text-[10px]">Engineered by Solo Dev Roni</span>
+                  {/* Footer Action Links */}
+                  <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('signup');
+                        setErrorMsg('');
+                      }}
+                      className="text-on-surface-variant hover:text-primary transition cursor-pointer"
+                    >
+                      New to Helpotron? <span className="text-primary font-semibold">Create account</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryOpen(true)}
+                      className="text-on-surface-variant hover:text-on-surface underline underline-offset-4 decoration-outline-variant/50 cursor-pointer"
+                    >
+                      Recovery channel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ── CREATE SOVEREIGN ACCOUNT (Spec 3.2.2) ─────────────── */
+                <form onSubmit={handleSignup} className="mt-5 space-y-3.5">
+                  {/* Public ID with Re-roll */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <label htmlFor="signup-public-id" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
+                        PUBLIC IDENTITY HASH
+                      </label>
+                      <span className="font-mono text-[10px] text-primary">Self-Custodial Moniker</span>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        id="signup-public-id"
+                        name="username"
+                        type="text"
+                        required
+                        value={signupId}
+                        onChange={(e) => setSignupId(e.target.value)}
+                        className="w-full h-11 px-3 pr-11 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-primary font-semibold placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRerollId}
+                        title="Re-roll cryptographic hex ID"
+                        className="absolute right-1.5 p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition cursor-pointer"
+                      >
+                        <Dices className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Passphrase & Entropy Meter */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <label htmlFor="signup-passphrase" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
+                        MASTER PASSPHRASE
+                      </label>
+                      <span className="font-mono text-[10px] text-on-surface-variant">{entropy.label}</span>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        id="signup-passphrase"
+                        name="password"
+                        type={showSignupPass ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        required
+                        placeholder="Minimum 8 characters or words..."
+                        value={signupPass}
+                        onChange={(e) => setSignupPass(e.target.value)}
+                        className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupPass((prev) => !prev)}
+                        className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                      >
+                        {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {/* 4-Segment Strength Indicator */}
+                    <div className="grid grid-cols-4 gap-1 pt-1">
+                      {[1, 2, 3, 4].map((step) => (
+                        <div
+                          key={step}
+                          className={`h-1 rounded-full transition-all ${
+                            entropy.score >= step ? entropy.color : 'bg-surface-container-high'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Confirm Passphrase */}
+                  <div className="space-y-1">
+                    <label htmlFor="signup-passphrase-confirm" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                      CONFIRM MASTER PASSPHRASE
+                    </label>
+                    <input
+                      id="signup-passphrase-confirm"
+                      name="confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      placeholder="Re-enter passphrase verification..."
+                      value={signupPassConfirm}
+                      onChange={(e) => setSignupPassConfirm(e.target.value)}
+                      className="w-full h-11 px-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                    />
+                  </div>
+
+                  {/* Optional Referral / Institutional Pass */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setReferralOpen((prev) => !prev)}
+                      className="flex items-center justify-between w-full py-1 text-xs text-on-surface-variant hover:text-on-surface cursor-pointer select-none"
+                    >
+                      <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider">
+                        <Ticket className="w-3.5 h-3.5 text-secondary" />
+                        Institutional or Peer Pass
+                      </span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-semibold">
+                        +10,000 TOKENS
+                      </span>
+                    </button>
+                    {referralOpen && (
+                      <input
+                        type="text"
+                        placeholder="e.g. STANFORD-AI-7749"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                        className="w-full h-10 px-3 mt-1.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs uppercase text-on-surface focus:outline-none focus:border-secondary transition"
+                      />
+                    )}
+                  </div>
+
+                  {/* Protocol Consent Checkbox */}
+                  <div className="flex items-start gap-2.5 pt-1 select-none">
+                    <input
+                      type="checkbox"
+                      id="protocol-consent"
+                      checked={consentAgreed}
+                      onChange={(e) => setConsentAgreed(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded text-primary focus:ring-0 cursor-pointer accent-primary"
+                    />
+                    <label htmlFor="protocol-consent" className="text-[11px] text-on-surface-variant leading-tight cursor-pointer">
+                      I agree to the Protocol Terms and understand that lost local cryptographic keys{' '}
+                      <span className="text-error font-semibold">cannot</span> be recovered by server nodes.
+                    </label>
+                  </div>
+
+                  {/* Turnstile Captcha */}
+                  {captchaEnabled && turnstileSitekey && (
+                    <div className="p-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col items-center">
+                      <div ref={turnstileContainerRef} data-turnstile />
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={loading || !consentAgreed}
+                    glow={true}
+                    className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
+                  >
+                    <span>{loading ? 'Initializing Node...' : 'Initialize Sovereign Node'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+
+                  {/* Switch to login */}
+                  <div className="pt-2 text-center text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('login');
+                        setErrorMsg('');
+                      }}
+                      className="text-on-surface-variant hover:text-primary transition cursor-pointer"
+                    >
+                      Already have an identity? <span className="text-primary font-semibold">Sign in</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Cryptographic Zero-Telemetry Notice */}
+            <div className="mt-5 pt-3 border-t border-outline-variant/15 flex items-start gap-2 text-on-surface-variant">
+              <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <span className="font-mono text-[10px] leading-relaxed">
+                Deterministic tokens are validated with Ed25519 local signatures. Zero telemetry emitted to third parties.
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Embedded Recovery Flow Modal (Spec 3.2.4) */}
+      <RecoveryFlowModal
+        open={recoveryOpen}
+        onClose={() => setRecoveryOpen(false)}
+        publicId={loginId || signupId}
+      />
     </div>
   );
 }

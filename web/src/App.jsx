@@ -19,9 +19,11 @@ import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } 
  * and lands in its own chunk, fetched the moment the session resolves. */
 import AnonymousLanding from './components/AnonymousLanding.jsx';
 import AuthModal from './components/AuthModal.jsx';
+import SessionExpiryModal, { Session401Banner } from './components/SessionExpiryModal.jsx';
 import NotFound from './components/NotFound.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
+import { ToastContainer, OfflineBanner } from './components/ui/index.js';
 
 /* ── LAZY: with automatic chunk retry for seamless zero-downtime updates ── */
 function lazyWithRetry(componentImport) {
@@ -66,10 +68,11 @@ const ActivityView = lazyWithRetry(() => import('./components/ActivityView.jsx')
 const AutomationCenter = lazyWithRetry(() => import('./components/AutomationCenter.jsx'));
 const LibraryView = lazyWithRetry(() => import('./components/LibraryView.jsx'));
 const SettingsApp = lazyWithRetry(() => import('./components/SettingsApp.jsx'));
-const AdminPanels = lazyWithRetry(() => import('./components/AdminPanels.jsx'));
+const ControlCenterView = lazyWithRetry(() => import('./components/ControlCenterView.jsx'));
 const InsightsView = lazyWithRetry(() => import('./components/InsightsView.jsx'));
 const CreditsView = lazyWithRetry(() => import('./components/CreditsView.jsx'));
 const MyAgentView = lazyWithRetry(() => import('./components/MyAgentView.jsx'));
+const NotificationsView = lazyWithRetry(() => import('./components/NotificationsView.jsx'));
 
 /* Shown while a lazy view chunk is in flight. Deliberately quiet — a spinner
  * that flashes for 80ms reads as jank, a dimmed placeholder does not. */
@@ -230,6 +233,21 @@ export default function App() {
     setAuthModalOpen(true);
   };
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
+  const [silent401Visible, setSilent401Visible] = useState(false);
+
+  useEffect(() => {
+    const onSessionExpired = (e) => {
+      if (authStatus !== 'authed') return;
+      if (e.detail?.isBackground) {
+        setSilent401Visible(true);
+      } else {
+        setSessionExpiredOpen(true);
+      }
+    };
+    window.addEventListener('helpotron:session-expired', onSessionExpired);
+    return () => window.removeEventListener('helpotron:session-expired', onSessionExpired);
+  }, [authStatus]);
 
   /* ─── Client-side path guard (09-01, operator QA round) ────────────────
      The SPA serves index.html at every pathname (vite preview history
@@ -262,13 +280,16 @@ export default function App() {
     '/admin': ['admin', null],
   };
   /* Paths the anonymous landing page legitimately serves. */
-  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy']);
+  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy', '/extension']);
   const [notFoundPath, setNotFoundPath] = useState(null);
   const pendingDeepLink = useRef(null);
   const resolvePath = (path, status) => {
     if (path === '/sign-in' || path === '/signup') {
       pendingDeepLink.current = ['overview', null];
       if (status === 'signedOut') openAuth(path === '/sign-in' ? 'login' : 'signup');
+      return;
+    }
+    if (status === 'signedOut' && PUBLIC_PATHS.has(path)) {
       return;
     }
     const mapped = VIEW_PATH_MAP[path];
@@ -610,6 +631,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="app-canvas min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans antialiased selection:bg-[var(--accent-subtle)] selection:text-[var(--text-primary)]">
+        {/* Offline Diagnostic Persistence Banner */}
+        <OfflineBanner />
+
         {/* WCAG 2.4.1 Skip Navigation Link */}
         <a
           href="#main-content"
@@ -640,6 +664,23 @@ export default function App() {
           }}
         />
 
+        {/* Session Expiry Modal (Spec 3.2.5) */}
+        <SessionExpiryModal
+          isOpen={sessionExpiredOpen}
+          user={{ credits, public_id: userId, token_balance: tokenBalance, plan: userPlan, unlimited: userUnlimited }}
+          onSessionRestored={(u) => {
+            setSessionExpiredOpen(false);
+            setSilent401Visible(false);
+            handleLoginSuccess(u);
+          }}
+          onSwitchAccount={() => {
+            setSessionExpiredOpen(false);
+            setSilent401Visible(false);
+            handleLogout();
+            openAuth('login');
+          }}
+        />
+
         {/* Extension install is a sidebar section now (see ExtensionInstallView) */}
 
         {/* ─── AUTH GATE (audit 08-28) ───────────────────────────────────────
@@ -662,7 +703,7 @@ export default function App() {
         <AdminNoticePopup isLoggedIn={isLoggedIn} />
 
         {/* Global command palette */}
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={handleSelectView} isAdmin={effectiveIsAdmin} />
 
         {/* Memory-budget queue notice (08-31, operator) — shows while the
             API's 10G RAM budget is consumed and requests are auto-retried */}
@@ -732,6 +773,14 @@ export default function App() {
           onOpenAuth={() => openAuth('login')}
           onOpenPrivacy={() => setShowPrivacyModal(true)}
         >
+          {/* Silent 401 Telemetry / Sync Pause Banner (Spec 3.2.5) */}
+          {silent401Visible && (
+            <Session401Banner
+              onReconnect={() => setSessionExpiredOpen(true)}
+              onDismiss={() => setSilent401Visible(false)}
+            />
+          )}
+
           {/* Backend unreachable banner */}
           {!connected && (
             <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono mb-5 flex items-center justify-center gap-2">
@@ -821,6 +870,7 @@ export default function App() {
                   {activeView === 'settings' && <SettingsApp userId={userId} onGoTo={handleSelectView} plan={userPlan} credits={credits} tokenBalance={tokenBalance} isAdmin={effectiveIsAdmin} />}
                   {activeView === 'extension' && <ExtensionInstallView />}
                   {activeView === 'guide' && <GuideView onGoTo={handleSelectView} />}
+                  {activeView === 'notifications' && <NotificationsView onNavigate={handleSelectView} user={{ credits, public_id: userId, token_balance: tokenBalance }} />}
 
                   {/* LEGACY + LEGAL */}
                   {activeView === 'dump' && (
@@ -840,7 +890,7 @@ export default function App() {
                   {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}
 
                   {/* ADMIN — hard route guard: non-admins get a denial, not a shell */}
-                  {activeView === 'admin' && effectiveIsAdmin && <AdminPanels userId={userId} />}
+                  {activeView === 'admin' && effectiveIsAdmin && <ControlCenterView userId={userId} />}
                   {activeView === 'admin' && !effectiveIsAdmin && (
                     <div className="p-10 text-center">
                       <div className="text-3xl mb-3">🔒</div>
@@ -859,6 +909,9 @@ export default function App() {
         {isLoggedIn && termsAccepted && (
           <Suspense fallback={null}><CookieBanner /></Suspense>
         )}
+
+        {/* Global Luminous Glass Toast Stack */}
+        <ToastContainer />
       </div>
     </ErrorBoundary>
   );
