@@ -256,12 +256,30 @@ class StudyMaterial(Base):
     content: Mapped[str] = mapped_column(String)
     model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    saved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     shared_with: Mapped[list] = mapped_column(JSON, default=list)  # list of user IDs
 
     user = relationship("User", back_populates="materials")
     assignment = relationship("Assignment", back_populates="materials")
     transcript = relationship("Transcript", back_populates="materials")
     study_sessions = relationship("StudySession", back_populates="material")
+
+
+class StudyCardState(Base):
+    __tablename__ = "study_card_states"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("study_materials.id"), index=True)
+    card_index: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(16), default="new")  # new/learning/known/mastered (FSRS)
+    difficulty: Mapped[str] = mapped_column(String(16), default="medium")  # easy/medium/hard
+    due: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lapses: Mapped[int] = mapped_column(Integer, default=0)
+    last_practiced: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "material_id", "card_index", name="uq_study_cards"),)
 
 
 class CreditTransaction(Base):
@@ -660,6 +678,8 @@ def init_db() -> None:
                 columns_materials = [row[1] for row in conn.execute(text("PRAGMA table_info(study_materials)")).fetchall()]
                 if "shared_with" not in columns_materials:
                     conn.execute(text("ALTER TABLE study_materials ADD COLUMN shared_with JSON DEFAULT '[]'"))
+                if "saved_at" not in columns_materials:
+                    conn.execute(text("ALTER TABLE study_materials ADD COLUMN saved_at DATETIME"))
 
                 columns_assignments = [row[1] for row in conn.execute(text("PRAGMA table_info(assignments)")).fetchall()]
                 if "turned_in" not in columns_assignments:
