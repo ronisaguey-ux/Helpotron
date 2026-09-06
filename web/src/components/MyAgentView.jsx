@@ -35,8 +35,16 @@ export default function MyAgentView({
   const [effortScore, setEffortScore] = useState(() => Number(settings.effort_score || 600));
   const [activeIdentityId, setActiveIdentityId] = useState(() => settings.ai?.persona_id || 'scholar');
   const [identities, setIdentities] = useState(() => settings.ai?.identities || []);
-  const [skills, setSkills] = useState(() => DEFAULT_SKILLS);
-  const [activeSkillIds, setActiveSkillIds] = useState(() => ['z3_prover', 'latex_derivations', 'humanizer_cadence']);
+  const [skills, setSkills] = useState(() => settings.ai?.skills?.length ? settings.ai.skills : DEFAULT_SKILLS);
+  // The sidebar computes isEnabled as `active || enabled`; when stored skills
+  // exist, seed the active set FROM them so a user-disabled built-in (e.g.
+  // humanizer off) doesn't get pinned back on by the default include-list.
+  // 09-06.
+  const [activeSkillIds, setActiveSkillIds] = useState(() => {
+    const saved = settings.ai?.skills;
+    if (saved?.length) return saved.filter((s) => s.enabled).map((s) => s.id);
+    return ['z3_prover', 'latex_derivations', 'humanizer_cadence'];
+  });
   const [memory, setMemory] = useState([]);
   const [memoryText, setMemoryText] = useState('');
   const [files, setFiles] = useState([]);
@@ -702,9 +710,18 @@ export default function MyAgentView({
             skills={skills}
             activeSkillIds={activeSkillIds}
             onToggleSkill={(skillId) => {
+              // Flip BOTH the active-set and the skill's own enabled flag —
+              // the sidebar computes isEnabled as `active || enabled`, so a
+              // default-enabled skill also must toggle its flag or it can
+              // never be switched off (09-06).
+              const nextSkills = skills.map((s) => (s.id === skillId ? { ...s, enabled: !s.enabled } : s));
+              setSkills(nextSkills);
               setActiveSkillIds((prev) =>
                 prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
               );
+              const updated = { ...settings, ai: { ...(settings.ai || {}), skills: nextSkills } };
+              setSettings(updated);
+              saveSettings(updated);
             }}
             onAddSkill={(skill) => setSkills((prev) => [...prev, skill])}
             memory={memory}
