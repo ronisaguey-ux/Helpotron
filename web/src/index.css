@@ -1,1499 +1,150 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   LUMINOUS GLASS Design System — Helpotron OS v4
+   Material Design 3 semantic token architecture
+   Source of truth: luminous_glass/DESIGN.md (Stitch v6)
+   ═══════════════════════════════════════════════════════════════════════════
+   Zero hex literals in components — all via CSS vars.
+   Zero dark: Tailwind variants — theme resolution via data-theme + CSS vars.
+   One primary brand: M3 Electric Teal (--st-primary).
+   Dark is default hero-grade; light is a faithful translation.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
-
-@layer base {
-  :root {
-    /* Aurora design system (overhaul 08-28): deep-space base, glass surfaces */
-    --bg-base: #05060e;
-    --bg-surface: rgba(17, 20, 40, 0.58);      /* glass fill — blur lives on .glass-panel */
-    --bg-surface-elevated: rgba(27, 31, 58, 0.66);
-    --border-subtle: rgba(255, 255, 255, 0.10);
-    --border-hover: rgba(255, 255, 255, 0.22);
-
-    /* Aurora accent palette — violet primary, cyan secondary */
-    --accent: #8b5cf6; /* Violet-500 */
-    --accent-hover: #7c3aed; /* Violet-600 */
-    --accent-subtle: rgba(139, 92, 246, 0.16);
-    --accent-2: #22d3ee; /* Cyan-400 — secondary aurora hue */
-    --accent-mix: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 45%, #22d3ee 100%);
-
-    --text-primary: #f4f5ff;
-    --text-secondary: #c9cde6;
-    --text-muted: #9aa1c4; /* AA on deep space */
-
-    --radius-sm: 10px;
-    --radius-md: 14px;
-    --radius-lg: 20px;
-
-    /* ── TYPE SCALE (overhaul 08-30) ────────────────────────────────────
-       Root is 110% (17.6px), so these resolve to 14.3 / 15.4 / 16.5px.
-       Three steps at the small end so labels, metadata and body copy are
-       actually distinguishable — see READABILITY PASS v3 below. */
-    --fs-micro: 0.8125rem;   /* labels, table headers, timestamps */
-    --fs-meta:  0.875rem;    /* secondary / supporting copy */
-    --fs-small: 0.9375rem;   /* small body */
-    --fs-body:  1rem;
-    --fs-section: 1.0625rem; /* section titles */
-    --fs-page:  1.5rem;      /* page title */
-
-    /* ── SPACING SCALE ─────────────────────────────────────────────────── */
-    --space-1: 4px;
-    --space-2: 8px;
-    --space-3: 12px;
-    --space-4: 16px;
-    --space-5: 24px;
-    --space-6: 32px;
-    --space-7: 48px;
-
-    /* ── ELEVATION (dark-mode layered scale) ────────────────────────────
-       A single drop shadow barely reads on a near-black canvas: a dark
-       element on a dark background has almost no contrast. Depth here is a
-       rim (top inset highlight + inner hairline + outer ring, so the surface
-       has a self-lit edge) plus a penumbra of stacked drops whose blur grows
-       1→3→6→12px at a negative spread of about half the blur. Growing blur
-       while shrinking spread keeps the contact edge tight while the outer
-       layers spread — which is what sells the softness.
-       1 resting · 2 hover · 3 popover · 4 modal · 5 sticky bar. */
-    --rim:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-      0 0 0 1px rgba(0, 0, 0, 0.16);
-    --elev-1: var(--rim),
-      0 1px 1px -0.5px rgba(0, 0, 0, 0.18);
-    --elev-2: var(--rim),
-      0 1px 1px -0.5px rgba(0, 0, 0, 0.18),
-      0 3px 3px -1.5px rgba(0, 0, 0, 0.18);
-    --elev-3: var(--rim),
-      0 1px 1px -0.5px rgba(0, 0, 0, 0.18),
-      0 3px 3px -1.5px rgba(0, 0, 0, 0.18),
-      0 6px 6px -3px rgba(0, 0, 0, 0.18);
-    --elev-4: var(--rim),
-      0 1px 1px -0.5px rgba(0, 0, 0, 0.18),
-      0 3px 3px -1.5px rgba(0, 0, 0, 0.18),
-      0 6px 6px -3px rgba(0, 0, 0, 0.18),
-      0 12px 12px -6px rgba(0, 0, 0, 0.18);
-    --elev-5: var(--rim),
-      0 1px 1px -0.5px rgba(0, 0, 0, 0.18),
-      0 3px 3px -1.5px rgba(0, 0, 0, 0.18),
-      0 6px 6px -3px rgba(0, 0, 0, 0.18),
-      0 12px 12px -6px rgba(0, 0, 0, 0.18),
-      0 24px 24px -12px rgba(0, 0, 0, 0.18);
-
-    /* Inset surface: an inner group is DARKER than the panel holding it —
-       that contrast inversion is what makes a panel read as a container. */
-    --bg-inset: rgba(6, 8, 20, 0.46);
-    --bg-inset-strong: rgba(4, 6, 16, 0.62);
-  }
-
-  body {
-    background-color: var(--bg-base);
-    color: var(--text-primary);
-    /* Native UI stack: renders on first paint with no network request. The
-       previous stack listed "Inter" third, after -apple-system, so the webfont
-       downloaded from Google on every load and then never rendered on Apple
-       devices. Dropping it removed three render-blocking third-party requests
-       (and a third-party dependency in the CSP) for no visual change on macOS
-       or iOS. To ship true Inter, self-host @fontsource-variable/inter and put
-       it first here — never re-add the cross-origin <link>. */
-    font-family: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Accessible focus rings across all interactive elements (WCAG 2.4.7) */
-  :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
-
-/* Deep-space base with aurora orbs (default canvas; appearance engine's
-   html[data-bg="flat|aurora|mesh"] still overrides via .app-canvas rules) */
-.app-background {
-  background-color: var(--bg-base);
-  background-image:
-    radial-gradient(ellipse 55% 45% at 12% -5%, rgba(139, 92, 246, 0.16) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 40% at 88% 8%, rgba(34, 211, 238, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 50% at 50% 110%, rgba(99, 102, 241, 0.12) 0%, transparent 60%);
-}
-
-/* Frosted glass card surface — the app's signature surface */
-.clean-card,
-.glass-panel {
-  background: var(--bg-surface);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 8px 32px rgba(2, 4, 14, 0.45);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.clean-card:hover,
-.glass-panel:hover {
-  border-color: var(--border-hover);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 32px rgba(2, 4, 14, 0.5),
-    0 0 24px rgba(139, 92, 246, 0.08);
-}
-
-/* Glass inputs */
-.clean-input,
-.glass-input {
-  background: rgba(9, 11, 26, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-}
-
-.clean-input::placeholder,
-.glass-input::placeholder {
-  color: var(--text-muted);
-}
-
-.clean-input:focus,
-.glass-input:focus {
-  border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-subtle);
-}
-
-/* Smooth custom scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-/* Accessibility: Respect user motion preferences */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* WCAG 2.1 AA: minimum 44x44px touch targets on coarse pointers (2.5.8) */
-@media (pointer: coarse) {
-  button, a, input, select, textarea, [role="button"] {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  /* 08-29 (A6): checkboxes/radios were being inflated to 44x44, wrecking
-     inline control rows; they already render 16-20px boxes with 44px-ish
-     tappable area via label hit-boxes — keep the bare box at its class size. */
-  input[type="checkbox"], input[type="radio"] {
-    min-height: 0;
-    min-width: 0;
-  }
-}
-
+/* ── §1  DARK THEME (default) ─────────────────────────────────────────────── */
 :root {
-  /* Design system tokens (WCAG 2.1 AA — BATCH-07). Primary action color
-     with accessible hover/active states and on-primary contrast pair. */
-  --color-primary: oklch(0.62 0.19 292);
-  --color-primary-hover: oklch(0.56 0.20 292);
-  --color-primary-active: oklch(0.50 0.21 292);
-  --color-primary-foreground: oklch(0.99 0.005 300);
-  --color-focus-ring: oklch(0.70 0.15 292);
-  --color-surface: oklch(0.15 0.025 285);
-  --color-surface-raised: oklch(0.21 0.03 285);
-  --color-border-soft: oklch(0.34 0.045 285);
-  --color-text-primary: oklch(0.94 0.015 285);
-  --color-text-muted: oklch(0.68 0.04 275);
-  /* Neon chart tokens matching the app's cyan/indigo glass theme
-     (Bklit registry charts render against these). */
-  --chart-1: oklch(0.72 0.16 210);
-  --chart-2: oklch(0.6 0.2 270);
-  --chart-3: oklch(0.65 0.18 155);
-  --chart-4: oklch(0.7 0.19 55);
-  --chart-5: oklch(0.66 0.14 330);
-  --chart-background: oklch(0.11 0.02 260);
-  --chart-foreground: oklch(0.87 0.03 210);
-  --chart-foreground-muted: oklch(0.6 0.02 250);
+  color-scheme: dark;
+
+  /* ── Surface Scale ────────────────────────────────────────────────────── */
+  --st-background:                 #0E1113;
+  --st-surface:                    #0E1113;
+  --st-surface-dim:                #111416;
+  --st-surface-bright:             #37393C;
+  --st-surface-container-lowest:   #080A0C;
+  --st-surface-container-low:      #13171A;
+  --st-surface-container:          #1D2024;
+  --st-surface-container-high:     #272B30;
+  --st-surface-container-highest:  #32363C;
+  --st-surface-variant:            #323537;
+  --st-surface-tint:               #5BDACB;
+  --st-on-surface:                 #E2E2E6;
+  --st-on-surface-variant:         #C4C7C7;
+  --st-on-background:              #E1E2E5;
+  --st-inverse-surface:            #E1E2E5;
+  --st-inverse-on-surface:         #2E3133;
+
+  /* ── Lines & Boundaries ───────────────────────────────────────────────── */
+  --st-outline:                    #8E9192;
+  --st-outline-variant:            #444748;
+
+  /* ── Primary Brand (M3 Electric Teal) ─────────────────────────────────── */
+  --st-primary:                    #78F5E5;
+  --st-on-primary:                 #003732;
+  --st-primary-container:          #59D8C9;
+  --st-on-primary-container:       #005C54;
+  --st-inverse-primary:            #006A61;
+  --st-primary-fixed:              #7BF7E7;
+  --st-primary-fixed-dim:          #5BDACB;
+  --st-on-primary-fixed:           #00201D;
+  --st-on-primary-fixed-variant:   #005049;
+
+  /* ── Secondary (Periwinkle Blue) ──────────────────────────────────────── */
+  --st-secondary:                  #BFC2FF;
+  --st-on-secondary:               #282B5E;
+  --st-secondary-container:        #3E4276;
+  --st-on-secondary-container:     #ADB0EC;
+  --st-secondary-fixed:            #E0E0FF;
+  --st-secondary-fixed-dim:        #BFC2FF;
+  --st-on-secondary-fixed:         #121548;
+  --st-on-secondary-fixed-variant: #3E4276;
+
+  /* ── Tertiary (Desaturated Aqua) ──────────────────────────────────────── */
+  --st-tertiary:                   #9AEFEA;
+  --st-on-tertiary:                #003735;
+  --st-tertiary-container:         #7ED3CE;
+  --st-on-tertiary-container:      #005B58;
+  --st-tertiary-fixed:             #9CF1EC;
+  --st-tertiary-fixed-dim:         #80D5D0;
+  --st-on-tertiary-fixed:          #00201F;
+  --st-on-tertiary-fixed-variant:  #00504D;
+
+  /* ── Error ────────────────────────────────────────────────────────────── */
+  --st-error:                      #FFB4AB;
+  --st-on-error:                   #690005;
+  --st-error-container:            #93000A;
+  --st-on-error-container:         #FFDAD6;
+
+  /* ── Semantic Status Palette (8 deterministic pairs) ──────────────────── */
+  --st-sem-amber:      #F59E0B;   --st-on-sem-amber:     #422006;
+  --st-sem-blue:       #3B82F6;   --st-on-sem-blue:      #1E3A5F;
+  --st-sem-green:      #10B981;   --st-on-sem-green:     #064E3B;
+  --st-sem-cyan:       #06B6D4;   --st-on-sem-cyan:      #164E63;
+  --st-sem-indigo:     #6366F1;   --st-on-sem-indigo:    #312E81;
+  --st-sem-deepgreen:  #059669;   --st-on-sem-deepgreen: #064E3B;
+  --st-sem-gray:       #6B7280;   --st-on-sem-gray:      #1F2937;
+  --st-sem-slate:      #64748B;   --st-on-sem-slate:     #1E293B;
+
+  /* ── Chart Tokens ─────────────────────────────────────────────────────── */
+  --chart-1: #5BDACB;
+  --chart-2: #BFC2FF;
+  --chart-3: #9AEFEA;
+  --chart-4: #F59E0B;
+  --chart-5: #FFB4AB;
+  --chart-background: var(--st-surface-container-lowest);
+  --chart-foreground: var(--st-on-surface);
+  --chart-foreground-muted: var(--st-on-surface-variant);
   --chart-line-primary: var(--chart-1);
   --chart-line-secondary: var(--chart-2);
-  --chart-crosshair: oklch(0.75 0.14 210);
-  --chart-grid: oklch(0.24 0.015 260);
+  --chart-crosshair: var(--st-outline);
+  --chart-grid: var(--st-outline-variant);
   --chart-brush-border: var(--chart-grid);
-  --chart-tooltip-background: oklch(0.16 0.02 260 / 0.9);
-  --chart-tooltip-foreground: oklch(0.92 0.02 210);
-  --chart-tooltip-muted: oklch(0.65 0.03 250);
-  --chart-marker-background: oklch(0.14 0.02 260);
-  --chart-marker-border: oklch(0.45 0.05 260);
-  --chart-marker-foreground: oklch(0.9 0.03 210);
-  --chart-label: oklch(0.6 0.03 250);
-  --chart-scale-01: oklch(0.9 0.05 210);
-  --chart-scale-02: oklch(0.78 0.08 210);
-  --chart-scale-03: oklch(0.62 0.12 220);
-  --chart-scale-04: oklch(0.48 0.16 240);
-  --chart-scale-05: oklch(0.36 0.18 260);
-  --chart-scale-pattern-color: oklch(0.16 0.02 260);
-}
+  --chart-tooltip-background: color-mix(in srgb, var(--st-surface-container-low) 92%, transparent);
+  --chart-tooltip-foreground: var(--st-on-surface);
+  --chart-tooltip-muted: var(--st-on-surface-variant);
+  --chart-marker-background: var(--st-surface-container);
+  --chart-marker-border: var(--st-outline-variant);
+  --chart-marker-foreground: var(--st-on-surface);
+  --chart-label: var(--st-on-surface-variant);
+  --chart-scale-01: color-mix(in srgb, var(--st-primary) 90%, white);
+  --chart-scale-02: color-mix(in srgb, var(--st-primary) 70%, white);
+  --chart-scale-03: var(--st-primary);
+  --chart-scale-04: color-mix(in srgb, var(--st-primary) 70%, black);
+  --chart-scale-05: color-mix(in srgb, var(--st-primary) 40%, black);
+  --chart-scale-pattern-color: var(--st-surface-container-lowest);
 
-.dark {
-  --chart-1: oklch(1 0 none);
-  --chart-2: oklch(0.73 0 none);
-  --chart-3: oklch(0.51 0 none);
-  --chart-4: oklch(0.39 0 none);
-  --chart-5: oklch(0.32 0 none);
-  --chart-background: oklch(0.145 0 0);
-  --chart-foreground: oklch(0.45 0 0);
-  --chart-foreground-muted: oklch(0.65 0.01 260);
-  --chart-crosshair: oklch(0.45 0 0);
-  --chart-grid: oklch(0.25 0 0);
-  --chart-brush-border: var(--chart-grid);
-  --chart-marker-background: oklch(0.25 0.01 260);
-  --chart-marker-border: oklch(0.4 0.01 260);
-  --chart-marker-foreground: oklch(0.9 0 0);
-  --chart-label: oklch(0.75 0.01 260);
-  --chart-scale-01: oklch(0.28 0.03 270);
-  --chart-scale-02: oklch(0.38 0.04 270);
-  --chart-scale-03: oklch(0.48 0.05 270);
-  --chart-scale-04: oklch(0.58 0.06 270);
-  --chart-scale-05: oklch(0.68 0.07 270);
-  --chart-scale-pattern-color: oklch(0.145 0 0);
-}
+  /* ── Motion Tokens ────────────────────────────────────────────────────── */
+  --motion-micro: 150ms;
+  --motion-standard: 250ms;
+  --motion-emphasis: 400ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
 
-@theme inline {
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-chart-background: var(--chart-background);
-  --color-chart-foreground: var(--chart-foreground);
-  --color-chart-foreground-muted: var(--chart-foreground-muted);
-  --chart-line-primary: var(--chart-1);
-  --chart-line-secondary: var(--chart-2);
-  --color-chart-crosshair: var(--chart-crosshair);
-  --color-chart-grid: var(--chart-grid);
-  --chart-brush-border: var(--chart-brush-border);
-  --color-chart-tooltip-background: var(--chart-tooltip-background);
-  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
-  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
-  --color-chart-marker-background: var(--chart-marker-background);
-  --color-chart-marker-border: var(--chart-marker-border);
-  --color-chart-marker-foreground: var(--chart-marker-foreground);
-  --color-chart-label: var(--chart-label);
-  --color-chart-scale-01: var(--chart-scale-01);
-  --color-chart-scale-02: var(--chart-scale-02);
-  --color-chart-scale-03: var(--chart-scale-03);
-  --color-chart-scale-04: var(--chart-scale-04);
-  --color-chart-scale-05: var(--chart-scale-05);
-  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
-}
+  /* ── Glass Formulation ────────────────────────────────────────────────── */
+  --glass-fill: color-mix(in srgb, var(--st-surface-container-lowest) 70%, transparent);
+  --glass-blur: 24px;
+  --glass-border: color-mix(in srgb, var(--st-outline-variant) 20%, transparent);
+  --glass-border-hover: color-mix(in srgb, var(--st-outline-variant) 50%, transparent);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --glass-glow-primary: rgba(89, 216, 201, 0.07);
+  --glass-glow-secondary: rgba(191, 194, 255, 0.05);
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Helpotron OS tokens + controls (Experience Rewrite, 08-22)
-   ────────────────────────────────────────────────────────────────────────── */
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --elev-1: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --elev-2: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --elev-3: 0 10px 15px rgba(0, 0, 0, 0.3), 0 4px 6px rgba(0, 0, 0, 0.2);
+  --elev-4: 0 20px 25px rgba(0, 0, 0, 0.3), 0 8px 10px rgba(0, 0, 0, 0.2);
 
-/* Soft pulse for live system-map nodes */
-@keyframes pulse-soft {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.15); }
-  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
-}
-.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
-
-/* Range sliders (settings + spend simulator) */
-.os-range {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 6px;
-  border-radius: 9999px;
-  background: linear-gradient(to right, #1e293b, #334155);
-  outline: none;
-}
-.os-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #3b82f6;
-  border: 2px solid #0f172a;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 2px 6px rgba(0, 0, 0, 0.5);
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-.os-range::-webkit-slider-thumb:hover { transform: scale(1.15); }
-.os-range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #3b82f6;
-  border: 2px solid #0f172a;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
-  cursor: pointer;
-}
-
-/* Line-clamp used by notification cards */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Scrollable panels inside clean-card keep the 5px theme */
-.os-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
-
-/* ────────────────────────────────────────────────────────────────────────────
- * Helpotron cyber animation keyframes (logo + agent avatar)
- * ──────────────────────────────────────────────────────────────────────────── */
-@keyframes cyber-spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes visor-scanline {
-  0% { transform: translateY(-100%); opacity: 0; }
-  50% { opacity: 0.8; }
-  100% { transform: translateY(100%); opacity: 0; }
-}
-
-@keyframes aperture-pulse {
-  0%, 100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.4));
-  }
-  50% {
-    transform: scale(1.04);
-    filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.8));
-  }
-}
-
-.animate-cyber-spin {
-  animation: cyber-spin-slow 8s linear infinite;
-}
-
-.animate-visor-scan {
-  animation: visor-scanline 2.5s ease-in-out infinite;
-}
-
-.animate-aperture-pulse {
-  animation: aperture-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
- * READABILITY PASS v2 (2026-08-23): even the first bump left 7-12px text
- * everywhere (259x 11px, 247x 10px, 543x text-xs). This sweep sets a floor:
- * nothing below 12px, small text pushed to 13-14.5px, muted steps lifted
- * well past WCAG AA. App is dark-only, no side effects.
- * ───────────────────────────────────────────────────────────────────────────── */
-html { font-size: 110%; } /* 17.6px base */
-
-.text-slate-600,
-.text-slate-500 { color: #a8b6c8 !important; }
-.text-slate-400 { color: #e2e9f2 !important; }
-
-/* READABILITY PASS v3 (design overhaul 08-30): v2 set a floor but flattened
- * SEVEN authored sizes onto two values, so labels, metadata and body text all
- * rendered identically and the small end of the type scale carried no
- * hierarchy at all. Restored to three distinguishable steps, all still above
- * the v2 floor (root is 17.6px, so these resolve to 14.3 / 15.4 / 16.5px).
- * --fs-micro  labels, table headers, timestamps
- * --fs-meta   secondary/supporting copy
- * --fs-small  body-equivalent small text */
-.text-\[7px\],
-.text-\[8px\],
-.text-\[9px\],
-.text-\[10px\] { font-size: var(--fs-micro) !important; }
-
-.text-\[11px\],
-.text-\[12px\] { font-size: var(--fs-meta) !important; }
-
-.text-\[13px\],
-.text-xs        { font-size: var(--fs-small) !important; }
-
-
-/* ── Craft refinement (impeccable sweep, 08-24): hairline top accent on the
- * glass stat panels — a quiet signature across every stats row — plus a soft
- * boundary transition on cards so the surface feels alive without bouncing. */
-.glass-panel { position: relative; overflow: hidden; }
-.glass-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.40), rgba(34, 211, 238, 0.28), transparent);
-  pointer-events: none;
-}
-.clean-card { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-
-/* ─────────────────────────────────────────────────────────────────────────────
- * APPEARANCE ENGINE (08-26): the Settings → Appearance controls now actually
- * restyle the app. applyAppearance() sets data-theme / data-accent /
- * data-density on <html> (SettingsApp.jsx). These token layers + the
- * var-driven surfaces (body, .app-background, .clean-card, .glass-panel,
- * .clean-input, focus rings) follow along. Deep hardcoded-slate shells are the
- * remaining migration surface (tracked; next sweep converts them to vars).
- * ───────────────────────────────────────────────────────────────────────────── */
-[data-theme="light"] {
-  /* Low-luminance eye-comfortable slate (no blinding white light) */
-  --bg-base: #181d27;
-  --bg-surface: #222938;
-  --bg-surface-elevated: #2c364a;
-  --border-subtle: rgba(255, 255, 255, 0.10);
-  --border-hover: rgba(255, 255, 255, 0.22);
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --accent: #818cf8;
-  --accent-hover: #6366f1;
-  --accent-subtle: rgba(129, 140, 248, 0.16);
-}
-[data-theme="oled"] {
-  --bg-base: #000000;
-  --bg-surface: #060606;
-  --bg-surface-elevated: #0d0d0d;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.18);
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #7d8aa0;
-}
-[data-theme="midnight"] {
-  --bg-base: #0a1024;
-  --bg-surface: #101a38;
-  --bg-surface-elevated: #182448;
-  --border-subtle: rgba(140, 160, 255, 0.10);
-  --border-hover: rgba(140, 160, 255, 0.22);
-  --text-primary: #e8ecff;
-  --text-secondary: #c3cbee;
-  --text-muted: #8894c4;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-subtle: rgba(99, 102, 241, 0.16);
-}
-[data-theme="graphite"] {
-  --bg-base: #101114;
-  --bg-surface: #17181c;
-  --bg-surface-elevated: #1f2026;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.20);
-  --text-primary: #f4f5f7;
-  --text-secondary: #ced1d6;
-  --text-muted: #8b909a;
-  --accent: #94a3b8;
-  --accent-hover: #64748b;
-  --accent-subtle: rgba(148, 163, 184, 0.14);
-}
-[data-theme="system"] {
-  --bg-base: #030712;
-  --bg-surface: #0b0f19;
-  --bg-surface-elevated: #111827;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.18);
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
-}
-@media (prefers-color-scheme: light) {
-  [data-theme="system"] {
-    /* Soft comfortable slate when OS prefers light (no glare) */
-    --bg-base: #181d27;
-    --bg-surface: #222938;
-    --bg-surface-elevated: #2c364a;
-    --border-subtle: rgba(255, 255, 255, 0.10);
-    --border-hover: rgba(255, 255, 255, 0.22);
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-  }
-}
-
-/* Accent palettes — flip --accent so buttons/rings/chips follow the pick */
-[data-accent="purple"]   { --accent: #a855f7; --accent-hover: #9333ea; --accent-subtle: rgba(168, 85, 247, 0.14); }
-[data-accent="emerald"]  { --accent: #10b981; --accent-hover: #059669; --accent-subtle: rgba(16, 185, 129, 0.14); }
-[data-accent="amber"]    { --accent: #f59e0b; --accent-hover: #d97706; --accent-subtle: rgba(245, 158, 11, 0.14); }
-[data-accent="rose"]     { --accent: #f43f5e; --accent-hover: #e11d48; --accent-subtle: rgba(244, 63, 94, 0.14); }
-[data-accent="cyan"]     { --accent: #06b6d4; --accent-hover: #0891b2; --accent-subtle: rgba(6, 182, 212, 0.14); }
-[data-accent="custom"]   { --accent: #ec4899; --accent-hover: #db2777; --accent-subtle: rgba(236, 72, 153, 0.14); }
-
-/* Density — scale the OS spacing/padding rhythm */
-[data-density="compact"]     { --density-gap: 0.7; --density-pad: 0.8; }
-[data-density="spacious"]    { --density-gap: 1.25; --density-pad: 1.3; }
-[data-density="compact"]    .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
-[data-density="spacious"]   .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
-
-/* Light theme: keep the fixed-slate shells readable (semantic overrides) */
-[data-theme="light"] body { background: var(--bg-base); color: var(--text-primary); }
-[data-theme="light"] .app-background { background-color: var(--bg-base); }
-[data-theme="light"] .clean-card,
-[data-theme="light"] .glass-panel { background: var(--bg-surface); border-color: var(--border-subtle); }
-[data-theme="light"] .clean-input { background: #e3e7ef; color: var(--text-primary); border-color: var(--border-subtle); }
-[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(20, 26, 38, 0.30); }
-
-/* Font-scale smoothing: rem scaling w/o layout jarring */
-html { scroll-behavior: smooth; }
-
-/* ───────────────────────────────────────────────────────────────────────
- * Appearance compliance sweep (operator 08-26)
- * The app hardcodes Tailwind slate/white/blue utilities; these layers map
- * those stems onto the theme variables so the appearance controls
- * (light theme, accent, density, animation, background, ui style) actually
- * apply app-wide. Overrides win over utilities via attribute specificity.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-/* 1. APPEARANCE: ANIMATIONS -------------------------------------------------- */
-html[data-anim="none"] *, html[data-anim="none"] *::before, html[data-anim="none"] *::after,
-html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim="reduced"] *::after {
-  animation: none !important;
-}
-html[data-anim="none"] *, html[data-anim="none"] *::before, html[data-anim="none"] *::after {
-  transition: none !important;
-}
-html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim="reduced"] *::after {
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
-}
-
-/* 2. APPEARANCE: BACKGROUND STYLES ------------------------------------------ */
-.app-canvas { background-color: var(--bg-base); transition: background-color 0.3s ease; }
-html[data-bg="flat"] .app-canvas { background-image: none; }
-html[data-bg="aurora"] .app-canvas {
-  background-image:
-    radial-gradient(at 20% 0%, rgba(59,130,246,0.16) 0px, transparent 45%),
-    radial-gradient(at 80% 10%, rgba(168,85,247,0.13) 0px, transparent 50%),
-    radial-gradient(at 40% 80%, rgba(6,182,212,0.10) 0px, transparent 55%);
-}
-html[data-bg="mesh"] .app-canvas {
-  background-image:
-    linear-gradient(30deg, rgba(59,130,246,0.10) 0%, transparent 45%),
-    linear-gradient(120deg, rgba(16,185,129,0.08) 0%, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(99,102,241,0.12) 0px, transparent 60%);
-}
-html[data-bg="gradient"] .app-canvas {
-  background-image:
-    linear-gradient(135deg, rgba(109,90,230,0.14) 0%, transparent 45%),
-    linear-gradient(315deg, rgba(56,189,248,0.11) 0%, transparent 50%),
-    radial-gradient(at 70% 30%, rgba(139,92,246,0.10) 0px, transparent 55%);
-}
-html[data-bg="glass"] .app-canvas {
-  background-image:
-    linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 45%, rgba(255,255,255,0.05) 100%),
-    radial-gradient(at 15% 10%, rgba(139,92,246,0.07) 0px, transparent 45%);
-}
-html[data-bg="noise"] .app-canvas {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-}
-html[data-ui="minimal"] .clean-card,
-html[data-ui="minimal"] .glass-panel { box-shadow: none !important; }
-html[data-ui="minimal"] .shadow-lg,
-html[data-ui="minimal"] .shadow-xl,
-html[data-ui="minimal"] .shadow-2xl,
-html[data-ui="minimal"] .shadow-sm,
-html[data-ui="minimal"] .shadow-md { box-shadow: none !important; }
-html[data-ui="glass"] .clean-card,
-html[data-ui="glass"] .glass-panel,
-html[data-ui="blur"] .clean-card,
-html[data-ui="blur"] .glass-panel {
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  backdrop-filter: blur(18px) saturate(140%);
-}
-html[data-ui="dense"] .clean-card,
-html[data-ui="dense"] .glass-panel {
-  padding: 0.875rem !important;
-  border-radius: 0.875rem !important;
-}
-html[data-ui="dense"] .gap-4,
-html[data-ui="dense"] .gap-5,
-html[data-ui="dense"] .gap-6 { gap: 0.625rem !important; }
-html[data-ui="soft"] .clean-card,
-html[data-ui="soft"] .glass-panel {
-  border-radius: 1.25rem !important;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18) !important;
-}
-html[data-ui="terminal"] body {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
-  letter-spacing: -0.01em;
-}
-html[data-ui="terminal"] .clean-card,
-html[data-ui="terminal"] .glass-panel {
-  border-radius: 0.5rem !important;
-  border-color: rgba(134, 239, 172, 0.16) !important;
-}
-
-/* 3. APPEARANCE: ACCENT (blue stem -> selected accent) -------------------- */
-/* SOLID fills only — :not([class*="./"]) keeps translucent chips (/10,/20…)
-   in their default blue, otherwise every chip becomes a solid accent box. */
-html[data-accent] [class*="bg-blue-600"]:not([class*="bg-blue-600/"]) { background-color: var(--accent) !important; }
-html[data-accent] [class*="bg-blue-500"]:not([class*="bg-blue-500/"]) { background-color: var(--accent) !important; }
-html[data-accent] [class*="bg-blue-400"]:not([class*="bg-blue-400/"]) { background-color: var(--accent-hover) !important; }
-html[data-accent] [class*="bg-blue-500"]:not([class*="bg-blue-500/"]):hover { background-color: var(--accent-hover) !important; }
-html[data-accent] [class*="bg-blue-600"]:not([class*="bg-blue-600/"]):hover { background-color: var(--accent-hover) !important; }
-/* Translucent blue chips stay blue under the accent (subtle, not engulfing) */
-html[data-accent] [class*="bg-blue-500/"] { background-color: rgb(59 130 246 / var(--chip-alpha, 0.14)) !important; }
-html[data-accent] [class*="bg-blue-600/"] { background-color: rgb(59 130 246 / var(--chip-alpha, 0.16)) !important; }
-/* Accent stays SUBTLE (operator 08-26): only solid interactive fills move to
- * the accent — chips, translucent borders and body text keep their default
- * blue, otherwise a purple/amber accent "engulfs" the whole UI. */
-html[data-accent] [class*="from-blue-500"] { --tw-gradient-from: var(--accent) !important; }
-html[data-accent] [class*="to-blue-600"] { --tw-gradient-from: var(--accent-hover) !important; }
-html[data-accent] [class*="via-blue-500"] { --tw-gradient-from: var(--accent) !important; }
-html[data-accent] [class*="bg-blue-500/10"], html[data-accent] [class*="bg-blue-600/20"] { background-color: var(--accent-subtle) !important; }
-html[data-accent] [class*="border-blue-500/30"], html[data-accent] [class*="border-blue-600/25"], html[data-accent] [class*="border-blue-500/20"] { border-color: var(--accent-subtle) !important; }
-
-/* Accent text ON solid accent fills must stay white (operator 08-26) */
-html[data-accent] [class*="bg-blue-500"][class*="text-blue-200"],
-html[data-accent] [class*="bg-blue-500"][class*="text-blue-300"],
-html[data-accent] [class*="bg-blue-600"][class*="text-blue-200"],
-html[data-accent] [class*="bg-blue-600"][class*="text-blue-300"],
-html[data-accent] [class*="bg-emerald-500"][class*="text-emerald-200"],
-html[data-accent] [class*="bg-emerald-600"][class*="text-emerald-300"],
-html[data-accent] [class*="bg-rose-500"][class*="text-rose-200"],
-html[data-accent] [class*="bg-rose-600"][class*="text-rose-300"],
-html[data-accent] [class*="bg-purple-500"][class*="text-purple-200"],
-html[data-accent] [class*="bg-purple-600"][class*="text-purple-300"] {
-  color: #ffffff !important;
-}
-/* 4. APPEARANCE: THEME VAR HARMONIZATION -------------------------------- */
-html[data-theme="light"] .clean-input { background-color: var(--bg-surface-elevated); color: var(--text-primary); }
-
-/* 5. APPEARANCE: DENSITY (common spacing stems scaled) ------------------- */
-html[data-density="compact"] .gap-1\.5 { gap: calc(0.375rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-1\.5 { gap: calc(0.375rem * var(--density-gap)); }
-html[data-density="compact"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-2 { gap: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .gap-3 { gap: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-3 { gap: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .gap-4 { gap: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-4 { gap: calc(1rem * var(--density-gap)); }
-html[data-density="compact"] .gap-5 { gap: calc(1.25rem * var(--density-gap)); }
-html[data-density="spacious"] .gap-5 { gap: calc(1.25rem * var(--density-gap)); }
-html[data-density="compact"] .p-1 { padding: calc(0.25rem * var(--density-gap)); }
-html[data-density="spacious"] .p-1 { padding: calc(0.25rem * var(--density-gap)); }
-html[data-density="compact"] .p-2 { padding: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .p-2 { padding: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .p-3 { padding: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .p-3 { padding: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .p-4 { padding: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .p-4 { padding: calc(1rem * var(--density-gap)); }
-html[data-density="compact"] .p-6 { padding: calc(1.5rem * var(--density-gap)); }
-html[data-density="spacious"] .p-6 { padding: calc(1.5rem * var(--density-gap)); }
-html[data-density="compact"] .px-2 { padding-left: calc(0.5rem * var(--density-gap)); padding-right: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .px-2 { padding-left: calc(0.5rem * var(--density-gap)); padding-right: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .px-3 { padding-left: calc(0.75rem * var(--density-gap)); padding-right: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .px-3\.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
-html[data-density="spacious"] .px-3\.5 { padding-left: calc(0.875rem * var(--density-gap)); padding-right: calc(0.875rem * var(--density-gap)); }
-html[data-density="compact"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .px-4 { padding-left: calc(1rem * var(--density-gap)); padding-right: calc(1rem * var(--density-gap)); }
-html[data-density="compact"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
-html[data-density="spacious"] .py-1 { padding-top: calc(0.25rem * var(--density-gap)); padding-bottom: calc(0.25rem * var(--density-gap)); }
-html[data-density="compact"] .py-1\.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
-html[data-density="spacious"] .py-1\.5 { padding-top: calc(0.375rem * var(--density-gap)); padding-bottom: calc(0.375rem * var(--density-gap)); }
-html[data-density="compact"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .py-2 { padding-top: calc(0.5rem * var(--density-gap)); padding-bottom: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .py-2\.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
-html[data-density="spacious"] .py-2\.5 { padding-top: calc(0.625rem * var(--density-gap)); padding-bottom: calc(0.625rem * var(--density-gap)); }
-html[data-density="compact"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .py-3 { padding-top: calc(0.75rem * var(--density-gap)); padding-bottom: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1rem * var(--density-gap)); }
-html[data-density="compact"] .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.25rem * var(--density-gap)); }
-html[data-density="spacious"] .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.25rem * var(--density-gap)); }
-html[data-density="compact"] .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.5rem * var(--density-gap)); }
-html[data-density="spacious"] .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(1.5rem * var(--density-gap)); }
-html[data-density="compact"] .mt-2 { margin-top: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .mt-2 { margin-top: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .mt-3 { margin-top: calc(0.75rem * var(--density-gap)); }
-html[data-density="spacious"] .mt-3 { margin-top: calc(0.75rem * var(--density-gap)); }
-html[data-density="compact"] .mt-4 { margin-top: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .mt-4 { margin-top: calc(1rem * var(--density-gap)); }
-html[data-density="compact"] .mb-2 { margin-bottom: calc(0.5rem * var(--density-gap)); }
-html[data-density="spacious"] .mb-2 { margin-bottom: calc(0.5rem * var(--density-gap)); }
-html[data-density="compact"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
-html[data-density="spacious"] .mb-4 { margin-bottom: calc(1rem * var(--density-gap)); }
-
-/* Cookie notice clearance (08-28, visual polish): the fixed consent bar must
-   never sit over the footer or bury primary actions at the page bottom.
-   CookieBanner.jsx toggles this class on <body> while the bar is visible
-   (dropped as soon as the user accepts/rejects) and the pad reserves just
-   enough scroll room: taller on mobile where the bar stacks, plus room for
-   the sticky bottom nav (bottom-16 clearance from it). */
-body.cookie-banner-visible { padding-bottom: 9rem; }
-@media (min-width: 768px) {
-  body.cookie-banner-visible { padding-bottom: 6.5rem; }
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * Accessibility (operator 08-26) — wired to settings.accessibility via
- * applyAccessibility(). Without these, the toggles did nothing.
- * ──────────────────────────────────────────────────────────────────────────── */
-html[data-motion="reduced"] *,
-html[data-motion="reduced"] *::before,
-html[data-motion="reduced"] *::after {
-  animation: none !important;
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
-}
-html[data-textscale="large"] { font-size: 18.4px; }
-html[data-contrast="high"] {
-  --text-primary: #050505;
-  --text-muted: #373737;
-  --text-secondary: #111111;
-  --border-subtle: rgba(5, 5, 5, 0.55);
-  --accent: #0b53c2;
-}
-html[data-contrast="high"][data-theme="dark"],
-html[data-contrast="high"][data-theme="midnight"],
-html[data-contrast="high"][data-theme="graphite"],
-html[data-contrast="high"][data-theme="oled"] {
-  --text-primary: #ffffff;
-  --text-muted: #d7dbe2;
-  --text-secondary: #f5f7fa;
-  --border-subtle: rgba(255, 255, 255, 0.55);
-  --accent: #4da3ff;
-}
-html[data-reading="dyslexia"] body,
-html[data-reading="dyslexia"] .app-canvas {
-  letter-spacing: 0.045em;
-  word-spacing: 0.14em;
-  line-height: 1.9;
-}
-html[data-reading="dyslexia"] * { line-height: 1.75; }
-html[data-screenreader="on"] :focus-visible {
-  outline: 3px solid var(--accent) !important;
-  outline-offset: 2px;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   AURORA DESIGN SYSTEM (overhaul 08-28) — deep-space glass language.
-   Rules: use tokens, never hardcode colors; glow is a signature, not a
-   confetti — headers and primary CTAs only. All appearance-engine layers
-   above still win via attribute specificity.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* Aurora orbs on the root canvas when no explicit background pick is stored */
-html:not([data-bg]) .app-canvas {
-  background-image:
-    radial-gradient(ellipse 55% 45% at 12% -5%, rgba(139, 92, 246, 0.14) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 40% at 88% 8%, rgba(34, 211, 238, 0.09) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 50% at 50% 112%, rgba(99, 102, 241, 0.11) 0%, transparent 62%);
-}
-
-/* Slow aurora drift for decorative orbs (always respects data-anim/motion:
-   those layers kill animation with !important above) */
-@keyframes aurora-drift {
-  0%, 100% { transform: translate3d(-3%, -2%, 0) scale(1); }
-  50%      { transform: translate3d(3%, 2%, 0) scale(1.06); }
-}
-.animate-aurora-drift { animation: aurora-drift 26s ease-in-out infinite; }
-
-/* fadeIn — referenced app-wide (was a dead utility with no definition) */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.animate-fadeIn { animation: fadeIn 0.3s ease-out both; }
-
-/* slideUp — permission bottom sheet on mobile (09-01, Bob's Stitch design) */
-@keyframes slideUp {
-  from { transform: translate3d(0, 100%, 0); }
-  to   { transform: translate3d(0, 0, 0); }
-}
-.animate-slideUp { animation: slideUp 0.3s ease-out both; }
-
-/* glassy-navy — permission bottom-sheet surface (09-01, Bob's Stitch design:
-   rgba(11,31,42,0.85) + 12px blur, the sheet's "glass" over the chat). */
-.glassy-navy {
-  background-color: rgba(11, 31, 42, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* focus-glow — the Stitch permission design's teal-glow-focus, on the app's
-   semantic green (permission composer/instruction fields). */
-.focus-glow:focus-within {
-  box-shadow: 0 0 15px rgba(124, 227, 139, 0.15);
-  border-color: #7ce38b;
-}
-
-/* custom-scrollbar — thin overlay scrollbar for modal interiors */
-.custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
-
-/* view-enter — main-column view transition (08-29).
-   Replaces the AnimatePresence + motion.div wrapper in App.jsx: that one
-   decorative fade was the only import pinning `motion` (140 KB) into the
-   entry chunk. React remounts on key change, which replays this animation.
-   Matches the old timing exactly (180ms, ease-out, 10px rise). The global
-   prefers-reduced-motion rule above already neutralizes it. */
-@keyframes view-enter {
-  from { opacity: 0; transform: translate3d(0, 10px, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-.view-enter { animation: view-enter 0.18s ease-out both; }
-
-/* Gradient text — headings/logo wordmarks only */
-.text-aurora {
-  background: var(--accent-mix);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* Accent glow — primary CTAs, active nav items */
-.glow-accent {
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 4px 24px rgba(139, 92, 246, 0.28);
-}
-
-/* Stronger glass for modals/drawers (solid enough to read over orbs) */
-.surface-glass-strong {
-  background: rgba(13, 15, 32, 0.86);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid var(--border-subtle);
-}
-
-/* Aurora chip — status/feature pills */
-.aurora-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--accent-subtle);
-  border: 1px solid rgba(139, 92, 246, 0.28);
-}
-
-/* Scrollbar — violet-tinted on dark default */
-::-webkit-scrollbar-thumb {
-  background: rgba(167, 139, 250, 0.30);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(167, 139, 250, 0.45);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   MOBILE HARDENING (A9, 08-28) — global layer. Additive & scoped:
-   (1) safe-area tokens + utilities (viewport-fit=cover in index.html),
-   (2) iOS focus-zoom guard: form controls never below 16px on phones,
-   (3) touch-action + safe-area insets for the two fixed chrome elements
-       (mobile bottom nav / sticky topbar — attribute-scoped, no component
-       edits needed, and they compose with any component-side fix),
-   (4) print: minimal ink pass (no print styles existed; the dark-only UI
-       otherwise prints white text on white paper).
-   NONE of these rules target a component's own container — the only
-   property forced here is font-size on form controls (mobile only, and any
-   component-side override lands at the same >=16px outcome, so there is
-   nothing to fight).
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* Safe-area tokens — with viewport-fit=cover these are non-zero on notched
-   iPhones; without cover (or on desktop) they resolve to 0px and are no-ops. */
-:root {
+  /* ── Safe Areas ───────────────────────────────────────────────────────── */
   --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-}
+  --safe-right: env(safe-area-inset-right, 0px);
 
-/* Safe-area utilities for fixed/full-bleed elements. These REPLACE the
-   corresponding padding side, so use them with the same padding that side
-   already has (e.g. py-2 + .pt-safe → padding-top becomes the inset; if the
-   element also needs its base padding, compose in a small local rule). */
-.pt-safe { padding-top: var(--safe-top); }
-.pr-safe { padding-right: var(--safe-right); }
-.pb-safe { padding-bottom: var(--safe-bottom); }
-.pl-safe { padding-left: var(--safe-left); }
-
-/* iOS Safari auto-zooms the page when a form control under 16px receives
-   focus — a top mobile complaint. Ensure every input/select/textarea is
-   >=16px on phones (checkboxes/radios included: focusing them zooms too).
-   max(16px, 1em) never shrinks a control that already renders larger (most
-   inherit the 17.6px root), and 1em resolves against the PARENT so text-sm/
-   text-xs contexts are lifted to exactly 16px — no visual rhythm change on
-   desktop, none beyond 16px on phones.
-   !important + the :not([type]) class-level specificity are required to beat
-   the readability pass's rem floors and the .text-xs/.text-sm utilities
-   (.text-[11px]/etc. are !important too and compute to 15px at the 16px
-   root the appearance engine sets post-login — still under the threshold).
-   The height clause catches landscape phones (320-440px tall) which the
-   640px width clause misses on landscape iPhones. */
-@media (max-width: 640px), (max-height: 500px) {
-  :is(input, select, textarea):not([type="range"]):not([type="hidden"]) {
-    font-size: max(16px, 1em) !important;
-  }
-}
-
-/* ALL touch devices (no width gate — tablets/landscape included): interactive
-   elements react on the first tap, killing the 300ms double-tap-zoom stall,
-   while pinch zoom stays available (touch-action: manipulation only removes
-   the double-tap gesture, never pinch). Range inputs excluded — they need
-   pan gestures on their track. Pointer-only input is unaffected. */
-button, a, select, textarea, [role="button"], input:not([type="range"]) {
-  touch-action: manipulation;
-}
-
-/* Mobile bottom nav (AppShell.jsx: `md:hidden fixed bottom-0 ... px-2 py-1.5`)
-   sits on top of the iPhone home indicator once viewport-fit=cover is set.
-   Attribute-scoped to that exact landmark; py-1.5 (0.375rem) is retained
-   and the inset is ADDED, so the bar grows instead of losing its padding. */
-nav[aria-label="Mobile Bottom Navigation"] {
-  padding-bottom: calc(0.375rem + var(--safe-bottom));
-}
-
-/* Sticky app topbar (AppShell.jsx: `sticky top-0 ... h-14`): with
-   viewport-fit=cover the content column starts under the status bar/notch.
-   Adding the inset above the (unchanged) h-14 row pushes it clear. */
-header.sticky {
-  padding-top: var(--safe-top);
-}
-
-/* Print — dark-only UI previously printed light text on white paper.
-   Minimal ink pass, fully scoped to @media print. */
-@media print {
-  html { font-size: 100%; }
-  body { background: #ffffff !important; }
-  body, body * { color: #16181d !important; }
-  .app-background, .app-canvas { background-image: none !important; }
-  .clean-card, .glass-panel {
-    background: #ffffff !important;
-    border-color: #c9ccd4 !important;
-    box-shadow: none !important;
-  }
-  nav[aria-label="Mobile Bottom Navigation"] { display: none !important; }
-  ::-webkit-scrollbar { display: none; }
-}
-/* A9 end-marker 08-28: mobile hardening section complete (safe-area tokens,
-   iOS focus-zoom guard, global touch-action, fixed-chrome insets, print). */
-
-/* ═════════════════════════════════════════════════════════════════════════════
- * LAYER SYSTEM (design overhaul 2026-08-30)
- *
- * The problem this fixes: the app had exactly ONE surface class (.clean-card,
- * aliased by .glass-panel) and used it for page headers, section wrappers,
- * tab strips and inner controls alike. Every element carried identical weight,
- * so no card knew what it was and the whole app read as a stack of identical
- * dark boxes. Four ranks, each visually distinct:
- *
- *   1  .page-head   page title      — NOT a card. Sits on the canvas.
- *   2  .panel       section surface — the only RAISED rank (rim + penumbra).
- *   3  .group       inner group     — INSET: darker than its parent, no shadow.
- *   4  .segmented / .chip / inputs  — controls.
- *
- * Rank 3 is the important one: an inner group must be *darker* than the panel
- * holding it. That contrast inversion is what makes a panel read as a
- * container rather than as another sibling box.
- * ═════════════════════════════════════════════════════════════════════════════ */
-
-/* ── RANK 1 · PAGE HEADER ──────────────────────────────────────────────────
-   Not a card: the view's name sits directly on the canvas over an aurora
-   bloom, closed by a hairline. Kills the "three stacked titles" problem —
-   the view name appears once, here, and never again in the body. */
-.page-head {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-1) 0 var(--space-4);
-  margin-bottom: var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.page-head > * { position: relative; z-index: 1; }
-.page-head::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  left: -8%;
-  top: -120%;
-  width: min(680px, 78%);
-  height: 320%;
-  background:
-    radial-gradient(ellipse 50% 45% at 18% 62%, var(--accent-subtle) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 38% at 52% 58%, rgba(34, 211, 238, 0.09) 0%, transparent 72%);
-  pointer-events: none;
-}
-.page-head__title {
-  font-size: var(--fs-page);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-.page-head__sub {
-  margin-top: 3px;
-  font-size: var(--fs-meta);
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-/* Icon plate — small, quiet; it labels the header, it isn't the header. */
-.page-head__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-  color: var(--accent);
-  background: linear-gradient(160deg, var(--accent-subtle), rgba(34, 211, 238, 0.06));
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  box-shadow: var(--rim);
-}
-@media (min-width: 640px) {
-  .page-head__title { font-size: 1.75rem; }
-}
-
-/* ── RANK 2 · SECTION PANEL ────────────────────────────────────────────────
-   The only raised rank. Gradient fill so the surface has a light direction
-   instead of reading as flat fog. */
-.panel,
-.clean-card,
-.glass-panel {
-  position: relative;
-  background:
-    linear-gradient(168deg, rgba(255, 255, 255, 0.035) 0%, transparent 46%),
-    var(--bg-surface);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--elev-1);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-.panel:hover,
-.clean-card:hover,
-.glass-panel:hover {
-  border-color: var(--border-hover);
-  box-shadow: var(--elev-2);
-}
-/* Header strip inside a panel — separated by its own rule, so the panel's
-   title never competes with the page title. */
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.panel-head__title {
-  font-size: var(--fs-section);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-.panel-body { padding: var(--space-4); }
-
-/* Section label — the quiet uppercase anchor above a group of panels. */
-.section-label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.section-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--border-subtle), transparent);
-}
-
-/* ── RANK 3 · INNER GROUP (INSET) ──────────────────────────────────────────
-   Darker than its parent, hairline border, NO shadow. This is the rank the
-   app was missing entirely. */
-.group {
-  background: var(--bg-inset);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-md);
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.30);
-}
-.group-strong {
-  background: var(--bg-inset-strong);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-md);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.36);
-}
-.group-pad { padding: var(--space-3); }
-
-/* ── RANK 4 · CONTROLS ─────────────────────────────────────────────────────
-   Segmented control: a recessed track with ONE raised thumb. Replaces the
-   full-width card that tab strips used to sit in. */
-.segmented {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: var(--bg-inset-strong);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: calc(var(--radius-md) + 3px);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.38);
-}
-.segmented--fill { display: flex; width: 100%; }
-.seg-item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 7px var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: var(--fs-small);
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-.seg-item:hover { color: var(--text-secondary); background: rgba(255, 255, 255, 0.04); }
-.seg-item[aria-selected="true"],
-.seg-item[data-active="true"] {
-  color: var(--text-primary);
-  font-weight: 600;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  box-shadow:
-    var(--rim),
-    0 1px 2px rgba(0, 0, 0, 0.30),
-    0 0 18px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-.seg-count {
-  padding: 1px 6px;
-  border-radius: 9999px;
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.08);
-}
-.seg-item[aria-selected="true"] .seg-count,
-.seg-item[data-active="true"] .seg-count {
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-/* Status chips — one shape, semantic colour. Always paired with a label or
-   icon in markup so state is never carried by colour alone. */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 9999px;
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  line-height: 1.35;
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-.chip-neutral { color: var(--text-secondary); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.10); }
-.chip-accent  { color: #cbb6ff; background: var(--accent-subtle); border-color: color-mix(in srgb, var(--accent) 34%, transparent); }
-.chip-ok      { color: #6ee7b7; background: rgba(16,185,129,0.14);  border-color: rgba(16,185,129,0.34); }
-.chip-warn    { color: #fcd34d; background: rgba(245,158,11,0.14);  border-color: rgba(245,158,11,0.34); }
-.chip-danger  { color: #fda4af; background: rgba(244,63,94,0.14);   border-color: rgba(244,63,94,0.34); }
-
-/* ── DATA TABLE ────────────────────────────────────────────────────────────
-   Admin tables were raw headers on a blank card. A real data surface: quiet
-   tracked header, hairline row separation, mono numerals, right-aligned
-   actions, and a row hover that reads without moving anything. */
-.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
-.data-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--bg-inset-strong);
-  border-bottom: 1px solid var(--border-subtle);
-  backdrop-filter: blur(8px);
-}
-.data-table tbody td {
-  padding: var(--space-3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-  /* rows whose action cell stacks controls are far taller than the label cells;
-     middle-aligning those left cells reads as a dead gap (08-30). */
-  vertical-align: top;
-}
-.data-table tbody tr:last-child td { border-bottom: 0; }
-.data-table tbody tr { transition: background 0.15s ease; }
-.data-table tbody tr:hover td { background: rgba(255, 255, 255, 0.035); }
-.data-table .num {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-.data-table .cell-actions { text-align: right; white-space: nowrap; }
-
-/* ── STAT TILE ─────────────────────────────────────────────────────────────
-   Value leads at 1.5x the base UI text; the label is quiet above it. */
-.stat-tile {
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-inset);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-md);
-}
-.stat-tile__label {
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.stat-tile__value {
-  margin-top: 3px;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-/* ── SIDEBAR NAV ───────────────────────────────────────────────────────────
-   Group names were rendered as bare hairlines with no label, so the sidebar
-   was a flat list of twelve items. Labels restored; the active item gets an
-   accent bar + glow instead of only a tint. */
-.nav-group-label {
-  padding: 0 var(--space-2);
-  font-size: var(--fs-micro);
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--text-muted) 78%, transparent);
-}
-.nav-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: var(--fs-small);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-.nav-item:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
-.nav-item[aria-current="page"] {
-  color: var(--text-primary);
-  font-weight: 600;
-  background: linear-gradient(90deg, var(--accent-subtle), transparent 88%);
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-/* Accent bar on the active item — the strongest single cue in the sidebar. */
-.nav-item[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  border-radius: 9999px;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-}
-
-/* ── EMPTY STATE ───────────────────────────────────────────────────────────
-   Was either a shouting full-height box or a bare table header on a blank
-   card. Compact, and always names the next action. */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-5) var(--space-4);
-  text-align: center;
-  color: var(--text-muted);
-  font-size: var(--fs-small);
-}
-.empty-state__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  background: var(--bg-inset);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* Hover lift only where a pointer can actually hover, and never enough to
-   shift a neighbour. */
-@media (hover: hover) and (pointer: fine) {
-  .panel-interactive:hover { transform: translateY(-1px); box-shadow: var(--elev-3); }
-}
-
-/* The appearance engine's "minimal" UI style flattens shadows — keep the
-   inset ranks legible when it does, or groups vanish into their panels. */
-html[data-ui="minimal"] .group,
-html[data-ui="minimal"] .group-strong,
-html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
-
-/* Aliases for chip names already used in markup (AdminAdvancedDashboard,
-   AdminPanels, AnonymousLanding, AssignmentCardDashboard) that had no CSS
-   behind them — semantic class names were shipped without a definition, so
-   those chips rendered as bare text. */
-.chip-emerald { color: #6ee7b7; background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.34); }
-.chip-amber   { color: #fcd34d; background: rgba(245,158,11,0.14); border: 1px solid rgba(245,158,11,0.34); }
-.chip-emerald, .chip-amber {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 9px; border-radius: 9999px;
-  font-size: var(--fs-micro); font-weight: 600; line-height: 1.35; white-space: nowrap;
-}
-
-/* Compact empty state — a row, not a column. An empty panel must not reserve
-   a screen-height box for one sentence. */
-.empty-state--compact {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  text-align: left;
-}
-.empty-state--compact .empty-state__icon { width: 30px; height: 30px; flex-shrink: 0; }
-.empty-state--compact p { margin: 0; }
-
-/* ── Landing atmosphere ──────────────────────────────────────────────────────
- * Brand lighting, not a hero gradient. better-design's review rules flag the
- * "glass panels over a radial-glow background" stack as a generated-page tell,
- * so this is a single accent spill hugging the TOP EDGE that dies out by ~560px
- * — the same gesture as .page-head::before, so signed-out and signed-in read as
- * one product instead of two. No centred blob behind the headline. */
-.landing-atmos { position: relative; isolation: isolate; }
-.landing-atmos::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 560px;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(120% 100% at 16% -12%, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 62%),
-    radial-gradient(90% 84% at 90% -20%, color-mix(in srgb, var(--accent-2) 10%, transparent) 0%, transparent 58%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   STITCH DESIGN TOKENS (09-01, Bob) · "Premium Co-pilot" scheme
-   Source: stitch-design/helpotron_dashboard.html tailwind-config — M3-style
-   teal/indigo scheme. The app's DEFAULT theme is dark (Aurora :root), so the
-   dark sheet lives on :root here; [data-theme="light"] carries the design
-   sheet. Stitch shipped light values only — dark roles are derived on the
-   same hues with M3 rules, matching the app's deep-space family. Stitch
-   iteration 2 (STITCH_IMPROVE_PROMPT.md) returns the official dark sheet;
-   swapping this block is then a pure var change.
-   Roles are Tailwind-4 @theme tokens → the design's classNames
-   (bg-surface-container-lowest, text-on-surface, font-label-caps, …) compile
-   verbatim. Type scale + spacing are REM so applyFontScale (root font-size,
-   default 16px = design px exactly) scales the new UI with the user setting.
-   ─────────────────────────────────────────────────────────────────────────── */
-:root {
-  --st-background: #0e1113;
-  --st-surface: #1a1c1e;
-  --st-surface-dim: #111315;
-  --st-surface-bright: #36393e;
-  --st-surface-container-lowest: #0b0e0f;
-  --st-surface-container-low: #1d2024;
-  --st-surface-container: #212428;
-  --st-surface-container-high: #2b2f33;
-  --st-surface-container-highest: #363a3f;
-  --st-on-surface: #e2e2e6;
-  --st-on-surface-variant: #c4c7cf;
-  --st-outline: #8e9199;
-  --st-outline-variant: #44474e;
-  --st-primary: #59d8c9;
-  --st-on-primary: #003732;
-  --st-primary-container: #005049;
-  --st-on-primary-container: #76f5e5;
-  --st-primary-fixed: #76f5e5;
-  --st-on-primary-fixed: #00201d;
-  --st-primary-fixed-dim: #59d8c9;
-  --st-on-primary-fixed-variant: #005049;
-  --st-secondary: #bfc2ff;
-  --st-on-secondary: #1518a6;
-  --st-secondary-container: #2d2fbc;
-  --st-on-secondary-container: #e0e0ff;
-  --st-secondary-fixed: #e0e0ff;
-  --st-on-secondary-fixed: #00006e;
-  --st-secondary-fixed-dim: #bfc2ff;
-  --st-on-secondary-fixed-variant: #2d2fbc;
-  --st-tertiary: #ffb2be;
-  --st-on-tertiary: #660021;
-  --st-tertiary-container: #660021;
-  --st-on-tertiary-container: #ffdad9;
-  --st-tertiary-fixed: #ffdad9;
-  --st-on-tertiary-fixed: #3b0010;
-  --st-tertiary-fixed-dim: #ffb2be;
-  --st-on-tertiary-fixed-variant: #660021;
-  --st-error: #ffb4ab;
-  --st-on-error: #690005;
-  --st-error-container: #93000a;
-  --st-on-error-container: #ffdad6;
-  --st-on-background: #e2e2e6;
-  --st-surface-tint: #59d8c9;
-  --st-inverse-surface: #e2e2e6;
-  --st-inverse-on-surface: #2f3033;
-  --st-inverse-primary: #006a61;
-
-  /* Semantic (status) palette */
-  --st-sem-amber: #ffc46b;  --st-on-sem-amber: #4a2c00;
-  --st-sem-blue: #9cc7ff;   --st-on-sem-blue: #12365f;
-  --st-sem-green: #7ce38b;  --st-on-sem-green: #103d19;
-  --st-sem-cyan: #8fe0f5;   --st-on-sem-cyan: #0b3c4d;
-  --st-sem-indigo: #bfc2ff; --st-on-sem-indigo: #25289b;
-  --st-sem-deepgreen: #5edf8a; --st-on-sem-deepgreen: #0c3a1d;
-  --st-sem-gray: #c4c7cf;   --st-on-sem-gray: #33363b;
-  --st-sem-slate: #a8b3bd;  --st-on-sem-slate: #2c343c;
-
-  /* Legacy aliases for unported views (TASK 4) */
+  /* ── Legacy Aliases (backward compat for unported components) ──────── */
   --bg-base: var(--st-background);
-  --bg-surface: var(--st-surface);
+  --bg-surface: var(--glass-fill);
   --bg-surface-elevated: var(--st-surface-container);
-  --border-subtle: color-mix(in srgb, var(--st-outline-variant) 60%, transparent);
-  --border-hover: var(--st-outline-variant);
+  --border-subtle: var(--glass-border);
+  --border-hover: var(--glass-border-hover);
   --text-primary: var(--st-on-surface);
   --text-secondary: var(--st-on-surface-variant);
   --text-muted: var(--st-outline);
@@ -1501,73 +152,124 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --accent-hover: var(--st-on-primary-container);
   --accent-subtle: color-mix(in srgb, var(--st-primary) 14%, transparent);
   --accent-2: var(--st-secondary);
+  --accent-mix: linear-gradient(135deg, var(--st-primary) 0%, var(--st-secondary) 100%);
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --bg-inset: color-mix(in srgb, var(--st-surface-container-lowest) 70%, transparent);
+  --bg-inset-strong: color-mix(in srgb, var(--st-surface-container-lowest) 85%, transparent);
+  --color-primary: var(--st-primary);
+  --color-primary-hover: var(--st-primary-fixed-dim);
+  --color-primary-active: var(--st-primary-container);
+  --color-primary-foreground: var(--st-on-primary);
+  --color-focus-ring: var(--st-primary-fixed-dim);
+  --color-surface: var(--st-surface-container);
+  --color-surface-raised: var(--st-surface-container-high);
+  --color-border-soft: var(--st-outline-variant);
+  --color-text-primary: var(--st-on-surface);
+  --color-text-muted: var(--st-on-surface-variant);
+
+  /* ── Spacing Scale (legacy) ───────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ── Type Scale (legacy) ──────────────────────────────────────────────── */
+  --fs-micro:   0.75rem;
+  --fs-meta:    0.875rem;
+  --fs-small:   0.875rem;
+  --fs-body:    1rem;
+  --fs-section: 1.25rem;
+  --fs-page:    2rem;
 }
 
-/* Official Stitch Light Sheet (DESIGN.md) */
+/* ── §2  LIGHT THEME ──────────────────────────────────────────────────────── */
 [data-theme="light"] {
-  --st-background: #f8f9ff;
-  --st-surface: #f8f9ff;
-  --st-surface-dim: #cbdbf5;
-  --st-surface-bright: #f8f9ff;
-  --st-surface-container-lowest: #ffffff;
-  --st-surface-container-low: #eff4ff;
-  --st-surface-container: #e5eeff;
-  --st-surface-container-high: #dce9ff;
-  --st-surface-container-highest: #d3e4fe;
-  --st-on-surface: #0b1c30;
-  --st-on-surface-variant: #3d4947;
-  --st-outline: #6d7a77;
-  --st-outline-variant: #bcc9c6;
-  --st-surface-tint: #006a61;
-  --st-primary: #00685f;
-  --st-on-primary: #ffffff;
-  --st-primary-container: #008378;
-  --st-on-primary-container: #f4fffc;
-  --st-inverse-primary: #6bd8cb;
-  --st-secondary: #4648d4;
-  --st-on-secondary: #ffffff;
-  --st-secondary-container: #6063ee;
-  --st-on-secondary-container: #fffbff;
-  --st-tertiary: #924628;
-  --st-on-tertiary: #ffffff;
-  --st-tertiary-container: #b05e3d;
-  --st-on-tertiary-container: #fffbff;
-  --st-error: #ba1a1a;
-  --st-on-error: #ffffff;
-  --st-error-container: #ffdad6;
-  --st-on-error-container: #93000a;
-  --st-primary-fixed: #89f5e7;
-  --st-primary-fixed-dim: #6bd8cb;
-  --st-on-primary-fixed: #00201d;
-  --st-on-primary-fixed-variant: #005049;
-  --st-secondary-fixed: #e1e0ff;
-  --st-secondary-fixed-dim: #c0c1ff;
-  --st-on-secondary-fixed: #07006c;
-  --st-on-secondary-fixed-variant: #2f2ebe;
-  --st-tertiary-fixed: #ffdbce;
-  --st-tertiary-fixed-dim: #ffb59a;
-  --st-on-tertiary-fixed: #370e00;
-  --st-on-tertiary-fixed-variant: #773215;
-  --st-on-background: #0b1c30;
-  --st-inverse-surface: #213145;
-  --st-inverse-on-surface: #eaf1ff;
+  color-scheme: light;
 
-  /* Semantic (status) palette */
-  --st-sem-amber: #a05c00;  --st-on-sem-amber: #ffc46b;
-  --st-sem-blue: #2f5f9e;   --st-on-sem-blue: #9cc7ff;
-  --st-sem-green: #1a7d3f;  --st-on-sem-green: #7ce38b;
-  --st-sem-cyan: #0c6e8c;   --st-on-sem-cyan: #8fe0f5;
-  --st-sem-indigo: #3a3db8; --st-on-sem-indigo: #bfc2ff;
-  --st-sem-deepgreen: #146b34; --st-on-sem-deepgreen: #5edf8a;
-  --st-sem-gray: #5a666e;   --st-on-sem-gray: #c4c7cf;
-  --st-sem-slate: #4c5861;  --st-on-sem-slate: #a8b3bd;
+  --st-background:                 #F8FAFB;
+  --st-surface:                    #F8FAFB;
+  --st-surface-dim:                #D8DADC;
+  --st-surface-bright:             #F8FAFB;
+  --st-surface-container-lowest:   #FFFFFF;
+  --st-surface-container-low:      #F2F4F5;
+  --st-surface-container:          #ECEEF0;
+  --st-surface-container-high:     #E6E8EA;
+  --st-surface-container-highest:  #E1E2E5;
+  --st-surface-variant:            #DFE3E2;
+  --st-surface-tint:               #006A61;
+  --st-on-surface:                 #191C1D;
+  --st-on-surface-variant:         #3F4948;
+  --st-on-background:              #191C1D;
+  --st-inverse-surface:            #2E3133;
+  --st-inverse-on-surface:         #EFF1F2;
+  --st-outline:                    #6F7978;
+  --st-outline-variant:            #BEC9C7;
+  --st-primary:                    #006A61;
+  --st-on-primary:                 #FFFFFF;
+  --st-primary-container:          #59D8C9;
+  --st-on-primary-container:       #00201D;
+  --st-inverse-primary:            #5BDACB;
+  --st-primary-fixed:              #7BF7E7;
+  --st-primary-fixed-dim:          #5BDACB;
+  --st-on-primary-fixed:           #00201D;
+  --st-on-primary-fixed-variant:   #005049;
+  --st-secondary:                  #4648D4;
+  --st-on-secondary:               #FFFFFF;
+  --st-secondary-container:        #6063EE;
+  --st-on-secondary-container:     #FFFBFF;
+  --st-secondary-fixed:            #E0E0FF;
+  --st-secondary-fixed-dim:        #BFC2FF;
+  --st-on-secondary-fixed:         #121548;
+  --st-on-secondary-fixed-variant: #3E4276;
+  --st-tertiary:                   #006A67;
+  --st-on-tertiary:                #FFFFFF;
+  --st-tertiary-container:         #7ED3CE;
+  --st-on-tertiary-container:      #00201F;
+  --st-tertiary-fixed:             #9CF1EC;
+  --st-tertiary-fixed-dim:         #80D5D0;
+  --st-on-tertiary-fixed:          #00201F;
+  --st-on-tertiary-fixed-variant:  #00504D;
+  --st-error:                      #BA1A1A;
+  --st-on-error:                   #FFFFFF;
+  --st-error-container:            #FFDAD6;
+  --st-on-error-container:         #410002;
 
-  /* Legacy aliases for unported views (TASK 4) */
+  /* Semantic (light) */
+  --st-sem-amber:      #8B5E00;   --st-on-sem-amber:     #FFF8E1;
+  --st-sem-blue:       #1D4ED8;   --st-on-sem-blue:      #EFF6FF;
+  --st-sem-green:      #047857;   --st-on-sem-green:     #ECFDF5;
+  --st-sem-cyan:       #0E7490;   --st-on-sem-cyan:      #ECFEFF;
+  --st-sem-indigo:     #4338CA;   --st-on-sem-indigo:    #EEF2FF;
+  --st-sem-deepgreen:  #047857;   --st-on-sem-deepgreen: #ECFDF5;
+  --st-sem-gray:       #4B5563;   --st-on-sem-gray:      #F9FAFB;
+  --st-sem-slate:      #475569;   --st-on-sem-slate:     #F8FAFC;
+
+  /* Chart (light) */
+  --chart-1: #006A61;
+  --chart-2: #4648D4;
+  --chart-3: #006A67;
+  --chart-4: #8B5E00;
+  --chart-5: #BA1A1A;
+
+  /* Glass formulation (light) */
+  --glass-fill: rgba(255, 255, 255, 0.85);
+  --glass-border: color-mix(in srgb, var(--st-outline-variant) 30%, transparent);
+  --glass-border-hover: color-mix(in srgb, var(--st-outline-variant) 60%, transparent);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --glass-glow-primary: rgba(0, 106, 97, 0.40);
+  --glass-glow-secondary: rgba(70, 72, 212, 0.30);
+
+  /* Legacy aliases (light) */
   --bg-base: var(--st-background);
-  --bg-surface: var(--st-surface);
+  --bg-surface: var(--glass-fill);
   --bg-surface-elevated: var(--st-surface-container);
-  --border-subtle: color-mix(in srgb, var(--st-outline-variant) 60%, transparent);
-  --border-hover: var(--st-outline-variant);
+  --border-subtle: var(--glass-border);
+  --border-hover: var(--glass-border-hover);
   --text-primary: var(--st-on-surface);
   --text-secondary: var(--st-on-surface-variant);
   --text-muted: var(--st-outline);
@@ -1575,10 +277,16 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --accent-hover: var(--st-primary-container);
   --accent-subtle: color-mix(in srgb, var(--st-primary) 14%, transparent);
   --accent-2: var(--st-secondary);
+  --color-primary: var(--st-primary);
+  --color-primary-foreground: var(--st-on-primary);
+  --color-focus-ring: var(--st-primary);
+  --color-text-primary: var(--st-on-surface);
+  --color-text-muted: var(--st-on-surface-variant);
 }
 
+/* ── §3  @theme inline — Tailwind v4 utility mapping ──────────────────────── */
 @theme inline {
-  /* colors — design role names; resolved per theme via the vars above */
+  /* Colors — design role names; resolved per theme via --st-* vars */
   --color-background: var(--st-background);
   --color-surface: var(--st-surface);
   --color-surface-bright: var(--st-surface-bright);
@@ -1588,6 +296,8 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --color-surface-container: var(--st-surface-container);
   --color-surface-container-high: var(--st-surface-container-high);
   --color-surface-container-highest: var(--st-surface-container-highest);
+  --color-surface-variant: var(--st-surface-variant);
+  --color-surface-tint: var(--st-surface-tint);
   --color-on-surface: var(--st-on-surface);
   --color-on-surface-variant: var(--st-on-surface-variant);
   --color-on-background: var(--st-on-background);
@@ -1601,6 +311,9 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --color-on-primary-fixed: var(--st-on-primary-fixed);
   --color-primary-fixed-dim: var(--st-primary-fixed-dim);
   --color-on-primary-fixed-variant: var(--st-on-primary-fixed-variant);
+  --color-inverse-surface: var(--st-inverse-surface);
+  --color-inverse-on-surface: var(--st-inverse-on-surface);
+  --color-inverse-primary: var(--st-inverse-primary);
   --color-secondary: var(--st-secondary);
   --color-on-secondary: var(--st-on-secondary);
   --color-secondary-container: var(--st-secondary-container);
@@ -1621,48 +334,63 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --color-on-error: var(--st-on-error);
   --color-error-container: var(--st-error-container);
   --color-on-error-container: var(--st-on-error-container);
-  --color-inverse-surface: var(--st-inverse-surface);
-  --color-inverse-on-surface: var(--st-inverse-on-surface);
-  --color-inverse-primary: var(--st-inverse-primary);
-  --color-surface-tint: var(--st-surface-tint);
 
-  /* semantic (status) palette — the sheets define the vars; this wires them
-     to utilities (text-sem-green, bg-sem-amber/15, …) like the M3 roles. */
-  --color-sem-amber: var(--st-sem-amber);     --color-on-sem-amber: var(--st-on-sem-amber);
-  --color-sem-blue: var(--st-sem-blue);       --color-on-sem-blue: var(--st-on-sem-blue);
-  --color-sem-green: var(--st-sem-green);     --color-on-sem-green: var(--st-on-sem-green);
-  --color-sem-cyan: var(--st-sem-cyan);       --color-on-sem-cyan: var(--st-on-sem-cyan);
-  --color-sem-indigo: var(--st-sem-indigo);   --color-on-sem-indigo: var(--st-on-sem-indigo);
+  /* Semantic status palette */
+  --color-sem-amber: var(--st-sem-amber);         --color-on-sem-amber: var(--st-on-sem-amber);
+  --color-sem-blue: var(--st-sem-blue);           --color-on-sem-blue: var(--st-on-sem-blue);
+  --color-sem-green: var(--st-sem-green);         --color-on-sem-green: var(--st-on-sem-green);
+  --color-sem-cyan: var(--st-sem-cyan);           --color-on-sem-cyan: var(--st-on-sem-cyan);
+  --color-sem-indigo: var(--st-sem-indigo);       --color-on-sem-indigo: var(--st-on-sem-indigo);
   --color-sem-deepgreen: var(--st-sem-deepgreen); --color-on-sem-deepgreen: var(--st-on-sem-deepgreen);
-  --color-sem-gray: var(--st-sem-gray);       --color-on-sem-gray: var(--st-on-sem-gray);
-  --color-sem-slate: var(--st-sem-slate);     --color-on-sem-slate: var(--st-on-sem-slate);
+  --color-sem-gray: var(--st-sem-gray);           --color-on-sem-gray: var(--st-on-sem-gray);
+  --color-sem-slate: var(--st-sem-slate);         --color-on-sem-slate: var(--st-on-sem-slate);
 
-  /* spacing — design grid (unit 4px); rem so root font-size scales it */
-  --spacing-container-padding: 1.5rem;   /* 24px */
-  --spacing-margin-mobile: 1rem;         /* 16px */
-  --spacing-margin-desktop: 2rem;        /* 32px */
-  --spacing-gutter: 1rem;                /* 16px */
-  /* step scale — Stitch design sheet (permission modal 09-01, Bob): the M3
-     xs/sm/md/lg/xl steps his screens use. Additive: no other view uses them. */
-  --spacing-xs: 0.25rem;                 /* 4px  */
-  --spacing-sm: 0.5rem;                  /* 8px  */
-  --spacing-md: 1rem;                    /* 16px */
-  --spacing-lg: 1.5rem;                  /* 24px */
-  --spacing-xl: 2rem;                    /* 32px */
+  /* Chart tokens */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-background: var(--chart-background);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-label: var(--chart-label);
+  --color-chart-scale-01: var(--chart-scale-01);
+  --color-chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-03: var(--chart-scale-03);
+  --color-chart-scale-04: var(--chart-scale-04);
+  --color-chart-scale-05: var(--chart-scale-05);
+  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
 
-  /* Named-width scale (09-01 bugfix, owner: empty states squeezed to 8px).
-     Tailwind v4.3.3 resolves width utilities namespace-first:
-     w-* = --width-* → --spacing-* → --container-*, and max-w-* the same
-     with --max-width-* first. The M3 spacing steps above define
-     --spacing-xs/sm/md/lg/xl, so `max-w-sm`, `max-w-md`, `max-w-alpha`
-     silently resolved to the SPACING values (0.5rem / 1rem …) instead of
-     the Tailwind default container sizes — this build shipped
-     `.max-w-sm{max-width:.5rem}` (8px!): the empty-state body column.
-     Pins below restore the official Tailwind v4 defaults for every family
-     that shares a name with a spacing step, and the --container-* scale is
-     re-pinned (identical values to node_modules/tailwindcss/theme.css) so
-     the token exists regardless of usage tree-shaking. The spacing steps
-     themselves (p-sm, gap-md, …) are untouched. */
+  /* Spacing — 8px grid with 4px micro-increments */
+  --spacing-micro-1: 0.25rem;
+  --spacing-micro-2: 0.5rem;
+  --spacing-unit-3: 0.75rem;
+  --spacing-unit-4: 1rem;
+  --spacing-unit-5: 1.25rem;
+  --spacing-unit-6: 1.5rem;
+  --spacing-unit-8: 2rem;
+  --spacing-unit-10: 2.5rem;
+  --spacing-unit-12: 3rem;
+  --spacing-gutter-mobile: 1rem;
+  --spacing-gutter-desktop: 1.5rem;
+  --spacing-page-max: 75rem;
+  /* Legacy spacing steps (xs/sm/md/lg/xl) */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Container width scale (restore Tailwind defaults that spacing steps shadow) */
   --container-3xs: 16rem;  --container-2xs: 18rem;
   --container-xs: 20rem;   --container-sm: 24rem;  --container-md: 28rem;
   --container-lg: 32rem;   --container-xl: 36rem;
@@ -1674,62 +402,424 @@ html[data-ui="minimal"] .segmented { border-color: rgba(255, 255, 255, 0.12); }
   --min-height-xs: var(--container-xs); --min-height-sm: var(--container-sm); --min-height-md: var(--container-md); --min-height-lg: var(--container-lg); --min-height-xl: var(--container-xl);
   --max-height-xs: var(--container-xs); --max-height-sm: var(--container-sm); --max-height-md: var(--container-md); --max-height-lg: var(--container-lg); --max-height-xl: var(--container-xl);
 
-  /* fonts — self-hosted variable families (policy: never Google CDN) */
+  /* Fonts — self-hosted variable families (policy: never Google CDN) */
   --font-display-xl: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-headline-lg: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-headline-lg-mobile: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-title-md: "Inter Variable", system-ui, sans-serif;
   --font-body-md: "Inter Variable", system-ui, sans-serif;
   --font-body-sm: "Inter Variable", system-ui, sans-serif;
+  --font-body-lg: "Inter Variable", system-ui, sans-serif;
   --font-label-caps: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-tabular-stat: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-body-lg: "Inter Variable", system-ui, sans-serif;   /* Stitch: body-lg */
+  --font-tabular-stat-lg: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-code-sm: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-chip-status: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* type scale — rem; at the default 16px root these equal the design's px */
-  --text-display-xl: 3rem;               /* 48px */
+  /* Type scale — rem; at the default 16px root these equal the design px */
+  --text-display-xl: 3rem;
   --text-display-xl--line-height: 3.5rem;
   --text-display-xl--letter-spacing: -0.02em;
   --text-display-xl--font-weight: 700;
-  --text-headline-lg: 2rem;              /* 32px */
+  --text-display-xl-mobile: 2.25rem;
+  --text-display-xl-mobile--line-height: 2.75rem;
+  --text-display-xl-mobile--letter-spacing: -0.02em;
+  --text-display-xl-mobile--font-weight: 700;
+  --text-headline-lg: 2rem;
   --text-headline-lg--line-height: 2.5rem;
   --text-headline-lg--letter-spacing: -0.01em;
   --text-headline-lg--font-weight: 600;
-  --text-headline-lg-mobile: 1.5rem;     /* 24px */
+  --text-headline-lg-mobile: 1.625rem;
   --text-headline-lg-mobile--line-height: 2rem;
   --text-headline-lg-mobile--font-weight: 600;
-  --text-title-md: 1.25rem;              /* 20px */
+  --text-title-md: 1.25rem;
   --text-title-md--line-height: 1.75rem;
   --text-title-md--font-weight: 600;
-  --text-body-md: 1rem;                  /* 16px */
-  --text-body-md--line-height: 1.5rem;
-  --text-body-md--font-weight: 400;
-  --text-body-sm: 0.875rem;              /* 14px */
-  --text-body-sm--line-height: 1.25rem;
-  --text-body-sm--font-weight: 400;
-  --text-body-lg: 1.125rem;              /* 18px (Stitch: body-lg) */
+  --text-body-lg: 1.125rem;
   --text-body-lg--line-height: 1.75rem;
   --text-body-lg--font-weight: 400;
-  --text-code-sm: 0.8125rem;             /* 13px (Stitch: code-sm) */
-  --text-code-sm--line-height: 1.125rem;
-  --text-code-sm--font-weight: 400;
-  --text-label-caps: 0.75rem;            /* 12px */
+  --text-body-md: 1rem;
+  --text-body-md--line-height: 1.5rem;
+  --text-body-md--font-weight: 400;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-body-sm--font-weight: 400;
+  --text-label-caps: 0.75rem;
   --text-label-caps--line-height: 1rem;
   --text-label-caps--letter-spacing: 0.05em;
   --text-label-caps--font-weight: 500;
-  --text-tabular-stat: 0.875rem;         /* 14px */
+  --text-tabular-stat-lg: 1.875rem;
+  --text-tabular-stat-lg--line-height: 2.25rem;
+  --text-tabular-stat-lg--letter-spacing: -0.02em;
+  --text-tabular-stat-lg--font-weight: 600;
+  --text-tabular-stat: 0.875rem;
   --text-tabular-stat--line-height: 1.25rem;
-  --text-tabular-stat--font-weight: 400;
+  --text-tabular-stat--font-weight: 500;
+  --text-code-sm: 0.6875rem;
+  --text-code-sm--line-height: 1rem;
+  --text-code-sm--font-weight: 400;
+  --text-chip-status: 0.625rem;
+  --text-chip-status--line-height: 0.75rem;
+  --text-chip-status--letter-spacing: 0.05em;
+  --text-chip-status--font-weight: 500;
 }
 
-/* Design helpers (from helpotron_dashboard.html <style>) — theme-aware */
+/* ── §4  BASE STYLES ──────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--st-background);
+    color: var(--st-on-surface);
+    font-family: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* Accessible focus rings (WCAG 2.4.7) — primary teal, 2px offset */
+  :focus-visible {
+    outline: 2px solid var(--st-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* ── §5  CANVAS & AMBIENT GLOWS ───────────────────────────────────────────── */
+
+/* LUMINOUS GLASS ambient canvas — two fixed 600px blur radial emitters */
+.app-background,
+.app-canvas {
+  background-color: var(--st-background);
+  background-image:
+    radial-gradient(ellipse 600px 600px at 12% 5%, var(--glass-glow-primary) 0%, transparent 70%),
+    radial-gradient(ellipse 600px 600px at 88% 95%, var(--glass-glow-secondary) 0%, transparent 70%);
+}
+
+/* ── §6  GLASS SURFACES ───────────────────────────────────────────────────── */
+
+/* Glass panel — the LUMINOUS GLASS signature surface */
+.clean-card,
+.glass-panel {
+  background: var(--glass-fill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-specular);
+  transition: border-color var(--motion-micro) ease, box-shadow var(--motion-micro) ease;
+}
+
+/* Hover lift — ONLY on fine pointer (no touch hover ghosts) */
+@media (hover: hover) and (pointer: fine) {
+  .clean-card:hover,
+  .glass-panel:hover {
+    border-color: var(--glass-border-hover);
+    transform: translateY(-1px);
+  }
+}
+
+/* Glass inputs */
+.clean-input,
+.glass-input {
+  background: color-mix(in srgb, var(--st-surface-container-lowest) 50%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  color: var(--st-on-surface);
+  border-radius: 0.75rem;
+  min-height: 44px;
+  font-size: 1rem;
+  transition: all var(--motion-micro) ease;
+}
+
+.clean-input::placeholder,
+.glass-input::placeholder {
+  color: var(--st-outline);
+}
+
+.clean-input:focus,
+.glass-input:focus {
+  border-color: var(--st-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-primary) 30%, transparent);
+}
+
+/* ── §7  SCROLLBARS ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--st-on-surface) 12%, transparent);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--st-on-surface) 25%, transparent);
+}
+.os-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--st-on-surface) 15%, transparent) transparent;
+}
+
+/* ── §8  TOUCH TARGETS (WCAG 2.5.8) ──────────────────────────────────────── */
+@media (pointer: coarse) {
+  button, a, input, select, textarea, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input[type="checkbox"], input[type="radio"] {
+    min-height: 0;
+    min-width: 0;
+  }
+}
+
+/* ── §9  MOTION & ACCESSIBILITY ───────────────────────────────────────────── */
+
+/* Reduced motion — system preference */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Reduced motion — app setting */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Text scale */
+html[data-textscale="large"] { font-size: 18px; }
+
+/* High contrast */
+html[data-contrast="high"] {
+  --st-on-surface: #FFFFFF;
+  --st-on-surface-variant: #F5F7FA;
+  --st-outline: #D7DBE2;
+  --st-outline-variant: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.40);
+}
+[data-theme="light"][data-contrast="high"] {
+  --st-on-surface: #050505;
+  --st-on-surface-variant: #111111;
+  --st-outline: #373737;
+  --st-outline-variant: rgba(5, 5, 5, 0.55);
+}
+
+/* Dyslexia reading mode */
+html[data-reading="dyslexia"] body,
+html[data-reading="dyslexia"] .app-canvas {
+  letter-spacing: 0.045em;
+  word-spacing: 0.14em;
+  line-height: 1.9;
+}
+html[data-reading="dyslexia"] * { line-height: 1.75; }
+
+/* Screen reader enhanced focus */
+html[data-screenreader="on"] :focus-visible {
+  outline: 3px solid var(--st-primary) !important;
+  outline-offset: 2px;
+}
+
+/* Animation toggle */
+html[data-anim="none"] *, html[data-anim="none"] *::before, html[data-anim="none"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim="reduced"] *::after {
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ── §10  KEYFRAMES ───────────────────────────────────────────────────────── */
+
+/* Shimmer skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--st-surface-container) 25%,
+    var(--st-surface-container-high) 50%,
+    var(--st-surface-container) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Slide up */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Soft pulse for live nodes */
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-primary) 15%, transparent); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+/* Spin (loading spinners) */
+@keyframes spin-smooth {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Agent avatar animations */
+@keyframes cyber-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes visor-scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+@keyframes aperture-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--st-sem-green) 40%, transparent));
+  }
+  50% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--st-primary) 80%, transparent));
+  }
+}
+.animate-cyber-spin { animation: cyber-spin-slow 8s linear infinite; }
+.animate-visor-scan { animation: visor-scanline 2.5s ease-in-out infinite; }
+.animate-aperture-pulse { animation: aperture-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* Toast entrance */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Error shake for form fields / OTP */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake { animation: shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+
+/* ── §11  COMPONENT UTILITY CLASSES ───────────────────────────────────────── */
+
+/* Page layout helpers */
+.page-pad { padding: 1rem; }
+@media (min-width: 768px) { .page-pad { padding: 1.5rem; } }
+.page-max { max-width: 75rem; margin-left: auto; margin-right: auto; }
+
+/* Line clamp */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card hover lift — fine pointer only */
 .card-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  border: 1px solid var(--st-outline-variant);
+  transition: transform var(--motion-micro) ease, box-shadow var(--motion-micro) ease, border-color var(--motion-micro) ease;
+  border: 1px solid var(--glass-border);
 }
-.card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  border-color: var(--st-outline);
+@media (hover: hover) and (pointer: fine) {
+  .card-lift:hover {
+    transform: translateY(-1px);
+    border-color: var(--glass-border-hover);
+  }
 }
+
+/* Safe area padding */
 .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top: max(0px, env(safe-area-inset-top)); }
+
+/* Inline error strip (one rule for all errors) */
+.error-strip {
+  background: color-mix(in srgb, var(--st-error-container) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-error) 30%, transparent);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  color: var(--st-error);
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-size: 0.6875rem;
+}
+
+/* Singular focus glow for page-KEY CTA */
+.glow-primary {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--st-primary-container) 25%, transparent);
+}
+
+/* JetBrains Mono tabular nums — product signature */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ── §12  RANGE SLIDERS ───────────────────────────────────────────────────── */
+.os-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--st-surface-container-high);
+  outline: none;
+}
+.os-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--st-primary);
+  border: 2px solid var(--st-background);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-primary) 35%, transparent);
+  cursor: pointer;
+  transition: transform var(--motion-micro) ease;
+}
+.os-range::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.os-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--st-primary);
+  border: 2px solid var(--st-background);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-primary) 35%, transparent);
+  cursor: pointer;
+}
+
+/* ── §13  COOKIE BANNER CLEARANCE ─────────────────────────────────────────── */
+body.cookie-banner-visible { padding-bottom: 9rem; }
+@media (min-width: 768px) {
+  body.cookie-banner-visible { padding-bottom: 6.5rem; }
+}

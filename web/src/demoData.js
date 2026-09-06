@@ -10,6 +10,10 @@
  * render real backend data / graceful empty states instead of fake data.
  * NOTE: demo must NEVER default ON — a fresh visitor seeing the canned shell
  * masquerading as the app was a phantom-pass incident (see GATES.md).
+ *
+ * WRITE-GUARD (Stitch v6 Mandate): This file contains offline demonstration
+ * fixtures ONLY. It must NEVER be used to simulate or bypass live API endpoints,
+ * mutate live user records, or fabricate phantom successful state in tests/builds.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const HOUR = 3600_000;
