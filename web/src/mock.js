@@ -5,6 +5,9 @@
 // every request goes straight to the real backend — no mock data anywhere.
 // All content below is fake demo content (course names, people, cards are
 // invented samples); the on-screen DEMO badge labels it as such.
+//
+// WRITE-GUARD (Stitch v6 Mandate): This file contains offline demonstration
+// mock responses ONLY. It must never fabricate live API state or mask failures.
 
 const DEMO_KEY = 'helpotron_demo_mode';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
