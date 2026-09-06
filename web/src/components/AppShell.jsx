@@ -49,24 +49,14 @@ import NewAssignmentModal from './NewAssignmentModal.jsx';
 
 const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 
-export const getNavItems = (isAdmin) => [
+export const getNavItems = () => [
   { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard, group: 'Workspace Core' },
   { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'insights', label: 'Insights', Icon: BarChart3, group: 'Workspace Core' },
   { key: 'history', label: 'History', Icon: History, group: 'Workspace Core' },
   { key: 'library', label: 'Library', Icon: HelpCircle, group: 'Workspace Core' },
-  { key: 'dump', label: 'Drop Assignment', Icon: Inbox, group: 'Workspace Core' },
-  { key: 'datalake', label: 'Data Lake', Icon: Database, group: 'Workspace Core' },
   { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
   { key: 'credits', label: 'Billing', Icon: CreditCard, group: 'Platform System' },
-  { key: 'extension', label: 'Extension', Icon: Puzzle, group: 'Platform System' },
-  { key: 'guide', label: 'Guide', Icon: HelpCircle, group: 'Platform System' },
-  ...(isAdmin
-    ? [
-        { key: 'admin', label: 'Control Center', Icon: Shield, group: 'Administration' },
-        { key: 'monitors', label: 'Monitors', Icon: Gauge, group: 'Administration' },
-      ]
-    : []),
 ];
 
 export default function AppShell({
@@ -183,7 +173,27 @@ export default function AppShell({
   };
 
   const navItems = getNavItems(isAdmin);
-  const currentNav = navItems.find((i) => i.key === activeView) || navItems[0];
+  const ALL_VIEW_LABELS = {
+    overview: 'Dashboard',
+    agent: 'My Agent',
+    insights: 'Insights',
+    history: 'History',
+    library: 'Library',
+    settings: 'Settings',
+    credits: 'Billing',
+    dump: 'Drop Assignment',
+    datalake: 'Data Lake',
+    extension: 'Extension',
+    guide: 'Guide',
+    admin: 'Control Center',
+    monitors: 'Monitors',
+    notifications: 'Notifications',
+  };
+  const currentNav = navItems.find((i) => i.key === activeView) || {
+    key: activeView,
+    label: ALL_VIEW_LABELS[activeView] || 'Dashboard',
+    Icon: LayoutDashboard,
+  };
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-body-sm selection:bg-primary/20 selection:text-primary">
@@ -455,6 +465,11 @@ export default function AppShell({
                       <QuickSettings
                         settings={settings}
                         onChange={persistSettings}
+                        onNavigate={(v) => {
+                          setQuickSettingsOpen(false);
+                          onNavigate(v);
+                        }}
+                        isAdmin={isAdmin}
                         onOpenFull={() => {
                           setQuickSettingsOpen(false);
                           onNavigate('settings');

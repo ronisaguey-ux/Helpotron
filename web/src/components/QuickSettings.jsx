@@ -10,6 +10,13 @@ import {
   Monitor,
   Coins,
   Cpu,
+  UploadCloud,
+  Database,
+  Puzzle,
+  BookOpen,
+  ShieldAlert,
+  Activity,
+  Wrench,
 } from 'lucide-react';
 import { AvatarWidget } from './ui/AvatarWidget.jsx';
 import api from '../api.js';
@@ -37,6 +44,8 @@ export default function QuickSettings({
   onOpenNotifications,
   onOpenPrivacy,
   onLogout,
+  onNavigate,
+  isAdmin = false,
   user,
 }) {
   const containerRef = useRef(null);
@@ -73,7 +82,7 @@ export default function QuickSettings({
       ref={containerRef}
       role="menu"
       aria-label="Quick Settings Menu"
-      className="w-80 p-4 space-y-4 rounded-2xl bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 shadow-2xl text-on-surface"
+      className="w-80 max-h-[85vh] overflow-y-auto p-4 space-y-4 rounded-2xl bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 shadow-2xl text-on-surface"
     >
       {/* Identity Header */}
       <div className="flex items-center gap-3 pb-3 border-b border-outline-variant/20">
@@ -166,6 +175,67 @@ export default function QuickSettings({
               {label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Tools & Utilities */}
+      <div className="pt-2 border-t border-outline-variant/20">
+        <div className="text-[11px] font-mono text-on-surface-variant uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Wrench className="w-3.5 h-3.5 text-secondary" /> Tools & Utilities
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => onNavigate?.('dump')}
+            className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+          >
+            <UploadCloud className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">Drop Assign</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('datalake')}
+            className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+          >
+            <Database className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">Data Lake</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('extension')}
+            className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+          >
+            <Puzzle className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">Extension</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('guide')}
+            className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+          >
+            <BookOpen className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">Guide</span>
+          </button>
+          {isAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('admin')}
+                className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+              >
+                <ShieldAlert className="w-4 h-4 text-warning shrink-0" />
+                <span className="truncate">Control Ctr</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('monitors')}
+                className="flex items-center gap-2 p-2 rounded-xl text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer text-left min-h-[44px]"
+              >
+                <Activity className="w-4 h-4 text-secondary shrink-0" />
+                <span className="truncate">Monitors</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
