@@ -108,6 +108,12 @@ class FinalizePayload(BaseModel):
     action: str = Field(..., max_length=32)
 
 
+class BatchFinalizePayload(BaseModel):
+    ids: Optional[List[int]] = None
+    skip: Optional[List[int]] = None
+    action: Optional[str] = None
+
+
 @router.post("/upload")
 async def upload_dump_file(
     file: UploadFile = File(...),
@@ -281,45 +287,40 @@ async def manual_route_dump_item(
     return {"status": "success", "item_id": item.id, "matched_assignment_id": item.matched_assignment_id}
 
 
-@router.post("/{dump_id}/finalize")
-async def finalize_dump_item(
-    dump_id: int,
-    payload: FinalizePayload,
-    current_user: User = Depends(get_current_authenticated_user),
-    db: Session = Depends(get_db),
-):
-    """Assignment Dump finalize: ask the user what kind of assignment work they
-    want (flashcards / practice quiz / study guide / summary / just do it),
-    then materialize it: create the assignment if not yet routed, generate real
-    study-materials content via OpenRouter for the study kinds, and leave
-    do_it for the subagent pipeline to execute (no fake completion).
+def _calculate_dump_item_cost(item: UniversalDumpItem) -> tuple[int, int, int, float]:
+    """Returns (est_input_tokens, est_output_tokens, est_cost_tokens, est_cost_usd)."""
+    source_text = (item.extracted_text or "").strip()
+    est_input_tokens = max(100, int(len(source_text) / 4))
+    est_output_tokens = max(250, min(4000, int(est_input_tokens * 0.6)))
+    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))
+    est_cost_usd = round(est_cost_tokens * 0.01, 2)
+    return est_input_tokens, est_output_tokens, est_cost_tokens, est_cost_usd
 
-    Auth + ownership enforced (BATCH-04 IDOR pattern).
-    """
-    action = (payload.action or "").strip()
+
+async def _execute_finalize(
+    item: UniversalDumpItem,
+    action: str,
+    current_user: User,
+    db: Session,
+) -> dict[str, Any]:
+    """Core finalization logic shared between single-item finalize and batch finalize.
+    Ensures identical cost calculation, idempotency, study material generation, and assignment association."""
     if action not in FINALIZE_ACTIONS:
         raise HTTPException(
             status_code=400,
             detail=f"action must be one of: {', '.join(FINALIZE_ACTIONS)}",
         )
 
-    item = db.query(UniversalDumpItem).filter(UniversalDumpItem.id == dump_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Dump item not found.")
-    if item.user_id != current_user.id and not is_admin_user(current_user):
-        raise HTTPException(status_code=403, detail="Cannot finalize dump items owned by another user")
-
     # Token gate (owner A3/A14 rule): cost determined by task CONTENT (1 token = 1 cent), never flat task-type.
     source_text = (item.extracted_text or "").strip()
-    est_input_tokens = max(100, int(len(source_text) / 4))
-    est_output_tokens = max(250, min(4000, int(est_input_tokens * 0.6)))
-    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))
+    est_input_tokens, est_output_tokens, est_cost_tokens, _ = _calculate_dump_item_cost(item)
 
     if not is_admin_user(current_user) and current_user.plan != "elite":
         token_bal = float((current_user.settings or {}).get("token_balance", 0) or 0)
         if token_bal < est_cost_tokens:
             return {
                 "status": "insufficient_tokens",
+                "item_id": item.id,
                 "detail": f"⚠️ Insufficient tokens (Estimated cost: {est_cost_tokens} tokens based on content length, balance: {int(token_bal)} tokens). "
                           "Ask the operator to grant you tokens (or upgrade) to generate assignment work.",
             }
@@ -367,14 +368,6 @@ async def finalize_dump_item(
         kind = GENERATING_ACTIONS[action]
         sys_prompt = FINALIZE_PROMPTS[action]
 
-        # 08-28 BUG-1 fix: user_prompt used to be source_text[:8000], so a long
-        # scrape silently generated material from only its first 8k chars while
-        # the rest of the assignment was ignored. Now the source is split on
-        # paragraph boundaries into <=8k chunks and generation runs per chunk,
-        # then the per-chunk outputs are merged into ONE material — the whole
-        # source feeds the deck/guide. Bounded at 12 chunks (~96k chars); if
-        # the source is longer the limitation is stated in overlord_notes and
-        # never silent (the full source is always in the dump item).
         FINALIZE_CHUNK_CHARS = 8000
         FINALIZE_MAX_CHUNKS = 12
         chunks = _split_generation_chunks(source_text, FINALIZE_CHUNK_CHARS)
@@ -393,7 +386,7 @@ async def finalize_dump_item(
                     user_prompt=chunk,
                     system_prompt=sys_prompt,
                     effort="medium",
-                    effort_score=25,  # good-token bucket: cheap summary-grade generation
+                    effort_score=25,
                 )
                 raw = (raw or "").strip()
                 if raw:
@@ -407,29 +400,17 @@ async def finalize_dump_item(
 
         if pieces:
             if kind in ("flashcards", "practice_test"):
-                # Merge per-chunk decks into one list, deduping on the first 80
-                # chars of the question (each chunk asks for the {q,a} shape —
-                # the same parse rules as before now run once per chunk).
                 combined: list[dict] = []
                 seen: set[str] = set()
                 for piece in pieces:
                     parsed = extract_json(piece)
                     if kind == "flashcards":
-                        # Canonical {q, a} deck shape (08-27): also unwrap a
-                        # {"flashcards": [...]} wrapper and a legacy {front, back}
-                        # array so exporters never read empty fields.
                         if isinstance(parsed, dict) and isinstance(parsed.get("flashcards"), list):
                             parsed = parsed["flashcards"]
                     if isinstance(parsed, list) and all(isinstance(c, dict) for c in parsed):
                         for c in parsed:
                             q = str(c.get("q") if c.get("q") is not None else c.get("front") or "").strip()
                             if kind == "practice_test":
-                                # 08-31 fix: the quiz prompt asks for the
-                                # {q, options, answer, explain} shape, but the
-                                # merge was reading {a}/{back} (flashcards
-                                # shape), so every question had an empty answer
-                                # and was dropped — finalize always produced
-                                # no material. Keep the full quiz shape.
                                 a = str(
                                     c.get("answer") if c.get("answer") is not None
                                     else c.get("a") if c.get("a") is not None
@@ -455,9 +436,6 @@ async def finalize_dump_item(
                 if combined:
                     content = json.dumps(combined, ensure_ascii=False)
             else:
-                # summary / study_guide / solution / essay: concatenate the
-                # per-chunk outputs with explicit part headers so nothing is
-                # lost and every part of the source is represented.
                 if len(pieces) == 1:
                     content = pieces[0]
                 else:
@@ -489,9 +467,6 @@ async def finalize_dump_item(
             material_id = material.id
             assignment.progress = {**(assignment.progress or {}), kind: True}
             if kind == "solution":
-                # do_it: this is the actual completed work. Mark the assignment
-                # in progress and push the answer into its bubble chat so it is
-                # visible (no fake handoff — it IS done).
                 assignment.progress["do_it_work"] = content
                 if assignment.status in ("tracked", "not_started"):
                     assignment.status = "in_progress"
@@ -513,19 +488,12 @@ async def finalize_dump_item(
         else:
             note_parts.append("No content could be generated from this file.")
     else:
-        # Defensive only: every FINALIZE_ACTIONS value is now generating.
         assignment.progress = {**(assignment.progress or {}), "requested_action": action}
         if assignment.status not in ("tracked", "in_progress"):
             assignment.status = "tracked"
         note_parts.append(f"Recorded finalize request '{action}'.")
 
-    # 3. AI detection (08-28 BUG-4 fix): everything this bubble shows the user
-    # as PROGRESS (detector_risk / ai_score / detector_passed) was never
-    # written by the real engine — only by a mock. Finalize is where material
-    # is GENERATED, so the produced content is scored here through the real
-    # detector registry (same engine as draft/humanizer); the scraped source
-    # is scored too. Cheap: local heuristics + 24h cache, guarded so a
-    # detector failure never fails finalize.
+    # 3. AI detection scoring
     try:
         from . import detectors
 
@@ -593,13 +561,140 @@ async def finalize_dump_item(
         "generated": generated,
         "tokens_charged": actual_token_cost,
         "cost_usd": round(actual_token_cost * 0.01, 2),
-        # Only present when generated: the actual content (solution/study
-        # material) so the client can show the work without a second fetch.
-        # 08-28 BUG-1: was 40000 — a long multi-chunk material arrived sliced;
-        # the response now mirrors the stored material (StudyMaterial.content
-        # is unbounded) so the client never gets a silently cut answer.
         "work": (content[:400_000] if generated and content else None),
     }
+
+
+@router.get("/batch/estimate")
+async def batch_estimate_dump_items(
+    ids: Optional[str] = Query(None, description="Comma-separated dump item IDs (empty = all pending)"),
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Calculates real batch finalization estimates for pending dump items.
+    Reuses the exact same per-item token math as finalize to ensure ~$X.XX preview is completely honest."""
+    query = db.query(UniversalDumpItem)
+    if not is_admin_user(current_user):
+        query = query.filter(UniversalDumpItem.user_id == current_user.id)
+    if ids:
+        id_list = [int(i.strip()) for i in ids.split(",") if i.strip().isdigit()]
+        query = query.filter(UniversalDumpItem.id.in_(id_list))
+    else:
+        query = query.filter(UniversalDumpItem.status.in_(["pending", "routed", "unrouted", "uploaded"]))
+
+    items = query.all()
+    item_summaries = []
+    total_tokens = 0
+    total_cost = 0.0
+
+    for item in items:
+        _, _, tokens, cost = _calculate_dump_item_cost(item)
+        total_tokens += tokens
+        total_cost += cost
+        item_summaries.append({
+            "id": item.id,
+            "file_name": item.file_name or f"Dump #{item.id}",
+            "action": item.requested_action or "flashcards",
+            "matched_assignment_id": item.matched_assignment_id,
+            "status": item.status,
+            "est_tokens": tokens,
+            "est_cost": cost,
+        })
+
+    return {
+        "status": "success",
+        "count": len(item_summaries),
+        "total_cost": round(total_cost, 2),
+        "total_tokens": total_tokens,
+        "items": item_summaries,
+    }
+
+
+@router.post("/batch/finalize")
+async def batch_finalize_dump_items(
+    payload: BatchFinalizePayload,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Batch finalizes multiple dump items with individual per-item processing and skip list support.
+    Charges tokens per item using the honest content-based rate."""
+    skip_set = set(payload.skip or [])
+    query = db.query(UniversalDumpItem)
+    if not is_admin_user(current_user):
+        query = query.filter(UniversalDumpItem.user_id == current_user.id)
+    if payload.ids:
+        query = query.filter(UniversalDumpItem.id.in_(payload.ids))
+    else:
+        query = query.filter(UniversalDumpItem.status.in_(["pending", "routed", "unrouted", "uploaded"]))
+
+    items = [it for it in query.all() if it.id not in skip_set and it.status != "finalized"]
+
+    results = []
+    total_charged_tokens = 0
+    succeeded = 0
+    failed = 0
+
+    for item in items:
+        item_action = payload.action or item.requested_action or "flashcards"
+        if item_action not in FINALIZE_ACTIONS:
+            item_action = "flashcards"
+        try:
+            res = await _execute_finalize(item, item_action, current_user, db)
+            if res.get("status") in ("success", "finalized_no_content"):
+                succeeded += 1
+                total_charged_tokens += res.get("tokens_charged", 0)
+            else:
+                failed += 1
+            results.append(res)
+        except HTTPException as he:
+            failed += 1
+            results.append({
+                "status": "error",
+                "item_id": item.id,
+                "error": he.detail,
+            })
+        except Exception as e:
+            failed += 1
+            results.append({
+                "status": "error",
+                "item_id": item.id,
+                "error": str(e),
+            })
+
+    return {
+        "status": "success",
+        "processed": len(results),
+        "succeeded": succeeded,
+        "failed": failed,
+        "total_charged_tokens": total_charged_tokens,
+        "total_charged_usd": round(total_charged_tokens * 0.01, 2),
+        "results": results,
+    }
+
+
+@router.post("/{dump_id}/finalize")
+async def finalize_dump_item(
+    dump_id: int,
+    payload: FinalizePayload,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Assignment Dump finalize: ask the user what kind of assignment work they
+    want (flashcards / practice quiz / study guide / summary / just do it),
+    then materialize it: create the assignment if not yet routed, generate real
+    study-materials content via OpenRouter for the study kinds, and leave
+    do_it for the subagent pipeline to execute (no fake completion).
+
+    Auth + ownership enforced (BATCH-04 IDOR pattern).
+    """
+    item = db.query(UniversalDumpItem).filter(UniversalDumpItem.id == dump_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Dump item not found.")
+    if item.user_id != current_user.id and not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Cannot finalize dump items owned by another user")
+
+    action = (payload.action or "").strip()
+    return await _execute_finalize(item, action, current_user, db)
 
 
 @router.delete("/{dump_id}")

@@ -1,321 +1,481 @@
-/* ────────────────────────────────────────────────────────────────────────────
- * LibraryView.jsx — Files, Saved materials, and the academic Calendar.
- * ────────────────────────────────────────────────────────────────────────── */
-import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Bookmark, FileText, Bot } from 'lucide-react';
-import { LIBRARY, SAVED, CALENDAR, demoEnabled } from '../demoData.js';
-import { Badge, Tabs, EmptyState, SectionHeader, timeAgo } from './ui/os.jsx';
-import { api } from '../api.js';
-import SectionCard from './SectionCard.jsx';
+import React, { useState, useEffect } from "react";
+import {
+  FileText,
+  FileAudio,
+  Image as ImageIcon,
+  Video,
+  BookOpen,
+  Bookmark,
+  Calendar as CalendarIcon,
+  UploadCloud,
+  ChevronDown,
+  ChevronUp,
+  RotateCw,
+  Sparkles,
+  Award,
+  Trash2,
+  BookmarkCheck,
+  Play,
+  Layers,
+} from "lucide-react";
+import api from "../api.js";
+import FlashcardsPlayer from "./study/FlashcardsPlayer.jsx";
+import QuizPlayer from "./study/QuizPlayer.jsx";
+import AcademicCalendar from "./study/AcademicCalendar.jsx";
+import { StreakBadge, MasteryRing } from "./study/MasteryRing.jsx";
 
-const KIND_ICON = { pdf: '📕', doc: '📘', audio: '🎧', image: '🖼️' };
-const MAT_META = {
-  study_guide: { icon: '📗', label: 'Study Guide' },
-  flashcards: { icon: '🃏', label: 'Flashcards' },
-  practice_test: { icon: '📝', label: 'Practice Test' },
-  summary: { icon: '📄', label: 'Summary' },
-  solution: { icon: '✅', label: 'Solution' },
-};
+function getTileIcon(kind = "") {
+  const k = String(kind).toLowerCase();
+  if (k.includes("audio") || k.includes("lecture") || k.includes("voice")) {
+    return { Icon: FileAudio, tint: "text-sem-cyan bg-sem-cyan/10 border-sem-cyan/20" };
+  }
+  if (k.includes("image") || k.includes("photo") || k.includes("diagram")) {
+    return { Icon: ImageIcon, tint: "text-secondary bg-secondary/10 border-secondary/20" };
+  }
+  if (k.includes("video") || k.includes("stream")) {
+    return { Icon: Video, tint: "text-sem-indigo bg-sem-indigo/10 border-sem-indigo/20" };
+  }
+  if (k.includes("flashcard") || k.includes("deck")) {
+    return { Icon: Layers, tint: "text-primary bg-primary/10 border-primary/20" };
+  }
+  if (k.includes("test") || k.includes("quiz")) {
+    return { Icon: BookOpen, tint: "text-sem-amber bg-sem-amber/10 border-sem-amber/20" };
+  }
+  return { Icon: FileText, tint: "text-on-surface-variant bg-surface-container border-outline-variant/30" };
+}
 
-function CalendarGrid() {
-  const demo = demoEnabled();
-  const [monthOffset, setMonthOffset] = useState(0);
-  if (!demo || CALENDAR.length === 0) return <EmptyState title="No calendar events" body="Assignments and study sessions will appear here." />;
+export default function LibraryView({ userId = "", onGoTo, onSelectAssignment }) {
+  const [activeTab, setActiveTab] = useState("files"); // "files" | "saved" | "study" | "calendar"
+  const [materials, setMaterials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [streakDays, setStreakDays] = useState(0);
+  const [expandedMap, setExpandedMap] = useState({});
+  const [feedbackNotice, setFeedbackNotice] = useState("");
 
-  const base = new Date();
-  const year = base.getFullYear();
-  const month = base.getMonth() + monthOffset;
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+  // Active Study Tool Session State
+  const [activeStudyTool, setActiveStudyTool] = useState(null); // { type: "flashcards" | "quiz", material }
 
-  const eventsFor = (d) => CALENDAR.filter((c) => {
-    const dt = new Date(c.date);
-    return dt.getFullYear() === year && dt.getMonth() === month && dt.getDate() === d;
-  });
+  const fetchLibrary = async () => {
+    setLoading(true);
+    try {
+      const [matRes, streakRes] = await Promise.all([
+        fetch("/api/library/materials").then((r) => (r.ok ? r.json() : { materials: [] })).catch(() => ({ materials: [] })),
+        fetch("/api/study/streak").then((r) => (r.ok ? r.json() : { streak_days: 0 })).catch(() => ({ streak_days: 0 })),
+      ]);
 
-  const cells = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+      const list = Array.isArray(matRes?.materials) ? matRes.materials : [];
+      setMaterials(list);
+      setStreakDays(streakRes?.streak_days || 0);
+    } catch (err) {
+      console.warn("Failed fetching library materials:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const monthName = firstDay.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  useEffect(() => {
+    fetchLibrary();
+  }, [userId]);
+
+  const triggerNotice = (msg) => {
+    setFeedbackNotice(msg);
+    setTimeout(() => setFeedbackNotice(""), 3500);
+  };
+
+  // Save / Unsave
+  const handleToggleSave = async (m) => {
+    try {
+      if (m.saved_at) {
+        await fetch(`/api/library/materials/${m.id}/unsave`, { method: "DELETE" });
+        setMaterials((prev) =>
+          prev.map((item) => (item.id === m.id ? { ...item, saved_at: null } : item))
+        );
+        triggerNotice("Removed from saved library.");
+      } else {
+        const res = await fetch(`/api/library/materials/${m.id}/save`, { method: "POST" });
+        const data = await res.json();
+        setMaterials((prev) =>
+          prev.map((item) => (item.id === m.id ? { ...item, saved_at: data.saved_at } : item))
+        );
+        triggerNotice("Saved to your personal collection!");
+      }
+    } catch (e) {
+      triggerNotice("Action failed.");
+    }
+  };
+
+  const handleReviewCardDispatch = async (reviewPayload) => {
+    if (!activeStudyTool?.material?.id) return;
+    try {
+      await fetch(`/api/study/decks/${activeStudyTool.material.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          card_index: reviewPayload.cardIndex,
+          rating: reviewPayload.rating,
+          difficulty: reviewPayload.difficulty,
+        }),
+      });
+    } catch (e) {
+      console.warn("Could not record review:", e);
+    }
+  };
+
+  const handleGradeQuizDispatch = async (gradePayload) => {
+    const mId = gradePayload.materialId || activeStudyTool?.material?.id;
+    if (!mId) return null;
+    try {
+      const res = await fetch(`/api/study/quiz/${mId}/grade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answers: gradePayload.answers,
+        }),
+      });
+      return await res.json();
+    } catch (e) {
+      console.warn("Could not grade quiz:", e);
+      return null;
+    }
+  };
+
+  const savedMaterials = materials.filter((m) => !!m.saved_at);
 
   return (
-    <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm space-y-4">
-      <div className="flex items-center justify-between w-full">
-        <h3 className="font-title-md text-title-md text-on-surface flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-primary" /> {monthName}
-        </h3>
-        <div className="flex gap-1.5">
-          <button type="button" onClick={() => setMonthOffset(monthOffset - 1)} className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer" aria-label="Previous month">←</button>
-          <button type="button" onClick={() => setMonthOffset(0)} className="px-3.5 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer">Today</button>
-          <button type="button" onClick={() => setMonthOffset(monthOffset + 1)} className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer" aria-label="Next month">→</button>
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-label-caps text-[10px] text-primary uppercase tracking-widest">
+              Study Materials &amp; Spaced Repetition // §3.10
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-outline-variant" />
+            <span className="font-code-sm text-xs text-on-surface-variant">
+              Active Recall Library
+            </span>
+          </div>
+          <h1 className="font-headline-lg text-2xl md:text-3xl text-on-surface font-semibold tracking-tight">
+            Library &amp; Study Tools
+          </h1>
+          <p className="font-body-sm text-xs text-on-surface-variant mt-1 max-w-2xl">
+            Generated flashcards, practice test diagnostics, saved materials, and real academic due dates.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <StreakBadge streakDays={streakDays} />
+          <button
+            type="button"
+            onClick={() => onGoTo?.("dump")}
+            className="h-10 px-4 rounded-xl bg-primary text-on-primary font-label-caps text-xs flex items-center gap-2 shadow-[0_0_20px_rgba(89,216,201,0.25)] transition cursor-pointer"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Upload to Assignment Dump</span>
+          </button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1.5 font-label-caps text-label-caps uppercase text-on-surface-variant mb-1.5">
-        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => <div key={d} className="text-center py-1">{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((d, i) => {
-          if (d === null) return <div key={i} />;
-          const events = eventsFor(d);
-          const isToday = `${year}-${month}-${d}` === todayStr;
+
+      {feedbackNotice && (
+        <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs font-code-sm text-primary">
+          {feedbackNotice}
+        </div>
+      )}
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 p-1 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 overflow-x-auto">
+        {[
+          { key: "files", label: "Files & Materials", count: materials.length },
+          { key: "saved", label: "Saved Collection", count: savedMaterials.length },
+          { key: "study", label: "Active Recall Player" },
+          { key: "calendar", label: "Academic Deadlines" },
+        ].map(({ key, label, count }) => {
+          const isActive = activeTab === key;
           return (
-            <div
-              key={d}
-              className={`min-h-[74px] rounded-xl border p-2 transition ${
-                isToday ? 'border-primary bg-primary/10' : 'border-outline-variant/20 bg-surface-container-low'
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setActiveTab(key);
+                if (key !== "study") setActiveStudyTool(null);
+              }}
+              className={`h-10 px-5 rounded-xl font-label-caps text-xs flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
+                isActive
+                  ? "bg-surface-container text-on-surface shadow-sm font-semibold"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40"
               }`}
             >
-              <div className={`font-tabular-stat text-xs font-semibold ${isToday ? 'text-primary' : 'text-on-surface-variant'}`}>{d}</div>
-              <div className="space-y-1 mt-1">
-                {events.map((e) => (
-                  <div
-                    key={e.title + d}
-                    title={`${e.title} · ${e.course}`}
-                    className={`px-1.5 py-0.5 rounded text-[8px] font-medium truncate ${
-                      e.kind === 'study'
-                        ? 'bg-primary/15 text-primary border border-primary/20'
-                        : e.status?.startsWith('completed')
-                          ? 'bg-primary/15 text-primary border border-primary/20 line-through opacity-70'
-                          : e.status === 'draft_ready'
-                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                            : 'bg-secondary/15 text-secondary border border-secondary/20'
-                    }`}
-                  >
-                    {e.title}
-                  </div>
-                ))}
-              </div>
-            </div>
+              <span>{label}</span>
+              {count != null && (
+                <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-code-sm">
+                  {count}
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
-    </div>
-  );
-}
 
-export default function LibraryView({ user, onOpenAssignmentBubble, onOpenWorkspace }) {
-  const [tab, setTab] = useState('files');
-  const [mats, setMats] = useState([]);
-  const demo = demoEnabled();
-  const files = demo ? LIBRARY : [];
-  const saved = demo ? SAVED : [];
-
-  const handleOpenBubble = onOpenAssignmentBubble || onOpenWorkspace;
-
-  // Real saved materials (08-27): study guides/flashcards/etc. generated by
-  // the agent or the Assignment Dump land here — the previous tab only ever
-  // showed demo data.
-  useEffect(() => {
-    if (!user?.public_id) return;
-    api.materialsFor(user.public_id)
-      .then((r) => setMats(Array.isArray(r?.materials) ? r.materials : []))
-      .catch(() => setMats([]));
-  }, [user?.public_id]);
-
-  return (
-    <div className="space-y-6">
-      {/* Study OS Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-outline-variant/20">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary border border-primary/20 font-semibold">
-              Study OS
-            </span>
-          </div>
-          <h2 className="font-headline-lg text-title-md md:text-headline-lg text-on-surface">Study OS & Library</h2>
-          <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-            Master core concepts, review generated study materials, lecture files, and academic schedules.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-lowest border border-primary/20 text-xs text-primary shadow-sm shrink-0 self-start sm:self-auto">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <span className="font-label-caps text-label-caps">AI Copilot Ready</span>
-        </div>
-      </div>
-
-      <Tabs
-        tabs={[
-          { key: 'files', label: `Files (${files.length})` },
-          { key: 'saved', label: `Saved (${saved.length})` },
-          { key: 'materials', label: `My Materials (${mats.length})` },
-          { key: 'calendar', label: 'Calendar' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
-
-      {tab === 'files' && (
-        files.length === 0 ? (
-          <EmptyState icon="🗂️" title="Your library is empty" body="Upload lectures, PDFs and scans — Helpotron turns them into study material." actionLabel="Upload materials" onAction={() => { /* dump view */ window.location.hash = ''; }} />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-            {files.map((f) => (
-              <div key={`library-file-${f.id}`} className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm h-full flex flex-col justify-between group hover:border-primary/40 transition">
-                <div className="w-full">
-                  <div className="aspect-[16/9] max-h-40 w-full rounded-2xl border border-outline-variant/20 bg-surface-container-low flex flex-col items-center justify-center gap-2 mb-4">
-                    <span className="text-4xl leading-none" aria-hidden="true">{KIND_ICON[f.kind] || '📄'}</span>
-                    <span className="font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold">{f.kind}</span>
-                  </div>
-                  <div className="font-title-md text-sm text-on-surface line-clamp-2 min-h-[2.6em] group-hover:text-primary transition">{f.name}</div>
-                  <div className="font-body-sm text-xs text-on-surface-variant line-clamp-1 mt-1">{f.course} · {f.size}{f.pages ? ` · ${f.pages} pages` : ''}{f.duration ? ` · ${f.duration}` : ''}</div>
-                  <div className="font-tabular-stat text-[11px] text-on-surface-variant mt-1">uploaded {timeAgo(f.uploaded)}</div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-outline-variant/20">
-                  <button type="button" onClick={handleOpenBubble} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 font-label-caps text-xs uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition cursor-pointer">
-                    <Bot className="w-3.5 h-3.5 text-primary" /> Open in Bubble
-                  </button>
-                </div>
+      {/* TAB 1: FILES & MATERIALS (2-col mobile, 3-col md, 4-col lg per spec) */}
+      {activeTab === "files" && (
+        <div className="space-y-6">
+          {loading ? (
+            <div className="p-12 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/30 text-center font-code-sm text-xs text-on-surface-variant">
+              Loading synthesized study materials…
+            </div>
+          ) : materials.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mx-auto">
+                <BookOpen className="w-6 h-6" />
               </div>
-            ))}
-          </div>
-        )
-      )}
+              <h3 className="font-title-md text-base font-semibold text-on-surface">
+                No synthesized materials yet
+              </h3>
+              <p className="font-body-sm text-xs text-on-surface-variant max-w-md mx-auto">
+                Generate study guides, flashcard decks, and practice tests from any assignment or uploaded lecture note.
+              </p>
+              <button
+                type="button"
+                onClick={() => onGoTo?.("dump")}
+                className="h-10 px-5 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase inline-flex items-center gap-2 cursor-pointer shadow-sm mx-auto"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Upload First Material</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {materials.map((m) => {
+                const { Icon, tint } = getTileIcon(m.kind);
+                const isSaved = !!m.saved_at;
+                const isExpanded = !!expandedMap[m.id];
+                const contentStr = typeof m.content === "string" ? m.content : JSON.stringify(m.content, null, 2);
 
-      {tab === 'saved' && (
-        saved.length === 0 ? (
-          <EmptyState icon="🔖" title="Nothing saved yet" body="Save study guides, decks and tests here for quick access." />
-        ) : (
-          <div className="space-y-3">
-            {saved.map((s) => (
-              <div key={s.id} className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl px-5 py-4 flex items-center gap-4 transition hover:border-primary/40 shadow-sm">
-                <span className="text-2xl">{s.kind === 'flashcards' ? '🃏' : s.kind === 'practice_test' ? '📝' : '📖'}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-on-surface">{s.title}</div>
-                  <div className="font-tabular-stat text-[11px] text-on-surface-variant mt-0.5">{s.course} · saved {timeAgo(s.savedAt)}</div>
-                </div>
-                <span className="font-label-caps text-xs uppercase px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant border border-outline-variant/30">
-                  {s.kind.replace('_', ' ')}
-                </span>
-                <Bookmark className="w-4 h-4 text-primary shrink-0" />
-              </div>
-            ))}
-          </div>
-        )
-      )}
-
-      {tab === 'materials' && (
-        mats.length === 0 ? (
-          <EmptyState icon="🃏" title="No materials yet" body="Generate a study guide, flashcards or practice test — saved materials appear here." />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-            {mats.map((m) => {
-              const meta = MAT_META[m.kind] || { icon: '📄', label: m.kind.replace('_', ' ') };
-              const content = m.content;
-              const parsed =
-                typeof content === 'string'
-                  ? (() => { try { return JSON.parse(content); } catch { return content; } })()
-                  : content;
-              const cards = m.kind === 'flashcards' && Array.isArray(parsed) ? parsed.filter((c) => c && (c.q || c.front)) : null;
-              const quiz = m.kind === 'practice_test' && (Array.isArray(parsed) || (parsed && typeof parsed === 'object' && (parsed.multiple_choice || parsed.short_answer))) ? parsed : null;
-              return (
-                <div key={`mat-${m.id}`} id={`library-material-${m.id}`} className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm h-[480px] flex flex-col overflow-hidden hover:border-primary/40 transition">
-                  <div className="w-full shrink-0">
-                    <div className="aspect-[16/9] max-h-36 w-full rounded-2xl border border-outline-variant/20 bg-surface-container-low flex flex-col items-center justify-center gap-1.5 mb-3">
-                      <span className="text-3xl leading-none" aria-hidden="true">{meta.icon}</span>
-                      <span className="font-label-caps text-xs uppercase tracking-wider px-3 py-1 rounded-full bg-primary/15 text-primary font-semibold">{meta.label}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-title-md text-sm font-semibold text-on-surface line-clamp-1 truncate">{meta.label}</span>
-                      <div className="flex items-center gap-2 font-tabular-stat text-[10px] text-on-surface-variant shrink-0">
-                        {m.model_used && <span className="px-1.5 py-0.5 rounded-full bg-surface-container-low border border-outline-variant/30 font-mono">{m.model_used}</span>}
-                        {m.created_at && <span>saved {timeAgo(m.created_at)}</span>}
+                return (
+                  <div
+                    key={m.id}
+                    className="p-4 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 shadow-sm flex flex-col justify-between gap-3 hover:border-primary/40 transition"
+                  >
+                    <div>
+                      {/* Tile Header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${tint}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSave(m)}
+                          className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary transition cursor-pointer"
+                          title={isSaved ? "Remove from saved" : "Save to collection"}
+                        >
+                          {isSaved ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
+                        </button>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-1 mt-4 pt-3 border-t border-outline-variant/20">
-                    {cards ? (
-                      <div className="space-y-3">
-                        {cards.map((c, i) => (
-                          <div key={i} className="rounded-2xl bg-surface-container-low border border-outline-variant/20 p-3.5 space-y-1.5">
-                            <div className="font-label-caps text-xs font-semibold text-primary">Card {i + 1}</div>
-                            <div className="font-title-md text-xs font-semibold text-on-surface">{String(c.q ?? c.front ?? '')}</div>
-                            <div className="font-body-sm text-[11px] text-on-surface-variant leading-relaxed pt-1 border-t border-outline-variant/10">{String(c.a ?? c.back ?? '')}</div>
-                          </div>
-                        ))}
-                        {cards.length === 0 && (
-                          <p className="font-body-sm text-xs text-on-surface-variant">This deck is empty.</p>
+
+                      {/* Title & Metadata */}
+                      <div className="mt-3 space-y-1">
+                        <span className="font-chip-status text-[10px] uppercase font-semibold text-primary block">
+                          {m.kind.replace("_", " ")}
+                        </span>
+                        <h3 className="font-title-md text-xs font-semibold text-on-surface line-clamp-1">
+                          Material #{m.id}
+                        </h3>
+                        {m.model_used && (
+                          <span className="font-code-sm text-[10px] text-outline block">
+                            Model: {m.model_used}
+                          </span>
                         )}
                       </div>
-                    ) : quiz ? (
-                      <div className="space-y-3">
-                        {(Array.isArray(parsed) ? parsed : [
-                          ...(parsed.multiple_choice || []).map((q) => ({ type: 'mc', ...q })),
-                          ...(parsed.short_answer || []).map((q) => ({ type: 'sa', ...q })),
-                        ]).map((q, i) => (
-                          <div key={i} className="rounded-2xl bg-surface-container-low border border-outline-variant/20 p-3.5 space-y-2">
-                            <div className="font-label-caps text-xs font-semibold text-secondary">Question {i + 1}</div>
-                            <div className="font-title-md text-xs font-semibold text-on-surface">{String(q.q ?? q.question ?? '')}</div>
-                            {q.options && Array.isArray(q.options) && (
-                              <div className="space-y-1 pt-1">
-                                {q.options.map((o, j) => (
-                                  <div key={j} className={`px-2.5 py-1.5 rounded-xl border text-[11px] flex items-center gap-2 ${
-                                    q.answer_index === j || q.answer === j
-                                      ? 'border-primary bg-primary/10 text-primary font-medium'
-                                      : 'border-outline-variant/20 bg-surface-container-lowest/50 text-on-surface-variant'
-                                  }`}>
-                                    <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-mono shrink-0">
-                                      {String.fromCharCode(65 + j)}
-                                    </span>
-                                    <span>{o}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {q.explanation && <div className="text-[10px] text-on-surface-variant bg-surface-container-lowest/60 p-2 rounded-xl border border-outline-variant/20">💡 {q.explanation}</div>}
-                            {q.model_answer && <div className="font-body-sm text-[11px] text-on-surface-variant">Model answer: <span className="text-on-surface font-mono">{q.model_answer}</span></div>}
-                          </div>
-                        ))}
+
+                      {/* Clamped Preview (4 lines with expand per 3.10.6) */}
+                      <div className="mt-2 pt-2 border-t border-outline-variant/15">
+                        <p className={`font-body-sm text-[11px] text-on-surface-variant leading-relaxed ${isExpanded ? "" : "line-clamp-4"}`}>
+                          {contentStr}
+                        </p>
+                        {contentStr.length > 120 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMap((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
+                            className="text-primary hover:underline font-code-sm text-[10px] mt-1 flex items-center gap-0.5"
+                          >
+                            <span>{isExpanded ? "Show less" : "Expand preview"}</span>
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <p className="font-mono text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap">{String(content ?? '')}</p>
-                    )}
+                    </div>
+
+                    {/* Launch Study Mode CTA */}
+                    <div className="pt-2 border-t border-outline-variant/15 flex items-center gap-2">
+                      {m.kind === "flashcards" || m.kind === "deck" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveStudyTool({ type: "flashcards", material: m });
+                            setActiveTab("study");
+                          }}
+                          className="w-full h-9 rounded-xl bg-primary text-on-primary font-label-caps text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Practice Cards</span>
+                        </button>
+                      ) : m.kind === "practice_test" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveStudyTool({ type: "quiz", material: m });
+                            setActiveTab("study");
+                          }}
+                          className="w-full h-9 rounded-xl bg-surface-container-high hover:bg-surface-bright text-primary font-label-caps text-[11px] uppercase flex items-center justify-center gap-1.5 active:scale-[0.98] cursor-pointer"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          <span>Take Quiz</span>
+                        </button>
+                      ) : (
+                        <span className="font-code-sm text-[10px] text-outline">
+                          Synthesized Reference Document
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
-      {tab === 'calendar' && (
-        <>
-          <CalendarGrid />
-          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-title-md text-title-md text-on-surface">Upcoming Deadlines</h3>
-              <span className="font-label-caps text-xs uppercase text-on-surface-variant tracking-wider">Academic Timeline</span>
+      {/* TAB 2: SAVED COLLECTION */}
+      {activeTab === "saved" && (
+        <div className="space-y-6">
+          {savedMaterials.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-3">
+              <Bookmark className="w-8 h-8 text-outline mx-auto" />
+              <h3 className="font-title-md text-sm font-semibold text-on-surface">
+                No saved study materials yet
+              </h3>
+              <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto">
+                Bookmark flashcard sets or summary notes to keep them pinned here for quick review.
+              </p>
             </div>
-            {CALENDAR.filter((c) => c.kind === 'due' && !c.status?.startsWith('completed')).length === 0 ? (
-              <EmptyState title="Nothing upcoming" body="No open due dates in range." />
-            ) : (
-              <div className="space-y-2">
-                {CALENDAR.filter((c) => c.kind === 'due' && !c.status?.startsWith('completed'))
-                  .sort((a, b) => a.date - b.date)
-                  .map((c, i) => (
-                    <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low border border-outline-variant/20 hover:border-primary/30 transition">
-                      <div className="w-10 text-center shrink-0">
-                        <div className="font-tabular-stat text-sm font-bold text-on-surface">{new Date(c.date).getDate()}</div>
-                        <div className="font-label-caps text-[9px] uppercase text-on-surface-variant">{new Date(c.date).toLocaleDateString([], { month: 'short' })}</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {savedMaterials.map((m) => {
+                const { Icon, tint } = getTileIcon(m.kind);
+                return (
+                  <div
+                    key={m.id}
+                    className="p-4 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 shadow-sm flex flex-col justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${tint}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        {/* 44px Unsave Button (Spec Requirement) */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSave(m)}
+                          className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
+                          title="Unsave material"
+                        >
+                          <BookmarkCheck className="w-4 h-4 text-primary hover:text-error" />
+                        </button>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-title-md text-xs text-on-surface truncate">{c.title}</div>
-                        <div className="font-body-sm text-[10px] text-on-surface-variant">{c.course}</div>
+
+                      <div className="mt-2 space-y-1">
+                        <span className="font-chip-status text-[10px] uppercase font-semibold text-primary block">
+                          {m.kind.replace("_", " ")}
+                        </span>
+                        <h3 className="font-title-md text-xs font-semibold text-on-surface">
+                          Material #{m.id}
+                        </h3>
+                        {/* saved-date mono per 3.10.2 */}
+                        <span className="font-code-sm text-[10px] text-outline block">
+                          Saved {m.saved_at ? new Date(m.saved_at).toLocaleDateString() : "Recently"}
+                        </span>
                       </div>
-                      <span className={`font-label-caps text-xs uppercase px-2.5 py-1 rounded-full font-semibold ${
-                        c.status === 'draft_ready' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20' : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/30'
-                      }`}>
-                        {c.status.replace('_', ' ')}
-                      </span>
                     </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveStudyTool({
+                          type: m.kind === "practice_test" ? "quiz" : "flashcards",
+                          material: m,
+                        });
+                        setActiveTab("study");
+                      }}
+                      className="w-full h-9 rounded-xl bg-surface-container-high hover:bg-surface-bright text-primary font-label-caps text-[11px] uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Review Now</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: ACTIVE RECALL PLAYER (FLASHCARDS & QUIZ) */}
+      {activeTab === "study" && (
+        <div>
+          {activeStudyTool ? (
+            <div>
+              {activeStudyTool.type === "flashcards" ? (
+                <FlashcardsPlayer
+                  deckId={activeStudyTool.material.id}
+                  deckTitle={`Material #${activeStudyTool.material.id} · Flashcard Deck`}
+                  cards={
+                    Array.isArray(activeStudyTool.material.content)
+                      ? activeStudyTool.material.content
+                      : []
+                  }
+                  streakDays={streakDays}
+                  onReviewCard={handleReviewCardDispatch}
+                  onCompleteSession={() => setActiveTab("files")}
+                />
+              ) : (
+                <QuizPlayer
+                  materialId={activeStudyTool.material.id}
+                  quizTitle={`Material #${activeStudyTool.material.id} · Diagnostic Quiz`}
+                  questions={
+                    Array.isArray(activeStudyTool.material.content)
+                      ? activeStudyTool.material.content
+                      : []
+                  }
+                  streakDays={streakDays}
+                  onGradeQuiz={handleGradeQuizDispatch}
+                  onComplete={() => setActiveTab("files")}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="p-8 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-4">
+              <Layers className="w-10 h-10 text-primary mx-auto" />
+              <h3 className="font-title-md text-base font-semibold text-on-surface">
+                Select a deck or quiz to begin active recall
+              </h3>
+              <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto">
+                Choose any flashcard set or quiz from your files to launch the adaptive spaced repetition player.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab("files")}
+                className="h-10 px-5 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary font-label-caps text-xs uppercase inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Browse Materials</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: ACADEMIC CALENDAR */}
+      {activeTab === "calendar" && (
+        <AcademicCalendar onSelectAssignment={onSelectAssignment} />
       )}
     </div>
   );

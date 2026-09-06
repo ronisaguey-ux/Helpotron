@@ -1,78 +1,82 @@
+/* ────────────────────────────────────────────────────────────────────────────
+ * CookieBanner.jsx — LUMINOUS GLASS Student Privacy & Cookie Choice (Spec 3.3.5)
+ *
+ * Requirements:
+ * - Glass card with LUMINOUS GLASS tokens (zero hex literals).
+ * - 2 honest buttons: "Necessary only" and "Accept all".
+ * - Stored via getCookieConsent / setCookieConsent in localStorage.
+ * - Revert path via Settings > Privacy.
+ * - Adds .cookie-banner-visible to body while visible to prevent occlusion.
+ * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState, useEffect } from 'react';
-
-const CONSENT_KEY = 'helpotron_cookie_consent';
+import { ShieldCheck, Cookie } from 'lucide-react';
+import { getCookieConsent, setCookieConsent } from '../lib/cookieConsent.js';
+import Button from './Button.jsx';
 
 export function CookieBanner() {
-  const [consent, setConsent] = useState(() => {
-    try {
-      return localStorage.getItem(CONSENT_KEY);
-    } catch {
-      return null;
-    }
-  });
+  const [consent, setConsent] = useState(getCookieConsent);
 
-  // 08-28 (visual polish): while the fixed bar is visible, reserve matching
-  // scroll space at the bottom of the page (see .cookie-banner-visible in
-  // index.css) so it never covers the footer or primary actions. The class is
-  // dropped the moment consent is chosen or the banner unmounts.
   useEffect(() => {
-    if (consent) return;
+    const onConsentChanged = (e) => setConsent(e.detail);
+    window.addEventListener('helpotron:cookie-consent-changed', onConsentChanged);
+    return () => window.removeEventListener('helpotron:cookie-consent-changed', onConsentChanged);
+  }, []);
+
+  useEffect(() => {
+    if (consent) {
+      document.body.classList.remove('cookie-banner-visible');
+      return;
+    }
     document.body.classList.add('cookie-banner-visible');
     return () => document.body.classList.remove('cookie-banner-visible');
   }, [consent]);
 
   if (consent) return null;
 
-  const choose = (value) => {
-    try {
-      localStorage.setItem(CONSENT_KEY, value);
-    } catch {
-      /* private mode — hide for the session only */
-    }
-    setConsent(value);
+  const handleChoose = (choice) => {
+    setCookieConsent(choice);
+    setConsent(choice);
   };
 
   return (
     <div
       role="region"
       aria-label="Student Privacy & Cookie Choice"
-      className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-50 bg-[#10121f] border border-white/10 rounded-2xl shadow-2xl p-5 backdrop-blur-xl"
+      className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-50 bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 rounded-2xl shadow-2xl p-4 sm:p-5 text-on-surface select-none"
     >
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="space-y-1 max-w-xl">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-white tracking-tight">Student Privacy &amp; Cookie Choice</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase font-semibold">
+            <span className="flex items-center gap-1.5 text-sm font-bold text-on-surface tracking-tight">
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              Student Privacy &amp; Cookie Choice
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 uppercase font-semibold">
               FERPA Compliant
             </span>
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            We use essential cookies for secure login and strictly optional anonymous telemetry to improve AI humanizing accuracy.
-            We <strong className="text-white">never sell student data</strong>, harvest personal essays, or track browsing across external sites.
+          <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+            We use essential cookies for session security and strictly optional anonymous telemetry to improve AI performance.
+            We <strong className="text-on-surface font-medium">never sell student data</strong>, harvest coursework, or track browsing across external sites.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full lg:w-auto justify-end">
           <button
             type="button"
-            onClick={() => choose('rejected')}
-            className="px-3 py-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition text-xs font-medium"
+            onClick={() => handleChoose('necessary')}
+            className="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface font-title-md text-xs font-semibold transition cursor-pointer min-h-[44px]"
           >
-            Reject All Optional
+            Necessary only
           </button>
-          <button
-            type="button"
-            onClick={() => choose('necessary')}
-            className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white transition text-xs font-semibold border border-white/10"
+          <Button
+            variant="primary"
+            glow={true}
+            onClick={() => handleChoose('all')}
+            className="px-5 py-2 text-xs uppercase tracking-wider font-semibold min-h-[44px]"
           >
-            Necessary Only
-          </button>
-          <button
-            type="button"
-            onClick={() => choose('accepted')}
-            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transition text-xs font-bold shadow-lg shadow-purple-500/25"
-          >
-            Accept All &amp; Support Dev
-          </button>
+            Accept all
+          </Button>
         </div>
       </div>
     </div>

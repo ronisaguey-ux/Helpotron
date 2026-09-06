@@ -1,5 +1,15 @@
 fastapi>=0.115
 uvicorn>=0.30
 requests>=2.31
+# LLM extraction layer — SmartScraperGraph against OpenRouter (FREE deepseek key only)
 scrapegraphai>=0.19
 playwright>=1.46
+# Agent-Reach zero-config channels, used directly by the sidecar lanes
+# (agent-reach itself is installed from the GitHub archive — see run.sh / install.txt)
+yt-dlp>=2024.01.01
+feedparser>=6.0.11
+# Adaptive fetch lanes: TLS-impersonating Fetcher, StealthyFetcher (Cloudflare),
+# DynamicFetcher (JS). Needs `scrapling install` for browsers after pip install.
+scrapling[fetchers]
+# page.markdown() conversion (scrapling renders markdown with markdownify)
+markdownify>=1.0
