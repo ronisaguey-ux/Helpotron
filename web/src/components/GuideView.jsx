@@ -40,7 +40,7 @@ const SECTIONS = [
     chip: 'Start here',
     what: 'The whole pipeline in order: create an account, get coursework into Helpotron, tell the team what to build, study the results, and Launch to Doc for essays. You can skip steps or do them in a different order — this is just the shortest path.',
     steps: [
-      'Sign up with a public ID and a password (no email, no card) — you start on a 7-day free trial with 100 task tokens.',
+      'Sign up with a public ID and a password (no email, no card) — you start on a 7-day free trial with 150 task tokens after enabling 2FA.',
       'Install the browser extension from the Chrome Web Store — or skip it and use Drop Assignment manually, that works too.',
       'Open Drop Assignment and dump your coursework: a PDF, slides, lecture audio, an image, a video, or pasted text. The AI matches it to the right assignment or makes a new bubble.',
       'Open the assignment and pick a direction — Do it for me, Study guide, Quiz, Flashcards, Summary, or Something else. The subagent team starts the moment you pick.',
@@ -50,7 +50,7 @@ const SECTIONS = [
     tips: [
       'Dropping coursework manually works fully without the extension; the extension just makes capture one click on class pages.',
       'Each assignment has its own chat thread — the same conversation appears in My Agent\'s bubbles and in the assignment workspace.',
-      'Plans refill tokens monthly: Basic 300, Pro 1,000, Elite 2,700. The 7-day trial starts you at 100.',
+      'Plans refill tokens monthly: Basic 300, Pro 1,000, Elite 2,700. The 7-day trial starts you at 150.',
     ],
   },
   {
@@ -758,7 +758,7 @@ export default function GuideView({ onGoTo, publicMode = false }) {
                 Ready to start studying?
               </h3>
               <p className="text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto leading-relaxed">
-                Join Helpotron with a public ID and password — no credit card needed to start. The 7-day trial includes 150 task tokens after you enable two-factor authentication.
+                Join Helpotron with a public ID and password — no credit card needed to start. The 7-day trial includes 150 task tokens after you enable two-factor authentication and a $0.01 payment verification.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button

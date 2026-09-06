@@ -177,7 +177,7 @@ export default function ControlCenterView({ userId = "" }) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="font-label-caps text-[10px] text-primary uppercase tracking-widest">
-              Operations Console // §3.19
+              Operations Console
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-outline-variant" />
             <span className="font-code-sm text-xs text-on-surface-variant">

@@ -172,7 +172,7 @@ export default function DataLakeView({ userId = '' }) {
           <span className="text-primary font-medium">Data Lake</span>
           <span>/</span>
           <span className="text-sem-cyan flex items-center gap-1 font-chip-status text-[10px] px-2 py-0.5 rounded-full bg-sem-cyan/10">
-            SPEC §3.12 VALUATION
+            DATA VALUATION
           </span>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
