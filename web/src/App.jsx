@@ -279,13 +279,16 @@ export default function App() {
     '/admin': ['admin', null],
   };
   /* Paths the anonymous landing page legitimately serves. */
-  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy']);
+  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy', '/extension']);
   const [notFoundPath, setNotFoundPath] = useState(null);
   const pendingDeepLink = useRef(null);
   const resolvePath = (path, status) => {
     if (path === '/sign-in' || path === '/signup') {
       pendingDeepLink.current = ['overview', null];
       if (status === 'signedOut') openAuth(path === '/sign-in' ? 'login' : 'signup');
+      return;
+    }
+    if (status === 'signedOut' && PUBLIC_PATHS.has(path)) {
       return;
     }
     const mapped = VIEW_PATH_MAP[path];
