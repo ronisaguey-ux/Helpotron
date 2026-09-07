@@ -39,7 +39,7 @@ The product is built on a dual-layer UX doctrine: simple, focused, and low-cogni
 - **Strict Ban on Legacy Models:** Models from previous generations (`deepseek/deepseek-chat`, `deepseek/deepseek-v3`, `deepseek/deepseek-r1`, `google/gemini-1.5-*`, `google/gemini-2.0-*`) are strictly banned from production routing.
 - **Approved Active Catalog:**
   - **Primary Frontier Reasoning & Text:** `deepseek/deepseek-v4-flash-vision`, `deepseek/deepseek-v4-pro-vision`
-  - **Primary Multimodal, OCR & Vision:** `google/gemini-3.1-flash-lite`, `google/gemini-3.7-flash` (for Canvas LMS document ingestion, image/diagram recognition, audio/video lecture transcription, and visual OCR)
+  - **Primary Multimodal, OCR & Vision:** `google/gemini-3.1-flash-lite`, `google/gemini-3.8-flash` (for Canvas LMS document ingestion, image/diagram recognition, audio/video lecture transcription, and visual OCR)
   - **Auxiliary Grunt Worker Pool:** `qwen/qwen-2.5-72b-instruct`, `mistralai/mistral-nemo`, `nvidia/nemotron-mini-4b-instruct`
 - **Dynamic Grunt-Tier Invariant:**
   $$\text{effective\_candidate\_cost} < \text{deepseek\_baseline\_cost} \land \text{minimum\_capability\_met} == \text{True} \land \text{reliability} \ge 0.985$$

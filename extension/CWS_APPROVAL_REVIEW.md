@@ -39,7 +39,7 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 | ~~`downloads`~~ **REMOVED** | No `chrome.downloads` reference anywhere in `extension/*.js` (grep 0 hits); no longer in `permissions` (`manifest.json:12-21`) | None | OK (removed — DECISION-ITEM 2 resolved) |
 | `tabCapture` | `agent_mode.js:36,360` — `getMediaStreamId` for the agent "See screen" stream | Stream the selected tab's screen content to the agent (visible to user; "See screen" toggle in `popup.html`) | OK — justify in listing as "stream the tab to the agent the user chose" |
 | `desktopCapture` | `agent_mode.js:37,396` — Firefox/`chooseDesktopMedia` fallback for the preview path | Same purpose, browser fallback | OK (justify, keep permission narrow — never used in the Chrome happy path) |
-| `debugger` — **OPTIONAL** | `manifest.json:22-24` (`optional_permissions`); requested on first use from a user gesture (`popup.js` toggle handler → `chrome.permissions.request({permissions:['debugger']})`); `agent_mode.js:584` attach, `598` detach, `604,609,874,1245` sendCommand (CDP `Input` + `Runtime.evaluate` for typing/clicking hints, never raw input events); presence checked via `chrome.permissions.contains` at popup init and in `agent_mode.js` `ensureDebugger()` (returns false + friendly status when not granted) | Drive the user-approved agent actions (move/click/type/scroll in the selected tab), only after the user switches Execute on and approves Chrome's prompt. Never required at install; declining leaves Execute off with all other features working | OK (gated — DECISION-ITEM 1 resolved) |
+| `debugger` — **REQUIRED** (changed 2026-09-06) | `manifest.json` `permissions`; `popup.js` `executeReturnedActions()` attach/detach + CDP `Input.dispatchMouseEvent`/`insertText`/`dispatchKeyEvent` and `Runtime.evaluate` (virtual-cursor overlay only — never raw input capture); `agent_mode.js` `ensureDebugger()` attaches directly | Drive the user-approved agent actions (move/click/type/scroll) in the selected tab. Still gated in the product by the **Execute** switch (default OFF) + the Manual/Automatic/YOLO permission mode; credential/OTP/card fields, downloads and file inputs stay hard-blocked in every mode; Pause/Esc always ends a burst | ⚠️ CHANGED — see DECISION-ITEM 1 (owner directive: no mid-flow permission dialog) |
 | `notifications` | `background.js:554,599,621,628` — approval-request card and its button callback | Popup open isn't guaranteed during an agent session; notification card is the approval surface | OK (ties to consent UX — mention in listing) |
 | `host_permissions` `*.instructure.com` | `content.js:25,199`, `background.js:1119` | Canvas capture | OK |
 | `host_permissions` `classroom.google.com` | `content.js:224` | Google Classroom capture | OK |
@@ -70,7 +70,7 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 | Popup chat button title | `popup.html:94` — "…with your approval, act on the selected tab" (was "drive this screen") | OK |
 | Popup scrape status | `popup.js` — "Reading the focused tab (waiting for load, expanding content, hashing files)…" (was "Deep-scraping…") and "Saved to Helpotron: …" (was "Tracked & Ingested: …") | OK |
 | Popup Chat sub-label | `popup.html:187` — "Tell the agent what to do on your screen" | OK (unchanged, accurate) |
-| Popup Execute permission note | `popup.js` toggle handler — first switch-on calls `chrome.permissions.request`; denial flips Execute back off with status "Agent actions need the 'debugger' permission — not granted. Execute stays OFF"; init re-checks `permissions.contains` so UI and capability can't drift | OK (new) |
+| Popup Execute permission note | REMOVED 2026-09-06 — `debugger` is a required permission now, so there is no mid-flow prompt to describe. Switching Execute on states "Execute: ON — the agent may act with permission mode." The install-time permission warning is Chrome's own | OK (accurate for the shipped build) |
 | Options subtitle | `options.html` — "Configure how Helpotron works in your browser." (removed "premium co-pilot") | OK |
 | Options capture/privacy sections | `options.html` — removed dead toggles (`optAskSubject`, `optAutoCapture`, `optStructured` — no code reads `ext_askSubject`/`ext_autoCapture`/`ext_structured`; `options.js` now reads only `ext_theme`/`ext_accent`); privacy list now matches real flows (URL/title, prompt/rubric, course metadata, file links + size/SHA-256 + bytes <6MB; chat + compressed screenshot when See screen on; "keystrokes typed into pages are never read") | OK |
 | Options shortcuts section | `options.html` — removed entirely (manifest has no `commands` key — Alt+H/Alt+C never existed) | OK |
@@ -83,7 +83,7 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 | `PRIVACY_POLICY.md` §2.2 | Rewritten 2026-09-02: supported sites (Canvas, Classroom, Blackboard, Brightspace/D2L, Moodle, Schoology, GDocs, Gmail, Notion, M365, Helpotron, localhost); explicit user-initiated capture only ("never reads or transmits a page's content on page open"); per-endpoint dump (URL/title, prompt/rubric, course metadata, files + SHA-256/size + bytes ≤6MB); course crawl + robots.txt respect (`background.js:1379-1384`); agent chat + compressed screen frame while "See screen" on; typing is local DOM events (`content.js:692-770`), keystrokes never transmitted; auth tokens stored in extension storage only; NEW: "Debugger" permission paragraph — only requested the first time Execute is switched on, declining keeps agent actions off | OK (fixed) |
 | `PRIVACY_POLICY.md` §2.2 misrepresentation, now fixed | Old text claimed Canvas-only + "custom university domains configured by the student" (no such config exists), "strictly read-only traversal … never click submission buttons" (agent_mode.js can click/type with consent; only LMS pages are read-only, `background.js:846-860`) | OK (fixed) |
 | `PRIVACY_POLICY.md` §15.2 | Now lists real `chrome.storage` keys: `server`, `public_id`, `token`, `session_token`, `helpotron_chat*`, `helpotron_crawl*`, `helpotron_last_scrapes`, `helpotron_agent_*`, `helpotron_hud_config`, `helpotron_approval_*`/`helpotron_appr_*`, `helpotron_update_check`, `whatsnew_last_seen_version`, `ext_theme`, `ext_accent`; no `localStorage` | OK (fixed) |
-| `EXTENSION_SETUP_GUIDE.md` | Rewritten 2026-09-02 (v2.5.1): real feature names (Scrape current/whole tab, Chat with See screen + Execute + Manual/Automatic/YOLO, Open Data Lake), `helpotron.dpdns.org` (was helpotron.com), removed "Spawn AI Subagent"/"Submit to Data Lake … bonus micro-credits"/"Record Lecture Audio" (no UI trigger in the current popup), release/update flow matches `background.js:1464-1500` + popup What's New; NEW: first-use debugger permission note in the Execute row | OK (fixed) |
+| `EXTENSION_SETUP_GUIDE.md` | Rewritten 2026-09-02 (v2.5.1): real feature names (Scrape current/whole tab, Chat with See screen + Execute + Manual/Automatic/YOLO, Open Data Lake), `helpotron.dpdns.org` (was helpotron.com), removed "Spawn AI Subagent"/"Submit to Data Lake … bonus micro-credits"/"Record Lecture Audio" (no UI trigger in the current popup), release/update flow matches `background.js:1464-1500` + popup What's New; Execute row rewritten 2026-09-06 — no first-use permission prompt (required `debugger`), documents the one-click Retry instead | OK (fixed) |
 | `web/src/PrivacyPolicy.jsx` CAT-15 | Updated to match: multi-platform capture, file bytes, screen frames, chat; "not transmitted: keystrokes/passwords/OTP/card" | OK (fixed) |
 | `web/public/PRIVACY_POLICY.md` + `web/dist/PRIVACY_POLICY.md` (stale legacy copies) | Replaced with the authoritative root `PRIVACY_POLICY.md` so no publicly reachable copy contradicts the current policy | OK (synced) |
 
@@ -128,7 +128,7 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 > - **alarms** — scheduled update checks and the course crawl tick.
 > - **notifications** — show the approval card when the agent wants to take an action while the popup is closed.
 > - **tabCapture / desktopCapture** — stream the selected tab to the agent when you turn "See screen" on (desktopCapture is a browser fallback path).
-> - **debugger (optional)** — not requested at install. The extension asks for it **only when you first switch Execute on**, and it drives the agent's consented actions (move/click/type/scroll) in the tab you selected via the browser's debugging protocol. Credential/OTP/card fields, downloads, and learning platforms are hard-blocked, every action is visibly approved in the mode you choose, and Stop/Esc always ends it. If you decline, Execute stays off and every other feature keeps working.
+> - **debugger** — drives the agent's consented actions (move/click/type/scroll) in the tab you selected, through the browser's debugging protocol. It is never used unless you switch **Execute** on yourself (it ships OFF), and then only in the permission mode you pick. Credential/OTP/card fields, downloads, and learning platforms are hard-blocked in every mode; a visible second cursor shows exactly what the agent is doing, and Pause or Esc stops it instantly.
 > - **Host permissions** — each listed LMS/document host (Canvas, Classroom, Blackboard, Brightspace, Moodle, Schoology, Google Docs, Gmail, Notion, Office) plus your own Helpotron server (https://helpotron.dpdns.org) and localhost for local development; permission is required so the extension can read the page you asked it to capture.
 
 **Privacy policy URL:** `https://helpotron.dpdns.org/privacy-policy`
@@ -139,7 +139,10 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 
 ## 3. DECISION-ITEMS — status
 
-1. **`debugger` — keep, gate, or remove?** → **RESOLVED: gated as an optional permission.** Added `"optional_permissions": ["debugger"]` (`manifest.json:22-24`); removed from required `permissions` (`:12-21`). Popup requests it on the first Execute switch-on (`popup.js` toggle handler), flips the toggle back and shows a status message if denied, and re-validates with `chrome.permissions.contains` at init. `agent_mode.js` `ensureDebugger()` checks `contains` and degrades gracefully (friendly status, no attach). Listing justification updated to describe the optional, first-use request.
+1. **`debugger` — keep, gate, or remove?** → **REOPENED AND RE-DECIDED 2026-09-06 (owner directive): REQUIRED, no runtime prompt.**
+   The optional-permission design (2026-09-02) put a Chrome permission dialog in the middle of the Execute flow; the owner ruled that unacceptable, so `debugger` moved into required `permissions` and every `chrome.permissions.request`/`contains({permissions:['debugger']})` call was removed (`popup.js` has zero `chrome.permissions` references; `agent_mode.js` keeps only the host-permission origin gate).
+   **Store consequence — must be re-declared before the next submission:** the extension now shows the "Read and change all your data…"-class warning at INSTALL time rather than on first use, and the listing text above was rewritten to match. The product-level gate is unchanged and is what the justification leans on: Execute ships OFF, the permission mode still governs each action, hard blocks (credentials/OTP/cards/downloads) apply in every mode, and Pause/Esc ends a burst. Reverting to optional would restore the old prompt — do not do so without the owner.
+   The `contains({origins:[…]})` host gate documented in DESIGN-UX.md §3 is untouched.
 2. **Remove `downloads`** → **RESOLVED:** removed from `manifest.json` permissions (0 code references).
 3. **Remove redundant `https://*.google.com/*`** → **RESOLVED:** removed; classroom/docs/mail each listed explicitly (`manifest.json:27,33,34`).
 4. **Verify the extension loads in a real Chrome** → **RESOLVED:** loaded in a real Chromium engine (Chrome-152-based Playwright build, `--headless=new --no-sandbox --load-extension`), verified end-to-end over CDP: service worker alive and responds, `chrome.runtime.getManifest()` returns 2.5.1 with all 7 invariants (optional debugger, no debugger/downloads in required set, no `*.google.com`, no `externally_connectable`, `service_worker` present), popup.html renders (title "Helpotron Companion", Execute toggle + What's New banner), agent_mode.html renders with the control toggle (full log in §4). Branded `google-chrome` ignores unpacked `--load-extension` flags by design ("--disable-extensions-except is not allowed in Google Chrome, ignoring.") — that is a launch restriction, not an extension defect; the identical engine build accepted the manifest.
@@ -154,6 +157,10 @@ Legend: **OK** — accurate/tight; **REWORD** — text needs fixing (done or fla
 ## 4. Verification evidence (2026-09-02, final pass)
 
 **Real-Chrome load (DECISION-ITEM 4) — CDP session, all green:**
+> HISTORICAL LOG from the 2026-09-02 / v2.5.1 pass. The two `optional_permissions`
+> lines below no longer hold: `debugger` is a REQUIRED permission as of 2026-09-06
+> (DECISION-ITEM 1). Every other invariant still holds and was re-verified against
+> v2.6.1 in a real Chromium engine this pass.
 ```
 extension id: dpbeoomhlbphmmamopkjillheehakgka
 worker alive ✓
@@ -177,17 +184,17 @@ This run also **caught and fixed a real defect**: the `externally_connectable` e
 - `node --check` on all touched JS: `popup.js`, `agent_mode.js` → pass. (`options.js`, `background.js`, `content.js`, `onboarding.js`, `recorder.js`, `theme.js`, `crawl-core.js`, `mouse_path.js`, `vite.config.js` checked in the first pass.)
 - `py_compile` on `routes_extension.py`, `main.py`, `config.py`, `canvas_sync.py` → pass.
 - `GET http://127.0.0.1:8000/api/extension/version` → `latest_version: "2.5.1"` with 2.5.1 release notes (safer permissions / rename / cleaner zip).
-- `GET http://127.0.0.1:8000/api/extension/download` → **200, 535 KB zip: no `.md` files, `manifest.json` inside reports 2.5.1 + `optional_permissions: ["debugger"]` + name "Helpotron Academic Companion"** (28 files).
+- `GET http://127.0.0.1:8000/api/extension/download` → **200, 535 KB zip: no `.md` files, `manifest.json` inside reports 2.5.1 + `optional_permissions: ["debugger"]` *(v2.5.1 snapshot; v2.6.1 ships required `debugger`)* + name "Helpotron Academic Companion"** (28 files).
 - Live: `https://helpotron.dpdns.org/privacy-policy` = 200, renders current policy (new §2.2 + §15.2 + debugger paragraph); `/extension-guide` = 200, renders v2.5.1 guide — both verified in the first pass; stale `web/public/` + `web/dist/` policy copies synced to the authoritative root version this pass.
 - No commits made; all edits uncommitted for the owner.
 
 ## 5. Files changed in this review
 
 Manifest & permissions:
-- `extension/manifest.json` — name, description (len-safe), **v2.5.1**, `optional_permissions: ["debugger"]`, `downloads` removed, `*.google.com` removed, `externally_connectable` removed
+- `extension/manifest.json` — name, description (len-safe), **v2.5.1**, `optional_permissions: ["debugger"]` *(superseded 2026-09-06: required `permissions`)*, `downloads` removed, `*.google.com` removed, `externally_connectable` removed
 
 Extension JS/HTML:
-- `extension/popup.js` — debugger permission request on first Execute switch-on (async toggle handler), init-time `permissions.contains` consistency check, denial status message
+- `extension/popup.js` — debugger permission request on first Execute switch-on (async toggle handler), init-time `permissions.contains` consistency check, denial status message *(all removed 2026-09-06 — see DECISION-ITEM 1)*
 - `extension/agent_mode.js` — `ensureDebugger()` grants-aware guard with friendly status
 - `extension/popup.html` — version badge 2.5.1, 1 title attr
 - `extension/options.html`, `extension/options.js` — dead toggles/shortcuts wiring removed, accurate copy
@@ -199,7 +206,7 @@ Server:
 
 Docs & policy:
 - `PRIVACY_POLICY.md` — §2.2, §15.2, debugger-permission paragraph, brand rename, Last Updated
-- `EXTENSION_SETUP_GUIDE.md` — full rewrite (v2.5.1) incl. first-use debugger note
+- `EXTENSION_SETUP_GUIDE.md` — full rewrite (v2.5.1) incl. first-use debugger note *(that note replaced 2026-09-06)*
 - `web/public/PRIVACY_POLICY.md`, `web/dist/PRIVACY_POLICY.md` — synced to root policy (stale copies replaced)
 
 Web app (branding):

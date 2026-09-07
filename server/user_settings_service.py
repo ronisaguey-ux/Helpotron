@@ -166,8 +166,8 @@ AVAILABLE_MODELS = [
         "min_effort": 750,
     },
     {
-        "id": "gemini_37_flash",
-        "name": "Google Gemini 3.7 Flash",
+        "id": "gemini_38_flash",
+        "name": "Google Gemini 3.8 Flash",
         "pricing": "$0.25 / $1.00 per 1M tokens",
         "context_window": 1000000,
         "recommended_use": "Max Effort Gemini-Exclusive: Audio, Video, Google Slides & Doc History",
@@ -272,7 +272,7 @@ def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
             "tier_label": f"Levels 8–10 (7+): DeepSeek V4 Pro Vision (Lvl {lvl})",
             "score": score,
             "level": lvl,
-            "description": "Flagship cognitive depth, research, and rigorous synthesis with DeepSeek V4 Pro Vision (Gemini 3.7 Flash for Gemini-exclusive tasks).",
+            "description": "Flagship cognitive depth, research, and rigorous synthesis with DeepSeek V4 Pro Vision (Gemini 3.8 Flash for Gemini-exclusive tasks).",
             "summary_model": "deepseek_v4_pro_vision",
             "flashcard_model": "deepseek_v4_pro_vision",
             "draft_model": "deepseek_v4_pro_vision",
@@ -346,10 +346,10 @@ class UserSettingsService:
             "effort_score": 500,  # 1 - 1000 scale
             "auto_start": False,  # True = Auto-start execution on assignment bubble organization; False = Manual staging approval
 
-            # 3. Gemini 3.7 Flash Multimodal & Presentation Engine
+            # 3. Gemini 3.8 Flash Multimodal & Presentation Engine
             "gemini_multimodal": {
-                "enabled": True,  # Enables Gemini 3.7 Flash
-                "auto_spawn_on_media": True,  # Auto-spawns Gemini 3.7 Flash sub-agent into teams when assignment has media/video
+                "enabled": True,  # Enables Gemini 3.8 Flash
+                "auto_spawn_on_media": True,  # Auto-spawns Gemini 3.8 Flash sub-agent into teams when assignment has media/video
                 "image_generation": True,
                 "video_generation": True,
                 "interpretation": True,
@@ -357,7 +357,7 @@ class UserSettingsService:
             # PowerPoint / Google Slides Pure-Gemini Engine (Bypasses Nemotron & DeepSeek)
             "presentation_gemini_config": {
                 "pure_gemini_exclusive": True,
-                "flash_lite_percent": 60,  # 60% Gemini 3.1 Flash-Lite / 40% Gemini 3.7 Flash
+                "flash_lite_percent": 60,  # 60% Gemini 3.1 Flash-Lite / 40% Gemini 3.8 Flash
                 "speaker_notes_enabled": True,
                 "visual_layout_instructions": True,
             },
@@ -415,7 +415,7 @@ class UserSettingsService:
                 "draft_model": "fast_draft_tier",
                 "humanizer_model": "elite_humanizer_tier",
                 "default_model": "moe_high_throughput",
-                "gemini_multimodal": "gemini_37_flash",
+                "gemini_multimodal": "gemini_38_flash",
             },
 
             # 8b. AI & Intelligence (agent brain — one top-level key so the

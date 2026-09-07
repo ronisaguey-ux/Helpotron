@@ -1,7 +1,7 @@
 """API cost tracking — per-call ledger + admin analytics.
 
 Model policy (2026-08-21): rate keys use ONLY allowlisted models
-(deepseek-v4-flash/pro, gemini-3.1-flash-lite/3.7-flash). Legacy keys
+(deepseek-v4-flash/pro, gemini-3.1-flash-lite/3.8-flash). Legacy keys
 that are never routed to were dropped — banned model names must not
 appear anywhere in code that a policy scanner would flag.
 """
@@ -20,7 +20,7 @@ MODEL_RATES = {
     'deepseek-v4-flash': {'input': 0.0001, 'output': 0.0002},
     'deepseek-v4-pro': {'input': 0.0014, 'output': 0.0028},
     'gemini-3.1-flash-lite': {'input': 0.0005, 'output': 0.0015},
-    'gemini-3.7-flash': {'input': 0.001, 'output': 0.004},
+    'gemini-3.8-flash': {'input': 0.001, 'output': 0.004},
     'mistral-nemo': {'input': 0.00015, 'output': 0.00015},
     'qwen-cheap': {'input': 0.0001, 'output': 0.0001},
 }

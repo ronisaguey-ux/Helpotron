@@ -1,0 +1,937 @@
+{
+ "producer": "B",
+ "area": "frontend_replacement_map",
+ "generated": "2026-09-06",
+ "export_root": "/tmp/stitch_z3/stitch_design_concept_generator (99 screen_* folders, 112 code.html incl. 13 legacy-named) ",
+ "current_components": {
+  "top_level_jsx_51": [
+   "ActivityView.jsx",
+   "AdminAdvancedDashboard.jsx",
+   "AdminAgentChat.jsx",
+   "AdminPanels.jsx",
+   "AgentConfigsSidebar.jsx",
+   "AnalyticsDashboard.jsx",
+   "AnonymousLanding.jsx",
+   "AppShell.jsx",
+   "AssignmentCardDashboard.jsx",
+   "AssignmentCard.jsx",
+   "AssignmentDetailView.jsx",
+   "AssignmentDumpView.jsx",
+   "AssignmentHistoryView.jsx",
+   "AssignmentTurnInView.jsx",
+   "AuthModal.jsx",
+   "AutomationCenter.jsx",
+   "BillingView.jsx",
+   "Button.jsx",
+   "CommandPalette.jsx",
+   "CookieBanner.jsx",
+   "CreditLeaderboard.jsx",
+   "CreditsPricingDashboard.jsx",
+   "CreditsView.jsx",
+   "DataLakeView.jsx",
+   "DemoModeToggle.jsx",
+   "DevContactModal.jsx",
+   "ExtensionInstallView.jsx",
+   "GuideView.jsx",
+   "InsightsView.jsx",
+   "IntelligenceView.jsx",
+   "LaunchToDocModal.jsx",
+   "LibraryView.jsx",
+   "MessageAdminView.jsx",
+   "MonitorsView.jsx",
+   "MyAgentView.jsx",
+   "NewAssignmentModal.jsx",
+   "NotFound.jsx",
+   "NotificationsView.jsx",
+   "PermissionModal.jsx",
+   "PrivacyPolicyModal.jsx",
+   "PrivacyPolicyView.jsx",
+   "QueueNoticeBanner.jsx",
+   "RecoveryFlowModal.jsx",
+   "ReferralSection.jsx",
+   "ScopedSetting.jsx",
+   "SectionCard.jsx",
+   "SettingsApp.jsx",
+   "SettingsSections.jsx",
+   "shimmering-text.jsx",
+   "TermsOfServiceView.jsx",
+   "TwoFactorSetup.jsx"
+  ],
+  "ui_subdir_10": [
+   "ui/AdminNoticePopup.jsx",
+   "ui/AgentAvatar.jsx",
+   "ui/AnimatedLogo.jsx",
+   "ui/background-beams.jsx",
+   "ui/bento-grid.jsx",
+   "ui/Button.jsx",
+   "ui/lip-scroll-zoomin-animation.jsx",
+   "ui/moving-border.jsx",
+   "ui/os.jsx",
+   "ui/typewriter-effect.jsx"
+  ],
+  "charts_subdir_38": [
+   "charts/*.jsx (24) + charts/*.js (9) + charts/tooltip/* (6 .jsx) — VisX chart engine; source of charts/area-chart.jsx, area.jsx, x-axis.jsx, grid.jsx, series-*.jsx, use-*.js hooks, tooltip/*, animated path lib (gsap/framer). KEEP wholesale as plumbing."
+  ],
+  "src_non_component": [
+   "App.jsx (866: routing+auth machine+lazy map — KEEP wiring, restyle only)",
+   "main.jsx",
+   "api.js (777: server client + QUEUE_MESSAGE + queue banner constants — KEEP)",
+   "demoData.js (441: lib/assignmentBuckets.js state + settings + demo data — KEEP)",
+   "mock.js (358: isDemoMode/setDemoMode/resolveDemoRequest — KEEP)",
+   "PrivacyPolicy.jsx (content doc)",
+   "index.css (1735: token home — REWRITE token sheet, keep structure)",
+   "lib/assignmentBuckets.js",
+   "lib/assignmentEvents.js",
+   "lib/utils.js (cn)"
+  ],
+  "non_component_roots": [
+   "components.json (shadcn config, keep)",
+   "vite.config.js (plugins incl tailwind v4 — keep)",
+   "index.html",
+   "manifest.json",
+   "DESIGN_OVERHAUL.md (superseded 09-05 by the v6 spec — archive)"
+  ],
+  "roles_note": "Roles per file were read from the top ~35 lines of each: AppShell/nav + drawer + bottom bar + palette host (891), AuthModal panes-signin/signup, AssignmentCardDashboard = Home content column, AssignmentDetailView = per-assignment bento w/ direction picker + timeline, MyAgentView = chat console (45s poll), SettingsApp/SettingsSections = the 3000-line settings sprawl (keeps applyAppearance/applyAccessibility/applyFontScale exported at 1008-1034), AgentConfigsSidebar = mode/identity rail + presets + event bubbles, ScopedSetting = 3-level config data engine (SCOPE_LEVELS/resolveScopedValue/effectiveValue), Export/Dump/TurnIn/History/Intelligence/Analytics/Library/Credits(x4)/DataLake/Monitors/AdminPanels(+2)/Extension/Guide/ToS/Privacy(x2)/TwoFactor/Recovery/Permission/Cookie/CommandPalette/NotFound/DemoMode = one screen each; os.jsx = shared primitives kit; SectionCard/Button/AgentAvatar/AnimatedLogo/bento-grid/moving-border/background-beams/lip-scroll/typewriter/shimmering-text = primitive/decoration; QueueNoticeBanner + AdminNoticePopup = banner pair; DevContactModal = dead (no importers)."
+ },
+ "mapping": [
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.1",
+   "export_dir": "screen_3.1.1_1440_populated_dark_app_shell_frame (1 folder, 1440 dark)",
+   "current_component": "AppShell.jsx",
+   "action": "REPLACE",
+   "notes": "All export screens render ON this shell: topbar 64px + sidebar 256px + page-max/page-pad main. getNavItems export in AppShell.jsx (30) is the nav config source — rebuild as NAV_ITEMS + useLocation. live mode only; data-path attrs in export become route hooks."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.2",
+   "export_dir": "screen_3.1.2_390_populated_dark_mobile_navigation_drawer (1 folder, 390)",
+   "current_component": "AppShell.jsx",
+   "action": "REPLACE",
+   "notes": "Distinct variant, not a separate file: inside new AppShell, <lg drawer + scrim + spring (useAnimate), WalletLine/guest Sign-in row in footer of drawer, focus-return to hamburger."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.3",
+   "export_dir": "screen_3.1.3_390_populated_dark_mobile_bottom_bar_more_sheet (1 folder, 390)",
+   "current_component": "AppShell.jsx",
+   "action": "REPLACE",
+   "notes": "Bottom bar 5 slots Home/Agent/Insights/History/More min 44px, active=bg-primary-container no scale, More sheet above bar. Pending-approval amber dot on Home (honest badge)."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.4",
+   "export_dir": "screen_3.1.4_1440_populated_dark_quick_settings_popover (1 folder, 1440)",
+   "current_component": "AppShell.jsx",
+   "action": "REPLACE",
+   "notes": "New: QuickSettingsPopover.jsx — theme/AI-effort segmented, WalletLine, build-id footer; mobile sheet variant. Replaces AppShell's plain avatar dropdown."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.5",
+   "export_dir": "screen_3.1.5_1440_populated_dark_command_palette_popover + screen_3.1.5_390_populated_dark_mobile_command_palette (2 folders)",
+   "current_component": "CommandPalette.jsx",
+   "action": "REPLACE",
+   "notes": "CmdPalette rewritten: recents key helpotron_palette_recent kept, slash-command index from demoData.js kept, admin gating, empty-honest-empty-state."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.6",
+   "export_dir": "screen_3.1.6_1440_spec_runtime_dark_global_footer_system (1 folder, 1440)",
+   "current_component": "null (footer lives in AppShell.jsx)",
+   "action": "REPLACE",
+   "notes": "Mono 11px footer new: part of AppShell scaffold item."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.7",
+   "export_dir": "screen_3.1.7_1440_populated_dark_notification_bell_popover_activity_stream (1 folder, 1440)",
+   "current_component": "NotificationsView.jsx (unused by App.jsx)",
+   "action": "REPLACE",
+   "notes": "Bell popover new (inside AppShell); KEEP the localStorage key helpotron_notifications_read so bell+view agree. demo-empty vs live-empty states distinct."
+  },
+  {
+   "spec_family": "3.1",
+   "spec_screen": "3.1.8",
+   "export_dir": "screen_3.1.8_1440_populated_dark_notifications_activity_feed (1 folder, 1440)",
+   "current_component": "ActivityView.jsx (route activity:notifications)",
+   "action": "REPLACE",
+   "notes": "New activity feed with All/Unread/Preferences tabs; Preferences tab = the real Settings notifications panel (single source, kills SettingsSections duplicate)."
+  },
+  {
+   "spec_family": "3.2",
+   "spec_screen": "3.2.1",
+   "export_dir": "screen_3.2.1_1440_populated_dark_auth_sign_in_recovery + screen_3.2.1_390_populated_dark_mobile_auth_sign_in (2 folders)",
+   "current_component": "AuthModal.jsx",
+   "action": "REPLACE",
+   "notes": "Two-pane (left brand / right card), PUBLIC ID field w/ eye toggle, Turnstile below form on mobile, banner/lapsed-trial variants. Auth status-machine in App.jsx untouched."
+  },
+  {
+   "spec_family": "3.2",
+   "spec_screen": "3.2.2",
+   "export_dir": "screen_3.2.2_1440_populated_dark_create_account_sovereign_pane (1 folder, 1440)",
+   "current_component": "AuthModal.jsx (mode='signup' pane)",
+   "action": "REPLACE",
+   "notes": "Create-account pane variants: referral chip, consent checkbox required, captcha-failure state, duplicate-ID error."
+  },
+  {
+   "spec_family": "3.2",
+   "spec_screen": "3.2.3",
+   "export_dir": "screen_3.2.3_1440_interactive_dark_2fa_segmented_otp + screen_3.2.3_390_populated_dark_mobile_2fa_segmented_otp (2 folders)",
+   "current_component": "TwoFactorSetup.jsx (190 lines, inside SettingsSections) + auth_2fa_verification legacy",
+   "action": "REPLACE",
+   "notes": "6-cell OTP w/ hidden mirror input, paste-spread, 30s resend cooldown mono countdown, error shake; hard/soft-method caption from real server only. Interactive export (JS-free demo script) is a reference, not code."
+  },
+  {
+   "spec_family": "3.2",
+   "spec_screen": "3.2.4",
+   "export_dir": "screen_3.2.4_1440_populated_dark_real_recovery_flow_modal (1 folder, 1440)",
+   "current_component": "RecoveryFlowModal.jsx",
+   "action": "REPLACE",
+   "notes": "Real channel flow incl. ask-the-developer channel (absorbs DevContactModal, currently dead/unused)."
+  },
+  {
+   "spec_family": "3.2",
+   "spec_screen": "3.2.5",
+   "export_dir": "screen_3.2.5_1440_populated_dark_session_expiry_states_suite (1 folder, 1440)",
+   "current_component": "AuthModal.jsx / App.jsx (session machine)",
+   "action": "REPLACE",
+   "notes": "3 variants: in-app modal, silent 401 banner, full-page re-auth; preserve pending intent. App.jsx wiring KEEP."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.1",
+   "export_dir": "screen_3.3.1_1440_populated_dark_public_landing_pricing + screen_3.3.1_1440_populated_light_public_landing_pricing + screen_3.3.3_390_populated_dark_mobile_public_landing (3 folders)",
+   "current_component": "AnonymousLanding.jsx",
+   "action": "REPLACE",
+   "notes": "Old landing (shimmering-text, typewriter, moving-border, background-beams, lip-scroll) dies with it. Pricing never-dies honest failure line."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.2",
+   "export_dir": "screen_3.3.2_1440_public_dark_public_guide_knowledge_base (1 folder, 1440)",
+   "current_component": "GuideView.jsx (shell-bound)",
+   "action": "REPLACE",
+   "notes": "Guest-mode Guide = 3.15 layout w/o shell chrome; CTA band swaps to Create account/See plans. One GuideView with public prop (like 3.14.1 public variant)."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.3",
+   "export_dir": "screen_3.3.3_390_populated_dark_mobile_public_landing (390; group of 3.3.1)",
+   "current_component": "AnonymousLanding.jsx",
+   "action": "REPLACE",
+   "notes": "Mobile variant of 3.3.1 — left-aligned, stacked CTAs, 1-col."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.4",
+   "export_dir": "(no dedicated folder — reuse screen_3.17.1_1440_populated_dark_terms_of_service layout in guest mode)",
+   "current_component": "TermsOfServiceView.jsx",
+   "action": "REPLACE",
+   "notes": "Public ToS = max-w-5xl layout, no shell. No separate export; reuse 3.17.1 code.html."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.5",
+   "export_dir": "(screen_3.14.1_1440_public_dark_extension_companion_install is the public variant)",
+   "current_component": "ExtensionInstallView.jsx",
+   "action": "REPLACE",
+   "notes": "Public extension page strips install CTA, keeps copyable pill. One component with public prop."
+  },
+  {
+   "spec_family": "3.3",
+   "spec_screen": "3.3.6",
+   "export_dir": "screen_3.3.6_1440_populated_dark_cookie_consent_preferences (1 folder, 1440)",
+   "current_component": "CookieBanner.jsx",
+   "action": "REPLACE",
+   "notes": "2 honest buttons only (Necessary only / Accept all); consent key helpotron_cookie_consent kept; shows on anonymous landing too; prefs modal > settings link."
+  },
+  {
+   "spec_family": "3.4",
+   "spec_screen": "3.4.1",
+   "export_dir": "screen_3.4.1_1440_populated_dark_home_dashboard + screen_3.4.1_1440_empty_error_states_dark_home_dashboard + screen_3.4.1_390_populated_dark_mobile_home_dashboard + screen_3.4.1_1024_populated_dark_home_dashboard_3_col_tablet (4 folders)",
+   "current_component": "AssignmentCardDashboard.jsx (700) + AssignmentCard.jsx (151)",
+   "action": "REPLACE",
+   "notes": "New DashboardView — subject orb tiles (48px tinted), STATIC 11-chip set, per-subject sections, pending red-bordered cards, fetch-error card + Retry (never 6 fake-empty subjects), honest count line, ledger pointer card, md:grid-cols-3 fix, skeletons."
+  },
+  {
+   "spec_family": "3.4",
+   "spec_screen": "3.4.2",
+   "export_dir": "screen_3.4.2_1440_populated_dark_subject_settings_disclosure_level_1 (1 folder, 1440)",
+   "current_component": "ScopedSetting.jsx (429, logic engine)",
+   "action": "REPLACE",
+   "notes": "KEEP_PLUMBING for ScopedSetting data model (SCOPE_LEVELS, resolveScopedValue, effectiveValue) — new Level1SubjectSettingsPanel.jsx wrapping it; 6 ConfigField 3-state widgets (§4.3), amber dot when overrides exist."
+  },
+  {
+   "spec_family": "3.4",
+   "spec_screen": "3.4.3",
+   "export_dir": "screen_3.4.3_1440_populated_dark_create_subject_dialog (1 folder, 1440)",
+   "current_component": "null (subject creation is ad-hoc inside AssignmentCardDashboard)",
+   "action": "NEW",
+   "notes": "CreateSubjectDialog.jsx — lucide 12-glyph select, 8 sem-color swatches 44px, replaces jump-in panel."
+  },
+  {
+   "spec_family": "3.4",
+   "spec_screen": "3.4.4",
+   "export_dir": "screen_3.4.4_3.4.5_1440_populated_dark_statuschip_duechip_matrix (1 folder covers 3.4.4+3.4.5)",
+   "current_component": "AssignmentCard.jsx AURORA_CHIP_TINTS + ui/os.jsx StatusBadge",
+   "action": "REPLACE",
+   "notes": "New StatusChip.jsx + chips.js map — 11 statuses w/ 6px dots per #3.4.4; replaces AURORA_CHIP_TINTS constants in ActivityView/AssignmentDumpView/AssignmentTurnInView/AssignmentCard (all deleted with their files)."
+  },
+  {
+   "spec_family": "3.4",
+   "spec_screen": "3.4.5",
+   "export_dir": "(matrix folder above; section 3.4.5 = due chips)",
+   "current_component": "AssignmentCard.jsx (inline due chip)",
+   "action": "REPLACE",
+   "notes": "DueChip.jsx — due border-outline-variant/30 + Calendar 14; today amber; overdue error tint; part of StatusChip matrix export."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.1",
+   "export_dir": "screen_3.5.1_1440_populated_dark_assignment_detail_bento + screen_3.5.1_1440_empty_error_states_dark_assignment_detail + screen_3.5.1_390_populated_dark_mobile_assignment_detail + screen_3.5.1_768_populated_dark_assignment_detail_bento_tablet (4 folders)",
+   "current_component": "AssignmentDetailView.jsx (852)",
+   "action": "REPLACE",
+   "notes": "Bento rebuild; sticky mobile action bar; archived banner; overdue chip vs today; ID mono; overflow menu (Archive/config)."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.2",
+   "export_dir": "screen_3.5.2_1440_populated_dark_direction_picker_assignment_detail (1 folder, 1440)",
+   "current_component": "AssignmentDetailView.jsx (direction state inline)",
+   "action": "REPLACE",
+   "notes": "DirectionPicker becomes its own inset component inside new AssignmentDetailView."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.3",
+   "export_dir": "screen_3.5.3_1440_populated_dark_agent_activity_timeline_stop (1 folder, 1440)",
+   "current_component": "AssignmentDetailView.jsx (SUBAGENT_STATUS timeline section)",
+   "action": "REPLACE",
+   "notes": "AgentActivityTimeline.jsx — stop/humanize event log, reads lib/assignmentEvents.js (KEEP)."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.4",
+   "export_dir": "screen_3.5.4_1440_populated_dark_working_draft_card_reading_mode (1 folder, 1440)",
+   "current_component": "AssignmentTurnInView.jsx (315) + LaunchToDocModal.jsx reading overlay",
+   "action": "REPLACE",
+   "notes": "WorkingDraftCard.jsx reading mode (dark reader surface, <article>-based) — replaces parts of TurnIn + LaunchToDoc reading overlay."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.6",
+   "export_dir": "screen_3.5.6_1440_populated_dark_level_2_assignment_settings_panel (1 folder, 1440)",
+   "current_component": "ScopedSetting.jsx (logic)",
+   "action": "REPLACE",
+   "notes": "KEEP_PLUMBING ScopedSetting model; new AssignmentSettingsPanel.jsx (level-2 ConfigFields)."
+  },
+  {
+   "spec_family": "3.5",
+   "spec_screen": "3.5.7",
+   "export_dir": "screen_3.5.7_1440_populated_dark_prompt_rubric_files_materials_cards (1 folder, 1440)",
+   "current_component": "AssignmentDetailView.jsx + AssignmentTurnInView.jsx (prompt/rubric/files)",
+   "action": "REPLACE",
+   "notes": "Folded into new AssignmentDetailView cards section (cards, rubric, materials, files chips)."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.1",
+   "export_dir": "screen_3.6.1_1440_populated_dark_my_agent_co_pilot + screen_3.6.1_1440_thinking_streaming_dark_my_agent_live_execution + screen_3.6.1_390_populated_dark_mobile_my_agent (3 folders)",
+   "current_component": "MyAgentView.jsx (1941 — largest file)",
+   "action": "REPLACE",
+   "notes": "Chat-first simplification: ThinkingBubble + ChatBubble kit, live execution stream state; 45s lifecycle poll wiring in App.jsx KEEP."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.2",
+   "export_dir": "screen_3.6.2_3.6.4_1440_populated_dark_agent_mode_identity_threads_rail (1 folder covers 3.6.2/3.6.3/3.6.4)",
+   "current_component": "AgentConfigsSidebar.jsx (1072)",
+   "action": "REPLACE",
+   "notes": "AgentModeRail.jsx — mode/identity/threads rail; DEFAULT_IDENTITIES/DEFAULT_SKILLS consts moved to lib/agentPresets.js."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.3",
+   "export_dir": "(in the 3.6.2_3.6.4 combined folder)",
+   "current_component": "AgentConfigsSidebar.jsx",
+   "action": "REPLACE",
+   "notes": "Identity rail section of same folder."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.4",
+   "export_dir": "(in the 3.6.2_3.6.4 combined folder)",
+   "current_component": "AgentConfigsSidebar.jsx",
+   "action": "REPLACE",
+   "notes": "Threads rail section of same folder."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.5",
+   "export_dir": "screen_3.6.5_1440_populated_dark_my_agent_configs_starter_presets (1 folder, 1440)",
+   "current_component": "AgentConfigsSidebar.jsx (presets list)",
+   "action": "REPLACE",
+   "notes": "Starter presets panel; four-combo presets from demoData.js."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.6",
+   "export_dir": "screen_3.6.6_1440_populated_dark_agent_permission_modal (1 folder, 1440)",
+   "current_component": "PermissionModal.jsx (485)",
+   "action": "REPLACE",
+   "notes": "Rejected perm modal w/ honest cooldown copy; SETTING_LABELS map kept."
+  },
+  {
+   "spec_family": "3.6",
+   "spec_screen": "3.6.7",
+   "export_dir": "screen_3.6.7_1440_populated_dark_assignment_moment_event_bubbles (1 folder, 1440)",
+   "current_component": "AgentConfigsSidebar.jsx",
+   "action": "REPLACE",
+   "notes": "Moment event bubbles panel (shared ThinkingBubble kit)."
+  },
+  {
+   "spec_family": "3.7",
+   "spec_screen": "3.7.1",
+   "export_dir": "screen_3.7.1_1440_populated_dark_4_step_assignment_import_modal (1 folder, 1440)",
+   "current_component": "NewAssignmentModal.jsx (513)",
+   "action": "REPLACE",
+   "notes": "DialogShell template + 4-step flow (source→parse→route→launch); file/link/audio sources."
+  },
+  {
+   "spec_family": "3.7",
+   "spec_screen": "3.7.2",
+   "export_dir": "screen_3.7.2_1440_populated_dark_launch_to_doc_realism_modal (1 folder, 1440)",
+   "current_component": "LaunchToDocModal.jsx (750)",
+   "action": "REPLACE",
+   "notes": "LaunchToDoc 2.0: multi-source status rows, honest lanes; DialogShell template of the whole modal family."
+  },
+  {
+   "spec_family": "3.7",
+   "spec_screen": "3.7.3",
+   "export_dir": "screen_3.7.3_1440_populated_dark_route_triage_modal (1 folder, 1440)",
+   "current_component": "null (triage is inline in NewAssignmentModal)",
+   "action": "NEW",
+   "notes": "RouteTriageModal.jsx — per-source triage to subject/agent; new modal, not a fold-in."
+  },
+  {
+   "spec_family": "3.8",
+   "spec_screen": "3.8.1",
+   "export_dir": "screen_3.8.1_1440_populated_dark_insights_analytics + screen_3.8.1_768_populated_dark_tablet_insights_telemetry (2 folders)",
+   "current_component": "AnalyticsDashboard.jsx (192) + InsightsView.jsx (44 tab wrapper)",
+   "action": "REPLACE",
+   "notes": "Rebuild w/ existing visx chart engine (charts/* KEEP) + chart-1..5 tokens; tablet 2-col."
+  },
+  {
+   "spec_family": "3.8",
+   "spec_screen": "3.8.2",
+   "export_dir": "screen_3.8.2_1440_populated_dark_insights_academic_progress (1 folder, 1440)",
+   "current_component": "AnalyticsDashboard.jsx",
+   "action": "REPLACE",
+   "notes": "Academic progress tab (gpa/sparkline section) inside new InsightsView."
+  },
+  {
+   "spec_family": "3.8",
+   "spec_screen": "3.8.3",
+   "export_dir": "screen_3.8.3_1440_populated_dark_recommendations_insights (1 folder, 1440)",
+   "current_component": "null (recommendations live in IntelligenceView deriveInsights)",
+   "action": "NEW",
+   "notes": "RecommendationsPanel.jsx — curates deriveInsights output from IntelligenceView."
+  },
+  {
+   "spec_family": "3.8",
+   "spec_screen": "3.8.4",
+   "export_dir": "screen_3.8.4_1440_populated_dark_intelligence_view_m3_port (1 folder, 1440)",
+   "current_component": "IntelligenceView.jsx (380)",
+   "action": "REPLACE",
+   "notes": "M3-port of intelligence view; deriveInsights wrapper function kept."
+  },
+  {
+   "spec_family": "3.9",
+   "spec_screen": "3.9.1",
+   "export_dir": "screen_3.9.1_1440_populated_dark_history_submission_ledger (1 folder, 1440)",
+   "current_component": "AssignmentHistoryView.jsx (531)",
+   "action": "REPLACE",
+   "notes": "Submission ledger with completion stats; old 'history_submission_ledger' legacy export superseded."
+  },
+  {
+   "spec_family": "3.9",
+   "spec_screen": "3.9.2",
+   "export_dir": "screen_3.9.2_1440_populated_dark_export_dropdown_history_table (1 folder, 1440)",
+   "current_component": "AssignmentHistoryView.jsx (export buttons)",
+   "action": "REPLACE",
+   "notes": "Export dropdown + table (CSV/JSON/PDF) folded into new HistoryView."
+  },
+  {
+   "spec_family": "3.9",
+   "spec_screen": "3.9.3",
+   "export_dir": "screen_3.9.3_390_populated_dark_mobile_history_cards (1 folder, 390)",
+   "current_component": "AssignmentHistoryView.jsx",
+   "action": "REPLACE",
+   "notes": "Mobile card variant of the ledger."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.1",
+   "export_dir": "screen_3.10.1_1440_populated_dark_library_active_recall + screen_3.10.1_390_populated_dark_mobile_library_files_grid (2 folders)",
+   "current_component": "LibraryView.jsx (322)",
+   "action": "REPLACE",
+   "notes": "Library rebuild: files grid + active recall tab."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.2",
+   "export_dir": "screen_3.10.2_1440_populated_dark_library_saved_materials_mastery_rings (1 folder, 1440)",
+   "current_component": "LibraryView.jsx (SAVED tab)",
+   "action": "REPLACE",
+   "notes": "Saved materials w/ mastery rings (semicircle SVGs from export — port as LibraryRing.jsx)."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.3",
+   "export_dir": "screen_3.10.3_1440_populated_dark_flashcards_leitner_spaced_repetition_player + screen_3.10.3_390_populated_dark_mobile_study_tools_flashcards (2 folders)",
+   "current_component": "null (no flashcard UI today)",
+   "action": "NEW",
+   "notes": "FlashcardsView.jsx — Leitner deck player w/ flip + box indicators; mobile full-height player."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.4",
+   "export_dir": "screen_3.10.4_1440_populated_dark_quiz_diagnostic_engine + screen_3.10.4_390_populated_dark_mobile_quiz_diagnostic_engine (2 folders)",
+   "current_component": "null",
+   "action": "NEW",
+   "notes": "QuizDiagnosticView.jsx — question driver, results breakdown."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.5",
+   "export_dir": "screen_3.10.5_1440_populated_dark_study_mastery_spaced_repetition_analytics (1 folder, 1440)",
+   "current_component": "null",
+   "action": "NEW",
+   "notes": "MasteryAnalyticsView.jsx — spaced-rep analytics; can reuse charts/* engine."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.6",
+   "export_dir": "screen_3.10.6_1440_populated_dark_my_materials_cards_clamped_previews (1 folder, 1440)",
+   "current_component": "LibraryView.jsx (LIBRARY tab)",
+   "action": "REPLACE",
+   "notes": "My materials cards w/ clamped previews."
+  },
+  {
+   "spec_family": "3.10",
+   "spec_screen": "3.10.7",
+   "export_dir": "screen_3.10.7_1440_populated_dark_calendar_real_academic_due_dates + screen_3.10.7_390_populated_dark_mobile_academic_calendar (2 folders; includes CALENDAR tab)",
+   "current_component": "LibraryView.jsx (CALENDAR tab)",
+   "action": "REPLACE",
+   "notes": "Real due-date calendar (month grid) w/ overdue honors; MONTHS/CALENDAR demo data kept."
+  },
+  {
+   "spec_family": "3.11",
+   "spec_screen": "3.11.1",
+   "export_dir": "screen_3.11.1_1440_populated_dark_credits_billing + screen_3.11.1_390_populated_dark_mobile_credits_billing_strip (2 folders)",
+   "current_component": "BillingView.jsx (107) + CreditsPricingDashboard.jsx (963)",
+   "action": "REPLACE",
+   "notes": "CreditsView.jsx tab wrapper folds into new CreditsView (dashboard w/ credits hero in mono tabular-stat)."
+  },
+  {
+   "spec_family": "3.11",
+   "spec_screen": "3.11.2",
+   "export_dir": "screen_3.11.2_1440_populated_dark_plans_top_ups_m3_overhaul + screen_3.11.2_390_populated_dark_mobile_plans_top_ups (2 folders)",
+   "current_component": "CreditsPricingDashboard.jsx (plans grid)",
+   "action": "REPLACE",
+   "notes": "Plans + top-up packs; popular ring-2 primary/40, honest $0.01/token footnote; never-die failure line."
+  },
+  {
+   "spec_family": "3.11",
+   "spec_screen": "3.11.3",
+   "export_dir": "screen_3.11.3_1440_populated_dark_earn_referral_rewards (1 folder, 1440)",
+   "current_component": "ReferralSection.jsx (341)",
+   "action": "REPLACE",
+   "notes": "Earn/referral redesign in new CreditsView."
+  },
+  {
+   "spec_family": "3.11",
+   "spec_screen": "3.11.4",
+   "export_dir": "screen_3.11.4_1440_populated_dark_leaderboard_peer_compute_rankings + screen_3.11.4_390_populated_dark_mobile_leaderboard_peer_rankings (2 folders)",
+   "current_component": "CreditLeaderboard.jsx (462)",
+   "action": "REPLACE",
+   "notes": "Peer compute rankings; RANDOM_ALIASES demo data kept w/ honest 'demo' treatment."
+  },
+  {
+   "spec_family": "3.11",
+   "spec_screen": "3.11.5",
+   "export_dir": "screen_3.11.5_1440_populated_dark_cost_ledger_spend_analytics + screen_3.11.5_390_populated_dark_mobile_cost_ledger_spend_analytics (2 folders)",
+   "current_component": "null (spend simulator is buried in Settings/DataLake)",
+   "action": "NEW",
+   "notes": "CostLedgerView.jsx — per-assignment spend analytics w/ charts engine."
+  },
+  {
+   "spec_family": "3.12",
+   "spec_screen": "3.12.1",
+   "export_dir": "screen_3.12.1_1440_populated_dark_data_lake_contribution_valuation + screen_3.12.1_1440_populated_dark_data_lake_valuation_ledger + screen_3.12.1_390_populated_dark_mobile_data_lake_ledger (3 folders)",
+   "current_component": "DataLakeView.jsx (325)",
+   "action": "REPLACE",
+   "notes": "Contribution valuation + ledger (two 1440 states, one 390)."
+  },
+  {
+   "spec_family": "3.13",
+   "spec_screen": "3.13.1",
+   "export_dir": "screen_3.13.1_1440_populated_dark_2_step_spend_confirmation_modal + screen_3.13.1_1440_populated_dark_assignment_dump_intake + screen_3.13.1_390_populated_dark_mobile_assignment_dump_audio_intake (3 folders)",
+   "current_component": "AssignmentDumpView.jsx (837)",
+   "action": "REPLACE",
+   "notes": "Dump intake + SpendConfirmationModal (2-step) folded into new AssignmentDumpView."
+  },
+  {
+   "spec_family": "3.14",
+   "spec_screen": "3.14.1",
+   "export_dir": "screen_3.14.1_1440_populated_dark_extension_companion_install + screen_3.14.1_1440_public_dark_extension_companion_install (2 folders)",
+   "current_component": "ExtensionInstallView.jsx (413)",
+   "action": "REPLACE",
+   "notes": "Auth + public variants from one component (public prop)."
+  },
+  {
+   "spec_family": "3.15",
+   "spec_screen": "3.15.1",
+   "export_dir": "screen_3.15.1_1440_populated_dark_guide_knowledge_base + screen_3.15.1_390_populated_dark_mobile_guide_knowledge_base (2 folders)",
+   "current_component": "GuideView.jsx (443)",
+   "action": "REPLACE",
+   "notes": "Knowledge-base guide; SECTIONS/TERMS consts kept."
+  },
+  {
+   "spec_family": "3.16",
+   "spec_screen": "3.16.1",
+   "export_dir": "screen_3.16.1_1440_populated_dark_privacy_data_retention + screen_3.16.1_390_populated_dark_mobile_privacy_retention (2 folders)",
+   "current_component": "PrivacyPolicyView.jsx (10, wraps src/PrivacyPolicy.jsx) + PrivacyPolicyModal.jsx (310)",
+   "action": "REPLACE",
+   "notes": "New PrivacyPolicyView + retention section; SUBPROCESSORS content list kept."
+  },
+  {
+   "spec_family": "3.17",
+   "spec_screen": "3.17.1",
+   "export_dir": "screen_3.17.1_1440_populated_dark_terms_of_service + screen_3.17.1_390_populated_dark_mobile_terms_of_service (2 folders)",
+   "current_component": "TermsOfServiceView.jsx (442)",
+   "action": "REPLACE",
+   "notes": "Layout reuse also covers guest-mode 3.3.4."
+  },
+  {
+   "spec_family": "3.18",
+   "spec_screen": "3.18.1",
+   "export_dir": "screen_3.18.1_1440_populated_dark_settings_bare_bones + screen_3.18.1_1440_populated_light_settings_bare_bones + screen_3.18.1_768_populated_dark_settings_tablet_accordion + screen_3.18.1_390_populated_dark_mobile_settings_accordion (4 folders)",
+   "current_component": "SettingsApp.jsx (1302) + SettingsSections.jsx (1500) + ScopedSetting.jsx UI part",
+   "action": "REPLACE",
+   "notes": "Bare-bones collapse per §5 keep/move/delete matrix. KEEP the exported applyAppearance/applyAccessibility/applyFontScale (AppShell imports them) — move to src/lib/appearanceEngine.js. Sliders/Toggles re-implemented in new kit."
+  },
+  {
+   "spec_family": "3.19",
+   "spec_screen": "3.19.1",
+   "export_dir": "screen_3.19.1_1440_populated_dark_control_center_admin_console + screen_3.19.1_390_populated_dark_mobile_control_center (2 folders)",
+   "current_component": "AdminPanels.jsx (130) + AdminAdvancedDashboard.jsx (1537) + AdminAgentChat.jsx (182) + AutomationCenter.jsx (183) + MessageAdminView.jsx (257)",
+   "action": "REPLACE",
+   "notes": "One ControlCenterView.jsx (admin console tiles) absorbs all five; state machines (SystemMapPanel telemetry etc.) move to lib/admin-engine.js KEEP."
+  },
+  {
+   "spec_family": "3.20",
+   "spec_screen": "3.20.1",
+   "export_dir": "screen_3.20.1_1440_populated_dark_monitors_system_health + screen_3.20.1_390_populated_dark_mobile_monitors_system_health (2 folders)",
+   "current_component": "MonitorsView.jsx (398)",
+   "action": "REPLACE",
+   "notes": "Feedback-first health; 30s polling wiring kept."
+  },
+  {
+   "spec_family": "3.21",
+   "spec_screen": "3.21.1",
+   "export_dir": "screen_3.21.1_1440_error_states_dark_404_401_502_suite (1 folder, 1440)",
+   "current_component": "NotFound.jsx (65)",
+   "action": "REPLACE",
+   "notes": "ErrorState family (404/401/502) — one ErrorState.jsx w/ variant prop; AppShell error snackbar wiring kept."
+  },
+  {
+   "spec_family": "3.22",
+   "spec_screen": "3.22.1",
+   "export_dir": "screen_3.22.1_1440_populated_dark_overlay_kitchen_toasts (1 folder, 1440)",
+   "current_component": "null (toasts are ad-hoc inline divs + ui/os.jsx)",
+   "action": "NEW",
+   "notes": "ToastKit: role=status, single Toast component; replaces scattered notices (QueueNoticeBanner merges into AdminNoticePattern)."
+  },
+  {
+   "spec_family": "3.23",
+   "spec_screen": "3.23.1",
+   "export_dir": "screen_3.23.1_1440_populated_dark_demo_mode_labeled_environment (1 folder, 1440)",
+   "current_component": "DemoModeToggle.jsx (51)",
+   "action": "REPLACE",
+   "notes": "DemoRibbon.jsx — FlaskConical 'Demo data' sem-amber chip; live mode never borrows it. demoData/mock.js KEEP."
+  }
+ ],
+ "kept_plumbing": [
+  "web/src/api.js",
+  "web/src/mock.js",
+  "web/src/demoData.js",
+  "web/src/lib/utils.js",
+  "web/src/lib/assignmentBuckets.js",
+  "web/src/lib/assignmentEvents.js",
+  "web/src/components/charts/* (38 files — VisX engine; new Insights/CostLedger/MasteryAnalytics consume it)",
+  "web/src/components.json",
+  "web/vite.config.js",
+  "web/public",
+  "web/manifest.json",
+  "web/src/main.jsx",
+  "web/src/components/ScopedSetting.jsx (ASSIGNMENT-LOGIC part: SCOPE_LEVELS, resolveScopedValue, effectiveValue, getSetting — UI part dies)",
+  "web/src/components/SettingsApp.jsx exported appearance engine (applyAppearance/applyAccessibility/applyFontScale) → relocated src/lib/appearanceEngine.js",
+  "web/src/components/ui/AdminNoticePopup.jsx (admin notices popup — keep; pattern merged w/ QueueNoticeBanner)",
+  "web/src/components/QueueNoticeBanner.jsx (keep; re-tokenized)",
+  "localStorage keys (NOT components, but contracts the rebuild must keep): helpotron_sidebar_collapsed, helpotron_palette_recent, helpotron_notifications_read, helpotron_cookie_consent, helpotron_automations_state",
+  "index.css token layer — kept as the single token home, values regenerated from the export tailwind-config (see html_reuse_strategy)"
+ ],
+ "deletions": [
+  "web/src/components/AssignmentCard.jsx (folded into DashboardView + StatusChip.jsx)",
+  "web/src/components/AssignmentCardDashboard.jsx (renamed DashboardView.jsx)",
+  "web/src/components/BillingView.jsx (folded into new CreditsView)",
+  "web/src/components/CreditsView.jsx (wrapper folds)",
+  "web/src/components/InsightsView.jsx (wrapper folds into new InsightsView)",
+  "web/src/components/NotificationsView.jsx (folded into ActivityView 3.1.8 + bell popover)",
+  "web/src/components/SettingsSections.jsx (1500-line sprawl dies; content per §5 matrix redistributed)",
+  "web/src/components/AdminAdvancedDashboard.jsx / AdminAgentChat.jsx / AutomationCenter.jsx / MessageAdminView.jsx (folded into ControlCenterView.jsx)",
+  "web/src/components/SectionCard.jsx (replaced by glass SectionCard in new ui kit)",
+  "web/src/components/components/ui/os.jsx (replaced by split kit: lib/time.js + new ui kit)",
+  "web/src/components/Button.jsx (merged with ui/Button.jsx into ONE Button w/ 5 variants + loading — component inventory §8)",
+  "web/src/components/ui/Button.jsx (merged, same)",
+  "web/src/components/ui/AnimatedLogo.jsx (replaced by export logo asset from helpotron_os_logo/ + helpotron_logo_1.jpeg)",
+  "web/src/components/ui/AgentAvatar.jsx (replaced by AvatarWidget in new kit)",
+  "web/src/components/ui/background-beams.jsx, bento-grid.jsx, moving-border.jsx, lip-scroll-zoomin-animation.jsx, typewriter-effect.jsx (Aurora hero decorations — spec deletes gradient orbs/gradients; ambient glows are plain CSS in index.css)",
+  "web/src/components/shimmering-text.jsx (landing hero animation — spec: reduced-motion static glow)",
+  "web/src/components/DevContactModal.jsx (dead code; channel absorbed by 3.2.4 RecoveryFlow)",
+  "web/src/components/PrivacyPolicy.jsx (content migrates into new PrivacyPolicyView)"
+ ],
+ "new_components": [
+  "web/src/components/AppShell.jsx (rewrite: shell + drawer + bottom bar + footer)",
+  "web/src/components/QuickSettingsPopover.jsx",
+  "web/src/components/NotificationBell.jsx (3.1.7 popover)",
+  "web/src/components/ActivityView.jsx (rewrite: 3.1.8 feed + prefs tab)",
+  "web/src/components/CommandPalette.jsx (rewrite)",
+  "web/src/components/DashboardView.jsx (3.4.1; replaces AssignmentCardDashboard.jsx)",
+  "web/src/components/SubjectSettingsPanel.jsx (3.4.2/3.5.6 - Level1/2 ConfigFields, wraps ScopedSetting logic)",
+  "web/src/components/CreateSubjectDialog.jsx (3.4.3)",
+  "web/src/components/StatusChip.jsx + web/src/lib/chips.js (3.4.4/3.4.5)",
+  "web/src/components/AssignmentDetailView.jsx (rewrite bento + DirectionPicker + AgentActivityTimeline + PromptRubricFiles)",
+  "web/src/components/WorkingDraftCard.jsx (3.5.4)",
+  "web/src/components/MyAgentView.jsx (rewrite chat-first; ThinkingBubble/ChatBubble kit)",
+  "web/src/components/AgentModeRail.jsx (3.6.2-3.6.4; replaces AgentConfigsSidebar.jsx) + web/src/lib/agentPresets.js",
+  "web/src/components/PermissionModal.jsx (rewrite)",
+  "web/src/components/RouteTriageModal.jsx (3.7.3 NEW)",
+  "web/src/components/LaunchToDocModal.jsx (rewrite)",
+  "web/src/components/NewAssignmentModal.jsx (rewrite 4-step DialogShell)",
+  "web/src/components/InsightsView.jsx (rewrite incl. AnalyticsDashboard, academic progress, RecommendationsPanel)",
+  "web/src/components/RecommendationsPanel.jsx (3.8.3 NEW)",
+  "web/src/components/IntelligenceView.jsx (rewrite M3 port)",
+  "web/src/components/HistoryView.jsx (3.9.1-3 (rewrite; replaces AssignmentHistoryView.jsx))",
+  "web/src/components/LibraryView.jsx (rewrite incl. saved materials ring + calendar tab)",
+  "web/src/components/FlashcardsView.jsx (3.10.3 NEW)",
+  "web/src/components/QuizDiagnosticView.jsx (3.10.4 NEW)",
+  "web/src/components/MasteryAnalyticsView.jsx (3.10.5 NEW)",
+  "web/src/components/CreditsView.jsx (rewrite; absorbs BillingView + CreditsPricingDashboard + ReferralSection)",
+  "web/src/components/CostLedgerView.jsx (3.11.5 NEW)",
+  "web/src/components/LeaderboardView.jsx (rewrite of CreditLeaderboard.jsx)",
+  "web/src/components/DataLakeView.jsx (rewrite)",
+  "web/src/components/AssignmentDumpView.jsx (rewrite incl. SpendConfirmationModal)",
+  "web/src/components/ExtensionInstallView.jsx (rewrite, public variant)",
+  "web/src/components/GuideView.jsx (rewrite, guest CTA variant)",
+  "web/src/components/PrivacyPolicyView.jsx (rewrite w/ retention + modal)",
+  "web/src/components/TermsOfServiceView.jsx (rewrite)",
+  "web/src/components/SettingsView.jsx (3.18.1 bare-bones; replaces SettingsApp+SettingsSections views)",
+  "web/src/components/ControlCenterView.jsx (3.19.1 absorbs AdminPanels/AdminAdvancedDashboard/AdminAgentChat/AutomationCenter/MessageAdminView)",
+  "web/src/components/MonitorsView.jsx (rewrite)",
+  "web/src/components/ErrorState.jsx (3.21.1 404/401/502 family)",
+  "web/src/components/ui/toast.jsx (3.22.1 ToastKit: Toast + ToastProvider role=status)",
+  "web/src/components/DemoRibbon.jsx (3.23.1)",
+  "web/src/components/ui/kit.jsx (new primitives kit: Button×5, Tabs/ModeControl, EmptyState, StatCard, SectionCard, DialogShell, MobileSheet, StickyBar, ChipScroller, WalletLine, AvatarWidget, Kbd, ModeSegmented, SubjectTile, Skeleton, ThinkingBubble, ChatBubble — replaces the os.jsx / Button.jsx / SectionCard.jsx blob)",
+  "web/src/lib/appearanceEngine.js (applyAppearance/applyAccessibility/applyFontScale moved from SettingsApp.jsx)",
+  "web/src/lib/iconMap.js (Material-Symbols-glyph → lucide map)",
+  "web/src/components/ui/illustrations.jsx (curved-stroke line art from export SVGs)",
+  "web/src/components/AnonymousLanding.jsx (rewrite 3.3.1/3.3.3)",
+  "web/src/components/AuthModal.jsx (rewrite 3.2.1/3.2.2 panes)",
+  "web/src/components/TwoFactorSetup.jsx (rewrite 3.2.3 OTP; or folded into AuthModal)",
+  "web/src/components/RecoveryFlowModal.jsx (rewrite 3.2.4)",
+  "web/src/components/CookieBanner.jsx (rewrite 3.3.6)",
+  "web/src/components/NotFound.jsx (rewrite → ErrorState.jsx consumer)"
+ ],
+ "replacement_pct": "≈92% overall / 100% of current UI surfaces (23/23 families, 71/71 defined screens get a new export-backed design; every old routable surface replaces. File-level: 45 of 51 top-level .jsx + 9 of 10 ui/ files replaced/folded; the kept 10% = data/api/charts/logic plumbing only).",
+ "screen_totals": {
+  "export_screen_folders": 99,
+  "unique_spec_ids_with_export": 69,
+  "spec_ids_in_doc": 72,
+  "mapping_rows": 71,
+  "mobile_390_folders": 26,
+  "tablet_768_folders": 3,
+  "tablet_1024_folders": 1,
+  "desktop_1440_folders": 69,
+  "light_theme_folders": 2,
+  "combined_id_folders": [
+   "screen_3.4.4_3.4.5_… (3.4.4+3.4.5)",
+   "screen_3.6.2_3.6.4_… (3.6.2+3.6.3+3.6.4)"
+  ],
+  "legacy_superseded_code_html": 13
+ },
+ "per_family_status": {
+  "3.1": {
+   "ok": true,
+   "screens": 8,
+   "folders": 9,
+   "note": "Shell + mobile drawer/bottom-bar + popover/palette/footer/bell/feed. Only 390 renders for drawer/bottom bar/palette — mobile-empty states derived, not exported."
+  },
+  "3.2": {
+   "ok": true,
+   "screens": 5,
+   "folders": 7,
+   "note": "Sign-in pane export includes recovery entry. Legacy auth_sign_in + auth_2fa_verification superseded. 2FA folder is 'interactive' — its vanilla JS is a demo, not code to port."
+  },
+  "3.3": {
+   "ok": true,
+   "screens": 6,
+   "folders": 5,
+   "note": "3.3.4/3.3.5 have no own folders — reuse 3.17.1 layout + 3.14.1 public variant (marked in mapping). Landing has the only light-theme export (with 3.18.1)."
+  },
+  "3.4": {
+   "ok": true,
+   "screens": 5,
+   "folders": 7,
+   "note": "Strongest coverage: 4 viewport/state folders for 3.4.1 incl. 1024 3-col + empty/error. 3.4.4+3.4.5 share one matrix folder."
+  },
+  "3.5": {
+   "ok": true,
+   "screens": 7,
+   "folders": 9,
+   "note": "Detail bento at 1440/768/390 + empty/error; 3.5.5 is a live-mode rule, not a screen (no folder — by design)."
+  },
+  "3.6": {
+   "ok": true,
+   "screens": 7,
+   "folders": 7,
+   "note": "3.6.2/3.6.3/3.6.4 share one rail folder. Streaming state covered by separate 1440 thinking_streaming folder. MyAgentView.jsx is the largest replacement (1941 lines)."
+  },
+  "3.7": {
+   "ok": true,
+   "screens": 3,
+   "folders": 3,
+   "note": "RouteTriage is the only genuinely NEW modal (no current equivalent)."
+  },
+  "3.8": {
+   "ok": true,
+   "screens": 4,
+   "folders": 5,
+   "note": "Tablet-768 telemetry exported; charts carried by visx engine + chart-* tokens."
+  },
+  "3.9": {
+   "ok": true,
+   "screens": 3,
+   "folders": 3,
+   "note": "Mobile cards variant exported; legacy history_submission_ledger superseded."
+  },
+  "3.10": {
+   "ok": true,
+   "screens": 7,
+   "folders": 11,
+   "note": "Biggest NEW surface; flashcards/quiz/mastery have no current UI at all. Study tools are token-hungry (mono numerals) — JetBrains Mono already self-hosted."
+  },
+  "3.11": {
+   "ok": true,
+   "screens": 5,
+   "folders": 9,
+   "note": "Cost ledger is new; leaderboard 390 exported. Old legacy library_study_tools_clean superseded."
+  },
+  "3.12": {
+   "ok": true,
+   "screens": 1,
+   "folders": 3,
+   "note": "Two 1440 states + one 390 — good."
+  },
+  "3.13": {
+   "ok": true,
+   "screens": 1,
+   "folders": 3,
+   "note": "Spend confirm + intake 1440 + mobile audio intake 390."
+  },
+  "3.14": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "The public variant folder doubles for 3.3.5."
+  },
+  "3.15": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "1440 + 390."
+  },
+  "3.16": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "1440 + 390; retention section new."
+  },
+  "3.17": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "1440 + 390; reused for public ToS."
+  },
+  "3.18": {
+   "ok": true,
+   "screens": 1,
+   "folders": 4,
+   "note": "Only family with its own light-theme export + tablet accordion; the heaviest collapse (2800+ current lines → bare-bones)."
+  },
+  "3.19": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "admin console 1440 + 390; legacy control_center_operations superseded."
+  },
+  "3.20": {
+   "ok": true,
+   "screens": 1,
+   "folders": 2,
+   "note": "1440 + 390."
+  },
+  "3.21": {
+   "ok": true,
+   "screens": 1,
+   "folders": 1,
+   "note": "One folder contains the 404/401/502 suite — split at conversion."
+  },
+  "3.22": {
+   "ok": true,
+   "screens": 1,
+   "folders": 1,
+   "note": "Toast kitchen = the new global Toast kit."
+  },
+  "3.23": {
+   "ok": true,
+   "screens": 1,
+   "folders": 1,
+   "note": "Demo ribbon; live-mode screens never borrow it."
+  }
+ },
+ "html_reuse_strategy": "7-step conversion (verified against screen_3.1.1, 3.4.1, 3.5.3, 3.18.1, 3.2.3 code.html):\n1. TOKENS FIRST — the export is `cdn.tailwindcss.com` + an inline `tailwind.config` (darkMode:'class') in EVERY code.html. An earlier port (09-01) already landed in web/src/index.css: `--st-*` vars + `@theme inline` (lines ~1560-1735: all M3 color roles bg-surface-container-lowest/text-on-surface/border-outline-variant/primary/tertiary, 8 sem pairs, sem-*, font + `--text-*` type scale). Delta to add from the v6 export config (extracted verbatim, e.g. 3.4.1: colors on-surface #E2E2E6, primary #78f5e5, surface-container-lowest #0c0f11, sem-amber #F59E0B, sem-blue #3B82F6, sem-deepgreen #059669, sem-slate #64748B; fontFamily {display-xl, display-xl-mobile, headline-lg, headline-lg-mobile, title-md, body-md, body-sm, label-caps, code-sm, chip-status, tabular-stat-md/lg}; fontSize {display-xl 48/56/700 -0.02em, headline-lg 32/40/600, body-md 16/24, body-sm 14/20, label-caps 12/16/500 +.05em, chip-status 10/12/500); spacing {micro-1 0.25rem, micro-2 0.5rem, unit-3 0.75rem, unit-4 1rem, unit-5 1.25rem, unit-6 1.5rem, unit-8 2rem, unit-10 2.5rem, unit-12 3rem, gutter-mobile 1rem, gutter-desktop 1.5rem, page-max-width 75rem}. ADD: `--spacing-micro-1/2`, `--spacing-unit-3..12`, `--spacing-gutter-desktop`, `--spacing-page-max-width` (or --max-width-page-max), `--font-chip-status` + `--text-chip-status`, `--font-tabular-stat-md/-lg`, `--text-display-xl-mobile`, and fix divergences: font-code-sm 11px (current port has 13px), headline-lg-mobile 26px (current 24px), primary #59d8c9 → #78f5e5 (update --st-* dark + light sheets from the export config). Delete the Google-Fonts `<link>` tags from exports — the app self-hosts via @fontsource-variable hanken-grotesk/inter/jetbrains-mono (already in package.json; policy: never Google CDN).\n2. MARKUP HARVEST — copy the `<body>` inner HTML of the 1440 populated folder per spec id as the JSX shell: classes are pure Tailwind class strings (verified: `bg-surface-container-lowest/70 backdrop-blur-xl`, `font-label-caps text-label-caps tracking-wider uppercase`, `data-active-classes` on nav, ZERO `dark:` anywhere) and compile verbatim against the @theme tokens. Mechanical replaces: class→className, for→htmlFor, aria-*/role keep, `<img src=…>` self-close, `style=\"\"` (rare, 2 occurrences found in 3.5.3) → cn(). No inline `<style>` blocks beyond the 1 base block (html,body margin/overscroll, body::-webkit-scrollbar hidden) — fold that base block into index.css.\n3. ICONS — exports use Material Symbols Outlined (font glyphs, `material-symbols-outlined` spans, 292 distinct glyphs across the 99 files: grid_view, smart_toy, dock_to_left, finance_chip, shield_with_heart, …). The spec §8 component inventory mandates lucide and lucide-react is installed: do NOT install the Material font. Build src/lib/iconMap.js: glyph→lucide component (grid_view→LayoutGrid, smart_toy→Bot, dock_to_left→PanelLeftClose, folder_open→FolderOpen, insights→Lightbulb, history→History, finance_chip→CircleDollarSign, …) with the raw glyph name left as a trailing comment; convert glyphs lazily as each screen is ported. ~40 glyphs cover >80% of the UI; the rest map 1:1 at conversion time.\n4. SVG/LINE-ART + CHARTS — the export's inline `<svg>` are of two kinds: (a) curved-stroke illustrations for empties/heroes/success (the one illustration family per §1: port as small React components in components/ui/illustrations.jsx), (b) data chart paths (revenue/portfolio, mastery rings, sparklines) — for those do NOT port the paths: reuse the existing visx chart engine (components/charts/*, 38 files, kept) which already exports area/line/grid/tooltip with `--chart-*` tokens wired in @theme (--color-chart-1..5, chart-line-primary, chart-grid, chart-*-tooltip mapped at index.css 280-306).\n5. SCRIPTS — every code.html has 3 scripts: (1) cdn.tailwindcss.com (drop), (2) the tailwind.config (harvest → step 1), (3) a DOMContentLoaded 'micro-interaction' demo (e.g. 3.1.1 cmd-input focus class toggle, 3.2.3 OTP typing) — drop and re-implement natively: useState/useEffect/AnimatePresence; nav `data-path` anchors + `data-active-classes` → NAV_ITEMS config + useLocation active-class constants.\n6. VIEWPORTS — 99 folders = viewport/state variants, NOT separate components. Merge into one component per spec id using md:/lg: breakpoints; keep genuinely distinct layouts as separate exports-pairs (3.1.1 desktop shell vs 3.1.2 drawer vs 3.1.3 bottom bar; 3.18.1 768 accordion) and the state-variant folders (3.4.1 empty/error → component state props, sharing the same JSX).\n7. LIGHT THEME / THEME ON — every export (including the 2 'light' folders, verified 3.18.1-1440-light) hardcodes `<html class=\"dark\">`; the @theme vars + [data-theme=\"light\"] sheets already in index.css derive light automatically — keep data-theme toggle + `@custom-variant dark (&:is(.dark *))`, add zero `dark:` variants (HARD RULE §1.2). Then: replace demoData fetch with real api.js per screen, run `npm run test:ui` smoke + screenshot-compare each ported screen against export screen.png (playwright.config.js exists).\n",
+ "risks": [
+  "Icon fork: spec mandates lucide but the export rendered Material Symbols. 292 distinct glyphs — converting all is the largest single conversion cost. Mitigation: iconMap.js alias module + lazy per-screen conversion.",
+  "Coverage asymmetry vs spec §2.6 universal rule: 26/99 folders are 390 mobile, only 3 folders are 768 and 1 is 1024 (3.4.1) — the spec demanded every screen at all 4 viewports; the export does not deliver that. Tablet layouts for ~60 screens must be derived, not copied.",
+  "Light theme: only 2 of 99 folders are light (3.3.1, 3.18.1) and even they hardcode `<html class='dark'>` — light correctness rides entirely on the token sheet.",
+  "Empty/loading states: exported only for 3.4.1 and 3.5.1 (2 folders); the §2.7 per-screen states (loading/empty/error) must be grown from the design language for the rest.",
+  "Token drift: the worked 09-01 port (--st-* #59d8c9 primary, font-code-sm 13px, headline-lg-mobile 24px) differs from this v6 export (#78f5e5, 11px, 26px). Either values update everywhere or the ported screens keep stale tokens — pick the export as source of truth and batch-update index.css.",
+  "The '3.18.1-light' folder is the ONLY light settings render; PRIVACY/LIBRARY/MY-AGENT etc. light states unverified.",
+  "Huge single-file legacy (MyAgentView 1941, SettingsApp 1302 + SettingsSections 1500, AdminAdvancedDashboard 1537) — replacing these threatens the 45s lifecycle poll + settings machine regressions; extract logic to lib/* before deleting UI.",
+  "AppShell.jsx exports getNavItems and SettingsApp.jsx exports applyAppearance/applyAccessibility/applyFontScale — consumers (AppShell imports) break if the files disappear; the sheet's rerouting plan (nav→lib, appearance engine→lib/appearanceEngine.js) must land in the same sweep.",
+  "Old heredocs: DESIGN_OVERHAUL.md (Aurora) and the earliest numbered folders (3.1.5_command_palette_desktop_1440, 3.4.1_home_dashboard_overhaul_desktop_1440, 3.5_assignment_detail_bento_desktop_1440, 3.6_my_agent_academic_co_pilot_desktop_1440 + 13 legacy-named) are earlier iterations — convert ONLY screen_* v6-regenerated folders.",
+  "chat/console streaming: 3.6.1 has a dedicated streaming folder whose script is a mock; the real SSE/poll wiring in MyAgentView must be preserved."
+ ],
+ "notes": [
+  "Read-only analysis — no repo file was modified; this sheet is the only artifact.",
+  "Export root identical to the sibling agent inputs (/tmp/stitch_z3/stitch_design_concept_generator/improvement.md is the truthful 'v4 UI spec' — the family bullet text above is quoted from it).",
+  "The spec's §3.1.5 palette state says 'today hardcoded dark glass' — CommandPalette.jsx gets theme-aware treatment in the port.",
+  "Charts and mono numerals (font-tabular-stat) exist already in the app: @fontsource JetBrains Mono + charts engine; the 'new product signature' cost is mostly class-string work.",
+  "Missing spec ids w/o export (by design): 3.3.4/3.3.5 (reuse rules above), 3.5.5 (live-mode rule, no screen).",
+  "helpotron_os_logo/ and helpotron_logo_1.jpeg/ are logo asset deliverables in the export (helpotron_os_logo has code.html + screen.png + DESIGN.md) — the app's ui/AnimatedLogo.jsx should be replaced by this asset via public/.",
+  "sophisticated_minimalist_student_portrait_avatar_... and luminous_glass folders are image/design-language-only assets, no code.html."
+ ]
+}

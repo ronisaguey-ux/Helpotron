@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_flash_lite_model: str = os.getenv("GEMINI_FLASH_LITE_MODEL", "gemini-3.1-flash-lite")
-    gemini_flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.7-flash")
+    gemini_flash_model: str = os.getenv("GEMINI_FLASH_MODEL", "gemini-3.8-flash")
     primary_model: str = os.getenv("PRIMARY_MODEL", "mistral-nemo")  # bare name; llm.py routes NVIDIA tier via OmniRoute free lane
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
@@ -108,6 +108,17 @@ class Settings(BaseSettings):
     detector_zippy_enabled: bool = os.getenv("HELPOTRON_DETECTOR_ZIPPY", "true").lower() in ("1", "true", "yes", "on")
     detector_funnel_enabled: bool = os.getenv("HELPOTRON_DETECTOR_FUNNEL", "true").lower() in ("1", "true", "yes", "on")
     detector_model_dir: str = os.getenv("HELPOTRON_DETECTOR_MODEL_DIR", str(BASE_DIR / "server" / "detector_models" / "onnx"))
+
+    # Cloudflare Computer (owner 09-06): durable agent workspace via the
+    # @cloudflare/computer preview runtime (github.com/cloudflare/computer).
+    # Helpotron is not Cloudflare-native — it calls the deployed computer-mcp
+    # Worker's /mcp endpoint (bearer MCP_TOKEN) as an MCP client. Disabled by
+    # default: the runtime is PREVIEW-ONLY (unstable APIs, "NOT suitable for
+    # production use"), and the worker itself must be deployed after
+    # `npx wrangler login` before any enablement.
+    cf_computer_enabled: bool = os.getenv("HELPOTRON_CF_COMPUTER_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+    cf_computer_url: str = os.getenv("HELPOTRON_CF_COMPUTER_URL", "")  # https://computer-mcp.<sub>.workers.dev/mcp
+    cf_computer_token: str = os.getenv("HELPOTRON_CF_COMPUTER_TOKEN", "")  # MCP_TOKEN worker secret
 
     # Email Verification & SMTP
     email_host: str = os.getenv("EMAIL_HOST", "smtp.gmail.com")
