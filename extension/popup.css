@@ -579,6 +579,106 @@ body.window-mode {
   background: var(--surface-container-high);
   color: var(--on-surface);
 }
+
+/* In-Chat Quick Controls & Toggles */
+.chat-controls-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+}
+.chat-toggles-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chat-toggle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--outline);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.chat-toggle-chip:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+.chat-toggle-chip.active {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.chat-toggle-chip .chip-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--outline);
+  transition: all 0.15s ease;
+}
+.chat-toggle-chip.active .chip-status-dot {
+  background: var(--sem-green);
+  box-shadow: 0 0 5px var(--sem-green);
+}
+.chat-pause-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sem-red);
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chat-pause-btn:hover {
+  background: rgba(239, 68, 68, 0.28);
+}
+.chat-effort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
+}
+.chat-effort-lbl {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chat-effort-range {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.chat-model-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--primary);
+  background: var(--surface-container-high);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .threads-drawer {
   position: absolute;
   /* Anchored below the chat header bar (~46px) + thread info strip (~40px);

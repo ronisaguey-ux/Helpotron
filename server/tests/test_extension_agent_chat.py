@@ -170,3 +170,33 @@ def test_browser_action_invalid_burst_drops_all_and_reports_failed(client, monke
     assert data["control_actions"] is None
     assert data["execution"]["status"] == "failed"
     assert data["execution"]["actions_count"] == 0
+
+
+def test_browser_search_with_math_query_never_intercepted_by_shell(client, unique_user):
+    """'search inside my tab, how to solve 1+1' or 'search in my searchbar, how to solve 1+x=2'
+    must NEVER be intercepted by _extract_shell_query into a failing math bash command.
+    It must resolve to browser_action with real control actions."""
+    from server.routes_overlord import _extract_shell_query
+
+    t1 = "search inside my tab, how to solve 1+1"
+    t2 = "search in my searchbar, how to solve 1+x=2"
+    assert _extract_shell_query(t1) == ""
+    assert _extract_shell_query(t2) == ""
+
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+    resp = client.post("/api/extension/agent_chat", json={
+        "text": t1,
+        "agent_mode": True,
+        "viewport": {"width": 1280, "height": 800},
+    }, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert "couldn't run that computation" not in (data.get("reply") or "").lower()
+    assert data["control_actions"] is not None
+    assert len(data["control_actions"]) > 0
+    # verify typed query is extracted cleanly
+    type_actions = [a for a in data["control_actions"] if a.get("op") == "type"]
+    assert len(type_actions) == 1
+    assert "how to solve 1+1" in type_actions[0]["text"]
+
