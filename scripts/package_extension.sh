@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 # package_extension.sh — build the CWS submission zip for the Helpotron
-# extension (v2.6.1) and extract it into a test dir. Re-runnable: the zip and
-# the test dir are rebuilt from scratch every time. The previous zip's hash is
-# recorded in the manifest before it is replaced.
+# extension (version read from extension/manifest.json) and extract it into a
+# test dir. Re-runnable: the zip and the test dir are rebuilt from scratch
+# every time. The previous zip's hash is recorded in the manifest before it is
+# replaced.
 #
 # Usage:
 #   bash scripts/package_extension.sh
 #
 # Outputs:
-#   helpotron-extension-v2.6.1.zip                       (manifest at zip root)
-#   helpotron-extension-v2.6.1-test/                     (extracted for testing)
-#   verify-artifacts/package-manifest.txt                (zip sha256 + listing hash)
+#   helpotron-extension-v<version>.zip                  (manifest at zip root)
+#   helpotron-extension-v<version>-test/                (extracted for testing)
+#   verify-artifacts/package-manifest.txt               (zip sha256 + listing hash)
 #
 # Exclusions: *.md, .DS_Store, __pycache__/, *.pyc, *.tmp, *.log
 set -euo pipefail
 
 REPO="/home/roni/Roni_workspace/helpotron"
 EXT_DIR="$REPO/extension"
-ZIP="$REPO/helpotron-extension-v2.6.1.zip"
-TEST_DIR="$REPO/helpotron-extension-v2.6.1-test"
+VERSION="$("$REPO/.venv/bin/python3" -c "import json;print(json.load(open('$EXT_DIR/manifest.json'))['version'])")"
+ZIP="$REPO/helpotron-extension-v$VERSION.zip"
+TEST_DIR="$REPO/helpotron-extension-v$VERSION-test"
 ART="$REPO/verify-artifacts"
 
 rm -rf /tmp/helpotron-pkg-stage
@@ -50,13 +52,13 @@ LISTING=$(unzip -Z1 "$ZIP" | LC_ALL=C sort)
 LIST_HASH=$(printf '%s\n' "$LISTING" | sha256sum | cut -d' ' -f1)
 COUNT=$(printf '%s\n' "$LISTING" | grep -c .)
 
-# -- sanity: manifest inside the zip is the 2.6.1 one --------------------------
-"$REPO/.venv/bin/python3" - "$ZIP" <<'EOF'
+# -- sanity: manifest inside the zip matches the source version ---------------
+"$REPO/.venv/bin/python3" - "$ZIP" "$VERSION" <<'EOF'
 import json, sys, zipfile
 with zipfile.ZipFile(sys.argv[1]) as z:
     m = json.loads(z.read("manifest.json"))
 assert m.get("manifest_version") == 3, "not MV3"
-assert m.get("version") == "2.6.1", f"version {m.get('version')} != 2.6.1"
+assert m.get("version") == sys.argv[2], f"version {m.get('version')} != {sys.argv[2]}"
 print(f"zip manifest check OK: {m.get('name')} v{m.get('version')} (MV3)")
 EOF
 

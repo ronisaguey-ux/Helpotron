@@ -1,0 +1,152 @@
+label: final2c
+browser: /home/roni-saguey/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+extension: /home/roni/Roni_workspace/helpotron/extension
+profile: /tmp/helpotron-ext-verify-gkgebttz (temp)
+extension id: dpbeoomhlbphmmamopkjillheehakgka
+manifest: {
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger"
+  ],
+  "version": "2.6.1"
+}
+
+[manifest] Helpotron Academic Companion v2.6.1
+  [invariant] name correct: OK
+  [invariant] version 2.6.1: OK
+  [invariant] service_worker present: OK
+  [invariant] debugger required: OK
+  [invariant] downloads absent: OK
+  [invariant] tabs permission: OK
+[feature] approval
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [shot] final2c-approval-card-empty-approve.png (66030 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [FAIL    ] approval.empty-approve: expect=allow resolve=None tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [shot] final2c-approval-after-empty-approve.png (65819 bytes)
+  [shot] final2c-approval-card-empty-reject.png (68147 bytes)
+  [key] Enter  #approvalReject -> pressed
+  [FAIL    ] approval.empty-reject: expect=deny resolve=None tap=[] cardHidden=True status=⛔ Rejected the agent action.
+  [shot] final2c-approval-after-empty-reject.png (65728 bytes)
+  [shot] final2c-approval-card-text-approve.png (68486 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [FAIL    ] approval.text-approve: expect=allow/note='pls do it gently' resolve=None tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [shot] final2c-approval-after-text-approve.png: attempt 1 failed () — retrying
+  [shot] final2c-approval-after-text-approve.png (65819 bytes)
+  [FAIL    ] approval.empty-neutral-blocked: card not visible; cannot click
+[feature] keepopen
+  [PASS    ] keepopen.spare-tab: spare tab #692806248 in window 692806245
+  [keepopen] press teardown race tolerated: no close frame received or sent
+  [PASS    ] keepopen.second-window: target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [FAIL    ] keepopen.mode-window: live=True body.window-mode=False url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [PASS    ] keepopen.popout-hidden: btnPopOut hidden=True (window-mode hides the affordance)
+  [PASS    ] keepopen.window-type: windows.getAll: type=popup id=692806249
+  [PASS    ] keepopen.listed-after-focus: still listed after focusing another window (focus result: ok; headless focus may be cosmetic)
+[sync checks] page console errors: 0
+=== toggle results ===
+=== feature check results ===
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [FAIL    ] approval.empty-approve: expect=allow resolve=None tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [FAIL    ] approval.empty-reject: expect=deny resolve=None tap=[] cardHidden=True status=⛔ Rejected the agent action.
+  [FAIL    ] approval.text-approve: expect=allow/note='pls do it gently' resolve=None tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [FAIL    ] approval.empty-neutral-blocked: card not visible; cannot click
+  [PASS    ] keepopen.spare-tab: spare tab #692806248 in window 692806245
+  [PASS    ] keepopen.second-window: target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [FAIL    ] keepopen.mode-window: live=True body.window-mode=False url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [PASS    ] keepopen.popout-hidden: btnPopOut hidden=True (window-mode hides the affordance)
+  [PASS    ] keepopen.window-type: windows.getAll: type=popup id=692806249
+  [PASS    ] keepopen.listed-after-focus: still listed after focusing another window (focus result: ok; headless focus may be cosmetic)
+=== screenshots (7) ===
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-card-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-after-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-card-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-after-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-card-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-approval-after-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final2c-keepopen-window.png

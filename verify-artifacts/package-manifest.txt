@@ -1,10 +1,10 @@
-helpotron extension package manifest  (2026-09-07 01:40:29)
-previous-zip-sha256: 5fa7d6beb83070a86032bfa78c3e2fe161b5e457729b92963909e1a7c1b202d3  (built 2026-09-07 00:47:11)
-zip: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.6.1.zip
-zip-sha256: ff316c3605929f622dcaf400631dc7198fb4ac2e765fed01f10389466c7d3d7a
+helpotron extension package manifest  (2026-09-07 14:39:28)
+previous-zip-sha256: 341792f896a621ba10a82a294823316a26e77a9fed7ac76dae974b8d7c1b63dd  (built 2026-09-07 04:08:47)
+zip: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0.zip
+zip-sha256: 853a87d006dde5b31fe05bcfafffec141992a97e62f0dceadecf3399237d088b
 listing-sha256 (sorted file list): 687e39adbfc1069c788a901c9d92191277bd391335728d9a0f7aa071ebbcf5b0
 file-count: 30
-test-dir: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.6.1-test
+test-dir: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test
 excluded: *.md .DS_Store __pycache__/* *.pyc *.tmp *.log
 --- sorted zip listing ---
 agent_mode.html

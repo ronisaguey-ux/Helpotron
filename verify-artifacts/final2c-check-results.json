@@ -1,0 +1,77 @@
+{
+  "label": "final2c",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "approval.presence-core",
+      "status": "PASS",
+      "detail": "contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True"
+    },
+    {
+      "check": "approval.presence-legacy",
+      "status": "PASS",
+      "detail": "legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)"
+    },
+    {
+      "check": "approval.presence-autoAdd",
+      "status": "PASS",
+      "detail": "#approvalApproveAuto present"
+    },
+    {
+      "check": "approval.worker-tap",
+      "status": "PASS",
+      "detail": "listener injected on service worker"
+    },
+    {
+      "check": "approval.empty-approve",
+      "status": "FAIL",
+      "detail": "expect=allow resolve=None tap=[] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-reject",
+      "status": "FAIL",
+      "detail": "expect=deny resolve=None tap=[] cardHidden=True status=\u26d4 Rejected the agent action."
+    },
+    {
+      "check": "approval.text-approve",
+      "status": "FAIL",
+      "detail": "expect=allow/note='pls do it gently' resolve=None tap=[] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-neutral-blocked",
+      "status": "FAIL",
+      "detail": "card not visible; cannot click"
+    },
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #692806248 in window 692806245"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "PASS",
+      "detail": "target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.mode-window",
+      "status": "FAIL",
+      "detail": "live=True body.window-mode=False url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.popout-hidden",
+      "status": "PASS",
+      "detail": "btnPopOut hidden=True (window-mode hides the affordance)"
+    },
+    {
+      "check": "keepopen.window-type",
+      "status": "PASS",
+      "detail": "windows.getAll: type=popup id=692806249"
+    },
+    {
+      "check": "keepopen.listed-after-focus",
+      "status": "PASS",
+      "detail": "still listed after focusing another window (focus result: ok; headless focus may be cosmetic)"
+    }
+  ],
+  "surface_failures": []
+}

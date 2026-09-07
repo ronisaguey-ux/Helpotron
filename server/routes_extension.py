@@ -49,7 +49,7 @@ def get_current_manifest() -> Dict[str, Any]:
                 return json.load(f)
         except Exception:
             pass
-    return {"version": "2.6.1", "name": "Helpotron Academic Companion"}
+    return {"version": "2.7.0", "name": "Helpotron Academic Companion"}
 
 
 class VersionCheckRequest(BaseModel):
@@ -136,6 +136,12 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.7.0": [
+        "🖱️ Driving actually works: the agent auto-picks a real web page (new-tab/extension pages are skipped with a clear RETRY), then moves a visible cursor and clicks for you.",
+        "✅ Same approval card everywhere — popup, popped-out window, and the Helpotron site: Approve, Reject, or Neutral (with an optional note the agent sees).",
+        "⚡ Approve + auto-add: approve an action type once and future identical actions run without asking.",
+        "🗝️ Agent prompt hardened: the agent never refuses a legit request, and Educational Mode limits it to school/study tasks.",
+    ],
     "2.6.1": [
         "🖥️ Natural mouse glide: agent moves cursor smoothly along Bezier curves before clicking or typing.",
         "🎛️ Full interactive toggles: Educational Mode, See Screen, and Execute switches now fully responsive and synced.",
@@ -402,6 +408,25 @@ class VisionRequest(BaseModel):
     prompt: Optional[str] = Field(None, max_length=2_000, description="optional custom analysis instruction")
     width: Optional[int] = Field(None, ge=1, le=20_000)
     height: Optional[int] = Field(None, ge=1, le=20_000)
+
+
+class ExtensionApprovalResponseRequest(BaseModel):
+    """09-07: the approval card's answer to a pending approval request
+    (the `approval_request` object an agent_chat response carried).
+
+    decision: allow | deny | neutral ('message' is accepted as an alias for
+    neutral; the legacy web vocabulary approve/reject also works).
+    req_id is required (reqId camelCase alias accepted; permission_id is a
+    second alias — the same pending-permission id).
+    """
+    req_id: Optional[str] = Field(None, description="pending approval id (the approval_request.req_id the card received)")
+    reqId: Optional[str] = Field(None, description="camelCase alias for req_id (extension protocol spelling)")
+    permission_id: Optional[str] = Field(None, description="alias for req_id — the perm_ id, same pending permission")
+    decision: str = Field(..., description="allow | deny | neutral (message/media accepted; approve/reject aliases too)")
+    text: Optional[str] = Field(None, description="user feedback text — REQUIRED for neutral; optional for allow/deny")
+    comment: Optional[str] = Field(None, description="alias for text (legacy web spelling)")
+    auto_add: bool = Field(False, description="allow + persist the action type into the user's auto-approved actions")
+    autoAdd: Optional[bool] = Field(None, description="camelCase alias for auto_add")
 
 
 async def _extension_current_user(request: Request, db: Session):
@@ -840,7 +865,7 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             reply_text = await _conversational_fallback(user, payload.text, db=db, node="extensions")
             reply_text = strip_thinking_tokens(reply_text)
         if _is_degenerate_reply(reply_text):
-            reply_text = "I didn't catch that — mind rephrasing? (Reply generation came back empty.)"
+            reply_text = "I couldn't generate a reply just now (the model service may be down) — please try again in a moment."
         if payload.agent_mode:
             # agent mode (09-01): split the fenced ```control``` block off the
             # reply and harden it (allowlist + viewport clamp + caps; the WHOLE
@@ -893,9 +918,12 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             db, user, thread_key,
             text=f"⚠️ Action '{intent['action'].replace('_', ' ')}' requires your permission before execution.",
             suggested_actions=["Approve", "Write Something Else", "Always Approve This Action"])
+        from .routes_overlord import approval_request_payload  # lazy (import order parity)
+
         return {
             "status": "permission_required",
             "permission_request": perm,
+            "approval_request": approval_request_payload(perm),
             "message": agent_reply,
             "token_balance": _tk_balance(user),
         }
@@ -955,6 +983,46 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         resp["model_tier"] = vision_model_tier
         resp["effort_score"] = effort_score
     return resp
+
+
+@router.post("/approval/respond")
+async def respond_extension_approval(payload: ExtensionApprovalResponseRequest, request: Request, db: Session = Depends(get_db)):
+    """09-07: the extension approval card answers a pending approval that an
+    /api/extension/agent_chat response carried as `approval_request`.
+
+    reqId-keyed (req_id / reqId / permission_id all accepted — same pending
+    permission entry). Outcomes:
+      * allow  — execute the pending action (bypassing the prompt that already
+        happened); with autoAdd also persist the action TYPE in the user's
+        settings auto_approved_actions so identical requests auto-allow
+        silently (no prompt at all).
+      * deny   — hard no: the action is rejected and never runs.
+      * neutral — the action is NOT performed; the user's text (REQUIRED — blank
+        neutral is a 400 the UI can block) is injected into the agent thread as
+        a user turn so the agent continues without that action; the request
+        STAYS pending so the agent may re-request it.
+    Unknown reqId is ignored safely: 404, nothing mutated, no crash. Auth is
+    the same session_token/JWT/cookie path as agent_chat."""
+    user = await _extension_current_user(request, db)
+    req_id = (payload.req_id or payload.reqId or payload.permission_id or "").strip()
+    if not req_id:
+        raise HTTPException(status_code=422, detail="req_id is required")
+
+    from .overlord_agent import overlord_agent as _overlord_agent  # lazy (import order parity)
+
+    if req_id not in _overlord_agent._pending_permissions:
+        raise HTTPException(status_code=404, detail="Approval request not found")
+    perm_entry = _overlord_agent._pending_permissions[req_id]
+    if perm_entry.get("user_public_id") != user.public_id:
+        raise HTTPException(status_code=403, detail="Approval request does not belong to you")
+
+    from .routes_overlord import _apply_approval_decision  # lazy (import order parity)
+
+    auto_add = bool(payload.autoAdd) if payload.autoAdd is not None else payload.auto_add
+    return await _apply_approval_decision(
+        db, user, perm_entry, payload.decision,
+        comment=payload.comment, text=payload.text, auto_add=auto_add,
+    )
 
 
 @router.get("/agent_chat/history")

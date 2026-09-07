@@ -1,0 +1,72 @@
+{
+  "label": "final2",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "approval.presence-core",
+      "status": "PASS",
+      "detail": "contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True"
+    },
+    {
+      "check": "approval.presence-legacy",
+      "status": "PASS",
+      "detail": "legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)"
+    },
+    {
+      "check": "approval.presence-autoAdd",
+      "status": "PASS",
+      "detail": "#approvalApproveAuto present"
+    },
+    {
+      "check": "approval.run",
+      "status": "ERROR",
+      "detail": "Page.enable: {'code': -32601, 'message': \"'Page.enable' wasn't found\"}"
+    },
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 992102384, 'winId': 992102381}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:45337/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #992102385 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #992102385 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 992102385, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "PASS",
+      "detail": "click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=\u2713 Drove LH5DRIVE-1788764859717 \u2014 1 action(s) executed with v"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "PASS",
+      "detail": "page-side click counter = 1; server counter = 1"
+    },
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #992102388 in window 992102381"
+    },
+    {
+      "check": "keepopen.run",
+      "status": "ERROR",
+      "detail": "no close frame received or sent"
+    }
+  ],
+  "surface_failures": []
+}
