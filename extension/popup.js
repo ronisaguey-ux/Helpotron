@@ -25,7 +25,7 @@ const MODEL_TIER_KEY = 'helpotron_agent_model_tier';
 const EDUCATIONAL_MODE_KEY = 'helpotron_educational_mode';
 
 const SEE_SCREEN_DEFAULT = true;
-const EXECUTE_DEFAULT = false;
+const EXECUTE_DEFAULT = true;
 const MODE_DEFAULT = 'manual';
 const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
 const EDUCATIONAL_MODE_DEFAULT = true;
@@ -39,6 +39,13 @@ const modelToggles = {
 const effortScoreSlider = document.getElementById('effortScoreSlider');
 const effortScoreVal = document.getElementById('effortScoreVal');
 const chatModelIndicator = document.getElementById('chatModelIndicator');
+const chatToggleEdu = document.getElementById('chatToggleEdu');
+const chatToggleSee = document.getElementById('chatToggleSee');
+const chatToggleExecute = document.getElementById('chatToggleExecute');
+const chatQuickPause = document.getElementById('chatQuickPause');
+const chatEffortSlider = document.getElementById('chatEffortSlider');
+const chatEffortVal = document.getElementById('chatEffortVal');
+const chatModelBadge = document.getElementById('chatModelBadge');
 const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 const modeHintEl = document.getElementById('modeHint');
 const modelEffortEl = document.getElementById('modelEffort');
@@ -71,10 +78,19 @@ if (btnPopOut) {
     btnPopOut.disabled = true;
     const errEl = document.getElementById('popOutError');
     try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+      const curTab = tabs && tabs[0];
+      if (chrome.sidePanel && chrome.sidePanel.open && curTab && curTab.windowId) {
+        try {
+          await chrome.sidePanel.open({ windowId: curTab.windowId });
+          window.close();
+          return;
+        } catch { /* fallback to popup window */ }
+      }
       const win = await chrome.windows.create({
         url: chrome.runtime.getURL('popup.html?mode=window'),
         type: 'popup',
-        width: 420,
+        width: 440,
         height: 660,
         focused: true,
       });
@@ -279,8 +295,35 @@ async function applyAgentStateToUI(st) {
   if (effortScoreVal) effortScoreVal.innerText = `${score}`;
   if (effortScoreSlider) effortScoreSlider.value = score;
   if (modelNameEl) modelNameEl.innerText = info.label;
-  if (chatModelIndicator) chatModelIndicator.innerText = info.label;
   if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  syncInChatControls(st);
+}
+
+function syncInChatControls(st) {
+  const see = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : !!st[SEE_SCREEN_KEY];
+  const exe = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : !!st[EXECUTE_KEY];
+  const edu = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : !!st[EDUCATIONAL_MODE_KEY];
+  const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
+  const info = effortModelInfo(score);
+
+  if (chatToggleEdu) {
+    chatToggleEdu.classList.toggle('active', edu);
+    const lbl = chatToggleEdu.querySelector('.chip-title');
+    if (lbl) lbl.textContent = edu ? 'Edu: ON' : 'Edu: OFF';
+  }
+  if (chatToggleSee) {
+    chatToggleSee.classList.toggle('active', see);
+    const lbl = chatToggleSee.querySelector('.chip-title');
+    if (lbl) lbl.textContent = see ? 'Screen: ON' : 'Screen: OFF';
+  }
+  if (chatToggleExecute) {
+    chatToggleExecute.classList.toggle('active', exe);
+    const lbl = chatToggleExecute.querySelector('.chip-title');
+    if (lbl) lbl.textContent = exe ? 'Execute: ON' : 'Execute: OFF';
+  }
+  if (chatEffortSlider) chatEffortSlider.value = score;
+  if (chatEffortVal) chatEffortVal.textContent = score;
+  if (chatModelBadge) chatModelBadge.textContent = info.label;
 }
 
 // ── Backend settings sync (09-02): GET /api/user/settings -> ai.{effortScore,
@@ -448,6 +491,80 @@ Object.keys(modelToggles).forEach((id) => {
     handleToggleChange(id, el.checked);
   });
 });
+
+if (chatToggleEdu) {
+  chatToggleEdu.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : !!st[EDUCATIONAL_MODE_KEY];
+    await handleToggleChange('toggleEducationalMode', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatToggleSee) {
+  chatToggleSee.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : !!st[SEE_SCREEN_KEY];
+    await handleToggleChange('toggleSeeScreen', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatToggleExecute) {
+  chatToggleExecute.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : !!st[EXECUTE_KEY];
+    await handleToggleChange('toggleExecute', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatQuickPause) {
+  chatQuickPause.addEventListener('click', () => {
+    pauseAgentAction();
+  });
+}
+
+if (chatEffortSlider) {
+  chatEffortSlider.addEventListener('input', () => {
+    const val = clampEffortScore(chatEffortSlider.value);
+    if (chatEffortVal) chatEffortVal.innerText = `${val}`;
+    if (effortScoreSlider) effortScoreSlider.value = val;
+    if (effortScoreVal) effortScoreVal.innerText = `${val}`;
+    const info = effortModelInfo(val);
+    if (modelEffortEl) modelEffortEl.innerText = `effort ${val}`;
+    if (modelNameEl) modelNameEl.innerText = info.label;
+    if (chatModelIndicator) chatModelIndicator.innerText = info.label;
+    if (chatModelBadge) chatModelBadge.innerText = info.label;
+    if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  });
+
+  chatEffortSlider.addEventListener('change', async () => {
+    const val = clampEffortScore(chatEffortSlider.value);
+    const info = effortModelInfo(val);
+    await persistAgentState({
+      [EFFORT_KEY]: val,
+      [MODEL_KEY]: info.model,
+      [MODEL_TIER_KEY]: info.tier,
+    });
+    setStatus(`⚡ Effort score set to ${val} (${info.label}).`);
+    syncInChatControls(await readAgentState());
+
+    clearTimeout(effortPatchDebounceTimer);
+    effortPatchDebounceTimer = setTimeout(async () => {
+      const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+      const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const t = await authToken();
+      if (public_id && t) {
+        fetch(`${srv}/api/user/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ ai: { effortScore: val } }),
+        }).catch(() => {});
+      }
+    }, 400);
+  });
+}
 
 // Effort score slider interactive updates
 if (effortScoreSlider) {
@@ -1726,6 +1843,7 @@ function showAgentActiveBar(desc) {
     if (btnTxt) btnTxt.textContent = 'PAUSE';
   }
   if (hBtn) hBtn.style.display = 'inline-flex';
+  if (chatQuickPause) chatQuickPause.style.display = 'inline-flex';
 }
 
 function updateAgentActiveDesc(desc) {
@@ -1749,6 +1867,7 @@ function setAgentActionPausedState() {
     if (btnTxt) btnTxt.textContent = 'CANCEL';
   }
   if (hBtn) hBtn.style.display = 'none';
+  if (chatQuickPause) chatQuickPause.style.display = 'none';
   setStatus('⏸ Agent action paused. Press Cancel or issue a new instruction.');
 }
 
@@ -1759,6 +1878,7 @@ function hideAgentActiveBar() {
   const hBtn = document.getElementById('btnHeaderPause');
   if (bar) bar.style.display = 'none';
   if (hBtn) hBtn.style.display = 'none';
+  if (chatQuickPause) chatQuickPause.style.display = 'none';
 }
 
 let pauseBarVisible = false; // bar is up in a paused/can-cancel state
