@@ -332,7 +332,7 @@ def get_ai_economics_data() -> Dict[str, Any]:
         "model_distribution": model_dist,
         "downgrade_opportunities": downgrades[:10],
         "wasted_spend_alerts": [
-            "Workflow 'Assignment Parser' currently using Gemini 3.7 Flash for tag extraction. Candidate for Nemotron/Qwen downgrade."
+            "Workflow 'Assignment Parser' currently using Gemini 3.8 Flash for tag extraction. Candidate for Nemotron/Qwen downgrade."
         ] if len(downgrades) > 0 else [],
         "low_effort_savings_simulation": {
             "current_projected_cost": "$4.12 / 1000 tasks",

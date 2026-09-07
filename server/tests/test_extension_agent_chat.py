@@ -1,0 +1,172 @@
+"""09-07: /api/extension/agent_chat semantics — token gating (insufficient_tokens),
+the structured-agent-call guarantee that a deliberation monologue can never
+reach the user, the viewport clamp contract on the direct browser_action
+payload, and the all-or-nothing drop reporting.
+
+Run with the pinned test DB (conftest) — never against the live :8000.
+"""
+from server.database import AgentChatMessage, SessionLocal, User
+from server.security import create_jwt_token
+
+
+def _make_user(public_id: str, token_balance: float, plan: str = "basic"):
+    """Create (or update) a user and return (auth headers, numeric user id)."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == public_id).first()
+        if not user:
+            user = User(
+                public_id=public_id,
+                plan=plan,
+                credits=100.0 if plan in ("basic", "pro", "elite") else 0.0,
+                settings={"2fa_enabled": True, "token_balance": token_balance},
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            user.settings = {**(user.settings or {}), "2fa_enabled": True,
+                             "token_balance": token_balance}
+            db.commit()
+            db.refresh(user)
+        token = create_jwt_token({"sub": user.id, "public_id": user.public_id})
+        return {"Authorization": f"Bearer {token}"}, user.id
+    finally:
+        db.close()
+
+
+def test_zero_balance_returns_insufficient_tokens_and_records_nothing(client, unique_user):
+    """Token gate (operator 08-26 semantics): with 0 balance no LLM call, no
+    execution, no persisted message — the response carries insufficient_tokens."""
+    headers, uid = _make_user(unique_user, token_balance=0.0)
+    resp = client.post("/api/extension/agent_chat", json={"text": "solve 1+x=2"}, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "insufficient_tokens"
+    # message/reply are the durable chat-message record; text holds the copy
+    assert "Insufficient tokens" in data["message"]["text"]
+    assert data["token_balance"] == 0.0
+    db = SessionLocal()
+    try:
+        # the gate short-circuits before the user message is recorded or any
+        # action runs — only the refusal itself is persisted (by design).
+        user_rows = db.query(AgentChatMessage).filter(
+            AgentChatMessage.user_id == uid, AgentChatMessage.sender == "user",
+        ).count()
+        assert user_rows == 0
+        refusal = db.query(AgentChatMessage).filter(
+            AgentChatMessage.user_id == uid, AgentChatMessage.sender == "overlord",
+        ).all()
+        assert refusal and "Insufficient tokens" in (refusal[0].text or "")
+    finally:
+        db.close()
+
+
+def test_plain_answer_reply_never_leaks_think_monologue(client, monkeypatch, unique_user):
+    """A structured agent call resolving to plain_answer must never deliver
+    <think> blocks or the rules-monologue to the user — stripped in the route."""
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+
+    async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
+                           node="my_agent", assignment_context=None,
+                           humanizer_ctx=None, viewport=None):
+        # the real caller's viewport default must be forwarded
+        assert viewport == {"width": 1280, "height": 800}
+        return {
+            "action": "plain_answer",
+            "payload": {},
+            "force_permission": False,
+            "reply": (
+                "<think>We need to follow the system's rules. The instruction says "
+                "use sandboxed math. The user says: solve 1+1.</think>The answer is 2."
+            ),
+        }
+
+    import server.routes_overlord as _ro
+    monkeypatch.setattr(_ro, "_resolve_agent_intent", fake_resolve)
+
+    resp = client.post("/api/extension/agent_chat",
+                       json={"text": "how do i solve 1+1 mate"}, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert "think" not in data["reply"].lower()
+    assert "we need to follow" not in data["reply"].lower()
+    assert "the instruction says" not in data["reply"].lower()
+    assert "The answer is 2." in data["reply"]
+    # one token charged on success
+    assert data["token_balance"] == 4.0
+
+
+def test_browser_action_payload_is_clamped_to_captured_viewport(client, monkeypatch, unique_user):
+    """Direct-payload browser_action: coords clamp into the captured viewport,
+    the fenced-block name list validates, and deliberate text is stripped."""
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+
+    async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
+                           node="my_agent", assignment_context=None,
+                           humanizer_ctx=None, viewport=None):
+        return {
+            "action": "browser_action",
+            "payload": {"actions": [
+                {"op": "move", "x": 99999, "y": -5},
+                {"op": "click", "x": 500, "y": 400, "button": "left"},
+                {"op": "type", "text": "hi"},
+                {"op": "key", "key": "Enter", "modifiers": []},
+                {"op": "scroll", "x": 10, "y": 10, "deltaX": 0, "deltaY": 240},
+            ]},
+            "force_permission": False,
+            "reply": "<think>planning the move</think>Moved and clicked.",
+        }
+
+    import server.routes_overlord as _ro
+    monkeypatch.setattr(_ro, "_resolve_agent_intent", fake_resolve)
+
+    resp = client.post("/api/extension/agent_chat", json={
+        "text": "click the search bar", "agent_mode": True,
+        "viewport": {"width": 400, "height": 300},
+    }, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    acts = data["control_actions"]
+    assert len(acts) == 5
+    # clamped to (width-1, height-1) / (0, 0)
+    assert acts[0] == {"op": "move", "x": 399, "y": 0}
+    assert acts[1] == {"op": "click", "x": 399, "y": 299, "button": "left"}
+    assert acts[3] == {"op": "key", "key": "Enter", "modifiers": []}
+    assert "planning" not in data["reply"]
+    assert data["execution"]["actions_count"] == 5
+    assert data["token_balance"] == 4.0
+
+
+def test_browser_action_invalid_burst_drops_all_and_reports_failed(client, monkeypatch, unique_user):
+    """One invalid op anywhere in the direct payload => the WHOLE burst drops;
+    the response must report it honestly (failed, 0 actions), never success."""
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+
+    async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
+                           node="my_agent", assignment_context=None,
+                           humanizer_ctx=None, viewport=None):
+        return {
+            "action": "browser_action",
+            "payload": {"actions": [
+                {"op": "move", "x": 10, "y": 10},
+                {"op": "explode", "x": 1, "y": 1},  # not on the allowlist
+            ]},
+            "force_permission": False,
+            "reply": "Going to move.",
+        }
+
+    import server.routes_overlord as _ro
+    monkeypatch.setattr(_ro, "_resolve_agent_intent", fake_resolve)
+
+    resp = client.post("/api/extension/agent_chat", json={
+        "text": "move the mouse", "agent_mode": True,
+        "viewport": {"width": 640, "height": 480},
+    }, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["control_actions"] is None
+    assert data["execution"]["status"] == "failed"
+    assert data["execution"]["actions_count"] == 0

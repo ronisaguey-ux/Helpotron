@@ -112,9 +112,11 @@ export default function MobileDrawer({
             <div className="flex flex-col flex-1 overflow-y-auto os-scroll">
               <div className="h-16 px-5 flex items-center justify-between border-b border-outline-variant/20 shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary font-bold">
-                    H
-                  </div>
+                  <img
+                    src="/HelpoTron_logo.jpeg"
+                    alt="Helpotron Logo"
+                    className="w-8 h-8 rounded-xl object-cover border border-primary/30 shrink-0"
+                  />
                   <div className="flex flex-col">
                     <span className="font-semibold text-sm text-on-surface leading-tight">Helpotron</span>
                     <span className="font-mono text-[9px] text-primary uppercase tracking-wider">Academic Co-pilot</span>

@@ -536,7 +536,7 @@ async def get_developer_intelligence(request: Request, db: Session = Depends(get
     return {
         "status": "operational",
         "active_subsystems": 6,
-        "active_models": ["deepseek-v4-flash", "deepseek-v4-pro", "gemini-3.1-flash-lite", "gemini-3.7-flash"],
+        "active_models": ["deepseek-v4-flash", "deepseek-v4-pro", "gemini-3.1-flash-lite", "gemini-3.8-flash"],
         "system_nodes": get_live_system_nodes(db),
         "telemetry": {
             "p95_latency_ms": 24.5,

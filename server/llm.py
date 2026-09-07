@@ -10,9 +10,15 @@ from datetime import datetime
 # .env is authoritative: stale OPENROUTER_API_KEY exports in the surrounding
 # shell have shadowed the real key repeatedly (os.environ wins over pydantic's
 # env_file). override=True forces .env values into os.environ at import.
+# EXCEPTION (2026-09-07, incident root cause): a caller-explicit DATABASE_URL /
+# ENVIRONMENT must survive — load_dotenv stomping them snapped every "scratch"
+# uvicorn (`DATABASE_URL=sqlite:////tmp/...`) onto the prod DB at import.
 try:
     from dotenv import load_dotenv
+    _PINNED = {k: os.environ[k] for k in ("DATABASE_URL", "ENVIRONMENT") if k in os.environ}
     load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+    for _k, _v in _PINNED.items():
+        os.environ[_k] = _v
 except Exception:
     pass
 
@@ -34,7 +40,7 @@ class ModelPolicy:
         "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
         "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
         "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
-        "gemini_37_flash": "google/gemini-3.7-flash",
+        "gemini_38_flash": "google/gemini-3.8-flash",
     }
     
     GRUNT_CANDIDATES = [
@@ -55,7 +61,7 @@ class ModelPolicy:
         "deepseek/deepseek-v4-flash": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
         "deepseek/deepseek-v4-pro-vision": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
         "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
-        "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "google/gemini-3.8-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
     }
 
 PRIMARY_MODELS = ModelPolicy.PRIMARY_MODELS
@@ -115,7 +121,7 @@ def resolve_model_routing(
     - Level 3: google/gemini-3.1-flash-lite
     - Levels 4-7: deepseek/deepseek-v4-flash-vision
     - Levels 8-10 (7+): deepseek/deepseek-v4-pro-vision
-    - Gemini 3.7 Flash: ONLY used when effort is maxed out (>=8) on Gemini-exclusive tasks
+    - Gemini 3.8 Flash: ONLY used when effort is maxed out (>=8) on Gemini-exclusive tasks
       (audio, image/video generation/analysis, google slides, fake google doc history).
     """
     required_capabilities = required_capabilities or []
@@ -164,7 +170,7 @@ def resolve_model_routing(
 
     if is_gemini_exclusive:
         if level >= 8:
-            selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]
+            selected = ModelPolicy.PRIMARY_MODELS["gemini_38_flash"]
             tier = "gemini_exclusive_flagship"
             reason = "Maxed effort on Gemini-exclusive task (audio/video/slides/fake doc history)"
         else:
@@ -257,6 +263,57 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
         logger.warning(f"Failed to persist routing telemetry: {e}")
 
 
+def strip_thinking_tokens(text: Optional[str]) -> str:
+    """Robustly strips internal thinking, reasoning tags, and internal monologues.
+    
+    Prevents thinking tokens (<think>...</think>, <thought>...</thought>,
+    <reasoning>...</reasoning>) and internal rule-deliberation leaks from reaching users.
+    """
+    if not text:
+        return ""
+    import re
+    t = str(text).strip()
+    # Strip closed blocks
+    t = re.sub(r"<think>[\s\S]*?</think>", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"<thought>[\s\S]*?</thought>", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"<reasoning>[\s\S]*?</reasoning>", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"<thought_process>[\s\S]*?</thought_process>", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\[THOUGHT\][\s\S]*?\[/THOUGHT\]", "", t, flags=re.IGNORECASE)
+
+    # Handle unclosed thinking tags (e.g. truncated generation)
+    for tag in ("<think>", "<thought>", "<reasoning>"):
+        idx = t.lower().find(tag)
+        if idx != -1:
+            close_tag = tag.replace("<", "</")
+            close_idx = t.lower().find(close_tag)
+            if close_idx != -1:
+                t = t[close_idx + len(close_tag):]
+            else:
+                t = t[:idx]
+
+    # Clean Thinking Process / Analysis preambles
+    t = re.sub(r"^Thinking Process:[\s\S]*?(?=\n\n[A-Z0-9{\"']|\Z)", "", t, flags=re.IGNORECASE)
+
+    # If text is an internal rules monologue without JSON, filter out meta sentences
+    lower = t.lower().strip()
+    if (lower.startswith("we need to follow the system's rules") or
+        lower.startswith("we must follow the system's rules") or
+        ("the user says:" in lower and "the instruction says" in lower)):
+        sentences = re.split(r"(?<=[.?!])\s+", t)
+        real_sentences = [
+            s for s in sentences
+            if not any(kw in s.lower() for kw in (
+                "we need to follow", "we must follow", "the user says",
+                "the instruction says", "there's no tool", "the only tool mentioned",
+                "according to the rules", "use sandboxed math",
+                "use solve_deterministic_math",
+            ))
+        ]
+        t = " ".join(real_sentences).strip()
+
+    return t.strip()
+
+
 def format_model_identity_prompt(model_id: str) -> str:
     if "deepseek-v4-flash" in model_id:
         clean_name = "deepseek-v4-flash-vision"
@@ -304,6 +361,8 @@ async def call_llm(
         effort_score=effort_score,
     )
     model_id = MODELS.get(model, model) if model else route["model"]  # short names (flash/pro/...) → real slug 08-28
+    if json_mode and model_id == ModelPolicy.PRIMARY_MODELS["nemotron_nano"]:
+        model_id = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
     
     for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
         if prohibited in model_id:
@@ -371,6 +430,7 @@ async def call_llm(
                 if content is None:
                     # reasoning model burned its output cap — retry next candidate
                     raise ValueError("blank content (reasoning cap)")
+                content = strip_thinking_tokens(content)
                 if not str(content).strip():
                     # 200 with an empty body is a provider backend failure, not a
                     # real answer (08-31: finalize silently produced no material
@@ -413,6 +473,7 @@ async def call_llm(
                     resp.raise_for_status()
                 ldata = resp.json()
                 lcontent = ldata["choices"][0]["message"]["content"] or ""
+                lcontent = strip_thinking_tokens(lcontent)
                 if not lcontent.strip():
                     raise ValueError("lane returned empty content")
                 lusage = ldata.get("usage") or {}
@@ -462,7 +523,7 @@ MODELS = {
     "flash_vision": "deepseek/deepseek-v4-flash-vision",
     "pro_vision": "deepseek/deepseek-v4-pro-vision",
     "lite": "google/gemini-3.1-flash-lite",
-    "gemini": "google/gemini-3.7-flash",
+    "gemini": "google/gemini-3.8-flash",
     "nano": "nvidia/nemotron-3-nano-30b-a3b",
     "qwen": "qwen/qwen-2.5-72b-instruct",
     "grunt": "nvidia/nemotron-3-nano-30b-a3b",

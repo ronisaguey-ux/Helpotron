@@ -9,7 +9,7 @@
 // has no such limit, so the scrape-side slices were the ONLY truncation.
 // Guard is now a generous hard ceiling (pathological multi-MB pages only) and
 // any cut is EXPLICITLY marked so the stored content never silently loses tail.
-const SCRAPE_TEXT_CAP = 1_000_000; // chars — storage is TEXT; this only bounds megabyte pages
+var SCRAPE_TEXT_CAP = 1_000_000; // chars — storage is TEXT; this only bounds megabyte pages
 
 function capScrapeText(s) {
   const t = (s || '').trim();
@@ -41,7 +41,7 @@ function detectPlatform() {
 
 // Client-side mirror of the server's keyword classifier. Course names are the
 // best signal ("Algebra 2 Honors Topic 1 Packet" -> Mathematics).
-const SUBJECT_HINTS = [
+var SUBJECT_HINTS = [
   ['Mathematics', ['algebra', 'geometry', 'calculus', 'trig', 'trigonometr', 'statistic', 'equation', 'theorem', 'linear', 'quadratic', 'function', 'probability', 'arithmetic', 'math', 'integral', 'derivative', 'exponential', 'logarithm']],
   ['Biology', ['cell', 'dna', 'genetics', 'organism', 'biology', 'evolution', 'crispr', 'photosynthesis', 'ecosystem', 'bacteria', 'mitochondria']],
   ['Chemistry', ['chemistry', 'chemical', 'molecule', 'atom', 'compound', 'reaction', 'acid', 'periodic']],
@@ -76,7 +76,12 @@ function classifySubject(text) {
 function parseCourseUrl(url) {
   try {
     const u = new URL(url);
-    const m = u.pathname.match(/^\/courses\/(\d+)\/(assignments|quizzes|pages|discussion_topics|modules|files|modules\/items)\/([^/?#]+)/);
+    // ORDERING TRAP: 'modules/items' MUST precede 'modules' in the alternation.
+    // The regex engine takes the FIRST alternative whose remainder matches, so
+    // with 'modules' first, /courses/1/modules/items/44 parses as kind='modules',
+    // itemId='items' (regex stops at \/items) — every module item collapsed onto
+    // ONE wrong canvas_id ('c1:modules:items'), breaking subject pairing/dedupe.
+    const m = u.pathname.match(/^\/courses\/(\d+)\/(assignments|quizzes|pages|discussion_topics|modules\/items|modules|files)\/([^/?#]+)/);
     if (!m) {
       const c = u.pathname.match(/^\/courses\/(\d+)/);
       return { courseId: c ? c[1] : '', itemId: '', itemKind: '', courseUrl: c ? u.origin + c[0] : '' };
@@ -329,7 +334,7 @@ function scrapeGeneric() {
 // explicit download markers + Canvas/Drive/OneDrive file routes + ANY link whose
 // path (or visible link text) ends in a document/media extension. URLs are
 // resolved ABSOLUTE and deduped so the server-side bubble stores real URLs.
-const FILE_EXT_RE = /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|rtf|txt|csv|md|tex|mobi|epub|odt|ods|odp|key|pages|numbers|png|jpe?g|gif|webp|bmp|svg|tiff?|mp3|wav|m4a|aac|ogg|flac|mp4|mov|avi|mkv|webm|tar|gz|dmg|exe)$/i;
+var FILE_EXT_RE = /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|rtf|txt|csv|md|tex|mobi|epub|odt|ods|odp|key|pages|numbers|png|jpe?g|gif|webp|bmp|svg|tiff?|mp3|wav|m4a|aac|ogg|flac|mp4|mov|avi|mkv|webm|tar|gz|dmg|exe)$/i;
 
 function extractAllFileLinks() {
   const fileHints = [
@@ -379,7 +384,7 @@ function extractAllFileLinks() {
 // wait for the DOM to settle, THEN extract; finally fetch + sha256 every
 // downloadable file through the page's own session so LMS cookies apply.
 
-const DEEP_REVEAL_RE = /^(show|view|read|load|open|see|display|expand|continue)\b.*(more|all|full|details|everything)|^(show all|view all|load more|read more|see more|expand all|continue reading|more)$|more|expand|continue reading|展开|更多|查看全部|显示/i;
+var DEEP_REVEAL_RE = /^(show|view|read|load|open|see|display|expand|continue)\b.*(more|all|full|details|everything)|^(show all|view all|load more|read more|see more|expand all|continue reading|more)$|more|expand|continue reading|展开|更多|查看全部|显示/i;
 
 function deepVisible(el) {
   const r = el.getBoundingClientRect();
@@ -399,7 +404,7 @@ function deepRevealCandidates() {
   return out;
 }
 
-const sleepDeep = (ms) => new Promise((r) => setTimeout(r, ms));
+var sleepDeep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function deepScrapeUniversal(options) {
   const opts = options || {};
@@ -550,6 +555,17 @@ window.__helpotron_extract_rubric = function (selector) {
 // ── Remediation BATCH-08: runtime message channel (MV3) ─────────────────────
 // Complements the window.__helpotron_* globals above — the popup/background
 // can now drive scraping over chrome.runtime messaging.
+//
+// IDEMPOTENCY GUARD (09-07): background.js re-injects content.js on every
+// scrape/agent call (`chrome.scripting.executeScript {files:['content.js']}`),
+// and a dynamic injection re-RUNS the whole file in the SAME isolated world as
+// the manifest content script. Unguarded top-level registrations would
+// compound per Scrape click: listener ×N answering every message, the web-app
+// bridge re-posting, the interrupt reporter firing through N listeners, N
+// keydown handlers on the page. Each registration below is flagged in this
+// world (reset on document navigation) so re-injection is a no-op.
+if (!window.__helpotron_scrape_channel__) {
+  window.__helpotron_scrape_channel__ = true;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request && request.action === 'SCRAPE_CURRENT_ASSIGNMENT') {
     const data = (typeof scrapeAssignmentUniversal === 'function')
@@ -568,12 +584,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   return true; // keep the channel open for the (sync) response
 });
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ── "Launch to Doc" — Assistive Typing Engine for Students with Disabilities ──
 // ═════════════════════════════════════════════════════════════════════════════
 
-class GoogleDocsAssistiveTypingEngine {
+var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   constructor() {
     this.state = {
       isTyping: false,
@@ -1352,10 +1369,12 @@ if (!window.__helpotron_unified_typing_engine) {
 // ── Web App PostMessage Bridge (for localhost / helpotron web app) ──────────
 // ═════════════════════════════════════════════════════════════════════════════
 if (
-  window.location.hostname === 'localhost' ||
+  !window.__helpotron_webapp_bridge__ &&
+  (window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1' ||
-  window.location.hostname.includes('helpotron')
+  window.location.hostname.includes('helpotron'))
 ) {
+  window.__helpotron_webapp_bridge__ = true; // idempotency guard (see BATCH-08 note)
   window.__helpotron_extension_installed = true;
   window.postMessage({ type: 'HELPOTRON_EXTENSION_READY', version: '2.2.0' }, '*');
 
@@ -1481,6 +1500,8 @@ if (
 (function () {
   try {
     if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.onMessage) return;
+    if (window.__helpotron_agent_drive__) return; // idempotency guard (see BATCH-08 note)
+    window.__helpotron_agent_drive__ = true;
 
     let driveArmed = false;          // masked window (agent is driving)
     let lastInterruptAt = 0;         // ms epoch of the last sent interrupt

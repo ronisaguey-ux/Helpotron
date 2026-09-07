@@ -162,7 +162,7 @@ def test_ai_detectors_individual_toggling():
 
 
 def test_models_catalog_and_effort_score_tiers():
-    """Verify functional model tiers, Gemini 3.7 Flash multimodal, and effort tier resolution."""
+    """Verify functional model tiers, Gemini 3.8 Flash multimodal, and effort tier resolution."""
     from server.user_settings_service import AVAILABLE_MODELS, resolve_effort_tier
 
     # 1. Models catalog contains new verified models
@@ -172,7 +172,7 @@ def test_models_catalog_and_effort_score_tiers():
     assert "gemini_31_flash_lite" in model_ids
     assert "deepseek_v4_flash_vision" in model_ids
     assert "deepseek_v4_pro_vision" in model_ids
-    assert "gemini_37_flash" in model_ids
+    assert "gemini_38_flash" in model_ids
 
     # 2. Effort Level 1 & 2 -> routes to Nemotron Nano & Qwen 72B
     eff1 = resolve_effort_tier(100)
@@ -227,7 +227,7 @@ def test_auto_start_and_effort_trio_scoping():
 
 
 def test_custom_subjects_crud_and_gemini_multimodal():
-    """Verify custom subject creation, description persistence, and Gemini 3.7 Flash settings."""
+    """Verify custom subject creation, description persistence, and Gemini 3.8 Flash settings."""
     from fastapi.testclient import TestClient
     from server.main import app
 

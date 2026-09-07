@@ -57,10 +57,10 @@ def test_tier_mid_lower_301_500():
 
 def test_tier_mid_upper_501_700():
     model, tier, _ = resolve_vision_model(501)
-    assert model == "google/gemini-3.7-flash"
+    assert model == "google/gemini-3.8-flash"
     assert tier == "mid_upper"
     model, tier, _ = resolve_vision_model(700)
-    assert model == "google/gemini-3.7-flash"
+    assert model == "google/gemini-3.8-flash"
     assert tier == "mid_upper"
 
 
@@ -103,7 +103,7 @@ def test_or_slug_map_matches_llm_call_slug_rules():
     assert _OR_SLUG_MAP["deepseek/deepseek-v4-flash-vision"] == "deepseek/deepseek-v4-flash-vision-exp"
     assert _OR_SLUG_MAP["deepseek/deepseek-v4-pro-vision"] == "deepseek/deepseek-v4-pro"
     assert _OR_SLUG_MAP["google/gemini-3.1-flash-lite"] == "google/gemini-3.1-flash-lite"
-    assert _OR_SLUG_MAP["google/gemini-3.7-flash"] == "google/gemini-3.7-flash"
+    assert _OR_SLUG_MAP["google/gemini-3.8-flash"] == "google/gemini-3.8-flash"
     # every tier model resolves through the map
     assert set(_OR_SLUG_MAP.keys()) == set(VISION_MODEL_TIERS.keys())
 

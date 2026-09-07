@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Scholar avatar: line-art student with glasses">
+  <!-- luminous_glass line-art avatar : 100% vector, no photographic assets -->
+  <defs>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#86efac" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0.03"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.36" r="0.62">
+      <stop offset="0.55" stop-color="#bbf7d0" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#bbf7d0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- glass tile background -->
+  <rect x="10" y="10" width="236" height="236" rx="44" fill="url(#glass)" stroke="#bbf7d0" stroke-opacity="0.35" stroke-width="2"/>
+  <circle cx="128" cy="112" r="96" fill="url(#halo)"/>
+
+  <!-- line-art scholar: head, v-neck, shoulders -->
+  <g fill="none" stroke="#bbf7d0" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- shoulders / v-neck garment -->
+    <path d="M 52 196  Q 58 150  100 140" stroke-opacity="0.9"/>
+    <path d="M 204 196 Q 198 150  156 140" stroke-opacity="0.9"/>
+    <!-- collar V -->
+    <path d="M 100 141 Q 128 168  156 141" stroke-opacity="0.9"/>
+    <!-- head -->
+    <ellipse cx="128" cy="106" rx="52" ry="58"/>
+    <!-- glasses (scholar line-art) -->
+    <circle cx="108" cy="104" r="19"/>
+    <circle cx="148" cy="104" r="19"/>
+    <path d="M 127 104 h 2" />
+    <path d="M 89 100 L 82 103" />
+    <path d="M 167 100 L 174 103" />
+    <!-- simple mouth line -->
+    <path d="M 120 132 q 8 5 16 0" stroke-opacity="0.75"/>
+  </g>
+</svg>

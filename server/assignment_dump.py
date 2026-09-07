@@ -1,7 +1,7 @@
 """Universal Assignment Dump Engine.
 
 Accepts any file type (PDF, DOCX, TXT, Audio, Video, Image), extracts text/transcripts
-using Gemini 3.1 Flash-Lite (Audio) and Gemini 3.7 Flash (Vision/OCR), and uses the Overlord AI
+using Gemini 3.1 Flash-Lite (Audio) and Gemini 3.8 Flash (Vision/OCR), and uses the Overlord AI
 to intelligently auto-route and attach materials to relevant assignments.
 """
 from __future__ import annotations
@@ -281,11 +281,11 @@ class AssignmentDumpManager:
             except Exception:
                 return f"# Presentation: {os.path.basename(file_path)}\n\n[Slide deck loaded for Gemini generation]", "pure-gemini"
 
-        # 6. Image file -> Gemini 3.7 Flash Vision OCR
+        # 6. Image file -> Gemini 3.8 Flash Vision OCR
         elif file_category == "image":
             try:
                 text = await AssignmentDumpManager._ocr_image_gemini(file_path, user_id)
-                return text, "gemini-3.7-flash-vision"
+                return text, "gemini-3.8-flash-vision"
             except Exception as e:
                 logger.warning("Image vision OCR failed: %s", e)
                 return f"Image document: {os.path.basename(file_path)}", "image_meta"
@@ -294,7 +294,7 @@ class AssignmentDumpManager:
 
     @staticmethod
     async def _ocr_image_gemini(image_path: str, user_id: str) -> str:
-        """Performs visual OCR and diagram parsing via Gemini 3.7 Flash Vision."""
+        """Performs visual OCR and diagram parsing via Gemini 3.8 Flash Vision."""
         api_key = (os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key or config.omniroute_api_key).strip()
         if not api_key:
             return f"OCR Image scan: {os.path.basename(image_path)}"

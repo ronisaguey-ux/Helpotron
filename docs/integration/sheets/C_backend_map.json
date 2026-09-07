@@ -1,0 +1,338 @@
+{
+  "producer": "C",
+  "area": "backend_feature_delta",
+  "spec": "/tmp/stitch_z3/stitch_design_concept_generator/improvement.md",
+  "existing_capabilities": [
+    {
+      "family": "3.2.1-3.2.2 auth",
+      "module": "server/auth.py + server/main.py",
+      "key_endpoints": ["POST /api/login (main.py:848)", "POST /api/signup (main.py:998)", "POST /api/logout (main.py:1059)", "GET /api/me (main.py:1069)", "GET /api/public-config (main.py:838)"],
+      "models": ["User", "UserSession", "PasswordReset"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.2.3 2FA",
+      "module": "server/routes_auth_2fa.py",
+      "key_endpoints": ["POST /api/auth/2fa/setup, /2fa/verify-setup (156,208)", "POST /api/auth/2fa/send-challenge, /2fa/verify-challenge (252,302)", "POST /api/auth/2fa/disable (325)", "POST /api/auth/2fa/purchase-challenge, /2fa/purchase-verify (374,417)", "POST /api/auth/2fa/verify-totp (467)", "POST /api/auth/sms/inbound (545)"],
+      "models": ["User.settings (2FA fields)", "UserSession"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.2.4 recovery",
+      "module": "server/routes_recovery.py",
+      "key_endpoints": ["GET /api/recovery/options (48)", "POST /api/recovery/request (67)", "POST /api/recovery/verify (86)", "POST /api/recovery/contact (103)"],
+      "models": ["PasswordReset"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.3 pricing / 3.11.2 plans",
+      "module": "server/plans.py + main.py:556",
+      "key_endpoints": ["GET /api/plans (main.py:556)"],
+      "models": ["Payment", "CreditTransaction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.4.1 dashboard",
+      "module": "server/main.py + server/assignments.py + server/assignment_direction.py",
+      "key_endpoints": ["GET /api/dashboard (main.py:1758, _build_dashboard_payload)", "GET /api/assignments (assignments.py:71)", "GET /api/overlord/assignments/cards (routes_overlord.py:139)", "bucket_for()/normalize_compat_status() (assignment_direction.py:52,65)"],
+      "models": ["Assignment", "StudyMaterial", "CreditTransaction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.4.3 custom subjects + 3.4.4/3.4.5 chips",
+      "module": "server/routes_user_settings.py",
+      "key_endpoints": ["GET/POST/DELETE /api/user/custom-subjects (240,248,262)", "GET/POST/DELETE /api/user/custom-bubbles (272,280,295)"],
+      "models": ["User.settings.custom_subjects (JSON in user_settings_service.py DEFAULT_CUSTOM_SUBJECTS:375)"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.4.2 / section 4 config 3-level persistence",
+      "module": "server/user_settings_service.py + server/routes_user_settings.py",
+      "key_endpoints": ["GET /api/user/settings (175)", "PATCH /api/user/settings (182)", "POST /api/user/effort-score/resolve (51)"],
+      "models": ["UserSettingsScope (database.py:209, scope_type global/subject/assignment)", "UserSetting"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.5.1-3.5.2 assignment detail + direction",
+      "module": "server/assignments.py + server/routes_assignment_direction.py + server/assignment_direction.py",
+      "key_endpoints": ["GET/POST /api/assignments (71,93)", "GET/PATCH/DELETE /api/assignments/{id} (126,154,188)", "GET /api/assignments/{id}/subagent-team (136)", "apply_direction() (assignment_direction.py:143)", "mark_done/archive (223,234)"],
+      "models": ["Assignment"], "coverage": "FULL"
+    },
+    {
+      "family": "3.5.3 stop + activity",
+      "module": "server/main.py + server/routes_overlord.py + server/agent_actions.py",
+      "key_endpoints": ["GET /api/assignments/{id}/subagent-team/status (main.py:498)", "POST /api/assignments/{id}/subagent-team/interrupt (main.py:515)", "GET /api/agent/actions (routes_agent_actions.py:16)", "POST /api/agent/actions/{action_id}/undo (25)", "record_agent_action() (agent_actions.py:16)"],
+      "models": ["AgentAction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.5.4 working draft + 3.5.7 prompt/rubric/files",
+      "module": "server/main.py + server/routes_overlord.py + server/agent_files.py",
+      "key_endpoints": ["GET /api/overlord/assignment/{id}/full-view (routes_overlord.py:296)", "GET /api/overlord/assignment/{id}/launch-doc-payload (340)", "list_agent_files() (agent_files.py:59)", "POST /api/assignments (draft creation, main.py:1298)"],
+      "models": ["Draft", "AgentFile"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.5.5 chat stream + 3.6.1 My Agent chat",
+      "module": "server/main.py:1875,1934 + server/agent_session.py",
+      "key_endpoints": ["POST /api/agent/start (main.py:1875)", "WS /ws/agent/{session_id} (main.py:1934; JSON events: thinking/text chunks/tool via agent_session._send:264)", "GET /api/generate/stream/{kind} SSE (main.py:1595)"],
+      "models": ["AgentChatThread", "AgentChatMessage", "Transcript"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.6.2-3.6.4 mode/threads/pending approval/effort",
+      "module": "server/routes_overlord.py",
+      "key_endpoints": ["GET/POST /api/agent/mode (552,564)", "GET/POST/PATCH/DELETE /api/agent/threads (375,453,463,493)", "GET /api/agent/permissions/pending (579)", "POST /api/agent/permission/respond (587)", "GET/POST /api/agent/permissions/rules (656,664)", "DELETE /api/agent/permissions/rules/{rule} (690)"],
+      "models": ["AgentChatThread", "AgentChatMessage", "AgentAction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.6.5 identities/skills/memories/files",
+      "module": "server/routes_user_settings.py + server/agent_memory.py + server/agent_files.py",
+      "key_endpoints": ["POST /api/user/personas (365)", "POST /api/user/personas/switch (373)", "DELETE /api/user/personas/{id} (381)", "load/append/replace/delete_memory() (agent_memory.py:29,40,56,74)", "list_agent_files() (agent_files.py:59)"],
+      "models": ["AgentFile", "User.settings (personas/identities JSON)"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.7 import modals",
+      "module": "server/routes_import_url.py + server/routes_dump.py",
+      "key_endpoints": ["POST /api/assignments/import-from-url (routes_import_url.py:59)", "POST /api/dump/upload (routes_dump.py:111)", "GET /api/dump/list (167)", "POST /api/dump/{id}/route (211)", "POST /api/dump/{id}/finalize (284)"],
+      "models": ["UniversalDumpItem", "Assignment"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.8 insights",
+      "module": "server/routes_analytics.py + server/analytics.py",
+      "key_endpoints": ["GET /api/analytics (routes_analytics.py:14)", "GET /api/analytics/activity (20)", "GET /api/analytics/value (30)", "POST /api/analytics/session (39)", "GET /api/analytics/snapshot (59)", "GET /api/insights/snapshot (main.py:536)", "GET /api/features/recommend (routes_features.py:320)", "compute_next_best_action() (analytics.py:136)"],
+      "models": ["StudySession", "ApiUsageLog"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.9 history + export",
+      "module": "server/routes_user_settings.py + server/assignment_turnin.py",
+      "key_endpoints": ["GET /api/user/assignment-history (629)", "PATCH /api/assignments/{id}/turn-in (assignment_turnin.py:35)", "GET /api/assignments/turned-in (73)", "GET /api/user/history/export-csv + /export/history.csv (670-672)", "GET /api/user/data/export-all (469, JSON archive)", "GET /api/user/data/soft-reset (535)"],
+      "models": ["Assignment (turned_in/turned_in_at)", "StudyMaterial"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.10 library + study tools",
+      "module": "server/main.py + server/routes_export.py + server/study_tools.py + server/fsrs_scheduler.py + server/anki_exporter.py",
+      "key_endpoints": ["POST /api/study-guide, /flashcards, /practice-test, /summary (main.py:1560-1575)", "GET /api/materials/{public_id}/{kind} (main.py:1652)", "GET /api/export/flashcards/{id}/anki|quizlet (routes_export.py:24,47; CSV)", "GET /api/export/practice-test/{id}/json (70)", "GET /api/export/study-guide|summary/{id}/markdown|latex|txt (93-175)", "GET /api/analytics/session (log_study_session)"],
+      "models": ["StudyMaterial", "StudySession"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.11.1-3.11.2 credits/billing/top-up/checkout",
+      "module": "server/credits.py + server/payments.py + server/main.py",
+      "key_endpoints": ["GET /api/credits/balance (main.py:1259)", "GET /api/credits/{public_id} (1784)", "POST /api/payments (1806, real provider payment via process_payment)", "POST /api/checkout (1835, Stripe session; is_annual param)", "POST /api/stripe/webhook (1847)", "POST /api/discount (1859)", "charge/refund/top_up (credits.py:123,161,239)", "_purchase_2fa_required gate"],
+      "models": ["Payment", "CreditTransaction", "User (credits/plan/stripe fields)"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.11.3 referrals",
+      "module": "server/referral.py + server/routes_referral.py",
+      "key_endpoints": ["GET /api/referrals/code (14)", "POST /api/referrals/generate (31)", "POST /api/referrals/redeem (46)", "GET /api/referrals/stats (61)"],
+      "models": ["Referral"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.11.4 leaderboard",
+      "module": "server/routes_user_settings.py",
+      "key_endpoints": ["GET /api/user/leaderboard (305)", "POST /api/user/leaderboard/alias (313)"],
+      "models": ["User (first_name/public_id)", "CreditTransaction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.11.5 cost ledger",
+      "module": "server/routes_features.py + server/cost_tracking.py + server/cost_control.py",
+      "key_endpoints": ["GET /api/features/costs/intelligence (routes_features.py:114)", "get_user_cost_intelligence() (cost_tracking.py:199)", "GET /api/admin/advanced/costs/summary|users|budget|estimate (routes_admin_advanced.py:307,315,369,427)"],
+      "models": ["ApiUsageLog", "CreditTransaction"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.12 data lake",
+      "module": "server/routes_datalake.py + server/datalake.py",
+      "key_endpoints": ["POST /api/datalake/microcredits/submit (119)", "POST /api/datalake/microcredits/{id}/implement (168)", "GET /api/datalake/microcredits/history (204)", "POST /api/datalake/microcredits/redeem (227)", "GET /api/datalake/stats (310)", "GET /api/datalake/insights (292)", "GET /api/datalake/{entry_id} DELETE (332)"],
+      "models": ["DataSubmission"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.13 dump",
+      "module": "server/routes_dump.py",
+      "key_endpoints": ["POST /api/dump/upload (111)", "GET /api/dump/list (167)", "POST /api/dump/{id}/route (211)", "POST /api/dump/{id}/finalize (284)", "DELETE /api/dump/{id} (605)", "GET /api/dump/{id} (649)"],
+      "models": ["UniversalDumpItem"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.14 extension",
+      "module": "server/routes_extension.py",
+      "key_endpoints": ["GET /api/extension/version (60)", "POST /api/extension/check-update (82)", "GET /api/extension/download (101)", "GET /api/extension/releases (214)", "POST /api/extension/releases/{id}/read (251)", "POST /api/extension/releases (267, admin)", "public_router (37, public /version + doc pages)"],
+      "models": ["ExtensionRelease", "ExtensionReleaseRead"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.15 guide / 3.16 privacy / 3.17 ToS",
+      "module": "server/privacy.py + server/routes_user_settings.py",
+      "key_endpoints": ["DELETE /user/account + /api/user/account (privacy.py:98, cascades _CHILD_TABLES:47)", "GET /api/user/data/export-all (routes_user_settings.py:469)", "POST /api/user/data/permanent-delete-request (595)", "POST /api/user/message-admin (725)", "GET /api/user/my-admin-messages (777)"],
+      "models": ["User + 15 child tables (privacy._CHILD_TABLES)", "AdminMessage"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.18 settings",
+      "module": "server/routes_user_settings.py + server/routes_features.py",
+      "key_endpoints": ["GET/PATCH /api/user/settings (175,182)", "POST /api/user/change-password (690)", "POST /api/user/styles (215)", "GET/POST /api/user/trio + /trio/resolve (328,344)", "POST /api/features/theme + GET /api/features/theme (332,354)", "GET/POST /api/features/telegram/status|configure|disconnect (224,265,296)", "GET /api/user/presentation-config (889)"],
+      "models": ["UserSettingsScope", "UserSetting", "User"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.19 control center (admin)",
+      "module": "server/main.py + server/routes_admin_advanced.py + server/admin.py",
+      "key_endpoints": ["GET /api/admin/users (main.py:1110)", "POST /api/admin/user/{pub}/credits|plan|reset-password|ban|unban|tempban|kick (1160-1212)", "GET /api/admin/advanced/system-health (76)", "GET /api/admin/advanced/stats (83)", "GET /api/admin/advanced/moderation + /moderation/{id}/action (100,112)", "GET /api/admin/advanced/model-metrics (136)", "GET /api/admin/advanced/messages + reply/delete (155,185,208)", "POST /api/admin/advanced/notify-user + broadcast-notify (260,284)", "GET /api/admin/advanced/costs/* (307-427)"],
+      "models": ["ModerationItem", "AdminMessage", "Payment", "ApiUsageLog", "AdminNotice"],
+      "coverage": "PARTIAL"
+    },
+    {
+      "family": "3.20 monitors",
+      "module": "server/routes_monitors.py + server/monitors.py + server/routes_datalake.py",
+      "key_endpoints": ["GET /api/monitors/overview (16)", "GET /api/monitors/history (22)", "snapshot_once()/get_live_snapshot() (monitors.py:226,238; includes _datalake_counts:98, _activity_counts:107, _cost_counts:133)", "POST /api/feedback/submit + GET /api/feedback/list (routes_datalake.py:48,78)"],
+      "models": ["ApiUsageLog"],
+      "coverage": "FULL"
+    },
+    {
+      "family": "3.1.7/3.1.8 notifications",
+      "module": "server/(no module)",
+      "key_endpoints": ["(exists: GET /api/user/admin-notices + POST /api/user/admin-notices/read routes_user_settings.py:917,961; GET /api/agent/permissions/pending routes_overlord.py:579; Telegram notify via routes_features.py:312) — no per-user notification feed endpoint"],
+      "models": ["AdminNotice", "AdminNoticeRead"],
+      "coverage": "NONE"
+    }
+  ],
+  "new_modules": [
+    {
+      "name": "routes_notifications.py",
+      "family": "3.1.7-3.1.8 (notification bell + screen)",
+      "router_prefix": "/api/notifications",
+      "endpoints": [
+        { "method": "GET", "path": "/api/notifications", "auth": "user", "model": "derived (Draft, AgentAction, AdminNotice)", "spec_ref": "3.1.7/3.1.8", "notes": "Derived feed, no new table: draft-ready (Draft rows ordered by created_at) + agent events (AgentAction where summary/action_type signals completion) + broadcast AdminNotice rows (broadcast=true). Never fabricate; live empty = honest BellOff." },
+        { "method": "POST", "path": "/api/notifications/read", "auth": "user", "model": "none (client read-store per spec: helpotron_notifications_read)", "spec_ref": "3.1.7", "notes": "Marks ids read; server may also persist read ids in User.settings quietly, but the spec's one read store is localStorage; keep endpoint optional no-op-safe." }
+      ],
+      "how_to_create": [
+        "Exact file path: /home/roni/Roni_workspace/helpotron/server/routes_notifications.py",
+        "Import snippet to add in server/main.py try-block (model on existing entries near line 92, e.g. after `from .routes_features import router as features_router`):\n    from .routes_notifications import router as notifications_router\n(and the mirrored `from server.routes_notifications import router as notifications_router` line in the ImportError except-block near lines 95-122)",
+        "Register in server/main.py AFTER line 390 (`app.include_router(trial_router)`) — append:\n    app.include_router(notifications_router)\n(The include block 362-390 ends at trial_router; the special-order comment at line 386 only constrains assignment_turnin vs assignments.)",
+        "Model: none needed — derive from existing Draft/AgentAction/AdminNotice rows (no database.py change, no migration)",
+        "Header/auth convention: `router = APIRouter(prefix=\"/api/notifications\", tags=[\"notifications\"])` + `user: User = Depends(get_current_user)` from .security (same as routes_analytics.py:13-14)",
+        "Test file: /home/roni/Roni_workspace/helpotron/server/tests/test_notifications.py"
+      ]
+    },
+    {
+      "name": "routes_library.py",
+      "family": "3.10.1-3.10.2 (library files/saved tabs)",
+      "router_prefix": "/api/library",
+      "endpoints": [
+        { "method": "GET", "path": "/api/library/materials", "auth": "user", "model": "StudyMaterial", "spec_ref": "3.10.1-3.10.2", "notes": "kind filter + saved flag filter; returns _material_payload shape (mirror main.py:1652) with model_used + created_at for the 'saved-date mono'." },
+        { "method": "POST", "path": "/api/library/materials/{material_id}/save", "auth": "user", "model": "StudyMaterial", "spec_ref": "3.10.2", "notes": "Sets saved_at on the row (ownership-checked)." },
+        { "method": "DELETE", "path": "/api/library/materials/{material_id}/unsave", "auth": "user", "model": "StudyMaterial", "spec_ref": "3.10.2", "notes": "Clears saved_at; keeps material (unsaved != deleted)." },
+        { "method": "DELETE", "path": "/api/library/materials/{material_id}", "auth": "user", "model": "StudyMaterial", "spec_ref": "3.10.6", "notes": "Optional hard delete for My Materials 'remove' if UI wants it; not required by spec." }
+      ],
+      "how_to_create": [
+        "Exact file path: /home/roni/Roni_workspace/helpotron/server/routes_library.py",
+        "Import in server/main.py near line 92: `from .routes_library import router as library_router` (+ except-block mirror near line 121)",
+        "Register after `app.include_router(trial_router)` at server/main.py:390: `app.include_router(library_router)`",
+        "Model add in server/database.py (convention: new class inheriting Base with Mapped[...] mapped_column, e.g. StudyMaterial at database.py:248): add column to StudyMaterial — `saved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)` — plus migrations note: init_db() (database.py:611) runs `Base.metadata.create_all(engine)` (new tables auto-created) but existing tables need the PRAGMA-driven ALTER pattern like the study_materials.shared_with block at database.py:645-648. Add an analogous block copying the ALTER for saved_at.",
+        "Test file: /home/roni/Roni_workspace/helpotron/server/tests/test_library_v3.py"
+      ]
+    },
+    {
+      "name": "routes_study_tools.py",
+      "family": "3.10.3-3.10.5 (flashcards player, quiz, difficulty/mastery/streak)",
+      "router_prefix": "/api/study",
+      "endpoints": [
+        { "method": "GET", "path": "/api/study/decks", "auth": "user", "model": "StudyMaterial", "spec_ref": "3.10.3-3.10.5", "notes": "Materials of kind flashcard/practice-test (=deck) with per-card state + difficulty + last-practiced + mastery %; existing review_meta/state JSON on StudyMaterial content is the source of truth for cards." },
+        { "method": "POST", "path": "/api/study/decks/{material_id}/review", "auth": "user", "model": "StudyCardState (new)", "spec_ref": "3.10.3/3.10.5", "notes": "One call per card mark (known/unknown) OR a batch at deck end; drives fsrs_scheduler.FSRSScheduler (currently dead code — first live consumer) and updates StudySession via log_study_session (analytics.py:14)." },
+        { "method": "POST", "path": "/api/study/quiz/{material_id}/grade", "auth": "user", "model": "StudyCardState", "spec_ref": "3.10.4", "notes": "Answers submitted client-side; server grades against stored terms, returns score + wrong list, records StudySession(score)." },
+        { "method": "GET", "path": "/api/study/streak", "auth": "user", "model": "StudySession", "spec_ref": "3.10.5", "notes": "Consecutive-day count from StudySession.created_at + analytics activity; returns 0 when none (streak chip ONLY when real)." },
+        { "method": "GET", "path": "/api/study/mastery/{material_id}", "auth": "user", "model": "StudyCardState", "spec_ref": "3.10.5", "notes": "Ring data: mastered/total from FSRS states; 0 when none-practiced." }
+      ],
+      "how_to_create": [
+        "Exact file path: /home/roni/Roni_workspace/helpotron/server/routes_study_tools.py",
+        "Import in server/main.py near line 92: `from .routes_study_tools import router as study_tools_router` (+ except-block mirror)",
+        "Register after `app.include_router(trial_router)` at server/main.py:390: `app.include_router(study_tools_router)`",
+        "Model add in server/database.py — new class (pattern from StudySession at database.py:363):\nclass StudyCardState(Base):\n    __tablename__ = \"study_card_states\"\n    id: Mapped[int] = mapped_column(Integer, primary_key=True)\n    user_id: Mapped[int] = mapped_column(ForeignKey(\"users.id\"), index=True)\n    material_id: Mapped[int] = mapped_column(ForeignKey(\"study_materials.id\"), index=True)\n    card_index: Mapped[int] = mapped_column(Integer)\n    state: Mapped[str] = mapped_column(String(16), default=\"new\")  # new/learning/known/mastered (FSRS)\n    difficulty: Mapped[str] = mapped_column(String(16), default=\"medium\")  # easy/medium/hard\n    due: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)\n    lapses: Mapped[int] = mapped_column(Integer, default=0)\n    last_practiced: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)\n    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)\n    __table_args__ = (UniqueConstraint(\"user_id\", \"material_id\", \"card_index\", name=\"uq_study_cards\"),)\nNew tables: init_db() create_all picks them up (database.py:611) — no PRAGMA ALTER needed for a new table.",
+        "Reuse, do not redefine: .fsrs_scheduler.FSRSScheduler (fsrs_scheduler.py:28) and .anki_exporter.AnkiExporter (anki_exporter.py:18) for any export path; guard quiz generation path via .study_tools.generate_practice_quiz (study_tools.py:187)",
+        "Test file: /home/roni/Roni_workspace/helpotron/server/tests/test_study_tools_v3.py"
+      ]
+    },
+    {
+      "name": "routes_dump.py (EXTEND existing router)",
+      "family": "3.13 (dump 2-step confirm + cost)",
+      "router_prefix": "/api/dump",
+      "endpoints": [
+        { "method": "GET", "path": "/api/dump/batch/estimate", "auth": "user", "model": "UniversalDumpItem", "spec_ref": "3.13", "notes": "Accept ?ids=a,b,c (empty = all pending of user); returns count + total cost estimate using the same per-item cost path the finalize uses (cost_tracking/CreditTransaction rates) so the modal's '~$X.XX' is real." },
+        { "method": "POST", "path": "/api/dump/batch/finalize", "auth": "user", "model": "UniversalDumpItem", "spec_ref": "3.13", "notes": "Body {ids: [...], skip: [...]} — runs finalize per item with charge_with_rollback + idempotency keys; skips unmatched/unapproved items unless confirmed; per-item results in response; honest 'no work generated' per item." }
+      ],
+      "how_to_create": [
+        "File: /home/roni/Roni_workspace/helpotron/server/routes_dump.py — add endpoints inside existing router (prefix /api/dump already at routes_dump.py:17); no new import/registration in main.py needed (dump_router already registered at main.py:381)",
+        "Reuse inside: .assignment_dump.process_dump_upload / get_assignment_dump_secure, .credits.charge (credits.py:123) / charge_with_rollback (81), cost estimation from .cost_tracking.CostEngine (cost_tracking.py:31)",
+        "Registration: already present — `app.include_router(dump_router)` at main.py:381; do NOT add a second line",
+        "No model change (UniversalDumpItem already carries requested_action/status)",
+        "Test file: /home/roni/Roni_workspace/helpotron/server/tests/test_dump_batch.py"
+      ]
+    }
+  ],
+  "feature_notes": {
+    "3.5.5/3.6.1 chat streaming": "EXISTS — WebSocket /ws/agent/{session_id} (main.py:1934-1949) driven by agent_session.py manager (run():148, _send():264 channels thinking / text chunks / tool events); POST /api/agent/start (main.py:1875) boots the run. All 3.5.5 states map to existing WS event kinds; 'tool-running chips are backend-gated' holds because AgentAction rows exist. Stream for study-material generation is the SSE route /api/generate/stream/{kind} (main.py:1595-1645). No new backend needed; UI-only work.",
+    "3.9.2 export": "EXISTS — per-assignment JSON download (routes_assignment_direction.py:195, Content-Disposition); history CSV at GET /api/user/history/export-csv and /export/history.csv (routes_user_settings.py:670-675, uses user_settings_service.export_history_csv); Full JSON archive at GET /api/user/data/export-all (routes_user_settings.py:469). LaTeX exists for study docs (routes_export.py:135,157 + export.py markdown_to_latex:136). CSV BOM + \\r\\n is a client-side Blob concern; backend returns raw CSV.",
+    "3.11 credits/billing": "EXISTS, real money paths — balance (main.py:1259 /api/credits/balance; credits.effective_credits_balance:51 reconciles ledger+column, _wallet_display_credits main.py:1697 adds micro-credits 1000:1), plans catalogue (plans.py get_plan_catalogue:71, /api/plans main.py:556), top-up real path POST /api/payments (main.py:1806 -> payments.process_payment:165) and Stripe via /api/checkout + /api/stripe/webhook (main.py:1835,1847; payments.create_checkout_session:33, handle_stripe_webhook:74 — only active when _stripe_enabled:29), 2FA checkout gate via _purchase_2fa_required + /api/auth/2fa/purchase-challenge|verify (routes_auth_2fa.py:374,417). MISSING backend: nothing — the 'handleTopUp fake success' is pure frontend; the server already returns payment.status/amount_charged_cents/credits (main.py:1812-1821).",
+    "3.12 datalake valuation": "EXISTS — submit/list/history/redeem/implement micro-credits (routes_datalake.py:119-254), stats (310), insights (292), analyze (301), delete (332); 1000 micro-credits = 1 credit display in main.py _wallet_display_credits:1697-1703. MISSING: 'Export my entries (.json)' — add small GET /api/datalake/export.json in routes_datalake.py (returns DataSubmission rows for the user; no new module needed).",
+    "3.19-3.20 control center/monitors": "EXISTS — admin users/CRUD ops (main.py:1110-1224), system-health (routes_admin_advanced.py:76, real uptime/latency/error-rate), moderation queue (100), model-metrics (136), admin messages/inquiries (155-208), notify/broadcast (260,284), costs suite (307-427). Monitors: /api/monitors/overview + /history fed by monitors.py live snapshot (_datalake_counts:98, _activity_counts:107, _cost_counts:133), MonitorMiddleware (monitors.py:64), run_monitors_loop (217) — real, no mock nodes. Cost merge = UI-only (backend cost data already under /api/features/costs/intelligence for users and /admin/advanced/costs for ops). GAP: 'Storage' tool tab — no storage-size endpoint; optionally add GET /api/admin/advanced/storage (sizes of uploads/, datalake_storage/, exports/, stats.sqlite3) as a tiny extension of routes_admin_advanced.py.",
+    "3.13 dump 2-step spend": "PARTIAL — single-item finalize exists (routes_dump.py:284) and spends via the real charge path; 'Dump All' today is a client loop with no cost preview and no skip list (the spec's unapproved-spend complaint). Backend must add Batch estimate+finalize (see new_modules 'routes_dump.py EXTEND'); cost estimate endpoint for admins exists (routes_admin_advanced.py:427) but per-user batch preview is new.",
+    "3.10.3-3.10.5 SRS/quiz": "EXISTS: materials generation (StudyMaterial kinds via main.py:1560-1575 + SSE), exports (quizlet/anki CSV, practice-test JSON), StudySession logging (POST /api/analytics/session routes_analytics.py:39; StudySession database.py:363), fsrs_scheduler.FSRSScheduler (fsrs_scheduler.py:28) — BUT it has ZERO callers today (first consumer = new routes_study_tools.py). anki_exporter.AnkiExporter (anki_exporter.py:18) is used by /api/export/flashcards/{id}/anki. MISSING: deck state persistence, per-card known/unknown, quiz grading endpoint, difficulty/mastery/streak computation → new routes_study_tools.py + study_card_states table."
+  },
+  "requirements_per_family": {
+    "3.1": { "backend": "new notifications feed (3.1.7 bell/3.1.8 screen) — routes_notifications.py; everything else client-side (sidebar collapsed persisted in localStorage per spec, theme via existing POST/GET /api/features/theme, per-session effort dial should stay client state + effort passed to /api/agent/start)", "new_files": ["server/routes_notifications.py"] },
+    "3.2": { "backend": "none — signin/signup/2FA/recovery/ban all real (auth.py, routes_auth_2fa.py, routes_recovery.py); Turnstile already via captcha_required; session expiry surfaces client-side on existing 401s", "new_files": [] },
+    "3.3": { "backend": "none — plans via GET /api/plans, extension public router exists (routes_extension.py public_router:37), PUBLIC deep-link paths are client routes; cookie banner is localStorage-only", "new_files": [] },
+    "3.4": { "backend": "none required — dashboard payload (main.py:1758), buckets (assignment_direction.bucket_for:65), due chips real (due_date field), custom subjects/bubbles CRUD exist; small optional: confirm custom-subject POST carries icon+color keys (settings JSON is arbitrary so OK as-is)", "new_files": [] },
+    "3.5": { "backend": "none — detail CRUD (assignments.py), direction apply (routes_assignment_direction), interrupt/stop (main.py:515), mark done/archive (assignment_direction.py:223,234), turn-in (assignment_turnin.py:35)", "new_files": [] },
+    "3.6": { "backend": "none required — threads/mode/permissions/identities/personas all real (routes_overlord.py:375-690, routes_user_settings.py:365-381); starter presets (3.6.5) = seed DEFAULT personas in user_settings_service.py defaults (user_settings_service.py:375 area) or pure frontend presets; effort dial client-side", "new_files": [] },
+    "3.7": { "backend": "none — import-from-url (routes_import_url.py:59), dump upload/route/finalize, insufficient-tokens already an HTTP-200 body (keep it that way)", "new_files": [] },
+    "3.8": { "backend": "none — analytics routes/snapshot/recommend exist", "new_files": [] },
+    "3.9": { "backend": "none required — assignment-history, turn-in, CSV export, JSON export-all exist; date-range filter = query params or client filter (route currently supports subject+limit only)", "new_files": [] },
+    "3.10": { "backend": "YES — new routes_library.py (saved toggle + saved_at column) and routes_study_tools.py (deck state, quiz grading, difficulty/mastery/streak; first live use of fsrs_scheduler)", "new_files": ["server/routes_library.py", "server/routes_study_tools.py", "database.py (StudyMaterial.saved_at + StudyCardState)"] },
+    "3.11": { "backend": "none required — all real (payments/checkout/stripe/2FA purchase/referral/leaderboard/cost intelligence); frontend honesty fixes only", "new_files": [] },
+    "3.12": { "backend": "small — add GET /api/datalake/export.json (extend routes_datalake.py)", "new_files": [] },
+    "3.13": { "backend": "YES — extend routes_dump.py with batch estimate + batch finalize (2-step confirm, per-item skip, idempotent charges)", "new_files": [] },
+    "3.14": { "backend": "none — one live version source via /api/extension/version + releases", "new_files": [] },
+    "3.15": { "backend": "none — static content; CTA endpoints exist (message-admin, agent chat)", "new_files": [] },
+    "3.16": { "backend": "none — export-all/soft-reset/permanent-delete-request/account-delete cascade all exist (privacy.py:98)", "new_files": [] },
+    "3.17": { "backend": "none — static content", "new_files": [] },
+    "3.18": { "backend": "none — settings PATCH/change-password/telegram/theme/personas/styles/trio/citations/originality/presentation-config all exist; config-surface restructure is persistence-agnostic (settings JSON already scoped)", "new_files": [] },
+    "3.19": { "backend": "none required — admin users/costs/moderation/inquiries/messages/model-metrics/system-health exist; optional GET /api/admin/advanced/storage for the Storage tool", "new_files": [] },
+    "3.20": { "backend": "none — monitors overview/history real; cost tab removal is UI-only", "new_files": [] },
+    "3.21": { "backend": "none — client error-state family", "new_files": [] },
+    "3.22": { "backend": "none — overlays client-side (destructive confirm reuses existing DELETE endpoints)", "new_files": [] },
+    "3.23": { "backend": "none — demo ribbon is presentation; must not leak into live mode (real-data-only rule enforced in routes + frontend)", "new_files": [] }
+  },
+  "risks": [
+    "Money paths: new /api/dump/batch/finalize must reuse credits.charge_with_rollback (credits.py:81) + idempotency keys (credits.py:123) exactly like routes_dump.py:284 does, and the estimate endpoint must charge-check with the SAME cost math (verify one helper, no divergence) — mismatch = user sees '$X.XX', wallet charges $Y.",
+    "fsrs_scheduler.FSRSScheduler (fsrs_scheduler.py:28) is dead code with zero tests; wiring it as the first consumer of study card state needs its own unit tests before route tests, and must not break anki/quizlet CSV exports (routes_export.py:24,47) or StudySession logging.",
+    "New columns on existing tables (StudyMaterial.saved_at) need the init_db PRAGMA ALTER pattern (database.py:645-648) — otherwise prod sqlite DBs 500 on the new query. New tables (study_card_states) are covered by create_all.",
+    "Notifications feed is derived (Draft/AgentAction/AdminNotice): must be ownership-filtered by user_id on every branch and admin-broadcast only via AdminNotice.broadcast — leaking another user's drafts is the same class of bug as the 09-04 IDOR fixes.",
+    "Leaderboard/referral numbers are real-data-only per spec: keep /api/user/leaderboard ties (no fabricated deltas) and referral stats as-is; do not add derived earning rows.",
+    "main.py last-write rule: the include block order matters only for /assignments (comment main.py:386); append new routers after trial_router at line 390, never before assignment_turnin.",
+    "2FA checkout (routes_auth_2fa.py:374-417) is already order-dependent (challenge before purchase-verify): the new batch endpoints must not reuse those session stores without a fresh challenge check.",
+    "Per-session effort dial (3.1.4): do NOT add a new UserSetting scope type for 'session' — the settings resolution chain (user_settings_service.py, scope types global/subject/assignment) has no session tier; keep the dial client-side and pass effort with /api/agent/start, or extend the model deliberately in the agy plan."
+  ],
+  "notes": [
+    "Layout: routers live as server/routes_<name>.py exposing `router` (routes_extension.py also exposes `public_router`); some older route surfaces are direct @app routes in server/main.py (auth, dashboard, materials, payments/checkout, WS) — new work should prefer routes_*.py + include_router.",
+    "main.py anchor: insert new imports after `from .routes_features import router as features_router` (main.py:92; except-block mirror near 121) and register after `app.include_router(trial_router)` (main.py:390).",
+    "Database convention: classes in server/database.py inherit Base (database.py:48), use Mapped[...] mapped_column with FK + index, timestamps default=utcnow (database.py:44 quote utcnow); init_db() (database.py:611) create_all for new tables; PRAGMA-driven ALTER blocks for columns on existing tables.",
+    "Tests: server/tests/test_<area>.py (NOT top-level tests/) following conftest.py which pins DATABASE_URL=sqlite:///./test_helpotron.db + OMNIROUTE endless port BEFORE imports and exposes the `client` TestClient fixture + create_jwt_token; existing exemplars: test_export_latex_routes.py, test_datalake.py, test_user_settings_and_admin_advanced.py. Top-level /tests/ holds integration tests (privacy, rate limiting, turn-in, idor, llm).",
+    "Auth deps: current_user via Depends(get_current_user) (.security), or request-based _get_current_user in routes_user_settings.py older handlers; datalake uses get_current_authenticated_user (routes_datalake.py:293).",
+    "3.10.7 calendar: GET /api/features/calendar/deadlines (routes_features.py:184) returns real due dates — spec's demo-events-never-render is a frontend rule already satisfiable.",
+    "3.2.5 session expiry: backend already returns 401 (get_current_user / ws close 1008 at main.py:1940-1944); all three expiry variants are frontend.",
+    "3.6.2 pending-approval: GET /api/agent/permissions/pending (routes_overlord.py:579) is the single source for the 'N action waiting' strip — the spec's 12s poll + banner replacement is frontend-only; keep endpoint response shape stable.",
+    "Credit display edge case already handled server-side: effective_credits_balance + micro-credit 1000:1 in _wallet_display_credits (main.py:1697-1703) — new wallet surfaces should call GET /api/credits/balance, never compute from the raw users.credits column.",
+    "Sheet is a READ-ONLY analysis; no files outside docs/integration/sheets/C_backend_map.json were created or modified."
+  ]
+}

@@ -49,7 +49,7 @@ def get_current_manifest() -> Dict[str, Any]:
                 return json.load(f)
         except Exception:
             pass
-    return {"version": "2.5.2", "name": "Helpotron Academic Companion"}
+    return {"version": "2.6.1", "name": "Helpotron Academic Companion"}
 
 
 class VersionCheckRequest(BaseModel):
@@ -136,6 +136,12 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.6.1": [
+        "🖥️ Natural mouse glide: agent moves cursor smoothly along Bezier curves before clicking or typing.",
+        "🎛️ Full interactive toggles: Educational Mode, See Screen, and Execute switches now fully responsive and synced.",
+        "🪟 Keep Open pop-out window: open extension in a persistent window that stays open beside tabs.",
+        "✨ Embedded Settings overhaul: clean account view and preference controls right inside the extension.",
+    ],
     "2.6.0": [
         "🎉 Helpotron 2.6 — the big clean-up: simpler 4-pillar navigation, a live 3-stage progress ribbon on every assignment (watch agents work, send messages, upload files, interrupt them), and honest open pricing — you always see the task-token cost before you approve (no hidden flat fees).",
         "🛡️ Safety first: two-factor authentication is now required for any purchase, and a clear FERPA banner lets you choose exactly what you allow.",
@@ -201,6 +207,12 @@ def sync_extension_releases(db: Session) -> List[ExtensionRelease]:
             is_major=_is_major_bump(prev.version if prev else None, version),
         ))
         db.commit()
+    elif version in PRESET_RELEASE_NOTES:
+        row = db.query(ExtensionRelease).filter(ExtensionRelease.version == version).first()
+        preset_text = "\n".join(PRESET_RELEASE_NOTES[version])
+        if row and row.notes != preset_text and len(row.notes.split("\n")) < len(PRESET_RELEASE_NOTES[version]):
+            row.notes = preset_text
+            db.commit()
     return list(db.query(ExtensionRelease).order_by(ExtensionRelease.id.desc()).all())
 
 
@@ -380,6 +392,8 @@ class ExtensionChatRequest(BaseModel):
     # the captured tab's CSS viewport so control coordinates can be clamped.
     images: List[str] = Field(default_factory=list, description="captured JPEG frames (base64)")
     agent_mode: bool = Field(False, description="agent-mode screen-control chat")
+    educational_mode: Optional[bool] = Field(None, description="when False, disables strict study-only restrictions")
+    permission_mode: Optional[str] = Field(None, description="manual | auto | yolo permission mode")
     viewport: Optional[ChatViewport] = Field(None, description="captured tab viewport size")
 
 
@@ -431,11 +445,14 @@ AGENT_MODE_DIRECTIVE = (
     "browser tab, captured right now by the extension — you genuinely see that "
     "screen, and you can genuinely act on it. Answer the user normally (normally "
     "choose \"plain_answer\"); your outer reply is still the strict JSON envelope "
-    "and your answer goes in the \"reply\" value. WHEN your answer implies acting "
-    "on the screen, append to the END of the \"reply\" value — inside that same "
-    "JSON string, after the prose — one fenced ```control``` block holding an "
+    "and your answer goes in the \"reply\" value. "
+    "WHEN the user asks you to interact with, search, click, type, fill, scroll, or do anything on the screen "
+    "(e.g. 'type in my search bar...', 'click on...', 'search for...', 'solve and type...'): "
+    "You MUST emit concrete actions to do it! Append to the END of the \"reply\" value — inside that same "
+    "JSON string, after your brief conversational prose — one fenced ```control``` block holding an "
     "ORDERED JSON ARRAY: [ {\"op\": ...}, ... ] (a bare array, nothing wrapped). "
-    "The app strips that block and executes it: it is DATA, not free-form "
+    "For example, to type a query into a search bar: move to the search bar coordinates, click on it, type the query text, and send an Enter key. "
+    "The app strips that block and executes it via browser debugger: it is DATA, not free-form "
     "markdown, so it does not violate the envelope's no-markdown rule. "
     "ALLOWED OPS (only these): "
     "{\"op\":\"move\",\"x\":0,\"y\":0}; "
@@ -446,7 +463,8 @@ AGENT_MODE_DIRECTIVE = (
     "{\"op\":\"key\",\"key\":\"Enter\"|\"Escape\"|\"Tab\"|\"Backspace\"|\"ArrowLeft\"|\"ArrowRight\"|\"ArrowUp\"|\"ArrowDown\"|\"Home\"|\"End\"|\"Delete\"|\"PageUp\"|\"PageDown\",\"modifiers\":[\"ctrl\"|\"shift\"|\"alt\"]}; "
     "{\"op\":\"scroll\",\"x\":0,\"y\":0,\"deltaX\":0,\"deltaY\":0}. "
     "Coordinates are CSS pixel offsets inside the tab viewport (each [Screen "
-    "state] line gives its W×H). ACTING RULES: one screen task per message, "
+    "state] line gives its W×H; if exact coordinates are estimated from the screen description, pick reasonable coordinates for the visible UI element, e.g. center of the search bar). "
+    "ACTING RULES: one screen task per message, "
     "minimal steps, never more than 15 actions in one task (09-02 cap; the "
     "extension's stop button and per-action permission prompts are live, so "
     "the user can halt after any action — keep each batch small and wait for the "
@@ -547,6 +565,49 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
         "effort_score": effort_score,
         "token_balance": _tk_balance(user),
     }
+
+
+def _harden_actions(raw: Any, viewport: Dict[str, int]) -> Optional[List[Dict[str, Any]]]:
+    """Allowlist + viewport-clamp a control-action list from the model.
+
+    Same contract as `extract_control_actions`: the WHOLE list drops when any
+    single op is invalid (never a partial burst — a dropped `click` would leave
+    the following `type` landing on whatever happened to hold focus), and the
+    per-burst cap is enforced here too (the direct `browser_action` payload
+    used to bypass both).
+    """
+    from .screen_vision import _MAX_CONTROL_ACTIONS, _validate_op
+
+    if not isinstance(raw, list) or not raw:
+        return None
+    if len(raw) > _MAX_CONTROL_ACTIONS:
+        return None
+    normalized: List[Dict[str, Any]] = []
+    for op in raw:
+        n = _validate_op(op, viewport)
+        if n is None:
+            return None
+        normalized.append(n)
+    return normalized or None
+
+
+def _search_burst(query: str, viewport: Dict[str, int]) -> List[Dict[str, Any]]:
+    """move -> click -> type -> Enter aimed at the viewport's own centre.
+
+    The coordinates used to be hard-coded (480, 320), which lands outside a
+    small captured frame; they are derived from the real viewport now and still
+    pass through `_harden_actions` for clamping.
+    """
+    w = int(viewport.get("width") or 1280)
+    h = int(viewport.get("height") or 800)
+    x = max(1, w // 2)
+    y = max(1, min(h // 2, int(h * 0.4)))
+    return [
+        {"op": "move", "x": x, "y": y},
+        {"op": "click", "x": x, "y": y, "button": "left"},
+        {"op": "type", "text": query},
+        {"op": "key", "key": "Enter", "modifiers": []},
+    ]
 
 
 def _charge_tokens(user, db, cost: float) -> None:  # pragma: no cover - thin wrapper
@@ -660,11 +721,11 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     # becomes an explicit "unavailable" note, never a hard failure of the
     # chat (and model errors never 500).
     control_actions = None  # -> additively present in the response (agent mode only)
-    viewport_dict = None
+    viewport_dict = {"width": 1280, "height": 800}
     screen_context = ""
     if payload.agent_mode:
-        viewport_dict = ({"width": payload.viewport.width, "height": payload.viewport.height}
-                         if payload.viewport is not None else None)
+        if payload.viewport is not None:
+            viewport_dict = {"width": payload.viewport.width, "height": payload.viewport.height}
         ts = datetime.now().strftime("%H:%M:%S")
         screen_lines: List[str] = []
         for img in (payload.images or [])[:_MAX_IMAGES_PER_CALL]:
@@ -714,6 +775,10 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         ai_cfg = dict(settings.get("ai") or {}) if isinstance(settings.get("ai"), dict) else {}
         hier = dict(ai_cfg.get("hierarchy") or {}) if isinstance(ai_cfg.get("hierarchy"), dict) else {}
         ext_cfg = dict(hier.get("extensions") or {}) if isinstance(hier.get("extensions"), dict) else {}
+        if payload.educational_mode is not None:
+            ext_cfg["mode"] = "edu" if payload.educational_mode else "open"
+        if payload.permission_mode:
+            resolve_settings_perm_mode = payload.permission_mode
         existing_ix = str(ext_cfg.get("instructions") or "").strip()
         directive_block = AGENT_MODE_DIRECTIVE
         if screen_context:
@@ -723,26 +788,73 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         ai_cfg["hierarchy"] = hier
         resolve_settings = dict(settings)
         resolve_settings["ai"] = ai_cfg
+        if payload.permission_mode:
+            resolve_settings["operation_mode"] = payload.permission_mode
 
     intent = await _resolve_agent_intent(
         user, resolve_settings, resolve_text, is_admin, db=db,
-        target_key=thread_key, node="extensions",
+        target_key=thread_key, node="extensions", viewport=viewport_dict,
     )
+
+    from .llm import strip_thinking_tokens
+    from .screen_vision import _validate_op
+
+    # Direct browser action tool call
+    if intent["action"] == "browser_action":
+        if not is_admin and user.plan != "elite":
+            _charge_tokens(user, db, 1.0)
+        payload_actions = intent.get("payload", {}).get("actions") or []
+        reply_text = strip_thinking_tokens(intent.get("reply") or "Interacting with your browser…")
+        vp = viewport_dict or {"width": 1280, "height": 800}
+        control_actions = _harden_actions(payload_actions, vp)
+        if not control_actions:
+            # payload failed hardening (invalid op / over-cap / empty) — the
+            # reply may still carry a fenced ```control``` block; honor that,
+            # otherwise NOTHING executes and the execution verdict says so
+            # (a phantom "success" with 0 actions would be a fake completion).
+            reply_text, control_actions = extract_control_actions(reply_text, vp)
+
+        agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
+        await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
+        return {
+            "status": "success",
+            "message": agent_reply,
+            "execution": {
+                "status": "success" if control_actions else "failed",
+                "actions_count": len(control_actions or []),
+            },
+            "reply": reply_text,
+            "control_actions": control_actions,
+            "token_balance": _tk_balance(user),
+            "model": vision_model_id,
+            "model_tier": vision_model_tier,
+            "effort_score": effort_score,
+        }
 
     # Plain conversational answer (still costs 1 token like the web chat).
     if intent["action"] == "plain_answer":
         if not is_admin and user.plan != "elite":
             _charge_tokens(user, db, 1.0)
-        reply_text = intent["reply"]
+        reply_text = strip_thinking_tokens(intent["reply"])
         if _is_degenerate_reply(reply_text):
             reply_text = await _conversational_fallback(user, payload.text, db=db, node="extensions")
+            reply_text = strip_thinking_tokens(reply_text)
         if _is_degenerate_reply(reply_text):
             reply_text = "I didn't catch that — mind rephrasing? (Reply generation came back empty.)"
         if payload.agent_mode:
             # agent mode (09-01): split the fenced ```control``` block off the
             # reply and harden it (allowlist + viewport clamp + caps; the WHOLE
             # list drops on any invalid op — never partial execution).
-            reply_text, control_actions = extract_control_actions(reply_text, viewport_dict)
+            vp = viewport_dict or {"width": 1280, "height": 800}
+            reply_text, control_actions = extract_control_actions(reply_text, vp)
+            if not control_actions:
+                low_text = payload.text.lower()
+                if any(k in low_text for k in ("search", "searchbar", "search bar", "click", "type in", "type into", "touch my browser")):
+                    m = re.search(r"(?:search|type)\s+(?:in|into|for)?\s*(?:my\s+)?(?:searchbar|search\s+bar)?(?:\s*,\s*|\s+for\s+|\s+to\s+)?(.*)", payload.text, re.IGNORECASE)
+                    q = m.group(1).strip(" '\"?,.") if m else payload.text
+                    control_actions = _harden_actions(
+                        _search_burst(q or payload.text, vp), vp
+                    )
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         resp: Dict[str, Any] = {"status": "success", "message": agent_reply, "execution": None,
@@ -809,19 +921,20 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     if not is_admin and user.plan != "elite":
         _charge_tokens(user, db, _action_cost(intent["action"]))
     if exec_res.get("status") == "failed":
-        reply_text = f"⚠️ {exec_res.get('message', 'Could not do that.')}"
+        reply_text = f"⚠️ {strip_thinking_tokens(exec_res.get('message', 'Could not do that.'))}"
     else:
-        result_msg = exec_res.get("message") or exec_res.get("result_text")
+        result_msg = strip_thinking_tokens(exec_res.get("message") or exec_res.get("result_text"))
         if _is_degenerate_reply(result_msg):
             result_msg = await _conversational_fallback(user, payload.text, node="extensions")
+            result_msg = strip_thinking_tokens(result_msg)
         if intent["action"] == "humanize_text" and exec_res.get("result_text"):
-            reply_text = exec_res["result_text"]
+            reply_text = strip_thinking_tokens(exec_res["result_text"])
             if _is_degenerate_reply(reply_text):
                 reply_text = llm_empty_honest
         elif _is_degenerate_reply(result_msg):
             reply_text = llm_empty_honest
         else:
-            reply_text = f"✅ {result_msg}"
+            reply_text = f"✅ {strip_thinking_tokens(result_msg)}"
     if payload.agent_mode:
         # agent mode (09-01): same fenced-block extraction + hardening as the
         # plain-answer path (executor replies rarely carry one; defensive).

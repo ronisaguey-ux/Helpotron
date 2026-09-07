@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .agent_prompt import agent_persona_block, agent_system_prompt
+from .llm import strip_thinking_tokens  # noqa: F401 — reply plumbing strips every LLM text
 from .database import AgentChatMessage, AgentChatThread, Assignment, StudyMaterial, UniversalDumpItem, User, get_db
 from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_agent, permission_engine, describe_permission_action
 
@@ -933,6 +934,11 @@ SCRAPE_ACTION_SPEC = {
                    "\"focus on the main prompt lines\"; empty string = the whole page",
 }
 
+BROWSER_ACTION_SPEC = {
+    "actions": "list of concrete browser control operations: [{\"op\":\"move\",\"x\":int,\"y\":int}, {\"op\":\"click\",\"x\":int,\"y\":int,\"button\":\"left\"|\"right\"}, {\"op\":\"dblclick\",\"x\":int,\"y\":int}, {\"op\":\"type\",\"text\":\"string\"}, {\"op\":\"key\",\"key\":\"Enter|Escape|Tab|Backspace|ArrowDown|ArrowUp\",\"modifiers\":[\"ctrl\"|\"shift\"]}, {\"op\":\"scroll\",\"x\":int,\"y\":int,\"deltaX\":int,\"deltaY\":int}, {\"op\":\"drag\",\"fromX\":int,\"fromY\":int,\"toX\":int,\"toY\":int}]",
+    "reply": "str — concise message to the user explaining what you are doing on their screen"
+}
+
 # Credit gate (operator 08-26): actions that do work have to be affordable even
 # before execution. Costs follow credits.py TASK_COSTS semantics; 0 = free
 # (plain answers, settings/read/no-op actions are never gated).
@@ -949,6 +955,7 @@ _AGENT_ACTION_COSTS = {
     "run_sandbox_script": 10,      # subagent_browser
     "run_shell": 3,                # code_analysis
     "scrape_assignment": 1,        # prompt-only trigger; the extension does the work
+    "browser_action": 1,          # extension direct screen control
     "read_assignment": 0, "change_settings": 0,
     "remember": 0, "forget_memory": 0, "plain_answer": 0,
     "get_wallet": 0, "list_library": 0, "list_referrals": 0,
@@ -1002,7 +1009,7 @@ def _extract_math_expression(text: str) -> str:
         return f"sqrt({m.group(2)})"
     for pat, op in _WORD_OPS:
         t = pat.sub(f" {op} ", t)
-    t = re.sub(r"^(?:what\s+is|whats|what'?s|calculate|compute|solve|how\s+much\s+is|answer|result|result\s*of)\s*[:=]?\s*", "", t)
+    t = re.sub(r"^(?:what\s+is|whats|what'?s|calculate|compute|solve|how\s+much\s+is|answer|result|result\s*of|how\s+(?:to|do\s+(?:i|you|we))\s+solve)\s*[:=]?\s*", "", t)
     t = t.rstrip("?.! ").strip()
     if _PHONEISH.search(t):
         return ""  # phone numbers contain dashes/digits — not math
@@ -1014,7 +1021,87 @@ def _extract_math_expression(text: str) -> str:
         return ""
     if not re.fullmatch(r"[0-9\s.+\-*/(),%_a-z]+", t):
         return ""
+    # 09-06: the char-class above also matches ordinary prose that merely
+    # CONTAINS a sum ("search inside my tab, how to solve 1+1"), which used to
+    # be compiled into `print(search inside my tab, how to solve 1+1)` — a
+    # guaranteed SyntaxError that surfaced as "I couldn't run that computation
+    # safely" AND stole the turn from `browser_action`. Every alphabetic word
+    # that survives must now be a real math token; anything else is prose.
+    if _stray_math_words(t):
+        return ""
     return t
+
+
+# Words that may legitimately appear inside a compiled math expression.
+_MATH_WORDS = frozenset({
+    "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "log10", "log", "ln",
+    "exp", "abs", "round", "floor", "ceil", "factorial", "pow", "pi", "e",
+    "mod", "x",
+})
+
+
+def _stray_math_words(expr: str) -> bool:
+    """True when `expr` still holds an alphabetic word that is not a math token
+    (i.e. it is prose, not a computation)."""
+    return any(w not in _MATH_WORDS for w in re.findall(r"[a-z_]+", expr))
+
+
+# `solve 1+x=2`, `2x+3=11`, `x/4 = 3` — a single-unknown LINEAR equation. Solved
+# deterministically in the sandbox by evaluating the residual at x=0 and x=1
+# (f(x)=lhs-rhs is affine, so x = -f(0)/(f(1)-f(0))); no arithmetic is ever done
+# in prompt text.
+_LINEAR_EQ_PREFIX = re.compile(
+    r"^(?:please\s+)?(?:can\s+you\s+)?(?:solve|find|work\s+out|compute|calculate)?\s*"
+    r"(?:for\s+x)?\s*[:=]?\s*",
+    re.IGNORECASE,
+)
+
+
+def _extract_linear_equation(text: str) -> str:
+    """Return `lhs|rhs` for a solvable single-unknown linear equation, else ''."""
+    if not text:
+        return ""
+    t = (text or "").strip().lower().rstrip("?.! ").strip()
+    t = _LINEAR_EQ_PREFIX.sub("", t, count=1).strip()
+    if t.count("=") != 1:
+        return ""
+    lhs, rhs = (side.strip() for side in t.split("="))
+    if not lhs or not rhs:
+        return ""
+    sides = []
+    for side in (lhs, rhs):
+        side = side.replace("×", "*").replace("÷", "/").replace("^", "**")
+        # implicit multiplication: 2x -> 2*x, )x -> )*x, x( -> x*(
+        side = re.sub(r"(?<=[0-9)])\s*x", "*x", side)
+        side = re.sub(r"x\s*(?=[0-9(])", "x*", side)
+        if not re.fullmatch(r"[0-9\s.+\-*/()x]+", side):
+            return ""
+        sides.append(side)
+    joined = "".join(sides)
+    if "x" not in joined or not re.search(r"\d", joined):
+        return ""
+    return f"{sides[0]}|{sides[1]}"
+
+
+def _build_linear_equation_command(pair: str) -> str:
+    """python3 one-liner that solves the linear equation and prints `x = <v>`.
+
+    09-07: the integer-ness test is `round(r, 9) == r`, NOT `abs(...)<1e-9` —
+    `_validated_argv._SHELL_META` rejects any `<`/`>` in the command (they are
+    shell redirection metachars), so the old generator produced a command that
+    could never pass validation and the executor answered every linear equation
+    with "I couldn't run that computation safely" (observed live: solve 1+x=2).
+    """
+    lhs, rhs = pair.split("|", 1)
+    code = (
+        "import math;"
+        f"f=lambda x: ({lhs})-({rhs});"
+        "a=f(1)-f(0);"
+        "print('No unique solution.') if a==0 else "
+        "print('x = ' + (lambda r: str(int(round(r))) if round(r,9)==r "
+        "else str(round(r,10)))(-f(0)/a))"
+    )
+    return f'python3 -c "{code}"'
 
 
 _MATH_FUNC_RENAME = re.compile(r"\b(sqrt|sin|cos|tan|asin|acos|atan|log10|ln|exp|abs|round|floor|ceil|factorial|pow)\b")
@@ -1075,6 +1162,9 @@ def _extract_shell_query(text: str) -> str:
     expr = _extract_math_expression(text)
     if expr:
         return _build_math_command(expr)
+    eq = _extract_linear_equation(text)
+    if eq:
+        return _build_linear_equation_command(eq)
     return ""
 
 
@@ -1145,7 +1235,8 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
             effort_score=effort,
             db=db, user_id=user.public_id,
         )
-        return (raw or "").strip()[:1000]
+        from .llm import strip_thinking_tokens
+        return strip_thinking_tokens((raw or "").strip()[:1000])
     except Exception:
         return ""
 
@@ -1168,7 +1259,8 @@ async def _apply_detection_standard(settings: Dict[str, Any], user, text: str, n
 
 def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
     """Tolerant JSON parse: strips markdown fences, finds the first balanced object."""
-    t = (text or "").strip()
+    from .llm import strip_thinking_tokens
+    t = strip_thinking_tokens(text or "")
     t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t).strip()
     for start in [i for i, ch in enumerate(t) if ch == "{"]:
         depth = 0
@@ -1198,12 +1290,36 @@ def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _regex_fallback_intent(text: str, node: str = "my_agent") -> Dict[str, Any]:
+def _regex_fallback_intent(text: str, node: str = "my_agent", viewport: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     """Old keyword dispatch — only used when the LLM JSON contract fails."""
     shell_cmd = _extract_shell_query(text)
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
     lower = text.lower()
+    if node == "extensions" and any(k in lower for k in ("search", "searchbar", "search bar", "click", "type in", "type on", "touch my browser", "use my browser")):
+        m = re.search(r"(?:search|type)\s+(?:in|into|for)?\s*(?:my\s+)?(?:searchbar|search\s+bar)?(?:\s*,\s*|\s+for\s+|\s+to\s+)?(.*)", text, re.IGNORECASE)
+        q = m.group(1).strip(" '\"?,.") if m else text
+        # 09-07: the burst coordinates were hard-coded (480, 320), which lands
+        # outside a small captured frame; derive them from the real viewport
+        # (same rule as routes_extension._search_burst — the whole list still
+        # passes through _harden_actions for clamping before execution).
+        vp = viewport or {"width": 1280, "height": 800}
+        w = max(1, int(vp.get("width") or 1280))
+        h = max(1, int(vp.get("height") or 800))
+        x = max(1, w // 2)
+        y = max(1, min(h // 2, int(h * 0.4)))
+        return {
+            "action": "browser_action",
+            "payload": {
+                "actions": [
+                    {"op": "move", "x": x, "y": y},
+                    {"op": "click", "x": x, "y": y, "button": "left"},
+                    {"op": "type", "text": q or text},
+                    {"op": "key", "key": "Enter", "modifiers": []}
+                ]
+            },
+            "reply": f"Searching for \"{q or text}\" on your screen now…"
+        }
     if node == "extensions" and any(k in lower for k in ("scrape", "canvas", "capture this page")):
         return {"action": "scrape_assignment",
                 "payload": {"instruction": text},
@@ -1342,7 +1458,7 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
-async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None) -> Dict[str, Any]:
+async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None, viewport: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
     The model sees the surface's identity + personality + instructions, its
@@ -1380,9 +1496,8 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
 
     actions = dict(_AGENT_ACTIONS)
     if node == "extensions":
-        # The extension surface owns the REAL browser tab-scraper: the model
-        # declares it so capture requests land on the tool instead of a
-        # refusal ("I can't directly scrape canvas").
+        # The extension surface owns the REAL browser tools (screen control + tab scraping)
+        actions["browser_action"] = BROWSER_ACTION_SPEC
         actions["scrape_assignment"] = SCRAPE_ACTION_SPEC
     if is_admin:
         actions.update({
@@ -1443,25 +1558,17 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         f'If the user is just talking or asking a question, use "action": "plain_answer" and put the COMPLETE answer in "reply" (it may be long — essays/guides can run several thousand words).'
     )
     if node == "extensions":
-        # Tool reality for the extension surface (operator 08-28): the popup
-        # sits next to the user's browser tabs and has a REAL tab-scraper the
-        # agent can request — declare the mechanism so "scrape this canvas
-        # assignment" becomes a tool call, never a refusal. This paragraph is
-        # appended AFTER the identity/edu blocks so the greeting carve-out and
-        # the tool guidance are both visible; it never overrides the edu gate.
         system_prompt += (
-            'TOOL REALITY (browser extension surface): you run inside the Helpotron extension popup, '
-            "right next to the user's browser tabs, and you have a REAL tab-scraper here: the "
-            "'scrape_assignment' action listed above. When the user asks you to scrape, capture, or "
-            "collect the assignment on their tab (Canvas or any school page), opens a page and says "
-            "'help me with this', or asks you to 'look at' the current page — choose the action "
-            "scrape_assignment, with instruction set to what to collect (any constraint, e.g. "
-            "'only the rubric' or 'focus on the main prompt lines'; an empty string means the whole "
-            "page; include a brief page/course hint when the user names one, e.g. 'the current "
-            "assignment page'). The extension then runs the real browser scrape of the selected tab "
-            "and saves the assignment into the dump for you. NEVER refuse with 'I can't scrape "
-            "canvas' and NEVER tell the user to paste the assignment text instead — you have that "
-            "tool.\n"
+            "\nTOOL REALITY (browser extension surface & screen control):\n"
+            "You are operating inside the Helpotron extension popup, connected directly to the user's active browser tab.\n"
+            "You have REAL tools to control and interact with their browser:\n"
+            "1. `browser_action`: You can physically move the mouse cursor, click elements/buttons/searchbars, double click, drag, type text into inputs/searchbars, press keys (like Enter, Tab, Escape, Backspace), and scroll on the user's active webpage!\n"
+            "   Whenever the user asks you to interact with their browser (e.g. 'search in my searchbar...', 'type ... into search', 'click the button', 'fill out the form', 'solve and enter'):\n"
+            "   Choose the action `browser_action`!\n"
+            "   In payload, provide `actions`: an ordered array of operations (e.g. move to search bar -> click search bar -> type query -> key Enter), and in `reply` explain what you are doing on their screen.\n"
+            "   Example for searching or typing in searchbar: {\"action\": \"browser_action\", \"payload\": {\"actions\": [{\"op\": \"move\", \"x\": 480, \"y\": 320}, {\"op\": \"click\", \"x\": 480, \"y\": 320, \"button\": \"left\"}, {\"op\": \"type\", \"text\": \"how to solve 1+x=2\"}, {\"op\": \"key\", \"key\": \"Enter\", \"modifiers\": []}]}, \"reply\": \"Searching in your search bar for 'how to solve 1+x=2'…\"}\n"
+            "   NEVER refuse browser requests with 'I don't have a tool to search' or 'I cannot use your browser' — you HAVE the `browser_action` tool!\n"
+            "2. `scrape_assignment`: When the user asks you to scrape, capture, or collect the assignment on their tab (Canvas or school page), choose `scrape_assignment`.\n"
         )
     # Conversation memory (operator 08-26): the LLM previously saw ONLY the
     # current message. 08-27 bugfix: the loop walked the history from the
@@ -1550,10 +1657,10 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         scrape_ask = node == "extensions" and any(
             k in lower for k in ("scrape", "canvas", "capture the page", "collect this page"))
         if "submit" in lower or "delete" in lower or "humanize" in lower or "rubric" in lower or scrape_ask:
-            return _regex_fallback_intent(text, node)
+            return _regex_fallback_intent(text, node, viewport)
         return {"action": "plain_answer", "payload": {}, "reply": str(parsed.get("reply") or text)}
     # LLM failed or chose an unknown action — fall back to keyword dispatch
-    return _regex_fallback_intent(text, node)
+    return _regex_fallback_intent(text, node, viewport)
 
 
 def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:
@@ -1695,6 +1802,11 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
             logger.warning("stream_chat_message exception: %s", err)
             stream_failed = True
 
+        # 09-07: the assembled stream is an LLM return path like any other —
+        # strip thinking/deliberation before it is persisted or sent in the
+        # done frame (live deltas streamed as-is; the durable reply is clean).
+        from .llm import strip_thinking_tokens as _strip
+        full_reply = _strip(full_reply)
         if stream_failed or not full_reply.strip():
             yield f"data: {json.dumps({'type': 'unavailable', 'reason': 'actions'})}\n\n"
             return
@@ -1797,11 +1909,12 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     if intent["action"] == "plain_answer":
         if not is_admin and user.plan != "elite":
             _charge_tokens(user, db, 1.0)
-        reply_text = intent["reply"]
+        reply_text = strip_thinking_tokens(intent["reply"])
         if _is_degenerate_reply(reply_text):
             reply_text = await _conversational_fallback(
                 user, payload.text, db=db, node=agent_node, assignment_context=assignment_ctx,
             )
+        reply_text = strip_thinking_tokens(reply_text)
         if _is_degenerate_reply(reply_text):
             reply_text = ("I didn't catch that — mind rephrasing? "
                           "(Reply generation came back empty.)")
@@ -1889,17 +2002,18 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     _LLM_EMPTY_HONEST = ("Hmm — I ran into an issue answering that one."
                          " Try again in a moment?")
     if exec_res.get("status") == "failed":
-        reply_text = f"⚠️ {exec_res.get('message', 'Could not do that.')}"
+        reply_text = f"⚠️ {strip_thinking_tokens(exec_res.get('message', 'Could not do that.'))}"
     else:
-        result_msg = exec_res.get("message") or exec_res.get("result_text")
+        result_msg = strip_thinking_tokens(exec_res.get("message") or exec_res.get("result_text"))
         if _is_degenerate_reply(result_msg):
             # Execution completed silently (misclassified intent / empty result):
             # answer the user's message conversationally instead of a bare ✅.
             result_msg = await _conversational_fallback(
                 user, payload.text, node=agent_node, assignment_context=assignment_ctx,
             )
+            result_msg = strip_thinking_tokens(result_msg)
         if intent["action"] == "humanize_text" and exec_res.get("result_text"):
-            reply_text = exec_res["result_text"]
+            reply_text = strip_thinking_tokens(exec_res["result_text"])
             if _is_degenerate_reply(reply_text):
                 reply_text = _LLM_EMPTY_HONEST
         elif _is_degenerate_reply(result_msg):

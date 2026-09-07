@@ -32,7 +32,7 @@ Server (`server/screen_vision.py`, unit-tested in
 effort score 1..1000  (default 500, clamped at both ends)
   ≤ 300  → google/gemini-3.1-flash-lite      ($0.075/M in)  tier "lite"
   301-500 → deepseek/deepseek-v4-flash-vision ($0.14/M)      tier "mid_lower"  [default]
-  501-700 → google/gemini-3.7-flash          ($0.25/M)       tier "mid_upper"
+  501-700 → google/gemini-3.8-flash          ($0.25/M)       tier "mid_upper"
   > 700   → deepseek/deepseek-v4-pro-vision  ($0.87/M)       tier "pro"
 ```
 

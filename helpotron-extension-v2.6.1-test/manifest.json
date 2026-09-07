@@ -1,0 +1,87 @@
+{
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "version": "2.6.1",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

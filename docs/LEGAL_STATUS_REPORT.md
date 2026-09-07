@@ -21,7 +21,7 @@ An end-to-end technical analysis of Helpotron's codebase (`server/`, `web/src/`,
 - **Frontend:** React 18, Vite 6, Tailwind CSS, Lucide icons, `@visx` charts.
 - **Chrome Extension:** Manifest V3 extension extracting Canvas DOM / assignment context and injecting human-like keystroke pacing for accessibility.
 - **Identity & Auth:** JWT tokens (`HS256`), password hashing (`scrypt`/`PBKDF2-HMAC-SHA256` with unique salts), Email Verification (SMTP), TOTP Authenticator apps (`pyotp`), SMS 2FA (`Twilio REST API`).
-- **AI Model Pipeline:** Multi-model inference gateway via OpenRouter (`deepseek-v4-flash-vision`, `deepseek-v4-pro-vision`, `google/gemini-3.1-flash-lite`, `google/gemini-3.7-flash`, `qwen/qwen-2.5-72b-instruct`, `nvidia/nemotron-3-nano-30b-a3b`).
+- **AI Model Pipeline:** Multi-model inference gateway via OpenRouter (`deepseek-v4-flash-vision`, `deepseek-v4-pro-vision`, `google/gemini-3.1-flash-lite`, `google/gemini-3.8-flash`, `qwen/qwen-2.5-72b-instruct`, `nvidia/nemotron-3-nano-30b-a3b`).
 - **Data Ingestion & Extraction:** Canvas LMS course/assignment scraping, audio transcription, file uploads (`.pdf`, `.docx`, `.txt`, `.py`), universal dump items, user-curated study sets.
 - **Monetization & Economy:** Stripe Checkout / Subscriptions, internal virtual microcredits ledger (`CreditTransaction`), referral bonus engine (`Referral`).
 - **Telemetry & Logs:** Access log rotating buffer, API usage telemetry (`ApiUsageLog`), autonomous data lake feedback (`DataSubmission`).

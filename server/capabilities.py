@@ -22,7 +22,7 @@ class CapabilitiesEngine:
 
         return {
             "status": "success",
-            "version": "2.5.2",
+            "version": "2.6.1",
             "environment": getattr(config, "environment", "development"),
             "currency_model": {
                 "task_token_value_usd": 0.01,
@@ -52,9 +52,9 @@ class CapabilitiesEngine:
                 "purged": ["winston_ai"],
             },
             "models": {
-                "primary": getattr(config, "primary_model", "gemini-3.7-flash"),
+                "primary": getattr(config, "primary_model", "gemini-3.8-flash"),
                 "flash_lite": getattr(config, "gemini_flash_lite_model", "gemini-3.1-flash-lite"),
-                "flash": getattr(config, "gemini_flash_model", "gemini-3.7-flash"),
+                "flash": getattr(config, "gemini_flash_model", "gemini-3.8-flash"),
             },
             "sandbox": {
                 "supported_languages": ["python", "javascript", "bash"],
