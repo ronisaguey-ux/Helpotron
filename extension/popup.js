@@ -22,23 +22,30 @@ const MODE_KEY = 'helpotron_agent_mode';
 const EFFORT_KEY = 'helpotron_agent_effort';
 const MODEL_KEY = 'helpotron_agent_model';
 const MODEL_TIER_KEY = 'helpotron_agent_model_tier';
+const EDUCATIONAL_MODE_KEY = 'helpotron_educational_mode';
 
 const SEE_SCREEN_DEFAULT = true;
 const EXECUTE_DEFAULT = false;
 const MODE_DEFAULT = 'manual';
 const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
+const EDUCATIONAL_MODE_DEFAULT = true;
 const MODELS = ['manual', 'auto', 'yolo'];
 
 const modelToggles = {
   toggleSeeScreen: document.getElementById('toggleSeeScreen'),
   toggleExecute: document.getElementById('toggleExecute'),
+  toggleEducationalMode: document.getElementById('toggleEducationalMode'),
 };
+const effortScoreSlider = document.getElementById('effortScoreSlider');
+const effortScoreVal = document.getElementById('effortScoreVal');
+const chatModelIndicator = document.getElementById('chatModelIndicator');
 const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 const modeHintEl = document.getElementById('modeHint');
 const modelEffortEl = document.getElementById('modelEffort');
 const modelNameEl = document.getElementById('modelName');
 const modelTierEl = document.getElementById('modelTier');
 let effortFromServer = null; // true once GET /api/user/settings succeeded
+let effortPatchDebounceTimer = null;
 
 function setStatus(text) {
   statusEl.innerText = text;
@@ -84,7 +91,7 @@ async function persistAgentState(patch) {
 
 async function readAgentState() {
   return await chrome.storage.local.get([
-    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY,
+    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY, EDUCATIONAL_MODE_KEY,
   ]);
 }
 
@@ -116,11 +123,19 @@ async function applyAgentStateToUI(st) {
     modelToggles.toggleExecute.checked = v;
     modelToggles.toggleExecute.setAttribute('aria-checked', v ? 'true' : 'false');
   }
+  if (modelToggles.toggleEducationalMode) {
+    const v = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : st[EDUCATIONAL_MODE_KEY];
+    modelToggles.toggleEducationalMode.checked = v;
+    modelToggles.toggleEducationalMode.setAttribute('aria-checked', v ? 'true' : 'false');
+  }
   // Effort -> model line (mirror of the backend resolver).
   const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
   const info = effortModelInfo(score);
   if (modelEffortEl) modelEffortEl.innerText = `effort ${score}`;
+  if (effortScoreVal) effortScoreVal.innerText = `${score}`;
+  if (effortScoreSlider) effortScoreSlider.value = score;
   if (modelNameEl) modelNameEl.innerText = info.label;
+  if (chatModelIndicator) chatModelIndicator.innerText = info.label;
   if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
 }
 
@@ -156,11 +171,23 @@ async function syncAgentSettingsFromServer() {
     const score = clampEffortScore(ai.effortScore === undefined ? EFFORT_DEFAULT : ai.effortScore);
     const info = effortModelInfo(score);
     const serverMode = MODELS.includes(ai.mode) ? ai.mode : MODE_DEFAULT;
+    const hier = (ai && ai.hierarchy) || {};
+    const extCfg = hier.extensions || {};
+    let eduModeVal = EDUCATIONAL_MODE_DEFAULT;
+    if (extCfg.mode === 'open' || settings.educationalMode === false) {
+      eduModeVal = false;
+    } else if (extCfg.mode === 'edu' || settings.educationalMode === true) {
+      eduModeVal = true;
+    } else if (st[EDUCATIONAL_MODE_KEY] !== undefined) {
+      eduModeVal = Boolean(st[EDUCATIONAL_MODE_KEY]);
+    }
+
     effortFromServer = true;
     await persistAgentState({
       [EFFORT_KEY]: score,
       [MODEL_KEY]: info.model,
       [MODEL_TIER_KEY]: info.tier,
+      [EDUCATIONAL_MODE_KEY]: eduModeVal,
       // Server mode wins unless the user changed it locally just now
       // (pendingLocalMode guards the in-flight PATCH below).
       ...(pendingLocalMode ? {} : { [MODE_KEY]: serverMode }),
@@ -217,8 +244,41 @@ Object.keys(modelToggles).forEach((id) => {
   const el = modelToggles[id];
   if (!el) return;
   el.addEventListener('change', async () => {
-    const key = id === 'toggleSeeScreen' ? SEE_SCREEN_KEY : EXECUTE_KEY;
+    const isEdu = id === 'toggleEducationalMode';
+    const isSee = id === 'toggleSeeScreen';
+    const key = isEdu ? EDUCATIONAL_MODE_KEY : isSee ? SEE_SCREEN_KEY : EXECUTE_KEY;
     const val = el.checked;
+
+    // Educational mode toggle -> syncs to local storage and backend settings
+    if (isEdu) {
+      el.setAttribute('aria-checked', val ? 'true' : 'false');
+      await persistAgentState({ [key]: val });
+      setStatus(val
+        ? '🎓 Educational Mode: ON — standard study guidance active.'
+        : '🔓 Educational Mode: OFF — open agent mode active (unrestrained by school-only rules).');
+
+      const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+      const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const t = await authToken();
+      if (public_id && t) {
+        fetch(`${srv}/api/user/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({
+            educationalMode: val,
+            ai: {
+              hierarchy: {
+                extensions: {
+                  mode: val ? 'edu' : 'open',
+                },
+              },
+            },
+          }),
+        }).catch(() => {});
+      }
+      return;
+    }
+
     // Execute drives the agent through the browser debugger — an OPTIONAL
     // permission (manifest.json optional_permissions) requested on first use,
     // so the install itself stays permission-light for the store review.
@@ -244,6 +304,44 @@ Object.keys(modelToggles).forEach((id) => {
                                    : 'Execute: OFF — the agent will only talk, never act.'));
   });
 });
+
+// Effort score slider interactive updates
+if (effortScoreSlider) {
+  effortScoreSlider.addEventListener('input', () => {
+    const val = clampEffortScore(effortScoreSlider.value);
+    if (effortScoreVal) effortScoreVal.innerText = `${val}`;
+    const info = effortModelInfo(val);
+    if (modelEffortEl) modelEffortEl.innerText = `effort ${val}`;
+    if (modelNameEl) modelNameEl.innerText = info.label;
+    if (chatModelIndicator) chatModelIndicator.innerText = info.label;
+    if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  });
+
+  effortScoreSlider.addEventListener('change', async () => {
+    const val = clampEffortScore(effortScoreSlider.value);
+    const info = effortModelInfo(val);
+    await persistAgentState({
+      [EFFORT_KEY]: val,
+      [MODEL_KEY]: info.model,
+      [MODEL_TIER_KEY]: info.tier,
+    });
+    setStatus(`⚡ Effort score set to ${val} (${info.label}).`);
+
+    clearTimeout(effortPatchDebounceTimer);
+    effortPatchDebounceTimer = setTimeout(async () => {
+      const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+      const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const t = await authToken();
+      if (public_id && t) {
+        fetch(`${srv}/api/user/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ ai: { effortScore: val } }),
+        }).catch(() => {});
+      }
+    }, 300);
+  });
+}
 
 // ── Approval inbox (09-02): the open popup is the approval surface. We signal
 // popup-alive with a runtime Port (MV3 service workers can't see the popup
@@ -384,7 +482,7 @@ async function init() {
   const st = await chrome.storage.local.get([
     'server', 'public_id', 'token', 'session_token',
     'update_available', 'latest_version', CRAWL_CACHE_KEY,
-    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY,
+    SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY, EDUCATIONAL_MODE_KEY,
   ]);
   serverInput.value = st.server || 'https://helpotron.dpdns.org';
   publicIdInput.value = st.public_id || '';
@@ -744,7 +842,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const optsBtn = document.getElementById('btnOptions');
   if (optsBtn) {
     optsBtn.addEventListener('click', () => {
-      if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
+      switchView('settings');
     });
   }
 
@@ -753,11 +851,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
     launcher: document.getElementById('tabNavLauncher'),
     chat: document.getElementById('tabNavChat'),
     type: document.getElementById('tabNavType'),
+    settings: document.getElementById('tabNavSettings'),
   };
   const viewPanels = {
     launcher: document.getElementById('viewLauncher'),
     chat: document.getElementById('viewChat'),
     type: document.getElementById('viewType'),
+    settings: document.getElementById('viewSettings'),
   };
 
   function switchView(viewName) {
@@ -775,18 +875,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
     });
 
     if (viewName === 'chat') {
+      fetchChatThreads();
       loadPopupChatHistory();
       const input = document.getElementById('popupChatInput');
       if (input) setTimeout(() => input.focus(), 80);
     } else if (viewName === 'type') {
       loadAssignmentsForLaunch();
       detectDocTabs();
+    } else if (viewName === 'settings') {
+      refreshSettingsView();
     }
   }
 
   if (navTabs.launcher) navTabs.launcher.addEventListener('click', () => switchView('launcher'));
   if (navTabs.chat) navTabs.chat.addEventListener('click', () => switchView('chat'));
   if (navTabs.type) navTabs.type.addEventListener('click', () => switchView('type'));
+  if (navTabs.settings) navTabs.settings.addEventListener('click', () => switchView('settings'));
 
   const agentBtn = document.getElementById('btnAgentMode');
   const openChatBtn = document.getElementById('btnOpenChat');
@@ -807,6 +911,70 @@ chrome.storage.onChanged.addListener((changes, area) => {
       if (!label) return;
       const pid = (stCache.public_id || '').trim();
       label.textContent = (pid && pid !== 'Guest') ? `@${pid}` : 'Guest';
+    });
+  }
+
+  // Embedded Settings Controls
+  function refreshSettingsView() {
+    chrome.storage.local.get(['public_id', 'session_token', 'token'], (st) => {
+      const pid = (st.public_id || '').trim();
+      const connected = !!(pid && (st.session_token || st.token));
+      const nameEl = document.getElementById('settingsAccountName');
+      const statusEl = document.getElementById('settingsAccountStatus');
+      const avatarEl = document.getElementById('settingsAvatar');
+      const btnAuth = document.getElementById('btnOpenWebAuth');
+
+      if (nameEl) nameEl.textContent = connected ? `@${pid}` : 'Guest';
+      if (statusEl) statusEl.textContent = connected ? 'Active session connected' : 'Sign in to sync your scrapes & chat';
+      if (avatarEl) avatarEl.textContent = (pid ? pid[0] : 'S').toUpperCase();
+      if (btnAuth) btnAuth.textContent = connected ? 'Connected' : 'Sign in';
+    });
+
+    chrome.storage.sync.get(['ext_theme', 'ext_accent'], (st) => {
+      const currentTheme = st.ext_theme || 'dark';
+      const currentAccent = st.ext_accent || 'teal';
+      document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((b) => {
+        b.classList.toggle('selected', b.dataset.themePick === currentTheme);
+      });
+      document.querySelectorAll('#viewSettings [data-accent]').forEach((b) => {
+        b.classList.toggle('selected', b.dataset.accent === currentAccent);
+      });
+    });
+  }
+
+  document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const theme = b.dataset.themePick;
+      chrome.storage.sync.set({ ext_theme: theme });
+      document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((btn) => {
+        btn.classList.toggle('selected', btn.dataset.themePick === theme);
+      });
+    });
+  });
+
+  document.querySelectorAll('#viewSettings [data-accent]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const accent = b.dataset.accent;
+      chrome.storage.sync.set({ ext_accent: accent });
+      document.querySelectorAll('#viewSettings [data-accent]').forEach((btn) => {
+        btn.classList.toggle('selected', btn.dataset.accent === accent);
+      });
+    });
+  });
+
+  const btnOpenWebAuth = document.getElementById('btnOpenWebAuth');
+  if (btnOpenWebAuth) {
+    btnOpenWebAuth.addEventListener('click', async () => {
+      const { server } = await chrome.storage.local.get('server');
+      const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      chrome.tabs.create({ url: srv });
+    });
+  }
+
+  const btnOpenFullOptionsTab = document.getElementById('btnOpenFullOptionsTab');
+  if (btnOpenFullOptionsTab) {
+    btnOpenFullOptionsTab.addEventListener('click', () => {
+      if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
     });
   }
 })();
@@ -849,8 +1017,259 @@ function renderPopupChatHistory(msgs) {
   msgs.forEach((m) => addPopupChatMsg(m.sender === 'user' ? 'user' : 'agent', m.text));
 }
 
+let currentThreadId = 0;
+let currentThreadTitle = 'current chat';
+let currentThreadPinned = false;
+let chatThreadsList = [];
+
+const currentThreadTitleEl = document.getElementById('currentThreadTitle');
+const btnNewChat = document.getElementById('btnNewChat');
+const btnToggleThreads = document.getElementById('btnToggleThreads');
+const btnCloseThreads = document.getElementById('btnCloseThreads');
+const threadsDrawer = document.getElementById('threadsDrawer');
+const threadsListEl = document.getElementById('threadsList');
+const btnRenameThread = document.getElementById('btnRenameThread');
+const btnPinThread = document.getElementById('btnPinThread');
+
+function updateThreadUI() {
+  if (currentThreadTitleEl) {
+    currentThreadTitleEl.textContent = currentThreadTitle || (currentThreadId === 0 ? 'current chat' : `Chat #${currentThreadId}`);
+  }
+  if (btnPinThread) {
+    btnPinThread.innerHTML = currentThreadPinned
+      ? '<svg class="ic ic--xs" style="color:var(--primary)"><use href="#i-pin" /></svg>'
+      : '<svg class="ic ic--xs"><use href="#i-pin" /></svg>';
+    btnPinThread.title = currentThreadPinned ? 'Unpin conversation' : 'Pin conversation';
+  }
+}
+
+async function fetchChatThreads() {
+  const { server } = await chrome.storage.local.get('server');
+  const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+  if (!t) return;
+  try {
+    const res = await fetch(`${srv}/api/agent/threads`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    chatThreadsList = data.threads || [];
+    renderThreadsDrawer();
+    const cur = chatThreadsList.find((th) => th.id === currentThreadId);
+    if (cur) {
+      currentThreadTitle = cur.title || (cur.id === 0 ? 'current chat' : `Chat #${cur.id}`);
+      currentThreadPinned = !!cur.pinned;
+      updateThreadUI();
+    }
+  } catch (e) {
+    // Network failure
+  }
+}
+
+function renderThreadsDrawer() {
+  if (!threadsListEl) return;
+  threadsListEl.innerHTML = '';
+  if (chatThreadsList.length === 0) {
+    threadsListEl.innerHTML = '<div class="thread-item active">Current conversation</div>';
+    return;
+  }
+  chatThreadsList.forEach((th) => {
+    const div = document.createElement('div');
+    const isActive = th.id === currentThreadId;
+    div.className = `thread-item ${isActive ? 'active' : ''}`;
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.style.flex = '1';
+    titleSpan.style.overflow = 'hidden';
+    titleSpan.style.textOverflow = 'ellipsis';
+    titleSpan.style.whiteSpace = 'nowrap';
+    titleSpan.textContent = th.title || (th.id === 0 ? 'current chat' : `Chat #${th.id}`);
+    div.appendChild(titleSpan);
+
+    if (th.pinned) {
+      const pinIcon = document.createElement('span');
+      pinIcon.className = 'pin-indicator';
+      pinIcon.innerHTML = '📌';
+      div.appendChild(pinIcon);
+    }
+
+    div.addEventListener('click', () => {
+      currentThreadId = th.id;
+      currentThreadTitle = th.title || (th.id === 0 ? 'current chat' : `Chat #${th.id}`);
+      currentThreadPinned = !!th.pinned;
+      updateThreadUI();
+      if (threadsDrawer) threadsDrawer.classList.add('hidden');
+      loadPopupChatHistory();
+    });
+
+    threadsListEl.appendChild(div);
+  });
+}
+
+if (btnToggleThreads) {
+  btnToggleThreads.addEventListener('click', () => {
+    if (!threadsDrawer) return;
+    const isHidden = threadsDrawer.classList.contains('hidden');
+    if (isHidden) {
+      threadsDrawer.classList.remove('hidden');
+      fetchChatThreads();
+    } else {
+      threadsDrawer.classList.add('hidden');
+    }
+  });
+}
+
+if (btnCloseThreads) {
+  btnCloseThreads.addEventListener('click', () => {
+    if (threadsDrawer) threadsDrawer.classList.add('hidden');
+  });
+}
+
+if (btnNewChat) {
+  btnNewChat.addEventListener('click', async () => {
+    const { server } = await chrome.storage.local.get('server');
+    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (!t) {
+      setStatus('⚠️ Sign in on Helpotron to create new chat threads.');
+      return;
+    }
+    try {
+      setStatus('Creating new conversation thread…');
+      const res = await fetch(`${srv}/api/agent/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ title: 'New chat' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const newThread = (data && data.thread) || {};
+        currentThreadId = newThread.id || 0;
+        currentThreadTitle = newThread.title || 'New chat';
+        currentThreadPinned = false;
+        updateThreadUI();
+        if (chatMessagesEl) chatMessagesEl.innerHTML = '';
+        addPopupChatMsg('agent', "Hi! I'm your Helpotron companion. Ask questions about your coursework, or tell me what to do on this page.");
+        setStatus(`✨ Switched to new conversation: ${currentThreadTitle}`);
+        fetchChatThreads();
+      } else {
+        setStatus('❌ Failed to create new conversation.');
+      }
+    } catch (e) {
+      setStatus(`❌ Connection error: ${String(e)}`);
+    }
+  });
+}
+
+if (btnRenameThread) {
+  btnRenameThread.addEventListener('click', async () => {
+    const newTitle = prompt('Rename this conversation:', currentThreadTitle);
+    if (!newTitle || !newTitle.trim()) return;
+    const titleClean = newTitle.trim().slice(0, 120);
+    const { server } = await chrome.storage.local.get('server');
+    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (!t) return;
+    try {
+      const res = await fetch(`${srv}/api/agent/threads/${currentThreadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ title: titleClean }),
+      });
+      if (res.ok) {
+        currentThreadTitle = titleClean;
+        updateThreadUI();
+        fetchChatThreads();
+        setStatus(`✅ Renamed conversation to “${titleClean}”.`);
+      }
+    } catch (e) {
+      setStatus(`❌ Rename failed: ${String(e)}`);
+    }
+  });
+}
+
+if (btnPinThread) {
+  btnPinThread.addEventListener('click', async () => {
+    const nextPin = !currentThreadPinned;
+    const { server } = await chrome.storage.local.get('server');
+    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (!t) return;
+    try {
+      const res = await fetch(`${srv}/api/agent/threads/${currentThreadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ pinned: nextPin }),
+      });
+      if (res.ok) {
+        currentThreadPinned = nextPin;
+        updateThreadUI();
+        fetchChatThreads();
+        setStatus(nextPin ? '📌 Conversation pinned.' : 'Conversation unpinned.');
+      }
+    } catch (e) {
+      setStatus(`❌ Pin toggle failed: ${String(e)}`);
+    }
+  });
+}
+
+function captureActiveTabFrame() {
+  return new Promise((resolve) => {
+    chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 70 }, (dataUrl) => {
+      if (chrome.runtime.lastError || !dataUrl) {
+        resolve(null);
+      } else {
+        resolve(dataUrl);
+      }
+    });
+  });
+}
+
+async function executeReturnedActions(actions) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const activeTab = tabs && tabs[0] ? tabs[0] : null;
+  if (!activeTab || !activeTab.id) {
+    setStatus('⚠️ Cannot execute actions: active tab not found.');
+    return;
+  }
+  const hasDebugger = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
+  if (!hasDebugger) {
+    setStatus('⚠️ Cannot execute: debugger permission not granted.');
+    return;
+  }
+  try {
+    await chrome.debugger.attach({ tabId: activeTab.id }, '1.3');
+    for (const op of actions) {
+      if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {
+        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
+          type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: 'left', clickCount: 1,
+        });
+        await new Promise((r) => setTimeout(r, 60));
+        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: 'left', clickCount: 1,
+        });
+      } else if (op.op === 'type' && op.text) {
+        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.insertText', { text: String(op.text) });
+      } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
+        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
+          type: 'mouseWheel', x: Math.round(op.x || 100), y: Math.round(op.y || 100),
+          deltaX: Math.trunc(op.deltaX || 0), deltaY: Math.trunc(op.deltaY || 0),
+        });
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    await chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+    setStatus(`✓ Executed ${actions.length} agent action(s) in active tab.`);
+  } catch (err) {
+    setStatus(`⚠️ Action execution failed: ${String(err)}`);
+    chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+  }
+}
+
 async function loadPopupChatHistory() {
-  const cached = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY];
+  const cacheKey = `${CHAT_KEY}_t${currentThreadId}`;
+  const cached = (await chrome.storage.local.get([CHAT_KEY, cacheKey]))[currentThreadId === 0 ? CHAT_KEY : cacheKey];
   if (cached && cached.length) renderPopupChatHistory(cached);
 
   const { server } = await chrome.storage.local.get('server');
@@ -859,7 +1278,7 @@ async function loadPopupChatHistory() {
   if (!t) return;
 
   try {
-    const res = await fetch(`${srv}/api/extension/agent_chat/history`, {
+    const res = await fetch(`${srv}/api/extension/agent_chat/history?thread_id=${currentThreadId}`, {
       headers: { Authorization: `Bearer ${t}` },
     });
     if (!res.ok) return;
@@ -867,7 +1286,7 @@ async function loadPopupChatHistory() {
     const msgs = ((data && data.chat) || []).map((m) => ({ sender: m.sender, text: m.text }));
     if (msgs.length) {
       renderPopupChatHistory(msgs);
-      chrome.storage.local.set({ [CHAT_KEY]: msgs }).catch(() => {});
+      chrome.storage.local.set({ [currentThreadId === 0 ? CHAT_KEY : cacheKey]: msgs }).catch(() => {});
     }
   } catch {
     // Offline or server unreachable — cached messages remain visible
@@ -875,7 +1294,10 @@ async function loadPopupChatHistory() {
 }
 
 if (btnRefreshChat) {
-  btnRefreshChat.addEventListener('click', loadPopupChatHistory);
+  btnRefreshChat.addEventListener('click', () => {
+    fetchChatThreads();
+    loadPopupChatHistory();
+  });
 }
 
 if (chatFormEl && chatInputEl) {
@@ -901,17 +1323,34 @@ if (chatFormEl && chatInputEl) {
     }
 
     try {
+      const agentState = await readAgentState();
+      const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
+      let images = [];
+      let viewport = null;
+
+      if (seeScreen) {
+        const frameDataUrl = await captureActiveTabFrame();
+        if (frameDataUrl) {
+          images = [frameDataUrl];
+          viewport = { width: window.screen.width || 1280, height: window.screen.height || 800 };
+        }
+      }
+
+      const bodyPayload = {
+        text,
+        thread_id: currentThreadId,
+        agent_mode: true,
+      };
+      if (images.length) bodyPayload.images = images;
+      if (viewport) bodyPayload.viewport = viewport;
+
       const res = await fetch(`${srv}/api/extension/agent_chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${t}`,
         },
-        body: JSON.stringify({
-          text,
-          thread_id: 0,
-          agent_mode: true,
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -927,11 +1366,24 @@ if (chatFormEl && chatInputEl) {
         const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
         addPopupChatMsg('agent', reply);
         // Persist message to local chat mirror
-        const st = await chrome.storage.local.get(CHAT_KEY);
-        const list = (st[CHAT_KEY] || []).slice(-70);
+        const cacheKey = currentThreadId === 0 ? CHAT_KEY : `${CHAT_KEY}_t${currentThreadId}`;
+        const st = await chrome.storage.local.get(cacheKey);
+        const list = (st[cacheKey] || []).slice(-70);
         list.push({ sender: 'user', text, timestamp: new Date().toISOString() });
         list.push({ sender: 'agent', text: reply, timestamp: new Date().toISOString() });
-        chrome.storage.local.set({ [CHAT_KEY]: list }).catch(() => {});
+        chrome.storage.local.set({ [cacheKey]: list }).catch(() => {});
+
+        // Check for control actions execution
+        const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
+        if (actions && actions.length) {
+          const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
+          if (executeOn) {
+            setStatus(`Executing ${actions.length} action(s) proposed by agent…`);
+            await executeReturnedActions(actions);
+          } else {
+            setStatus(`Agent proposed ${actions.length} action(s) — Execute is OFF, so actions were skipped.`);
+          }
+        }
       } else {
         addPopupChatMsg('agent', `⚠️ Error: ${data.detail || `HTTP ${res.status}`}`);
       }
