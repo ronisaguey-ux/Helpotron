@@ -56,7 +56,6 @@ def _openrouter_api_key() -> str:
     key = (
         os.getenv("OPENROUTER_API_KEY")
         or getattr(config, "openrouter_api_key", "")
-        or getattr(config, "omniroute_api_key", "")
     ).strip()
     return key
 

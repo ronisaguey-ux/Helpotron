@@ -103,6 +103,57 @@
       border-top: 1px solid var(--surface-container-high); background: var(--surface-container-lowest);
       min-height: 16px;
     }
+    /* Approval card — same contract/styles as popup.css (this page loads only
+       design.css, so the shared card styles are declared here verbatim:
+       teal primary tokens, --radius-lg, label-caps typography). */
+    .approval-card {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 10px;
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-low));
+      border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
+    }
+    .approval-card .a-title {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 12px; line-height: 16px;
+      font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--primary);
+    }
+    .approval-card .a-title .ic { color: var(--primary); }
+    .approval-card .a-text { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+    .approval-card .a-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .approval-card .a-actions .btn {
+      flex: 1 1 0; min-width: 0; width: auto;
+      justify-content: center; min-height: 38px; padding: 6px 8px; font-size: 12px;
+    }
+    .approval-card .a-actions .approval-auto { flex: 1 1 100%; }
+    .approval-card .a-actions .approval-auto .a-auto-badge {
+      font-family: var(--font-mono); font-size: 8.5px; line-height: 12px;
+      letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+      padding: 2px 5px; border-radius: 999px; color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 22%, transparent);
+    }
+    .approval-card .a-input-row { display: flex; flex-direction: column; gap: 4px; }
+    .approval-card .a-input-label {
+      font-family: var(--font-mono); font-size: 10.5px; line-height: 14px;
+      font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--on-surface-variant);
+    }
+    .approval-card .a-input-row .input { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+    .approval-card .a-helper {
+      font-family: var(--font-mono); font-size: 10.5px; line-height: 14px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--on-surface-variant);
+    }
+    .approval-card .a-helper.a-helper--warn { color: var(--error); font-weight: 600; }
+    .approval-status {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 10px;
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--primary) 8%, var(--surface-container-low));
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+      font-size: 12px; line-height: 16px; color: var(--on-surface);
+    }
     /* .hidden must beat the component display rules above: design.css defines
        .hidden { display:none } (0,1,0) but rules later in the cascade with the
        same specificity (e.g. .modal-overlay/.agent-banner display:flex, here in
@@ -185,6 +236,33 @@
         </button>
       </div>
       <div class="muted-note hidden" id="loginNote">⚠️ Log in on the Helpotron website (or in the popup) first — the agent chat needs your account session.</div>
+    </section>
+
+    <!-- ───────── right-bottom: approval card (same contract ids as popup.html) ───────── -->
+    <section id="approvalSection" aria-label="Agent action approval" style="display:none">
+      <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
+        <div class="a-title">
+          <svg class="ic ic--sm" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>
+          <span id="approvalTitle">The agent wants to act</span>
+        </div>
+        <div class="a-text" id="approvalText"></div>
+        <div class="a-actions">
+          <button class="btn btn--primary" id="approvalApprove" type="button">Approve</button>
+          <button class="btn btn--secondary" id="approvalReject" type="button">Reject</button>
+          <button class="btn btn--ghost" id="approvalNeutral" type="button">Neutral</button>
+          <button class="btn btn--ghost approval-auto" id="approvalApproveAuto" type="button">
+            <span>Approve + auto-add</span>
+            <span class="a-auto-badge">AUTO</span>
+          </button>
+        </div>
+        <div class="a-input-row">
+          <label class="a-input-label" for="approvalInput">Say something…</label>
+          <input class="input" id="approvalInput" type="text" placeholder="Optional note to the agent" autocomplete="off" />
+        </div>
+        <div class="a-helper" id="approvalHelper">Approve = let it act &middot; Reject = stop it &middot; Neutral = don&rsquo;t do it, just send your note.</div>
+      </div>
+      <!-- After an answer the card hides and this status line takes its place -->
+      <div class="approval-status" id="approvalStatus" role="status" aria-live="polite" hidden></div>
     </section>
   </main>
 

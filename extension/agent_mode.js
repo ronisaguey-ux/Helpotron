@@ -1275,6 +1275,20 @@ async function sendChatMessage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (data && data.status === 'permission_required') {
+      // Server permission gate (09-07): action needs the user's decision before
+      // the agent can execute. Renders this page's shared card; answers post to
+      // /api/extension/approval/respond.
+      const ap = (data.approval_request && data.approval_request.req_id)
+        ? data.approval_request
+        : (data.permission_request
+            ? { req_id: data.permission_request.id, title: data.permission_request.title, summary: data.permission_request.description }
+            : null);
+      if (ap) pendAgentApprovals.push({ reqId: String(ap.req_id), title: ap.title || 'Permission required', summary: ap.summary || 'The agent is waiting for your decision.', viaServer: true });
+      while (pendAgentApprovals.length > 5) pendAgentApprovals.shift();
+      renderAgentApproval();
+      setStatus('⚠️ The agent needs your approval before it can act.');
+    }
     const reply = chatReplyText(data, '✅ Done.');
     typingEl.replaceWith(addChatMsgEl('agent', reply));
     const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
@@ -1303,6 +1317,91 @@ async function sendChatMessage() {
     els.chatSend.disabled = false;
     els.chatInput.focus();
   }
+}
+
+// ── Server approval card (09-07): the same card as the popup's, wired to
+// /api/extension/approval/respond. pendAgentApprovals holds server-channel
+// prompts delivered by an agent_chat "permission_required" response.
+const pendAgentApprovals = [];
+const AGENT_NEUTRAL_HINT = 'Say something first — Neutral needs your note';
+
+function renderAgentApproval() {
+  const card = document.getElementById('approvalCard');
+  const titleEl = document.getElementById('approvalTitle');
+  const textEl = document.getElementById('approvalText');
+  if (!card || !titleEl || !textEl) return;
+  const item = pendAgentApprovals[0];
+  if (!item) {
+    card.style.display = 'none';
+    return;
+  }
+  titleEl.innerText = item.title;
+  textEl.innerText = item.summary;
+  const input = document.getElementById('approvalInput');
+  const statusLine = document.getElementById('approvalStatus');
+  const helper = document.getElementById('approvalHelper');
+  if (input) { input.value = ''; input.setAttribute('aria-invalid', 'false'); }
+  if (statusLine) statusLine.hidden = true;
+  if (helper) {
+    helper.classList.remove('a-helper--warn');
+    helper.textContent = 'Approve = let it act · Reject = stop it · Neutral = don’t do it, just send your note.';
+  }
+  card.style.display = 'block';
+}
+
+function answerAgentApproval(reqId, decision, note, opts) {
+  const d = (decision === 'allow' || decision === 'deny' || decision === 'neutral')
+    ? decision
+    : (decision ? 'allow' : 'deny');
+  const text = String(note || '').trim();
+  const autoAdd = Boolean(opts && opts.autoAdd);
+  const ix = pendAgentApprovals.findIndex((p) => p.reqId === reqId);
+  if (ix >= 0) pendAgentApprovals.splice(ix, 1);
+  const card = document.getElementById('approvalCard');
+  const statusLine = document.getElementById('approvalStatus');
+  const done = (msg) => {
+    if (card) card.style.display = 'none';
+    if (statusLine) { statusLine.innerText = msg; statusLine.hidden = false; }
+    renderAgentApproval();
+  };
+  chrome.storage.local.get(['server', 'session_token', 'token'])
+    .then(async (st) => {
+      const srv = (st.server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const t = st.session_token || st.token || '';
+      try {
+        const res = await fetch(`${srv}/api/extension/approval/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ req_id: reqId, decision: d, ...(text ? { text } : {}), auto_add: autoAdd }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) done(`⚠️ Could not send your decision (HTTP ${res.status}${data.detail ? ' — ' + data.detail : ''})`);
+        else if (d === 'deny') done('⛔ Rejected the agent action.');
+        else if (d === 'neutral') done('⚪ Neutral — the agent got your note.');
+        else if (autoAdd) done('✅ Allowed — added to auto-approved actions.');
+        else done('✅ Allowed the agent action.');
+      } catch (err) {
+        done(`⚠️ Could not reach the server: ${String(err).slice(0, 90)}`);
+      }
+    })
+    .catch(() => {});
+}
+
+function answerAgentApprovalFromButton(decision, opts) {
+  const p = pendAgentApprovals[0];
+  if (!p) return;
+  const input = document.getElementById('approvalInput');
+  const helper = document.getElementById('approvalHelper');
+  const text = input ? String(input.value || '') : '';
+  if (decision === 'neutral' && !text.trim()) {
+    if (input) { input.focus(); input.setAttribute('aria-invalid', 'true'); }
+    if (helper) {
+      helper.classList.add('a-helper--warn');
+      helper.textContent = AGENT_NEUTRAL_HINT;
+    }
+    return;
+  }
+  answerAgentApproval(p.reqId, decision, text, opts);
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
@@ -1385,6 +1484,17 @@ function init() {
   });
 
   els.chatSend.addEventListener('click', sendChatMessage);
+
+  // Server-approval card buttons (same contract as the popup card).
+  for (const [aid, decision, aopts] of [
+    ['approvalApprove', 'allow', null],
+    ['approvalReject', 'deny', null],
+    ['approvalNeutral', 'neutral', null],
+    ['approvalApproveAuto', 'allow', { autoAdd: true }],
+  ]) {
+    const el = document.getElementById(aid);
+    if (el) el.addEventListener('click', () => answerAgentApprovalFromButton(decision, aopts));
+  }
   els.chatInput.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendChatMessage(); }
   });

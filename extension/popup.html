@@ -133,6 +133,9 @@
     <button class="icon-btn" id="btnClosePopup" type="button" title="Close extension" aria-label="Close extension">
       <svg class="ic"><use href="#i-close" /></svg>
     </button>
+    <!-- Inline keep-open error: shown when the pop-out window cannot be opened
+         (popup stays alive so a retry is possible — never close on failure). -->
+    <span class="popout-error" id="popOutError" role="status" hidden></span>
   </header>
 
   <!-- ============ Update banner (hidden; popup.js shows on update_available) ============ -->
@@ -353,18 +356,35 @@
               <span>Go to Agent Chat</span>
             </button>
 
-            <!-- Approval card: popup IS approval surface -->
+            <!-- Approval card: popup IS approval surface. Shared contract ids
+                 (#approvalCard/#approvalTitle/#approvalText/#approvalApprove/
+                 #approvalReject/#approvalNeutral/#approvalInput) — identical
+                 markup in agent_mode.html. Every decision button submits its
+                 decision plus whatever note is in #approvalInput (empty text is
+                 fine for Approve/Reject; Neutral REQUIRES a note). -->
             <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
               <div class="a-title">
-                <svg class="ic ic--sm" style="color:var(--sem-amber)"><use href="#i-shield" /></svg>
+                <svg class="ic ic--sm"><use href="#i-shield" /></svg>
                 <span id="approvalTitle">The agent wants to act</span>
               </div>
               <div class="a-text" id="approvalText"></div>
               <div class="a-actions">
-                <button class="btn btn--secondary" id="denyBtn" type="button">Deny</button>
-                <button class="btn btn--primary" id="approveBtn" type="button">Allow</button>
+                <button class="btn btn--primary" id="approvalApprove" type="button">Approve</button>
+                <button class="btn btn--secondary" id="approvalReject" type="button">Reject</button>
+                <button class="btn btn--ghost" id="approvalNeutral" type="button">Neutral</button>
+                <button class="btn btn--ghost approval-auto" id="approvalApproveAuto" type="button">
+                  <span>Approve + auto-add</span>
+                  <span class="a-auto-badge">AUTO</span>
+                </button>
               </div>
+              <div class="a-input-row">
+                <label class="a-input-label" for="approvalInput">Say something…</label>
+                <input class="input" id="approvalInput" type="text" placeholder="Optional note to the agent" autocomplete="off" />
+              </div>
+              <div class="a-helper" id="approvalHelper">Approve = let it act &middot; Reject = stop it &middot; Neutral = don&rsquo;t do it, just send your note.</div>
             </div>
+            <!-- After an answer the card hides and this status line takes its place -->
+            <div class="approval-status" id="approvalStatus" role="status" aria-live="polite" hidden></div>
           </div>
         </section>
       </div>

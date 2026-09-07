@@ -533,8 +533,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     brokerApproval(message, sendResponse);
     return true;
   }
-  if (message.action === 'APPROVAL_RESPONSE') {
-    resolveApproval(message.reqId, message.decision === 'allow');
+  if (message.action === 'APPROVAL_RESPONSE' || message.act === 'APPROVAL_RESPONSE') {
+    // 09-07: the shared card sends {act:'APPROVAL_RESPONSE', reqId, decision,
+    // text?, autoAdd?}; accept message.action too for pre-card legacy callers.
+    const d = (message.decision || '').toLowerCase();
+    const approved = d === 'allow' || d === 'approve';
+    // Server-channel (approval_request) answers never reach here — the popup
+    // posts them straight to /api/extension/approval/respond. Broker prompts
+    // consume only the approve/deny outcome for the local action gate.
+    resolveApproval(message.reqId, approved);
     sendResponse({ ok: true });
     return false;
   }
