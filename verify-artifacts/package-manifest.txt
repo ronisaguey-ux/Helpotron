@@ -1,0 +1,39 @@
+helpotron extension package manifest  (2026-09-07 01:40:29)
+previous-zip-sha256: 5fa7d6beb83070a86032bfa78c3e2fe161b5e457729b92963909e1a7c1b202d3  (built 2026-09-07 00:47:11)
+zip: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.6.1.zip
+zip-sha256: ff316c3605929f622dcaf400631dc7198fb4ac2e765fed01f10389466c7d3d7a
+listing-sha256 (sorted file list): 687e39adbfc1069c788a901c9d92191277bd391335728d9a0f7aa071ebbcf5b0
+file-count: 30
+test-dir: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.6.1-test
+excluded: *.md .DS_Store __pycache__/* *.pyc *.tmp *.log
+--- sorted zip listing ---
+agent_mode.html
+agent_mode.js
+assets/
+assets/fonts/
+assets/fonts/hanken-grotesk-var.woff2
+assets/fonts/inter-var.woff2
+assets/fonts/jetbrains-mono-var.woff2
+assets/icons.svg
+assets/logo.jpeg
+background.js
+content.js
+crawl-core.js
+design.css
+icon128.jpeg
+icon128.png
+icon16.png
+icon32.png
+icon48.png
+manifest.json
+mouse_path.js
+onboarding.html
+onboarding.js
+options.html
+options.js
+popup.css
+popup.html
+popup.js
+recorder.html
+recorder.js
+theme.js

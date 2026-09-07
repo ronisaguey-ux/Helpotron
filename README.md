@@ -241,7 +241,7 @@ Helpotron integrates an intelligent, multi-model capability router in `server/ll
 - Primary models:
   - `google/gemini-3.1-flash-lite`: Ultra-fast, cost-efficient model for basic summaries, quiz generation, and audio transcription.
   - `qwen/qwen-2.5-72b-instruct`: Balanced instruction-following engine for drafting and study guides.
-  - `google/gemini-3.7-flash` & `deepseek/deepseek-r1`: Flagship reasoning engines utilized for complex STEM problem decomposition, literature analysis, and deep Socratic tutoring.
+  - `google/gemini-3.8-flash` & `deepseek/deepseek-r1`: Flagship reasoning engines utilized for complex STEM problem decomposition, literature analysis, and deep Socratic tutoring.
 - Prohibited model prefixes and paid-key safety guards are enforced to prevent unbudgeted upstream spend.
 
 ### Verified Subscription & Token Economics

@@ -52,7 +52,7 @@ import DemoModeToggle from './DemoModeToggle.jsx';
 
 const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 
-export const getNavItems = () => [
+export const getNavItems = (isAdmin = false) => [
   { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard, group: 'Workspace Core' },
   { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'dump', label: 'Assignment Dump', Icon: Inbox, group: 'Workspace Core' },
@@ -62,6 +62,12 @@ export const getNavItems = () => [
   { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
   { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
   { key: 'credits', label: 'Billing', Icon: CreditCard, group: 'Platform System' },
+  { key: 'extension', label: 'Extension', Icon: Puzzle, group: 'Platform System' },
+  { key: 'guide', label: 'Guide', Icon: HelpCircle, group: 'Platform System' },
+  ...(isAdmin ? [
+    { key: 'admin', label: 'Control Center', Icon: Shield, group: 'Administration' },
+    { key: 'monitors', label: 'Monitors', Icon: Gauge, group: 'Administration' },
+  ] : []),
 ];
 
 export default function AppShell({
@@ -215,9 +221,11 @@ export default function AppShell({
           {/* Brand Header */}
           <div className="h-16 px-4 flex items-center justify-between border-b border-outline-variant/20 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-primary-container text-on-primary-container border border-primary/30 flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
-                H
-              </div>
+              <img
+                src="/HelpoTron_logo.jpeg"
+                alt="Helpotron Logo"
+                className="w-8 h-8 rounded-xl object-cover border border-primary/30 shrink-0 shadow-sm"
+              />
               {!sidebarCollapsed && (
                 <div className="flex flex-col min-w-0">
                   <span className="font-title-md text-sm font-bold text-on-surface leading-tight truncate">

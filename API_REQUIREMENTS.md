@@ -10,9 +10,9 @@ All environment variables should be defined in a `.env` file at the root of the 
 
 | Environment Variable | Required / Optional | Service Provider | Primary Purpose & Usage |
 | :--- | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | **Recommended** | Google AI Studio | Powers **Gemini 3.1 Flash-Lite** (Audio transcription & OCR) and **Gemini 3.7 Flash** (Deep reasoning). |
+| `GEMINI_API_KEY` | **Recommended** | Google AI Studio | Powers **Gemini 3.1 Flash-Lite** (Audio transcription & OCR) and **Gemini 3.8 Flash** (Deep reasoning). |
 | `GEMINI_FLASH_LITE_MODEL` | Optional (default: `gemini-3.1-flash-lite`) | Google AI Studio | Economy model ($0.50/1M tokens) for transcription, OCR, initial drafting. |
-| `GEMINI_FLASH_MODEL` | Optional (default: `gemini-3.7-flash`) | Google AI Studio | Flagship model ($2.50/1M tokens) for humanization, detector evasion, and grading. |
+| `GEMINI_FLASH_MODEL` | Optional (default: `gemini-3.8-flash`) | Google AI Studio | Flagship model ($2.50/1M tokens) for humanization, detector evasion, and grading. |
 | `OPENAI_API_KEY` | Optional | OpenAI | Fallback for GPT models and embeddings. |
 | `DEEPSEEK_API_KEY` | Optional | DeepSeek | Fast reasoning fallback (`deepseek-v4-flash`). |
 | `WHISPER_API_KEY` | Optional | OpenAI / OmniRoute | Whisper-1 audio transcription fallback if Gemini is offline. |
@@ -46,7 +46,7 @@ Helpotron employs dynamic, cost-aware model tiering driven by the user's **Effor
 |--------------|------------------------|-------------------------------------------|-----------------------|
 | 1 – 4 (Low)  | Gemini 3.1 Flash-Lite  | Lecture transcription, OCR, quick drafts  | $0.50 input / $1.50   |
 | 5 – 7 (Med)  | Balanced (Lite + 3.7)  | Lite for drafting, 3.7 for humanization   | Blended               |
-| 8 – 10 (High)| Gemini 3.7 Flash       | Deep synthesis, anti-detection evasion    | $2.50 input / $7.50   |
+| 8 – 10 (High)| Gemini 3.8 Flash       | Deep synthesis, anti-detection evasion    | $2.50 input / $7.50   |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -71,7 +71,7 @@ Administrators have access to the **Cost & Usage** panel within the Admin Dashbo
 
 1. **User Drops File**: Supports PDF, DOCX, TXT, MD, MP3, WAV, M4A, FLAC, JPG, PNG, TIFF, MP4, MOV.
 2. **Audio Processing**: Sent to Gemini 3.1 Flash-Lite producing structured Markdown with timestamps (`[MM:SS]`), speaker labels, and takeaway summaries.
-3. **Image / Vision**: Scanned via Gemini 3.7 Flash OCR to extract rubrics and formulas.
+3. **Image / Vision**: Scanned via Gemini 3.8 Flash OCR to extract rubrics and formulas.
 4. **Overlord NLP Routing**: Automatically matches extracted text against active user assignments with a confidence score. If $\ge 60\%$, automatically pairs; otherwise queues for 1-click manual routing.
 
 ---

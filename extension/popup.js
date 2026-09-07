@@ -44,13 +44,122 @@ const modeHintEl = document.getElementById('modeHint');
 const modelEffortEl = document.getElementById('modelEffort');
 const modelNameEl = document.getElementById('modelName');
 const modelTierEl = document.getElementById('modelTier');
+const btnPopOut = document.getElementById('btnPopOut');
+const btnClosePopup = document.getElementById('btnClosePopup');
 let effortFromServer = null; // true once GET /api/user/settings succeeded
 let effortPatchDebounceTimer = null;
 
-function setStatus(text) {
-  statusEl.innerText = text;
-  statusEl.hidden = !text;
+// ── Window Mode & Appbar Button Controls ─────────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const isWindowMode = urlParams.get('mode') === 'window' || urlParams.get('window') === '1';
+if (isWindowMode) {
+  document.body.classList.add('window-mode');
+  if (btnPopOut) btnPopOut.style.display = 'none'; // already popped out
 }
+
+if (btnPopOut) {
+  btnPopOut.addEventListener('click', () => {
+    chrome.windows.create({
+      url: chrome.runtime.getURL('popup.html?mode=window'),
+      type: 'popup',
+      width: 420,
+      height: 660,
+      focused: true,
+    });
+    window.close();
+  });
+}
+
+if (btnClosePopup) {
+  btnClosePopup.addEventListener('click', () => {
+    window.close();
+  });
+}
+
+// ── Natural Mouse Path Generator (humanlike Bezier curve) ────────────────────
+function _bezPoint(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+  };
+}
+
+function _easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function humanMovePoints(fromX, fromY, toX, toY, opts = {}) {
+  const fx = Number(fromX) || 0;
+  const fy = Number(fromY) || 0;
+  const tx = Number(toX) || 0;
+  const ty = Number(toY) || 0;
+  const dx = tx - fx;
+  const dy = ty - fy;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.5) return [{ x: tx, y: ty, t: 0 }];
+
+  const duration = Math.min(950, Math.max(300, 260 + dist * 0.35));
+  const nX = (dist > 0 ? -dy / dist : 0);
+  const nY = (dist > 0 ? dx / dist : 0);
+  const side = opts.side !== undefined ? (opts.side > 0 ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
+
+  const off = dist * (0.08 + Math.random() * 0.10) * side;
+  const u1 = 0.25 + Math.random() * 0.15;
+  const u2 = 0.60 + Math.random() * 0.18;
+  const p0 = { x: fx, y: fy };
+  const p3 = { x: tx, y: ty };
+  const p1 = { x: fx + dx * u1 + nX * off, y: fy + dy * u1 + nY * off };
+  const p2 = { x: fx + dx * u2 + nX * off * (0.7 + Math.random() * 0.6),
+               y: fy + dy * u2 + nY * off * (0.7 + Math.random() * 0.6) };
+
+  let dt = 10 + Math.random() * 6;
+  const tGapCap = Math.max(40, dist / 6);
+  if (dt > tGapCap) dt = tGapCap;
+
+  const points = [{ x: fx, y: fy, t: 0 }];
+  const count = Math.max(6, Math.round(duration / dt));
+  for (let i = 1; i <= count; i++) {
+    const tNorm = i / (count + 1);
+    const tms = tNorm * duration;
+    const eased = _easeInOut(tNorm);
+    const p = _bezPoint(p0, p1, p2, p3, eased);
+    points.push({ x: p.x, y: p.y, t: tms });
+  }
+  points.push({ x: tx, y: ty, t: duration });
+  return points;
+}
+
+const statusTextEl = document.getElementById('statusText');
+let statusClearTimer = null;
+
+function setStatus(text) {
+  const msg = text == null ? '' : String(text);
+  if (statusTextEl) {
+    statusTextEl.innerText = msg;
+  } else {
+    statusEl.innerText = msg;
+  }
+  // Two-line clamp in CSS; the untruncated message stays reachable on hover.
+  statusEl.title = msg;
+  statusEl.hidden = !msg;
+  // Transient confirmations clear themselves; warnings/errors stay until the
+  // user dismisses them or the next message replaces them.
+  clearTimeout(statusClearTimer);
+  const sticky = /^[⚠️🔒]|error|failed|required/i.test(msg);
+  if (msg && !sticky) {
+    statusClearTimer = setTimeout(() => {
+      if (statusEl.title === msg) setStatus('');
+    }, 6000);
+  }
+}
+
+const btnStatusCloseEl = document.getElementById('btnStatusClose');
+if (btnStatusCloseEl) btnStatusCloseEl.addEventListener('click', () => setStatus(''));
 
 function showUnparseable(reason) {
   unparseableBox.style.display = 'block';
@@ -81,7 +190,7 @@ function effortModelInfo(score) {
   const s = clampEffortScore(score);
   if (s <= 300) return { tier: 'lite', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
   if (s <= 500) return { tier: 'mid_lower', label: 'DeepSeek V4 Flash Vision', model: 'deepseek/deepseek-v4-flash-vision' };
-  if (s <= 700) return { tier: 'mid_upper', label: 'Gemini 3.7 Flash', model: 'google/gemini-3.7-flash' };
+  if (s <= 700) return { tier: 'mid_upper', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
   return { tier: 'pro', label: 'DeepSeek V4 Pro Vision', model: 'deepseek/deepseek-v4-pro-vision' };
 }
 
@@ -111,22 +220,34 @@ function applyModeToUI(mode) {
   if (modeHintEl) modeHintEl.innerText = MODE_HINTS[next] || '';
 }
 
+// Toggle choices the USER made in THIS popup session. applyAgentStateToUI /
+// syncAgentSettingsFromServer must never overwrite them (a just-clicked toggle
+// cannot be reverted by a later server sync or a stale storage snapshot —
+// the user's own choice always wins on-screen; it is already persisted).
+const localToggleChoices = new Map(); // toggleId -> value the user chose
+
+function applyToggleValue(toggle, val) {
+  if (!toggle) return;
+  toggle.checked = !!val;
+  toggle.setAttribute('aria-checked', val ? 'true' : 'false');
+}
+
 async function applyAgentStateToUI(st) {
   applyModeToUI(st[MODE_KEY] || MODE_DEFAULT);
+  // One switch row per toggle: the row label is a single <label> wrapping the
+  // input, so apply from storage/snapshot ONLY when the user hasn't touched
+  // this toggle in the current session (their click already wrote storage).
   if (modelToggles.toggleSeeScreen) {
     const v = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : st[SEE_SCREEN_KEY];
-    modelToggles.toggleSeeScreen.checked = v;
-    modelToggles.toggleSeeScreen.setAttribute('aria-checked', v ? 'true' : 'false');
+    if (!localToggleChoices.has('toggleSeeScreen')) applyToggleValue(modelToggles.toggleSeeScreen, v);
   }
   if (modelToggles.toggleExecute) {
     const v = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : st[EXECUTE_KEY];
-    modelToggles.toggleExecute.checked = v;
-    modelToggles.toggleExecute.setAttribute('aria-checked', v ? 'true' : 'false');
+    if (!localToggleChoices.has('toggleExecute')) applyToggleValue(modelToggles.toggleExecute, v);
   }
   if (modelToggles.toggleEducationalMode) {
     const v = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : st[EDUCATIONAL_MODE_KEY];
-    modelToggles.toggleEducationalMode.checked = v;
-    modelToggles.toggleEducationalMode.setAttribute('aria-checked', v ? 'true' : 'false');
+    if (!localToggleChoices.has('toggleEducationalMode')) applyToggleValue(modelToggles.toggleEducationalMode, v);
   }
   // Effort -> model line (mirror of the backend resolver).
   const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
@@ -173,13 +294,13 @@ async function syncAgentSettingsFromServer() {
     const serverMode = MODELS.includes(ai.mode) ? ai.mode : MODE_DEFAULT;
     const hier = (ai && ai.hierarchy) || {};
     const extCfg = hier.extensions || {};
-    let eduModeVal = EDUCATIONAL_MODE_DEFAULT;
-    if (extCfg.mode === 'open' || settings.educationalMode === false) {
-      eduModeVal = false;
-    } else if (extCfg.mode === 'edu' || settings.educationalMode === true) {
-      eduModeVal = true;
-    } else if (st[EDUCATIONAL_MODE_KEY] !== undefined) {
-      eduModeVal = Boolean(st[EDUCATIONAL_MODE_KEY]);
+    let eduModeVal = st[EDUCATIONAL_MODE_KEY] !== undefined ? Boolean(st[EDUCATIONAL_MODE_KEY]) : EDUCATIONAL_MODE_DEFAULT;
+    if (st[EDUCATIONAL_MODE_KEY] === undefined) {
+      if (extCfg.mode === 'open' || settings.educationalMode === false) {
+        eduModeVal = false;
+      } else if (extCfg.mode === 'edu' || settings.educationalMode === true) {
+        eduModeVal = true;
+      }
     }
 
     effortFromServer = true;
@@ -187,7 +308,10 @@ async function syncAgentSettingsFromServer() {
       [EFFORT_KEY]: score,
       [MODEL_KEY]: info.model,
       [MODEL_TIER_KEY]: info.tier,
-      [EDUCATIONAL_MODE_KEY]: eduModeVal,
+      // Never overwrite the educational-mode choice the user made in THIS
+      // popup session: the server's extCfg.mode/educationalMode may be stale
+      // (the PATCH below is still in flight), so the local choice wins.
+      ...(localToggleChoices.has('toggleEducationalMode') ? {} : { [EDUCATIONAL_MODE_KEY]: eduModeVal }),
       // Server mode wins unless the user changed it locally just now
       // (pendingLocalMode guards the in-flight PATCH below).
       ...(pendingLocalMode ? {} : { [MODE_KEY]: serverMode }),
@@ -240,68 +364,65 @@ modeBtns.forEach((b) => {
   b.addEventListener('click', () => setAgentMode(b.dataset.mode));
 });
 
+// ONE handler per switch input, bound to the input's `change` event only.
+// Each toggle lives in a single <label class="switch-row"> that wraps its own
+// input (native label activation = exactly one toggle per click) — there is
+// no container-level click delegation and no nested label anywhere, so a
+// click on the row or the input flips the switch exactly once.
+async function handleToggleChange(id, val) {
+  const isEdu = id === 'toggleEducationalMode';
+  const isSee = id === 'toggleSeeScreen';
+  const key = isEdu ? EDUCATIONAL_MODE_KEY : isSee ? SEE_SCREEN_KEY : EXECUTE_KEY;
+  const inputEl = modelToggles[id];
+  if (inputEl) {
+    inputEl.checked = val;
+    inputEl.setAttribute('aria-checked', val ? 'true' : 'false');
+  }
+  // Record the user's own choice so sync/apply never reverts it this session.
+  localToggleChoices.set(id, !!val);
+
+  // Educational mode toggle -> syncs to local storage and backend settings
+  if (isEdu) {
+    await persistAgentState({ [key]: val });
+    setStatus(val
+      ? '🎓 Educational Mode: ON — standard study guidance active.'
+      : '🔓 Educational Mode: OFF — open agent mode active (unrestrained by school-only rules).');
+
+    const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+    const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (public_id && t) {
+      fetch(`${srv}/api/user/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({
+          educationalMode: val,
+          ai: {
+            hierarchy: {
+              extensions: {
+                mode: val ? 'edu' : 'open',
+              },
+            },
+          },
+        }),
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  await persistAgentState({ [key]: val });
+  setStatus(val
+    ? (id === 'toggleSeeScreen' ? '👁 See screen: ON — the agent receives the screen with each chat message.'
+                                 : '✅ Execute: ON — the agent may act with permission mode.')
+    : (id === 'toggleSeeScreen' ? 'See screen: OFF — chat messages carry no screen.'
+                                 : 'Execute: OFF — the agent will only talk, never act.'));
+}
+
 Object.keys(modelToggles).forEach((id) => {
   const el = modelToggles[id];
   if (!el) return;
-  el.addEventListener('change', async () => {
-    const isEdu = id === 'toggleEducationalMode';
-    const isSee = id === 'toggleSeeScreen';
-    const key = isEdu ? EDUCATIONAL_MODE_KEY : isSee ? SEE_SCREEN_KEY : EXECUTE_KEY;
-    const val = el.checked;
-
-    // Educational mode toggle -> syncs to local storage and backend settings
-    if (isEdu) {
-      el.setAttribute('aria-checked', val ? 'true' : 'false');
-      await persistAgentState({ [key]: val });
-      setStatus(val
-        ? '🎓 Educational Mode: ON — standard study guidance active.'
-        : '🔓 Educational Mode: OFF — open agent mode active (unrestrained by school-only rules).');
-
-      const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
-      const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-      const t = await authToken();
-      if (public_id && t) {
-        fetch(`${srv}/api/user/settings`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-          body: JSON.stringify({
-            educationalMode: val,
-            ai: {
-              hierarchy: {
-                extensions: {
-                  mode: val ? 'edu' : 'open',
-                },
-              },
-            },
-          }),
-        }).catch(() => {});
-      }
-      return;
-    }
-
-    // Execute drives the agent through the browser debugger — an OPTIONAL
-    // permission (manifest.json optional_permissions) requested on first use,
-    // so the install itself stays permission-light for the store review.
-    if (id === 'toggleExecute' && val) {
-      let granted = false;
-      try {
-        granted = await chrome.permissions.request({ permissions: ['debugger'] });
-      } catch { granted = false; }
-      if (!granted) {
-        el.checked = false;
-        el.setAttribute('aria-checked', 'false');
-        await persistAgentState({ [key]: false });
-        setStatus('⚠️ Agent actions need the “debugger” permission — not granted. Execute stays OFF (the agent will only talk, never act).');
-        return;
-      }
-    }
-    el.setAttribute('aria-checked', val ? 'true' : 'false');
-    await persistAgentState({ [key]: val });
-    setStatus(val
-      ? (id === 'toggleSeeScreen' ? '👁 See screen: ON — the agent receives the screen with each chat message.'
-                                   : '✅ Execute: ON — the agent may act with permission mode.')
-      : (id === 'toggleSeeScreen' ? 'See screen: OFF — chat messages carry no screen.'
-                                   : 'Execute: OFF — the agent will only talk, never act.'));
+  el.addEventListener('change', () => {
+    handleToggleChange(id, el.checked);
   });
 });
 
@@ -363,6 +484,14 @@ function renderNextApproval() {
   }
   titleEl.innerText = item.title;
   textEl.innerText = item.summary;
+  // Approval cards can render inside the (now collapsed) Agent Controls
+  // accordion: expand the section so the card + chevron stay consistent.
+  const chatOptions = document.getElementById('chat-options');
+  const optionChat = document.getElementById('option-chat');
+  if (chatOptions && chatOptions.hidden) {
+    chatOptions.hidden = false;
+    optionChat?.setAttribute('aria-expanded', 'true');
+  }
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -421,9 +550,31 @@ async function loadWhatsNew() {
     const res = await fetch(`${srv}/api/extension/releases`, {
       headers: cred ? { Authorization: `Bearer ${cred}` } : {},
     });
-    if (!res.ok) return;
-    releases = (await res.json()).releases || [];
-  } catch { return; } // server unreachable — banner stays hidden
+    if (res.ok) releases = (await res.json()).releases || [];
+  } catch { /* fall through to the /version fallback below */ }
+
+  // Fallback: the public /api/extension/version endpoint always carries the
+  // latest release's notes (2.6.1 included) even when the releases feed is
+  // empty or the caller is anonymous — the banner must never silently die.
+  if (!releases.length) {
+    try {
+      const verRes = await fetch(`${srv}/api/extension/version`);
+      if (verRes.ok) {
+        const ver = await verRes.json();
+        if (ver && ver.latest_version) {
+          releases = [{
+            id: null, // no server-side read receipt for the synthesized row
+            version: ver.latest_version,
+            title: 'Update installed',
+            notes: Array.isArray(ver.release_notes) ? ver.release_notes.join('\n') : String(ver.release_notes || ''),
+            is_major: !!ver.is_critical_update,
+            read: false,
+          }];
+        }
+      }
+    } catch { /* server unreachable — banner stays hidden */ }
+  }
+  if (!releases.length) return;
 
   const myVer = (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '0.0.0';
   const seenLocal = st[WHATSNEW_SEEN_KEY] || '0.0.0';
@@ -434,6 +585,16 @@ async function loadWhatsNew() {
 
   banner.style.display = 'block';
   body.innerHTML = '';
+  // Headline only; the notes live behind "Details" so the banner costs one row
+  // instead of a third of the popup.
+  const headline = document.getElementById('whatsNewHeadline');
+  if (headline) {
+    const top = unread[0];
+    headline.textContent = unread.length === 1
+      ? `v${top.version} — ${top.title || 'Update installed'}`
+      : `v${top.version} and ${unread.length - 1} more update${unread.length === 2 ? '' : 's'}`;
+    headline.title = headline.textContent;
+  }
   // Newest first; "…and N more" so catch-up stays honest without a scroll wall.
   const shown = unread.slice(0, 4);
   const more = unread.length - shown.length;
@@ -463,11 +624,23 @@ async function loadWhatsNew() {
     body.appendChild(moreEl);
   }
 
+  const expandBtn = document.getElementById('btnWhatsNewExpand');
+  const expandLabel = document.getElementById('whatsNewExpandLabel');
+  if (expandBtn) {
+    expandBtn.onclick = () => {
+      const open = expandBtn.getAttribute('aria-expanded') === 'true';
+      expandBtn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      body.hidden = open;
+      if (expandLabel) expandLabel.textContent = open ? 'Details' : 'Hide';
+    };
+  }
+
   document.getElementById('btnWhatsNewDismiss').onclick = async () => {
     banner.style.display = 'none';
     await chrome.storage.local.set({ [WHATSNEW_SEEN_KEY]: unread[0].version });
     if (cred) {
       for (const r of unread) {
+        if (typeof r.id !== 'number') continue; // synthesized /version row has no receipt
         await fetch(`${srv}/api/extension/releases/${r.id}/read`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${cred}` },
@@ -495,29 +668,13 @@ async function init() {
     if (label) label.textContent = (st.public_id && st.public_id !== 'Guest') ? `@${st.public_id}` : 'Guest';
   }
   if (!loggedIn) {
-    setStatus('⚠️ Login required — tap the account chip above, or sign in once on the Helpotron website (session syncs here).');
+    setStatus('⚠️ Sign in to sync — tap the account chip above.');
   }
 
   // CHAT options: instant paint from local state, then server sync after paint.
   await applyAgentStateToUI(st);
 
-  // Agent-actions permission consistency: if Execute is stored ON but the
-  // optional debugger permission is gone (profile reset, revoked, moved to a
-  // new browser), flip the toggle back OFF so the UI can't promise actions
-  // the browser will refuse.
-  if (st[EXECUTE_KEY]) {
-    try {
-      const has = await chrome.permissions.contains({ permissions: ['debugger'] });
-      if (!has) {
-        await persistAgentState({ [EXECUTE_KEY]: false });
-        if (modelToggles.toggleExecute) {
-          modelToggles.toggleExecute.checked = false;
-          modelToggles.toggleExecute.setAttribute('aria-checked', 'false');
-        }
-        setStatus('⚠️ Agent-actions permission was reset — switch Execute on again and approve the prompt.');
-      }
-    } catch { /* permissions API unavailable — keep stored state */ }
-  }
+
 
   const updateBanner = document.getElementById('updateBanner');
   const updateBadge = document.getElementById('updateVersionBadge');
@@ -814,11 +971,13 @@ document.getElementById('saveSettings')?.addEventListener('click', async () => {
 
 // Live-sync: after a website handoff (captcha login) the popup re-reads
 // identity + agent settings without a manual reopen.
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.public_id || changes.session_token || changes.token)) {
-    init();
-  }
-});
+if (chrome && chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes.public_id || changes.session_token || changes.token)) {
+      init();
+    }
+  });
+}
 
 // ── Launcher shell: two option cards, sub-options revealed under each ────────
 (function initShell() {
@@ -930,22 +1089,27 @@ chrome.storage.onChanged.addListener((changes, area) => {
       if (btnAuth) btnAuth.textContent = connected ? 'Connected' : 'Sign in';
     });
 
-    chrome.storage.sync.get(['ext_theme', 'ext_accent'], (st) => {
-      const currentTheme = st.ext_theme || 'dark';
-      const currentAccent = st.ext_accent || 'teal';
-      document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((b) => {
-        b.classList.toggle('selected', b.dataset.themePick === currentTheme);
+    const storageArea = (chrome && chrome.storage && chrome.storage.sync) || (chrome && chrome.storage && chrome.storage.local);
+    if (storageArea) {
+      storageArea.get(['ext_theme', 'ext_accent'], (st) => {
+        const safeSt = st || {};
+        const currentTheme = safeSt.ext_theme || 'dark';
+        const currentAccent = safeSt.ext_accent || 'teal';
+        document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((b) => {
+          b.classList.toggle('selected', b.dataset.themePick === currentTheme);
+        });
+        document.querySelectorAll('#viewSettings [data-accent]').forEach((b) => {
+          b.classList.toggle('selected', b.dataset.accent === currentAccent);
+        });
       });
-      document.querySelectorAll('#viewSettings [data-accent]').forEach((b) => {
-        b.classList.toggle('selected', b.dataset.accent === currentAccent);
-      });
-    });
+    }
   }
 
   document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((b) => {
     b.addEventListener('click', () => {
       const theme = b.dataset.themePick;
-      chrome.storage.sync.set({ ext_theme: theme });
+      const sArea = (chrome && chrome.storage && chrome.storage.sync) || (chrome && chrome.storage && chrome.storage.local);
+      if (sArea) sArea.set({ ext_theme: theme });
       document.querySelectorAll('#popupThemeSeg [data-theme-pick]').forEach((btn) => {
         btn.classList.toggle('selected', btn.dataset.themePick === theme);
       });
@@ -955,7 +1119,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   document.querySelectorAll('#viewSettings [data-accent]').forEach((b) => {
     b.addEventListener('click', () => {
       const accent = b.dataset.accent;
-      chrome.storage.sync.set({ ext_accent: accent });
+      const sArea = (chrome && chrome.storage && chrome.storage.sync) || (chrome && chrome.storage && chrome.storage.local);
+      if (sArea) sArea.set({ ext_accent: accent });
       document.querySelectorAll('#viewSettings [data-accent]').forEach((btn) => {
         btn.classList.toggle('selected', btn.dataset.accent === accent);
       });
@@ -1214,6 +1379,24 @@ if (btnPinThread) {
   });
 }
 
+// CSS viewport of the tab the agent will drive. Falls back to the screen size
+// only when the page cannot be queried (no host permission, chrome:// page).
+async function activeTabViewport() {
+  const fallback = { width: window.screen.width || 1280, height: window.screen.height || 800 };
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || !tab.id || !chrome.scripting) return fallback;
+    const res = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => ({ width: window.innerWidth, height: window.innerHeight }),
+    });
+    const v = res && res[0] && res[0].result;
+    if (v && v.width > 0 && v.height > 0) return v;
+  } catch { /* not scriptable — fall through */ }
+  return fallback;
+}
+
 function captureActiveTabFrame() {
   return new Promise((resolve) => {
     chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 70 }, (dataUrl) => {
@@ -1226,6 +1409,344 @@ function captureActiveTabFrame() {
   });
 }
 
+const KEY_MAP = {
+  Enter: { key: 'Enter', code: 'Enter', vk: 13 },
+  Escape: { key: 'Escape', code: 'Escape', vk: 27 },
+  Tab: { key: 'Tab', code: 'Tab', vk: 9 },
+  Backspace: { key: 'Backspace', code: 'Backspace', vk: 8 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', vk: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', vk: 39 },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', vk: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', vk: 40 },
+  Home: { key: 'Home', code: 'Home', vk: 36 },
+  End: { key: 'End', code: 'End', vk: 35 },
+  Delete: { key: 'Delete', code: 'Delete', vk: 46 },
+  PageUp: { key: 'PageUp', code: 'PageUp', vk: 33 },
+  PageDown: { key: 'PageDown', code: 'PageDown', vk: 34 },
+};
+
+let lastCursorPos = { x: 400, y: 300 };
+const VIRTUAL_CURSOR_ID = '__helpotron_agent_cursor__';
+
+// The server clamps against the frame it was given; the tab can have resized or
+// navigated since, so clamp again against the LIVE viewport before dispatching.
+// Without this a stale coordinate lands off-screen and the click silently
+// misses (CDP accepts out-of-bounds points without erroring).
+async function readViewport(tabId) {
+  try {
+    const res = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: '({w: window.innerWidth, h: window.innerHeight})',
+      returnByValue: true,
+    });
+    const v = res && res.result && res.result.value;
+    if (v && v.w > 0 && v.h > 0) return { w: v.w, h: v.h };
+  } catch { /* fall through to the default below */ }
+  return { w: 1280, h: 800 };
+}
+
+function clampToViewport(x, y, vp) {
+  const cx = Math.max(0, Math.min(vp.w - 1, Math.round(Number(x) || 0)));
+  const cy = Math.max(0, Math.min(vp.h - 1, Math.round(Number(y) || 0)));
+  return { x: cx, y: cy };
+}
+
+// ── Virtual Visible Second Cursor Overlay on Screen ─────────────────────────
+async function initVirtualCursor(tabId) {
+  if (!chrome.debugger) return;
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: `(() => {
+      let cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+      if (!cur) {
+        cur = document.createElement('div');
+        cur.id = '${VIRTUAL_CURSOR_ID}';
+        cur.innerHTML = \`
+          <div style="position: relative; pointer-events: none;">
+            <svg width="28" height="28" viewBox="0 0 24 24" style="filter: drop-shadow(0 3px 10px rgba(0,0,0,0.6)); transform: rotate(-22deg);">
+              <path d="M4 2v18l5-4.5 3 6.5 3-1.5-3-6.5h6.5L4 2z" fill="#14b8a6" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+            </svg>
+            <div id="__helpotron_cursor_badge__" style="position: absolute; left: 22px; top: 12px; display: inline-flex; align-items: center; gap: 4px; background: #090d16; color: #5eead4; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; border: 1px solid #14b8a6; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-family: system-ui, -apple-system, sans-serif; white-space: nowrap; pointer-events: none;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981;"></span>
+              <span id="__helpotron_cursor_text__">AI Agent</span>
+            </div>
+            <div id="__helpotron_cursor_ripple__" style="position: absolute; top: -6px; left: -6px; width: 36px; height: 36px; border-radius: 50%; border: 2.5px solid #5eead4; opacity: 0; transform: scale(0.3); pointer-events: none;"></div>
+          </div>
+        \`;
+        cur.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 2147483647; pointer-events: none; will-change: transform; transition: opacity 0.2s ease; opacity: 1; transform: translate(400px, 300px);';
+        document.documentElement.appendChild(cur);
+      }
+      // Generation token: removeVirtualCursor schedules a delayed removal;
+      // re-initializing (fast retry / next burst) bumps the token so the
+      // stale removal can never delete the cursor a NEW burst is driving.
+      window.__helpotron_cursor_gen__ = (window.__helpotron_cursor_gen__ || 0) + 1;
+      cur.__hgen = window.__helpotron_cursor_gen__;
+      cur.style.display = 'block';
+      cur.style.opacity = '1';
+      window.__helpotron_pause__ = false;
+      if (!window.__helpotron_esc_listener__) {
+        window.__helpotron_esc_listener__ = true;
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            window.__helpotron_pause__ = true;
+          }
+        }, { capture: true });
+      }
+    })()`
+  }).catch(() => {});
+}
+
+async function moveVirtualCursor(tabId, x, y) {
+  if (!chrome.debugger) return;
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: `(() => {
+      const cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+      if (cur) {
+        cur.style.transform = 'translate(' + ${Math.round(x)} + 'px, ' + ${Math.round(y)} + 'px)';
+      }
+    })()`
+  }).catch(() => {});
+}
+
+async function animateVirtualCursorClick(tabId) {
+  if (!chrome.debugger) return;
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: `(() => {
+      const rip = document.getElementById('__helpotron_cursor_ripple__');
+      if (rip) {
+        rip.style.transition = 'none';
+        rip.style.opacity = '1';
+        rip.style.transform = 'scale(0.3)';
+        void rip.offsetWidth;
+        rip.style.transition = 'transform 0.35s cubic-bezier(0,0,0.2,1), opacity 0.35s ease-out';
+        rip.style.transform = 'scale(2.2)';
+        rip.style.opacity = '0';
+      }
+    })()`
+  }).catch(() => {});
+}
+
+async function setVirtualCursorAction(tabId, actionText) {
+  if (!chrome.debugger) return;
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: `(() => {
+      const txt = document.getElementById('__helpotron_cursor_text__');
+      if (txt) txt.textContent = ${JSON.stringify(actionText)};
+    })()`
+  }).catch(() => {});
+}
+
+async function removeVirtualCursor(tabId) {
+  if (!chrome.debugger) return;
+  await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: `(() => {
+      const cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+      if (cur) {
+        const myGen = cur.__hgen;
+        cur.style.opacity = '0';
+        setTimeout(() => {
+          // Only remove if no NEW burst re-initialized the cursor meanwhile.
+          if (cur.__hgen === myGen && cur.parentNode) cur.parentNode.removeChild(cur);
+        }, 220);
+      }
+    })()`
+  }).catch(() => {});
+}
+
+async function checkPagePauseFlag(tabId) {
+  if (!chrome.debugger) return false;
+  try {
+    const res = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: 'Boolean(window.__helpotron_pause__)',
+      returnByValue: true,
+    });
+    return Boolean(res && res.result && res.result.value);
+  } catch {
+    return false;
+  }
+}
+
+// ── Agent Action Execution & Instant Pause Controller ────────────────────────
+let isAgentActionPaused = false;
+let isAgentActionRunning = false;
+let activeActionTabId = null;
+
+function showAgentActiveBar(desc) {
+  isAgentActionRunning = true;
+  isAgentActionPaused = false;
+  retryPending = false;
+  const bar = document.getElementById('agentActiveBar');
+  const d = document.getElementById('agentActiveDesc');
+  const btn = document.getElementById('btnPauseAgentAction');
+  const btnTxt = document.getElementById('btnPauseAgentText');
+  const hBtn = document.getElementById('btnHeaderPause');
+  if (bar) {
+    bar.style.display = 'flex';
+    bar.classList.remove('paused');
+  }
+  if (d) d.textContent = desc || 'Agent driving screen…';
+  if (btn) {
+    btn.onclick = null;  // drop a RETRY handler left by a failed attach
+    btn.className = 'btn btn--danger btn--sm';
+    if (btnTxt) btnTxt.textContent = 'PAUSE';
+  }
+  if (hBtn) hBtn.style.display = 'inline-flex';
+}
+
+function updateAgentActiveDesc(desc) {
+  const d = document.getElementById('agentActiveDesc');
+  if (d) d.textContent = desc;
+}
+
+function setAgentActionPausedState() {
+  isAgentActionPaused = true;
+  const bar = document.getElementById('agentActiveBar');
+  const d = document.getElementById('agentActiveDesc');
+  const btn = document.getElementById('btnPauseAgentAction');
+  const btnTxt = document.getElementById('btnPauseAgentText');
+  const hBtn = document.getElementById('btnHeaderPause');
+  if (bar) {
+    bar.classList.add('paused');
+  }
+  if (d) d.textContent = '⏸ Paused by user (Esc pressed)';
+  if (btn) {
+    btn.className = 'btn btn--secondary btn--sm';
+    if (btnTxt) btnTxt.textContent = 'CANCEL';
+  }
+  if (hBtn) hBtn.style.display = 'none';
+  setStatus('⏸ Agent action paused. Press Cancel or issue a new instruction.');
+}
+
+function hideAgentActiveBar() {
+  isAgentActionRunning = false;
+  isAgentActionPaused = false;
+  const bar = document.getElementById('agentActiveBar');
+  const hBtn = document.getElementById('btnHeaderPause');
+  if (bar) bar.style.display = 'none';
+  if (hBtn) hBtn.style.display = 'none';
+}
+
+let pauseBarVisible = false; // bar is up in a paused/can-cancel state
+let retryPending = false;    // bar is up with a RETRY button (attach failed)
+
+function syncPauseBarVisible() {
+  const bar = document.getElementById('agentActiveBar');
+  pauseBarVisible = !!(bar && bar.style.display !== 'none' && bar.style.display !== '');
+}
+
+async function pauseAgentAction() {
+  // RETRY mode: the button's own onclick re-runs the burst. Cancel it here
+  // (Escape / stop) — never race a detach against the retry attach.
+  if (retryPending) {
+    retryPending = false;
+    hideAgentActiveBar();
+    setStatus('Retry cancelled.');
+    return;
+  }
+  // Both paths must stay live even after the burst has finished unwinding:
+  // executeReturnedActions resets isAgentActionRunning in `finally` but
+  // leaves the paused bar up — CANCEL has to keep working, never a dead bar.
+  syncPauseBarVisible();
+  if (!isAgentActionRunning && !pauseBarVisible) return;
+  if (!isAgentActionPaused) {
+    // Pause immediately
+    isAgentActionPaused = true;
+    setAgentActionPausedState();
+    // Pin the tab id before any await: the burst's `finally` can null
+    // activeActionTabId while these run, which would detach the WRONG
+    // (null) tab and leak the live debugger onto the real one.
+    const tId = activeActionTabId;
+    if (tId) {
+      await removeVirtualCursor(tId).catch(() => {});
+      await chrome.debugger.detach({ tabId: tId }).catch(() => {});
+    }
+  } else {
+    // Already paused -> cancel / hide bar
+    hideAgentActiveBar();
+    setStatus('Agent action stopped.');
+  }
+}
+
+const btnPauseEl = document.getElementById('btnPauseAgentAction');
+const btnHeaderPauseEl = document.getElementById('btnHeaderPause');
+if (btnPauseEl) btnPauseEl.addEventListener('click', pauseAgentAction);
+if (btnHeaderPauseEl) btnHeaderPauseEl.addEventListener('click', pauseAgentAction);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isAgentActionRunning) {
+    pauseAgentAction();
+  }
+});
+
+// Every CDP call in a burst goes through here: once the user pauses we detach
+// immediately, so in-flight commands reject with "Debugger is not attached".
+// That is expected, not a failure — swallow it instead of aborting the run.
+async function cdp(tabId, method, params) {
+  try {
+    return await chrome.debugger.sendCommand({ tabId }, method, params);
+  } catch (err) {
+    if (isAgentActionPaused) return null;
+    throw err;
+  }
+}
+
+async function glideMouseTo(tabId, targetX, targetY) {
+  const points = humanMovePoints(lastCursorPos.x, lastCursorPos.y, targetX, targetY);
+  for (let i = 1; i < points.length; i++) {
+    if (isAgentActionPaused) break;
+    const pt = points[i];
+    const prev = points[i - 1];
+    const dt = Math.max(8, Math.min(45, Math.round(pt.t - prev.t)));
+    await new Promise((r) => setTimeout(r, dt));
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(pt.x),
+      y: Math.round(pt.y),
+      button: 'none',
+      buttons: 0,
+    }).catch(() => {});
+    await moveVirtualCursor(tabId, pt.x, pt.y);
+    lastCursorPos = { x: pt.x, y: pt.y };
+  }
+  if (!isAgentActionPaused) {
+    await moveVirtualCursor(tabId, targetX, targetY);
+    lastCursorPos = { x: targetX, y: targetY };
+  }
+}
+
+// Which tab the last burst ran in — used to reset the glide origin so the
+// visible cursor can never appear to fly in from another page's coordinates.
+let lastBurstTabId = null;
+
+// A failed attach used to end in a hidden bar and a one-line status the user
+// could do nothing about. Now the bar stays up with a live RETRY button.
+function offerActionRetry(actions, reason) {
+  const bar = document.getElementById('agentActiveBar');
+  const desc = document.getElementById('agentActiveDesc');
+  const btn = document.getElementById('btnPauseAgentAction');
+  const btnTxt = document.getElementById('btnPauseAgentText');
+  isAgentActionRunning = false;
+  isAgentActionPaused = false;
+  retryPending = true;
+  activeActionTabId = null; // the failed attach never owned a tab
+  if (bar) {
+    bar.style.display = 'flex';
+    bar.classList.add('paused');
+  }
+  if (desc) desc.textContent = `Could not attach to this tab — ${reason || 'unknown reason'}`;
+  if (btn) {
+    btn.className = 'btn btn--primary btn--sm';
+    if (btnTxt) btnTxt.textContent = 'RETRY';
+    btn.onclick = async () => {
+      btn.onclick = null;
+      retryPending = false;
+      hideAgentActiveBar();
+      // Re-target: the attach failure may have been this exact tab state
+      // (chrome:// / DevTools open / another debugger) — retry against the
+      // tab the user has focused RIGHT NOW.
+      await executeReturnedActions(actions);
+    };
+  }
+  setStatus('⚠️ Could not drive this tab — press RETRY, or switch to a normal web page first.');
+}
+
 async function executeReturnedActions(actions) {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const activeTab = tabs && tabs[0] ? tabs[0] : null;
@@ -1233,37 +1754,141 @@ async function executeReturnedActions(actions) {
     setStatus('⚠️ Cannot execute actions: active tab not found.');
     return;
   }
-  const hasDebugger = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
-  if (!hasDebugger) {
-    setStatus('⚠️ Cannot execute: debugger permission not granted.');
+  if (!chrome.debugger) {
+    setStatus('⚠️ Cannot execute: debugger API unavailable.');
     return;
   }
+
+  activeActionTabId = activeTab.id;
+  showAgentActiveBar(`Starting ${actions.length} action(s) with visible cursor…`);
+
   try {
-    await chrome.debugger.attach({ tabId: activeTab.id }, '1.3');
-    for (const op of actions) {
-      if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {
-        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
-          type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: 'left', clickCount: 1,
-        });
+    try {
+      await chrome.debugger.attach({ tabId: activeTab.id }, '1.3');
+    } catch (attachErr) {
+      // Attach fails on chrome:// pages, the Web Store, when DevTools is open,
+      // or when another extension holds the target. Never leave a dead bar:
+      // offer a one-click retry of this exact burst.
+      offerActionRetry(actions, String(attachErr && attachErr.message || attachErr));
+      return;
+    }
+
+    // Clamp every coordinate against the LIVE viewport, and start the glide
+    // from the middle of THIS tab so the cursor never enters from a stale
+    // position left behind by a previous page.
+    const vp = await readViewport(activeTab.id);
+    actions = actions.map((op) => {
+      if (op && op.x !== undefined && op.y !== undefined) {
+        const c = clampToViewport(op.x, op.y, vp);
+        return { ...op, x: c.x, y: c.y };
+      }
+      return op;
+    });
+    if (lastBurstTabId !== activeTab.id) {
+      lastCursorPos = { x: Math.round(vp.w / 2), y: Math.round(vp.h / 2) };
+      lastBurstTabId = activeTab.id;
+    }
+
+    await initVirtualCursor(activeTab.id);
+
+    for (let idx = 0; idx < actions.length; idx++) {
+      if (isAgentActionPaused) break;
+      const pagePaused = await checkPagePauseFlag(activeTab.id);
+      if (pagePaused) {
+        setAgentActionPausedState();
+        break;
+      }
+
+      const op = actions[idx];
+      const stepNum = idx + 1;
+
+      if (op.op === 'move' && op.x !== undefined && op.y !== undefined) {
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Moving to (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        await setVirtualCursorAction(activeTab.id, 'Moving…');
+        await glideMouseTo(activeTab.id, op.x, op.y);
+      } else if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        await setVirtualCursorAction(activeTab.id, 'Moving…');
+        await glideMouseTo(activeTab.id, op.x, op.y);
+        if (isAgentActionPaused) break;
+        await setVirtualCursorAction(activeTab.id, 'Clicking…');
+        await animateVirtualCursorClick(activeTab.id);
         await new Promise((r) => setTimeout(r, 60));
-        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
-          type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: 'left', clickCount: 1,
+        const btn = op.button === 'right' ? 'right' : 'left';
+        const btns = btn === 'right' ? 2 : 1;
+        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+          type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: btn, buttons: btns, clickCount: 1,
         });
+        await new Promise((r) => setTimeout(r, 60 + Math.random() * 40));
+        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: btn, buttons: 0, clickCount: 1,
+        });
+      } else if (op.op === 'dblclick' && op.x !== undefined && op.y !== undefined) {
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Double-clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        await setVirtualCursorAction(activeTab.id, 'Moving…');
+        await glideMouseTo(activeTab.id, op.x, op.y);
+        if (isAgentActionPaused) break;
+        await setVirtualCursorAction(activeTab.id, 'Double-clicking…');
+        await animateVirtualCursorClick(activeTab.id);
+        for (let c = 1; c <= 2; c++) {
+          await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+            type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: 'left', buttons: 1, clickCount: c,
+          });
+          await new Promise((r) => setTimeout(r, 45));
+          await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+            type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: 'left', buttons: 0, clickCount: c,
+          });
+          await new Promise((r) => setTimeout(r, 45));
+        }
       } else if (op.op === 'type' && op.text) {
-        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.insertText', { text: String(op.text) });
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Typing text…`);
+        await setVirtualCursorAction(activeTab.id, 'Typing…');
+        await cdp(activeTab.id, 'Input.insertText', { text: String(op.text) });
+      } else if (op.op === 'key' && op.key) {
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Key: ${op.key}…`);
+        await setVirtualCursorAction(activeTab.id, `Key: ${op.key}`);
+        const k = KEY_MAP[op.key];
+        if (k) {
+          await cdp(activeTab.id, 'Input.dispatchKeyEvent', {
+            type: 'rawKeyDown', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
+          });
+          await new Promise((r) => setTimeout(r, 40));
+          await cdp(activeTab.id, 'Input.dispatchKeyEvent', {
+            type: 'keyUp', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
+          });
+        }
       } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
-        await chrome.debugger.sendCommand({ tabId: activeTab.id }, 'Input.dispatchMouseEvent', {
-          type: 'mouseWheel', x: Math.round(op.x || 100), y: Math.round(op.y || 100),
+        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Scrolling…`);
+        await setVirtualCursorAction(activeTab.id, 'Scrolling…');
+        const sxy = clampToViewport(
+          op.x !== undefined ? op.x : lastCursorPos.x,
+          op.y !== undefined ? op.y : lastCursorPos.y,
+          vp
+        );
+        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+          type: 'mouseWheel', x: Math.round(sxy.x), y: Math.round(sxy.y),
           deltaX: Math.trunc(op.deltaX || 0), deltaY: Math.trunc(op.deltaY || 0),
         });
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 180));
     }
+
+    await removeVirtualCursor(activeTab.id);
     await chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
-    setStatus(`✓ Executed ${actions.length} agent action(s) in active tab.`);
+    if (isAgentActionPaused) {
+      setStatus('⏸ Agent action paused.');
+    } else {
+      setStatus(`✓ Glided mouse and executed ${actions.length} agent action(s) with visible cursor.`);
+      hideAgentActiveBar();
+    }
   } catch (err) {
     setStatus(`⚠️ Action execution failed: ${String(err)}`);
-    chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+    await removeVirtualCursor(activeTab.id).catch(() => {});
+    await chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+    hideAgentActiveBar();
+  } finally {
+    isAgentActionRunning = false;
+    activeActionTabId = null;
   }
 }
 
@@ -1326,20 +1951,28 @@ if (chatFormEl && chatInputEl) {
       const agentState = await readAgentState();
       const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
       let images = [];
-      let viewport = null;
+      // The server clamps returned control coordinates against THIS box, so it
+      // has to be the drive tab's CSS viewport. It used to send the whole
+      // screen (e.g. 2560x1440 for a 1200x800 tab), which let coordinates far
+      // outside the page survive clamping and land on nothing.
+      let viewport = await activeTabViewport();
 
       if (seeScreen) {
         const frameDataUrl = await captureActiveTabFrame();
         if (frameDataUrl) {
           images = [frameDataUrl];
-          viewport = { width: window.screen.width || 1280, height: window.screen.height || 800 };
         }
       }
+
+      const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
+      const permMode = agentState[MODE_KEY] || MODE_DEFAULT;
 
       const bodyPayload = {
         text,
         thread_id: currentThreadId,
         agent_mode: true,
+        educational_mode: eduMode,
+        permission_mode: permMode,
       };
       if (images.length) bodyPayload.images = images;
       if (viewport) bodyPayload.viewport = viewport;

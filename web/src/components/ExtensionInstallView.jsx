@@ -179,15 +179,9 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
                 <span>Add to Chrome (Free)</span>
               </a>
 
-              <button
-                type="button"
-                disabled={isDownloading}
-                onClick={handleDownloadZip}
-                className="w-full sm:w-auto min-h-[44px] px-5 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4 text-on-surface-variant" />
-                <span>{isDownloading ? 'Downloading Zip...' : downloadSuccess ? 'Downloaded!' : 'Download Zip Build'}</span>
-              </button>
+              <p className="w-full sm:w-auto font-body-sm text-xs text-on-surface-variant">
+                One-click from the Chrome Web Store — no zip, no extraction, no developer mode.
+              </p>
             </div>
           )}
         </div>
@@ -297,14 +291,41 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
         </div>
       </section>
 
-      {/* SECTION 3: 3 STEP INSTALL CARDS */}
-      <section className="space-y-4">
-        <div className="space-y-0.5">
-          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Manual Setup Guide</span>
-          <h2 className="font-title-md text-lg text-on-surface font-semibold">3-Step Developer Mode Deployment</h2>
-        </div>
+      {/* SECTION 3: DEV-MODE ZIP BUILD — collapsed by default. The Chrome Web
+          Store listing (one-click "Add to Chrome") is the primary install path;
+          the zip + load-unpacked flow is for Firefox builds and orgs that block
+          store installs, so it must never front-load the UX. */}
+      <section className="rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8">
+        <details className="group">
+          <summary className="font-label-caps text-xs text-on-surface-variant uppercase tracking-widest list-none flex items-center justify-between cursor-pointer select-none">
+            <span className="flex items-center gap-2">
+              <Terminal className="w-4 h-4" />
+              Want the newest version asap? Manual build — zip &amp; load unpacked (skips store rollout)
+            </span>
+            <ChevronRight className="w-4 h-4 text-on-surface-variant group-open:rotate-90 transition-transform" />
+          </summary>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-4 space-y-4">
+            <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+              The store listing lags its newest build by review time. If you need today's build right away — or you're on Firefox — grab the zip below: same code, no waiting.
+            </p>
+
+            <button
+              type="button"
+              disabled={isDownloading}
+              onClick={handleDownloadZip}
+              className="w-full sm:w-auto min-h-[44px] px-5 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4 text-on-surface-variant" />
+              <span>{isDownloading ? 'Downloading Zip...' : downloadSuccess ? 'Downloaded!' : 'Download Manual Build (latest)'}</span>
+            </button>
+
+            <div className="space-y-0.5">
+              <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Manual Setup Guide</span>
+              <h2 className="font-title-md text-lg text-on-surface font-semibold">3-Step Developer Mode Deployment</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 space-y-3">
             <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary font-tabular-stat text-sm font-bold flex items-center justify-center">
               1
@@ -343,6 +364,8 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
             </p>
           </div>
         </div>
+        </div>
+        </details>
       </section>
 
       {/* SECTION 4: SERVER SYNC ORIGIN PILL */}

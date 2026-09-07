@@ -1,0 +1,143 @@
+{
+  "producer": "D",
+  "area": "verification_toolbox",
+  "stack": {
+    "api": "FastAPI uvicorn on :8000. Launch (start_stack.sh): .venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1, started inside `systemd-run --user --scope --unit=helpotron-uvicorn -p MemoryMax=10G -p MemoryHigh=10G -p MemorySwapMax=0`, stdout -> /tmp/helpotron_api.log. Alternate native launch ./deploy/run_native.sh (python3 -m uvicorn server.main:app --host 127.0.0.1 --port 8000, runs both API+web dev servers). deploy/helpotron.service is the VPS/systemd path: uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 4. Other ports: scrape sidecar :9778 (config.py SCRAPE_SIDECAR_URL), docker maps 8000:8000."
+    ,
+    "web": "Vite. Dev: cd web && npm run dev (vite.config.js server.port=5173, host true, proxies /api /uploads /privacy-policy /extension-guide -> http://127.0.0.1:8000). Build: npm run build -> dist/. Serve: start_stack.sh runs `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173` (vite.config.js preview.port=5173 with the same /api proxy to :8000); cloudflared tunnel -> https://helpotron.dpdns.org points at this :5173 preview. CORS origins include http://localhost:5173, http://127.0.0.1:5173, chrome-extension://*." ,
+    "db": "Prod SQLite: /home/roni/Roni_workspace/helpotron/data/db/helpotron.db (repo .env DATABASE_URL=sqlite:////home/roni/Roni_workspace/helpotron/data/db/helpotron.db; same pin in deploy/run_native.sh). Test isolation: server/tests/conftest.py sets os.environ['DATABASE_URL']='sqlite:///./test_helpotron.db' (plus OMNIROUTE_API_BASE=http://localhost:9, DATA_LAKE_DIR=tempdir+rebind, ratelimiter/auth_limiter resets, per-test datalake monkeypatch) BEFORE any server.* import — the engine binds process-globally at first import of server.database (database.py create_engine(config.database_url)). Root tests/*.py self-pin at module top before their own server.* imports (sqlite:///./test_idor.db, ./test_privacy.db, ./test_rate_limiting.db, tempfile.mkstemp for turnin). README also documents ENVIRONMENT=development DATABASE_URL=\"sqlite:///./test_helpotron.db\" pytest server/tests/ -q. *.db / *.db-shm / *.db-wal are gitignored. NEVER run un-pinned against the prod DB."
+    ,
+    "docker": "docker-compose.yml targets: `docker compose up -d postgres helpotron-api` (or `docker compose up --build -d`). Compose requires (:? guards) JWT_SECRET, SESSION_SECRET, POSTGRES_PASSWORD; API gets DATABASE_URL=postgresql+psycopg2://helpotron:...@postgres:5432/helpotron + POSTGRES_* env; services: helpotron-api (build ., ports 8000:8000, depends_on postgres healthy, volumes helpotron_uploads/helpotron_exports/helpotron_lake) and postgres (postgres:16-alpine, pg_isready healthcheck, volume postgres_data). NOTE: this box's live stack is NATIVE (start_stack.sh / run_native.sh, sqlite), not docker — docker is the alternate/cloud target. Docker CLI here needs `sg docker -c` (memory: docker-access-via-sg)."
+    ,
+    "session-restore": "uvicorn reload wedge recipe (memory uvicorn-reload-wedge): symptom — :8000 still LISTENs but every route times out (curl 000; direct, vite proxy, and tunnel all dead) after a touch-triggered reload under the ~90/min monitor-poll flood; the reload socket hand-off races the monitor traffic. Apply: kill the reloader parent (pgrep -af uvicorn / ps -o ppid), wait for :8000 to free, relaunch with the exact start_stack flags (`.venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1 >> /tmp/helpotron_api.log 2>&1` via Bash run_in_background — plain nohup is denied in this session's sandbox). Recovery check: curl -m 8 http://127.0.0.1:8000/api/public-config. Gotcha: editing .env alone never triggers reload — must `touch server/main.py` (or restart). start_stack.sh itself is idempotent on re-run via `systemctl --user is-active --quiet helpotron-uvicorn.scope`."
+  },
+  "test_commands": [
+    {
+      "name": "pytest:all (both suites)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest server/tests tests -q",
+      "covers": "Full backend coverage: server/tests (39 modules incl. benchmark_smoke.py — auth/session/2FA, assignments+routing+turn-in+direction, credits/billing, exports (latex/gdocs/pptx), datalake+microcredits, extension+releases+vision tiers, overlord/subagents/sandboxes, personalization, referrals/admin portal, security+hardened, simulation, telegram agent, LLM wire model, humanizer, OSR engines, shell-math, free-trial SMS, cost+dump+transcription, harness) plus root tests/ (5 regression files: assignment turn-in, IDOR protection, LLM integration offline, GDPR privacy erasure, rate limiting).",
+      "approx_time": "3-6 min (server suite ~2-4 min; root suite ~30-60 s; some LLM/flaky tests may need one retry — AGY prompt: retry once before declaring a regression)",
+      "note": "Each suite pins its own DATABASE_URL; engine binds process-globally at first server.database import, so do not merge the two dirs into one pytest process if pin conflicts matter — the README/AGY canonical form runs server/tests alone (see next entries)."
+    },
+    {
+      "name": "pytest:server (canonical backend suite)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest server/tests -q",
+      "covers": "The main backend suite (39 modules). server/tests/conftest.py already pins DATABASE_URL=sqlite:///./test_helpotron.db + unreachable OMNIROUTE_API_BASE + temp datalake before any server import; env pins additionally override repo .env (pydantic-settings: os.environ beats env_file). This is the invocation in AGY_SECURITY_AUDIT_PROMPT.md and repo README section 15.",
+      "approx_time": "2-4 min",
+      "note": "Never run against prod DB: if env pins are stripped, server.config falls back to repo .env -> data/db/helpotron.db. Keep ENVIRONMENT=development (repo .env has ENVIRONMENT=production, PRODUCTION_MODE=true)."
+    },
+    {
+      "name": "pytest:tests-root (legacy regression files)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest tests -q",
+      "covers": "tests/test_assignment_turnin.py (turn-in -> history, undo, foreign-user 404), tests/test_idor_protection.py (IDOR: foreign assignment read/delete -> 404 not 403), tests/test_llm_integration.py (offline LLM: call_llm/extract_json exports, fence parsing, httpx-stubbed providers), tests/test_privacy.py (GDPR Article 17 erasure via DELETE /user/account wipes all user rows), tests/test_rate_limiting.py (sliding-window RateLimiter + per-IP 429 middleware path).",
+      "approx_time": "30-60 s",
+      "note": "Each file self-pins DATABASE_URL at module top before importing server.*. Side effect: run creates/overwrites ./test_idor.db, ./test_privacy.db, ./test_rate_limiting.db, a tmp turnin db in repo root (gitignored)."
+    },
+    {
+      "name": "pytest:single-module (server)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest server/tests/test_api.py -q",
+      "covers": "Single-module introspection for one feature area — example: server/tests/test_api.py (auth+user+assignment/credits/dashboard endpoints via session-scoped TestClient); substitute any of the 38 server/tests/test_*.py names. There is NO tests/test_credits.py — credits/billing coverage lives inside server/tests (test_api.py, test_referrals_and_admin_portal.py, and root tests *indirectly* via /api/credits/balance).",
+      "approx_time": "10-40 s per module",
+      "note": "Run server/tests modules individually for fast iteration; the conftest pin applies the same either way."
+    },
+    {
+      "name": "pytest:single-module (root)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest tests/test_idor_protection.py -q",
+      "covers": "Single root regression module — sub example is tests/test_idor_protection.py; valid names: test_assignment_turnin, test_idor_protection, test_llm_integration, test_privacy, test_rate_limiting.",
+      "approx_time": "10-20 s",
+      "note": "Root modules pin their DB via env at module scope; a lone test_llm_integration.py does not bind the engine (no DB import) so it stays read-only-safe even unpinned."
+    }
+  ],
+  "smoke": [
+    {
+      "name": "ui smoker (brand chrome)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && npm run test:ui",
+      "covers": "Runs node scripts/pw_smoke.mjs against http://localhost:5173 (PW_URL override): asserts header logo img /HelpoTron_logo.jpeg exists (count >= 1), reads wordmark header span.font-extrabold, counts console/pageerrors, writes /tmp/pw_home.png. Exit 0 iff logo >= 1.",
+      "note": "REQUIRES the app already running: API :8000 + web :5173 (start_stack.sh, or run_native.sh, or vite preview). Use PW_URL=http://127.0.0.1:5173 PW_OUT=/tmp/pw_home.png to point elsewhere."
+    },
+    {
+      "name": "flow dogfood (live functional)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && node scripts/ht_flow_smoke.mjs",
+      "covers": "Live functional pass on the running app (web/scripts/ht_flow_smoke.mjs): auth gate, signup, privacy modal, dashboard, 2FA settings panel, admin upgrade/top-up/downgrade, data-lake feedback; JSON results + screenshots to /tmp/ht_dogfood.",
+      "note": "Needs :5173 + :8000 up; ADMIN_PW env for the admin scenario. CREATES REAL USER ROWS via signup (demo_pw_<ts>) — clean up afterward (no throwaway rows in prod DB per memory helpotron-signup-monitor-prod-db), or run against a scratch instance (:8001 pattern from sweep-reports)."
+    }
+  ],
+  "build": [
+    {
+      "name": "web build",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && npm run build",
+      "covers": "vite production build (esbuild + rollup) into web/dist/ — fails on syntax/import/JSX errors; catches dead imports, missing files, chunking issues. This is the compiler-level check for every frontend change (GATES.md G4 uses `npx vite build` from web/).",
+      "note": "No TypeScript typecheck is wired (jsconfig.json only; vite builds via @vitejs/plugin-react, esbuild strips types). `npm run build` success + zero new warnings is the gate. Expect the known rollup chunk-size warning (info only)."
+    },
+    {
+      "name": "serve built dist (vite preview lifecycle)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173",
+      "covers": "Serves the built dist/: with the /api + /uploads proxy to http://127.0.0.1:8000 (vite.config.js preview block) — this is exactly what the live stack and the cloudflared tunnel use (production mode 08-27), NOT raw /src/ from the dev server.",
+      "note": "Run in background; verify with curl http://127.0.0.1:5173/ (200) and that /api/health proxies through (200). 308 redirect to https only fires when Host includes helpotron.dpdns.org."
+    }
+  ],
+  "api_probe": [
+    {
+      "name": "health (minimal)",
+      "cmd": "curl -s http://127.0.0.1:8000/health || echo API_DOWN",
+      "covers": "server/main.py: GET /health -> {\"status\":\"ok\"}; the AGY audit verification #3 (must return 200 {\"status\":\"ok\"})."
+    },
+    {
+      "name": "health (detailed)",
+      "cmd": "curl -s http://127.0.0.1:8000/api/health || echo API_DOWN",
+      "covers": "server/main.py: GET /api/health -> {status, app, version, env, database: ok|error, llm_configured, stripe_configured, telegram_configured}; proves DB connectivity (SELECT 1 through SessionLocal) and config load in one shot."
+    },
+    {
+      "name": "public-config (wedge recovery probe)",
+      "cmd": "curl -m 8 -s http://127.0.0.1:8000/api/public-config || echo API_TIMED_OUT",
+      "covers": "The exact recovery-check command from the uvicorn reload-wedge recipe: with the wedge, port stays LISTEN but this times out (exit non-zero / 000). Also returns unauthenticated public config (plans etc.) used by the signed-out landing page."
+    },
+    {
+      "name": "auth gate alive",
+      "cmd": "curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/api/me; echo",
+      "covers": "Expect 401 — proves the auth gate is wired (no session -> 401, not 500); the AGY live spot-check pattern. Read-only, safe against prod."
+    },
+    {
+      "name": "web :5173 up",
+      "cmd": "curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5173/; echo",
+      "covers": "Expect 200 — web preview/dev serving (AGY verification #3 second half). If the stack serves dist, also curl -s http://127.0.0.1:5173/api/health through the vite proxy."
+    }
+  ],
+  "qa_tools": [
+    {
+      "name": "web/qa_sweep.cjs (layout evidence sweep)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && node qa_sweep.cjs [baseURL] [user] [pass] [outDir]",
+      "note": "Full AUTHENTICATED walk of 20 views (overview, activity, agent, ai-workspace, history, library, dump, datalake, inbox, automation, extension, insights x3, credits x2, settings, monitors, privacy, terms) with measured layout evidence: per-view console/pageerror/requestfailed, leaf text-node collisions (>25% overlap, per line-box rects), horizontal overflow (scrollWidth>clientWidth), off-viewport nodes, CSS custom properties resolving to '', transparent/ghost panels. Defaults: http://127.0.0.1:5173, user qa_sweep_081 / QaPass123!, out /tmp/worker_qa/sweep (report.json + per-view PNG). Run from web/ (uses node_modules playwright)."
+    },
+    {
+      "name": "scripts/gates/* (GATES.md runtime gates)",
+      "cmd": ".venv/bin/python scripts/gates/gate_search.py && .venv/bin/python scripts/gates/gate_subagents.py && .venv/bin/python scripts/gates/gate_subagent_endpoint.py && .venv/bin/python scripts/gates/gate_smoke.py && node scripts/gates/gate_no_hardcoded_team.mjs && node scripts/gates/gate_16files.mjs && node scripts/gates/gate_executor_prompts.mjs",
+      "note": "GATES.md ledger (8 gates G1-G8): each gate is a runtime proof (import+call, API call, build) — NEVER string greps; each must print its '<name> gate passed' and exit 0. gate_smoke.py hits the live :8000 API (search without token -> 401). node gates run from scripts/gates/."
+    },
+    {
+      "name": "web/scripts secondary probes",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron/web && node scripts/ht_check_extview.mjs && node scripts/ht_agent_ext_smoke.mjs && node scripts/ht_selprobe.mjs && node scripts/pw_states.mjs",
+      "note": "Per-area live probes against :5173: extension-view asset checks (ht_check_extview), extension install/agent smoke (ht_agent_ext_smoke), per-view selector/state probe (ht_selprobe), multi-state screenshots (pw_states). Other one-offs present: pw_shots.mjs, pw_menu.mjs, pw_collapsed.mjs, pw_admin.mjs, drag_sanity.mjs, ht_listeners.mjs, ht_probe2.mjs, ht_probe_settings.mjs."
+    },
+    {
+      "name": "AST sanity (README §15)",
+      "cmd": "cd /home/roni/Roni_workspace/helpotron && python3 -c \"import ast; [ast.parse(open(f).read()) for f in ['server/llm.py','server/agent_prompt.py','server/routes_overlord.py','server/payments.py']]\" && echo AST_OK",
+      "covers": "Cheap parse check that the four highest-risk backend modules remain syntactically valid."
+    }
+  ],
+  "security_rescan": "Documented lanes only (NOT run by this plan): (1) SHANNON webchat-lane scan (memory shannon-webchat-lane-fixes): runs agy/pi's DeepSeek security agent on the OWNER's free DeepSeek account through the webchat harness gateway :8086 — launched via webchat-harness/start-lane.sh with pins DRIFT_DETECT=0, MIN_SEND_INTERVAL_MS=20000, CONTEXT_HANDOFF_THRESHOLD=60000, BASH_ALLOWED=1, GIT_ROOT=<repo>; shannon CLI spawns worker + temporal containers (watch: sg docker -c 'docker logs -f shannon-worker-<hash>'); provider must be deepseek:* (openai:* Responses API dies at the gateway); workspace named t2b-helpotron-<timestamp>; deliverable validation = host-side files in WS_SHANNON_DIR/deliverables/<class>_exploitation_queue.json ({vulnerabilities:[...]}), queue classes INJ-/XSS-/AUTH-/AUTHZ-/SSRF-. For helpotron the target is the scratch instance :8001, never prod :8000. (2) Manual scratch-instance sweep (sweep-reports/helpotron-sweep.md, 2026-09-03 result 0C/0H, mediums M-01 uploads unauth read /uploads/assignment_dump/*, M-02 recovery enumeration oracle, M-03 recovery-request spam + code in plaintext log): copy repo to /tmp/helpotron-sweep, run uvicorn on :8001 with disposable /tmp/sweep_helpotron.db, probe ONLY :8001, python3+requests (and sqlmap via uv venv /tmp/ht-venv), verify isolation by querying prod DB for 0 matches. (3) In-repo agent audit lane: AGY_SECURITY_AUDIT_PROMPT.md (analysis + fix + rebase/merge + verification block, data-safety rules, .venv/bin/python, vite build from web/, /health check). Rescan step for agy should use one of these; do not probe helpotron.dpdns.org or :8000 with mutations.",
+  "per_batch_gate": [
+    "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development .venv/bin/python -m pytest server/tests -q && ENVIRONMENT=development .venv/bin/python -m pytest tests -q",
+    "cd /home/roni/Roni_workspace/helpotron/web && npm run build",
+    "curl -s http://127.0.0.1:8000/health && curl -s -o /dev/null -w 'web:%{http_code}\\n' http://127.0.0.1:5173/ && curl -s http://127.0.0.1:8000/api/public-config"
+  ],
+  "notes": [
+    "Ports: API 8000, web 5173, scrape sidecar 9778 (config.py SCRAPE_SIDECAR_URL), docker 8000:8000, shannon harness gateway 8086, stitch CDP 9226. Frontend calls the API same-origin (web/src/api.js getBaseUrl() -> '' default, i.e. relative; the vite dev/preview proxy forwards /api to 127.0.0.1:8000; a saved helpotron_server localStorage value can point the client elsewhere, and localStorage helpotron_server is cleared when it matches the window host).",
+    "Safety: every api_probe above is a read-only GET against the live :8000. Mutating flows (signup (visible in ht_flow_smoke), qa_sweep login as qa_sweep_081) create real rows in the prod sqlite DB (data/db/helpotron.db) — clean up after, or run against a scratch instance (sweep-reports: copy repo + :8001 + /tmp/sweep_helpotron.db) — memory helpotron-signup-monitor-prod-db: no throwaway rows, pytest isolated via DATABASE_URL pins.",
+    "Test isolation: engine binds once per process at first import of server.database; within any single pytest process the FIRST module's DATABASE_URL pin wins — every documented invocation pin differs from prod (.env) so bare `pytest` from repo root is non-destructive, but keep the pins in the commands above (README/AGY canonical). server/tests/test_api.py notes ./test_helpotron.db persists between runs and is idempotent; 3.1MB test_helpotron.db currently at repo root is leftover test artifact (gitignored).",
+    "GATES.md: string-grep verification is banned in this repo (phantom-pass remediation); every check must be the runtime gate in scripts/gates/ (exit 0 + printed '<name> gate passed').",
+    "verify-serve pairing: after a server change, the uvicorn --reload should pick it up automatically, but reload can wedge (session-restore recipe above) — after any backend batch, confirm health with the per_batch_gate curl, not by assuming reload.",
+    "scripts/stitch_inspect.py exists for the Stitch project page state (playwright connect_over_cdp http://127.0.0.1:9226, run with scrape_sidecar/.venv/bin/python) — it inspects the Stitch design surface, not the app; listed here so agy does not mistake it for a verification tool.",
+    "Frontend verification pyramid for the design overhaul: npm run build (compile) -> npm run test:ui (brand chrome) -> node qa_sweep.cjs (20-view layout evidence: collisions/overflow/offscreen/unresolved vars) -> ht_flow_smoke.mjs (functional flows). Stitch redesign touches web/src/** only; backend suite (gate 1) should stay green unchanged."
+  ]
+}
