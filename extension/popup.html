@@ -82,6 +82,19 @@
       <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
       <path d="M21 3v6h-6"/>
     </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="17" x2="12" y2="22"/>
+      <path d="M5 17h14v-2l-3-4V4h1V2H7v2h1v7l-3 4v2z"/>
+    </symbol>
+    <symbol id="i-pin-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="2" y1="2" x2="22" y2="22"/>
+      <line x1="12" y1="17" x2="12" y2="22"/>
+      <path d="M9 9v2l-3 4v2h10m2-2l-1-1.3V4h1V2H7v2h1v3"/>
+    </symbol>
   </defs>
 </svg>
   <!-- ============ Update banner (hidden; popup.js shows on update_available) ============ -->
@@ -142,7 +155,7 @@
     </p>
   </section>
 
-  <!-- ============ Navigation Tabs (Launcher / Chat / Type) ============ -->
+  <!-- ============ Navigation Tabs (Launcher / Chat / Type / Settings) ============ -->
   <nav class="popup-nav" id="popupNav" role="tablist" aria-label="Main Navigation">
     <button class="nav-tab active" id="tabNavLauncher" type="button" role="tab" aria-selected="true" aria-controls="viewLauncher">
       <svg class="ic ic--sm"><use href="#i-capture" /></svg>
@@ -156,9 +169,13 @@
       <svg class="ic ic--sm"><use href="#i-doc" /></svg>
       <span>Launch to Doc</span>
     </button>
+    <button class="nav-tab" id="tabNavSettings" type="button" role="tab" aria-selected="false" aria-controls="viewSettings">
+      <svg class="ic ic--sm"><use href="#i-settings" /></svg>
+      <span>Settings</span>
+    </button>
   </nav>
 
-  <!-- ============ Main Container with 3 Views ============ -->
+  <!-- ============ Main Container with 4 Views ============ -->
   <main class="app-main">
 
     <!-- ───────────── VIEW 1: LAUNCHER (SCRAPE + AGENT CONFIG) ───────────── -->
@@ -228,6 +245,17 @@
             <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
           </button>
           <div class="option-panel" id="chat-options">
+            <!-- Toggle 0: Educational Mode -->
+            <div class="switch-row">
+              <span class="switch-label">
+                Educational Mode
+                <span class="switch-sub">When OFF, the agent is unrestrained by strict study-only rules</span>
+              </span>
+              <span class="switch">
+                <input type="checkbox" id="toggleEducationalMode" role="switch" aria-checked="true" aria-label="Educational Mode" checked />
+                <span class="track" aria-hidden="true"></span>
+              </span>
+            </div>
             <!-- Toggle 1: See screen -->
             <div class="switch-row">
               <span class="switch-label">
@@ -259,6 +287,15 @@
                 <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
               </div>
               <div class="field-hint" id="modeHint">Manual — the agent asks before every action.</div>
+            </div>
+
+            <!-- Effort score slider -->
+            <div class="field" style="margin-top:2px;">
+              <div class="field-header">
+                <label class="field-label" for="effortScoreSlider">Effort Score (Vision &amp; Reasoning Tier)</label>
+                <span class="field-word-count" id="effortScoreVal">500</span>
+              </div>
+              <input type="range" class="range-slider" id="effortScoreSlider" min="100" max="1000" step="50" value="500" />
             </div>
 
             <!-- Effort-driven vision model line -->
@@ -294,18 +331,47 @@
     <!-- ───────────── VIEW 2: EMBEDDED AGENT CHAT ───────────── -->
     <div class="view-panel hidden" id="viewChat" role="tabpanel" aria-labelledby="tabNavChat">
       <div class="chat-container">
+        <!-- Chat header with thread title, new chat, thread selector, refresh, and full tab link -->
         <div class="chat-header-bar">
           <div class="chat-status-pill">
             <span class="chat-status-dot"></span>
             <span id="chatModelIndicator">DeepSeek V4 Flash Vision</span>
           </div>
           <div class="chat-actions">
+            <button class="icon-btn icon-btn--sm" id="btnNewChat" type="button" title="Start new conversation" aria-label="New chat">
+              <svg class="ic ic--sm"><use href="#i-plus" /></svg>
+            </button>
+            <button class="icon-btn icon-btn--sm" id="btnToggleThreads" type="button" title="Past conversations" aria-label="Past conversations">
+              <svg class="ic ic--sm"><use href="#i-folder" /></svg>
+            </button>
             <button class="icon-btn icon-btn--sm" id="btnRefreshChat" type="button" title="Refresh messages" aria-label="Refresh chat">
               <svg class="ic ic--sm"><use href="#i-refresh" /></svg>
             </button>
             <button class="icon-btn icon-btn--sm" id="btnFullAgentTab" type="button" title="Open full screen-driver tab" aria-label="Open Full Agent Mode Tab">
               <svg class="ic ic--sm"><use href="#i-cursor" /></svg>
             </button>
+          </div>
+        </div>
+
+        <!-- Thread info strip (current thread title + rename + pin) -->
+        <div class="thread-info-strip" id="threadInfoStrip">
+          <span class="thread-title-text" id="currentThreadTitle">current chat</span>
+          <button class="btn-icon-ghost" id="btnRenameThread" type="button" title="Rename conversation">
+            <svg class="ic ic--xs"><use href="#i-edit" /></svg>
+          </button>
+          <button class="btn-icon-ghost" id="btnPinThread" type="button" title="Pin conversation">
+            <svg class="ic ic--xs"><use href="#i-pin" /></svg>
+          </button>
+        </div>
+
+        <!-- Threads drawer overlay (hidden by default) -->
+        <div class="threads-drawer hidden" id="threadsDrawer">
+          <div class="threads-drawer-header">
+            <span class="field-label">Past Conversations</span>
+            <button class="btn-link" id="btnCloseThreads" type="button">Close</button>
+          </div>
+          <div class="threads-list" id="threadsList">
+            <div class="thread-item active">Current conversation</div>
           </div>
         </div>
 
@@ -414,6 +480,56 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ───────────── VIEW 4: EMBEDDED SETTINGS ───────────── -->
+    <div class="view-panel hidden" id="viewSettings" role="tabpanel" aria-labelledby="tabNavSettings">
+      <div class="settings-panel-content">
+        <div class="panel-section-title">
+          <svg class="ic ic--sm text-primary"><use href="#i-settings" /></svg>
+          <span>Extension Settings</span>
+        </div>
+
+        <!-- Account Section -->
+        <section class="option-panel">
+          <span class="field-label">Account &amp; Session</span>
+          <div class="account-card" style="padding:10px;background:var(--surface-container-high);border-radius:var(--radius-lg);display:flex;align-items:center;gap:10px;">
+            <div class="avatar" id="settingsAvatar" style="width:34px;height:34px;border-radius:50%;background:var(--primary-container);color:var(--on-primary-container);display:flex;align-items:center;justify-content:center;font-weight:700;">@</div>
+            <div style="flex:1;min-width:0;">
+              <div class="font-body-sm text-on-surface" id="settingsAccountName" style="font-weight:600;">Guest</div>
+              <div class="field-hint" id="settingsAccountStatus">Sign in to sync your scrapes &amp; chat</div>
+            </div>
+            <button class="btn btn--outline btn--sm" id="btnOpenWebAuth" type="button">Sign in</button>
+          </div>
+        </section>
+
+        <!-- Appearance Section -->
+        <section class="option-panel">
+          <span class="field-label">Theme &amp; Accent</span>
+          <div class="field">
+            <label class="field-label" style="font-size:11px;">Theme</label>
+            <div class="seg" id="popupThemeSeg" role="group" aria-label="Theme">
+              <button type="button" class="seg-btn" data-theme-pick="dark">Dark</button>
+              <button type="button" class="seg-btn" data-theme-pick="light">Light</button>
+              <button type="button" class="seg-btn" data-theme-pick="system">System</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" style="font-size:11px;">Accent Color</label>
+            <div class="swatches" style="display:flex;gap:8px;">
+              <button class="swatch selected" data-accent="teal" style="width:24px;height:24px;border-radius:50%;background:#59d8c9;border:2px solid var(--outline);cursor:pointer;" aria-label="Teal" title="Teal"></button>
+              <button class="swatch" data-accent="indigo" style="width:24px;height:24px;border-radius:50%;background:#bfc2ff;border:2px solid transparent;cursor:pointer;" aria-label="Indigo" title="Indigo"></button>
+              <button class="swatch" data-accent="rose" style="width:24px;height:24px;border-radius:50%;background:#ffb2be;border:2px solid transparent;cursor:pointer;" aria-label="Rose" title="Rose"></button>
+              <button class="swatch" data-accent="amber" style="width:24px;height:24px;border-radius:50%;background:#ffc46b;border:2px solid transparent;cursor:pointer;" aria-label="Amber" title="Amber"></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Full Options Page Link -->
+        <button class="btn btn--ghost btn--sm" id="btnOpenFullOptionsTab" type="button" style="justify-content:center;">
+          <span>Open Full Options Page ↗</span>
+        </button>
       </div>
     </div>
 
