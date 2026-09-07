@@ -593,7 +593,7 @@ async def health_check():
         "version": "1.0.0",
         "env": config.ENVIRONMENT,
         "database": db_status,
-        "llm_configured": bool(config.omniroute_api_key),
+        "llm_configured": bool(os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key),
         "stripe_configured": bool(config.stripe_secret_key),
         "telegram_configured": bool(config.telegram_bot_token),
     }

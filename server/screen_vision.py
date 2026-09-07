@@ -241,7 +241,6 @@ async def analyze_screen_image(
         api_key = (
             os.getenv("OPENROUTER_API_KEY")
             or getattr(config, "openrouter_api_key", "")
-            or getattr(config, "omniroute_api_key", "")
         )
     except Exception:
         api_key = os.getenv("OPENROUTER_API_KEY", "")

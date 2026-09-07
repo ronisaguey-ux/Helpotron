@@ -61,9 +61,19 @@ class ThreadRenameRequest(BaseModel):
 
 class PermissionResponseRequest(BaseModel):
     permission_id: str
-    decision: str = Field(..., description="approve | reject | always_approve | write_something_else")
+    decision: str = Field(
+        ...,
+        description=(
+            "approve | reject | always_approve | write_something_else | neutral "
+            "(aliases accepted: allow=approve, deny=reject, message=neutral). "
+            "neutral: action NOT performed, text routed back to the agent as "
+            "feedback, request stays pending."
+        ),
+    )
     comment: Optional[str] = None
     replacement_text: Optional[str] = None
+    text: Optional[str] = Field(None, description="user feedback text — REQUIRED for decision=neutral")
+    auto_add: bool = Field(False, description="approve + persist the action type into the user's auto-approved actions store")
 
 
 class ModeUpdateRequest(BaseModel):
@@ -595,22 +605,78 @@ async def get_pending_permissions(request: Request, db: Session = Depends(get_db
     return {"status": "success", "count": len(pending), "pending": pending}
 
 
-@router.post("/agent/permission/respond")
-async def respond_to_permission(payload: PermissionResponseRequest, request: Request, db: Session = Depends(get_db)):
-    """Handles user approval decision: approve, reject, always_approve, or write_something_else."""
-    user = _get_current_user(request, db)
-    perm_entry = overlord_agent._pending_permissions.get(payload.permission_id)
-    if not perm_entry:
-        raise HTTPException(404, "Permission request not found")
-    if perm_entry.get("user_public_id") != user.public_id:
-        raise HTTPException(403, "Permission request does not belong to you")
+def approval_request_payload(perm: Dict[str, Any]) -> Dict[str, str]:
+    """09-07: the popup/popout approval-card payload — req_id/title/summary.
+    The extension card renders these and echoes `req_id` back as reqId."""
+    return {"req_id": perm["id"], "title": perm["title"], "summary": perm["description"]}
 
-    decision = payload.decision.lower()
+
+async def _apply_approval_decision(
+    db: Session,
+    user: User,
+    perm_entry: Dict[str, Any],
+    decision: str,
+    comment: Optional[str] = None,
+    replacement_text: Optional[str] = None,
+    text: Optional[str] = None,
+    auto_add: bool = False,
+) -> Dict[str, Any]:
+    """Shared approval-decision core (web + extension surfaces — 09-05 pass).
+
+    Decisions (extension vocabulary with stable server equivalents):
+    'allow'/'approve' → execute the pending action; 'deny'/'reject' → hard no;
+    'neutral'/'message' → do NOT execute, route the user's text back to the
+    agent as a follow-up instruction while the request STAYS pending (the
+    agent may re-request it or continue the plan without it); neutral WITHOUT
+    text is a client error (400) — there is nothing useful to send; unknown/
+    stale requests are 404 (never crash, never mutate). auto_add (allow only)
+    also persists the action TYPE into the user's settings
+    auto_approved_actions list, so the next identical request auto-allows
+    silently (the permission engine consults that store first, in any mode).
+    """
+    decision = (decision or "").strip().lower()
+
+    # Extension protocol aliases -> server vocabulary.
+    if decision in ("allow", "approve"):
+        decision = "approve"
+    elif decision in ("deny", "reject"):
+        decision = "reject"
+    elif decision == "message":
+        decision = "neutral"
+
     assignment_id = perm_entry.get("assignment_id")
+
+    if decision == "neutral":
+        feedback = (text or "").strip() or (comment or "").strip()
+        if not feedback:
+            raise HTTPException(
+                status_code=400,
+                detail="A neutral decision requires text (what the agent should do instead).",
+            )
+        # Action NOT performed; request stays pending (not a hard no).
+        if assignment_id:
+            overlord_agent.add_chat_message(
+                assignment_id, sender="user", text=feedback, user_id=user.id)
+            overlord_agent.add_chat_message(
+                assignment_id, sender="overlord",
+                text=(
+                    f"ℹ️ Action '{perm_entry['action_type']}' is still pending approval "
+                    f"(no decision — the request remains open). Your message was passed "
+                    f"to the agent as feedback."
+                ),
+                user_id=user.id,
+            )
+        return {
+            "status": "neutral",
+            "decision": "neutral",
+            "message": feedback,
+            "permission_id": perm_entry["id"],
+            "request_status": "still_pending",
+        }
 
     if decision == "write_something_else":
         perm_entry["status"] = "cancelled"
-        replacement = payload.replacement_text or payload.comment or "Cancelled in favor of alternative instructions."
+        replacement = (replacement_text or comment or "Cancelled in favor of alternative instructions.").strip()
         if assignment_id:
             overlord_agent.add_chat_message(
                 assignment_id,
@@ -624,7 +690,7 @@ async def respond_to_permission(payload: PermissionResponseRequest, request: Req
 
     if decision == "reject":
         perm_entry["status"] = "rejected"
-        reject_note = payload.comment or "Declined by user."
+        reject_note = (comment or "").strip() or "Declined by user."
         if assignment_id:
             overlord_agent.add_chat_message(
                 assignment_id,
@@ -632,34 +698,69 @@ async def respond_to_permission(payload: PermissionResponseRequest, request: Req
                 text=f"❌ Action '{perm_entry['action_type']}' rejected by user. Note: {reject_note}", user_id=user.id)
         return {"status": "rejected", "decision": "reject", "note": reject_note}
 
-    if decision == "always_approve":
-        # Add action type to user's persistent auto_approved_actions
-        settings = dict(user.settings or {})
-        auto_list = set(settings.get("auto_approved_actions", []))
-        auto_list.add(perm_entry["action_type"])
-        settings["auto_approved_actions"] = list(auto_list)
-        user.settings = settings
-        db.commit()
+    if decision in ("always_approve", "approve"):
+        if decision == "always_approve" or auto_add:
+            # Persist the action TYPE into the user's auto-approved store
+            # (settings JSON, same field the permission engine reads first)
+            # so the next identical request auto-allows silently.
+            settings = dict(user.settings or {})
+            auto_list = set(settings.get("auto_approved_actions", []))
+            auto_list.add(perm_entry["action_type"])
+            settings["auto_approved_actions"] = list(auto_list)
+            user.settings = settings
+            db.commit()
+            # persist_chat_message path not needed — this is settings, not chat.
 
-    # Execute approved action (with optional user instructions/comments merged in)
-    perm_entry["status"] = "approved"
-    action_payload = dict(perm_entry["payload"])
-    if payload.comment:
-        action_payload["user_instruction"] = payload.comment
+        # Execute approved action (with optional user instructions/comments merged in)
+        perm_entry["status"] = "approved"
+        action_payload = dict(perm_entry["payload"])
+        if (comment or "").strip():
+            action_payload["user_instruction"] = comment.strip()
 
-    exec_res = await overlord_agent.execute_task_action(
-        db,
-        user=user,
-        action_type=perm_entry["action_type"],
-        payload=action_payload,
-        assignment_id=assignment_id,
+        exec_res = await overlord_agent.execute_task_action(
+            db,
+            user=user,
+            action_type=perm_entry["action_type"],
+            payload=action_payload,
+            assignment_id=assignment_id,
+        )
+        if assignment_id and (comment or "").strip():
+            overlord_agent.add_chat_message(
+                assignment_id,
+                sender="user",
+                text=f"Approval Note: {comment.strip()}", user_id=user.id)
+        ret = {
+            "status": "success",
+            "decision": decision,
+            "execution_result": exec_res,
+            "comment": comment or None,
+        }
+        if auto_add:
+            ret["auto_added"] = True
+            ret["auto_approved_actions"] = user.settings.get("auto_approved_actions", [])
+        return ret
+
+    raise HTTPException(status_code=400, detail=f"Unknown approval decision: '{decision}'")
+
+
+@router.post("/agent/permission/respond")
+async def respond_to_permission(payload: PermissionResponseRequest, request: Request, db: Session = Depends(get_db)):
+    """Handles user approval decision: approve (allow), reject (deny),
+    always_approve, write_something_else, or neutral (09-07: action NOT
+    performed, text routed back to the agent as feedback, request stays
+    pending). allow + auto_add also stores the action type in the user's
+    auto-approved settings so the next request skips the prompt."""
+    user = _get_current_user(request, db)
+    perm_entry = overlord_agent._pending_permissions.get(payload.permission_id)
+    if not perm_entry:
+        raise HTTPException(404, "Permission request not found")
+    if perm_entry.get("user_public_id") != user.public_id:
+        raise HTTPException(403, "Permission request does not belong to you")
+    return await _apply_approval_decision(
+        db, user, perm_entry, payload.decision,
+        comment=payload.comment, replacement_text=payload.replacement_text,
+        text=payload.text, auto_add=payload.auto_add,
     )
-    if assignment_id and payload.comment:
-        overlord_agent.add_chat_message(
-            assignment_id,
-            sender="user",
-            text=f"Approval Note: {payload.comment}", user_id=user.id)
-    return {"status": "success", "decision": decision, "execution_result": exec_res, "comment": payload.comment}
 
 
 # ─── 3. Auto-Approved Actions Rule Manager ────────────────────────────────────
@@ -1237,7 +1338,8 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
         )
         from .llm import strip_thinking_tokens
         return strip_thinking_tokens((raw or "").strip()[:1000])
-    except Exception:
+    except Exception as err:
+        logger.error("conversational fallback LLM failed: %s", err)
         return ""
 
 
@@ -1627,7 +1729,8 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
             effort_score=effort,
             db=db, user_id=user.public_id,
         )
-    except Exception:
+    except Exception as err:
+        logger.error("agent intent LLM failed: %s", err)
         raw = ""
 
     parsed = _safe_json_extract(raw) if raw else None
@@ -1916,8 +2019,8 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             )
         reply_text = strip_thinking_tokens(reply_text)
         if _is_degenerate_reply(reply_text):
-            reply_text = ("I didn't catch that — mind rephrasing? "
-                          "(Reply generation came back empty.)")
+            reply_text = ("I couldn't generate a reply just now (the model "
+                          "service may be down) — please try again in a moment.")
         # AI Detection Standard (operator 08-31): prose replies only — status
         # markers and error text are never rewritten.
         if reply_text and not reply_text.startswith(("⚠️", "✅", "❌")):
@@ -1969,6 +2072,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         return {
             "status": "permission_required",
             "permission_request": perm,
+            "approval_request": approval_request_payload(perm),
             "message": agent_reply,
             "token_balance": _tk_balance(user),
         }
@@ -2186,6 +2290,7 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
         return {
             "status": "permission_required",
             "permission_request": perm,
+            "approval_request": approval_request_payload(perm),
             "message": f"Action '{action_type}' paused awaiting user confirmation.",
         }
 

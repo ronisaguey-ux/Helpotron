@@ -1,0 +1,258 @@
+label: final4
+browser: /home/roni-saguey/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+extension: /home/roni/Roni_workspace/helpotron/extension
+profile: /tmp/helpotron-ext-verify-l7n1fbuw (temp)
+extension id: dpbeoomhlbphmmamopkjillheehakgka
+manifest: {
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger"
+  ],
+  "version": "2.6.1"
+}
+
+[manifest] Helpotron Academic Companion v2.6.1
+  [invariant] name correct: OK
+  [invariant] version 2.6.1: OK
+  [invariant] service_worker present: OK
+  [invariant] debugger required: OK
+  [invariant] downloads absent: OK
+  [invariant] tabs permission: OK
+[surface] launch
+  [shot] final4-launch.png (37353 bytes)
+  [key] Enter  #option-chat -> pressed
+  [panel] #chat-options expanded: True
+  [shot] final4-launcher-agent-controls-open.png (67430 bytes)
+  [toggle] educational: before {'checked': True, 'aria': 'true'}
+  [key] Space  #toggleEducationalMode, input[aria-label*='Educational' i] -> pressed
+  [toggle] educational: after {'checked': False, 'aria': 'false'} -> OK (state changed)
+  [shot] final4-launcher-toggle-educational-off.png (69305 bytes)
+  [toggle] seescreen: before {'checked': True, 'aria': 'true'}
+  [key] Space  #toggleSeeScreen, input[aria-label*='See screen' i] -> pressed
+  [toggle] seescreen: after {'checked': False, 'aria': 'false'} -> OK (state changed)
+  [shot] final4-launcher-toggle-seescreen-off.png (67200 bytes)
+  [toggle] execute: before {'checked': False, 'aria': 'false'}
+  [key] Space  #toggleExecute, input[aria-label*='Execute' i] -> pressed
+  [toggle] execute: after {'checked': True, 'aria': 'true'} -> OK (state changed)
+  [shot] final4-launcher-toggle-execute-on.png (68158 bytes)
+  [key] Enter  #modeSeg .mode-btn[data-mode='manual'], .mode-btn[data-mode='manual'] -> pressed
+  [key] Enter  #modeSeg .mode-btn[data-mode='auto'], .mode-btn[data-mode='auto'] -> pressed
+  [key] Enter  #modeSeg .mode-btn[data-mode='yolo'], .mode-btn[data-mode='yolo'] -> pressed
+  [mode] aria-pressed after cycle: {"manual":"false","auto":"false","yolo":"true"}
+  [shot] final4-launcher-mode-final.png (68318 bytes)
+[surface] chat
+  [key] Enter  #tabNavChat -> pressed
+  [shot] final4-chat.png (39058 bytes)
+[surface] type
+  [key] Enter  #tabNavType -> pressed
+  [shot] final4-type.png (68917 bytes)
+  [key] Enter  button.ltd-preset[data-wpm='65'] -> pressed
+  [key] Enter  button.ltd-preset[data-wpm='48'] -> pressed
+  [key] Enter  button.ltd-preset[data-wpm='85'] -> pressed
+  [shot] final4-type-presets-cycled.png (68387 bytes)
+[surface] settings
+  [key] Enter  #tabNavSettings -> pressed
+  [shot] final4-settings.png (47850 bytes)
+  [key] Enter  [data-theme-pick='light'] -> pressed
+  [shot] final4-settings-theme-light.png (47335 bytes)
+  [key] Enter  [data-theme-pick='dark'] -> pressed
+  [shot] final4-settings-theme-dark.png (47262 bytes)
+[surface] options
+  [shot] final4-options.png: attempt 1 failed () — retrying
+  [shot] final4-options.png (122743 bytes)
+[surface] onboarding
+  [shot] final4-onboarding.png (127028 bytes)
+[surface] agent
+  [shot] final4-agent.png: attempt 1 failed () — retrying
+  [shot] final4-agent.png (67435 bytes)
+  [toggle] agent Control: before {'checked': False}
+  [key] Space  #controlToggle -> pressed
+  [shot] final4-agent-control-consent.png: attempt 1 failed () — retrying
+  [shot] final4-agent-control-consent.png (104591 bytes)
+  [toggle] agent Control: consent modal shown (captured) — refusing
+  [key] Enter  #consentCancel -> pressed
+  [key] Space  #controlToggle -> pressed
+  [toggle] agent Control: after {'checked': True} -> OK (toggled)
+[feature] approval
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [shot] final4-approval-card-empty-approve.png (67432 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [PASS    ] approval.empty-approve: expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[{'reqId': 'lh5_empty-approve', 'decision': 'allow', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True status=✅ Allowed the agent action.
+  [shot] final4-approval-after-empty-approve.png: attempt 1 failed () — retrying
+  [shot] final4-approval-after-empty-approve.png (67379 bytes)
+  [shot] final4-approval-card-empty-reject.png (68853 bytes)
+  [key] Enter  #approvalReject -> pressed
+  [PASS    ] approval.empty-reject: expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[{'reqId': 'lh5_empty-reject', 'decision': 'deny', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True status=⛔ Rejected the agent action.
+  [shot] final4-approval-after-empty-reject.png: attempt 1 failed () — retrying
+  [shot] final4-approval-after-empty-reject.png (67306 bytes)
+  [shot] final4-approval-card-text-approve.png (69281 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [PASS    ] approval.text-approve: expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[{'reqId': 'lh5_text-approve', 'decision': 'allow', 'message': 'pls do it gently', 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True sta
+  [shot] final4-approval-after-text-approve.png: attempt 1 failed () — retrying
+  [shot] final4-approval-after-text-approve.png (67379 bytes)
+  [key] Enter  #approvalNeutral -> pressed
+  [PASS    ] approval.empty-neutral-blocked: no request sent; input flagged (active=True aria-invalid=true class='input'); card still visible
+  [shot] final4-approval-neutral-blocked.png (69673 bytes)
+  [key] Enter  #approvalNeutral -> pressed
+  [PASS    ] approval.neutral-with-text: decision=neutral note='please wait on that' resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_neutral'} status=⚪ Neutral — the agent got your note.
+  [shot] final4-approval-after-neutral.png: attempt 1 failed () — retrying
+  [shot] final4-approval-after-neutral.png (67663 bytes)
+  [key] Enter  #approvalApproveAuto -> pressed
+  [PASS    ] approval.autoAdd-empty-approve: tap=[{'reqId': 'lh5_auto', 'decision': 'allow', 'message': None, 'autoAdd': True, 'act': 'APPROVAL_RESPONSE'}] resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_auto'}
+[feature] drive
+  [PASS    ] drive.target-tab: drive tab created: {'id': 1523577594, 'winId': 1523577591}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:56303/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #1523577595 created
+  [PASS    ] drive.undriveable-tab: newtab tab #1523577595 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 1523577595, 'url': 'chrome://newtab/', 'active': True}
+  [PASS    ] drive.auto-switch-or-retry: click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=✓ Drove LH5DRIVE-1788769145719 — 1 action(s) executed with v
+  [PASS    ] drive.click-evidence: page-side click counter = 1; server counter = 1
+[feature] keepopen
+  [PASS    ] keepopen.spare-tab: spare tab #1523577598 in window 1523577591
+  [keepopen] press teardown race tolerated: no close frame received or sent
+  [PASS    ] keepopen.second-window: target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [PASS    ] keepopen.mode-window: live=True body.window-mode=True url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window dbg={"href":"chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window","search":"?mode=window","ready":"complete","bodyCls":"window-mode","popupJsLoaded":true,"urlParamsMo
+  [PASS    ] keepopen.popout-hidden: btnPopOut hidden=True (window-mode hides the affordance)
+  [PASS    ] keepopen.window-type: windows.getAll: type=popup id=1523577599
+  [PASS    ] keepopen.listed-after-focus: still listed after focusing another window (focus result: ok; headless focus may be cosmetic)
+[sync checks] page console errors: 0
+=== toggle results ===
+  educational: ok {'checked': False, 'aria': 'false'}
+  seescreen: ok {'checked': False, 'aria': 'false'}
+  execute: ok {'checked': True, 'aria': 'true'}
+  mode-seg: ok {"manual":"false","auto":"false","yolo":"true"}
+  agent-control: ok {'checked': True}
+=== feature check results ===
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [PASS    ] approval.empty-approve: expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[{'reqId': 'lh5_empty-approve', 'decision': 'allow', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONS
+  [PASS    ] approval.empty-reject: expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[{'reqId': 'lh5_empty-reject', 'decision': 'deny', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}]
+  [PASS    ] approval.text-approve: expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[{'reqId': 'lh5_text-approve', 'decision': 'allow', 'message': 'pls do it gently', 'autoA
+  [PASS    ] approval.empty-neutral-blocked: no request sent; input flagged (active=True aria-invalid=true class='input'); card still visible
+  [PASS    ] approval.neutral-with-text: decision=neutral note='please wait on that' resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_neutral'} status=⚪ Neutral — the agent got your note.
+  [PASS    ] approval.autoAdd-empty-approve: tap=[{'reqId': 'lh5_auto', 'decision': 'allow', 'message': None, 'autoAdd': True, 'act': 'APPROVAL_RESPONSE'}] resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_auto'}
+  [PASS    ] drive.target-tab: drive tab created: {'id': 1523577594, 'winId': 1523577591}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:56303/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #1523577595 created
+  [PASS    ] drive.undriveable-tab: newtab tab #1523577595 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 1523577595, 'url': 'chrome://newtab/', 'active': True}
+  [PASS    ] drive.auto-switch-or-retry: click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=✓ Drove LH5DRIVE-1788769145719 — 1 action(s) executed with v
+  [PASS    ] drive.click-evidence: page-side click counter = 1; server counter = 1
+  [PASS    ] keepopen.spare-tab: spare tab #1523577598 in window 1523577591
+  [PASS    ] keepopen.second-window: target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window
+  [PASS    ] keepopen.mode-window: live=True body.window-mode=True url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window dbg={"href":"chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window","search":"?mode=window","ready":"complet
+  [PASS    ] keepopen.popout-hidden: btnPopOut hidden=True (window-mode hides the affordance)
+  [PASS    ] keepopen.window-type: windows.getAll: type=popup id=1523577599
+  [PASS    ] keepopen.listed-after-focus: still listed after focusing another window (focus result: ok; headless focus may be cosmetic)
+=== screenshots (26) ===
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launch.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launcher-agent-controls-open.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launcher-toggle-educational-off.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launcher-toggle-seescreen-off.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launcher-toggle-execute-on.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-launcher-mode-final.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-chat.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-type.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-type-presets-cycled.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-settings.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-settings-theme-light.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-settings-theme-dark.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-options.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-onboarding.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-agent.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-agent-control-consent.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-card-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-after-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-card-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-after-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-card-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-after-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-neutral-blocked.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-approval-after-neutral.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-drive-target.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final4-keepopen-window.png

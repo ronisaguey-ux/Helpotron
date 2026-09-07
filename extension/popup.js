@@ -57,16 +57,39 @@ if (isWindowMode) {
   if (btnPopOut) btnPopOut.style.display = 'none'; // already popped out
 }
 
+// Keep-open: the real window MUST exist before this popup closes. Closing the
+// popup first was killing the in-flight chrome.windows.create — the browser
+// action popup died before the create landed, so no window ever appeared
+// ("it still closes when I close out"). Order: await create -> close. On any
+// failure the popup stays alive and the error surfaces at the button.
+let popoutInFlight = false;
+let popoutErrTimer = null;
 if (btnPopOut) {
-  btnPopOut.addEventListener('click', () => {
-    chrome.windows.create({
-      url: chrome.runtime.getURL('popup.html?mode=window'),
-      type: 'popup',
-      width: 420,
-      height: 660,
-      focused: true,
-    });
-    window.close();
+  btnPopOut.addEventListener('click', async () => {
+    if (popoutInFlight) return; // double-click: the first click already opens it
+    popoutInFlight = true;
+    btnPopOut.disabled = true;
+    const errEl = document.getElementById('popOutError');
+    try {
+      const win = await chrome.windows.create({
+        url: chrome.runtime.getURL('popup.html?mode=window'),
+        type: 'popup',
+        width: 420,
+        height: 660,
+        focused: true,
+      });
+      if (!win || !win.id) throw new Error('chrome.windows.create returned no window');
+      window.close(); // go away only once the persistent window is up
+    } catch (e) {
+      popoutInFlight = false;
+      btnPopOut.disabled = false;
+      if (errEl) {
+        errEl.innerText = "⚠️ Couldn't open the keep-open window — please try again.";
+        errEl.hidden = false;
+        clearTimeout(popoutErrTimer);
+        popoutErrTimer = setTimeout(() => { if (errEl) errEl.hidden = true; }, 5000);
+      }
+    }
   });
 }
 
@@ -466,11 +489,15 @@ if (effortScoreSlider) {
 
 // ── Approval inbox (09-02): the open popup is the approval surface. We signal
 // popup-alive with a runtime Port (MV3 service workers can't see the popup
-// any other way); incoming APPROVAL_PROMPT renders the card, Allow/Deny
+// any other way); incoming APPROVAL_PROMPT renders the shared card —
+// #approvalApprove / #approvalReject / #approvalNeutral / #approvalApproveAuto
 // answer APPROVAL_RESPONSE. Prompts queue: one card at a time.
 const POPUP_PORT_NAME = 'helpotron-popup';
 const pendingApprovals = []; // [{reqId, title, summary}]
 let approvalPort = null;
+const APPROVAL_HELPER_DEFAULT = 'Approve = let it act · Reject = stop it · Neutral = don’t do it, just send your note.';
+const APPROVAL_NEUTRAL_HINT = 'Say something first — Neutral needs your note';
+let approvalHelperTimer = null;
 
 function renderNextApproval() {
   const card = document.getElementById('approvalCard');
@@ -484,6 +511,19 @@ function renderNextApproval() {
   }
   titleEl.innerText = item.title;
   textEl.innerText = item.summary;
+  // Fresh prompt: reset the answer state (input note + previous status line).
+  const input = document.getElementById('approvalInput');
+  const statusLine = document.getElementById('approvalStatus');
+  const helper = document.getElementById('approvalHelper');
+  if (input) {
+    input.value = '';
+    input.setAttribute('aria-invalid', 'false');
+  }
+  if (statusLine) statusLine.hidden = true;
+  if (helper) {
+    helper.classList.remove('a-helper--warn');
+    helper.textContent = APPROVAL_HELPER_DEFAULT;
+  }
   // Approval cards can render inside the (now collapsed) Agent Controls
   // accordion: expand the section so the card + chevron stay consistent.
   const chatOptions = document.getElementById('chat-options');
@@ -496,30 +536,127 @@ function renderNextApproval() {
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function answerApproval(reqId, allowed) {
+// Shared answer path: decision is 'allow' | 'deny' | 'neutral' (or the legacy
+// boolean from answerApproval(reqId, true|false) callers), note is the optional
+// typed text ('' fine for allow/deny — REQUIRED for neutral), opts carries
+// {autoAdd} for the Approve + auto-add button.
+function answerApproval(reqId, decision, note, opts) {
+  const d = (decision === 'allow' || decision === 'deny' || decision === 'neutral')
+    ? decision
+    : (decision ? 'allow' : 'deny'); // legacy boolean stays supported
+  const text = String(note || '').trim();
+  const autoAdd = Boolean(opts && opts.autoAdd);
   const ix = pendingApprovals.findIndex((p) => p.reqId === reqId);
+  const viaServer = ix >= 0 ? Boolean(pendingApprovals[ix].viaServer) : false;
   if (ix >= 0) {
     pendingApprovals.splice(ix, 1);
   }
-  chrome.runtime.sendMessage({ action: 'APPROVAL_RESPONSE', reqId, decision: allowed ? 'allow' : 'deny' })
-    .catch(() => {});
-  setStatus(allowed ? '✅ Allowed the agent action.' : '⛔ Denied the agent action.');
+  // Server-channel prompts (the /api/extension/agent_chat permission gate)
+  // answer straight to /api/extension/approval/respond; broker prompts keep
+  // the runtime-message settle path below.
+  if (viaServer) {
+    chrome.storage.local.get(['server', 'session_token', 'token'])
+      .then(async (st) => {
+        const srv = (st.server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+        const t = st.session_token || st.token || '';
+        try {
+          const res = await fetch(`${srv}/api/extension/approval/respond`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+            body: JSON.stringify({
+              req_id: reqId,
+              decision: d,
+              ...(text ? { text } : {}),
+              auto_add: autoAdd,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showApprovalStatus(`⚠️ Could not send your decision (HTTP ${res.status}${data.detail ? ' — ' + data.detail : ''})`);
+          } else if (d === 'deny') {
+            showApprovalStatus('⛔ Rejected the agent action.');
+          } else if (d === 'neutral') {
+            showApprovalStatus('⚪ Neutral — the agent got your note.');
+          } else if (autoAdd) {
+            showApprovalStatus('✅ Allowed — added to auto-approved actions.');
+          } else {
+            showApprovalStatus('✅ Allowed the agent action.');
+          }
+          // If the executed action produced further drive actions, run them.
+          const next = data && data.execution_result && Array.isArray(data.execution_result.control_actions)
+            ? data.execution_result.control_actions
+            : (Array.isArray(data && data.control_actions) ? data.control_actions : null);
+          if (next && next.length) {
+            setStatus(`Executing ${next.length} action(s) after approval…`);
+            await executeReturnedActions(next).catch(() => {});
+          }
+        } catch (err) {
+          showApprovalStatus(`⚠️ Could not reach the server: ${String(err).slice(0, 90)}`);
+        }
+        renderNextApproval();
+      })
+      .catch(() => {});
+    return;
+  }
+  const msg = { act: 'APPROVAL_RESPONSE', reqId, decision: d };
+  if (text) msg.text = text; // optional for allow/deny; neutral is gated before this call
+  if (autoAdd) msg.autoAdd = true;
+  chrome.runtime.sendMessage(msg).catch(() => {});
+  showApprovalStatus(d === 'allow'
+    ? (autoAdd ? '✅ Allowed the agent action — added to auto-approved actions.'
+               : '✅ Allowed the agent action.')
+    : d === 'deny' ? '⛔ Rejected the agent action.'
+    : '⚪ Neutral — the agent got your note.');
   renderNextApproval();
 }
 
-const approveBtnEl = document.getElementById('approveBtn');
-const denyBtnEl = document.getElementById('denyBtn');
-if (approveBtnEl) {
-  approveBtnEl.addEventListener('click', () => {
-    const p = pendingApprovals[0];
-    if (p) answerApproval(p.reqId, true);
-  });
+function showApprovalStatus(text) {
+  const card = document.getElementById('approvalCard');
+  const statusLine = document.getElementById('approvalStatus');
+  if (card) card.style.display = 'none';
+  if (statusLine) {
+    statusLine.innerText = text;
+    statusLine.hidden = false;
+  }
 }
-if (denyBtnEl) {
-  denyBtnEl.addEventListener('click', () => {
-    const p = pendingApprovals[0];
-    if (p) answerApproval(p.reqId, false);
-  });
+
+// Neutral REQUIRES a note: an empty Neutral click must not send — flag the
+// input, explain inline, and only send once text is present (trimmed non-empty).
+function answerFromButton(decision, opts) {
+  const p = pendingApprovals[0];
+  if (!p) return;
+  const input = document.getElementById('approvalInput');
+  const helper = document.getElementById('approvalHelper');
+  const text = input ? String(input.value || '') : '';
+  if (decision === 'neutral' && !text.trim()) {
+    if (input) {
+      input.focus();
+      input.setAttribute('aria-invalid', 'true');
+    }
+    if (helper) {
+      helper.classList.add('a-helper--warn');
+      helper.textContent = APPROVAL_NEUTRAL_HINT;
+      clearTimeout(approvalHelperTimer);
+      approvalHelperTimer = setTimeout(() => {
+        helper.classList.remove('a-helper--warn');
+        helper.textContent = APPROVAL_HELPER_DEFAULT;
+      }, 3500);
+    }
+    return;
+  }
+  answerApproval(p.reqId, decision, text, opts);
+}
+
+const approvalButtons = [
+  ['approvalApprove', 'allow', null],
+  ['approvalReject', 'deny', null],
+  ['approvalNeutral', 'neutral', null],
+  ['approvalApproveAuto', 'allow', { autoAdd: true }],
+];
+for (const [id, decision, opts] of approvalButtons) {
+  const el = document.getElementById(id);
+  if (!el) continue; // surface without the shared card (e.g. agent_mode shell)
+  el.addEventListener('click', () => answerFromButton(decision, opts));
 }
 
 // ── General popup paint & behavior ───────────────────────────────────────────
@@ -554,7 +691,7 @@ async function loadWhatsNew() {
   } catch { /* fall through to the /version fallback below */ }
 
   // Fallback: the public /api/extension/version endpoint always carries the
-  // latest release's notes (2.6.1 included) even when the releases feed is
+  // latest release's notes (2.7.0 included) even when the releases feed is
   // empty or the caller is anonymous — the banner must never silently die.
   if (!releases.length) {
     try {
@@ -1715,9 +1852,78 @@ async function glideMouseTo(tabId, targetX, targetY) {
 // visible cursor can never appear to fly in from another page's coordinates.
 let lastBurstTabId = null;
 
+// ── Drivable Tab Selection ───────────────────────────────────────────────────
+// Chrome refuses chrome.debugger.attach on protected schemes (chrome://,
+// edge://, about:, chrome-extension://, devtools://, view-source:, data: …)
+// with "Not allowed to attach to this tab". The agent may therefore only ever
+// attach to a real web page. Every burst starts by PICKING the drive tab:
+// the active tab when *it* is drivable, otherwise the most recently accessed
+// drivable tab anywhere (background tabs included) — the user is switched to
+// it so they can see what is being driven.
+
+function isDriveableUrl(url) {
+  const u = String(url || '').toLowerCase();
+  // Protected + extension-internal schemes: debugger attach is hard-blocked
+  // by Chrome. Fail the pick BEFORE any attach attempt.
+  if (/^(chrome|chrome-extension|chromium|edge|about|devtools|view-source|data|javascript|blob|extensions|moz-extension|opera|vivaldi|brave|settings|options|webextension):/.test(u)) return false;
+  return /^(https?|file):\/\//.test(u);
+}
+
+function isDriveableTab(tab) {
+  return Boolean(tab && tab.id && isDriveableUrl(tab.url));
+}
+
+// The popup lives in its own chrome window on some builds, which makes
+// `currentWindow` ambiguous inside an action popup. Query defensively: the
+// window the popup belongs to first, then the last-focused window.
+async function activeTabForDrive() {
+  let list = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!list || !list.length) list = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return (list && list.length) ? list[0] : null;
+}
+
+// Most recently accessed drivable tab, newest first. `windowId === null`
+// searches every window; `excludeId` keeps the pick off a tab already known
+// to be undriveable.
+async function pickDriveTabInWindow(windowId, excludeId) {
+  const q = { url: ['http://*/*', 'https://*/*'] };
+  if (windowId) q.windowId = windowId;
+  let hits = [];
+  try { hits = await chrome.tabs.query(q); } catch { hits = []; }
+  const list = (hits || [])
+    .filter((t) => t.id !== excludeId && isDriveableTab(t))
+    .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return list[0] || null;
+}
+
+// Same window as the active tab first (that is the view the user is on right
+// now), then any window — the drive tab is activated visibly either way.
+async function pickDriveTab(activeTab) {
+  let tab = null;
+  if (activeTab && activeTab.windowId) {
+    tab = await pickDriveTabInWindow(activeTab.windowId, activeTab.id);
+  }
+  if (!tab) tab = await pickDriveTabInWindow(null, activeTab ? activeTab.id : null);
+  return tab;
+}
+
+function driveTabLabel(tab) {
+  if (!tab) return 'page';
+  if (tab.title && tab.title.trim()) return tab.title.trim();
+  try { return new URL(tab.url).hostname || tab.url; } catch { return String(tab.url || 'page'); }
+}
+
 // A failed attach used to end in a hidden bar and a one-line status the user
 // could do nothing about. Now the bar stays up with a live RETRY button.
 function offerActionRetry(actions, reason) {
+  if (isAgentActionPaused || retryPending) {
+    // The user paused/cancelled while the burst was still winding up (an
+    // in-flight attach rejected after the pause detach). Never resurrect a
+    // RETRY bar on top of a paused bar — the pause already cleaned up.
+    hideAgentActiveBar();
+    if (isAgentActionPaused) setStatus('⏸ Agent action paused.');
+    return;
+  }
   const bar = document.getElementById('agentActiveBar');
   const desc = document.getElementById('agentActiveDesc');
   const btn = document.getElementById('btnPauseAgentAction');
@@ -1725,7 +1931,7 @@ function offerActionRetry(actions, reason) {
   isAgentActionRunning = false;
   isAgentActionPaused = false;
   retryPending = true;
-  activeActionTabId = null; // the failed attach never owned a tab
+  activeActionTabId = null; // no burst owns a tab right now
   if (bar) {
     bar.style.display = 'flex';
     bar.classList.add('paused');
@@ -1738,9 +1944,9 @@ function offerActionRetry(actions, reason) {
       btn.onclick = null;
       retryPending = false;
       hideAgentActiveBar();
-      // Re-target: the attach failure may have been this exact tab state
-      // (chrome:// / DevTools open / another debugger) — retry against the
-      // tab the user has focused RIGHT NOW.
+      // Re-run the WHOLE pick, not just the attach: the failure may have been
+      // a chrome:// target, a closed tab, DevTools, or another debugger — the
+      // active tab may also have changed while the user was looking at RETRY.
       await executeReturnedActions(actions);
     };
   }
@@ -1748,35 +1954,72 @@ function offerActionRetry(actions, reason) {
 }
 
 async function executeReturnedActions(actions) {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const activeTab = tabs && tabs[0] ? tabs[0] : null;
-  if (!activeTab || !activeTab.id) {
-    setStatus('⚠️ Cannot execute actions: active tab not found.');
-    return;
-  }
   if (!chrome.debugger) {
     setStatus('⚠️ Cannot execute: debugger API unavailable.');
     return;
   }
 
-  activeActionTabId = activeTab.id;
-  showAgentActiveBar(`Starting ${actions.length} action(s) with visible cursor…`);
+  // 1. Pick a DRIVABLE tab: the active tab only when it is a real web page,
+  //    else the most recently accessed drivable tab (background tabs
+  //    included). chrome:// / about: / extension pages reject the attach
+  //    outright and must never even reach chrome.debugger.attach.
+  const activeTab = await activeTabForDrive();
+  let driveTab = null;
+  if (activeTab && isDriveableTab(activeTab)) {
+    driveTab = activeTab;
+  } else {
+    driveTab = await pickDriveTab(activeTab);
+  }
+  if (!driveTab) {
+    offerActionRetry(actions, 'no driveable web page tab found — chrome://, about: and extension pages cannot be driven (switch to a normal web page first)');
+    return;
+  }
+  // Belt & braces: re-check the scheme immediately before attach.
+  if (!isDriveableUrl(driveTab.url)) {
+    offerActionRetry(actions, 'target is not a driveable web page');
+    return;
+  }
+
+  // 2. The user must SEE the page being driven: when the drive tab is not
+  //    already active, switch to it explicitly — and focus its window when it
+  //    lives outside the window the popup is attached to.
+  if (!driveTab.active || (activeTab && activeTab.id !== driveTab.id)) {
+    await chrome.tabs.update(driveTab.id, { active: true }).catch(() => {});
+  }
+  if (activeTab && driveTab.windowId !== activeTab.windowId) {
+    await chrome.windows.update(driveTab.windowId, { focused: true }).catch(() => {});
+  }
+  const fresh = (await chrome.tabs.get(driveTab.id).catch(() => null)) || driveTab;
+
+  activeActionTabId = driveTab.id;
+  showAgentActiveBar(`Driving: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`);
 
   try {
     try {
-      await chrome.debugger.attach({ tabId: activeTab.id }, '1.3');
+      await chrome.debugger.attach({ tabId: driveTab.id }, '1.3');
     } catch (attachErr) {
-      // Attach fails on chrome:// pages, the Web Store, when DevTools is open,
-      // or when another extension holds the target. Never leave a dead bar:
-      // offer a one-click retry of this exact burst.
+      // Attach fails when DevTools is open on the target, on the Web Store,
+      // during a pending navigation, or when another debugger holds it. Never
+      // leave a dead bar: RETRY re-runs the whole pick (the target may have
+      // been closed or the user may have switched pages).
       offerActionRetry(actions, String(attachErr && attachErr.message || attachErr));
+      return;
+    }
+
+    // The user can pause (Esc) in the gap between pick and attach; the pause
+    // already detached the in-flight session. Honor it instead of driving a
+    // dead/never-attached session.
+    if (isAgentActionPaused) {
+      await removeVirtualCursor(driveTab.id).catch(() => {});
+      await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
+      setStatus('⏸ Agent action paused.');
       return;
     }
 
     // Clamp every coordinate against the LIVE viewport, and start the glide
     // from the middle of THIS tab so the cursor never enters from a stale
     // position left behind by a previous page.
-    const vp = await readViewport(activeTab.id);
+    const vp = await readViewport(driveTab.id);
     actions = actions.map((op) => {
       if (op && op.x !== undefined && op.y !== undefined) {
         const c = clampToViewport(op.x, op.y, vp);
@@ -1784,16 +2027,16 @@ async function executeReturnedActions(actions) {
       }
       return op;
     });
-    if (lastBurstTabId !== activeTab.id) {
+    if (lastBurstTabId !== driveTab.id) {
       lastCursorPos = { x: Math.round(vp.w / 2), y: Math.round(vp.h / 2) };
-      lastBurstTabId = activeTab.id;
+      lastBurstTabId = driveTab.id;
     }
 
-    await initVirtualCursor(activeTab.id);
+    await initVirtualCursor(driveTab.id);
 
     for (let idx = 0; idx < actions.length; idx++) {
       if (isAgentActionPaused) break;
-      const pagePaused = await checkPagePauseFlag(activeTab.id);
+      const pagePaused = await checkPagePauseFlag(driveTab.id);
       if (pagePaused) {
         setAgentActionPausedState();
         break;
@@ -1804,68 +2047,68 @@ async function executeReturnedActions(actions) {
 
       if (op.op === 'move' && op.x !== undefined && op.y !== undefined) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Moving to (${Math.round(op.x)}, ${Math.round(op.y)})`);
-        await setVirtualCursorAction(activeTab.id, 'Moving…');
-        await glideMouseTo(activeTab.id, op.x, op.y);
+        await setVirtualCursorAction(driveTab.id, 'Moving…');
+        await glideMouseTo(driveTab.id, op.x, op.y);
       } else if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
-        await setVirtualCursorAction(activeTab.id, 'Moving…');
-        await glideMouseTo(activeTab.id, op.x, op.y);
+        await setVirtualCursorAction(driveTab.id, 'Moving…');
+        await glideMouseTo(driveTab.id, op.x, op.y);
         if (isAgentActionPaused) break;
-        await setVirtualCursorAction(activeTab.id, 'Clicking…');
-        await animateVirtualCursorClick(activeTab.id);
+        await setVirtualCursorAction(driveTab.id, 'Clicking…');
+        await animateVirtualCursorClick(driveTab.id);
         await new Promise((r) => setTimeout(r, 60));
         const btn = op.button === 'right' ? 'right' : 'left';
         const btns = btn === 'right' ? 2 : 1;
-        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+        await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
           type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: btn, buttons: btns, clickCount: 1,
         });
         await new Promise((r) => setTimeout(r, 60 + Math.random() * 40));
-        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+        await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
           type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: btn, buttons: 0, clickCount: 1,
         });
       } else if (op.op === 'dblclick' && op.x !== undefined && op.y !== undefined) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Double-clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
-        await setVirtualCursorAction(activeTab.id, 'Moving…');
-        await glideMouseTo(activeTab.id, op.x, op.y);
+        await setVirtualCursorAction(driveTab.id, 'Moving…');
+        await glideMouseTo(driveTab.id, op.x, op.y);
         if (isAgentActionPaused) break;
-        await setVirtualCursorAction(activeTab.id, 'Double-clicking…');
-        await animateVirtualCursorClick(activeTab.id);
+        await setVirtualCursorAction(driveTab.id, 'Double-clicking…');
+        await animateVirtualCursorClick(driveTab.id);
         for (let c = 1; c <= 2; c++) {
-          await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+          await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
             type: 'mousePressed', x: Math.round(op.x), y: Math.round(op.y), button: 'left', buttons: 1, clickCount: c,
           });
           await new Promise((r) => setTimeout(r, 45));
-          await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+          await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
             type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: 'left', buttons: 0, clickCount: c,
           });
           await new Promise((r) => setTimeout(r, 45));
         }
       } else if (op.op === 'type' && op.text) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Typing text…`);
-        await setVirtualCursorAction(activeTab.id, 'Typing…');
-        await cdp(activeTab.id, 'Input.insertText', { text: String(op.text) });
+        await setVirtualCursorAction(driveTab.id, 'Typing…');
+        await cdp(driveTab.id, 'Input.insertText', { text: String(op.text) });
       } else if (op.op === 'key' && op.key) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Key: ${op.key}…`);
-        await setVirtualCursorAction(activeTab.id, `Key: ${op.key}`);
+        await setVirtualCursorAction(driveTab.id, `Key: ${op.key}`);
         const k = KEY_MAP[op.key];
         if (k) {
-          await cdp(activeTab.id, 'Input.dispatchKeyEvent', {
+          await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
             type: 'rawKeyDown', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
           });
           await new Promise((r) => setTimeout(r, 40));
-          await cdp(activeTab.id, 'Input.dispatchKeyEvent', {
+          await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
             type: 'keyUp', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
           });
         }
       } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
         updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Scrolling…`);
-        await setVirtualCursorAction(activeTab.id, 'Scrolling…');
+        await setVirtualCursorAction(driveTab.id, 'Scrolling…');
         const sxy = clampToViewport(
           op.x !== undefined ? op.x : lastCursorPos.x,
           op.y !== undefined ? op.y : lastCursorPos.y,
           vp
         );
-        await cdp(activeTab.id, 'Input.dispatchMouseEvent', {
+        await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
           type: 'mouseWheel', x: Math.round(sxy.x), y: Math.round(sxy.y),
           deltaX: Math.trunc(op.deltaX || 0), deltaY: Math.trunc(op.deltaY || 0),
         });
@@ -1873,18 +2116,18 @@ async function executeReturnedActions(actions) {
       await new Promise((r) => setTimeout(r, 180));
     }
 
-    await removeVirtualCursor(activeTab.id);
-    await chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+    await removeVirtualCursor(driveTab.id);
+    await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
     if (isAgentActionPaused) {
       setStatus('⏸ Agent action paused.');
     } else {
-      setStatus(`✓ Glided mouse and executed ${actions.length} agent action(s) with visible cursor.`);
+      setStatus(`✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
       hideAgentActiveBar();
     }
   } catch (err) {
     setStatus(`⚠️ Action execution failed: ${String(err)}`);
-    await removeVirtualCursor(activeTab.id).catch(() => {});
-    await chrome.debugger.detach({ tabId: activeTab.id }).catch(() => {});
+    await removeVirtualCursor(driveTab.id).catch(() => {});
+    await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
     hideAgentActiveBar();
   } finally {
     isAgentActionRunning = false;
@@ -1995,6 +2238,21 @@ if (chatFormEl && chatInputEl) {
           chatTokenBanner.style.display = 'flex';
         }
         addPopupChatMsg('agent', '⚠️ Insufficient tokens — visit your Helpotron account to replenish tokens.');
+      } else if (data && data.status === 'permission_required') {
+        // Server permission gate (09-07): the action needs the user's decision
+        // before the agent can execute. Renders the shared card; the answer
+        // posts straight to /api/extension/approval/respond (viaServer entry).
+        const ap = (data.approval_request && data.approval_request.req_id)
+          ? data.approval_request
+          : (data.permission_request
+              ? { req_id: data.permission_request.id, title: data.permission_request.title, summary: data.permission_request.description }
+              : null);
+        if (ap) {
+          pendingApprovals.push({ reqId: String(ap.req_id), title: ap.title || 'Permission required', summary: ap.summary || 'The agent is waiting for your decision.', viaServer: true });
+          while (pendingApprovals.length > 5) pendingApprovals.shift();
+          renderNextApproval();
+          setStatus('⚠️ The agent needs your approval before it can act.');
+        }
       } else if (res.ok) {
         const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
         addPopupChatMsg('agent', reply);
