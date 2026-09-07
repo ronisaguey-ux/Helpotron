@@ -125,7 +125,7 @@ async def download_extension_zip():
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Access-Control-Expose-Headers": "Content-Disposition",
     }
-    return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+    return Response(content=zip_buffer.getvalue(), media_type="application/zip", headers=headers)
 
 
 # ─── Release announcements (09-03): "remember all new major updates" ────────
@@ -874,8 +874,8 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             reply_text, control_actions = extract_control_actions(reply_text, vp)
             if not control_actions:
                 low_text = payload.text.lower()
-                if any(k in low_text for k in ("search", "searchbar", "search bar", "click", "type in", "type into", "touch my browser")):
-                    m = re.search(r"(?:search|type)\s+(?:in|into|for)?\s*(?:my\s+)?(?:searchbar|search\s+bar)?(?:\s*,\s*|\s+for\s+|\s+to\s+)?(.*)", payload.text, re.IGNORECASE)
+                if any(k in low_text for k in ("search", "searchbar", "search bar", "click", "type in", "type into", "touch my browser", "inside my tab", "in my tab")):
+                    m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", payload.text, re.IGNORECASE)
                     q = m.group(1).strip(" '\"?,.") if m else payload.text
                     control_actions = _harden_actions(
                         _search_burst(q or payload.text, vp), vp

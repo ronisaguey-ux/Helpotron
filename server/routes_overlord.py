@@ -1251,10 +1251,20 @@ _TIME_CODE = (
 )
 
 
+_BROWSER_INTENT_PAT = re.compile(
+    r"\b(search|searchbar|search\s+bar|tab|tabs|screen|click|press|type\s+in|type\s+into|type\s+on|browse|browser|page|pages|open|scroll|goto|navigate|look\s+at|see\s+my|canvas|doc|docs|google\s+docs)\b",
+    re.IGNORECASE,
+)
+
+
 def _extract_shell_query(text: str) -> str:
     """If the message is a self-contained math/date/time query, return the safe
-    server-generated command; else ''."""
+    server-generated command; else ''.
+    Browser/extension-oriented instructions are NEVER intercepted as quick-path shell commands.
+    """
     if not text:
+        return ""
+    if _BROWSER_INTENT_PAT.search(text):
         return ""
     if _TIME_PAT.search(text):
         return f'python3 -c "{_TIME_CODE}"'
@@ -1398,8 +1408,8 @@ def _regex_fallback_intent(text: str, node: str = "my_agent", viewport: Optional
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
     lower = text.lower()
-    if node == "extensions" and any(k in lower for k in ("search", "searchbar", "search bar", "click", "type in", "type on", "touch my browser", "use my browser")):
-        m = re.search(r"(?:search|type)\s+(?:in|into|for)?\s*(?:my\s+)?(?:searchbar|search\s+bar)?(?:\s*,\s*|\s+for\s+|\s+to\s+)?(.*)", text, re.IGNORECASE)
+    if node == "extensions" and any(k in lower for k in ("search", "searchbar", "search bar", "click", "type in", "type on", "touch my browser", "use my browser", "inside my tab", "in my tab")):
+        m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", text, re.IGNORECASE)
         q = m.group(1).strip(" '\"?,.") if m else text
         # 09-07: the burst coordinates were hard-coded (480, 320), which lands
         # outside a small captured frame; derive them from the real viewport

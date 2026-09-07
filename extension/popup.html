@@ -426,6 +426,33 @@
           </button>
         </div>
 
+        <!-- In-Chat Quick Controls & Toggles (Educational Mode, See Screen, Execute, Effort Score) -->
+        <div class="chat-controls-bar" id="chatControlsBar">
+          <div class="chat-toggles-row">
+            <button type="button" class="chat-toggle-chip active" id="chatToggleEdu" title="Educational Mode: ON limits agent to coursework. OFF allows open-ended agent behavior.">
+              <span class="chip-status-dot"></span>
+              <span class="chip-title">Edu: ON</span>
+            </button>
+            <button type="button" class="chat-toggle-chip active" id="chatToggleSee" title="See Screen: ON sends snapshot of current tab. OFF sends only text.">
+              <span class="chip-status-dot"></span>
+              <span class="chip-title">Screen: ON</span>
+            </button>
+            <button type="button" class="chat-toggle-chip active" id="chatToggleExecute" title="Execute: ON enables mouse gliding, clicking and typing on page.">
+              <span class="chip-status-dot"></span>
+              <span class="chip-title">Execute: ON</span>
+            </button>
+            <button type="button" class="chat-pause-btn" id="chatQuickPause" title="Instantly halt agent actions (or press Esc)" style="display:none;">
+              <svg class="ic ic--xs"><use href="#i-pause" /></svg>
+              <span>Pause</span>
+            </button>
+          </div>
+          <div class="chat-effort-row">
+            <label class="chat-effort-lbl" for="chatEffortSlider">Effort: <span id="chatEffortVal">500</span></label>
+            <input type="range" class="chat-effort-range" id="chatEffortSlider" min="100" max="1000" step="50" value="500" title="Effort score determines model intelligence and reasoning depth" />
+            <span class="chat-model-badge" id="chatModelBadge">DeepSeek V4 Flash Vision</span>
+          </div>
+        </div>
+
         <!-- Threads drawer overlay (hidden by default) -->
         <div class="threads-drawer hidden" id="threadsDrawer">
           <div class="threads-drawer-header">
