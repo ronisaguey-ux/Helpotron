@@ -1,0 +1,42 @@
+{
+  "label": "final3e",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 1442070784, 'winId': 1442070781}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:41283/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #1442070785 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #1442070785 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 1442070785, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "PASS",
+      "detail": "click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=\u2713 Drove LH5DRIVE-1788767537314 \u2014 1 action(s) executed with v"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "PASS",
+      "detail": "page-side click counter = 1; server counter = 1"
+    }
+  ],
+  "surface_failures": []
+}

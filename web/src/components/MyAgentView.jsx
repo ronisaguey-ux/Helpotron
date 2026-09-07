@@ -18,7 +18,7 @@ import ModeControl from './ModeControl.jsx';
 import IdentityPill from './IdentityPill.jsx';
 import ThreadsRail from './ThreadsRail.jsx';
 import AgentConfigsSidebar from './AgentConfigsSidebar.jsx';
-import PermissionModal from './PermissionModal.jsx';
+import ApprovalCard from './ApprovalCard.jsx';
 import LaunchToDocModal from './LaunchToDocModal.jsx';
 import ChatBubble from './ChatBubble.jsx';
 import ThinkingBubble from './ThinkingBubble.jsx';
@@ -65,9 +65,18 @@ export default function MyAgentView({
 
   // ── Permissions & Modals ──
   const [pendingPermissions, setPendingPermissions] = useState([]);
-  const [activePermission, setActivePermission] = useState(null);
   const [showConfigsSidebar, setShowConfigsSidebar] = useState(false);
   const [launchToDocTarget, setLaunchToDocTarget] = useState(null);
+  // Educational mode (09-07): the site chat sends the flag on every agent
+  // call so the server-mode system prompts (edu vs open) apply on this
+  // surface too; the header chip exposes the stored user preference (server
+  // user settings, mirrored to local settings) like the extension popup does.
+  const [educationalMode, setEducationalMode] = useState(
+    () => (loadSettings()?.educationalMode ?? true) !== false
+  );
+  // Post-decision status line (extension parity: card hides, status shows).
+  const [recentApproval, setRecentApproval] = useState(null);
+  const approvalStatusTimer = useRef(null);
 
   // ── Lifecycle & Assignment Events (45s Polling) ──
   const [assignmentEvents, setAssignmentEvents] = useState([]);
@@ -83,7 +92,7 @@ export default function MyAgentView({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingText, thinkingState, assignmentEvents, scrollToBottom]);
+  }, [messages, streamingText, thinkingState, assignmentEvents, pendingPermissions, scrollToBottom]);
 
   // Load initial backend state
   useEffect(() => {
@@ -93,6 +102,20 @@ export default function MyAgentView({
     api.agentMode?.()
       .then((d) => {
         if (mounted && d?.operation_mode) setMode(d.operation_mode);
+      })
+      .catch(() => {});
+
+    // Load the stored educational-mode preference (server is the source of
+    // truth; local settings mirror it so the flag survives reloads too).
+    api.getUserSettings?.()
+      .then((d) => {
+        if (!mounted || !d) return;
+        if (typeof d.educationalMode === 'boolean') {
+          setEducationalMode(d.educationalMode);
+          const local = { ...loadSettings(), educationalMode: d.educationalMode };
+          saveSettings(local);
+          setSettings(local);
+        }
       })
       .catch(() => {});
 
@@ -157,10 +180,21 @@ export default function MyAgentView({
 
     async function pollAssignments() {
       try {
-        const [cardsRes, turnedInRes] = await Promise.all([
+        const [cardsRes, turnedInRes, pendingRes] = await Promise.all([
           api.assignmentCards?.().catch(() => null),
           api.getTurnedInAssignments?.().catch(() => null),
+          api.agentPermissionsPending?.().catch(() => null),
         ]);
+
+        // Merge freshly-created permission requests into the approval queue
+        // (never re-add one the user already answered — merge only new ids).
+        if (mounted && pendingRes && Array.isArray(pendingRes.pending)) {
+          setPendingPermissions((prev) => {
+            const existing = new Set(prev.map((p) => String(p.id)));
+            const fresh = pendingRes.pending.filter((p) => !existing.has(String(p.id)));
+            return fresh.length ? [...prev, ...fresh] : prev;
+          });
+        }
 
         if (!mounted || !cardsRes) return;
 
@@ -333,6 +367,7 @@ export default function MyAgentView({
             mode,
             effort: effortScore,
             persona: activeIdentityId,
+            educational_mode: educationalMode,
             signal: controller.signal,
           },
           (evt) => {
@@ -360,10 +395,32 @@ export default function MyAgentView({
             session_mode_override: mode,
             effort_score: effortScore,
             persona: activeIdentityId,
+            educational_mode: educationalMode,
           });
-          const reply = res?.reply || res?.message || 'Synthesis complete.';
-          replyBuffer = reply;
-          setStreamingText(reply);
+          // A permission_required response carries `message` as an OBJECT
+          // (not a string) — never hand it to the bubble renderer, or React
+          // error #31 unmounts the whole view (09-07 lane4 catch). Pull the
+          // notice text when present; the ApprovalCard owns the rest.
+          const reply =
+            typeof res?.reply === 'string'
+              ? res.reply
+              : typeof res?.message === 'string'
+                ? res.message
+                : typeof res?.message?.text === 'string'
+                  ? res.message.text
+                  : '';
+          if (reply) {
+            replyBuffer = reply;
+            setStreamingText(reply);
+          }
+          // Approval card: the backend holds the action and returns the
+          // request — surface it right under the notice bubble.
+          if (res?.status === 'permission_required') {
+            enqueuePermissionRequest(res);
+            // The chain stopped waiting for a decision — no lingering
+            // "Reasoning Chain Generated" bubble behind the card.
+            setThinkingState({ visible: false, text: '', tokens: 0 });
+          }
         }
       } else {
         // Direct chat fallback
@@ -373,18 +430,34 @@ export default function MyAgentView({
           session_mode_override: mode,
           effort_score: effortScore,
           persona: activeIdentityId,
+          educational_mode: educationalMode,
         });
-        const reply = res?.reply || res?.message || 'Synthesis complete.';
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `agent_${Date.now()}`,
-            role: 'agent',
-            text: reply,
-            timestamp: new Date().toISOString(),
-            tokens: res?.tokens_used || 420,
-          },
-        ]);
+        // Same guard as the stream fallback: `message` can be an OBJECT on
+        // permission_required — render only strings.
+        const reply =
+          typeof res?.reply === 'string'
+            ? res.reply
+            : typeof res?.message === 'string'
+              ? res.message
+              : typeof res?.message?.text === 'string'
+                ? res.message.text
+                : '';
+        if (reply) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `agent_${Date.now()}`,
+              role: 'agent',
+              text: reply,
+              timestamp: new Date().toISOString(),
+              tokens: res?.tokens_used || 420,
+            },
+          ]);
+        }
+        if (res?.status === 'permission_required') {
+          enqueuePermissionRequest(res);
+          setThinkingState({ visible: false, text: '', tokens: 0 });
+        }
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -426,20 +499,61 @@ export default function MyAgentView({
     setThinkingState((prev) => ({ ...prev, visible: false }));
   };
 
-  // ── Permission Decision Handler ──
-  const handlePermissionDecision = async (permId, decision, feedback) => {
+  // ── Permission Decision Handler (ApprovalCard) ──
+  // Contract (09-07): one note input shared by every decision. Each button
+  // sends its decision plus the typed text through the existing approval
+  // protocol — POST /api/agent/permission/respond {permission_id, decision:
+  // allow|deny|neutral, text?, autoAdd?}. Empty text is allowed for
+  // allow/deny; Neutral always carries a note (the card gates that).
+  const handlePermissionDecision = async (permId, decision, note, opts) => {
     try {
-      await api.agentPermissionRespond?.({
+      const payload = {
         permission_id: permId,
         decision,
-        comment: feedback || undefined,
-      });
-      setPendingPermissions((prev) => prev.filter((p) => p.id !== permId));
-      setActivePermission(null);
+        ...(note ? { comment: note, text: note } : {}),
+        ...(opts?.autoAdd ? { autoAdd: true } : {}),
+      };
+      await api.agentPermissionRespond?.(payload);
+      setPendingPermissions((prev) => prev.filter((p) => String(p.id) !== String(permId)));
+      const autoAddSuffix = opts?.autoAdd ? ' — added to auto-approved actions.' : '';
+      setRecentApproval(
+        decision === 'allow'
+          ? `✅ Allowed the agent action.${autoAddSuffix}`
+          : decision === 'deny'
+            ? '⛔ Rejected the agent action.'
+            : '⚪ Neutral — the agent got your note.'
+      );
+      clearTimeout(approvalStatusTimer.current);
+      approvalStatusTimer.current = setTimeout(() => setRecentApproval(null), 4000);
     } catch (e) {
       console.warn('Failed to respond to permission:', e);
       throw e;
     }
+  };
+
+  // ── Educational Mode Toggle (header chip) ──
+  const handleToggleEducationalMode = async () => {
+    const next = !educationalMode;
+    setEducationalMode(next);
+    try {
+      await api.updateSettings?.({ educationalMode: next });
+      const updated = { ...settings, educationalMode: next };
+      setSettings(updated);
+      saveSettings(updated);
+    } catch (e) {
+      // Revert on failure — the server preference stays authoritative.
+      setEducationalMode(!next);
+      console.warn('Failed to update educational mode:', e);
+    }
+  };
+
+  // Append a freshly-returned permission request to the approval queue.
+  const enqueuePermissionRequest = (res) => {
+    const perm = res?.permission_request;
+    if (!perm || !perm.id) return;
+    setPendingPermissions((prev) =>
+      prev.some((p) => String(p.id) === String(perm.id)) ? prev : [perm, ...prev]
+    );
   };
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0] || { title: 'New chat' };
@@ -486,11 +600,44 @@ export default function MyAgentView({
                 onChange={handleModeChange}
                 pendingCount={pendingPermissions.length}
                 onOpenPending={() => {
-                  if (pendingPermissions.length > 0) {
-                    setActivePermission(pendingPermissions[0]);
+                  // The approval card renders inline in the chat stream —
+                  // bring it into view instead of opening a modal.
+                  if (pendingPermissions.length > 0 && chatScrollRef.current) {
+                    chatScrollRef.current.scrollTo({
+                      top: chatScrollRef.current.scrollHeight,
+                      behavior: 'smooth',
+                    });
                   }
                 }}
               />
+
+              {/* Educational Mode Toggle (09-07): school-only help scope —
+                  mirrors the extension popup's Educational Mode switch */}
+              <button
+                id="educationalToggle"
+                type="button"
+                onClick={handleToggleEducationalMode}
+                title={
+                  educationalMode
+                    ? 'Educational mode ON — help is scoped to schoolwork. Click to open the chat.'
+                    : 'Educational mode OFF — chat about anything. Click to scope help to schoolwork.'
+                }
+                className="h-11 px-unit-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface flex items-center gap-micro-2 transition-all shadow-sm cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4 text-primary" />
+                <span className="font-label-caps text-label-caps uppercase hidden sm:inline">
+                  Educational
+                </span>
+                <span
+                  className={`font-code-sm text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border ${
+                    educationalMode
+                      ? 'bg-primary/15 text-primary border-primary/25'
+                      : 'bg-surface-container-high text-on-surface-variant border-outline-variant/30'
+                  }`}
+                >
+                  {educationalMode ? 'ON' : 'OFF'}
+                </span>
+              </button>
 
               {/* Identity Pill Trigger & Switcher */}
               <IdentityPill
@@ -624,6 +771,32 @@ export default function MyAgentView({
                 </div>
               );
             })}
+
+            {/* Approval Card (09-07): the chat-surface approval gate — same
+                four decisions + one note input as the extension card.
+                Rendered inline in the stream, right under the notice bubble. */}
+            {pendingPermissions.length > 0 && (
+              <ApprovalCard
+                key={`${pendingPermissions[0].id}`}
+                request={pendingPermissions[0]}
+                onDecision={handlePermissionDecision}
+              />
+            )}
+
+            {/* Post-decision status line (extension parity: card hides,
+                this line takes its place for a few seconds) */}
+            {!pendingPermissions.length && recentApproval && (
+              <div className="flex justify-center my-2">
+                <span
+                  id="approvalStatus"
+                  role="status"
+                  aria-live="polite"
+                  className="approval-status inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high/80 border border-outline-variant/30 font-code-sm text-code-sm text-on-surface-variant"
+                >
+                  {recentApproval}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Sticky Glass Composer Bar (§3.6.1) */}
@@ -759,14 +932,8 @@ export default function MyAgentView({
         </div>
       )}
 
-      {/* Autonomous Action Permission Modal (§3.6.6) */}
-      {activePermission && (
-        <PermissionModal
-          permission={activePermission}
-          onDecision={handlePermissionDecision}
-          onClose={() => setActivePermission(null)}
-        />
-      )}
+      {/* Autonomous Action approval UI now lives INSIDE the chat stream as the
+          inline ApprovalCard (09-07) — the permission modal is no longer used. */}
 
       {/* Launch To Doc Modal */}
       {launchToDocTarget && (

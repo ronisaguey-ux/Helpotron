@@ -1,0 +1,42 @@
+{
+  "label": "final3d",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 660916236, 'winId': 660916233}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:55089/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #660916237 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #660916237 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 660916237, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "FAIL",
+      "detail": "no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=\u26a0\ufe0f Sign in to sync \u2014 tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True}"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "FAIL",
+      "detail": "page-side click counter = 0; server counter = 0"
+    }
+  ],
+  "surface_failures": []
+}

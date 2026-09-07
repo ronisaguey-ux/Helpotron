@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger("helpotron.datalake")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATALAKE_DIR = BASE_DIR / "data_lake"
+DATALAKE_DIR = Path(os.environ.get("DATALAKE_DIR", str(BASE_DIR / "data_lake")))  # env override so scratch/dev servers never pollute the live lake
 TELEMETRY_DIR = DATALAKE_DIR / "telemetry"
 FEEDBACK_DIR = DATALAKE_DIR / "feedback"
 INSIGHTS_DIR = DATALAKE_DIR / "insights"

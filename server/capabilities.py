@@ -22,7 +22,7 @@ class CapabilitiesEngine:
 
         return {
             "status": "success",
-            "version": "2.6.1",
+            "version": "2.7.0",
             "environment": getattr(config, "environment", "development"),
             "currency_model": {
                 "task_token_value_usd": 0.01,

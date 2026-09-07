@@ -1,0 +1,196 @@
+label: final3d
+browser: /home/roni-saguey/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+extension: /home/roni/Roni_workspace/helpotron/extension
+profile: /tmp/helpotron-ext-verify-qy_r5x3w (temp)
+extension id: dpbeoomhlbphmmamopkjillheehakgka
+manifest: {
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger"
+  ],
+  "version": "2.6.1"
+}
+
+[manifest] Helpotron Academic Companion v2.6.1
+  [invariant] name correct: OK
+  [invariant] version 2.6.1: OK
+  [invariant] service_worker present: OK
+  [invariant] debugger required: OK
+  [invariant] downloads absent: OK
+  [invariant] tabs permission: OK
+[surface] launch
+  [shot] final3d-launch.png (37353 bytes)
+  [key] Enter  #option-chat -> pressed
+  [panel] #chat-options expanded: True
+  [shot] final3d-launcher-agent-controls-open.png (67430 bytes)
+  [toggle] educational: before {'checked': True, 'aria': 'true'}
+  [key] Space  #toggleEducationalMode, input[aria-label*='Educational' i] -> pressed
+  [toggle] educational: after {'checked': False, 'aria': 'false'} -> OK (state changed)
+  [shot] final3d-launcher-toggle-educational-off.png (69305 bytes)
+  [toggle] seescreen: before {'checked': True, 'aria': 'true'}
+  [key] Space  #toggleSeeScreen, input[aria-label*='See screen' i] -> pressed
+  [toggle] seescreen: after {'checked': False, 'aria': 'false'} -> OK (state changed)
+  [shot] final3d-launcher-toggle-seescreen-off.png (64994 bytes)
+  [toggle] execute: before {'checked': False, 'aria': 'false'}
+  [key] Space  #toggleExecute, input[aria-label*='Execute' i] -> pressed
+  [toggle] execute: after {'checked': True, 'aria': 'true'} -> OK (state changed)
+  [shot] final3d-launcher-toggle-execute-on.png (68208 bytes)
+  [key] Enter  #modeSeg .mode-btn[data-mode='manual'], .mode-btn[data-mode='manual'] -> pressed
+  [key] Enter  #modeSeg .mode-btn[data-mode='auto'], .mode-btn[data-mode='auto'] -> pressed
+  [key] Enter  #modeSeg .mode-btn[data-mode='yolo'], .mode-btn[data-mode='yolo'] -> pressed
+  [mode] aria-pressed after cycle: {"manual":"false","auto":"false","yolo":"true"}
+  [shot] final3d-launcher-mode-final.png (68318 bytes)
+[surface] chat
+  [key] Enter  #tabNavChat -> pressed
+  [shot] final3d-chat.png (39058 bytes)
+[surface] type
+  [key] Enter  #tabNavType -> pressed
+  [shot] final3d-type.png (68917 bytes)
+  [key] Enter  button.ltd-preset[data-wpm='65'] -> pressed
+  [key] Enter  button.ltd-preset[data-wpm='48'] -> pressed
+  [key] Enter  button.ltd-preset[data-wpm='85'] -> pressed
+  [shot] final3d-type-presets-cycled.png (68387 bytes)
+[surface] settings
+  [key] Enter  #tabNavSettings -> pressed
+  [shot] final3d-settings.png (47850 bytes)
+  [key] Enter  [data-theme-pick='light'] -> pressed
+  [shot] final3d-settings-theme-light.png (47335 bytes)
+  [key] Enter  [data-theme-pick='dark'] -> pressed
+  [shot] final3d-settings-theme-dark.png (47835 bytes)
+[surface] options
+  [shot] final3d-options.png: attempt 1 failed () — retrying
+  [shot] final3d-options.png (122743 bytes)
+[surface] onboarding
+  [shot] final3d-onboarding.png (127116 bytes)
+[surface] agent
+  [shot] final3d-agent.png: attempt 1 failed () — retrying
+  [shot] final3d-agent.png (67435 bytes)
+  [toggle] agent Control: before {'checked': False}
+  [key] Space  #controlToggle -> pressed
+  [shot] final3d-agent-control-consent.png: attempt 1 failed () — retrying
+  [shot] final3d-agent-control-consent.png (104591 bytes)
+  [toggle] agent Control: consent modal shown (captured) — refusing
+  [key] Enter  #consentCancel -> pressed
+  [key] Space  #controlToggle -> pressed
+  [toggle] agent Control: after {'checked': True} -> OK (toggled)
+[feature] drive
+  [PASS    ] drive.target-tab: drive tab created: {'id': 660916236, 'winId': 660916233}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:55089/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #660916237 created
+  [PASS    ] drive.undriveable-tab: newtab tab #660916237 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 660916237, 'url': 'chrome://newtab/', 'active': True}
+  [FAIL    ] drive.auto-switch-or-retry: no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=⚠️ Sign in to sync — tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True}
+  [FAIL    ] drive.click-evidence: page-side click counter = 0; server counter = 0
+[sync checks] page console errors: 0
+=== toggle results ===
+  educational: ok {'checked': False, 'aria': 'false'}
+  seescreen: ok {'checked': False, 'aria': 'false'}
+  execute: ok {'checked': True, 'aria': 'true'}
+  mode-seg: ok {"manual":"false","auto":"false","yolo":"true"}
+  agent-control: ok {'checked': True}
+=== feature check results ===
+  [PASS    ] drive.target-tab: drive tab created: {'id': 660916236, 'winId': 660916233}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:55089/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #660916237 created
+  [PASS    ] drive.undriveable-tab: newtab tab #660916237 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 660916237, 'url': 'chrome://newtab/', 'active': True}
+  [FAIL    ] drive.auto-switch-or-retry: no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=⚠️ Sign in to sync — tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True
+  [FAIL    ] drive.click-evidence: page-side click counter = 0; server counter = 0
+=== screenshots (17) ===
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launch.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launcher-agent-controls-open.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launcher-toggle-educational-off.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launcher-toggle-seescreen-off.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launcher-toggle-execute-on.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-launcher-mode-final.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-chat.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-type.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-type-presets-cycled.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-settings.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-settings-theme-light.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-settings-theme-dark.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-options.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-onboarding.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-agent.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-agent-control-consent.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/final3d-drive-target.png
