@@ -1,0 +1,37 @@
+{
+  "label": "final3g",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #1151702143 in window 1151702140"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "PASS",
+      "detail": "target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.mode-window",
+      "status": "FAIL",
+      "detail": "live=True body.window-mode=False url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window dbg={\"href\":\"chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window\",\"search\":\"?mode=window\",\"ready\":\"complete\",\"bodyCls\":\"window-mode\",\"popupJsLoaded\":true,\"urlParamsMode\":\"window\"}"
+    },
+    {
+      "check": "keepopen.popout-hidden",
+      "status": "PASS",
+      "detail": "btnPopOut hidden=True (window-mode hides the affordance)"
+    },
+    {
+      "check": "keepopen.window-type",
+      "status": "PASS",
+      "detail": "windows.getAll: type=popup id=1151702144"
+    },
+    {
+      "check": "keepopen.listed-after-focus",
+      "status": "PASS",
+      "detail": "still listed after focusing another window (focus result: ok; headless focus may be cosmetic)"
+    }
+  ],
+  "surface_failures": []
+}

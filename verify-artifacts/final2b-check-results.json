@@ -1,0 +1,57 @@
+{
+  "label": "final2b",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "approval.presence-core",
+      "status": "PASS",
+      "detail": "contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True"
+    },
+    {
+      "check": "approval.presence-legacy",
+      "status": "PASS",
+      "detail": "legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)"
+    },
+    {
+      "check": "approval.presence-autoAdd",
+      "status": "PASS",
+      "detail": "#approvalApproveAuto present"
+    },
+    {
+      "check": "approval.run",
+      "status": "ERROR",
+      "detail": "JS error in (() => { if (!window.__lh5tap) {  window.__lh5tap = [];  chrome.runtime.onMessag: Uncaught | workspace/helpotron/scripts/verify_extension.py\", line 741, in check_approval\n    if not await self._worker_cdp():\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/roni/Roni_workspace/helpotron/scripts/verify_extension.py\", line 614, in _worker_cdp\n    await c.js(\"(() => { if (!window.__lh5tap) {\"\n    ...<9 lines>...\n               \"} return window.__lh5tap.length; })()\")\n  File \"/home/roni/Roni_workspace/helpotron/scripts/verify_extension.py\", line 201, in js\n    raise RuntimeError(f\"JS error in {expr[:80]}: \"\n                       f\"{res['exceptionDetails'].get('text')}\")\nRuntimeError: JS error in (() => { if (!window.__lh5tap) {  window.__lh5tap = [];  chrome.runtime.onMessag: Uncaught\n"
+    },
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #1711318940 in window 1711318937"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "PASS",
+      "detail": "target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.mode-window",
+      "status": "PASS",
+      "detail": "live=True body.window-mode=True url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.popout-hidden",
+      "status": "PASS",
+      "detail": "btnPopOut hidden=True (window-mode hides the affordance)"
+    },
+    {
+      "check": "keepopen.window-type",
+      "status": "PASS",
+      "detail": "windows.getAll: type=popup id=1711318941"
+    },
+    {
+      "check": "keepopen.listed-after-focus",
+      "status": "PENDING",
+      "detail": "focus/relist result: {'error': 'window with mode=window vanished'}"
+    }
+  ],
+  "surface_failures": []
+}

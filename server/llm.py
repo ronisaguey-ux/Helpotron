@@ -1,6 +1,5 @@
 import os
 import json
-import itertools
 import httpx
 import logging
 from pathlib import Path
@@ -23,13 +22,6 @@ except Exception:
     pass
 
 logger = logging.getLogger(__name__)
-
-# Local webchat gateway lanes — free fallback when the OpenRouter key is dead.
-_LOCAL_LANES = (
-    "http://127.0.0.1:8080/v1/chat/completions",  # deepseek lane
-    "http://127.0.0.1:8085/v1/chat/completions",  # gemini lane
-)
-_LANE_RR = itertools.count()
 
 class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
@@ -370,7 +362,7 @@ async def call_llm(
 
     try:
         from .config import config
-        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or getattr(config, "omniroute_api_key", "") or OPENROUTER_API_KEY
+        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or OPENROUTER_API_KEY
     except Exception:
         api_key = os.getenv("OPENROUTER_API_KEY", "") or OPENROUTER_API_KEY
 
@@ -445,47 +437,11 @@ async def call_llm(
                 openrouter_err = err
                 logger.warning("call_llm openrouter model %s failed: %s — next candidate", cand_id, err)
 
-    # Fallback: local webchat gateway lanes (deepseek :8080 / gemini :8085) —
-    # no auth, model name is the gateway passthrough. Keeps the agent alive
-    # when the OpenRouter key is dead or 401 (08-27: the gifted key expired —
-    # every chat was silently falling to the regex dispatcher).
-    lp = dict(payload)
-    lp["model"] = "anymodel"
-    lp.pop("response_format", None)  # gateways may reject json_object; JSON
-    # extraction downstream (_safe_json_extract) tolerates plain text.
-    fallback_ident = format_model_identity_prompt(model_id)
-    fallback_messages = []
-    if system_prompt:
-        fallback_messages.append({"role": "system", "content": f"{fallback_ident}\n\n{system_prompt}"})
-    else:
-        fallback_messages.append({"role": "system", "content": fallback_ident})
-    fallback_messages.append({"role": "user", "content": user_prompt})
-    lp["messages"] = fallback_messages
-    # Try BOTH lanes round-robin (deepseek can be saturated by the audit
-    # engine; gemini stays free) before giving up.
-    lane_errs = []
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for _ in range(len(_LOCAL_LANES)):
-            lane_url = _LOCAL_LANES[next(_LANE_RR) % len(_LOCAL_LANES)]
-            try:
-                resp = await client.post(lane_url, json=lp)
-                if hasattr(resp, "raise_for_status") and callable(resp.raise_for_status):
-                    resp.raise_for_status()
-                ldata = resp.json()
-                lcontent = ldata["choices"][0]["message"]["content"] or ""
-                lcontent = strip_thinking_tokens(lcontent)
-                if not lcontent.strip():
-                    raise ValueError("lane returned empty content")
-                lusage = ldata.get("usage") or {}
-                if db and user_id:
-                    await record_routing_telemetry(db, user_id, route, lusage)
-                return lcontent
-            except Exception as err:
-                lane_errs.append(f"{lane_url}: {err}")
-                logger.warning("call_llm lane failed: %s", err)
-    raise RuntimeError(
-        f"all LLM backends failed (openrouter: {openrouter_err}; local lanes: {'; '.join(lane_errs)})"
-    )
+    # OpenRouter is the ONLY LLM channel (owner rule 2026-09-07: "all llm
+    # calls have to go thru openrouter with no exceptions") — no local-gateway
+    # fallbacks. Surface the real cause to the caller instead.
+    logger.error("all LLM backends failed (openrouter: %s)", openrouter_err, exc_info=True)
+    raise RuntimeError(f"all LLM backends failed (openrouter: {openrouter_err})") from openrouter_err
 
 def extract_json(content: Optional[str]) -> Any:
     if content is None or not str(content).strip():
@@ -591,7 +547,7 @@ async def stream_llm(
 
     try:
         from .config import config
-        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or getattr(config, "omniroute_api_key", "") or OPENROUTER_API_KEY
+        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or OPENROUTER_API_KEY
     except Exception:
         api_key = os.getenv("OPENROUTER_API_KEY", "") or OPENROUTER_API_KEY
 

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Helpotron — Extension Options</title>
+  <link rel="stylesheet" href="design.css" />
+  <style>
+    body { min-height: 100vh; }
+    .options-main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 96px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .options-section {
+      background: var(--surface-container-low);
+      border: 1px solid var(--outline-variant);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      box-shadow: var(--shadow-1);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .account-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      background: var(--surface-container-high);
+    }
+    .account-left { display: flex; align-items: center; gap: 16px; }
+    .avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-headline);
+      font-weight: 600; font-size: 18px;
+    }
+    .opts-header {
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 720px; margin: 0 auto; width: 100%;
+      padding: 10px 32px;
+      background: var(--surface-container-lowest);
+      border-bottom: 1px solid var(--outline-variant);
+      position: sticky; top: 0; z-index: 10;
+    }
+    @media (max-width: 780px) { .opts-header { padding: 10px 16px; } }
+    .set-note { font-size: 13px; line-height: 18px; color: var(--on-surface-variant); }
+    .data-list { list-style: disc; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+    .data-list li { font-size: 14px; color: var(--on-surface); }
+    .link-row { display: flex; gap: 24px; }
+    .link-row a { color: var(--primary); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <symbol id="i-capture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+    </symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
+      <path d="M4 9h16"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="m8 12.5 2.5 2.5L16 9.5"/>
+    </symbol>
+    <symbol id="i-search-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <path d="m21 21-4.3-4.3"/>
+      <path d="m8.5 11 2 2M12.5 8l2 2"/>
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+      <path d="M12 7v5l4 2"/>
+    </symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8V4H8"/>
+      <rect x="4" y="8" width="16" height="12" rx="2"/>
+      <circle cx="9" cy="14" r="1"/>
+      <circle cx="15" cy="14" r="1"/>
+      <path d="M2 14h2M20 14h2"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2" width="6" height="11" rx="3"/>
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1"/>
+      <path d="M12 18v4"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <path d="M21 3v6h-6"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 2 11 13"/>
+      <path d="m22 2-7 20-4-9-9-4z"/>
+    </symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="4" width="14" height="17" rx="2"/>
+      <path d="M9 2h6v4H9z"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 4H6v16h4zM18 4h-4v16h4z"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"/>
+      <path d="m7 10 5 5 5-5"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 3 1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2L12 3z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </symbol>
+    <symbol id="i-sigma" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 5H7l6 6-6 8h11"/>
+    </symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="3"/>
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
+    </symbol>
+    <symbol id="i-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="12" rx="2"/>
+      <path d="M8 20h8M12 16v4"/>
+    </symbol>
+    <symbol id="i-light-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+    </symbol>
+    <symbol id="i-dark-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/>
+      <path d="m13 6 6 6-6 6"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/>
+      <path d="M1 14h6M9 8h6M17 16h6"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5"/>
+      <path d="m11 12 9-9"/>
+      <path d="m16 7 3 3"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </symbol>
+  </defs>
+</svg>
+  <header class="opts-header">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" style="width:28px;height:28px;border-radius:8px;object-fit:cover;border:1px solid var(--outline-variant);" />
+      <span class="text-title-md text-on-surface" style="font-family:var(--font-headline);">Helpotron</span>
+    </div>
+    <button class="icon-btn" aria-label="Extension options" title="Extension options">
+      <svg class="ic"><use href="#i-settings" /></svg>
+    </button>
+  </header>
+
+  <main class="options-main">
+    <div>
+      <h2 class="font-headline-lg text-headline-lg text-primary" style="margin:0 0 8px;">Extension Options</h2>
+      <p class="font-body-sm text-body-sm text-on-surface-variant" style="margin:0;">Configure how Helpotron works in your browser.</p>
+    </div>
+
+    <!-- ── Account ── -->
+    <section class="options-section">
+      <h3 class="text-title-md" style="margin:0;">Account</h3>
+      <div class="account-card">
+        <div class="account-left">
+          <div class="avatar" id="optAvatar">S</div>
+          <div>
+            <div class="font-body-md" id="optAccountStatus">Not connected</div>
+            <div class="font-body-sm text-on-surface-variant" id="optLastSync">Sign in to sync your scrapes and chat.</div>
+          </div>
+        </div>
+        <button class="btn btn--outline btn--sm" id="btnDisconnect" type="button" hidden>Disconnect</button>
+      </div>
+      <button class="btn btn--primary" id="optSignIn" type="button" style="width:auto;align-self:flex-start;">
+        <svg class="ic"><use href="#i-arrow" /></svg>
+        <span>Sign in to Helpotron</span>
+      </button>
+    </section>
+
+    <!-- ── Capture behavior ── -->
+    <section class="options-section">
+      <h3 class="text-title-md" style="margin:0;">Capture behavior</h3>
+      <div class="card--inset">
+        <div class="field-label" style="margin-bottom:8px;">When does Helpotron capture a page?</div>
+        <ul class="data-list">
+          <li>Only when you click Scrape in the extension popup (or start a chat-context scrape)</li>
+          <li>Nothing is read or saved on page open, and nothing is captured on its own</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ── Appearance ── -->
+    <section class="options-section">
+      <h3 class="text-title-md" style="margin:0;">Appearance</h3>
+      <div>
+        <div class="field-label" style="margin-bottom:8px;">Theme</div>
+        <div class="theme-grid">
+          <button class="theme-opt" data-theme-pick="system" type="button">
+            <svg class="ic ic--lg"><use href="#i-desktop" /></svg>
+            System
+          </button>
+          <button class="theme-opt" data-theme-pick="light" type="button">
+            <svg class="ic ic--lg"><use href="#i-light-mode" /></svg>
+            Light
+          </button>
+          <button class="theme-opt" data-theme-pick="dark" type="button">
+            <svg class="ic ic--lg"><use href="#i-dark-mode" /></svg>
+            Dark
+          </button>
+        </div>
+      </div>
+      <div>
+        <div class="field-label" style="margin-bottom:8px;">Accent color</div>
+        <div class="swatches">
+          <button class="swatch selected" data-accent="teal" style="background:#59d8c9;" aria-label="Teal accent" title="Teal (default)"></button>
+          <button class="swatch" data-accent="indigo" style="background:#bfc2ff;" aria-label="Indigo accent" title="Indigo"></button>
+          <button class="swatch" data-accent="rose" style="background:#ffb2be;" aria-label="Rose accent" title="Rose"></button>
+          <button class="swatch" data-accent="amber" style="background:#ffc46b;" aria-label="Amber accent" title="Amber"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Privacy ── -->
+    <section class="options-section">
+      <h3 class="text-title-md" style="margin:0;">Privacy</h3>
+      <div class="card--inset">
+        <div class="field-label" style="margin-bottom:8px;">What a capture sends to your Helpotron account</div>
+        <ul class="data-list">
+          <li>Page URL and title of the page you scrape</li>
+          <li>Assignment prompt and rubric text found on the page</li>
+          <li>Course name and metadata used to file the material</li>
+          <li>File links on the page, plus file size and SHA-256 hash; the file itself when it is under 6 MB</li>
+        </ul>
+        <div class="font-body-sm text-body-sm text-on-surface-variant" style="margin-top:8px;">
+          Chat mode sends your messages and, when you turn on “See screen”, a compressed screenshot of the selected tab. Keystrokes you type into pages are never read. Full details: see the privacy policy linked below.
+        </div>
+      </div>
+      <div class="link-row">
+        <a href="#" id="linkPrivacy">Privacy Policy</a>
+        <a href="#" id="linkTerms">Terms of Service</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="theme.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

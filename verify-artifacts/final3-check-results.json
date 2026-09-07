@@ -1,0 +1,122 @@
+{
+  "label": "final3",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "approval.presence-core",
+      "status": "PASS",
+      "detail": "contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True"
+    },
+    {
+      "check": "approval.presence-legacy",
+      "status": "PASS",
+      "detail": "legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)"
+    },
+    {
+      "check": "approval.presence-autoAdd",
+      "status": "PASS",
+      "detail": "#approvalApproveAuto present"
+    },
+    {
+      "check": "approval.worker-tap",
+      "status": "PASS",
+      "detail": "listener injected on service worker"
+    },
+    {
+      "check": "approval.empty-approve",
+      "status": "PASS",
+      "detail": "expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[{'reqId': 'lh5_empty-approve', 'decision': 'allow', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-reject",
+      "status": "PASS",
+      "detail": "expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[{'reqId': 'lh5_empty-reject', 'decision': 'deny', 'message': None, 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True status=\u26d4 Rejected the agent action."
+    },
+    {
+      "check": "approval.text-approve",
+      "status": "PASS",
+      "detail": "expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[{'reqId': 'lh5_text-approve', 'decision': 'allow', 'message': 'pls do it gently', 'autoAdd': False, 'act': 'APPROVAL_RESPONSE'}] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-neutral-blocked",
+      "status": "PASS",
+      "detail": "no request sent; input flagged (active=True aria-invalid=true class='input'); card still visible"
+    },
+    {
+      "check": "approval.neutral-with-text",
+      "status": "PASS",
+      "detail": "decision=neutral note='please wait on that' resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_neutral'} status=\u26aa Neutral \u2014 the agent got your note."
+    },
+    {
+      "check": "approval.autoAdd-empty-approve",
+      "status": "PASS",
+      "detail": "tap=[{'reqId': 'lh5_auto', 'decision': 'allow', 'message': None, 'autoAdd': True, 'act': 'APPROVAL_RESPONSE'}] resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_auto'}"
+    },
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 630424450, 'winId': 630424447}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:52497/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #630424451 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #630424451 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 630424451, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "FAIL",
+      "detail": "no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=\u26a0\ufe0f Sign in to sync \u2014 tap the account chip above."
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "FAIL",
+      "detail": "page-side click counter = 0; server counter = 0"
+    },
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #630424454 in window 630424447"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "PASS",
+      "detail": "target found: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.mode-window",
+      "status": "FAIL",
+      "detail": "live=True body.window-mode=False url=chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=window"
+    },
+    {
+      "check": "keepopen.popout-hidden",
+      "status": "FAIL",
+      "detail": "btnPopOut hidden=False (window-mode hides the affordance)"
+    },
+    {
+      "check": "keepopen.window-type",
+      "status": "PASS",
+      "detail": "windows.getAll: type=popup id=630424455"
+    },
+    {
+      "check": "keepopen.listed-after-focus",
+      "status": "PASS",
+      "detail": "still listed after focusing another window (focus result: ok; headless focus may be cosmetic)"
+    }
+  ],
+  "surface_failures": []
+}

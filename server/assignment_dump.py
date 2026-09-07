@@ -295,7 +295,7 @@ class AssignmentDumpManager:
     @staticmethod
     async def _ocr_image_gemini(image_path: str, user_id: str) -> str:
         """Performs visual OCR and diagram parsing via Gemini 3.8 Flash Vision."""
-        api_key = (os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key or config.omniroute_api_key).strip()
+        api_key = (os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key).strip()
         if not api_key:
             return f"OCR Image scan: {os.path.basename(image_path)}"
 

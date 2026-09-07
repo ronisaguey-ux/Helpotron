@@ -1,0 +1,1183 @@
+/* popup.css — browser-action popup shell over the shared design system. */
+@import url('design.css');
+
+body {
+  width: 410px;
+  height: 600px;
+  max-height: 600px;
+  overflow: hidden;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+}
+
+.chat-stream, .chat-input, .text-area-preview, .field-hint, .panel-desc {
+  user-select: text;
+}
+
+/* Standalone / Pop-out Window mode (remains open on screen) */
+body.window-mode {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+}
+
+/* ═══ App Bar ═══ */
+.appbar {
+  padding: 8px 12px;
+  background: var(--surface-container-lowest);
+  border-bottom: 1px solid var(--outline-variant);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.appbar .logo {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  border: 1px solid var(--outline-variant);
+}
+.appbar .app-title {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--on-surface);
+}
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 140ms ease-out;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-chip:hover {
+  border-color: var(--primary);
+  background: var(--surface-container-high);
+}
+.account-chip .ic {
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  transition: all 140ms ease-out;
+}
+.icon-btn:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  border-color: var(--outline-variant);
+}
+.icon-btn--sm {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+.icon-btn--danger {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 50%, transparent);
+  background: color-mix(in srgb, var(--error) 16%, transparent);
+  animation: pulseGlowDanger 1.2s infinite ease-in-out;
+}
+.icon-btn--danger:hover {
+  background: var(--error);
+  color: var(--on-error);
+}
+@keyframes pulseGlowDanger {
+  0%, 100% { opacity: 0.7; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* ═══ Segmented Top Nav Bar ═══ */
+.popup-nav {
+  display: flex;
+  background: var(--surface-container-low);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--outline-variant);
+  gap: 4px;
+  flex-shrink: 0;
+}
+.nav-tab {
+  /* flex-basis 0 + min-width 0: the tab bar must never be wider than the body.
+     Before this the four labels summed to 420px inside a 410px popup, so every
+     view scrolled sideways and the Settings tab was clipped off the edge. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 160ms ease-out;
+  white-space: nowrap;
+}
+.nav-tab > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.nav-tab .ic {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+  transition: opacity 140ms ease;
+}
+.nav-tab:hover {
+  background: var(--surface-container);
+  color: var(--on-surface);
+}
+.nav-tab.active {
+  background: var(--surface-container-high);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.nav-tab.active .ic {
+  opacity: 1;
+  color: var(--primary);
+}
+
+/* ═══ Agent Active Bar (Action runner with Instant Pause) ═══ */
+.agent-active-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface-container-high));
+  border-bottom: 2px solid var(--primary);
+  flex-shrink: 0;
+  animation: agentBarSlideDown 200ms ease-out;
+}
+.agent-active-bar.paused {
+  background: color-mix(in srgb, var(--sem-amber) 20%, var(--surface-container-high));
+  border-bottom-color: var(--sem-amber);
+}
+@keyframes agentBarSlideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.agent-active-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+  flex-shrink: 0;
+  animation: pulseGlow 1.2s infinite ease-in-out;
+}
+.agent-active-bar.paused .agent-active-pulse {
+  background: var(--sem-amber);
+  box-shadow: 0 0 8px var(--sem-amber);
+  animation: none;
+}
+.agent-active-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.agent-active-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+  line-height: 13px;
+}
+.agent-active-desc {
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-active-bar .btn {
+  width: auto !important;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 4px 10px;
+  height: 28px;
+}
+.btn--danger {
+  background: var(--error);
+  color: var(--on-error);
+  border: 1px solid var(--error);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.btn--danger:hover {
+  background: color-mix(in srgb, var(--error) 85%, #000);
+}
+
+/* ═══ Main container & View switching ═══ */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 10px 12px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.view-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.view-panel.hidden {
+  display: none !important;
+}
+
+/* ═══ Launcher View (Scrape & Controls) ═══ */
+.option-grid { display: flex; flex-direction: column; gap: 8px; }
+.option-cluster { display: flex; flex-direction: column; gap: 6px; }
+.option-card {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease-out, background-color 160ms ease-out;
+}
+.option-card:hover { border-color: var(--primary); background: var(--surface-container-high); }
+.option-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.option-card .option-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  /* design.css has no --radius-md (undefined token computed to 0px and
+     squared the chip); --radius-lg is the design's control scale. */
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface-container-high));
+  color: var(--primary);
+}
+.option-card .option-icon .ic { width: 16px; height: 16px; }
+.option-card .option-body { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.option-card .option-title {
+  font-family: var(--font-headline); font-size: 12.5px; font-weight: 700;
+  letter-spacing: -0.01em; color: var(--on-surface);
+}
+.option-card .option-sub { font-size: 11px; line-height: 14px; color: var(--on-surface-variant); }
+.option-card .option-chevron { color: var(--on-surface-variant); transition: transform 180ms ease-out; }
+.option-card[aria-expanded="true"] .option-chevron { transform: rotate(180deg); }
+.option-panel {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+}
+.option-panel[hidden] { display: none; }
+#scrape-options .btn { justify-content: flex-start; width: 100%; }
+.divider-char { opacity: 0.5; }
+
+/* Crawl progress & results */
+.crawl-progress {
+  padding: 8px 10px; border-radius: var(--radius-lg);
+  background: var(--surface-container);
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 16px;
+  color: var(--on-surface-variant);
+  white-space: pre-wrap;
+}
+#crawlResultsWrap { display: flex; flex-direction: column; gap: 4px; }
+.crawl-results {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 180px; overflow-y: auto;
+  padding: 2px;
+}
+.crawl-result-row {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px 8px; border-radius: var(--radius-lg);
+  font-size: 11.5px; line-height: 15px;
+}
+.crawl-result-row .r-title { color: var(--on-surface); overflow-wrap: anywhere; }
+.crawl-result-row .r-meta {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10px; color: var(--on-surface-variant);
+}
+.crawl-result-row .r-ok { color: var(--sem-green); }
+.crawl-result-row .r-fail { color: var(--error); }
+.crawl-result-row:nth-child(odd) { background: var(--surface-container); }
+
+/* Switches & Mode controls */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+.switch-row:hover {
+  background: var(--surface-container-high);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--outline-variant));
+}
+.switch-row .switch-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  pointer-events: none;
+}
+.switch-row .switch-label .switch-sub {
+  font-weight: 400;
+  font-size: 10.5px;
+  line-height: 13px;
+  color: var(--on-surface-variant);
+  pointer-events: none;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.switch .track {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--surface-container-highest);
+  border: 1px solid var(--outline-variant);
+  transition: background-color 200ms ease-out, border-color 200ms ease-out;
+  pointer-events: none;
+}
+.switch .track::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-bright);
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.switch input:checked + .track {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.switch input:checked + .track::before {
+  transform: translateX(18px);
+  background: var(--on-primary);
+}
+.mode-seg-wrap { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+.mode-seg-wrap .seg .seg-btn { flex: 1; justify-content: center; font-size: 11px; padding: 3px 6px; }
+.mode-seg-wrap .field-hint { font-size: 10.5px; line-height: 13px; }
+.model-line {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 14px;
+  color: var(--on-surface-variant);
+}
+.model-line .model-effort { color: var(--primary); }
+.model-line .model-local { color: var(--sem-amber); }
+#btnOpenChat { min-height: 32px; padding: 6px 12px; font-size: 12px; justify-content: center; }
+
+/* Approval card in popup — teal primary + label-caps, per design.css tokens.
+   Card lives inside the Agent Controls accordion; renderNextApproval expands
+   the panel AND the rule below force-opens it while a card/status is up. */
+.approval-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-low));
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
+}
+#chat-options:has(.approval-card[style*="display: block"]),
+#chat-options:has(.approval-status:not([hidden])) { display: flex !important; }
+.approval-card .a-title {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 16px;
+  font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--primary);
+}
+.approval-card .a-title .ic { color: var(--primary); }
+.approval-card .a-text { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+.approval-card .a-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.approval-card .a-actions .btn {
+  flex: 1 1 0; min-width: 0; width: auto;
+  justify-content: center; min-height: 38px; padding: 6px 8px; font-size: 12px;
+}
+.approval-card .a-actions .approval-auto { flex: 1 1 100%; }
+.approval-card .a-actions .approval-auto .a-auto-badge {
+  font-family: var(--font-mono); font-size: 8.5px; line-height: 12px;
+  letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+  padding: 2px 5px; border-radius: 999px; color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.approval-card .a-input-row { display: flex; flex-direction: column; gap: 4px; }
+.approval-card .a-input-label {
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 14px;
+  font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+.approval-card .a-input-row .input { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.approval-card .a-helper {
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 14px;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+.approval-card .a-helper.a-helper--warn { color: var(--error); font-weight: 600; }
+/* After an answer the card hides and this status line takes its place */
+.approval-status {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-container-low));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  font-size: 12px; line-height: 16px; color: var(--on-surface);
+}
+
+/* Keep-open error (inline under the app bar, anchored to the buttons) */
+.appbar { position: relative; }
+.popout-error {
+  position: absolute; top: calc(100% + 6px); right: 12px; z-index: 40;
+  max-width: 300px;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg);
+  background: var(--error-container); color: var(--on-error-container);
+  border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
+  font-size: 11.5px; line-height: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.icon-btn:disabled { opacity: 0.55; cursor: default; transform: none; box-shadow: none; }
+
+/* Range slider styling */
+.range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-container-highest);
+  accent-color: var(--primary);
+  cursor: pointer;
+  outline: none;
+}
+
+/* ═══ View 2: Embedded Chat ═══ */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+  position: relative;
+}
+.chat-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.chat-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--primary);
+}
+.chat-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sem-green);
+  box-shadow: 0 0 6px var(--sem-green);
+}
+.chat-actions {
+  display: flex;
+  gap: 4px;
+}
+.thread-info-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  font-size: 11px;
+}
+.thread-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.btn-icon-ghost {
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.btn-icon-ghost:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+.threads-drawer {
+  position: absolute;
+  /* Anchored below the chat header bar (~46px) + thread info strip (~40px);
+     the old 60px start let the strip's rename/pin buttons stay clickable on
+     top of the drawer, and 50px bottom left a dead sliver under it. */
+  top: 88px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-lg);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.threads-drawer.hidden { display: none !important; }
+.threads-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--outline-variant);
+  padding-bottom: 4px;
+}
+.threads-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.thread-item {
+  padding: 6px 8px;
+  border-radius: var(--radius-lg);
+  font-size: 11.5px;
+  color: var(--on-surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.thread-item:hover {
+  background: var(--surface-container-high);
+}
+.thread-item.active {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-weight: 600;
+}
+.thread-item .pin-indicator {
+  margin-left: auto;
+  color: var(--primary);
+}
+.settings-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 2px;
+  scroll-behavior: smooth;
+}
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--radius-xl);
+  font-size: 12.5px;
+  line-height: 17px;
+  word-break: break-word;
+}
+.chat-msg.agent {
+  align-self: flex-start;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--outline-variant);
+}
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.chat-note {
+  align-self: center;
+  max-width: 95%;
+  background: var(--surface-container-lowest);
+  border: 1px dashed var(--outline-variant);
+  color: var(--on-surface-variant);
+  font-size: 11.5px;
+  text-align: center;
+}
+.chat-sender {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.chat-token-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--sem-amber) 16%, var(--surface-container));
+  border: 1px solid var(--sem-amber);
+  color: var(--sem-amber);
+  font-size: 11.5px;
+}
+.chat-composer-box {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--outline-variant);
+}
+.chat-input {
+  flex: 1;
+  min-height: 42px;
+  max-height: 90px;
+  padding: 8px 10px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 17px;
+  resize: none;
+  outline: none;
+}
+.chat-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+.chat-send-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: var(--radius-xl);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ═══ View 3: Launch to Doc ═══ */
+.launch-doc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-headline);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+.panel-desc {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.field-word-count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--primary);
+}
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.btn-link:hover { color: var(--primary-hover); }
+.select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+.select:focus {
+  border-color: var(--primary);
+}
+.text-area-preview {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 16px;
+  resize: vertical;
+}
+.ltd-preset {
+  flex: 1;
+  font-size: 11px;
+  padding: 5px 6px;
+  text-align: center;
+}
+
+/* Typing Active Card */
+.typing-active-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-high));
+  border: 1px solid var(--primary);
+  margin-top: 4px;
+}
+.typing-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.typing-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: typingGlow 1.2s infinite ease-in-out;
+}
+@keyframes typingGlow {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 8px var(--primary); }
+}
+.typing-pct {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--primary);
+}
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-container-highest);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 200ms ease;
+}
+.typing-btn-row {
+  display: flex;
+  gap: 8px;
+}
+.typing-btn-row .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* ═══ Embedded Settings View Styling ═══ */
+.settings-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-account-card {
+  padding: 10px 12px;
+  background: var(--surface-container-high);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.settings-account-card .btn {
+  width: auto !important;
+  flex-shrink: 0 !important;
+}
+.settings-account-card .avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.settings-account-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.settings-account-info .font-body-sm {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-account-info .field-hint {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--on-surface-variant);
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* ═══ Bottom Status strip & Banners ═══ */
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 14px;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  flex-shrink: 0;
+}
+.status[hidden] { display: none; }
+.status-text {
+  flex: 1;
+  min-width: 0;
+  /* Cap at two lines: a long error used to grow the strip and shove the
+     content area up. The full text stays available via the title attribute. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.status-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  opacity: 0.65;
+  transition: all 140ms ease-out;
+}
+.status-close:hover { opacity: 1; background: var(--surface-container-high); }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface-container));
+  border-bottom: 1px solid var(--primary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+/* What's new — a ONE-LINE summary that expands on demand. It used to render
+   every release note inline: 179px of a 600px popup with its own content
+   clipped at 110px of 722px, i.e. unreadable AND space-hungry at once. */
+.whatsnew-banner {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--sem-cyan) 10%, var(--surface-container-low));
+  border-color: color-mix(in srgb, var(--sem-cyan) 35%, transparent);
+}
+.whatsnew-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+.whatsnew-icon { color: var(--sem-cyan); flex-shrink: 0; }
+.whatsnew-head > .btn,
+.whatsnew-head > .whatsnew-expand,
+.whatsnew-head > .ic { flex: 0 0 auto; }
+.whatsnew-headline {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.whatsnew-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms ease-out;
+}
+.whatsnew-expand:hover { color: var(--on-surface); border-color: var(--primary); }
+.whatsnew-chevron { transition: transform 160ms ease-out; }
+.whatsnew-expand[aria-expanded="true"] .whatsnew-chevron { transform: rotate(180deg); }
+.whatsnew-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  max-height: 168px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  padding: 0 10px 8px;
+  box-sizing: border-box;
+}
+.whatsnew-body[hidden] { display: none; }
+.whatsnew-item {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 4px 6px;
+  border-left: 2px solid color-mix(in srgb, var(--sem-cyan) 60%, transparent);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-radius: var(--radius-lg);
+}
+.whatsnew-badge { font-family: var(--font-mono); font-size: 10px; color: var(--sem-cyan); }
+.whatsnew-badge--major { color: var(--sem-amber); font-weight: 600; }
+.whatsnew-title { font-size: 12px; font-weight: 600; }
+.whatsnew-notes {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--on-surface-variant);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.whatsnew-more { font-size: 10px; color: var(--on-surface-variant); }
+
+
+
+/* ═══ 09-06 refactor: shared bits the shell was missing ═══ */
+.ic--xs { width: 11px; height: 11px; }
+/* design.css gives .btn--primary/secondary/outline `width: 100%` (they are
+   full-width block CTAs by design). Inside a banner row that made the dismiss
+   button eat the whole line and squeeze the headline to zero width, so the
+   compact variants opt back out of it. */
+.btn--xs,
+.btn--inline {
+  width: auto;
+  flex: 0 0 auto;
+}
+.btn--xs {
+  padding: 3px 9px;
+  font-size: 10.5px;
+  border-radius: var(--radius-lg);
+  min-height: 0;
+}
+
+
+/* ═══ 09-06 density pass — every view must fit a 600px popup ═══
+   Measured before this block: launcher overflowed by 39px and Launch-to-Doc by
+   151px, so both needed scrolling to reach their primary button. design.css is
+   sized for the full web app; these overrides are scoped to the popup shell. */
+
+/* design.css gives .seg a `margin: 12px 14px 0`, which inset the segmented
+   controls relative to every card next to them. */
+.app-main .seg,
+.mode-seg-wrap .seg {
+  margin: 0;
+  padding: 3px;
+}
+.app-main .seg-btn {
+  min-height: 30px;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* Switch rows: three of them are the launcher's biggest block. Keep the
+   compact 4px padding and stop the sub-labels wrapping to a second line. */
+.app-main .switch-row { padding: 5px 9px; }
+.app-main .switch-row .switch-sub { line-height: 13px; }
+.option-grid { gap: 7px; }
+.option-cluster { gap: 5px; }
+
+/* Launch to Doc: trim the last of the overflow so the primary button is
+   reachable without scrolling. */
+.launch-doc-panel .field-hint { font-size: 10px; line-height: 13px; }
+.launch-doc-panel .btn--lg { min-height: 40px; font-size: 13px; }
+.launch-doc-panel .panel-section-title { margin-bottom: 0; }
+
+/* Launch to Doc: the draft box alone was 102px tall on open. */
+.launch-doc-panel { gap: 8px; }
+.launch-doc-panel .panel-desc {
+  font-size: 11px;
+  line-height: 15px;
+  margin: 0;
+}
+.launch-doc-panel .field { gap: 3px; }
+.launch-doc-panel .input,
+.launch-doc-panel .select { min-height: 36px; }
+.text-area-preview {
+  min-height: 48px;
+  max-height: 96px;
+  line-height: 16px;
+}
+/* Measured after the pass above: the panel still ran 459px into a 427px
+   viewport (with the What's-New banner up), clipping the Start button.
+   field-header's global 4px bottom margin ×3 fields + the two-line cadence
+   buttons + the 3-row draft box were the remaining cost. */
+.launch-doc-panel .field-header { margin-bottom: 0; }
+
+/* The effort label ran the full width in mono caps; the tier it names is
+   already spelled out on the model line directly beneath it. */
+.field-header .field-label { font-size: 10.5px; letter-spacing: 0.04em; }
+
+/* Typing cadence: "Academic (65 wpm)" wrapped to two lines and doubled the
+   control's height. Name and rate share one line ("Academic · 65 WPM") so the
+   seg matches the launcher's 30px mode control. */
+#ltdCadenceSeg .seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 4px;
+  line-height: 13px;
+  padding: 5px 6px;
+  white-space: nowrap;
+}
+.seg-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.seg-sub::before {
+  content: '·';
+  font-size: 10px;
+  opacity: 0.55;
+}
+/* Keep the right-hand action links clear of the panel edge. */
+.field-header { gap: 10px; }
+.field-header .btn-link,
+.field-header .field-word-count { padding-right: 2px; }
