@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Helpotron Companion</title>
+  <!-- Design system (dark-first; theme.js applies [data-theme]) -->
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <symbol id="i-capture" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 3v18l5.2-4.6 2 6.1 3-1-2-6.1H17L4 3z"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+    </symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="m8 12.5 2.5 2.5L16 9.5"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4M12 17h.01"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5"/>
+      <path d="m11 12 9-9"/>
+      <path d="m16 7 3 3"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12"/>
+      <path d="m7 10 5 5 5-5"/>
+      <path d="M5 21h14"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 2 11 13"/>
+      <path d="m22 2-7 20-4-9-9-4z"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 4H6v16h4zM18 4h-4v16h4z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <path d="M21 3v6h-6"/>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="17" x2="12" y2="22"/>
+      <path d="M5 17h14v-2l-3-4V4h1V2H7v2h1v7l-3 4v2z"/>
+    </symbol>
+    <symbol id="i-pin-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="2" y1="2" x2="22" y2="22"/>
+      <line x1="12" y1="17" x2="12" y2="22"/>
+      <path d="M9 9v2l-3 4v2h10m2-2l-1-1.3V4h1V2H7v2h1v3"/>
+    </symbol>
+    <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+      <polyline points="15 3 21 3 21 9"/>
+      <line x1="10" y1="14" x2="21" y2="3"/>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </symbol>
+  </defs>
+</svg>
+  <!-- ============ App bar ============ -->
+  <header class="appbar">
+    <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" />
+    <div class="app-title">Helpotron</div>
+    <div class="spacer"></div>
+    <button class="account-chip" id="accountChip" type="button" title="Account" aria-expanded="false" aria-controls="loginPanel">
+      <svg class="ic"><use href="#i-user" /></svg>
+      <span>Guest</span>
+    </button>
+    <button class="icon-btn icon-btn--danger" id="btnHeaderPause" type="button" title="Instantly pause agent actions (Esc)" aria-label="Pause agent action" style="display:none">
+      <svg class="ic"><use href="#i-pause" /></svg>
+    </button>
+    <button class="icon-btn" id="btnAgentMode" type="button" title="CHAT — the agent can see your screen and, with your approval, act on the selected tab" aria-label="Open Agent chat">
+      <svg class="ic"><use href="#i-chat" /></svg>
+    </button>
+    <button class="icon-btn" id="btnOptions" type="button" title="Extension options" aria-label="Open extension options">
+      <svg class="ic"><use href="#i-settings" /></svg>
+    </button>
+    <button class="icon-btn" id="btnPopOut" type="button" title="Keep open (pop out window so it stays open when clicking outside)" aria-label="Pop out into persistent window">
+      <svg class="ic"><use href="#i-external" /></svg>
+    </button>
+    <button class="icon-btn" id="btnClosePopup" type="button" title="Close extension" aria-label="Close extension">
+      <svg class="ic"><use href="#i-close" /></svg>
+    </button>
+  </header>
+
+  <!-- ============ Update banner (hidden; popup.js shows on update_available) ============ -->
+  <div class="update-banner" id="updateBanner" style="display:none">
+    <svg class="ic ic--sm"><use href="#i-download" /></svg>
+    <div>
+      <div class="b-sub">NEW VERSION AVAILABLE</div>
+      <div class="font-body-sm">Helpotron v<span id="updateVersionBadge">2.5.2</span> — download the update</div>
+    </div>
+    <button class="btn btn--ghost btn--sm" id="btnDownloadUpdate">Get</button>
+  </div>
+
+  <!-- ============ What's new (release notifications; popup.js renders unread, acks on Got it) ============ -->
+  <div class="update-banner whatsnew-banner" id="whatsNewBanner" style="display:none">
+    <div class="whatsnew-head">
+      <svg class="ic ic--sm whatsnew-icon"><use href="#i-check-circle" /></svg>
+      <span class="whatsnew-headline" id="whatsNewHeadline">What&rsquo;s new</span>
+      <button class="whatsnew-expand" id="btnWhatsNewExpand" type="button"
+              aria-expanded="false" aria-controls="whatsNewBody" title="Show release notes">
+        <span id="whatsNewExpandLabel">Details</span>
+        <svg class="ic ic--xs whatsnew-chevron"><use href="#i-chevron" /></svg>
+      </button>
+      <button class="btn btn--primary btn--xs" id="btnWhatsNewDismiss" type="button">Got it</button>
+    </div>
+    <div class="whatsnew-body" id="whatsNewBody" hidden></div>
+  </div>
+
+  <!-- ============ Login panel (opened from the account chip) ============ -->
+  <section class="card option-panel" id="loginPanel" hidden aria-labelledby="loginTitle">
+    <span class="field-label" id="loginTitle">Sign in to Helpotron</span>
+    <div class="field">
+      <label class="field-label" for="server">Server</label>
+      <input class="input" id="server" type="url" placeholder="https://helpotron.dpdns.org" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="public_id">Public ID</label>
+      <input class="input" id="public_id" type="text" placeholder="your Helpotron username" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="password">Password</label>
+      <input class="input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn btn--primary" id="saveSettings" type="button">
+      <svg class="ic"><use href="#i-key" /></svg>
+      Save &amp; Connect
+    </button>
+    <p class="field-hint">
+      Security-check accounts: sign in on the Helpotron website once — the session syncs here automatically.
+    </p>
+  </section>
+
+  <!-- ============ Navigation Tabs (Launcher / Chat / Type / Settings) ============ -->
+  <nav class="popup-nav" id="popupNav" role="tablist" aria-label="Main Navigation">
+    <button class="nav-tab active" id="tabNavLauncher" type="button" role="tab" aria-selected="true" aria-controls="viewLauncher" title="Scrape &amp; Agent controls" aria-label="Scrape and agent controls">
+      <svg class="ic ic--sm"><use href="#i-capture" /></svg>
+      <span>Scrape</span>
+    </button>
+    <button class="nav-tab" id="tabNavChat" type="button" role="tab" aria-selected="false" aria-controls="viewChat" title="Agent chat" aria-label="Agent chat">
+      <svg class="ic ic--sm"><use href="#i-chat" /></svg>
+      <span>Chat</span>
+    </button>
+    <button class="nav-tab" id="tabNavType" type="button" role="tab" aria-selected="false" aria-controls="viewType" title="Launch to Doc — humanized typing" aria-label="Launch to Doc">
+      <svg class="ic ic--sm"><use href="#i-doc" /></svg>
+      <span>Launch</span>
+    </button>
+    <button class="nav-tab" id="tabNavSettings" type="button" role="tab" aria-selected="false" aria-controls="viewSettings" title="Extension settings" aria-label="Extension settings">
+      <svg class="ic ic--sm"><use href="#i-settings" /></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- ============ Agent Action Active / Instant Pause Bar ============ -->
+  <div class="agent-active-bar" id="agentActiveBar" style="display:none">
+    <div class="agent-active-pulse"></div>
+    <div class="agent-active-info">
+      <span class="agent-active-title">Agent Driving Screen</span>
+      <span class="agent-active-desc" id="agentActiveDesc">Moving cursor…</span>
+    </div>
+    <button class="btn btn--danger btn--sm" id="btnPauseAgentAction" type="button" title="Instantly pause agent actions (or press Esc)">
+      <svg class="ic ic--sm" id="btnPauseIcon"><use href="#i-pause" /></svg>
+      <span id="btnPauseAgentText">PAUSE</span>
+    </button>
+  </div>
+
+  <!-- ============ Main Container with 4 Views ============ -->
+  <main class="app-main">
+
+    <!-- ───────────── VIEW 1: LAUNCHER (SCRAPE + AGENT CONFIG) ───────────── -->
+    <div class="view-panel" id="viewLauncher" role="tabpanel" aria-labelledby="tabNavLauncher">
+      <div class="option-grid" id="launcher">
+
+        <!-- SCRAPE -->
+        <section class="option-cluster" aria-label="Scrape">
+          <button class="option-card" id="option-scrape" type="button" role="button" aria-expanded="false" aria-controls="scrape-options">
+            <span class="option-icon"><svg class="ic"><use href="#i-globe" /></svg></span>
+            <span class="option-body">
+              <span class="option-title">Scrape</span>
+              <span class="option-sub">Pull the page (or the whole site) into Helpotron</span>
+            </span>
+            <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
+          </button>
+          <div class="option-panel" id="scrape-options" hidden>
+            <button class="btn btn--primary" id="btnScrapeCurrent" type="button">
+              <svg class="ic"><use href="#i-capture" /></svg>
+              <span>Scrape current thing only</span>
+            </button>
+            <button class="btn btn--secondary" id="btnScrapeSite" type="button">
+              <svg class="ic"><use href="#i-globe" /></svg>
+              <span>Scrape everything on the tab</span>
+            </button>
+            <button class="btn btn--danger-outline" id="stopCrawl" type="button" style="display:none">
+              <svg class="ic"><use href="#i-stop" /></svg>
+              Stop crawl
+            </button>
+
+            <!-- Crawl progress + per-page results -->
+            <div class="crawl-progress" id="crawlProgress" role="status" style="display:none"></div>
+            <div id="crawlResultsWrap" style="display:none">
+              <span class="field-label">Pages scraped so far</span>
+              <div class="crawl-results" id="crawlResults" aria-live="polite"></div>
+            </div>
+
+            <!-- Unparseable page -->
+            <div class="error-card" id="unparseableBox" style="display:none">
+              <div class="e-title">
+                <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+                Unparseable website
+              </div>
+              <div class="e-body" id="unparseableReason">Unsupported DOM or protected webview.</div>
+              <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
+                <svg class="ic ic--sm"><use href="#i-folder" /></svg>
+                Open Data Lake
+              </button>
+            </div>
+
+            <!-- Success: open the created bubble -->
+            <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
+              <svg class="ic"><use href="#i-check-circle" /></svg>
+              <span>Open bubble in Helpotron</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- AGENT CONTROL CONFIG -->
+        <section class="option-cluster" aria-label="Agent Controls">
+          <button class="option-card" id="option-chat" type="button" role="button" aria-expanded="false" aria-controls="chat-options">
+            <span class="option-icon"><svg class="ic"><use href="#i-cursor" /></svg></span>
+            <span class="option-body">
+              <span class="option-title">Agent Controls</span>
+              <span class="option-sub">Permissions &amp; screen attachment settings</span>
+            </span>
+            <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
+          </button>
+          <div class="option-panel" id="chat-options" hidden>
+            <!-- Toggle 0: Educational Mode -->
+            <label class="switch-row" for="toggleEducationalMode">
+              <div class="switch-label">
+                Educational Mode
+                <span class="switch-sub">Off = unrestrained by study-only rules</span>
+              </div>
+              <span class="switch">
+                <input type="checkbox" id="toggleEducationalMode" role="switch" aria-checked="true" aria-label="Educational Mode" checked />
+                <span class="track" aria-hidden="true"></span>
+              </span>
+            </label>
+            <!-- Toggle 1: See screen -->
+            <label class="switch-row" for="toggleSeeScreen">
+              <div class="switch-label">
+                See screen
+                <span class="switch-sub">Attach current screen snapshot to chat</span>
+              </div>
+              <span class="switch">
+                <input type="checkbox" id="toggleSeeScreen" role="switch" aria-checked="true" aria-label="See screen" />
+                <span class="track" aria-hidden="true"></span>
+              </span>
+            </label>
+            <!-- Toggle 2: Execute -->
+            <label class="switch-row" for="toggleExecute">
+              <div class="switch-label">
+                Execute
+                <span class="switch-sub">Allow clicks, typing &amp; scrolling</span>
+              </div>
+              <span class="switch">
+                <input type="checkbox" id="toggleExecute" role="switch" aria-checked="false" aria-label="Execute actions" />
+                <span class="track" aria-hidden="true"></span>
+              </span>
+            </label>
+
+            <!-- Permission mode: 3-way segmented control -->
+            <div class="mode-seg-wrap">
+              <div class="seg" id="modeSeg" role="group" aria-label="Permission mode for agent actions">
+                <button type="button" class="seg-btn mode-btn" data-mode="manual" aria-pressed="false">Manual</button>
+                <button type="button" class="seg-btn mode-btn" data-mode="auto" aria-pressed="false">Automatic</button>
+                <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
+              </div>
+              <div class="field-hint" id="modeHint">Manual — the agent asks before every action.</div>
+            </div>
+
+            <!-- Effort score slider -->
+            <div class="field" style="margin-top:2px;">
+              <div class="field-header">
+                <label class="field-label" for="effortScoreSlider">Effort score</label>
+                <span class="field-word-count" id="effortScoreVal">500</span>
+              </div>
+              <input type="range" class="range-slider" id="effortScoreSlider" min="100" max="1000" step="50" value="500" />
+            </div>
+
+            <!-- Effort-driven vision model line -->
+            <div class="model-line" id="modelLine">
+              <span class="model-effort" id="modelEffort">effort 500</span>
+              <span class="divider-char">·</span>
+              <span id="modelName">DeepSeek V4 Flash Vision</span>
+              <span id="modelTier" class="model-tier">(mid_lower)</span>
+            </div>
+
+            <button class="btn btn--primary" id="btnOpenChat" type="button">
+              <svg class="ic"><use href="#i-chat" /></svg>
+              <span>Go to Agent Chat</span>
+            </button>
+
+            <!-- Approval card: popup IS approval surface -->
+            <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
+              <div class="a-title">
+                <svg class="ic ic--sm" style="color:var(--sem-amber)"><use href="#i-shield" /></svg>
+                <span id="approvalTitle">The agent wants to act</span>
+              </div>
+              <div class="a-text" id="approvalText"></div>
+              <div class="a-actions">
+                <button class="btn btn--secondary" id="denyBtn" type="button">Deny</button>
+                <button class="btn btn--primary" id="approveBtn" type="button">Allow</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ───────────── VIEW 2: EMBEDDED AGENT CHAT ───────────── -->
+    <div class="view-panel hidden" id="viewChat" role="tabpanel" aria-labelledby="tabNavChat">
+      <div class="chat-container">
+        <!-- Chat header with thread title, new chat, thread selector, refresh, and full tab link -->
+        <div class="chat-header-bar">
+          <div class="chat-status-pill">
+            <span class="chat-status-dot"></span>
+            <span id="chatModelIndicator">DeepSeek V4 Flash Vision</span>
+          </div>
+          <div class="chat-actions">
+            <button class="icon-btn icon-btn--sm" id="btnNewChat" type="button" title="Start new conversation" aria-label="New chat">
+              <svg class="ic ic--sm"><use href="#i-plus" /></svg>
+            </button>
+            <button class="icon-btn icon-btn--sm" id="btnToggleThreads" type="button" title="Past conversations" aria-label="Past conversations">
+              <svg class="ic ic--sm"><use href="#i-folder" /></svg>
+            </button>
+            <button class="icon-btn icon-btn--sm" id="btnRefreshChat" type="button" title="Refresh messages" aria-label="Refresh chat">
+              <svg class="ic ic--sm"><use href="#i-refresh" /></svg>
+            </button>
+            <button class="icon-btn icon-btn--sm" id="btnFullAgentTab" type="button" title="Open full screen-driver tab" aria-label="Open Full Agent Mode Tab">
+              <svg class="ic ic--sm"><use href="#i-cursor" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Thread info strip (current thread title + rename + pin) -->
+        <div class="thread-info-strip" id="threadInfoStrip">
+          <span class="thread-title-text" id="currentThreadTitle">current chat</span>
+          <button class="btn-icon-ghost" id="btnRenameThread" type="button" title="Rename conversation">
+            <svg class="ic ic--xs"><use href="#i-edit" /></svg>
+          </button>
+          <button class="btn-icon-ghost" id="btnPinThread" type="button" title="Pin conversation">
+            <svg class="ic ic--xs"><use href="#i-pin" /></svg>
+          </button>
+        </div>
+
+        <!-- Threads drawer overlay (hidden by default) -->
+        <div class="threads-drawer hidden" id="threadsDrawer">
+          <div class="threads-drawer-header">
+            <span class="field-label">Past Conversations</span>
+            <button class="btn-link" id="btnCloseThreads" type="button">Close</button>
+          </div>
+          <div class="threads-list" id="threadsList">
+            <div class="thread-item active">Current conversation</div>
+          </div>
+        </div>
+
+        <!-- Scrollable chat thread -->
+        <div class="chat-stream" id="popupChatMessages" aria-live="polite">
+          <div class="chat-msg agent">
+            <span class="chat-sender">Agent</span>
+            <span>Hi! I'm your Helpotron companion. Ask questions about your coursework, or tell me what to do on this page.</span>
+          </div>
+        </div>
+
+        <!-- Token warning banner (hidden by default) -->
+        <div class="chat-token-banner" id="chatTokenBanner" style="display:none">
+          <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+          <span id="chatTokenMsg">Insufficient tokens.</span>
+        </div>
+
+        <!-- Chat composer -->
+        <form class="chat-composer-box" id="popupChatForm">
+          <textarea class="chat-input" id="popupChatInput" placeholder="Ask or instruct the agent…" rows="2" aria-label="Chat message"></textarea>
+          <button class="btn btn--primary chat-send-btn" id="btnPopupChatSend" type="submit" aria-label="Send message">
+            <svg class="ic ic--sm"><use href="#i-send" /></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ───────────── VIEW 3: LAUNCH TO DOC ───────────── -->
+    <div class="view-panel hidden" id="viewType" role="tabpanel" aria-labelledby="tabNavType">
+      <div class="launch-doc-panel">
+        <div class="panel-section-title">
+          <svg class="ic ic--sm text-primary"><use href="#i-doc" /></svg>
+          <span>Humanized Typing into Google Docs</span>
+        </div>
+        <p class="panel-desc">
+          Types a draft into a Google Doc at a natural human cadence — real keystroke intervals and micro-pauses.
+        </p>
+
+        <!-- Assignment selector -->
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="ltdAssignmentSelect">Select Assignment</label>
+            <button class="btn-link" id="btnRefreshAssignments" type="button">Refresh</button>
+          </div>
+          <select class="input select" id="ltdAssignmentSelect">
+            <option value="">Loading assignments…</option>
+          </select>
+        </div>
+
+        <!-- Text preview/custom text -->
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="ltdTextInput">Draft Text to Type</label>
+            <span class="field-word-count" id="ltdWordCount">0 words</span>
+          </div>
+          <textarea class="input text-area-preview" id="ltdTextInput" rows="2" placeholder="Assignment content will appear here, or paste custom text to type…"></textarea>
+        </div>
+
+        <!-- Target tab selector -->
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="ltdTabSelect">Target Document Tab</label>
+            <button class="btn-link" id="btnRefreshDocTabs" type="button">Detect tabs</button>
+          </div>
+          <select class="input select" id="ltdTabSelect">
+            <option value="">Detecting open doc tabs…</option>
+          </select>
+          <span class="field-hint">No Docs tab open? One is created at docs.new automatically.</span>
+        </div>
+
+        <!-- Speed and Cadence preset -->
+        <div class="field">
+          <label class="field-label">Typing Cadence</label>
+          <div class="seg" id="ltdCadenceSeg" role="group" aria-label="Typing Cadence">
+            <button type="button" class="seg-btn ltd-preset active" data-wpm="65" data-typo="0.018" title="Academic — 65 words per minute">Academic<span class="seg-sub">65 wpm</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-wpm="48" data-typo="0.025" title="Careful — 48 words per minute">Careful<span class="seg-sub">48 wpm</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-wpm="85" data-typo="0.012" title="Fast — 85 words per minute">Fast<span class="seg-sub">85 wpm</span></button>
+          </div>
+        </div>
+
+        <!-- Launch Action Button -->
+        <button class="btn btn--primary btn--lg" id="btnStartLaunchToDoc" type="button">
+          <svg class="ic"><use href="#i-edit" /></svg>
+          <span>Start Typing into Document</span>
+        </button>
+
+        <!-- Active Typing Controls & Progress (hidden until active) -->
+        <div class="typing-active-card" id="ltdActiveCard" style="display:none">
+          <div class="typing-status-line">
+            <span class="typing-pulse"></span>
+            <span id="ltdTypingStatus">Typing in progress…</span>
+            <span class="typing-pct" id="ltdTypingPct">0%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="ltdProgressFill" style="width:0%"></div>
+          </div>
+          <div class="typing-btn-row">
+            <button class="btn btn--secondary btn--sm" id="btnPauseTyping" type="button">
+              <svg class="ic ic--sm"><use href="#i-pause" /></svg>
+              <span>Pause</span>
+            </button>
+            <button class="btn btn--danger-outline btn--sm" id="btnCancelTyping" type="button">
+              <svg class="ic ic--sm"><use href="#i-stop" /></svg>
+              <span>Stop</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ───────────── VIEW 4: EMBEDDED SETTINGS ───────────── -->
+    <div class="view-panel hidden" id="viewSettings" role="tabpanel" aria-labelledby="tabNavSettings">
+      <div class="settings-panel-content">
+        <div class="panel-section-title">
+          <svg class="ic ic--sm text-primary"><use href="#i-settings" /></svg>
+          <span>Extension Settings</span>
+        </div>
+
+        <!-- Account Section -->
+        <section class="option-panel">
+          <span class="field-label">Account &amp; Session</span>
+          <div class="settings-account-card">
+            <div class="avatar" id="settingsAvatar">@</div>
+            <div class="settings-account-info">
+              <div class="font-body-sm text-on-surface" id="settingsAccountName">Guest</div>
+              <div class="field-hint" id="settingsAccountStatus">Sign in to sync your scrapes &amp; chat</div>
+            </div>
+            <button class="btn btn--outline btn--sm" id="btnOpenWebAuth" type="button">Sign in</button>
+          </div>
+        </section>
+
+        <!-- Appearance Section -->
+        <section class="option-panel">
+          <span class="field-label">Theme &amp; Accent</span>
+          <div class="field">
+            <label class="field-label" style="font-size:11px;">Theme</label>
+            <div class="seg" id="popupThemeSeg" role="group" aria-label="Theme">
+              <button type="button" class="seg-btn" data-theme-pick="dark">Dark</button>
+              <button type="button" class="seg-btn" data-theme-pick="light">Light</button>
+              <button type="button" class="seg-btn" data-theme-pick="system">System</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" style="font-size:11px;">Accent Color</label>
+            <div class="swatches" style="display:flex;gap:8px;">
+              <button class="swatch selected" data-accent="teal" style="width:24px;height:24px;border-radius:50%;background:#59d8c9;border:2px solid var(--outline);cursor:pointer;" aria-label="Teal" title="Teal"></button>
+              <button class="swatch" data-accent="indigo" style="width:24px;height:24px;border-radius:50%;background:#bfc2ff;border:2px solid transparent;cursor:pointer;" aria-label="Indigo" title="Indigo"></button>
+              <button class="swatch" data-accent="rose" style="width:24px;height:24px;border-radius:50%;background:#ffb2be;border:2px solid transparent;cursor:pointer;" aria-label="Rose" title="Rose"></button>
+              <button class="swatch" data-accent="amber" style="width:24px;height:24px;border-radius:50%;background:#ffc46b;border:2px solid transparent;cursor:pointer;" aria-label="Amber" title="Amber"></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Full Options Page Link -->
+        <button class="btn btn--ghost btn--sm" id="btnOpenFullOptionsTab" type="button" style="justify-content:center;">
+          <span>Open Full Options Page ↗</span>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============ Status strip ============ -->
+  <div class="status" id="status" role="status" aria-live="polite" hidden>
+    <span class="status-text" id="statusText"></span>
+    <button class="status-close" id="btnStatusClose" type="button" aria-label="Dismiss status">
+      <svg class="ic ic--xs"><use href="#i-close" /></svg>
+    </button>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

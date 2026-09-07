@@ -87,7 +87,7 @@ The Helpotron Academic Browser Extension supports Canvas (`*.instructure.com`), 
 - **Agent chat in the extension (popup Chat / Agent Mode tab)**:
   - The user's chat messages, plus — only while the "See screen" switch is on — one compressed JPEG frame (longest side ≤ 1280 px) of the selected tab's live stream, and the page viewport dimensions, sent to `/api/extension/agent_chat` so the agent can see the page. The server's vision analysis and the agent's reply are returned to the extension; the conversation is stored in the user's account chat history and mirrored in the extension's local storage.
   - Screen control (the agent moving the mouse, clicking, typing, and scrolling in the selected tab) is **opt-in at the moment of use**: the Control toggle starts OFF, enabling it shows an explicit consent dialog, and a Stop button plus mouse-interrupt and Esc always end the session. Credential, OTP/card fields and downloads are hard-blocked for the agent in every mode, and each action is approved by the user unless the user has chosen the documented permissive mode. Agent actions never run on learning-platform (LMS) pages: the scraper agent is restricted to read-only extraction there.
-  - **"Debugger" permission**: agent screen control uses Chrome's "debugger" permission. Installing the extension never requires it — the extension asks for it **only the first time you switch Execute on**, and only in response to that explicit action. If you decline, agent actions stay switched off (every other extension feature keeps working).
+  - **"Debugger" permission**: agent screen control uses Chrome's "debugger" permission, which the extension declares at install time (Chrome shows it in the install warning). It is only ever used while you have **Execute** switched on — it ships off — and then only in the permission mode you choose. It drives mouse, keyboard and scroll input in the single tab you selected; it is never used to read network traffic or capture keystrokes, credential/OTP/card fields and downloads are hard-blocked in every mode, and Pause or Esc ends an action immediately.
 - **Assistive typing**: typing an assistant's draft into a document the user chose (Google Docs, Gmail, Notion, Word Online, or a text field) is performed locally by the extension dispatching keystroke events inside the page. The extension never reads the contents of password, OTP, or card fields, and **never transmits keystrokes** to the Helpotron server.
 - **Account & authentication**: signing in exchanges the user's `public_id` and password with `/api/login` over HTTPS; the returned session tokens are stored only in the browser's extension-local storage (never in sync storage), as is a small local cache of recent chat, crawl state, and UI preferences (theme, accent color sync only).
 - **Fetching file content**: the extension may request the file URLs found on the page from within the user's own browser session (so the user's session cookies apply); this request goes to the course site itself, not to Helpotron.
@@ -142,7 +142,7 @@ Helpotron deploys a calibrated multi-model orchestration hierarchy consisting of
 
 1. **Google Gemini Suite**:
    - **Gemini 3.1 Flash-Lite**: High-throughput workhorse for lecture audio transcription, OCR, topic classification, and rapid study digests ($0.50 / $1.50 per 1M tokens).
-   - **Gemini 3.7 Flash**: Flagship multimodal vision engine for image/video assignments, diagram analysis, and complex presentation logic ($2.50 / $10.00 per 1M tokens).
+   - **Gemini 3.8 Flash**: Flagship multimodal vision engine for image/video assignments, diagram analysis, and complex presentation logic ($2.50 / $10.00 per 1M tokens).
 2. **DeepSeek Intelligence Suite**:
    - **DeepSeek-V4 Flash**: Ultra-low latency reasoning specialist for initial scaffolds, active recall flashcards, and summary outlines ($0.14 / $0.28 per 1M tokens).
    - **DeepSeek-V4 Pro**: Flagship cognitive engine for multi-step reasoning, mathematical proofs, and deep academic research ($0.55 / $2.19 per 1M tokens).
@@ -157,10 +157,10 @@ Helpotron deploys a calibrated multi-model orchestration hierarchy consisting of
 The user-configured Effort Score determines the proportional distribution of compute across high-throughput and deep-reasoning models:
 - **Low Effort (1–350)**: Offloads 85%+ of workloads to fast utility models (Gemini 3.1 Flash-Lite, DeepSeek-V4 Flash, Nemotron Nano, Llama 3.1 8B) for ultra-fast turnarounds and cost efficiency.
 - **Medium Effort (351–750)**: Balanced orchestration pairing instruction-tuned rubric models (Nemotron-3 Super) with selective stylistic drafting passes (Llama 3.3 Nemotron 70B).
-- **High Effort (751–1000)**: Maximizes deep multi-pass cognitive synthesis and thorough revision through flagship engines (DeepSeek-V4 Pro, Gemini 3.7 Flash, Llama 3.3 Nemotron 70B).
+- **High Effort (751–1000)**: Maximizes deep multi-pass cognitive synthesis and thorough revision through flagship engines (DeepSeek-V4 Pro, Gemini 3.8 Flash, Llama 3.3 Nemotron 70B).
 
 ### 4.3 Pure-Gemini Presentation Engine (Nemotron/DeepSeek Bypass)
-Presentation and slide assignments (`.pptx`, `.ppt`, `.gslides`, pitch decks) automatically bypass general LLM subagents and are routed exclusively to the Google Gemini suite, with a user-configurable model ratio split (0–100%) between Gemini 3.1 Flash-Lite and Gemini 3.7 Flash.
+Presentation and slide assignments (`.pptx`, `.ppt`, `.gslides`, pitch decks) automatically bypass general LLM subagents and are routed exclusively to the Google Gemini suite, with a user-configurable model ratio split (0–100%) between Gemini 3.1 Flash-Lite and Gemini 3.8 Flash.
 
 ### 4.4 Data Handling & Zero Data Retention (ZDR) by Third-Party AI Inference Providers
 When queries, assignment text, or transcripts are submitted to third-party model inference APIs (including Google Cloud Gemini, DeepSeek AI, and NVIDIA/Meta Open-Weights inference endpoints):
@@ -187,7 +187,7 @@ To operate our globally distributed cloud architecture, Helpotron engages vetted
 
 | Subprocessor | Purpose / Function | Location / Jurisdiction | Data Categories Processed | Security Safeguards |
 | :--- | :--- | :--- | :--- | :--- |
-| **Google Cloud / Gemini API** | Gemini 3.1 Flash-Lite & 3.7 Flash AI Inference, Transcription, Multimodal Vision | United States / Global | Anonymized prompts, transcripts, audio streams | ISO 27001, SOC 2 Type II, HIPAA compliant, TLS 1.3, Zero-Retention DPA |
+| **Google Cloud / Gemini API** | Gemini 3.1 Flash-Lite & 3.8 Flash AI Inference, Transcription, Multimodal Vision | United States / Global | Anonymized prompts, transcripts, audio streams | ISO 27001, SOC 2 Type II, HIPAA compliant, TLS 1.3, Zero-Retention DPA |
 | **DeepSeek AI** | DeepSeek-V4 Flash & DeepSeek-V4 Pro Reasoning Engine | Regional API Endpoints | Assignment prompts, study guide requests | Enterprise API DPA, Zero Data Retention Agreements |
 | **NVIDIA / Meta Host** | Nemotron-3 Super, Nemotron Nano, Llama 3.3 70B Style Engines | United States / EU | Stylistic templates, rubric constraints | Confidential Computing, Zero Data Retention |
 | **Stripe, Inc.** | Payment Processing & Subscription Billing | United States / EU | Billing address, transaction amounts, payment tokens | PCI-DSS Level 1, SOC 1/2/3, Tokenized Vaults |

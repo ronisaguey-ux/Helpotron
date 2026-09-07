@@ -17,9 +17,7 @@
     "alarms",
     "tabCapture",
     "desktopCapture",
-    "notifications"
-  ],
-  "optional_permissions": [
+    "notifications",
     "debugger"
   ],
   "host_permissions": [

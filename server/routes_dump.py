@@ -123,7 +123,7 @@ async def upload_dump_file(
 ):
     """Universal upload endpoint for any file (PDF, DOCX, TXT, Audio, Video, Image).
 
-    Extracts content via Gemini 3.1 Flash-Lite (Audio) / Gemini 3.7 Flash (Vision/OCR),
+    Extracts content via Gemini 3.1 Flash-Lite (Audio) / Gemini 3.8 Flash (Vision/OCR),
     and uses the Overlord AI to automatically route to the correct assignment.
     """
     filename = file.filename or "uploaded_file.bin"

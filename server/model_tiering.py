@@ -1,7 +1,7 @@
 """Model Tiering & Effort Level Engine.
 
 Manages dynamic routing between Gemini 3.1 Flash-Lite (Cost-effective default)
-and Gemini 3.7 Flash (High-quality reasoning), maps 1-10 Effort Levels,
+and Gemini 3.8 Flash (High-quality reasoning), maps 1-10 Effort Levels,
 enforces cost-aware detector routing, and calculates pre-flight cost estimations.
 """
 from __future__ import annotations
@@ -25,9 +25,9 @@ class ModelTieringEngine:
             "recommended_effort_min": 1,
             "recommended_effort_max": 5,
         },
-        "gemini-3.7-flash": {
+        "gemini-3.8-flash": {
             "tier": "high_quality",
-            "name": "Gemini 3.7 Flash",
+            "name": "Gemini 3.8 Flash",
             "cost_per_1m_input": 2.50,
             "cost_per_1m_output": 7.50,
             "description": "High-intelligence flagship for complex reasoning, academic synthesis, humanization, and detector evasion.",
@@ -49,7 +49,7 @@ class ModelTieringEngine:
         assignment_override: Optional[str] = None,
         admin_override: Optional[str] = None,
     ) -> str:
-        """Determines whether to use Gemini 3.1 Flash-Lite or Gemini 3.7 Flash based on Effort Level."""
+        """Determines whether to use Gemini 3.1 Flash-Lite or Gemini 3.8 Flash based on Effort Level."""
         if admin_override:
             return admin_override
         if assignment_override:
@@ -62,7 +62,7 @@ class ModelTieringEngine:
             return "gemini-3.1-flash-lite"
 
         if task_type in ["ocr", "vision", "extraction"]:
-            return "gemini-3.1-flash-lite" if effort_level <= 6 else "gemini-3.7-flash"
+            return "gemini-3.1-flash-lite" if effort_level <= 6 else "gemini-3.8-flash"
 
         # Content generation & humanization
         if effort_level <= 4:
@@ -71,11 +71,11 @@ class ModelTieringEngine:
         elif effort_level <= 7:
             # Medium Effort (5-7): Balanced
             if task_type in ["humanization", "final_polish", "grading_prediction"]:
-                return "gemini-3.7-flash"
+                return "gemini-3.8-flash"
             return "gemini-3.1-flash-lite"
         else:
-            # High Effort (8-10): Premium tier (Gemini 3.7 Flash)
-            return "gemini-3.7-flash"
+            # High Effort (8-10): Premium tier (Gemini 3.8 Flash)
+            return "gemini-3.8-flash"
 
     @staticmethod
     def estimate_task_cost(
@@ -138,7 +138,7 @@ class ModelTieringEngine:
         
         Nemotron and DeepSeek subagent teams are bypassed completely.
         User can configure the exact percentage balance between Gemini 3.1 Flash-Lite
-        (structure, outline, raw slide notes) and Gemini 3.7 Flash (visual styling,
+        (structure, outline, raw slide notes) and Gemini 3.8 Flash (visual styling,
         deep narrative synthesis, layout design).
         """
         lite_pct = max(0, min(100, int(flash_lite_percent)))
@@ -154,13 +154,13 @@ class ModelTieringEngine:
                     "percentage": lite_pct,
                     "model_id": "gemini-3.1-flash-lite",
                 },
-                "gemini-3.7-flash": {
+                "gemini-3.8-flash": {
                     "role": "High-Cognition Narrative Flow, Slide Layout Logic, Visual Formatting",
                     "percentage": flash_pct,
-                    "model_id": "gemini-3.7-flash",
+                    "model_id": "gemini-3.8-flash",
                 },
             },
-            "summary": f"PowerPoint/Google Slides routed exclusively to Gemini ({lite_pct}% Flash-Lite / {flash_pct}% 3.7 Flash).",
+            "summary": f"PowerPoint/Google Slides routed exclusively to Gemini ({lite_pct}% Flash-Lite / {flash_pct}% 3.8 Flash).",
         }
 
     @staticmethod
@@ -234,7 +234,7 @@ def check_budget_guardrail(user_plan: str, current_spend_usd: float) -> bool:
 def get_model_for_tier(user_plan: str, task_type: str = 'general') -> str:
     """Return the appropriate model name based on user plan and task type."""
     if user_plan == 'elite':
-        return 'gemini-3.7-flash'
+        return 'gemini-3.8-flash'
     elif user_plan == 'pro':
         return 'deepseek-v4-pro'
     else:

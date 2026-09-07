@@ -83,10 +83,14 @@
   --radius-2xl: 20px;
   --radius-xl: 12px;
   --radius-lg: 8px;
+  --radius-full: 9999px; /* .chip, .icon-btn, .progress, .switch track */
   /* Type */
   --font-body: 'Inter Variable', 'Inter', system-ui, sans-serif;
   --font-headline: 'Hanken Grotesk Variable', 'Hanken Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  /* Native widgets (select dropdown, range slider, scrollbar, autofill) get
+     the dark chrome instead of the light UA default. */
+  color-scheme: dark;
 }
 /* ---------- Tokens: light ---------- */
 [data-theme='light'] {
@@ -134,6 +138,7 @@
   --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.06), 0 4px 12px rgba(11, 28, 48, 0.05);
   --shadow-2: 0 4px 20px rgba(11, 28, 48, 0.08);
   --ring: #006a61;
+  color-scheme: light;
 }
 
 /* ---------- Base ---------- */

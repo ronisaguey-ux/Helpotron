@@ -54,11 +54,11 @@ def test_model_tiering_effort_levels():
     assert model_med_draft == "gemini-3.1-flash-lite"
 
     model_med_humanize = ModelTieringEngine.resolve_model_for_task("humanization", effort_level=6)
-    assert model_med_humanize == "gemini-3.7-flash"
+    assert model_med_humanize == "gemini-3.8-flash"
 
-    # High effort (8-10) -> Gemini 3.7 Flash
+    # High effort (8-10) -> Gemini 3.8 Flash
     model_high = ModelTieringEngine.resolve_model_for_task("draft", effort_level=9)
-    assert model_high == "gemini-3.7-flash"
+    assert model_high == "gemini-3.8-flash"
 
 
 def test_assignment_dump_nlp_matching(db_session):
@@ -113,13 +113,13 @@ def test_presentation_pure_gemini_split():
     )
     assert is_pres is True
 
-    # Pure-Gemini model split resolution (e.g. 70% Flash-Lite / 30% 3.7 Flash)
+    # Pure-Gemini model split resolution (e.g. 70% Flash-Lite / 30% 3.8 Flash)
     res = ModelTieringEngine.resolve_presentation_gemini_models(flash_lite_percent=70)
     assert res["engine_mode"] == "pure_gemini"
     assert "nemotron-3-super" in res["bypassed_subagents"]
     assert "deepseek-v4-flash" in res["bypassed_subagents"]
     assert res["active_models"]["gemini-3.1-flash-lite"]["percentage"] == 70
-    assert res["active_models"]["gemini-3.7-flash"]["percentage"] == 30
+    assert res["active_models"]["gemini-3.8-flash"]["percentage"] == 30
 
 
 def test_fake_writing_history_generation():

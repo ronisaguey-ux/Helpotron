@@ -108,6 +108,7 @@ const state = {
   execute: EXECUTE_DEFAULT,
   agentMode: MODE_DEFAULT,
   awaitingApproval: false,   // a REQ_APPROVAL is pending right now
+  pendingActions: null,      // actions dropped on attach failure — one-click retry
 };
 
 const els = {
@@ -170,13 +171,15 @@ function updateBanner() {
   if (!show) return;
   if (state.paused) {
     els.controlBanner.classList.add('warn');
-    els.bannerText.textContent =
-      'Paused by you — the agent will NOT drive again until you press "Resume driving". Nothing is retried automatically.';
+    els.bannerText.textContent = state.pendingActions && state.pendingActions.length
+      ? `⏸ Could not attach the debugger to the tab — press "Resume driving" to retry the ${state.pendingActions.length} agent action(s). Nothing runs until you retry.`
+      : 'Paused by you — the agent will NOT drive again until you press "Resume driving". Nothing is retried automatically.';
     els.resumeBtn.classList.remove('hidden');
   } else {
     els.controlBanner.classList.remove('warn');
-    els.bannerText.textContent =
-      'Control is ON — the agent can move the mouse, click and type inside the selected tab. Stop button / Esc always work; moving the mouse pauses it (no auto-resume).';
+    els.bannerText.textContent = state.pendingActions && state.pendingActions.length
+      ? `Debugger attach failed — press "Resume driving" to retry the ${state.pendingActions.length} agent action(s).`
+      : 'Control is ON — the agent can move the mouse, click and type inside the selected tab. Stop button / Esc always work; moving the mouse pauses it (no auto-resume).';
     els.resumeBtn.classList.add('hidden');
   }
 }
@@ -340,6 +343,10 @@ function refreshLoginNote() {
 
 // ── Screen capture ──────────────────────────────────────────────────────────
 function stopVideo() {
+  // Detach BEFORE driveTabId is cleared: detachDebugger reads it to target
+  // the tab, and nulling it first would silently leak a live debugger (with
+  // its attach infobar) onto the captured tab.
+  if (state.debuggerAttached && state.driveTabId) detachDebugger().catch(() => {});
   if (state.videoStream) {
     try { state.videoStream.getTracks().forEach((tr) => tr.stop()); } catch (e) { /* ok */ }
     state.videoStream = null;
@@ -350,6 +357,7 @@ function stopVideo() {
   state.driveTabId = null;
   state.driveTabTitle = '';
   state.cssViewport = null;
+  state.pendingActions = null;
   els.frameMeta.textContent = 'no frame yet';
   els.video.classList.remove('mirror');
   els.visionOutput.classList.add('hidden');
@@ -577,6 +585,7 @@ function enableControl() {
 function disableControl(reason) {
   state.controlOn = false;
   state.paused = false;
+  state.pendingActions = null;
   els.controlSwitchWrap.classList.remove('on');
   if (state.driving) state.pendingStop = true; // running burst aborts at next checkpoint
   updateBanner();
@@ -600,19 +609,10 @@ function maybeDisableToggle() {
 // ── Debugger / CDP control (the ONLY channel that moves the real cursor) ─────
 async function ensureDebugger() {
   if (state.debuggerAttached || !state.driveTabId) return true;
-  // debugger is an OPTIONAL permission granted when Execute is switched on in
-  // the popup — refuse to attach (with a helpful message) when it is absent.
-  try {
-    const has = await chrome.permissions.contains({ permissions: ['debugger'] });
-    if (!has) {
-      pushLog('info', 'debugger permission not granted — driving disabled');
-      setStatus('⚠️ Agent actions are off in this browser. Open the Helpotron popup, switch Execute on, and approve the permission prompt.');
-      return false;
-    }
-  } catch (e) {
-    pushLog('err', `debugger permission check failed: ${e}`);
-    return false;
-  }
+  // 09-06: `debugger` is a REQUIRED manifest permission now, so it is always
+  // present and there is no prompt to approve. The old optional-permission
+  // probe could only ever return true — and returned FALSE on any throw,
+  // silently disabling driving — so the attach below is the real gate.
   const tab = { tabId: state.driveTabId };
   try {
     await chrome.debugger.attach(tab, DEBUGGER_VERSION);
@@ -629,9 +629,122 @@ async function ensureDebugger() {
 
 async function detachDebugger() {
   if (!state.debuggerAttached || !state.driveTabId) { state.debuggerAttached = false; return; }
-  try { await chrome.debugger.detach({ tabId: state.driveTabId }); } catch (e) { /* already gone */ }
+  const tabId = state.driveTabId; // pin before any await: stopVideo() may clear driveTabId
+  await removeVirtualCursor(tabId).catch(() => {});
+  try { await chrome.debugger.detach({ tabId }); } catch (e) { /* already gone */ }
   state.debuggerAttached = false;
   pushLog('info', 'debugger detached — driving stopped');
+}
+
+const VIRTUAL_CURSOR_ID = '__helpotron_agent_cursor__';
+
+async function initVirtualCursor(tabId) {
+  if (!chrome.debugger || !tabId) return;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        let cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+        if (!cur) {
+          cur = document.createElement('div');
+          cur.id = '${VIRTUAL_CURSOR_ID}';
+          cur.innerHTML = \`
+            <div style="position: relative; pointer-events: none;">
+              <svg width="28" height="28" viewBox="0 0 24 24" style="filter: drop-shadow(0 3px 10px rgba(0,0,0,0.6)); transform: rotate(-22deg);">
+                <path d="M4 2v18l5-4.5 3 6.5 3-1.5-3-6.5h6.5L4 2z" fill="#14b8a6" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+              </svg>
+              <div id="__helpotron_cursor_badge__" style="position: absolute; left: 22px; top: 12px; display: inline-flex; align-items: center; gap: 4px; background: #090d16; color: #5eead4; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; border: 1px solid #14b8a6; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-family: system-ui, -apple-system, sans-serif; white-space: nowrap; pointer-events: none;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981;"></span>
+                <span id="__helpotron_cursor_text__">AI Agent</span>
+              </div>
+              <div id="__helpotron_cursor_ripple__" style="position: absolute; top: -6px; left: -6px; width: 36px; height: 36px; border-radius: 50%; border: 2.5px solid #5eead4; opacity: 0; transform: scale(0.3); pointer-events: none;"></div>
+            </div>
+          \`;
+          cur.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 2147483647; pointer-events: none; will-change: transform; transition: opacity 0.2s ease; opacity: 1; transform: translate(400px, 300px);';
+          document.documentElement.appendChild(cur);
+        }
+        // Generation token: a delayed removal from a PRIOR cleanup must never
+        // delete the cursor a new burst is driving (fast retry races).
+        window.__helpotron_cursor_gen__ = (window.__helpotron_cursor_gen__ || 0) + 1;
+        cur.__hgen = window.__helpotron_cursor_gen__;
+        cur.style.display = 'block';
+        cur.style.opacity = '1';
+        window.__helpotron_pause__ = false;
+        if (!window.__helpotron_esc_listener__) {
+          window.__helpotron_esc_listener__ = true;
+          window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+              window.__helpotron_pause__ = true;
+            }
+          }, { capture: true });
+        }
+      })()`
+    });
+  } catch (e) {}
+}
+
+async function moveVirtualCursor(tabId, x, y) {
+  if (!chrome.debugger || !tabId) return;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+        if (cur) {
+          cur.style.transform = 'translate(' + ${Math.round(x)} + 'px, ' + ${Math.round(y)} + 'px)';
+        }
+      })()`
+    });
+  } catch (e) {}
+}
+
+async function animateVirtualCursorClick(tabId) {
+  if (!chrome.debugger || !tabId) return;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const rip = document.getElementById('__helpotron_cursor_ripple__');
+        if (rip) {
+          rip.style.transition = 'none';
+          rip.style.opacity = '1';
+          rip.style.transform = 'scale(0.3)';
+          void rip.offsetWidth;
+          rip.style.transition = 'transform 0.35s cubic-bezier(0,0,0.2,1), opacity 0.35s ease-out';
+          rip.style.transform = 'scale(2.2)';
+          rip.style.opacity = '0';
+        }
+      })()`
+    });
+  } catch (e) {}
+}
+
+async function setVirtualCursorAction(tabId, actionText) {
+  if (!chrome.debugger || !tabId) return;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const txt = document.getElementById('__helpotron_cursor_text__');
+        if (txt) txt.textContent = ${JSON.stringify(actionText)};
+      })()`
+    });
+  } catch (e) {}
+}
+
+async function removeVirtualCursor(tabId) {
+  if (!chrome.debugger || !tabId) return;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const cur = document.getElementById('${VIRTUAL_CURSOR_ID}');
+        if (cur) {
+          const myGen = cur.__hgen;
+          cur.style.opacity = '0';
+          setTimeout(() => {
+            // Only remove if no NEW burst re-initialized the cursor meanwhile.
+            if (cur.__hgen === myGen && cur.parentNode) cur.parentNode.removeChild(cur);
+          }, 220);
+        }
+      })()`
+    });
+  } catch (e) {}
 }
 
 async function cdp(method, params) {
@@ -704,6 +817,7 @@ async function moveCursorAlong(points, buttons = 0) {
     if (dt > 0) await sleep(Math.min(dt, 60));
     await mouseEvent('mouseMoved', points[i].x, points[i].y, { buttons });
     state.cursor = { x: points[i].x, y: points[i].y };
+    if (state.driveTabId) await moveVirtualCursor(state.driveTabId, points[i].x, points[i].y);
   }
   return true;
 }
@@ -722,6 +836,11 @@ async function executeAction(op) {
   const pt = (x, y) => ({ x: x * sx, y: y * sy });
   const to = pt(op.x ?? op.toX, op.y ?? op.toY);
   const from = op.fromX !== undefined ? pt(op.fromX, op.fromY) : to;
+
+  if (state.driveTabId) {
+    const actLabel = op.op ? op.op.toUpperCase() : 'ACTION';
+    await setVirtualCursorAction(state.driveTabId, actLabel);
+  }
 
   const hop = async (target, dragging) => {
     // Each hop STARTS at the current tracked cursor (never teleport: a second
@@ -745,6 +864,7 @@ async function executeAction(op) {
     case 'click': {
       ok = await hop(to, false);
       if (!ok) break; // interrupted on the way — never click through a pause
+      if (state.driveTabId) await animateVirtualCursorClick(state.driveTabId);
       const button = op.button === 'right' ? 'right' : 'left';
       const btns = button === 'right' ? 2 : 1;
       await mouseEvent('mousePressed', to.x, to.y, { button, buttons: btns, clickCount: 1 });
@@ -756,6 +876,7 @@ async function executeAction(op) {
     case 'dblclick':
       ok = await hop(to, false);
       if (!ok) break;
+      if (state.driveTabId) await animateVirtualCursorClick(state.driveTabId);
       await mouseEvent('mousePressed', to.x, to.y, { button: 'left', buttons: 1, clickCount: 1 });
       await sleep(rand(30, 60));
       await mouseEvent('mouseReleased', to.x, to.y, { button: 'left', buttons: 0, clickCount: 1 });
@@ -1003,9 +1124,21 @@ async function runActions(actions) {
     return;
   }
 
-  if (await ensureDebugger() === false) return;
+  if (await ensureDebugger() === false) {
+    // One-click retry instead of a dead drop: the burst is remembered, the
+    // page grays out as paused, and "Resume driving" re-runs it after the
+    // user closed DevTools / switched to a normal page.
+    state.pendingActions = list;
+    state.pendingStop = true;
+    state.paused = true;
+    updateBanner();
+    setStatus('⏸ Debugger attach failed — press "Resume driving" to retry the agent actions.');
+    return;
+  }
+  state.pendingActions = null;
   state.driving = true;
   state.pendingStop = false;
+  if (state.driveTabId) await initVirtualCursor(state.driveTabId);
   const started = performance.now();
   // start cursor estimate: css center (real cursor resync happens on move sample 0)
   const cv = await getCssViewport();
@@ -1055,6 +1188,7 @@ async function runActions(actions) {
     state.driving = false;
     state.awaitingApproval = false;
     updateModeChip();
+    if (state.driveTabId) await removeVirtualCursor(state.driveTabId).catch(() => {});
     await driveMessage('window', false);
     await driveMessage('disarm', false);
     await detachDebugger();
@@ -1065,6 +1199,7 @@ async function runActions(actions) {
 function suspendForInterrupt(trigger) {
   state.pendingStop = true;
   state.paused = state.controlOn;
+  state.pendingActions = null; // an interrupt cancels an unattached retry too
   updateBanner();
   pushLog('warn', `⏹ paused by ${trigger} — press “Resume driving” to allow the next drive`);
   setStatus(trigger === 'user' ? '🖱 user activity detected — agent paused' : '⏹ Stopped.');
@@ -1075,6 +1210,14 @@ function resumeDriving() {
   state.pendingStop = false;
   updateBanner();
   pushLog('info', '► resumed driving — the next agent actions will run (nothing stale is replayed)');
+  // Attach-failed burst retry: the actions were dropped, not lost — re-run
+  // them now that the user pressed Resume.
+  if (state.pendingActions && state.pendingActions.length) {
+    const burst = state.pendingActions;
+    state.pendingActions = null;
+    pushLog('info', `retrying the ${burst.length} action(s) that failed to attach`);
+    runActions(burst).catch((e) => pushLog('err', `retry failed: ${e && e.message ? e.message : e}`));
+  }
 }
 
 function stopAll(trigger) {

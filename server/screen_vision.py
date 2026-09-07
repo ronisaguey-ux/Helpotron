@@ -46,7 +46,7 @@ _MAX_EFFORT_SCORE: int = 1000
 VISION_MODEL_TIERS: Dict[str, str] = {
     "google/gemini-3.1-flash-lite": "$0.075 / $0.30 / $0.0003",      # cheapest
     "deepseek/deepseek-v4-flash-vision": "$0.14 / $0.28 / $0.0004",
-    "google/gemini-3.7-flash": "$0.25 / $1.00 / $0.0008",
+    "google/gemini-3.8-flash": "$0.25 / $1.00 / $0.0008",
     "deepseek/deepseek-v4-pro-vision": "$0.87 / $1.74 / $0.0015",    # most expensive
 }
 
@@ -57,7 +57,7 @@ VISION_MODEL_TIERS: Dict[str, str] = {
 _OR_SLUG_MAP: Dict[str, str] = {
     "google/gemini-3.1-flash-lite": "google/gemini-3.1-flash-lite",
     "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
-    "google/gemini-3.7-flash": "google/gemini-3.7-flash",
+    "google/gemini-3.8-flash": "google/gemini-3.8-flash",
     "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
 }
 
@@ -192,7 +192,7 @@ def resolve_vision_model(effort_score: Any = None) -> Tuple[str, str, int]:
 
         <=300  -> gemini-3.1-flash-lite          (cheapest, lite)
         301..500  -> deepseek-v4-flash-vision     (mid pair, lower half)
-        501..700  -> gemini-3.7-flash             (mid pair, upper half)
+        501..700  -> gemini-3.8-flash             (mid pair, upper half)
         >700   -> deepseek-v4-pro-vision          (most expensive)
     """
     score = parse_effort_score(effort_score)
@@ -201,7 +201,7 @@ def resolve_vision_model(effort_score: Any = None) -> Tuple[str, str, int]:
     if score <= 500:
         return VISION_MODEL, "mid_lower", score
     if score <= 700:
-        return "google/gemini-3.7-flash", "mid_upper", score
+        return "google/gemini-3.8-flash", "mid_upper", score
     return "deepseek/deepseek-v4-pro-vision", "pro", score
 
 
@@ -284,7 +284,11 @@ async def analyze_screen_image(
         content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
         if not isinstance(content, str) or not content.strip():
             raise ValueError("vision model returned empty content")
-        return content.strip()
+        # 09-07: this analysis is fed verbatim into the agent's system prompt
+        # (screen state) and back to the user — strip thinking/deliberation
+        # before it reaches either.
+        from .llm import strip_thinking_tokens
+        return strip_thinking_tokens(content.strip())
 
 
 # ── Control-block extraction + hardening ──────────────────────────────────────
@@ -395,19 +399,17 @@ def extract_control_actions(reply_text: str, viewport: Optional[Dict[str, int]])
         if isinstance(parsed, dict) and isinstance(parsed.get("actions"), list):
             parsed = parsed.get("actions")
         if isinstance(parsed, list) and len(parsed) <= _MAX_CONTROL_ACTIONS:
-            if viewport:
-                normalized: List[Dict[str, Any]] = []
-                ok = True
-                for op in parsed:
-                    n = _validate_op(op, viewport)
-                    if n is None:
-                        ok = False
-                        break
-                    normalized.append(n)
-                if ok and normalized:
-                    actions = normalized
-            else:
-                actions = None  # no viewport -> control coordinate space unknown
+            vp = viewport or {"width": 1280, "height": 800}
+            normalized: List[Dict[str, Any]] = []
+            ok = True
+            for op in parsed:
+                n = _validate_op(op, vp)
+                if n is None:
+                    ok = False
+                    break
+                normalized.append(n)
+            if ok and normalized:
+                actions = normalized
         # Else: malformed JSON / wrong shape / over-cap -> actions stays None.
 
     clean = _CTRL_FENCE_RE.sub("", text)

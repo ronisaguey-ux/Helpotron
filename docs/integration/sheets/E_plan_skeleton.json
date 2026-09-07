@@ -1,0 +1,315 @@
+{
+  "producer": "E",
+  "area": "plan_skeleton_and_git_workflow",
+  "meta": {
+    "plan_id": "stitch-v6-integration",
+    "project": "Helpotron",
+    "repo": "/home/roni/Roni_workspace/helpotron",
+    "source_of_truth": {
+      "export_dir": "/tmp/stitch_z3/stitch_design_concept_generator",
+      "spec": "improvement.md",
+      "design_system": "luminous_glass/DESIGN.md",
+      "zip": "/home/roni-saguey/stitch_design_concept_generator (3).zip"
+    },
+    "mandates": {
+      "frontend_replacement_min_pct": "90",
+      "new_files": "allowed with how-to",
+      "steps": "snippets view/delete/edit/add",
+      "verification": "exactly 3 commands per step",
+      "batching": "batches of exactly 5, parallel-safe"
+    },
+    "author": "5-agent team + main",
+    "date": "2026-09-06"
+  },
+  "conventions": {
+    "step_schema": "copy the fields: id, batch, slug, title, family, objective/acceptance, type(replace|add|repair), files:{view:[cmd], delete:[{path,why,snippet}], edit:[{path,anchor,find,replace}], add:[{path,content}]}, backend:{}, frontend:{}, verification:[3 cmds], parallel_safe, conflict_zone, est_min",
+    "batch_schema": { "batch": "b1", "steps": "5 step ids", "parallel_safe": true, "conflict_zone": "disjoint file prefixes", "gate": "3 canonical commands" },
+    "step_id_format": "b<NN>-s<N> (b01..b12, s1..s5) — 60 steps total, globally unique",
+    "batch_key_format": "b1..b12 (batch_layout keys); branch zero-padded stitch/b01-<slug>",
+    "conflict_zone_format": "string of 5 prefixes separated by ' | ', one per step slot s1..s5 (s1..s5 in order). Each batch step may READ anything but may WRITE only inside its own prefix. Per-step conflict_zone added at synthesis (slice of this string).",
+    "router_ownership": "web/src/App.jsx is the ONE shared route registry (866 lines, lazyWithRetry imports + route table). Per batch, the step that owns the batch's primary screen (first step of each batch, 'owns routes') is the ONLY step in that batch allowed to edit App.jsx; it adds lazyWithRetry import + route entry per new/renamed screen. All other steps of the batch hand their route-additions as a snippet inside their step (files.add) but do not write App.jsx themselves.",
+    "new_files_how_to": "mkdir -p for missing dirs first (`mkdir -p web/src/components/ui`). Create each new file with full final content in one heredoc: `cat > web/src/components/X.jsx <<'STITCH_EOF'\n...full JSX...\nSTITCH_EOF` (or agent Write tool). New component = default export; registration = lazyWithRetry import + route entry, owned by the batch router step. New lib files = named exports, imported each by the owning step. No stub files, no 'TODO' bodies — file creation implies complete implementation (GATES.md phantom-pass rule).",
+    "global_css_ownership": "web/src/index.css (1735 lines, M3 tokens today) is owned by b1-s2 for the full LUMINOUS GLASS token rewrite. Later batches edit index.css ONLY to move per-file inline <style> into shared classes (e.g. AURORA_CHIP_TINTS -> 3.13) — those steps list index.css as secondary edit with a line-anchored snippet; any two steps in the SAME batch may not both write index.css.",
+    "canonical_gates": {
+      "g1_pytest": "cd /home/roni/Roni_workspace/helpotron && ENVIRONMENT=development DATABASE_URL=\"sqlite:///./test_helpotron.db\" .venv/bin/python -m pytest server/tests/ -q",
+      "g2_build": "cd /home/roni/Roni_workspace/helpotron/web && npm run build",
+      "g3_smoke": "cd /home/roni/Roni_workspace/helpotron && .venv/bin/python scripts/gates/gate_smoke.py",
+      "g3_health": "curl -s http://localhost:8000/api/health"
+    }
+  },
+  "batch_layout": [
+    {
+      "batch": "b1",
+      "branch": "stitch/b01-foundation",
+      "theme": "foundation — LUMINOUS GLASS design tokens + core primitives + avatar honesty fix + batch worktree bootstrap",
+      "families": ["foundation"],
+      "conflict_zone": "web/src/index.css | web/src/lib/*, web/src/api.js | web/src/components/ui/*, web/src/components/{Button}.jsx, web/src/components/SectionCard.jsx | web/src/components/AppShell.jsx (avatar area only) | repo-root git ops, docs/integration/** (NO web/src writes)",
+      "steps": ["b1-s1", "b1-s2", "b1-s3", "b1-s4", "b1-s5"],
+      "parallel_safe": false,
+      "est_minutes": 120,
+      "depends_on_batch": [],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b1-s1", "slug": "batch-bootstrap", "title": "Create feature branch + batch ops doc; read GATES.md/README gates; pin ENVIRONMENT/DATABASE_URL in shell", "family": "foundation", "est_min": 20, "type": "repair" },
+        { "id": "b1-s2", "slug": "design-tokens", "title": "Rewrite web/src/index.css to LUMINOUS GLASS M3 role tokens (per luminous_glass/DESIGN.md), data-theme swap, typography/radii/spacing/motion; zero hex literals, zero dark: (owned file only)", "family": "foundation", "est_min": 40, "type": "replace" },
+        { "id": "b1-s3", "slug": "core-primitives", "title": "Build shared primitives: Button (5 variants + loading), SectionCard (glass panel), EmptyState (line-art slots), StatusDot, Kbd, Skeleton shimmer, Toast base — components/ui + Button.jsx + SectionCard.jsx", "family": "foundation", "est_min": 30, "type": "replace" },
+        { "id": "b1-s4", "slug": "lib-shell", "title": "web/src/lib: statusChips.js (11-status matrix), settings.js (scoped prefs), overlay.js (toast/inline-strip helpers), api.js honest-error helpers; demoData.js/mock.js write-guard note", "family": "foundation", "est_min": 20, "type": "add" },
+        { "id": "b1-s5", "slug": "avatar-fix", "title": "AppShell.jsx avatar/identity honesty fix (AvatarWidget per spec 3.1.1: identity pill + build-id mono footer) — small edit only, full shell rewrite is b2-s1", "family": "foundation", "est_min": 10, "type": "repair" }
+      ]
+    },
+    {
+      "batch": "b2",
+      "branch": "stitch/b02-chrome",
+      "theme": "3.1 chrome & navigation — app shell frame, mobile drawer, bottom bar, quick-settings, command palette, notifications, footer",
+      "families": ["3.1"],
+      "conflict_zone": "web/src/components/AppShell.jsx, web/src/App.jsx (router owner) | web/src/components/MobileDrawer.jsx (new) | web/src/components/MobileBottomBar.jsx (new) | web/src/components/QuickSettings.jsx (new) | web/src/components/CommandPalette.jsx, web/src/components/NotificationsView.jsx, web/src/components/NotificationsPanel.jsx (new)",
+      "steps": ["b2-s1", "b2-s2", "b2-s3", "b2-s4", "b2-s5"],
+      "parallel_safe": true,
+      "est_minutes": 180,
+      "depends_on_batch": ["b1"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b2-s1", "slug": "app-shell", "title": "AppShell frame: 64px sticky glass topbar + 256px sidebar (expanded/collapsed-90px persisted helpotron_sidebar_collapsed, admin divider) + footer; routes App.jsx for the whole batch", "family": "3.1", "est_min": 50, "type": "replace" },
+        { "id": "b2-s2", "slug": "mobile-drawer", "title": "MobileDrawer slide-over (state machine closed/spring-open/scrim/closing, focus return, WalletLine/guest variants) — new file", "family": "3.1", "est_min": 30, "type": "add" },
+        { "id": "b2-s3", "slug": "bottom-bar", "title": "MobileBottomBar variant A (5 slots, 44px min, lifted blur, pending-review amber dot) — new file", "family": "3.1", "est_min": 25, "type": "add" },
+        { "id": "b2-s4", "slug": "quick-settings", "title": "QuickSettings popover/mobile-sheet (WalletLine, theme segmented Dark/Light/Auto, AI effort dial, menu) — new file", "family": "3.1", "est_min": 30, "type": "add" },
+        { "id": "b2-s5", "slug": "palette-notifications", "title": "CommandPalette theme-aware rewrite (slash commands, admin-gating, honest empty) + NotificationsView + bell panel (one read store helpotron_notifications_read)", "family": "3.1", "est_min": 45, "type": "replace" }
+      ]
+    },
+    {
+      "batch": "b3",
+      "branch": "stitch/b03-auth",
+      "theme": "3.2 auth & account entry — sign-in, create account, 2FA segmented OTP, recovery flow, session-expiry states",
+      "families": ["3.2"],
+      "conflict_zone": "web/src/components/AuthModal.jsx, web/src/App.jsx (router owner) | web/src/components/AuthModal.jsx (create-account pane section only) | web/src/components/TwoFactorSetup.jsx | web/src/components/RecoveryFlowModal.jsx | web/src/components/SessionExpiryModal.jsx (new), web/src/api.js (401 middleware)",
+      "steps": ["b3-s1", "b3-s2", "b3-s3", "b3-s4", "b3-s5"],
+      "parallel_safe": true,
+      "est_minutes": 150,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b3-s1", "slug": "auth-signin", "title": "AuthModal sign-in pane (two-pane >=lg, 10 variants, Turnstile below form, PUBLIC ID only, Enter submits, inline strip + shake); router owner", "family": "3.2", "est_min": 35, "type": "replace" },
+        { "id": "b3-s2", "slug": "auth-create", "title": "Create-account pane (referral chip, consent checkbox, duplicate-ID/dup-inline states, stacked mobile)", "family": "3.2", "est_min": 25, "type": "replace" },
+        { "id": "b3-s3", "slug": "auth-2fa", "title": "TwoFactorSetup segmented OTP (6 cells, auto-advance, paste-spread, shake+inline error, resend cooldown, lockout; fake 'Hardware/TOTP Synced' claim deleted)", "family": "3.2", "est_min": 30, "type": "replace" },
+        { "id": "b3-s4", "slug": "auth-recovery", "title": "RecoveryFlowModal real channel flow (email/phone/ask-dev, per-step errors, cooldowns, zero fabrications)", "family": "3.2", "est_min": 30, "type": "replace" },
+        { "id": "b3-s5", "slug": "session-expiry", "title": "SessionExpiryModal (Lock + Sign in), silent 401 banner for background polls, full-page re-auth variant, pending-intent restore; api.js 401 handling", "family": "3.2", "est_min": 30, "type": "add" }
+      ]
+    },
+    {
+      "batch": "b4",
+      "branch": "stitch/b04-public",
+      "theme": "3.3 public/guest — landing, public guide/privacy/ToS/extension variants, cookie banner + consent",
+      "families": ["3.3"],
+      "conflict_zone": "web/src/components/AnonymousLanding.jsx, web/src/App.jsx (router owner) | web/src/components/GuideView.jsx (guest prop) | web/src/components/PrivacyPolicyView.jsx, web/src/components/TermsOfServiceView.jsx | web/src/components/ExtensionInstallView.jsx (public prop) | web/src/components/CookieBanner.jsx, web/src/lib/consent.js (new)",
+      "steps": ["b4-s1", "b4-s2", "b4-s3", "b4-s4", "b4-s5"],
+      "parallel_safe": true,
+      "est_minutes": 150,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b4-s1", "slug": "landing", "title": "AnonymousLanding glass hero + 3 feature cards + live honest pricing + three-steps + footer; deep-link targets /features|/pricing|/guide|/terms|/privacy (pushState+popstate, scroll-margin 88px); router owner", "family": "3.3", "est_min": 45, "type": "replace" },
+        { "id": "b4-s2", "slug": "public-guide", "title": "GuideView guest mode (CTA band -> Create account + See plans; no shell chrome) — same layout as 3.15 with public prop", "family": "3.3", "est_min": 25, "type": "repair" },
+        { "id": "b4-s3", "slug": "public-legal", "title": "PrivacyPolicyView + TermsOfServiceView guest layouts (max-w-5xl, no shell)", "family": "3.3", "est_min": 25, "type": "repair" },
+        { "id": "b4-s4", "slug": "public-extension", "title": "ExtensionInstallView public variant (strip install CTA, keep copyable pill + honest lanes)", "family": "3.3", "est_min": 20, "type": "repair" },
+        { "id": "b4-s5", "slug": "cookie-banner", "title": "CookieBanner glass card + 2 honest buttons (Necessary only / Accept all) + consent prefs lib (localStorage), revert path via Settings privacy", "family": "3.3", "est_min": 35, "type": "replace" }
+      ]
+    },
+    {
+      "batch": "b5",
+      "branch": "stitch/b05-dashboard",
+      "theme": "3.4 home dashboard + section 4 Level-1 config — content column, subject settings disclosure, create-subject dialog, 11 StatusChips, due/overdue chips",
+      "families": ["3.4"],
+      "conflict_zone": "web/src/components/AssignmentCardDashboard.jsx, web/src/App.jsx (router owner) | web/src/components/SubjectSettingsPanel.jsx (new) | web/src/components/CreateSubjectDialog.jsx (new) | web/src/lib/statusChips.js, web/src/components/StatusChip.jsx (new) | web/src/components/AssignmentCard.jsx, web/src/components/SubjectTile.jsx (new)",
+      "steps": ["b5-s1", "b5-s2", "b5-s3", "b5-s4", "b5-s5"],
+      "parallel_safe": true,
+      "est_minutes": 180,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b5-s1", "slug": "dashboard-column", "title": "AssignmentCardDashboard content column (skeletons, honest count line, bucket fix completed not in in-progress, fetch-error card + Retry, tablet 3-col spec, Submission Ledger pointer); router owner", "family": "3.4", "est_min": 45, "type": "replace" },
+        { "id": "b5-s2", "slug": "subject-settings", "title": "SubjectSettingsPanel Level-1 disclosure (6 three-state config widgets per section 4.3, amber dot when overridden, Reset-to-Global, Done)", "family": "3.4", "est_min": 35, "type": "add" },
+        { "id": "b5-s3", "slug": "create-subject", "title": "CreateSubjectDialog (lucide 12-glyph icon select, 8-color semi palette swatches 44px, duplicate-name conflict, trap/esc) replaces jump-in panel + 7-emoji picker", "family": "3.4", "est_min": 30, "type": "add" },
+        { "id": "b5-s4", "slug": "status-chips", "title": "StatusChip set (11) 6px-dot semi-token matrix + DueChip (due/today/overdue) + compact size", "family": "3.4", "est_min": 30, "type": "add" },
+        { "id": "b5-s5", "slug": "cards-tiles", "title": "AssignmentCard variants (in-progress/pending red-bordered Review Now/due chips) + SubjectTile 48px tinted orb (sem colors, lucide, soft glow); dedupe by subject identity", "family": "3.4", "est_min": 40, "type": "replace" }
+      ]
+    },
+    {
+      "batch": "b6",
+      "branch": "stitch/b06-assignment",
+      "theme": "3.5 assignment detail bento + section 4 Level-2 config — header/action row, direction picker, agent timeline + Stop, draft card, chat stream, materials cards",
+      "families": ["3.5"],
+      "conflict_zone": "web/src/components/AssignmentDetailView.jsx, web/src/App.jsx (router owner) | web/src/components/DirectionPicker.jsx (new) | web/src/components/AgentTimeline.jsx (new), web/src/lib/team.js (new) | web/src/components/WorkingDraftCard.jsx (new), web/src/components/ChatBubble.jsx (new) | web/src/components/AssignmentConfigPanel.jsx (new)",
+      "steps": ["b6-s1", "b6-s2", "b6-s3", "b6-s4", "b6-s5"],
+      "parallel_safe": true,
+      "est_minutes": 210,
+      "depends_on_batch": ["b5"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b6-s1", "slug": "detail-header", "title": "AssignmentDetailView header + action row (per-status x per-ownership, overdue chip real due_date<today, ID mono, Launch to Doc, sticky action bar B on mobile); router owner", "family": "3.5", "est_min": 40, "type": "replace" },
+        { "id": "b6-s2", "slug": "direction-picker", "title": "DirectionPicker radiogroup, 6 tiles 2-col, custom dashed tile + inline textarea + honest Data Lake copy, horizontal scroller <=sm", "family": "3.5", "est_min": 35, "type": "add" },
+        { "id": "b6-s3", "slug": "activity-timeline", "title": "AgentTimeline + overall % mono + aria-valuenow progressbar + Stop Execution 3 states (armed/Halted/Finished); lib/team.js", "family": "3.5", "est_min": 45, "type": "add" },
+        { "id": "b6-s4", "slug": "draft-chat", "title": "WorkingDraftCard (4-line preview clamp, natural min-h, model_used mono pill, collapsed/expanded/error/empty) + ChatStream reusing ChatBubble + ThinkingBubble", "family": "3.5", "est_min": 45, "type": "add" },
+        { "id": "b6-s5", "slug": "detail-config", "title": "AssignmentConfigPanel Level-2 (Prompt/Rubric/Files/Materials cards + section 4 widget kit 3-state chips, Reset) + Expand/Collapse", "family": "3.5", "est_min": 45, "type": "add" }
+      ]
+    },
+    {
+      "batch": "b7",
+      "branch": "stitch/b07-agent",
+      "theme": "3.6 my agent — chat canvas + composer, mode control, identity pill + switcher, threads rail + effort dial, configs sidebar, permission modal, event bubbles",
+      "families": ["3.6"],
+      "conflict_zone": "web/src/components/MyAgentView.jsx, web/src/App.jsx (router owner) | web/src/components/ModeControl.jsx (new), web/src/components/PermissionModal.jsx | web/src/components/IdentityPill.jsx (new) | web/src/components/ThreadsRail.jsx (new), web/src/components/EffortDial.jsx (new) | web/src/components/AgentConfigsSidebar.jsx, web/src/lib/agentEvents.js (new)",
+      "steps": ["b7-s1", "b7-s2", "b7-s3", "b7-s4", "b7-s5"],
+      "parallel_safe": true,
+      "est_minutes": 210,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b7-s1", "slug": "chat-canvas", "title": "MyAgentView chat canvas + composer (chat-first simplification, ChatBubble incl. error variant, ThinkingBubble, honest empty/error); router owner", "family": "3.6", "est_min": 50, "type": "replace" },
+        { "id": "b7-s2", "slug": "mode-permission", "title": "ModeControl segmented (permission scope) + PermissionModal (scoped grant sheet, trap/esc) — section 4 widget kit", "family": "3.6", "est_min": 40, "type": "replace" },
+        { "id": "b7-s3", "slug": "identity-pill", "title": "IdentityPill + agent switcher (personas, Academic Co-pilot identity, 44px rows)", "family": "3.6", "est_min": 35, "type": "add" },
+        { "id": "b7-s4", "slug": "threads-effort", "title": "ThreadsRail + EffortDial (Low/Balanced/High per-session dial, synced with QuickSettings)", "family": "3.6", "est_min": 35, "type": "add" },
+        { "id": "b7-s5", "slug": "configs-events", "title": "AgentConfigsSidebar 4 tabs rewrite + assignment/moment event bubbles (lib/agentEvents.js)", "family": "3.6", "est_min": 50, "type": "replace" }
+      ]
+    },
+    {
+      "batch": "b8",
+      "branch": "stitch/b08-modals-settings",
+      "theme": "3.7 import/tool modals + 3.18 settings bare-bones — 4-step new assignment, Launch to Doc DialogShell, route modal, 6-section settings screen, live preview tile + Telegram",
+      "families": ["3.7", "3.18"],
+      "conflict_zone": "web/src/components/NewAssignmentModal.jsx, web/src/App.jsx (router owner) | web/src/components/LaunchToDocModal.jsx | web/src/components/RouteModal.jsx (new), web/src/lib/routing.js (new) | web/src/components/SettingsApp.jsx, web/src/components/SettingsSections.jsx | web/src/components/AppearancePreview.jsx (new), web/src/components/TelegramIntegration.jsx (new), web/src/lib/preferences.js (new)",
+      "steps": ["b8-s1", "b8-s2", "b8-s3", "b8-s4", "b8-s5"],
+      "parallel_safe": true,
+      "est_minutes": 180,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b8-s1", "slug": "new-assignment-flow", "title": "NewAssignmentModal 4-step flow (assign-from-dump / bulk entry, honest states, DialogShell chrome); router owner", "family": "3.7", "est_min": 45, "type": "replace" },
+        { "id": "b8-s2", "slug": "launch-to-doc", "title": "LaunchToDocModal as DialogShell template (steps, focus trap, Enter submits, state contract)", "family": "3.7", "est_min": 35, "type": "replace" },
+        { "id": "b8-s3", "slug": "route-modal", "title": "RouteModal (assign from dump / bulk routing, per-item skip, honest prices) — new file + lib/routing.js", "family": "3.7", "est_min": 35, "type": "add" },
+        { "id": "b8-s4", "slug": "settings-column", "title": "SettingsApp/SettingsSections bare-bones 6-section single screen (Account, Appearance & Display, Notifications flat panel, Privacy & Security, Credits read-only, Integrations) — delete 17-section wizard + quick-configs + AI sliders; verification: old surfaces removed + new route", "family": "3.18", "est_min": 40, "type": "replace" },
+        { "id": "b8-s5", "slug": "settings-live-preview", "title": "AppearancePreview live preview tile (merged accessibility) + TelegramIntegration real flow (lib/preferences.js) + per-field pristine/invalid/submitting/server-error + Saved mono tick", "family": "3.18", "est_min": 25, "type": "add" }
+      ]
+    },
+    {
+      "batch": "b9",
+      "branch": "stitch/b09-admin",
+      "theme": "3.19 control center + 3.20 monitors — users & ops tab, cost tab, tools tab, feedback-first monitors",
+      "families": ["3.19", "3.20"],
+      "conflict_zone": "web/src/components/ControlCenterView.jsx (new), web/src/App.jsx (router owner) | web/src/components/AdminCostView.jsx (new) | web/src/components/AdminToolsView.jsx (new) | web/src/components/MonitorsView.jsx | web/src/lib/monitors.js (new), web/src/lib/usePoll30.js (new)",
+      "steps": ["b9-s1", "b9-s2", "b9-s3", "b9-s4", "b9-s5"],
+      "parallel_safe": true,
+      "est_minutes": 180,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b9-s1", "slug": "control-users", "title": "ControlCenterView Users & Ops tab (needs-attention strip, simplified table + one ellipsis menu, destructive grouped in error-container, jargon dies: act-as-user behind dev accordion, tempban -> Ban (24h)); router owner; AdminPanels/AdminAdvancedDashboard legacy paths retired", "family": "3.19", "est_min": 45, "type": "replace" },
+        { "id": "b9-s2", "slug": "control-cost", "title": "AdminCostView (today's spend, per-day sparkline, per-plan cost, plain-English feature costs; Monitors cost duplicate dies)", "family": "3.19", "est_min": 35, "type": "add" },
+        { "id": "b9-s3", "slug": "control-tools", "title": "AdminToolsView 2-col progressive disclosure (Engine status real nodes or no-telemetry honest, Model Scorecards, Storage, Inquiries, Agent command box) — kill SystemMap demo fallback", "family": "3.19", "est_min": 40, "type": "add" },
+        { "id": "b9-s4", "slug": "monitors-feedback", "title": "MonitorsView feedback-first rebuild (Feedback & alerts queue + resolve 44px + needs-attention chips default tab, plain English, p95 kept + gloss)", "family": "3.20", "est_min": 35, "type": "replace" },
+        { "id": "b9-s5", "slug": "monitors-traffic", "title": "Traffic one-liner (total/rate/error % stat strip + error-rate chip) + Data Lake + Activity read-only cards, 30s auto-poll dim never re-shimmer (lib/monitors.js, usePoll30.js)", "family": "3.20", "est_min": 25, "type": "add" }
+      ]
+    },
+    {
+      "batch": "b10",
+      "branch": "stitch/b10-product",
+      "theme": "3.8 insights + 3.9 history + 3.10 library/study tools (incl. NEW flashcards player, quiz, mastery/streak, calendar)",
+      "families": ["3.8", "3.9", "3.10"],
+      "conflict_zone": "web/src/components/InsightsView.jsx, web/src/App.jsx (router owner) | web/src/components/IntelligenceView.jsx, web/src/components/AnalyticsDashboard.jsx | web/src/components/AssignmentHistoryView.jsx | web/src/components/LibraryView.jsx | web/src/components/StudyTools/*.jsx (new dir), web/src/components/AcademicCalendar.jsx (new)",
+      "steps": ["b10-s1", "b10-s2", "b10-s3", "b10-s4", "b10-s5"],
+      "parallel_safe": true,
+      "est_minutes": 240,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b10-s1", "slug": "insights-tabs", "title": "InsightsView overview + Academic Progress tab (charts = visx pipeline restyle tokens ONLY, never swap library; honest loading/no-data); router owner", "family": "3.8", "est_min": 50, "type": "replace" },
+        { "id": "b10-s2", "slug": "insights-recommendation", "title": "Recommendations tab + IntelligenceView M3 port (M3 port honest-data only)", "family": "3.8", "est_min": 45, "type": "replace" },
+        { "id": "b10-s3", "slug": "history-ledger", "title": "AssignmentHistoryView table + toolbar + tabs + Export dropdown (honest download states) + mobile card list", "family": "3.9", "est_min": 45, "type": "replace" },
+        { "id": "b10-s4", "slug": "library-tabs", "title": "LibraryView Files tab + Saved tab (tags/mastery rings, clamped previews, empty/loading honest)", "family": "3.10", "est_min": 45, "type": "replace" },
+        { "id": "b10-s5", "slug": "study-tools", "title": "NEW StudyTools dir: FlashcardsPlayer (Leitner spaced repetition player), Quiz diagnostic engine, Difficulty + Mastery + Streak, AcademicCalendar (real due dates, demo never renders in prod, month nav + mobile week strip)", "family": "3.10", "est_min": 55, "type": "add" }
+      ]
+    },
+    {
+      "batch": "b11",
+      "branch": "stitch/b11-economy",
+      "theme": "3.11 credits & billing + 3.12 data lake + 3.13 assignment dump + 3.14 extension install",
+      "families": ["3.11", "3.12", "3.13", "3.14"],
+      "conflict_zone": "web/src/components/CreditsView.jsx, web/src/components/BillingView.jsx, web/src/App.jsx (router owner) | web/src/components/ReferralSection.jsx, web/src/components/CreditLeaderboard.jsx | web/src/components/CreditsCostTab.jsx (new), web/src/components/CreditsPricingDashboard.jsx | web/src/components/DataLakeView.jsx | web/src/components/AssignmentDumpView.jsx, web/src/components/ExtensionInstallView.jsx, web/src/lib/auroraTints.css (move inline AURORA_CHIP_TINTS)",
+      "steps": ["b11-s1", "b11-s2", "b11-s3", "b11-s4", "b11-s5"],
+      "parallel_safe": true,
+      "est_minutes": 210,
+      "depends_on_batch": ["b2"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b11-s1", "slug": "credits-payments", "title": "CreditsView balance strip ALWAYS above tabs + BillingView M3 restyle (tier cards glass, popular pill, honest $0.01/token, annual segmented, prototype notice BELOW price terms, 2FA checkout in DialogShell, kill fake top-up success); router owner", "family": "3.11", "est_min": 50, "type": "replace" },
+        { "id": "b11-s2", "slug": "earn-leaderboard", "title": "ReferralSection (honest per-plan rewards, share row 44px + feedback) + CreditLeaderboard (real data only, own row pinned, empty/loading/ties)", "family": "3.11", "est_min": 40, "type": "replace" },
+        { "id": "b11-s3", "slug": "cost-tab", "title": "CreditsCostTab line chart (same chart component) + per-category mono rows; wire the dead back-nav target; CreditsPricingDashboard obsolete surfaces removed", "family": "3.11", "est_min": 30, "type": "add" },
+        { "id": "b11-s4", "slug": "datalake", "title": "DataLakeView rebuild (contribution panel + form + my entries table + valuation panel; skeleton first load, inline strip + Retry no alert(), pending/implemented pills, mobile responsive cards, Export my entries ghost, aria-live valuation)", "family": "3.12", "est_min": 45, "type": "replace" },
+        { "id": "b11-s5", "slug": "dump-extension", "title": "AssignmentDumpView hero dropzone (idle/drag-over/uploading/error/success), queue + filters + per-item action sheet, 2-step Dump-all confirm + skip checkboxes, dead false-success, options to lucide, AURORA_CHIP_TINTS inline style -> lib; + ExtensionInstallView M3 regen (one live version value, honest lanes, public variant)", "family": "3.13/3.14", "est_min": 45, "type": "replace" }
+      ]
+    },
+    {
+      "batch": "b12",
+      "branch": "stitch/b12-polish",
+      "theme": "3.15-3.17 guide/privacy/ToS (content locked, layout only) + 3.21 error & empty family + 3.22 overlay kitchen + 3.23 demo-mode guard + final sweep",
+      "families": ["3.15", "3.16", "3.17", "3.21", "3.22", "3.23"],
+      "conflict_zone": "web/src/components/GuideView.jsx, web/src/App.jsx (router owner) | web/src/components/PrivacyPolicyView.jsx | web/src/components/TermsOfServiceView.jsx | web/src/components/ErrorState.jsx (new), web/src/lib/overlay.js | web/src/components/DemoRibbon.jsx + DemoModeToggle.jsx, web/src/demoData.js, web/src/mock.js, web/src/components/NotFound.jsx",
+      "steps": ["b12-s1", "b12-s2", "b12-s3", "b12-s4", "b12-s5"],
+      "parallel_safe": true,
+      "est_minutes": 180,
+      "depends_on_batch": ["b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10", "b11"],
+      "gate": ["g1_pytest", "g2_build", "g3_smoke + g3_health"],
+      "step_plan": [
+        { "id": "b12-s1", "slug": "guide-layout", "title": "GuideView layout regeneration only (two-col >=1280 sticky rail, content verbatim from {id, icon, title, chip, what, steps[], tips[], faqs?}, search/filter combobox, FAQ accordion 10, CTA band); router owner", "family": "3.15", "est_min": 40, "type": "replace" },
+        { "id": "b12-s2", "slug": "privacy-layout", "title": "PrivacyPolicyView layout regeneration (6 sections, provider cards, what-stays-on-machine card, retention timeline, Export/Delete buttons, no over-promises)", "family": "3.16", "est_min": 30, "type": "replace" },
+        { "id": "b12-s3", "slug": "tos-layout", "title": "TermsOfServiceView layout regeneration (13 sections verbatim, jump bar pills, accent glyphs, contact glass card)", "family": "3.17", "est_min": 30, "type": "replace" },
+        { "id": "b12-s4", "slug": "errorkit-overlay", "title": "ErrorState family (404/network/401/500 x dark/light x reduced-motion x mobile, dot grid via var(--st-outline), role=main) + OverlayKitchen (Toast role=status 4s stacked max 3, inline strips, offline banner, consent banner, destructive-confirm overlay)", "family": "3.21/3.22", "est_min": 45, "type": "add" },
+        { "id": "b12-s5", "slug": "demo-guard-release", "title": "DemoRibbon (FlaskConical + sem-amber) on EVERY demo surface (auth'd demo mode, palette recents, Library demo tabs, SystemMap mock nodes); live mode never borrows it; audit demoData.js/mock.js consumers + NotFound regen + final viewport-sweep canary + release notes doc", "family": "3.23", "est_min": 35, "type": "repair" }
+      ]
+    }
+  ],
+  "git_workflow": {
+    "rules": [
+      "NEVER push to master/main directly — every change goes: feature branch -> push -> rebase onto origin/main -> PR -> merge (owner mandate; overrides README §17 single-branch note)",
+      "feature branch per batch, created from current origin/main: git switch -c stitch/bNN-slug; worktree per batch: git worktree add ../../workbench/stitch/bNN-slug stitch/bNN-slug (one worktree per batch; batches b2..b11 may run concurrently once b1 lands)",
+      "conventional commits, one per step (5 commits per batch): feat(b06): direction picker radiogroup — b6-s2; body ends with verification evidence line",
+      "gh CLI for push/PR/merge against github.com/ronisaguey-ux/Helpotron (existing auth)",
+      "rebase onto origin/main before PR and after merge (keep linear; interactive only if conflicts — method per AGY)",
+      "merge via rebase only; never -merge, never squash, no direct master pushes — main stays linear",
+      "same-batch steps must stay inside their conflict_zone prefix; if a step needs a file outside, split or move it to the owning batch"
+    ],
+    "branch_prefix": "stitch/b",
+    "branch": "stitch/b01-foundation ... stitch/b12-polish (zero-padded, slug from step plan)",
+    "branch_create": "git switch -c stitch/bNN-slug && git worktree add /home/roni/Roni_workspace/helpotron-work/stitch/bNN-slug stitch/bNN-slug",
+    "push": "git push -u origin stitch/bNN-slug",
+    "rebase": "git fetch origin && git rebase origin/main (method per AGY; interactive only if conflicts)",
+    "pr": "gh pr create --fill --title 'stitch/bNN: <batch theme>' --body '<# PR BODY TEMPLATE>\n## Batch\nbNN (steps bN-s1..bN-s5)\n## Families / screens\n<list from step_plan>\n## What changed\n<file+line summary per step>\n## Gates (all 3 must show evidence)\n- [x] pytest: <paste tail of g1_pytest output>\n- [x] build: <paste npm run build summary>\n- [x] smoke: <paste gate_smoke.py output + health curl>\n## Conflicts\n<list of cross-batch touched files (expected: web/src/App.jsx), or none>'",
+    "merge": "gh pr merge --rebase --delete-branch",
+    "gates_before_merge": ["pytest (isolated test db, ENVIRONMENT=development + DATABASE_URL pin)", "web build (vite production, cd web && npm run build)", "smoke + health (scripts/gates/gate_smoke.py + curl -s http://localhost:8000/api/health)"]
+  },
+  "rollout": [
+    "per-batch 3-gate (pytest isolated + vite build + gate_smoke/health curl), run inside the batch worktree before opening/merging the PR — evidence pasted into the PR body",
+    "full acceptance: EVERY screen re-verified at 320 / 390 / 768 / 1024 / 1440 + landscape-phone + dark/light + reduced-motion, against the improvement.md §2.7 universal state checklist; run at 90-100% UI replacement claim sign-off (Steps: sweep report per family -> consolidated acceptance table)",
+    "security rescan (Shannon note): per D_ sheet existing tooling — re-run the security sweep suite (server/tests security modules + sweep-reports baseline) after b12 lands; gates 0C/0H before any release; scanned as a full-stack change, not UI-only",
+    "demo-mode guard (3.23): verify demoData.js/mock.js are consumed ONLY behind DemoRibbon-labeled surfaces; live shell never renders demo nodes/versions/notifications/telemetry; check 'demo' string audit in final sweep",
+    "release notes: extension manifest version bump + PRESET_RELEASE_NOTES entry after final batch, plus README §17 branch-policy update to match the new PR flow (doc-only, last PR)"
+  ],
+  "placeholders": {
+    "steps": "filled from A_B_C_D sheets during synthesis",
+    "verification_commands": "concrete from D sheet",
+    "step_files": "view/delete/edit/add snippets with exact paths and line-anchors inserted at synthesis (skeleton currently carries only prefix-level conflict zones and planned slugs/titles)",
+    "fresh_file_targets": "new file paths are frozen in this sheet (MobileDrawer.jsx, QuickSettings.jsx, StudyTools/*, etc.); exact content + anchors come from A/B/D sheets",
+    "backend": "{} per step — this integration has no backend surface (UI-only per improvement.md); any discovered backend gap escapes as its own PR, never inside these batches"
+  },
+  "notes": [
+    "Coverage: 12 batches x exactly 5 steps = 60 steps; families covered: foundation + 3.1..3.23 (all 23 families) + final QA sweep; ordering follows improvement.md §9 STITCH GENERATION ORDER.",
+    "DAG: b1 (bootstrap, must be first) -> b2 (chrome shell, must be first main-visible batch) -> b3..b11 depend only on b2 and may run concurrently as separate branches/worktrees -> b12 depends on ALL previous batches (layout + global polish must see every screen); expected cross-batch conflict file: web/src/App.jsx only (router ownership rule in conventions).",
+    "README §17 (single-branch main, no push without authorization) contradicts the owner-mandated PR workflow: this plan implements the owner mandate; README §17 gets updated in the final docs PR (rollout).",
+    "HANDOFF.md is stale (2026-08-13 login debug state) — not a reference; GATES.md + README §15 are the QA source of truth; GATES.md G4/G8 map to g2_build / g3_smoke.",
+    "Design contracts (§10) are hard constraints per step: charts restyle-only (web/src/components/charts/** never touched), lucide-react only, copy of record locked for 3.15-3.17, real-data-only render, 44px minimum / 16px inputs / pb-safe, data-theme swap only with zero dark: and zero hex literals, <=150ms motion, reduced-motion kill switch, hover under (hover:hover) only.",
+    "New functionality in 3.10 (flashcards player, quiz, mastery/streak) is frontend-only; backend study_materials endpoints already exist (README) — steps must render honest empty/loading until real data resolves, no fabricated question banks.",
+    "Verification baseline commands come from README §15 + GATES.md; per-step EXACTLY 3 commands are filled from the D_ sheet (component-level pytest/node gate, build, live smoke/curl) — skeletons carry the canonical trio only.",
+    "Total estimated effort: ~2190 min (~36.5h) across 12 batches (est_minutes per batch in batch_layout).",
+    "Worktree note (T2B verify recipe): worktrees lack .env — every pytest command pins ENVIRONMENT=development + DATABASE_URL explicitly; smoke gate boots the app itself, no .env needed.",
+    "Sheet is independent of A/B/C/D content: only schema was consumed; identical field names in conventions.step_schema / batch_schema guarantee synthesis-time merge with sibling sheets."
+  ]
+}
