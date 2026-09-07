@@ -748,13 +748,57 @@ chrome.storage.onChanged.addListener((changes, area) => {
     });
   }
 
+  // View Navigation Tabs
+  const navTabs = {
+    launcher: document.getElementById('tabNavLauncher'),
+    chat: document.getElementById('tabNavChat'),
+    type: document.getElementById('tabNavType'),
+  };
+  const viewPanels = {
+    launcher: document.getElementById('viewLauncher'),
+    chat: document.getElementById('viewChat'),
+    type: document.getElementById('viewType'),
+  };
+
+  function switchView(viewName) {
+    Object.keys(navTabs).forEach((key) => {
+      const tab = navTabs[key];
+      const panel = viewPanels[key];
+      const active = key === viewName;
+      if (tab) {
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      }
+      if (panel) {
+        panel.classList.toggle('hidden', !active);
+      }
+    });
+
+    if (viewName === 'chat') {
+      loadPopupChatHistory();
+      const input = document.getElementById('popupChatInput');
+      if (input) setTimeout(() => input.focus(), 80);
+    } else if (viewName === 'type') {
+      loadAssignmentsForLaunch();
+      detectDocTabs();
+    }
+  }
+
+  if (navTabs.launcher) navTabs.launcher.addEventListener('click', () => switchView('launcher'));
+  if (navTabs.chat) navTabs.chat.addEventListener('click', () => switchView('chat'));
+  if (navTabs.type) navTabs.type.addEventListener('click', () => switchView('type'));
+
   const agentBtn = document.getElementById('btnAgentMode');
   const openChatBtn = document.getElementById('btnOpenChat');
-  const openAgent = () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('agent_mode.html') });
-  };
-  if (agentBtn) agentBtn.addEventListener('click', openAgent);
-  if (openChatBtn) openChatBtn.addEventListener('click', openAgent);
+  if (agentBtn) agentBtn.addEventListener('click', () => switchView('chat'));
+  if (openChatBtn) openChatBtn.addEventListener('click', () => switchView('chat'));
+
+  const btnFullAgentTab = document.getElementById('btnFullAgentTab');
+  if (btnFullAgentTab) {
+    btnFullAgentTab.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('agent_mode.html') });
+    });
+  }
 
   const chip = document.getElementById('accountChip');
   if (chip) {
@@ -766,6 +810,370 @@ chrome.storage.onChanged.addListener((changes, area) => {
     });
   }
 })();
+
+// ── Embedded Agent Chat Controller ──────────────────────────────────────────
+const CHAT_KEY = 'helpotron_chat';
+const chatMessagesEl = document.getElementById('popupChatMessages');
+const chatInputEl = document.getElementById('popupChatInput');
+const chatFormEl = document.getElementById('popupChatForm');
+const chatTokenBanner = document.getElementById('chatTokenBanner');
+const chatTokenMsg = document.getElementById('chatTokenMsg');
+const btnRefreshChat = document.getElementById('btnRefreshChat');
+let chatBusy = false;
+
+function addPopupChatMsg(sender, text) {
+  if (!chatMessagesEl) return null;
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
+  if (sender === 'user' || sender === 'agent') {
+    const sp = document.createElement('span');
+    sp.className = 'chat-sender';
+    sp.textContent = sender === 'user' ? 'You' : 'Agent';
+    div.appendChild(sp);
+  }
+  const body = document.createElement('span');
+  body.textContent = text;
+  div.appendChild(body);
+  chatMessagesEl.appendChild(div);
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  return div;
+}
+
+function renderPopupChatHistory(msgs) {
+  if (!chatMessagesEl) return;
+  chatMessagesEl.innerHTML = '';
+  if (!msgs || msgs.length === 0) {
+    addPopupChatMsg('agent', "Hi! I'm your Helpotron companion. Ask questions about your coursework, or tell me what to do on this page.");
+    return;
+  }
+  msgs.forEach((m) => addPopupChatMsg(m.sender === 'user' ? 'user' : 'agent', m.text));
+}
+
+async function loadPopupChatHistory() {
+  const cached = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY];
+  if (cached && cached.length) renderPopupChatHistory(cached);
+
+  const { server } = await chrome.storage.local.get('server');
+  const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+  if (!t) return;
+
+  try {
+    const res = await fetch(`${srv}/api/extension/agent_chat/history`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const msgs = ((data && data.chat) || []).map((m) => ({ sender: m.sender, text: m.text }));
+    if (msgs.length) {
+      renderPopupChatHistory(msgs);
+      chrome.storage.local.set({ [CHAT_KEY]: msgs }).catch(() => {});
+    }
+  } catch {
+    // Offline or server unreachable — cached messages remain visible
+  }
+}
+
+if (btnRefreshChat) {
+  btnRefreshChat.addEventListener('click', loadPopupChatHistory);
+}
+
+if (chatFormEl && chatInputEl) {
+  chatFormEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = chatInputEl.value.trim();
+    if (!text || chatBusy) return;
+
+    chatInputEl.value = '';
+    addPopupChatMsg('user', text);
+    chatBusy = true;
+    if (chatTokenBanner) chatTokenBanner.style.display = 'none';
+
+    const typingNode = addPopupChatMsg('agent', 'Thinking…');
+    const { server } = await chrome.storage.local.get('server');
+    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+
+    if (!t) {
+      if (typingNode) typingNode.querySelector('span:last-child').textContent = '⚠️ Sign in on Helpotron first to chat with the agent.';
+      chatBusy = false;
+      return;
+    }
+
+    try {
+      const res = await fetch(`${srv}/api/extension/agent_chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({
+          text,
+          thread_id: 0,
+          agent_mode: true,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
+
+      if (data && data.status === 'insufficient_tokens') {
+        if (chatTokenBanner && chatTokenMsg) {
+          chatTokenMsg.textContent = data.message || 'Insufficient tokens for agent actions.';
+          chatTokenBanner.style.display = 'flex';
+        }
+        addPopupChatMsg('agent', '⚠️ Insufficient tokens — visit your Helpotron account to replenish tokens.');
+      } else if (res.ok) {
+        const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
+        addPopupChatMsg('agent', reply);
+        // Persist message to local chat mirror
+        const st = await chrome.storage.local.get(CHAT_KEY);
+        const list = (st[CHAT_KEY] || []).slice(-70);
+        list.push({ sender: 'user', text, timestamp: new Date().toISOString() });
+        list.push({ sender: 'agent', text: reply, timestamp: new Date().toISOString() });
+        chrome.storage.local.set({ [CHAT_KEY]: list }).catch(() => {});
+      } else {
+        addPopupChatMsg('agent', `⚠️ Error: ${data.detail || `HTTP ${res.status}`}`);
+      }
+    } catch (err) {
+      if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
+      addPopupChatMsg('agent', `⚠️ Connection error: ${String(err).slice(0, 100)}`);
+    } finally {
+      chatBusy = false;
+    }
+  });
+
+  // Enter to send (Shift+Enter for newline)
+  chatInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      chatFormEl.dispatchEvent(new Event('submit'));
+    }
+  });
+}
+
+// ── Launch to Doc Controller ─────────────────────────────────────────────────
+const ltdAssignmentSelect = document.getElementById('ltdAssignmentSelect');
+const ltdTextInput = document.getElementById('ltdTextInput');
+const ltdWordCount = document.getElementById('ltdWordCount');
+const ltdTabSelect = document.getElementById('ltdTabSelect');
+const btnRefreshAssignments = document.getElementById('btnRefreshAssignments');
+const btnRefreshDocTabs = document.getElementById('btnRefreshDocTabs');
+const btnStartLaunchToDoc = document.getElementById('btnStartLaunchToDoc');
+const ltdActiveCard = document.getElementById('ltdActiveCard');
+const ltdProgressFill = document.getElementById('ltdProgressFill');
+const ltdTypingPct = document.getElementById('ltdTypingPct');
+const ltdTypingStatus = document.getElementById('ltdTypingStatus');
+const btnPauseTyping = document.getElementById('btnPauseTyping');
+const btnCancelTyping = document.getElementById('btnCancelTyping');
+const ltdCadenceButtons = document.querySelectorAll('.ltd-preset');
+
+let typingState = {
+  active: false,
+  paused: false,
+  wpm: 65,
+  typoRate: 0.018,
+  targetTabId: null,
+};
+
+function updateLtdWordCount() {
+  if (!ltdTextInput || !ltdWordCount) return;
+  const val = ltdTextInput.value.trim();
+  const words = val ? val.split(/\s+/).length : 0;
+  ltdWordCount.textContent = `${words} word${words === 1 ? '' : 's'}`;
+}
+
+if (ltdTextInput) {
+  ltdTextInput.addEventListener('input', updateLtdWordCount);
+}
+
+ltdCadenceButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    ltdCadenceButtons.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    typingState.wpm = Number(btn.dataset.wpm) || 65;
+    typingState.typoRate = Number(btn.dataset.typo) || 0.018;
+  });
+});
+
+async function loadAssignmentsForLaunch() {
+  if (!ltdAssignmentSelect) return;
+  ltdAssignmentSelect.innerHTML = '<option value="">Loading assignments…</option>';
+
+  const { server } = await chrome.storage.local.get('server');
+  const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+
+  if (!t) {
+    ltdAssignmentSelect.innerHTML = '<option value="">Please sign in to load assignments</option>';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${srv}/api/assignments`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = data.assignments || [];
+
+    ltdAssignmentSelect.innerHTML = '';
+    if (list.length === 0) {
+      ltdAssignmentSelect.innerHTML = '<option value="">No assignments found</option>';
+      return;
+    }
+
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = '— Choose an assignment to type —';
+    ltdAssignmentSelect.appendChild(defaultOpt);
+
+    list.forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = String(a.id);
+      opt.textContent = `${a.title || 'Untitled'} (#${a.id})`;
+      ltdAssignmentSelect.appendChild(opt);
+    });
+  } catch (e) {
+    ltdAssignmentSelect.innerHTML = `<option value="">Could not load (${String(e).slice(0, 30)})</option>`;
+  }
+}
+
+if (ltdAssignmentSelect) {
+  ltdAssignmentSelect.addEventListener('change', async () => {
+    const aid = ltdAssignmentSelect.value;
+    if (!aid) return;
+
+    const { server } = await chrome.storage.local.get('server');
+    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (!t) return;
+
+    try {
+      setStatus(`Loading text payload for assignment #${aid}…`);
+      const res = await fetch(`${srv}/api/assignment/${aid}/launch-doc-payload`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        if (payload && payload.text && ltdTextInput) {
+          ltdTextInput.value = payload.text;
+          updateLtdWordCount();
+          setStatus(`Loaded ${payload.word_count || 0} words for “${payload.title || 'assignment'}”.`);
+        }
+      }
+    } catch {
+      // Keep existing custom text
+    }
+  });
+}
+
+async function detectDocTabs() {
+  if (!ltdTabSelect) return;
+  ltdTabSelect.innerHTML = '<option value="">Detecting open doc tabs…</option>';
+
+  const resp = await chrome.runtime.sendMessage({ action: 'getGDocsTabs' }).catch(() => null);
+  const tabs = (resp && resp.tabs) || [];
+
+  ltdTabSelect.innerHTML = '';
+  const newTabOpt = document.createElement('option');
+  newTabOpt.value = 'new';
+  newTabOpt.textContent = '➕ Open new Google Doc (docs.new)';
+  ltdTabSelect.appendChild(newTabOpt);
+
+  tabs.forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = String(t.id);
+    opt.textContent = `📄 ${t.title || t.app || 'Document'} (${t.app})`;
+    if (t.active) opt.selected = true;
+    ltdTabSelect.appendChild(opt);
+  });
+}
+
+if (btnRefreshAssignments) btnRefreshAssignments.addEventListener('click', loadAssignmentsForLaunch);
+if (btnRefreshDocTabs) btnRefreshDocTabs.addEventListener('click', detectDocTabs);
+
+if (btnStartLaunchToDoc) {
+  btnStartLaunchToDoc.addEventListener('click', async () => {
+    const text = (ltdTextInput ? ltdTextInput.value : '').trim();
+    if (!text) {
+      setStatus('⚠️ Please enter or select assignment text to type.');
+      return;
+    }
+
+    const selectedTab = ltdTabSelect ? ltdTabSelect.value : 'new';
+    const targetId = selectedTab === 'new' ? null : Number(selectedTab);
+    const selectedAssignId = ltdAssignmentSelect ? Number(ltdAssignmentSelect.value) || null : null;
+
+    setStatus('🚀 Launching to doc… focusing tab and starting humanized typing stream.');
+    if (ltdActiveCard) ltdActiveCard.style.display = 'flex';
+    if (ltdProgressFill) ltdProgressFill.style.width = '0%';
+    if (ltdTypingPct) ltdTypingPct.textContent = '0%';
+    if (ltdTypingStatus) ltdTypingStatus.textContent = 'Initializing typing engine…';
+
+    typingState.active = true;
+    typingState.paused = false;
+
+    const resp = await chrome.runtime.sendMessage({
+      action: 'launchToDoc',
+      payload: {
+        text,
+        tabId: targetId,
+        wpm: typingState.wpm,
+        typoRate: typingState.typoRate,
+        assignmentId: selectedAssignId,
+      },
+    }).catch((e) => ({ ok: false, error: String(e) }));
+
+    if (resp && resp.ok) {
+      typingState.targetTabId = resp.tabId;
+      setStatus(`✅ Typing started in tab #${resp.tabId}`);
+      if (ltdTypingStatus) ltdTypingStatus.textContent = 'Typing into document…';
+    } else {
+      setStatus(`❌ Launch failed: ${(resp && resp.error) || 'unknown error'}`);
+      if (ltdActiveCard) ltdActiveCard.style.display = 'none';
+      typingState.active = false;
+    }
+  });
+}
+
+if (btnPauseTyping) {
+  btnPauseTyping.addEventListener('click', async () => {
+    const action = typingState.paused ? 'resumeTyping' : 'pauseTyping';
+    await chrome.runtime.sendMessage({ action, tabId: typingState.targetTabId }).catch(() => {});
+    typingState.paused = !typingState.paused;
+    btnPauseTyping.querySelector('span').textContent = typingState.paused ? 'Resume' : 'Pause';
+    if (ltdTypingStatus) ltdTypingStatus.textContent = typingState.paused ? 'Paused' : 'Typing into document…';
+  });
+}
+
+if (btnCancelTyping) {
+  btnCancelTyping.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ action: 'cancelTyping', tabId: typingState.targetTabId }).catch(() => {});
+    if (ltdActiveCard) ltdActiveCard.style.display = 'none';
+    typingState.active = false;
+    setStatus('⏹ Typing cancelled.');
+  });
+}
+
+// Listen for typing progress broadcasts from background
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && (msg.action === 'BROADCAST_TYPING_PROGRESS' || msg.action === 'TYPING_PROGRESS')) {
+    const p = msg.payload || msg;
+    if (p && p.percent !== undefined) {
+      const pct = Math.round(Number(p.percent));
+      if (ltdProgressFill) ltdProgressFill.style.width = `${pct}%`;
+      if (ltdTypingPct) ltdTypingPct.textContent = `${pct}%`;
+      if (pct >= 100) {
+        if (ltdTypingStatus) ltdTypingStatus.textContent = 'Completed!';
+        setTimeout(() => {
+          if (ltdActiveCard) ltdActiveCard.style.display = 'none';
+          typingState.active = false;
+        }, 2500);
+      }
+    }
+  }
+});
 
 // ── Approval inbox wiring ────────────────────────────────────────────────────
 function initApprovalInbox() {
@@ -792,3 +1200,4 @@ function initApprovalInbox() {
 
 initApprovalInbox();
 init();
+
