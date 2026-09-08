@@ -3144,8 +3144,11 @@ if (btnCancelTyping) {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && (msg.action === 'BROADCAST_TYPING_PROGRESS' || msg.action === 'TYPING_PROGRESS')) {
     const p = msg.payload || msg;
-    if (p && p.percent !== undefined) {
-      const pct = Math.round(Number(p.percent));
+    // content.js getStatus() reports the field as `percentage`; an older
+    // payload used `percent`. A payload that had neither would silently stall
+    // the bar at 0% forever, so read whichever is present.
+    if (p && (p.percentage !== undefined || p.percent !== undefined)) {
+      const pct = Math.round(Number(p.percentage !== undefined ? p.percentage : p.percent));
       if (ltdProgressFill) ltdProgressFill.style.width = `${pct}%`;
       if (ltdTypingPct) ltdTypingPct.textContent = `${pct}%`;
       if (pct >= 100) {
