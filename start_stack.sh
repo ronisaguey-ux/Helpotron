@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-shot bring-up of the helpotron stack after a reboot (08-31).
-# Replaces ad-hoc process starts: API (uvicorn :8000), web (vite :5173),
+# Replaces ad-hoc process starts: API (uvicorn :5000), web (vite :5173),
 # tunnel (cloudflared), and the tele-wake chain.
 # Run AS THE USER on the desktop session (X11 DISPLAY=:0 already up).
 set -e
@@ -20,7 +20,7 @@ else
   nohup systemd-run --user --scope --unit=helpotron-uvicorn \
     -p MemoryMax=10G -p MemoryHigh=10G -p MemorySwapMax=0 \
     /home/roni/Roni_workspace/helpotron/.venv/bin/uvicorn server.main:app \
-    --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips 127.0.0.1 \
+    --host 0.0.0.0 --port 5000 --proxy-headers --forwarded-allow-ips 127.0.0.1 \
     > /tmp/helpotron_api.log 2>&1 &
   echo "api scope started (pid $!)"
 fi
@@ -43,6 +43,6 @@ echo "tele watcher armed"
 
 sleep 6
 echo "--- checks:"
-curl -s -o /dev/null -w "api:%{http_code}\n" http://127.0.0.1:8000/ || echo "api: DOWN"
+curl -s -o /dev/null -w "api:%{http_code}\n" http://127.0.0.1:5000/ || echo "api: DOWN"
 curl -s -o /dev/null -w "web:%{http_code}\n" http://127.0.0.1:5173/ || echo "web: DOWN"
 curl -s -o /dev/null -w "tunnel:%{http_code}\n" https://helpotron.dpdns.org/ || echo "tunnel: DOWN (may need a few more seconds)"

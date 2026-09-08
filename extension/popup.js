@@ -25,7 +25,7 @@ const MODEL_TIER_KEY = 'helpotron_agent_model_tier';
 const EDUCATIONAL_MODE_KEY = 'helpotron_educational_mode';
 
 const SEE_SCREEN_DEFAULT = true;
-const EXECUTE_DEFAULT = false;
+const EXECUTE_DEFAULT = true;
 const MODE_DEFAULT = 'manual';
 const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
 const EDUCATIONAL_MODE_DEFAULT = true;
@@ -39,6 +39,13 @@ const modelToggles = {
 const effortScoreSlider = document.getElementById('effortScoreSlider');
 const effortScoreVal = document.getElementById('effortScoreVal');
 const chatModelIndicator = document.getElementById('chatModelIndicator');
+const chatToggleEdu = document.getElementById('chatToggleEdu');
+const chatToggleSee = document.getElementById('chatToggleSee');
+const chatToggleExecute = document.getElementById('chatToggleExecute');
+const chatQuickPause = document.getElementById('chatQuickPause');
+const chatEffortSlider = document.getElementById('chatEffortSlider');
+const chatEffortVal = document.getElementById('chatEffortVal');
+const chatModelBadge = document.getElementById('chatModelBadge');
 const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 const modeHintEl = document.getElementById('modeHint');
 const modelEffortEl = document.getElementById('modelEffort');
@@ -52,10 +59,29 @@ let effortPatchDebounceTimer = null;
 // ── Window Mode & Appbar Button Controls ─────────────────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
 const isWindowMode = urlParams.get('mode') === 'window' || urlParams.get('window') === '1';
+// background.js stamps the side panel's path with ?mode=panel — the side panel
+// and the action popup both load popup.html and are otherwise identical.
+const isPanelMode = urlParams.get('mode') === 'panel';
+// The distinction that actually matters for driving a tab: a popped-out window
+// and a side panel KEEP their document across tab/window focus changes, while a
+// browser-action popup is destroyed the instant focus leaves it.
+const isPersistentSurface = isWindowMode || isPanelMode;
 if (isWindowMode) {
   document.body.classList.add('window-mode');
-  if (btnPopOut) btnPopOut.style.display = 'none'; // already popped out
 }
+if (isPersistentSurface && btnPopOut) {
+  btnPopOut.style.display = 'none'; // already on a surface that stays open
+}
+
+// chrome.sidePanel.open() is gesture-gated, and the gesture is spent by the
+// first await in the click handler. Resolve the window id NOW so the handler
+// can call open() with no await in front of it.
+let currentWindowId = null;
+try {
+  Promise.resolve(chrome.windows.getCurrent())
+    .then((w) => { currentWindowId = w && w.id; })
+    .catch(() => {});
+} catch { /* no windows API (should not happen in a popup) */ }
 
 // Keep-open: the real window MUST exist before this popup closes. Closing the
 // popup first was killing the in-flight chrome.windows.create — the browser
@@ -71,10 +97,21 @@ if (btnPopOut) {
     btnPopOut.disabled = true;
     const errEl = document.getElementById('popOutError');
     try {
+      // Side panel FIRST, and with NO await ahead of it — sidePanel.open() is
+      // gesture-gated, so an intervening `await chrome.tabs.query(...)` can
+      // spend the user gesture and make open() reject. currentWindowId was
+      // resolved at load time precisely so this call stays synchronous.
+      if (chrome.sidePanel && chrome.sidePanel.open && currentWindowId != null) {
+        try {
+          await chrome.sidePanel.open({ windowId: currentWindowId });
+          window.close();
+          return;
+        } catch { /* fall through to a real popup window */ }
+      }
       const win = await chrome.windows.create({
         url: chrome.runtime.getURL('popup.html?mode=window'),
         type: 'popup',
-        width: 420,
+        width: 440,
         height: 660,
         focused: true,
       });
@@ -279,8 +316,35 @@ async function applyAgentStateToUI(st) {
   if (effortScoreVal) effortScoreVal.innerText = `${score}`;
   if (effortScoreSlider) effortScoreSlider.value = score;
   if (modelNameEl) modelNameEl.innerText = info.label;
-  if (chatModelIndicator) chatModelIndicator.innerText = info.label;
   if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  syncInChatControls(st);
+}
+
+function syncInChatControls(st) {
+  const see = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : !!st[SEE_SCREEN_KEY];
+  const exe = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : !!st[EXECUTE_KEY];
+  const edu = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : !!st[EDUCATIONAL_MODE_KEY];
+  const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
+  const info = effortModelInfo(score);
+
+  if (chatToggleEdu) {
+    chatToggleEdu.classList.toggle('active', edu);
+    const lbl = chatToggleEdu.querySelector('.chip-title');
+    if (lbl) lbl.textContent = edu ? 'Edu: ON' : 'Edu: OFF';
+  }
+  if (chatToggleSee) {
+    chatToggleSee.classList.toggle('active', see);
+    const lbl = chatToggleSee.querySelector('.chip-title');
+    if (lbl) lbl.textContent = see ? 'Screen: ON' : 'Screen: OFF';
+  }
+  if (chatToggleExecute) {
+    chatToggleExecute.classList.toggle('active', exe);
+    const lbl = chatToggleExecute.querySelector('.chip-title');
+    if (lbl) lbl.textContent = exe ? 'Execute: ON' : 'Execute: OFF';
+  }
+  if (chatEffortSlider) chatEffortSlider.value = score;
+  if (chatEffortVal) chatEffortVal.textContent = score;
+  if (chatModelBadge) chatModelBadge.textContent = info.label;
 }
 
 // ── Backend settings sync (09-02): GET /api/user/settings -> ai.{effortScore,
@@ -448,6 +512,80 @@ Object.keys(modelToggles).forEach((id) => {
     handleToggleChange(id, el.checked);
   });
 });
+
+if (chatToggleEdu) {
+  chatToggleEdu.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[EDUCATIONAL_MODE_KEY] === undefined ? EDUCATIONAL_MODE_DEFAULT : !!st[EDUCATIONAL_MODE_KEY];
+    await handleToggleChange('toggleEducationalMode', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatToggleSee) {
+  chatToggleSee.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[SEE_SCREEN_KEY] === undefined ? SEE_SCREEN_DEFAULT : !!st[SEE_SCREEN_KEY];
+    await handleToggleChange('toggleSeeScreen', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatToggleExecute) {
+  chatToggleExecute.addEventListener('click', async () => {
+    const st = await readAgentState();
+    const cur = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : !!st[EXECUTE_KEY];
+    await handleToggleChange('toggleExecute', !cur);
+    syncInChatControls(await readAgentState());
+  });
+}
+
+if (chatQuickPause) {
+  chatQuickPause.addEventListener('click', () => {
+    pauseAgentAction();
+  });
+}
+
+if (chatEffortSlider) {
+  chatEffortSlider.addEventListener('input', () => {
+    const val = clampEffortScore(chatEffortSlider.value);
+    if (chatEffortVal) chatEffortVal.innerText = `${val}`;
+    if (effortScoreSlider) effortScoreSlider.value = val;
+    if (effortScoreVal) effortScoreVal.innerText = `${val}`;
+    const info = effortModelInfo(val);
+    if (modelEffortEl) modelEffortEl.innerText = `effort ${val}`;
+    if (modelNameEl) modelNameEl.innerText = info.label;
+    if (chatModelIndicator) chatModelIndicator.innerText = info.label;
+    if (chatModelBadge) chatModelBadge.innerText = info.label;
+    if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  });
+
+  chatEffortSlider.addEventListener('change', async () => {
+    const val = clampEffortScore(chatEffortSlider.value);
+    const info = effortModelInfo(val);
+    await persistAgentState({
+      [EFFORT_KEY]: val,
+      [MODEL_KEY]: info.model,
+      [MODEL_TIER_KEY]: info.tier,
+    });
+    setStatus(`⚡ Effort score set to ${val} (${info.label}).`);
+    syncInChatControls(await readAgentState());
+
+    clearTimeout(effortPatchDebounceTimer);
+    effortPatchDebounceTimer = setTimeout(async () => {
+      const { server, public_id } = await chrome.storage.local.get(['server', 'public_id']);
+      const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const t = await authToken();
+      if (public_id && t) {
+        fetch(`${srv}/api/user/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ ai: { effortScore: val } }),
+        }).catch(() => {});
+      }
+    }, 400);
+  });
+}
 
 // Effort score slider interactive updates
 if (effortScoreSlider) {
@@ -1081,7 +1219,16 @@ document.getElementById('saveSettings')?.addEventListener('click', async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ public_id: pid, password: pwd }),
       });
-      const data = await res.json();
+      // A gateway that cannot reach the API answers 5xx with an EMPTY body, so
+      // res.json() throws and the catch below reports "Connection error:
+      // SyntaxError: Unexpected end of JSON input" — which names neither the
+      // status nor the host. Parse defensively and report what really came back.
+      let data = {};
+      try { data = JSON.parse(await res.text()) || {}; } catch { data = {}; }
+      if (!res.ok && !data.detail && !data.message) {
+        setStatus(`❌ Server error ${res.status} from ${srv} — that address answered but is not serving the Helpotron API. Check the SERVER field.`);
+        return;
+      }
       if (res.ok && data.token) {
         await chrome.storage.local.set({
           server: srv,
@@ -1726,6 +1873,7 @@ function showAgentActiveBar(desc) {
     if (btnTxt) btnTxt.textContent = 'PAUSE';
   }
   if (hBtn) hBtn.style.display = 'inline-flex';
+  if (chatQuickPause) chatQuickPause.style.display = 'inline-flex';
 }
 
 function updateAgentActiveDesc(desc) {
@@ -1749,6 +1897,7 @@ function setAgentActionPausedState() {
     if (btnTxt) btnTxt.textContent = 'CANCEL';
   }
   if (hBtn) hBtn.style.display = 'none';
+  if (chatQuickPause) chatQuickPause.style.display = 'none';
   setStatus('⏸ Agent action paused. Press Cancel or issue a new instruction.');
 }
 
@@ -1759,6 +1908,7 @@ function hideAgentActiveBar() {
   const hBtn = document.getElementById('btnHeaderPause');
   if (bar) bar.style.display = 'none';
   if (hBtn) hBtn.style.display = 'none';
+  if (chatQuickPause) chatQuickPause.style.display = 'none';
 }
 
 let pauseBarVisible = false; // bar is up in a paused/can-cancel state
@@ -1824,7 +1974,31 @@ async function cdp(tabId, method, params) {
   }
 }
 
+// Set per burst from `drivingUnseen`. When the drive tab is one the user cannot
+// see, the human-like glide is not merely pointless — it is the difference
+// between "it works" and "nothing happens". Chrome blocks
+// Input.dispatchMouseEvent for a fixed 5s on a NON-ACTIVE tab, because the
+// hidden renderer never acks the event. Measured 2026-09-08, headless AND
+// headful: 5.00s per mouse event on a background tab, 5-17ms on the same tab
+// once activated; Runtime.evaluate and Input.insertText stay at 1-2ms either
+// way. A 30-95 point glide therefore costs 2.5-8 MINUTES per click.
+let driveIsUnseen = false;
+
 async function glideMouseTo(tabId, targetX, targetY) {
+  // Nobody is watching this pointer, so jump straight to the target: the same
+  // click lands off one dispatch instead of 30-95.
+  if (driveIsUnseen) {
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(targetX),
+      y: Math.round(targetY),
+      button: 'none',
+      buttons: 0,
+    }).catch(() => {});
+    await moveVirtualCursor(tabId, targetX, targetY);
+    lastCursorPos = { x: targetX, y: targetY };
+    return;
+  }
   const points = humanMovePoints(lastCursorPos.x, lastCursorPos.y, targetX, targetY);
   for (let i = 1; i < points.length; i++) {
     if (isAgentActionPaused) break;
@@ -1980,19 +2154,30 @@ async function executeReturnedActions(actions) {
     return;
   }
 
-  // 2. The user must SEE the page being driven: when the drive tab is not
-  //    already active, switch to it explicitly — and focus its window when it
-  //    lives outside the window the popup is attached to.
-  if (!driveTab.active || (activeTab && activeTab.id !== driveTab.id)) {
+  // 2. Show the user the page being driven — but ONLY from a surface that can
+  //    survive doing so. A browser-action popup document is destroyed the
+  //    moment focus leaves it, so tabs.update({active:true}) /
+  //    windows.update({focused:true}) here kill THIS document mid-await: the
+  //    burst never reaches chrome.debugger.attach below, nothing is ever typed,
+  //    and the UI just vanishes ("typing only closed the extension"). Driving a
+  //    background tab over CDP works fine, so from the ephemeral popup we drive
+  //    in place and label it. Persistent surfaces (popped-out window, side
+  //    panel) still switch to the tab so the user can watch it happen.
+  const needsFocusSwitch = !driveTab.active || (activeTab && activeTab.id !== driveTab.id);
+  const drivingUnseen = Boolean(needsFocusSwitch) && !isPersistentSurface;
+  driveIsUnseen = drivingUnseen;
+  if (needsFocusSwitch && isPersistentSurface) {
     await chrome.tabs.update(driveTab.id, { active: true }).catch(() => {});
   }
-  if (activeTab && driveTab.windowId !== activeTab.windowId) {
+  if (isPersistentSurface && activeTab && driveTab.windowId !== activeTab.windowId) {
     await chrome.windows.update(driveTab.windowId, { focused: true }).catch(() => {});
   }
   const fresh = (await chrome.tabs.get(driveTab.id).catch(() => null)) || driveTab;
 
   activeActionTabId = driveTab.id;
-  showAgentActiveBar(`Driving: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`);
+  showAgentActiveBar(
+    `${drivingUnseen ? 'Driving (background tab)' : 'Driving'}: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`
+  );
 
   try {
     try {
@@ -2121,7 +2306,9 @@ async function executeReturnedActions(actions) {
     if (isAgentActionPaused) {
       setStatus('⏸ Agent action paused.');
     } else {
-      setStatus(`✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
+      setStatus(drivingUnseen
+        ? `✓ Drove ${driveTabLabel(fresh)} in the background — ${actions.length} action(s). Press ⧉ Keep open to watch it happen.`
+        : `✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
       hideAgentActiveBar();
     }
   } catch (err) {

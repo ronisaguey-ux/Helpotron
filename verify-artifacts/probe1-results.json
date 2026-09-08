@@ -1,0 +1,53 @@
+{
+  "label": "probe1",
+  "extension": "/home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "throttled": false,
+  "results": [
+    {
+      "check": "manifest.version",
+      "status": "PASS",
+      "detail": "loaded build reports version 2.7.0"
+    },
+    {
+      "check": "manifest.sidePanel-api",
+      "status": "PASS",
+      "detail": "typeof chrome.sidePanel = object"
+    },
+    {
+      "check": "A.target-active",
+      "status": "PASS",
+      "detail": "active tab before drive = {'id': 1864539843, 'url': 'http://127.0.0.1:43835/drive.html'}"
+    },
+    {
+      "check": "A.action-popup",
+      "status": "PASS",
+      "detail": "genuine action popup open: ['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html']"
+    },
+    {
+      "check": "A.popup-survived",
+      "status": "PASS",
+      "detail": "POPUP context after drive: True (contexts=['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html'])"
+    },
+    {
+      "check": "A.no-focus-switch",
+      "status": "PASS",
+      "detail": "active tab unchanged: 1864539843 -> 1864539843"
+    },
+    {
+      "check": "A.input-landed",
+      "status": "PASS",
+      "detail": "clicks=1 typed='V270_TYPE_OK' (expected 'V270_TYPE_OK') in 2.0s"
+    },
+    {
+      "check": "A.event-provenance",
+      "status": "PASS",
+      "detail": "page events = ['beforeinput|insertText|\"V270_TYPE_OK\"']"
+    },
+    {
+      "check": "A.burst-state",
+      "status": "NOTE",
+      "detail": "{'res': None, 'ms': None, 'alive': True} log=['SEND|Runtime.evaluate|t20', 'OK|Runtime.evaluate|t24', 'SEND|Runtime.evaluate|t25', 'OK|Runtime.evaluate|t31', 'SEND|Runtime.evaluate|t31', 'OK|Runtime.evaluate|t40', 'SEND|Runtime.evaluate|t1968', 'OK|Runtime.evaluate|t1971', 'SEND|Runtime.evaluate|t1971', 'OK|Runtime.evaluate|t1973', 'SEND|Input.insertText|t1973', 'OK|Input.insertText|t1985']"
+    }
+  ]
+}
