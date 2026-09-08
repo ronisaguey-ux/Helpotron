@@ -81,6 +81,7 @@ export default function AuthModal({
   const [signupPass, setSignupPass] = useState('');
   const [signupPassConfirm, setSignupPassConfirm] = useState('');
   const [showSignupPass, setShowSignupPass] = useState(false);
+  const [showSignupConfirm, setShowSignupConfirm] = useState(false);
   const [referralOpen, setReferralOpen] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [consentAgreed, setConsentAgreed] = useState(false);
@@ -623,7 +624,8 @@ export default function AuthModal({
                       />
                       <button
                         type="button"
-                        aria-label="Toggle password visibility"
+                        aria-label={showLoginPass ? 'Hide password' : 'Show password'}
+                        aria-pressed={showLoginPass}
                         onClick={() => setShowLoginPass((prev) => !prev)}
                         className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
                       >
@@ -730,6 +732,8 @@ export default function AuthModal({
                       <button
                         type="button"
                         onClick={() => setShowSignupPass((prev) => !prev)}
+                        aria-label={showSignupPass ? 'Hide password' : 'Show password'}
+                        aria-pressed={showSignupPass}
                         className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
                       >
                         {showSignupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -753,17 +757,28 @@ export default function AuthModal({
                     <label htmlFor="signup-passphrase-confirm" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
                       CONFIRM PASSWORD
                     </label>
-                    <input
-                      id="signup-passphrase-confirm"
-                      name="confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      placeholder="Re-enter your password"
-                      value={signupPassConfirm}
-                      onChange={(e) => setSignupPassConfirm(e.target.value)}
-                      className="w-full h-11 px-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        id="signup-passphrase-confirm"
+                        name="confirm-password"
+                        type={showSignupConfirm ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        required
+                        placeholder="Re-enter your password"
+                        value={signupPassConfirm}
+                        onChange={(e) => setSignupPassConfirm(e.target.value)}
+                        className="w-full h-11 px-3 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupConfirm((prev) => !prev)}
+                        aria-label={showSignupConfirm ? 'Hide password' : 'Show password'}
+                        aria-pressed={showSignupConfirm}
+                        className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+                      >
+                        {showSignupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Optional Discount Code (owner 09-06: was "Institutional or Peer Pass"

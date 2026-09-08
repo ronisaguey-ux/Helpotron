@@ -1317,6 +1317,38 @@ document.getElementById('accountChip')?.addEventListener('click', () => {
   chip.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 
+// Show/hide the password. Typing a long passphrase blind into a 320px popup is
+// how sign-ins fail twice and get abandoned; the field goes back to hidden when
+// the panel closes so a shoulder-surfable password is never left on screen.
+(() => {
+  const input = document.getElementById('password');
+  const btn = document.getElementById('togglePassword');
+  if (!input || !btn) return;
+  const icon = btn.querySelector('use');
+
+  const paint = (shown) => {
+    input.type = shown ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', shown ? 'true' : 'false');
+    const label = shown ? 'Hide password' : 'Show password';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    icon?.setAttribute('href', shown ? '#i-eye-off' : '#i-eye');
+  };
+
+  btn.addEventListener('click', () => {
+    const shown = input.type === 'password';
+    paint(shown);
+    // Focus back in the field with the caret at the end — the toggle is a
+    // detour in the middle of typing, not the end of it.
+    input.focus();
+    try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not supported on this type */ }
+  });
+
+  document.getElementById('accountChip')?.addEventListener('click', () => {
+    if (document.getElementById('loginPanel')?.hidden) paint(false);
+  });
+})();
+
 document.getElementById('saveSettings')?.addEventListener('click', async () => {
   const srv = serverInput.value.trim() || 'https://helpotron.dpdns.org';
   const pid = publicIdInput.value.trim();
