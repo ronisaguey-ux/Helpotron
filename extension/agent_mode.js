@@ -1261,7 +1261,7 @@ async function sendChatMessage() {
   }
 
   const typingEl = addChatMsgEl('agent', '…thinking…');
-  const body = { text, agent_mode: true };
+  const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute };
   if (images.length) body.images = images;
   if (viewport) body.viewport = viewport;
   try {
