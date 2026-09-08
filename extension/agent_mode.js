@@ -615,6 +615,11 @@ async function ensureDebugger() {
   // silently disabling driving — so the attach below is the real gate.
   const tab = { tabId: state.driveTabId };
   try {
+    // 09-08: a leaked session from a prior capture (popup closed mid-drive) makes
+    // attach fail with "Another debugger is already attached". Detach first,
+    // best-effort — if DevTools genuinely holds it, detach rejects and we catch,
+    // because that is a real blocker the user has to close by hand anyway.
+    await chrome.debugger.detach(tab).catch(() => {});
     await chrome.debugger.attach(tab, DEBUGGER_VERSION);
     state.debuggerAttached = true;
     pushLog('info', `debugger attached (protocol ${DEBUGGER_VERSION}) — driver armed`);

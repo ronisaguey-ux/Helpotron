@@ -2483,6 +2483,13 @@ async function driveActionsInTab(driveTab, actions, ctx) {
 
   try {
     try {
+      // A leaked debugger from a PRIOR burst on this tab (popup destroyed
+      // mid-await, or a run that errored before its finally-detach) makes the
+      // next attach fail with "Another debugger is already attached" — the
+      // RETRY re-runs the whole pick and hits the same wall forever. Detach
+      // first, best-effort: if DevTools holds it, detach rejects and we catch,
+      // which is fine because that is genuinely undoable by the user anyway.
+      await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
       await chrome.debugger.attach({ tabId: driveTab.id }, '1.3');
     } catch (attachErr) {
       // Attach fails when DevTools is open on the target, on the Web Store,
