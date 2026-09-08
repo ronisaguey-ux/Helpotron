@@ -2904,6 +2904,7 @@ const ltdTypingPct = document.getElementById('ltdTypingPct');
 const ltdTypingStatus = document.getElementById('ltdTypingStatus');
 const btnPauseTyping = document.getElementById('btnPauseTyping');
 const btnCancelTyping = document.getElementById('btnCancelTyping');
+const btnHumanizeLtd = document.getElementById('btnHumanizeLtd');
 const ltdCadenceButtons = document.querySelectorAll('.ltd-preset');
 
 let typingState = {
@@ -2923,6 +2924,44 @@ function updateLtdWordCount() {
 
 if (ltdTextInput) {
   ltdTextInput.addEventListener('input', updateLtdWordCount);
+}
+
+if (btnHumanizeLtd) {
+  btnHumanizeLtd.addEventListener('click', async () => {
+    const text = ltdTextInput ? ltdTextInput.value.trim() : '';
+    if (!text) {
+      setStatus('⚠️ Enter or paste draft text to humanize first.');
+      return;
+    }
+    const { server } = await chrome.storage.local.get(['server']);
+    const srv = (serverInput.value.trim() || server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    const t = await authToken();
+    if (!t) {
+      setStatus('🔒 Please log in before humanizing.');
+      return;
+    }
+    const orig = btnHumanizeLtd.innerHTML;
+    btnHumanizeLtd.disabled = true;
+    btnHumanizeLtd.innerHTML = '<span>Humanizing…</span>';
+    try {
+      const res = await fetch(`${srv}/api/assignment/humanize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify({ content: text }),
+      });
+      if (!res.ok) throw new Error(`server ${res.status}`);
+      const data = await res.json();
+      const out = (data && data.content) ? String(data.content) : text;
+      if (ltdTextInput) ltdTextInput.value = out;
+      updateLtdWordCount();
+      setStatus(`✨ Humanized ${out.split(/\s+/).filter(Boolean).length} words — ready to type.`);
+    } catch (e) {
+      setStatus(`⚠️ Humanize failed — ${e.message}`);
+    } finally {
+      btnHumanizeLtd.disabled = false;
+      btnHumanizeLtd.innerHTML = orig;
+    }
+  });
 }
 
 ltdCadenceButtons.forEach((btn) => {
