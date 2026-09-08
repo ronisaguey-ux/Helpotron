@@ -135,25 +135,25 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       // Public markdown pages served by the FastAPI public_router (no auth):
-      // /privacy-policy and /extension-guide must reach :8000 even when the
+      // /privacy-policy and /extension-guide must reach :5000 even when the
       // site itself is static dist served by vite preview.
       '/privacy-policy': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       '/extension-guide': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
@@ -162,28 +162,28 @@ export default defineConfig({
   // Production mode (08-27): the public site serves the BUILT dist via
   // `vite preview` on the same port the tunnel points at — never raw /src/
   // from the dev server. Mirror the /api + /uploads proxy so the built
-  // client can still reach the FastAPI backend on :8000.
+  // client can still reach the FastAPI backend on :5000.
   preview: {
     port: 5173,
     host: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       '/privacy-policy': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
       '/extension-guide': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },

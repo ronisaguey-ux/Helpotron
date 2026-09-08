@@ -30,26 +30,38 @@ Server (`server/screen_vision.py`, unit-tested in
 
 ```
 effort score 1..1000  (default 500, clamped at both ends)
-  ≤ 300  → google/gemini-3.1-flash-lite      ($0.075/M in)  tier "lite"
-  301-500 → deepseek/deepseek-v4-flash-vision ($0.14/M)      tier "mid_lower"  [default]
-  501-700 → google/gemini-3.8-flash          ($0.25/M)       tier "mid_upper"
-  > 700   → deepseek/deepseek-v4-pro-vision  ($0.87/M)       tier "pro"
+  ≤ 333   → google/gemini-3.1-flash-lite      ($0.075/M in)  tier "low"
+  334-666 → deepseek/deepseek-v4-flash-vision ($0.14/M)       tier "med"  [default]
+  > 666   → google/gemini-3.8-flash           ($0.25/M)       tier "high"
 ```
 
 - Higher effort ⇒ more expensive model, exactly as the owner's tiered list
-  demands; the four ids are the canonical ones from
+  demands; the three ids are the canonical ones from
   `server/user_settings_service.py` ai-block defaults and `server/llm.py`
   `MODEL_PRICING` (asserted equal by test).
 - `parse_effort_score`: `None`/empty/bool/garbage → 500; numeric → round to
   int, clamp to 1..1000. Out-of-range never errors.
 - `analyze_screen_image(..., model_id)` keeps its signature; a caller-supplied
-  `model_id` that is NOT one of the four canonical vision ids is ignored and
+  `model_id` that is NOT one of the three canonical vision ids is ignored and
   the default (`deepseek/deepseek-v4-flash-vision`) is used.
-- OpenRouter slugs: `deepseek/deepseek-v4-flash-vision` → the `-exp` slug and
-  `deepseek/deepseek-v4-pro-vision` → `deepseek/deepseek-v4-pro` (no
-  standalone pro-vision catalog entry) — mirrored in `_OR_SLUG_MAP` inside
+- OpenRouter slug: `deepseek/deepseek-v4-flash-vision` → the `-exp` slug; both
+  gemini ids pass through untouched. Mirrored in `_OR_SLUG_MAP` inside
   `screen_vision.py` to track `llm.call_llm`'s 09-01 map (test asserts both).
-- The popup/agent UI mirrors the same four bands client-side
+
+**Dead-tier fallback (09-08).** Measured live against the OpenRouter catalog
+and a real tab screenshot: `deepseek-v4-flash-vision-exp` is listed but its
+image price is `null` — it returns HTTP 200 with **empty content** for an image
+payload, and `deepseek-v4-pro` is not image-capable at all (HTTP 404). Because
+the default effort of 500 landed on the flash-vision tier, screen vision was
+silently dead ("Vision analysis unavailable this turn") for every user not on
+low effort. `deepseek-v4-pro-vision` is now off the ladder entirely. The med
+tier keeps `deepseek-v4-flash-vision`, but a non-200 or empty response now
+retries once on `_VISION_FALLBACK` → `google/gemini-3.8-flash` (degrading *up*,
+so the ladder stays monotonic) and logs a warning. Transport errors still raise
+so callers fail closed as before. Banned from the ladder outright:
+`gemini-3.5-flash`, `gemini-3.1-pro-preview`, `deepseek-v4-pro*`.
+
+- The popup/agent UI mirrors the same three bands client-side
   (`effortModelInfo` in `popup.js`) so the visible model line always agrees
   with what the backend resolves.
 
@@ -67,7 +79,7 @@ returns them). The extension:
    local mode **unless** the user changed the mode in the popup in the same
    instant (pending PATCH).
 3. **Fallback contract** (unauthenticated / offline / server error): effort
-   500 (mid_lower tier, the default) and mode `manual`. Nothing breaks — the
+   500 (med tier, the default) and mode `manual`. Nothing breaks — the
    extension is fully usable in local mode; a subtle "local fallback" hint is
    not shown, but the status line reports the sync failure, and the mode line
    is kept honest because default 500 ⇒ canonical default model.
@@ -160,8 +172,8 @@ without a reload, and Agent Mode's chip shows
 | `helpotron_chat_execute` | popup | bool, default `false` |
 | `helpotron_agent_mode` | popup | `manual`/`auto`/`yolo`, default `manual` |
 | `helpotron_agent_effort` | popup (cached from backend) | 1..1000, default 500 |
-| `helpotron_agent_model` | popup (cached) | canonical id, default mid_lower |
-| `helpotron_agent_model_tier` | popup (cached) | `lite`/`mid_lower`/`mid_upper`/`pro` |
+| `helpotron_agent_model` | popup (cached) | canonical id, default med |
+| `helpotron_agent_model_tier` | popup (cached) | `low`/`med`/`high` |
 | `helpotron_chat` | popup/agent | chat mirror (shared) |
 | `helpotron_crawl_cache` | popup | last crawl status snapshot |
 | `helpotron_last_scrapes` | popup | per-tab bubble pinning |
