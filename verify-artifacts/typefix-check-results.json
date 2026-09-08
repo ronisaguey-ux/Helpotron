@@ -1,0 +1,42 @@
+{
+  "label": "typefix",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "features": [
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 329035826, 'winId': 329035823}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:34963/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #329035827 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #329035827 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 329035827, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "FAIL",
+      "detail": "no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=\u26a0\ufe0f Sign in to sync \u2014 tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True, 'desc': 'Action 1/3: Clicking (100, 70)', 'statusTxt': '\u26a0\ufe0f Sign in to sync \u2014 tap the account chip above.'}"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "FAIL",
+      "detail": "page-side click counter = 0; server counter = 0"
+    }
+  ],
+  "surface_failures": []
+}

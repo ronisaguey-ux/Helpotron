@@ -1,0 +1,102 @@
+{
+  "label": "v270feat",
+  "extension_id": "dpbeoomhlbphmmamopkjillheehakgka",
+  "features": [
+    {
+      "check": "approval.presence-core",
+      "status": "PASS",
+      "detail": "contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True"
+    },
+    {
+      "check": "approval.presence-legacy",
+      "status": "PASS",
+      "detail": "legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)"
+    },
+    {
+      "check": "approval.presence-autoAdd",
+      "status": "PASS",
+      "detail": "#approvalApproveAuto present"
+    },
+    {
+      "check": "approval.worker-tap",
+      "status": "PASS",
+      "detail": "listener injected on service worker"
+    },
+    {
+      "check": "approval.empty-approve",
+      "status": "FAIL",
+      "detail": "expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-reject",
+      "status": "FAIL",
+      "detail": "expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[] cardHidden=True status=\u26d4 Rejected the agent action."
+    },
+    {
+      "check": "approval.text-approve",
+      "status": "FAIL",
+      "detail": "expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[] cardHidden=True status=\u2705 Allowed the agent action."
+    },
+    {
+      "check": "approval.empty-neutral-blocked",
+      "status": "FAIL",
+      "detail": "card not visible; cannot click"
+    },
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 2082283764, 'winId': 2082283761}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:47567/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #2082283765 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #2082283765 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 2082283765, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "PASS",
+      "detail": "click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=\u2713 Drove LH5DRIVE-1788852350542 in the background \u2014 3 action("
+    },
+    {
+      "check": "drive.type-landed",
+      "status": "PASS",
+      "detail": "input received 'LH5_TYPE_OK' (expected 'LH5_TYPE_OK')"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "PASS",
+      "detail": "page-side click counter = 1; server counter = 1"
+    },
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #2082283768 in window 2082283761"
+    },
+    {
+      "check": "keepopen.persistent-surface",
+      "status": "PASS",
+      "detail": "side panel: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=panel"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "NOTE",
+      "detail": "side panel taken (preferred); windows.create fallback not exercised"
+    }
+  ],
+  "surface_failures": []
+}

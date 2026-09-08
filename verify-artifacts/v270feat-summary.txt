@@ -1,0 +1,167 @@
+label: v270feat
+browser: /home/roni-saguey/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+extension: /home/roni/Roni_workspace/helpotron/extension
+profile: /tmp/helpotron-ext-verify-dmba6or5 (temp)
+extension id: dpbeoomhlbphmmamopkjillheehakgka
+manifest: {
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger",
+    "sidePanel"
+  ],
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "version": "2.7.0"
+}
+
+[manifest] Helpotron Academic Companion v2.7.0
+  [invariant] name correct: OK
+  [invariant] version matches extension/manifest.json (2.7.0): OK
+  [invariant] service_worker present: OK
+  [invariant] debugger required: OK
+  [invariant] downloads absent: OK
+  [invariant] tabs permission: OK
+[feature] approval
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [shot] v270feat-approval-card-empty-approve.png (66175 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [FAIL    ] approval.empty-approve: expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [shot] v270feat-approval-after-empty-approve.png (63727 bytes)
+  [shot] v270feat-approval-card-empty-reject.png (66704 bytes)
+  [key] Enter  #approvalReject -> pressed
+  [FAIL    ] approval.empty-reject: expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[] cardHidden=True status=⛔ Rejected the agent action.
+  [shot] v270feat-approval-after-empty-reject.png (63641 bytes)
+  [shot] v270feat-approval-card-text-approve.png (67046 bytes)
+  [key] Enter  #approvalApprove -> pressed
+  [FAIL    ] approval.text-approve: expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [shot] v270feat-approval-after-text-approve.png: attempt 1 failed () — retrying
+  [shot] v270feat-approval-after-text-approve.png (63727 bytes)
+  [FAIL    ] approval.empty-neutral-blocked: card not visible; cannot click
+[feature] drive
+  [PASS    ] drive.target-tab: drive tab created: {'id': 2082283764, 'winId': 2082283761}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:47567/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #2082283765 created
+  [PASS    ] drive.undriveable-tab: newtab tab #2082283765 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 2082283765, 'url': 'chrome://newtab/', 'active': True}
+  [PASS    ] drive.auto-switch-or-retry: click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=✓ Drove LH5DRIVE-1788852350542 in the background — 3 action(
+  [PASS    ] drive.type-landed: input received 'LH5_TYPE_OK' (expected 'LH5_TYPE_OK')
+  [PASS    ] drive.click-evidence: page-side click counter = 1; server counter = 1
+[feature] keepopen
+  [PASS    ] keepopen.spare-tab: spare tab #2082283768 in window 2082283761
+  [key] Enter  #btnPopOut -> pressed
+  [PASS    ] keepopen.persistent-surface: side panel: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=panel
+  [NOTE    ] keepopen.second-window: side panel taken (preferred); windows.create fallback not exercised
+[sync checks] page console errors: 2
+=== toggle results ===
+=== feature check results ===
+  [PASS    ] approval.presence-core: contract ids present: approvalCard=True, approvalTitle=True, approvalText=True, approvalApprove=True, approvalReject=True, approvalNeutral=True, approvalInput=True, approvalHelper=True, approvalStatus=True
+  [PASS    ] approval.presence-legacy: legacy ids: {'approveBtn': False, 'denyBtn': False} (expected gone once the new wiring lands)
+  [PASS    ] approval.presence-autoAdd: #approvalApproveAuto present
+  [PASS    ] approval.worker-tap: listener injected on service worker
+  [FAIL    ] approval.empty-approve: expect=allow resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_empty-approve'} tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [FAIL    ] approval.empty-reject: expect=deny resolve={'resolved': True, 'ok': True, 'approved': False, 'reason': 'user-deny', 'reqId': 'lh5_empty-reject'} tap=[] cardHidden=True status=⛔ Rejected the agent action.
+  [FAIL    ] approval.text-approve: expect=allow/note='pls do it gently' resolve={'resolved': True, 'ok': True, 'approved': True, 'reason': 'user-allow', 'reqId': 'lh5_text-approve'} tap=[] cardHidden=True status=✅ Allowed the agent action.
+  [FAIL    ] approval.empty-neutral-blocked: card not visible; cannot click
+  [PASS    ] drive.target-tab: drive tab created: {'id': 2082283764, 'winId': 2082283761}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:47567/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #2082283765 created
+  [PASS    ] drive.undriveable-tab: newtab tab #2082283765 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 2082283765, 'url': 'chrome://newtab/', 'active': True}
+  [PASS    ] drive.auto-switch-or-retry: click landed WITHOUT harness-switch (clicks 0->1); bar={'visible': False, 'text': 'PAUSE'} status=✓ Drove LH5DRIVE-1788852350542 in the background — 3 action(
+  [PASS    ] drive.type-landed: input received 'LH5_TYPE_OK' (expected 'LH5_TYPE_OK')
+  [PASS    ] drive.click-evidence: page-side click counter = 1; server counter = 1
+  [PASS    ] keepopen.spare-tab: spare tab #2082283768 in window 2082283761
+  [PASS    ] keepopen.persistent-surface: side panel: chrome-extension://dpbeoomhlbphmmamopkjillheehakgka/popup.html?mode=panel
+  [NOTE    ] keepopen.second-window: side panel taken (preferred); windows.create fallback not exercised
+=== screenshots (7) ===
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-card-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-after-empty-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-card-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-after-empty-reject.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-card-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-approval-after-text-approve.png
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270feat-drive-target.png

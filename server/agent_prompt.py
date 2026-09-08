@@ -46,8 +46,9 @@ def sandbox_math_rule() -> str:
         "conversions and every other numeric or symbolic calculation — run it "
         "(e.g. a sandboxed `python3 -c` / `bc` / `awk` one-liner), then report "
         "the executed result. Never silently state a computed value you did "
-        "not actually execute. Where a sandboxed math executor tool is "
-        "available (run_python_math_bash / solve_deterministic_math), use it."
+        "not actually execute. Where the `run_shell` tool is available, use it "
+        "for computations. On the extension surface (`node == 'extensions'`), "
+        "always use `browser_action` when asked to search, click, type, or interact with the browser or tab."
     )
 
 

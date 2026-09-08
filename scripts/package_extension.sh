@@ -76,6 +76,31 @@ EOF
     printf '%s\n' "$LISTING"
 } > "$ART/package-manifest.txt"
 
+# -- LOUD WARNING: stale sibling test dirs ------------------------------------
+# The bug class this catches cost a full debugging cycle: TEST_DIR is derived
+# from the manifest version, so changing that version silently starts writing to
+# a NEW directory while Chrome keeps loading the OLD one via "Load unpacked".
+# Every subsequent fix then lands somewhere the browser never reads, and the
+# extension appears not to change no matter what you do. Name the strays.
+STALE=()
+while IFS= read -r d; do
+    [[ "$d" == "$TEST_DIR" ]] && continue
+    STALE+=("$d")
+done < <(find "$REPO" -maxdepth 1 -type d -name 'helpotron-extension-v*-test' | LC_ALL=C sort)
+
+if (( ${#STALE[@]} )); then
+    echo
+    echo "  !!  STALE UNPACKED BUILD DIR(S) PRESENT — Chrome may still be loading one of"
+    echo "      these instead of the build just produced:"
+    for d in "${STALE[@]}"; do
+        echo "        $d   (last modified $(stat -c %y "$d" | cut -d. -f1))"
+    done
+    echo "      Just built:  $TEST_DIR"
+    echo "      If chrome://extensions 'Load unpacked' points at a stale dir, re-point it"
+    echo "      (or delete the stale dir) — otherwise your fixes will not be loaded."
+    echo
+fi
+
 echo "zip:            $ZIP"
 echo "zip-sha256:     $ZIP_SHA"
 echo "listing-hash:   $LIST_HASH  ($COUNT files)"

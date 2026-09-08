@@ -18,7 +18,8 @@
     "tabCapture",
     "desktopCapture",
     "notifications",
-    "debugger"
+    "debugger",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
@@ -49,6 +50,9 @@
       "48": "icon48.png",
       "128": "icon128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "options_ui": {
     "page": "options.html",
