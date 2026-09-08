@@ -248,10 +248,9 @@ function clampEffortScore(value) {
 
 function effortModelInfo(score) {
   const s = clampEffortScore(score);
-  if (s <= 300) return { tier: 'lite', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-  if (s <= 500) return { tier: 'mid_lower', label: 'DeepSeek V4 Flash Vision', model: 'deepseek/deepseek-v4-flash-vision' };
-  if (s <= 700) return { tier: 'mid_upper', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
-  return { tier: 'pro', label: 'DeepSeek V4 Pro Vision', model: 'deepseek/deepseek-v4-pro-vision' };
+  if (s <= 333) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
+  if (s <= 666) return { tier: 'med', label: 'DeepSeek V4 Flash Vision', model: 'deepseek/deepseek-v4-flash-vision' };
+  return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
 }
 
 async function persistAgentState(patch) {

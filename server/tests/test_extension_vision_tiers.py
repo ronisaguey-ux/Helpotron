@@ -39,73 +39,96 @@ def test_parse_effort_score(value, expected):
 
 # ── resolve_vision_model tiers ────────────────────────────────────────────────
 
-def test_tier_lite_below_300():
-    model, tier, score = resolve_vision_model(300)
+def test_tier_low_below_333():
+    model, tier, score = resolve_vision_model(333)
     assert model == "google/gemini-3.1-flash-lite"      # cheapest
-    assert tier == "lite"
-    assert score == 300
+    assert tier == "low"
+    assert score == 333
 
 
-def test_tier_mid_lower_301_500():
-    model, tier, _ = resolve_vision_model(301)
+def test_tier_med_334_666():
+    model, tier, _ = resolve_vision_model(334)
     assert model == VISION_MODEL                          # deepseek flash vision
-    assert tier == "mid_lower"
-    model, tier, _ = resolve_vision_model(500)
+    assert tier == "med"
+    model, tier, _ = resolve_vision_model(666)
     assert model == VISION_MODEL
-    assert tier == "mid_lower"
+    assert tier == "med"
 
 
-def test_tier_mid_upper_501_700():
-    model, tier, _ = resolve_vision_model(501)
-    assert model == "google/gemini-3.8-flash"
-    assert tier == "mid_upper"
-    model, tier, _ = resolve_vision_model(700)
-    assert model == "google/gemini-3.8-flash"
-    assert tier == "mid_upper"
-
-
-def test_tier_pro_above_700():
-    model, tier, _ = resolve_vision_model(701)
-    assert model == "deepseek/deepseek-v4-pro-vision"     # most expensive
-    assert tier == "pro"
+def test_tier_high_above_666():
+    model, tier, _ = resolve_vision_model(667)
+    assert model == "google/gemini-3.8-flash"             # most expensive
+    assert tier == "high"
     model, tier, _ = resolve_vision_model(1000)
-    assert model == "deepseek/deepseek-v4-pro-vision"
-    assert tier == "pro"
+    assert model == "google/gemini-3.8-flash"
+    assert tier == "high"
 
 
 def test_resolve_default_and_clamped():
-    # absent effort -> default 500 (mid_lower tier)
-    assert resolve_vision_model() == (VISION_MODEL, "mid_lower", 500)
+    # absent effort -> default 500 (med tier)
+    assert resolve_vision_model() == (VISION_MODEL, "med", 500)
     # out-of-range clamps, never a 500/error
-    assert resolve_vision_model(99999) == ("deepseek/deepseek-v4-pro-vision", "pro", 1000)
-    assert resolve_vision_model(-42) == ("google/gemini-3.1-flash-lite", "lite", 1)
+    assert resolve_vision_model(99999) == ("google/gemini-3.8-flash", "high", 1000)
+    assert resolve_vision_model(-42) == ("google/gemini-3.1-flash-lite", "low", 1)
 
 
 def test_tiers_are_ordered_by_price():
-    """Sanity: the four ids are distinct, ascending price, and every one of
+    """Sanity: the three ids are distinct, ascending price, and every one of
     them is declared in ModelPolicy's price table (llm.py) — the tier resolver
     must never name a model the pricing layer does not know."""
     from server.llm import MODEL_PRICING
     tiers = list(VISION_MODEL_TIERS.keys())
-    assert len(tiers) == 4
-    assert len(set(tiers)) == 4
+    assert len(tiers) == 3
+    assert len(set(tiers)) == 3
     for model_id in tiers:
         assert model_id in MODEL_PRICING, f"{model_id} missing from llm.MODEL_PRICING"
     prices = [MODEL_PRICING[m]["input"] for m in tiers]
     assert prices == sorted(prices), "tier order must be cheapest -> most expensive"
 
 
+def test_no_banned_gemini_models_in_ladder():
+    """Owner pin (09-08): gemini is 3.1-flash-lite + 3.8-flash ONLY, and
+    v4-pro-vision is off the ladder entirely."""
+    banned = ("gemini-3.5-flash", "gemini-3.1-pro-preview", "deepseek-v4-pro")
+    for model_id in list(VISION_MODEL_TIERS) + list(_OR_SLUG_MAP.values()):
+        for bad in banned:
+            assert bad not in model_id, f"{model_id} contains banned slug {bad}"
+
+
 # ── OpenRouter slug map sync (mirror of llm.call_llm, 09-01) ───────────────────
 
 def test_or_slug_map_matches_llm_call_slug_rules():
-    # flash-vision exp slug; pro-vision -> pro text slug (no standalone
-    # pro-vision catalog entry); both gemini slugs pass through untouched.
+    # flash-vision ships as the "-exp" slug; both gemini slugs pass through
+    # untouched.
     assert _OR_SLUG_MAP["deepseek/deepseek-v4-flash-vision"] == "deepseek/deepseek-v4-flash-vision-exp"
-    assert _OR_SLUG_MAP["deepseek/deepseek-v4-pro-vision"] == "deepseek/deepseek-v4-pro"
     assert _OR_SLUG_MAP["google/gemini-3.1-flash-lite"] == "google/gemini-3.1-flash-lite"
     assert _OR_SLUG_MAP["google/gemini-3.8-flash"] == "google/gemini-3.8-flash"
     # every tier model resolves through the map
     assert set(_OR_SLUG_MAP.keys()) == set(VISION_MODEL_TIERS.keys())
+
+
+# ── Dead-tier fallback (09-08) ────────────────────────────────────────────────
+
+def test_fallback_targets_are_live_tier_models():
+    """A fallback must point at a model that is itself a tier model, and must
+    never point at itself (that would loop the retry back onto the dead one)."""
+    from server.screen_vision import _VISION_FALLBACK
+    for src, dst in _VISION_FALLBACK.items():
+        assert src in VISION_MODEL_TIERS, f"fallback source {src} is not a tier"
+        assert dst in VISION_MODEL_TIERS, f"fallback target {dst} is not a tier"
+        assert src != dst
+        assert dst not in _VISION_FALLBACK, f"fallback target {dst} is itself dead"
+
+
+def test_med_tier_degrades_up_not_down():
+    """deepseek v4 flash vision returns empty for image payloads (measured
+    09-08). The user asked for more than low effort, so the retry must land on
+    the HIGH tier, never back down on the cheapest one."""
+    from server.llm import MODEL_PRICING
+    from server.screen_vision import _VISION_FALLBACK
+    src = "deepseek/deepseek-v4-flash-vision"
+    dst = _VISION_FALLBACK[src]
+    assert MODEL_PRICING[dst]["input"] >= MODEL_PRICING[src]["input"]
 
 
 # ── Control action cap (09-02 spec: max 15 per task) ──────────────────────────

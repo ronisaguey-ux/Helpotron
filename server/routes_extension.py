@@ -536,7 +536,10 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
     if img_err:
         raise HTTPException(status_code=400, detail=f"invalid image: {img_err}")
 
-    # Safety screen (operator 09-01 rules): refuse a flagged instruction.
+    # Safety screen (operator 09-08): record only, never refuse. Nothing is
+    # denied at the prompt level — the flag lands in the admin moderation
+    # queue and the instruction still reaches the model, which applies its
+    # own policy and decides how to answer.
     from .moderation import flag_content, screen_content
 
     vision_prompt = payload.prompt or ""
@@ -551,15 +554,7 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
             reason=reason,
             risk_score=risk,
         )
-        logger.warning("extension vision prompt flagged: %s", reason)
-        return {
-            "status": "refused",
-            "analysis": "That instruction can't be processed (moderation).",
-            "model": model_id,
-            "model_tier": model_tier,
-            "effort_score": effort_score,
-            "token_balance": _tk_balance(user),
-        }
+        logger.info("extension vision prompt flagged (not blocked): %s", reason)
 
     try:
         analysis = await analyze_screen_image(
@@ -688,8 +683,8 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     effort_score = _user_effort_score(user)
     vision_model_id, vision_model_tier, _clamped = resolve_vision_model(effort_score)
 
-    # Safety screen (operator 09-01 rules) at write time: refuse + flag the
-    # user text before it reaches the agent or the durable store.
+    # Safety screen (operator 09-08): record only, never refuse. The message
+    # always reaches the agent; the agent decides how to respond.
     from .moderation import flag_content, screen_content
 
     flagged, reason, risk = screen_content(payload.text)
@@ -703,15 +698,7 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             reason=reason,
             risk_score=risk,
         )
-        logger.warning("extension chat text flagged: %s", reason)
-        return {
-            "status": "refused",
-            "message": "That message can't be processed (moderation).",
-            "reply": "That message can't be processed (moderation).",
-            "execution": None,
-            "control_actions": None,
-            "token_balance": _tk_balance(user),
-        }
+        logger.info("extension chat text flagged (not blocked): %s", reason)
 
     # Restore conversation from the durable store (same as the web chat).
     try:

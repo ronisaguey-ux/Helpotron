@@ -24,11 +24,14 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # Default model (= middle tier) and the effort-score semantic (09-02).
 VISION_MODEL: str = "deepseek/deepseek-v4-flash-vision"
@@ -36,29 +39,44 @@ DEFAULT_EFFORT_SCORE: int = 500
 _MIN_EFFORT_SCORE: int = 1
 _MAX_EFFORT_SCORE: int = 1000
 
-# The four vision models the parent spec allows for screen vision, ordered
-# cheapest -> most expensive, keyed by their canonical llm.ModelPolicy ids.
-# Prices are llm.PRICING input/1M (text / image token / image 1M px) — the
-# tier band structure is mirrored in llm.resolve_model_routing (09-01
-# effort bands: <=350 lvl3, <=550 lvl5, <=750 lvl7, >750 lvl9/10), so a
+# The three vision models used for screen vision, ordered cheapest -> most
+# expensive. Prices are the llm.ModelPolicy.PRICING input/output per 1M. A
 # user's effort level is honored consistently by BOTH the text agent and the
 # screen-vision lane.
+#
+# Owner-pinned set (09-08): low -> gemini 3.1-flash-lite, med -> deepseek v4
+# flash vision, high -> gemini 3.8-flash. Nothing else: no 3.5-flash, no
+# pro-preview, and v4-pro-vision was dropped (see _VISION_FALLBACK).
 VISION_MODEL_TIERS: Dict[str, str] = {
-    "google/gemini-3.1-flash-lite": "$0.075 / $0.30 / $0.0003",      # cheapest
-    "deepseek/deepseek-v4-flash-vision": "$0.14 / $0.28 / $0.0004",
-    "google/gemini-3.8-flash": "$0.25 / $1.00 / $0.0008",
-    "deepseek/deepseek-v4-pro-vision": "$0.87 / $1.74 / $0.0015",    # most expensive
+    "google/gemini-3.1-flash-lite": "$0.075 / $0.30",       # cheapest — low
+    "deepseek/deepseek-v4-flash-vision": "$0.14 / $0.28",   # med (default)
+    "google/gemini-3.8-flash": "$0.25 / $1.00",             # most expensive — high
 }
 
-# OpenRouter catalog mapping that llm.call_llm applies (09-01, Bob): plain
-# deepseek-v4-flash is TEXT-ONLY on OpenRouter; the vision flavor needs the
-# "-exp" slug, and pro-vision has no standalone catalog entry (pro text slug
-# carries images). Kept in sync — same map — with llm.py.
+# OpenRouter catalog mapping that llm.call_llm applies (09-01, Bob) for the
+# canonical -> wire slug rewrite: deepseek vision ships as an "-exp" slug. The
+# two gemini ids pass through untouched.
 _OR_SLUG_MAP: Dict[str, str] = {
-    "google/gemini-3.1-flash-lite": "google/gemini-3.1-flash-lite",
     "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
+    "google/gemini-3.1-flash-lite": "google/gemini-3.1-flash-lite",
     "google/gemini-3.8-flash": "google/gemini-3.8-flash",
-    "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
+}
+
+# 09-08 (operator: "some of the vision tiers dont work"). Measured live against
+# the OpenRouter catalog + a real tab screenshot:
+#   deepseek-v4-flash-vision-exp -> listed, image price null; it ACCEPTS the
+#     request and returns EMPTY content for an image payload.
+#   deepseek-v4-pro              -> not in the image-capable list; HTTP 404.
+# So two of the four tiers answered nothing, and because the default effort is
+# 500 (the flash-vision tier) screen vision was dead for anyone not on low
+# effort — silently, as "Vision analysis unavailable this turn". v4-pro-vision
+# is now dropped from the ladder outright (owner call). v4-flash-vision stays
+# as the med tier, but instead of dying it falls back to 3.8-flash: the user
+# asked for more than low effort, so degrading UP to the working high tier
+# keeps the ladder monotonic. If deepseek ever starts serving images the med
+# tier just starts being used again. The fallback is logged, never silent.
+_VISION_FALLBACK: Dict[str, str] = {
+    "deepseek/deepseek-v4-flash-vision": "google/gemini-3.8-flash",
 }
 
 MAX_DECODED_BYTES: int = 8 * 1024 * 1024  # ~8MB decoded cap (parent spec)
@@ -71,7 +89,22 @@ _DEFAULT_VIEWPORT_MAX: int = 20000
 
 DEFAULT_SCREEN_PROMPT: str = (
     "Describe what is on this screen. Be specific about text, layout, buttons, "
-    "and their positions (coordinates if inferable). Reply in at most 120 words."
+    "and their positions. Keep the prose under 120 words, then give the "
+    "INTERACTIVE ELEMENTS section."
+)
+
+# 09-08: the analysis is the ONLY thing the text agent gets to aim at, so it
+# has to carry real coordinates. Free-form "describe the positions" produced
+# prose with zero usable numbers on several models (measured), which left the
+# agent guessing and the drive landing on nothing. This forces a machine-
+# readable element list at the end of every analysis.
+_INTERACTIVE_SECTION_RULE: str = (
+    "ALWAYS end your answer with a section headed exactly 'INTERACTIVE ELEMENTS:' "
+    "listing every clickable or typable element, one per line, in the form "
+    "'<name> (<role>) at x=<int>, y=<int>' using CSS pixel coordinates of the "
+    "element's CENTRE inside the given viewport. Estimate when unsure; never "
+    "omit the section, and never write a coordinate you did not derive from "
+    "the image."
 )
 
 # Accepted image signatures when Pillow is unavailable (the fallback path;
@@ -185,24 +218,21 @@ def parse_effort_score(value: Any) -> int:
 
 
 def resolve_vision_model(effort_score: Any = None) -> Tuple[str, str, int]:
-    """Map a user's ai.effortScore to one of the four spec'd vision models.
+    """Map a user's ai.effortScore to one of the three spec'd vision models.
 
-    Returns (canonical model_id, tier_key, clamped_score). Tiers (cheapest ->
-    most expensive, see VISION_MODEL_TIERS):
+    Returns (canonical model_id, tier_key, clamped_score). Three even bands
+    across 1..1000, cheapest -> most expensive (see VISION_MODEL_TIERS):
 
-        <=300  -> gemini-3.1-flash-lite          (cheapest, lite)
-        301..500  -> deepseek-v4-flash-vision     (mid pair, lower half)
-        501..700  -> gemini-3.8-flash             (mid pair, upper half)
-        >700   -> deepseek-v4-pro-vision          (most expensive)
+        <=333     -> gemini-3.1-flash-lite      (low)
+        334..666  -> deepseek-v4-flash-vision   (med) [default 500]
+        >666      -> gemini-3.8-flash           (high)
     """
     score = parse_effort_score(effort_score)
-    if score <= 300:
-        return "google/gemini-3.1-flash-lite", "lite", score
-    if score <= 500:
-        return VISION_MODEL, "mid_lower", score
-    if score <= 700:
-        return "google/gemini-3.8-flash", "mid_upper", score
-    return "deepseek/deepseek-v4-pro-vision", "pro", score
+    if score <= 333:
+        return "google/gemini-3.1-flash-lite", "low", score
+    if score <= 666:
+        return VISION_MODEL, "med", score
+    return "google/gemini-3.8-flash", "high", score
 
 
 # ── Vision inference (effort-tiered multimodal) ───────────────────────────────
@@ -259,35 +289,60 @@ async def analyze_screen_image(
     # as llm.call_llm does; unknown models are refused (never silent-swap to a
     # non-spec model).
     canonical = model_id if model_id in VISION_MODEL_TIERS else VISION_MODEL
-    model_id = _OR_SLUG_MAP.get(canonical, canonical)
-    payload = {
-        "model": model_id,
-        "temperature": 0.2,
-        "max_tokens": 700,
-        "messages": [
-            {"role": "system", "content": (
-                "You are Helpotron's screen-vision analyst. You see a snapshot of a "
-                "browser tab. Describe it faithfully: text, layout, buttons, fields, "
-                "state changes, and where things are (estimated pixel coordinates). "
-                "Never invent content that is not visible.")},
-            {"role": "user", "content": [
-                {"type": "text", "text": effective_prompt},
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(raw).decode('utf-8')}"}},
-            ]},
-        ],
-    }
+
+    def _payload_for(cid: str) -> Dict[str, Any]:
+        return {
+            # 09-08: 700 truncated the answer mid-way on the slower-to-the-point
+            # models, which cut the INTERACTIVE ELEMENTS section off entirely and
+            # left the agent with no coordinates (measured on real screenshots).
+            "model": _OR_SLUG_MAP.get(cid, cid),
+            "temperature": 0.2,
+            "max_tokens": 1100,
+            "messages": [
+                {"role": "system", "content": (
+                    "You are Helpotron's screen-vision analyst. You see a snapshot of a "
+                    "browser tab. Describe it faithfully: text, layout, buttons, fields, "
+                    "and state changes.\n" + _INTERACTIVE_SECTION_RULE + "\n"
+                    "Never invent content that is not visible.")},
+                {"role": "user", "content": [
+                    {"type": "text", "text": effective_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(raw).decode('utf-8')}"}},
+                ]},
+            ],
+        }
+
+    # Try the resolved tier, then its fallback (see _VISION_FALLBACK). Only a
+    # dead-model signal — non-200 or empty content — triggers the fallback; a
+    # transport error still raises so the caller fails closed as before.
+    chain = [canonical]
+    fallback = _VISION_FALLBACK.get(canonical)
+    if fallback and fallback != canonical:
+        chain.append(fallback)
+
+    last_err: Optional[str] = None
     async with httpx.AsyncClient(timeout=90.0) as client:
-        resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("vision model returned empty content")
-        # 09-07: this analysis is fed verbatim into the agent's system prompt
-        # (screen state) and back to the user — strip thinking/deliberation
-        # before it reaches either.
-        from .llm import strip_thinking_tokens
-        return strip_thinking_tokens(content.strip())
+        for attempt, cid in enumerate(chain):
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers, json=_payload_for(cid),
+            )
+            if resp.status_code != 200:
+                last_err = f"{cid} -> HTTP {resp.status_code}"
+            else:
+                content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content")
+                if isinstance(content, str) and content.strip():
+                    if attempt:
+                        logger.warning(
+                            "screen vision tier %s unusable (%s); answered with fallback %s",
+                            canonical, last_err, cid,
+                        )
+                    # 09-07: this analysis is fed verbatim into the agent's
+                    # system prompt (screen state) and back to the user — strip
+                    # thinking/deliberation before it reaches either.
+                    from .llm import strip_thinking_tokens
+                    return strip_thinking_tokens(content.strip())
+                last_err = f"{cid} -> empty content"
+        raise ValueError(f"vision model returned no usable content ({last_err})")
 
 
 # ── Control-block extraction + hardening ──────────────────────────────────────
@@ -370,6 +425,81 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
     return None
 
 
+def _parse_control_block(block: str) -> Any:
+    """The fenced block -> parsed JSON, tolerating one layer of over-escaping.
+
+    09-08: the control fence lives INSIDE the "reply" string of the agent's
+    JSON envelope. When the envelope decodes normally the block is clean JSON.
+    When the envelope parse falls back to raw text (a truncated or malformed
+    envelope), the block still carries the envelope's escaping — \\" for every
+    quote — and the strict json.loads fails, so the WHOLE action list dropped
+    while the fence was still stripped from the reply. The user then read
+    confident prose about an action that never ran. Retry once with that one
+    layer of escaping removed; anything that survives still goes through the
+    full op allowlist below, so this loosens parsing, never validation.
+    """
+    try:
+        return json.loads(block)
+    except Exception:
+        pass
+    if '\\"' not in block and "\\n" not in block:
+        return None
+    try:
+        return json.loads(block.replace('\\"', '"').replace("\\n", "\n"))
+    except Exception:
+        return None
+
+
+def extract_control_actions_ex(
+    reply_text: str, viewport: Optional[Dict[str, int]]
+) -> Tuple[str, Optional[List[Dict[str, Any]]], str]:
+    """extract_control_actions plus the reason nothing survived.
+
+    reason is "" on success and one of:
+      no_block | malformed_json | wrong_shape | over_cap | invalid_op | empty
+    The callers surface it so a dropped list becomes an honest "I could not
+    do that" instead of silence behind prose claiming the action happened.
+    """
+    text = reply_text or ""
+    actions: Optional[List[Dict[str, Any]]] = None
+    reason = "no_block"
+
+    matches = list(_CTRL_FENCE_RE.finditer(text))
+    if matches:
+        # Strict: only the LAST ```control block is honored; earlier stray
+        # fences are just stripped below.
+        block = matches[-1].group(1).strip()
+        parsed = _parse_control_block(block)
+        if isinstance(parsed, dict) and isinstance(parsed.get("actions"), list):
+            parsed = parsed.get("actions")
+        if parsed is None:
+            reason = "malformed_json"
+        elif not isinstance(parsed, list):
+            reason = "wrong_shape"
+        elif len(parsed) > _MAX_CONTROL_ACTIONS:
+            reason = "over_cap"
+        else:
+            vp = viewport or {"width": 1280, "height": 800}
+            normalized: List[Dict[str, Any]] = []
+            ok = True
+            for op in parsed:
+                n = _validate_op(op, vp)
+                if n is None:
+                    ok = False
+                    break
+                normalized.append(n)
+            if not ok:
+                reason = "invalid_op"
+            elif not normalized:
+                reason = "empty"
+            else:
+                actions, reason = normalized, ""
+
+    clean = _CTRL_FENCE_RE.sub("", text)
+    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
+    return clean, actions, reason
+
+
 def extract_control_actions(reply_text: str, viewport: Optional[Dict[str, int]]) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
     """Parses + hardens the agent's ```control block from a reply.
 
@@ -382,35 +512,5 @@ def extract_control_actions(reply_text: str, viewport: Optional[Dict[str, int]])
 
     The fenced block is stripped from the returned reply text either way.
     """
-    text = reply_text or ""
-    actions: Optional[List[Dict[str, Any]]] = None
-
-    matches = list(_CTRL_FENCE_RE.finditer(text))
-    if matches:
-        # Strict: only the LAST ```control block is honored; earlier stray
-        # fences are just stripped below.
-        block = matches[-1].group(1).strip()
-        parsed: Any = None
-        try:
-            parsed = json.loads(block)
-        except Exception:
-            parsed = None
-        if isinstance(parsed, dict) and isinstance(parsed.get("actions"), list):
-            parsed = parsed.get("actions")
-        if isinstance(parsed, list) and len(parsed) <= _MAX_CONTROL_ACTIONS:
-            vp = viewport or {"width": 1280, "height": 800}
-            normalized: List[Dict[str, Any]] = []
-            ok = True
-            for op in parsed:
-                n = _validate_op(op, vp)
-                if n is None:
-                    ok = False
-                    break
-                normalized.append(n)
-            if ok and normalized:
-                actions = normalized
-        # Else: malformed JSON / wrong shape / over-cap -> actions stays None.
-
-    clean = _CTRL_FENCE_RE.sub("", text)
-    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
+    clean, actions, _reason = extract_control_actions_ex(reply_text, viewport)
     return clean, actions
