@@ -266,7 +266,7 @@ async function readAgentState() {
 const MODE_HINTS = {
   manual: 'Manual — the agent asks you before EVERY action it wants to take.',
   auto: 'Automatic — the agent acts on its own; you only get asked for risky actions (credentials, deletions/submits, downloads, leaving this site).',
-  yolo: 'YOLO — the agent never asks. Passwords, OTP and downloads are still out of reach for the agent — those are hard-blocked.',
+  yolo: 'YOLO — the agent never asks, and nothing is off limits. It is your screen and your call.',
 };
 
 function applyModeToUI(mode) {
@@ -630,7 +630,11 @@ if (effortScoreSlider) {
 // #approvalApprove / #approvalReject / #approvalNeutral / #approvalApproveAuto
 // answer APPROVAL_RESPONSE. Prompts queue: one card at a time.
 const POPUP_PORT_NAME = 'helpotron-popup';
-const pendingApprovals = []; // [{reqId, title, summary}]
+const pendingApprovals = []; // [{reqId, title, summary, viaServer?, onDecision?}]
+// Set by "Approve + always" on a screen-control card: stops manual mode
+// re-asking for every keystroke inside one popup session. Deliberately not
+// persisted — a fresh session asks again.
+let screenControlSessionAllowed = false;
 let approvalPort = null;
 const APPROVAL_HELPER_DEFAULT = 'Approve = let it act · Reject = stop it · Neutral = don’t do it, just send your note.';
 const APPROVAL_NEUTRAL_HINT = 'Say something first — Neutral needs your note';
@@ -685,8 +689,21 @@ function answerApproval(reqId, decision, note, opts) {
   const autoAdd = Boolean(opts && opts.autoAdd);
   const ix = pendingApprovals.findIndex((p) => p.reqId === reqId);
   const viaServer = ix >= 0 ? Boolean(pendingApprovals[ix].viaServer) : false;
+  const onDecision = ix >= 0 ? pendingApprovals[ix].onDecision : null;
   if (ix >= 0) {
     pendingApprovals.splice(ix, 1);
+  }
+  // Local prompts (screen control in manual mode, 09-08). The actions are
+  // already in hand on this side — there is nothing to resume server-side, so
+  // the card just gates the dispatch. Nothing runs unless the user says allow.
+  if (typeof onDecision === 'function') {
+    Promise.resolve(onDecision(d, text, { autoAdd })).catch(() => {});
+    showApprovalStatus(d === 'allow'
+      ? (autoAdd ? '✅ Allowed — won’t ask again this session.' : '✅ Allowed the agent action.')
+      : d === 'deny' ? '⛔ Rejected — nothing ran on your screen.'
+      : '⚪ Neutral — nothing ran; the agent got your note.');
+    renderNextApproval();
+    return;
   }
   // Server-channel prompts (the /api/extension/agent_chat permission gate)
   // answer straight to /api/extension/approval/respond; broker prompts keep
@@ -2452,14 +2469,44 @@ if (chatFormEl && chatInputEl) {
 
         // Check for control actions execution
         const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
+        const execInfo = data.execution && typeof data.execution === 'object' ? data.execution : null;
         if (actions && actions.length) {
           const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
-          if (executeOn) {
+          if (!executeOn) {
+            setStatus(`Agent proposed ${actions.length} action(s) — Execute is OFF, so actions were skipped.`);
+          } else if (data.control_requires_approval && !screenControlSessionAllowed) {
+            // Manual mode (09-08): the agent does NOT touch the screen until
+            // the user says so. The card carries the real ops, so "Approve"
+            // is an informed click, not a blank cheque.
+            const reqId = `screenctl-${Date.now()}`;
+            pendingApprovals.push({
+              reqId,
+              title: 'Approve screen control?',
+              summary: data.control_summary
+                ? `${data.control_summary}\n\nOn: ${driveTabLabel(await pickDriveTab(await activeTabForDrive()))}`
+                : `The agent wants to run ${actions.length} action(s) on your screen.`,
+              onDecision: async (decision, note, opts) => {
+                if (decision !== 'allow') {
+                  setStatus('Screen control rejected — nothing ran.');
+                  return;
+                }
+                if (opts && opts.autoAdd) screenControlSessionAllowed = true;
+                setStatus(`Executing ${actions.length} action(s) after approval…`);
+                await executeReturnedActions(actions);
+              },
+            });
+            while (pendingApprovals.length > 5) pendingApprovals.shift();
+            renderNextApproval();
+            setStatus('⚠️ Waiting on your approval before touching the screen.');
+          } else {
             setStatus(`Executing ${actions.length} action(s) proposed by agent…`);
             await executeReturnedActions(actions);
-          } else {
-            setStatus(`Agent proposed ${actions.length} action(s) — Execute is OFF, so actions were skipped.`);
           }
+        } else if (execInfo && execInfo.status === 'failed' && execInfo.detail) {
+          // Never leave the agent's prose ("I'm typing that for you now") as
+          // the only account of a turn where nothing actually ran (09-08).
+          addPopupChatMsg('agent', `⚠️ ${execInfo.detail}`);
+          setStatus('No action ran — see the note above.');
         }
       } else {
         addPopupChatMsg('agent', `⚠️ Error: ${data.detail || `HTTP ${res.status}`}`);

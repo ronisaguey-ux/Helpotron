@@ -1402,8 +1402,18 @@ def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _regex_fallback_intent(text: str, node: str = "my_agent", viewport: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
-    """Old keyword dispatch — only used when the LLM JSON contract fails."""
+def _regex_fallback_intent(
+    text: str,
+    node: str = "my_agent",
+    viewport: Optional[Dict[str, int]] = None,
+    screen_analysis: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Old keyword dispatch — only used when the LLM JSON contract fails.
+
+    `screen_analysis` is the vision pass for this turn, when there is one. It is
+    what lets the browser burst aim at a field that actually exists instead of
+    guessing (see the search branch).
+    """
     shell_cmd = _extract_shell_query(text)
     if shell_cmd:
         return {"action": "run_shell", "payload": {"command": shell_cmd}, "reply": "Computing…"}
@@ -1412,14 +1422,30 @@ def _regex_fallback_intent(text: str, node: str = "my_agent", viewport: Optional
         m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", text, re.IGNORECASE)
         q = m.group(1).strip(" '\"?,.") if m else text
         # 09-07: the burst coordinates were hard-coded (480, 320), which lands
-        # outside a small captured frame; derive them from the real viewport
-        # (same rule as routes_extension._search_burst — the whole list still
-        # passes through _harden_actions for clamping before execution).
+        # outside a small captured frame; derive them from the real viewport.
+        # 09-08: deriving them from the viewport was still a guess — the CENTRE
+        # of the page is only a text field by luck. On a usage dashboard the
+        # operator watched a caret blink on dead space while the reply claimed
+        # the search had been typed. Aim at an element the vision pass actually
+        # reported; when there is none, say so instead of clicking at random.
+        # (Same rule as routes_extension._search_burst — the whole list still
+        # passes through _harden_actions for clamping before execution.)
+        from .screen_vision import find_input_target
+
         vp = viewport or {"width": 1280, "height": 800}
-        w = max(1, int(vp.get("width") or 1280))
-        h = max(1, int(vp.get("height") or 800))
-        x = max(1, w // 2)
-        y = max(1, min(h // 2, int(h * 0.4)))
+        target = find_input_target(screen_analysis, hint=text, viewport=vp)
+        if not target:
+            return {
+                "action": "plain_answer",
+                "payload": {},
+                "reply": (
+                    "I couldn't find that field on the current screen, so I didn't "
+                    "click anywhere. Open the page with the search box in view and "
+                    "ask me again."
+                ),
+            }
+        x = max(1, int(target["x"]))
+        y = max(1, int(target["y"]))
         return {
             "action": "browser_action",
             "payload": {
@@ -1570,7 +1596,7 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
-async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None, viewport: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None, viewport: Optional[Dict[str, int]] = None, screen_analysis: Optional[str] = None) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
     The model sees the surface's identity + personality + instructions, its
@@ -1770,10 +1796,10 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         scrape_ask = node == "extensions" and any(
             k in lower for k in ("scrape", "canvas", "capture the page", "collect this page"))
         if "submit" in lower or "delete" in lower or "humanize" in lower or "rubric" in lower or scrape_ask:
-            return _regex_fallback_intent(text, node, viewport)
+            return _regex_fallback_intent(text, node, viewport, screen_analysis)
         return {"action": "plain_answer", "payload": {}, "reply": str(parsed.get("reply") or text)}
     # LLM failed or chose an unknown action — fall back to keyword dispatch
-    return _regex_fallback_intent(text, node, viewport)
+    return _regex_fallback_intent(text, node, viewport, screen_analysis)
 
 
 def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:

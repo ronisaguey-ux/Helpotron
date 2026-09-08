@@ -288,7 +288,7 @@ def test_extension_agent_chat_permission_required_carries_approval_request(clien
 
     async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
                            node="my_agent", assignment_context=None,
-                           humanizer_ctx=None, viewport=None):
+                           humanizer_ctx=None, viewport=None, **kw):
         return {"action": "submit_assignment", "payload": {"assignment_id": 1},
                 "force_permission": False, "reply": "ok"}
 

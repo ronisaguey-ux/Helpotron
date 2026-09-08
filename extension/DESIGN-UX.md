@@ -98,17 +98,24 @@ Permission modes (persisted in `helpotron_agent_mode`, values
 |------|---------------|------------|
 | **Manual** | every action | — |
 | **Automatic** | only RISKY actions | safe actions |
-| **YOLO** | — | everything not hard-blocked |
+| **YOLO** | — | everything |
 
-Hard blocks apply in **every** mode and are never asked about:
+**Nothing is hard-blocked (09-08).** Credential/OTP/card fields and downloads
+were refused in every mode, YOLO included — the app overruling its own owner
+on their own screen, in the mode whose whole promise is that it never asks.
+They are RISKY now, not forbidden: manual asks, auto asks, YOLO runs. The
+classifier still runs, because its label is what the approval card shows, so
+"approve" stays an informed click:
 
 - **Credentials/OTP/cards** — the classifier (CDP `Runtime.evaluate`, live
   DOM inspection only — no keystroke reading, ever) flags element
   `type=password`, `autocomplete` ∈ {current-password, new-password,
   one-time-code, otp, cc-*, } and name/id/placeholder/aria-label matching
-  password-ish patterns; blocks the action outright.
-- **Downloads** — `a[download]` clicks and `input[type=file]` are blocked
-  outright ("no arbitrary file downloads").
+  password-ish patterns.
+- **Downloads** — `a[download]` clicks and `input[type=file]`.
+
+Two limits are structural, not policy, and still apply:
+
 - **Host permissions** — the whole burst is gated: the drive tab's origin must
   match one of the extension's `host_permissions` patterns
   (`${protocol}//${host}${port}/*` via `chrome.permissions.contains`), and

@@ -500,6 +500,124 @@ def extract_control_actions_ex(
     return clean, actions, reason
 
 
+_ELEMENT_RE = re.compile(
+    r"\s*(?:[-*\d.]+\s*)?(?P<name>[^()\n]{1,80}?)\s*"
+    r"\((?P<role>[^)\n]{1,40})\)\s*"
+    r"at\s*x\s*=\s*(?P<x>-?\d{1,5})\s*,\s*y\s*=\s*(?P<y>-?\d{1,5})",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Roles/names that mean "you can type here". Ordered: a real search box beats a
+# generic text field, which beats a bare input.
+# Sentence scaffolding that shows up when a model inlines an element into prose
+# ("I can see a Search bar (textbox) at x=..."). Stripped off the front of a
+# captured name so the name is the element, not the sentence around it.
+_NAME_PREFIX_NOISE = frozenset("""
+i we you it its there here this that these those a an the and also but so then
+can could see sees seeing find finds look looks shows showing show displays
+display display is are was were has have had contains containing near next
+at on in to of top left right bottom centre center page screen view
+""".split())
+
+_INPUT_HINTS: Tuple[Tuple[str, int], ...] = (
+    ("search", 100), ("query", 90), ("ask", 80), ("prompt", 80),
+    ("message", 70), ("chat", 70), ("textbox", 60), ("textarea", 60),
+    ("input", 50), ("field", 40), ("combobox", 30), ("url", 30),
+)
+
+
+def parse_interactive_elements(analysis: Optional[str]) -> List[Dict[str, Any]]:
+    """Pull the INTERACTIVE ELEMENTS section out of a vision analysis.
+
+    Returns [{"name","role","x","y"}, ...] for every line shaped
+    '<name> (<role>) at x=<int>, y=<int>' — the format the vision system prompt
+    demands (see _INTERACTIVE_SECTION_RULE). Lines anywhere in the text are
+    accepted, not just after the heading: models sometimes inline the list.
+    Never raises; an unparseable analysis just yields [].
+    """
+    if not isinstance(analysis, str) or not analysis.strip():
+        return []
+    out: List[Dict[str, Any]] = []
+    for m in _ELEMENT_RE.finditer(analysis):
+        try:
+            x, y = int(m.group("x")), int(m.group("y"))
+        except (TypeError, ValueError):
+            continue
+        name = _clean_element_name(m.group("name"))
+        role = m.group("role").strip()
+        if not name:
+            continue
+        out.append({"name": name, "role": role, "x": x, "y": y})
+    return out
+
+
+def _clean_element_name(raw: str) -> str:
+    """'I can see a Search bar' -> 'Search bar'.
+
+    The element name is whatever sat before the '(role)', which on an inlined
+    line is the whole sentence up to that point. Drop the leading scaffolding
+    words so the name is the control itself; a name that is nothing but
+    scaffolding is left alone rather than emptied.
+    """
+    words = raw.strip(" \t-*•.:").split()
+    kept = list(words)
+    while kept and kept[0].strip(",.:;").lower() in _NAME_PREFIX_NOISE:
+        kept.pop(0)
+    return " ".join(kept or words).strip(" \t-*•.:,")
+
+
+def find_input_target(
+    analysis: Optional[str], hint: str = "", viewport: Optional[Dict[str, int]] = None
+) -> Optional[Dict[str, Any]]:
+    """Best typable element on the analysed screen, or None.
+
+    09-08: the typing fallback used to click the viewport CENTRE and type into
+    whatever happened to have focus. On a page whose centre is not a field (a
+    usage dashboard, say) that put a caret nowhere and dropped the text on the
+    floor, while the agent's prose claimed the typing had happened. Now the
+    fallback aims at a element the vision pass actually saw, and when there is
+    no such element it returns None so the caller can say so instead of
+    guessing.
+
+    Scoring: the user's own words first, role/name keyword weight second. The
+    keyword weights (see _INPUT_HINTS) only rank fields the user said nothing
+    about — "send a message" must land in the message box even on a page whose
+    search bar scores higher on generic keywords, because the user named it.
+    Off-viewport candidates are discarded.
+    """
+    elements = parse_interactive_elements(analysis)
+    if not elements:
+        return None
+    w = int((viewport or {}).get("width") or 0)
+    h = int((viewport or {}).get("height") or 0)
+    hint_words = {
+        t for t in re.findall(r"[a-z]{3,}", (hint or "").lower())
+        if t not in _NAME_PREFIX_NOISE
+    }
+
+    best: Optional[Dict[str, Any]] = None
+    best_score = 0
+    for el in elements:
+        if el["x"] < 0 or el["y"] < 0:
+            continue
+        if (w and el["x"] > w) or (h and el["y"] > h):
+            continue
+        blob = f"{el['name']} {el['role']}".lower()
+        score = 0
+        for token, weight in _INPUT_HINTS:
+            if token in blob:
+                score = max(score, weight)
+        if not score:
+            continue
+        # Outranks every keyword weight on purpose: the user naming a field is
+        # better evidence than any guess this function can make about roles.
+        if hint_words & set(re.findall(r"[a-z]{3,}", blob)):
+            score += 1000
+        if score > best_score:
+            best, best_score = el, score
+    return best
+
+
 def extract_control_actions(reply_text: str, viewport: Optional[Dict[str, int]]) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
     """Parses + hardens the agent's ```control block from a reply.
 

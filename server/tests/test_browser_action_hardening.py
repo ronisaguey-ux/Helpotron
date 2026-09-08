@@ -91,16 +91,49 @@ def test_empty_or_non_list_payload_yields_no_actions(empty):
     assert _harden_actions(empty, VP) is None
 
 
-def test_search_burst_is_derived_from_the_viewport_not_hardcoded():
-    """The old fallback hard-coded (480, 320) — outside a small frame."""
-    small = _harden_actions(_search_burst("q", SMALL_VP), SMALL_VP)
-    assert (small[0]["x"], small[0]["y"]) == (200, 120)
-    assert small[0]["x"] < SMALL_VP["width"] and small[0]["y"] < SMALL_VP["height"]
+def test_search_burst_aims_at_an_element_the_vision_pass_reported():
+    """09-08: the burst is aimed, never guessed.
 
-    big = _harden_actions(_search_burst("q", VP), VP)
-    assert (big[0]["x"], big[0]["y"]) == (640, 320)
-    assert [op["op"] for op in big] == ["move", "click", "type", "key"]
-    assert big[2]["text"] == "q"
+    It hard-coded (480, 320), then derived the viewport CENTRE — still a guess.
+    On a page whose middle is not a field the click landed on dead space, the
+    caret went nowhere, and the reply claimed the text had been typed. Now the
+    coordinates come from an element the vision analysis actually listed.
+    """
+    analysis = (
+        "INTERACTIVE ELEMENTS:\n"
+        "- Sidebar toggle (button) at x=32, y=48\n"
+        "- Search bar (textbox) at x=640, y=112\n"
+        "- Sign out (link) at x=1180, y=48\n"
+    )
+    burst = _harden_actions(_search_burst("q", VP, screen_analysis=analysis), VP)
+    assert [op["op"] for op in burst] == ["move", "click", "type", "key"]
+    assert (burst[0]["x"], burst[0]["y"]) == (640, 112)
+    assert (burst[1]["x"], burst[1]["y"]) == (640, 112)
+    assert burst[2]["text"] == "q"
+
+
+def test_search_burst_does_nothing_when_no_field_is_on_screen():
+    """No typable element -> no actions. A miss that reports itself beats a
+    blind click that silently lands on nothing."""
+    no_input = (
+        "INTERACTIVE ELEMENTS:\n"
+        "- Upgrade plan (button) at x=900, y=300\n"
+        "- Docs (link) at x=120, y=64\n"
+    )
+    assert _search_burst("q", VP, screen_analysis=no_input) == []
+    assert _search_burst("q", VP, screen_analysis="") == []
+    assert _search_burst("q", VP) == []
+
+
+def test_search_burst_target_is_kept_inside_the_captured_frame():
+    """An element the vision pass placed outside the frame is not a target."""
+    offscreen = "INTERACTIVE ELEMENTS:\n- Search bar (textbox) at x=980, y=640\n"
+    assert _search_burst("q", SMALL_VP, screen_analysis=offscreen) == []
+
+    inside = "INTERACTIVE ELEMENTS:\n- Search bar (textbox) at x=200, y=120\n"
+    burst = _harden_actions(_search_burst("q", SMALL_VP, screen_analysis=inside), SMALL_VP)
+    assert (burst[0]["x"], burst[0]["y"]) == (200, 120)
+    assert burst[0]["x"] < SMALL_VP["width"] and burst[0]["y"] < SMALL_VP["height"]
 
 
 # ── 2. math path: prose never becomes a shell command; equations solve ────────
@@ -193,25 +226,43 @@ def test_clean_reply_is_left_untouched():
 
 # ── 4. regex fallback: browser_action burst derives coords from the viewport ──
 
-def test_regex_fallback_search_burst_is_viewport_derived():
-    """The keyword fallback used to hard-code (480, 320) — outside a small
-    captured frame. It must derive from the real viewport like _search_burst."""
+def test_regex_fallback_search_burst_is_aimed_at_a_real_element():
+    """Second door to the same defect (09-08).
+
+    When the LLM's JSON contract fails, this keyword dispatcher is what produces
+    the burst the extension then runs. It hard-coded (480, 320), then guessed
+    the viewport centre. It now takes the vision analysis and aims at a field
+    that was actually on screen.
+    """
     from server.routes_overlord import _regex_fallback_intent
 
-    small = _regex_fallback_intent("search for cats", node="extensions", viewport=SMALL_VP)
+    analysis = "INTERACTIVE ELEMENTS:\n- Search bar (textbox) at x=200, y=120\n"
+    small = _regex_fallback_intent(
+        "search for cats", node="extensions", viewport=SMALL_VP, screen_analysis=analysis,
+    )
     assert small["action"] == "browser_action"
     burst = small["payload"]["actions"]
     assert [op["op"] for op in burst] == ["move", "click", "type", "key"]
     assert (burst[0]["x"], burst[0]["y"]) == (200, 120)
     assert all(0 <= a["x"] < SMALL_VP["width"] and 0 <= a["y"] < SMALL_VP["height"]
                for a in burst if "x" in a)
+    assert burst[2]["text"] == "cats"
 
-    big = _regex_fallback_intent("search for cats", node="extensions", viewport=VP)
-    assert (big["payload"]["actions"][0]["x"], big["payload"]["actions"][0]["y"]) == (640, 320)
 
-    # No viewport supplied -> the default 1280x800 frame, inside it.
-    defaults = _regex_fallback_intent("search for cats", node="extensions")
-    assert (defaults["payload"]["actions"][0]["x"], defaults["payload"]["actions"][0]["y"]) == (640, 320)
+def test_regex_fallback_answers_instead_of_clicking_blind():
+    """No analysis, or no field in it -> a plain answer that admits the miss.
+    It must never fall back to clicking the middle of the user's page."""
+    from server.routes_overlord import _regex_fallback_intent
+
+    for kwargs in (
+        {},
+        {"viewport": VP},
+        {"viewport": VP, "screen_analysis": "INTERACTIVE ELEMENTS:\n- Docs (link) at x=120, y=64\n"},
+    ):
+        out = _regex_fallback_intent("search for cats", node="extensions", **kwargs)
+        assert out["action"] == "plain_answer"
+        assert not out["payload"]
+        assert "couldn't find" in out["reply"].lower()
 
 
 # ── 5. structured agent call: math quick-path answers from the sandbox ────────
