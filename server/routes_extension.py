@@ -438,6 +438,8 @@ class ExtensionChatRequest(BaseModel):
     agent_mode: bool = Field(False, description="agent-mode screen-control chat")
     educational_mode: Optional[bool] = Field(None, description="when False, disables strict study-only restrictions")
     permission_mode: Optional[str] = Field(None, description="manual | auto | yolo permission mode")
+    seescreen: Optional[bool] = Field(None, description="true if the extension's 'See screen' toggle is ON")
+    execute: Optional[bool] = Field(None, description="true if the extension's 'Execute' toggle is ON")
     viewport: Optional[ChatViewport] = Field(None, description="captured tab viewport size")
     tabs: List[ChatTabRef] = Field(
         default_factory=list,
@@ -963,6 +965,26 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             resolve_settings_perm_mode = payload.permission_mode
         existing_ix = str(ext_cfg.get("instructions") or "").strip()
         directive_block = AGENT_MODE_DIRECTIVE
+        # 09-08: the model only ever "sees" a screen when the extension actually
+        # sent a frame this turn. seescreen=OFF (or zero frames) means NO vision —
+        # state it explicitly so the model never claims to see/look at a screen it
+        # was not given (the OLD directive unconditionally asserted "you genuinely
+        # see that screen", which made it hallucinate visibility on sightless turns).
+        sees_can_see = bool(payload.seescreen) and bool(payload.images)
+        can_execute = bool(payload.execute)
+        if not sees_can_see:
+            directive_block += ("\n\n[SCREEN FEED: OFF — the user has the “See screen” toggle off "
+                                "(or no frame was captured). You CANNOT see any page or screen this turn. "
+                                "Do NOT describe, reference, or pretend to look at the page. If the user "
+                                "asks you to click/type/fill/search on a page, say you have no live view "
+                                "right now and ask them to switch “See screen” on.]")
+        else:
+            directive_block += "\n\n[SCREEN FEED: ON — you have a live tab frame this turn.]"
+        if not can_execute:
+            directive_block += ("\n\n[EXECUTE: OFF — the user has “Execute” off. You may plan and "
+                                "describe actions but they will NOT run. Do not act as if they ran.]")
+        else:
+            directive_block += "\n\n[EXECUTE: ON — actions you emit are actually executed.]"
         if screen_context:
             directive_block += "\n\nCURRENT SCREEN (this exact turn — the frames the extension just captured):\n" + screen_context
         ext_cfg["instructions"] = (existing_ix + "\n\n" + directive_block) if existing_ix else directive_block
