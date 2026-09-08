@@ -1219,7 +1219,16 @@ document.getElementById('saveSettings')?.addEventListener('click', async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ public_id: pid, password: pwd }),
       });
-      const data = await res.json();
+      // A gateway that cannot reach the API answers 5xx with an EMPTY body, so
+      // res.json() throws and the catch below reports "Connection error:
+      // SyntaxError: Unexpected end of JSON input" — which names neither the
+      // status nor the host. Parse defensively and report what really came back.
+      let data = {};
+      try { data = JSON.parse(await res.text()) || {}; } catch { data = {}; }
+      if (!res.ok && !data.detail && !data.message) {
+        setStatus(`❌ Server error ${res.status} from ${srv} — that address answered but is not serving the Helpotron API. Check the SERVER field.`);
+        return;
+      }
       if (res.ok && data.token) {
         await chrome.storage.local.set({
           server: srv,
