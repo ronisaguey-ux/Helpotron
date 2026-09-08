@@ -200,3 +200,34 @@ def test_browser_search_with_math_query_never_intercepted_by_shell(client, uniqu
     assert len(type_actions) == 1
     assert "how to solve 1+1" in type_actions[0]["text"]
 
+
+
+def test_plain_answer_click_fallback_does_not_crash_the_endpoint(client, monkeypatch, unique_user):
+    """Regression (09-08): the plain-answer control fallback called re.search in a
+    module that never imported `re`, so every agent-mode message containing
+    "click"/"search"/"type in" that came back WITHOUT a fenced control block
+    raised NameError and 500'd — the endpoint died on the most ordinary phrase
+    the feature exists to serve. It must answer, and report the miss honestly."""
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+
+    async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
+                           node="my_agent", assignment_context=None,
+                           humanizer_ctx=None, viewport=None, **kw):
+        # no ```control``` block anywhere in the reply -> the fallback runs
+        return {"action": "plain_answer", "payload": {}, "force_permission": False,
+                "reply": "Sure, I'll take care of that."}
+
+    import server.routes_overlord as _ro
+    monkeypatch.setattr(_ro, "_resolve_agent_intent", fake_resolve)
+
+    resp = client.post("/api/extension/agent_chat", json={
+        "text": "click accept", "agent_mode": True,
+        "viewport": {"width": 1280, "height": 800},
+    }, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    # nothing to aim at (no frames this turn) -> stated, never silently skipped
+    assert data["control_actions"] is None
+    assert data["execution"]["status"] == "failed"
+    assert data["execution"]["actions_count"] == 0

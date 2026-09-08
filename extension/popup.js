@@ -23,13 +23,29 @@ const EFFORT_KEY = 'helpotron_agent_effort';
 const MODEL_KEY = 'helpotron_agent_model';
 const MODEL_TIER_KEY = 'helpotron_agent_model_tier';
 const EDUCATIONAL_MODE_KEY = 'helpotron_educational_mode';
+// 09-08 jurisdiction: which tabs the agent may see and drive this turn.
+// 'active' (one tab, the old behaviour) | 'all' (every driveable tab) | an
+// array of tab ids the user picked.
+const JURISDICTION_KEY = 'helpotron_agent_jurisdiction';
 
 const SEE_SCREEN_DEFAULT = true;
 const EXECUTE_DEFAULT = true;
 const MODE_DEFAULT = 'manual';
 const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
 const EDUCATIONAL_MODE_DEFAULT = true;
+const JURISDICTION_DEFAULT = 'active';
 const MODELS = ['manual', 'auto', 'yolo'];
+// The server refuses more than 4 frames per call (screen_vision
+// _MAX_IMAGES_PER_CALL). Capture stops there rather than sending frames that
+// would be silently dropped and leave the model reasoning about a tab it
+// never actually saw.
+const MAX_JURISDICTION_FRAMES = 4;
+// A jurisdiction is also capped, well above the frame cap: tabs past the frame
+// cap are still REPORTED (as uncaptured) and still driven, they just arrive
+// unseen. 16 matches the server's `tabs` max_length — one more would 422 the
+// whole turn. When the cap bites the user is told, because a silently halved
+// "all tabs" is the same lie this labelling exists to stop.
+const MAX_JURISDICTION_TABS = 16;
 
 const modelToggles = {
   toggleSeeScreen: document.getElementById('toggleSeeScreen'),
@@ -42,6 +58,10 @@ const chatModelIndicator = document.getElementById('chatModelIndicator');
 const chatToggleEdu = document.getElementById('chatToggleEdu');
 const chatToggleSee = document.getElementById('chatToggleSee');
 const chatToggleExecute = document.getElementById('chatToggleExecute');
+const chatToggleTabs = document.getElementById('chatToggleTabs');
+const tabJurisdictionPanel = document.getElementById('tabJurisdictionPanel');
+const tabJurisdictionList = document.getElementById('tabJurisdictionList');
+const btnCloseJurisdiction = document.getElementById('btnCloseJurisdiction');
 const chatQuickPause = document.getElementById('chatQuickPause');
 const chatEffortSlider = document.getElementById('chatEffortSlider');
 const chatEffortVal = document.getElementById('chatEffortVal');
@@ -260,6 +280,7 @@ async function persistAgentState(patch) {
 async function readAgentState() {
   return await chrome.storage.local.get([
     SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY, EDUCATIONAL_MODE_KEY,
+    JURISDICTION_KEY,
   ]);
 }
 
@@ -344,6 +365,9 @@ function syncInChatControls(st) {
   if (chatEffortSlider) chatEffortSlider.value = score;
   if (chatEffortVal) chatEffortVal.textContent = score;
   if (chatModelBadge) chatModelBadge.textContent = info.label;
+  // Needs a live tab count for the "all (N)" label, so it repaints itself
+  // rather than reading from the snapshot this function was handed.
+  refreshJurisdictionChip().catch(() => {});
 }
 
 // ── Backend settings sync (09-02): GET /api/user/settings -> ai.{effortScore,
@@ -538,6 +562,106 @@ if (chatToggleExecute) {
     syncInChatControls(await readAgentState());
   });
 }
+
+// ── Jurisdiction picker ──────────────────────────────────────────────────────
+// The tab list is rebuilt every time the panel opens, never cached: tabs open
+// and close constantly, and a stale row would let the user tick a tab that no
+// longer exists.
+async function renderJurisdictionPicker() {
+  if (!tabJurisdictionList) return;
+  const st = await readAgentState();
+  const juris = normalizeJurisdiction(st[JURISDICTION_KEY]);
+  const chosen = Array.isArray(juris) ? new Set(juris) : null;
+
+  document.querySelectorAll('.juris-mode-btn').forEach((b) => {
+    const on = (b.dataset.juris === 'all' && juris === 'all')
+      || (b.dataset.juris === 'active' && juris === JURISDICTION_DEFAULT);
+    b.classList.toggle('active', on);
+  });
+
+  const tabs = await listDriveableTabs();
+  tabJurisdictionList.textContent = '';
+  if (!tabs.length) {
+    const p = document.createElement('div');
+    p.className = 'juris-tab-empty';
+    p.textContent = 'No driveable tabs open — chrome:// and extension pages cannot be driven.';
+    tabJurisdictionList.appendChild(p);
+    return;
+  }
+  for (const t of tabs) {
+    const row = document.createElement('label');
+    row.className = 'juris-tab-row';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.tabId = String(t.id);
+    box.checked = juris === 'all' || (chosen ? chosen.has(t.id) : Boolean(t.active));
+    const title = document.createElement('span');
+    title.className = 'juris-tab-title';
+    title.textContent = driveTabLabel(t);
+    row.appendChild(box);
+    row.appendChild(title);
+    tabJurisdictionList.appendChild(row);
+  }
+}
+
+// Ticking boxes always produces an explicit id list. "All open tabs" stays a
+// LIVE rule instead — a tab opened after the choice is still inside it, which
+// is what "all tabs it can see" has to mean.
+async function saveJurisdictionFromChecks() {
+  if (!tabJurisdictionList) return;
+  const ids = Array.from(tabJurisdictionList.querySelectorAll('input[type=checkbox]'))
+    .filter((b) => b.checked)
+    .map((b) => Number(b.dataset.tabId))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  await persistAgentState({ [JURISDICTION_KEY]: ids.length ? ids : JURISDICTION_DEFAULT });
+  await refreshJurisdictionChip();
+  document.querySelectorAll('.juris-mode-btn').forEach((b) => b.classList.remove('active'));
+}
+
+async function refreshJurisdictionChip() {
+  if (!chatToggleTabs) return;
+  const st = await readAgentState();
+  const juris = normalizeJurisdiction(st[JURISDICTION_KEY]);
+  let count = 0;
+  if (juris === 'all') {
+    try { count = (await listDriveableTabs()).length; } catch { count = 0; }
+  }
+  const lbl = chatToggleTabs.querySelector('.chip-title');
+  if (lbl) lbl.textContent = jurisdictionChipLabel(juris, count);
+  // The chip reads "active" only when the agent is looking past the one tab it
+  // would have used anyway — otherwise the highlight means nothing.
+  chatToggleTabs.classList.toggle('active', juris !== JURISDICTION_DEFAULT);
+}
+
+function setJurisdictionPanelOpen(open) {
+  if (!tabJurisdictionPanel) return;
+  tabJurisdictionPanel.hidden = !open;
+  if (chatToggleTabs) chatToggleTabs.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+if (chatToggleTabs) {
+  chatToggleTabs.addEventListener('click', async () => {
+    const open = tabJurisdictionPanel && tabJurisdictionPanel.hidden;
+    if (open) await renderJurisdictionPicker();
+    setJurisdictionPanelOpen(open);
+  });
+}
+if (btnCloseJurisdiction) {
+  btnCloseJurisdiction.addEventListener('click', () => setJurisdictionPanelOpen(false));
+}
+if (tabJurisdictionList) {
+  tabJurisdictionList.addEventListener('change', (e) => {
+    if (e.target && e.target.type === 'checkbox') saveJurisdictionFromChecks();
+  });
+}
+document.querySelectorAll('.juris-mode-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const val = btn.dataset.juris === 'all' ? 'all' : JURISDICTION_DEFAULT;
+    await persistAgentState({ [JURISDICTION_KEY]: val });
+    await renderJurisdictionPicker();
+    await refreshJurisdictionChip();
+  });
+});
 
 if (chatQuickPause) {
   chatQuickPause.addEventListener('click', () => {
@@ -947,6 +1071,7 @@ async function init() {
     'server', 'public_id', 'token', 'session_token',
     'update_available', 'latest_version', CRAWL_CACHE_KEY,
     SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY, EDUCATIONAL_MODE_KEY,
+    JURISDICTION_KEY,
   ]);
   serverInput.value = st.server || 'https://helpotron.dpdns.org';
   publicIdInput.value = st.public_id || '';
@@ -1697,16 +1822,67 @@ async function activeTabViewport() {
   return fallback;
 }
 
-function captureActiveTabFrame() {
+function captureActiveTabFrame(windowId) {
   return new Promise((resolve) => {
-    chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 70 }, (dataUrl) => {
-      if (chrome.runtime.lastError || !dataUrl) {
-        resolve(null);
-      } else {
-        resolve(dataUrl);
-      }
-    });
+    chrome.tabs.captureVisibleTab(
+      windowId === undefined ? null : windowId,
+      { format: 'jpeg', quality: 70 },
+      (dataUrl) => {
+        if (chrome.runtime.lastError || !dataUrl) {
+          resolve(null);
+        } else {
+          resolve(dataUrl);
+        }
+      },
+    );
   });
+}
+
+// captureVisibleTab can only ever photograph the ACTIVE tab of a window, so a
+// jurisdiction that includes background tabs has to go through CDP. Attaches,
+// shoots, detaches — the same debugger the drive already uses. This is also the
+// fallback when captureVisibleTab is refused for lack of a host permission: the
+// manifest lists the study sites, the `debugger` permission has no such limit.
+async function captureBackgroundTabFrame(tabId) {
+  if (!chrome.debugger) return null;
+  let attached = false;
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+    attached = true;
+    const shot = await chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', {
+      format: 'jpeg', quality: 70,
+    });
+    if (shot && shot.data) return `data:image/jpeg;base64,${shot.data}`;
+  } catch {
+    // DevTools open on the target, another debugger attached, a fully occluded
+    // renderer that cannot produce a frame. Not fatal: the turn continues with
+    // one fewer screen and the caller records the tab as unseen.
+  } finally {
+    if (attached) await chrome.debugger.detach({ tabId }).catch(() => {});
+  }
+  return null;
+}
+
+// One frame per jurisdiction tab, plus the labels that tell the model which
+// screen is which. Only the first MAX_JURISDICTION_FRAMES are photographed —
+// the server drops frames past its own cap — but EVERY tab in scope is still
+// reported, marked captured:false when it has no frame. Reporting only the
+// photographed ones would tell the model "4 tabs in scope" while the burst
+// runs in ten, which is exactly the mismatch this labelling exists to stop.
+async function captureJurisdictionFrames(targets, activeTab) {
+  const images = [];
+  const tabs = [];
+  for (const t of targets) {
+    let frame = null;
+    if (images.length < MAX_JURISDICTION_FRAMES) {
+      const sameWindowActive = t.active && (!activeTab || t.windowId === activeTab.windowId);
+      frame = sameWindowActive ? await captureActiveTabFrame(t.windowId) : null;
+      if (!frame) frame = await captureBackgroundTabFrame(t.id);
+      if (frame) images.push(frame);
+    }
+    tabs.push({ title: driveTabLabel(t), url: String(t.url || ''), captured: Boolean(frame) });
+  }
+  return { images, tabs };
 }
 
 const KEY_MAP = {
@@ -2103,6 +2279,69 @@ function driveTabLabel(tab) {
   try { return new URL(tab.url).hostname || tab.url; } catch { return String(tab.url || 'page'); }
 }
 
+// ── 09-08 jurisdiction: the set of tabs this turn may see and drive ──────────
+// Owner ask: "add a jurisdiction where u can choose 1 or multiple tabs, or all
+// tabs it can see, and execute in at once". Stored as 'active' | 'all' | an
+// array of tab ids. Tab ids die with their tab, so a stored list is a WISH,
+// never a guarantee — every read re-validates it against the live tab list and
+// silently drops what is gone. An empty result falls back to the single-tab
+// pick, which is the behaviour that existed before this feature.
+
+function normalizeJurisdiction(raw) {
+  if (raw === 'all') return 'all';
+  if (Array.isArray(raw)) {
+    const ids = raw.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0);
+    return ids.length ? ids : JURISDICTION_DEFAULT;
+  }
+  return JURISDICTION_DEFAULT;
+}
+
+// Every tab the agent could drive, ordered the way the user sees them
+// (window, then tab strip position) so a multi-tab run is predictable.
+async function listDriveableTabs() {
+  let hits = [];
+  try { hits = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }); } catch { hits = []; }
+  return (hits || [])
+    .filter(isDriveableTab)
+    .sort((a, b) => (a.windowId - b.windowId) || (a.index - b.index));
+}
+
+// The tabs this turn acts on. `activeTab` is the caller's already-resolved
+// active tab (avoids a second query); pass null to let this resolve it.
+// Returns { tabs, dropped } — `dropped` is how many in-scope tabs the cap cut,
+// so the caller can say so instead of quietly acting on a smaller set than the
+// user picked.
+async function resolveJurisdictionTabs(activeTab) {
+  const st = await readAgentState();
+  const juris = normalizeJurisdiction(st[JURISDICTION_KEY]);
+  const active = activeTab || await activeTabForDrive();
+
+  if (juris !== JURISDICTION_DEFAULT) {
+    const all = await listDriveableTabs();
+    const picked = juris === 'all'
+      ? all
+      : all.filter((t) => juris.includes(t.id));
+    if (picked.length) {
+      return {
+        tabs: picked.slice(0, MAX_JURISDICTION_TABS),
+        dropped: Math.max(0, picked.length - MAX_JURISDICTION_TABS),
+      };
+    }
+    // Chosen tabs are all closed or no longer driveable. Fall through to the
+    // single-tab pick rather than doing nothing — and say so at the call site.
+  }
+
+  if (active && isDriveableTab(active)) return { tabs: [active], dropped: 0 };
+  const fallback = await pickDriveTab(active);
+  return { tabs: fallback ? [fallback] : [], dropped: 0 };
+}
+
+function jurisdictionChipLabel(juris, count) {
+  if (juris === 'all') return `Tabs: all${count ? ` (${count})` : ''}`;
+  if (Array.isArray(juris)) return `Tabs: ${juris.length} picked`;
+  return 'Tabs: this one';
+}
+
 // A failed attach used to end in a hidden bar and a one-line status the user
 // could do nothing about. Now the bar stays up with a live RETRY button.
 function offerActionRetry(actions, reason) {
@@ -2143,42 +2382,32 @@ function offerActionRetry(actions, reason) {
   setStatus('⚠️ Could not drive this tab — press RETRY, or switch to a normal web page first.');
 }
 
-async function executeReturnedActions(actions) {
-  if (!chrome.debugger) {
-    setStatus('⚠️ Cannot execute: debugger API unavailable.');
-    return;
-  }
+// Drive ONE tab. Split out of executeReturnedActions on 09-08 so a jurisdiction
+// of several tabs runs the same burst through each of them without duplicating
+// the attach/clamp/detach discipline. Returns a verdict instead of touching the
+// status line — the caller owns the summary, because with N tabs no single tab
+// gets to speak for the run.
+//   {status: 'ok'|'paused'|'attach_failed'|'error', ran, error, label}
+async function driveActionsInTab(driveTab, actions, ctx) {
+  const { activeTab = null, index = 0, total = 1 } = ctx || {};
+  const many = total > 1;
+  const step = many ? `[tab ${index + 1}/${total}] ` : '';
 
-  // 1. Pick a DRIVABLE tab: the active tab only when it is a real web page,
-  //    else the most recently accessed drivable tab (background tabs
-  //    included). chrome:// / about: / extension pages reject the attach
-  //    outright and must never even reach chrome.debugger.attach.
-  const activeTab = await activeTabForDrive();
-  let driveTab = null;
-  if (activeTab && isDriveableTab(activeTab)) {
-    driveTab = activeTab;
-  } else {
-    driveTab = await pickDriveTab(activeTab);
-  }
-  if (!driveTab) {
-    offerActionRetry(actions, 'no driveable web page tab found — chrome://, about: and extension pages cannot be driven (switch to a normal web page first)');
-    return;
-  }
   // Belt & braces: re-check the scheme immediately before attach.
   if (!isDriveableUrl(driveTab.url)) {
-    offerActionRetry(actions, 'target is not a driveable web page');
-    return;
+    return { status: 'attach_failed', ran: 0, label: driveTabLabel(driveTab),
+             error: 'target is not a driveable web page' };
   }
 
-  // 2. Show the user the page being driven — but ONLY from a surface that can
-  //    survive doing so. A browser-action popup document is destroyed the
-  //    moment focus leaves it, so tabs.update({active:true}) /
-  //    windows.update({focused:true}) here kill THIS document mid-await: the
-  //    burst never reaches chrome.debugger.attach below, nothing is ever typed,
-  //    and the UI just vanishes ("typing only closed the extension"). Driving a
-  //    background tab over CDP works fine, so from the ephemeral popup we drive
-  //    in place and label it. Persistent surfaces (popped-out window, side
-  //    panel) still switch to the tab so the user can watch it happen.
+  // Show the user the page being driven — but ONLY from a surface that can
+  // survive doing so. A browser-action popup document is destroyed the
+  // moment focus leaves it, so tabs.update({active:true}) /
+  // windows.update({focused:true}) here kill THIS document mid-await: the
+  // burst never reaches chrome.debugger.attach below, nothing is ever typed,
+  // and the UI just vanishes ("typing only closed the extension"). Driving a
+  // background tab over CDP works fine, so from the ephemeral popup we drive
+  // in place and label it. Persistent surfaces (popped-out window, side
+  // panel) still switch to the tab so the user can watch it happen.
   const needsFocusSwitch = !driveTab.active || (activeTab && activeTab.id !== driveTab.id);
   const drivingUnseen = Boolean(needsFocusSwitch) && !isPersistentSurface;
   driveIsUnseen = drivingUnseen;
@@ -2189,10 +2418,11 @@ async function executeReturnedActions(actions) {
     await chrome.windows.update(driveTab.windowId, { focused: true }).catch(() => {});
   }
   const fresh = (await chrome.tabs.get(driveTab.id).catch(() => null)) || driveTab;
+  const label = driveTabLabel(fresh);
 
   activeActionTabId = driveTab.id;
   showAgentActiveBar(
-    `${drivingUnseen ? 'Driving (background tab)' : 'Driving'}: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`
+    `${step}${drivingUnseen ? 'Driving (background tab)' : 'Driving'}: ${label} — ${actions.length} action(s)…`
   );
 
   try {
@@ -2200,11 +2430,11 @@ async function executeReturnedActions(actions) {
       await chrome.debugger.attach({ tabId: driveTab.id }, '1.3');
     } catch (attachErr) {
       // Attach fails when DevTools is open on the target, on the Web Store,
-      // during a pending navigation, or when another debugger holds it. Never
-      // leave a dead bar: RETRY re-runs the whole pick (the target may have
-      // been closed or the user may have switched pages).
-      offerActionRetry(actions, String(attachErr && attachErr.message || attachErr));
-      return;
+      // during a pending navigation, or when another debugger holds it. The
+      // caller decides what to do — with one tab that is a RETRY bar, with
+      // several it is a skip so the remaining tabs still run.
+      return { status: 'attach_failed', ran: 0, label,
+               error: String(attachErr && attachErr.message || attachErr) };
     }
 
     // The user can pause (Esc) in the gap between pick and attach; the pause
@@ -2213,8 +2443,10 @@ async function executeReturnedActions(actions) {
     if (isAgentActionPaused) {
       await removeVirtualCursor(driveTab.id).catch(() => {});
       await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
-      setStatus('⏸ Agent action paused.');
-      return;
+      // A verdict, not a bare return: the caller reads .status off this, and the
+      // caller owns the status line (with several tabs no single tab speaks for
+      // the run). Returning undefined here threw on the very next line.
+      return { status: 'paused', ran: 0, label };
     }
 
     // Clamp every coordinate against the LIVE viewport, and start the glide
@@ -2235,6 +2467,10 @@ async function executeReturnedActions(actions) {
 
     await initVirtualCursor(driveTab.id);
 
+    // With a multi-tab jurisdiction the raw "Action 2/4: Clicking…" no longer
+    // says WHERE — keep the tab in front of the user for every step.
+    const say = (n, what) => updateAgentActiveDesc(`${step}Action ${n}/${actions.length}: ${what}`);
+
     for (let idx = 0; idx < actions.length; idx++) {
       if (isAgentActionPaused) break;
       const pagePaused = await checkPagePauseFlag(driveTab.id);
@@ -2247,11 +2483,11 @@ async function executeReturnedActions(actions) {
       const stepNum = idx + 1;
 
       if (op.op === 'move' && op.x !== undefined && op.y !== undefined) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Moving to (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        say(stepNum, `Moving to (${Math.round(op.x)}, ${Math.round(op.y)})`);
         await setVirtualCursorAction(driveTab.id, 'Moving…');
         await glideMouseTo(driveTab.id, op.x, op.y);
       } else if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        say(stepNum, `Clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
         await setVirtualCursorAction(driveTab.id, 'Moving…');
         await glideMouseTo(driveTab.id, op.x, op.y);
         if (isAgentActionPaused) break;
@@ -2268,7 +2504,7 @@ async function executeReturnedActions(actions) {
           type: 'mouseReleased', x: Math.round(op.x), y: Math.round(op.y), button: btn, buttons: 0, clickCount: 1,
         });
       } else if (op.op === 'dblclick' && op.x !== undefined && op.y !== undefined) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Double-clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
+        say(stepNum, `Double-clicking (${Math.round(op.x)}, ${Math.round(op.y)})`);
         await setVirtualCursorAction(driveTab.id, 'Moving…');
         await glideMouseTo(driveTab.id, op.x, op.y);
         if (isAgentActionPaused) break;
@@ -2285,11 +2521,11 @@ async function executeReturnedActions(actions) {
           await new Promise((r) => setTimeout(r, 45));
         }
       } else if (op.op === 'type' && op.text) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Typing text…`);
+        say(stepNum, 'Typing text…');
         await setVirtualCursorAction(driveTab.id, 'Typing…');
         await cdp(driveTab.id, 'Input.insertText', { text: String(op.text) });
       } else if (op.op === 'key' && op.key) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Key: ${op.key}…`);
+        say(stepNum, `Key: ${op.key}…`);
         await setVirtualCursorAction(driveTab.id, `Key: ${op.key}`);
         const k = KEY_MAP[op.key];
         if (k) {
@@ -2302,7 +2538,7 @@ async function executeReturnedActions(actions) {
           });
         }
       } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
-        updateAgentActiveDesc(`Action ${stepNum}/${actions.length}: Scrolling…`);
+        say(stepNum, 'Scrolling…');
         await setVirtualCursorAction(driveTab.id, 'Scrolling…');
         const sxy = clampToViewport(
           op.x !== undefined ? op.x : lastCursorPos.x,
@@ -2319,23 +2555,78 @@ async function executeReturnedActions(actions) {
 
     await removeVirtualCursor(driveTab.id);
     await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
-    if (isAgentActionPaused) {
-      setStatus('⏸ Agent action paused.');
-    } else {
-      setStatus(drivingUnseen
-        ? `✓ Drove ${driveTabLabel(fresh)} in the background — ${actions.length} action(s). Press ⧉ Keep open to watch it happen.`
-        : `✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
-      hideAgentActiveBar();
-    }
+    if (isAgentActionPaused) return { status: 'paused', ran: 0, label };
+    return { status: 'ok', ran: actions.length, label, unseen: drivingUnseen };
   } catch (err) {
-    setStatus(`⚠️ Action execution failed: ${String(err)}`);
     await removeVirtualCursor(driveTab.id).catch(() => {});
     await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
-    hideAgentActiveBar();
+    return { status: 'error', ran: 0, label, error: String(err) };
+  } finally {
+    activeActionTabId = null;
+  }
+}
+
+async function executeReturnedActions(actions) {
+  if (!chrome.debugger) {
+    setStatus('⚠️ Cannot execute: debugger API unavailable.');
+    return;
+  }
+
+  // The jurisdiction decides the targets. Default 'active' resolves to exactly
+  // the one tab this used to drive, so the single-tab path is unchanged; 'all'
+  // or a picked list runs the SAME burst through each tab in turn, re-clamped
+  // against that tab's own live viewport (a coordinate valid in a 1280-wide tab
+  // is not valid in a 700-wide one).
+  const activeTab = await activeTabForDrive();
+  const { tabs: targets, dropped: overCap } = await resolveJurisdictionTabs(activeTab);
+  if (!targets.length) {
+    offerActionRetry(actions, 'no driveable web page tab found — chrome://, about: and extension pages cannot be driven (switch to a normal web page first)');
+    return;
+  }
+
+  const done = [];
+  const skipped = [];
+  try {
+    for (let i = 0; i < targets.length; i++) {
+      if (isAgentActionPaused) break;
+      const r = await driveActionsInTab(targets[i], actions, {
+        activeTab, index: i, total: targets.length,
+      });
+      if (r.status === 'ok') done.push(r);
+      else if (r.status === 'paused') break;
+      else skipped.push(r);
+    }
   } finally {
     isAgentActionRunning = false;
     activeActionTabId = null;
   }
+
+  if (isAgentActionPaused) {
+    setStatus('⏸ Agent action paused.');
+    return;
+  }
+  // Every target failed to attach: same dead end as before, same live RETRY.
+  if (!done.length) {
+    const why = skipped.length === 1
+      ? (skipped[0].error || 'unknown reason')
+      : `none of the ${targets.length} tabs could be driven (${skipped[0] && skipped[0].error || 'unknown reason'})`;
+    offerActionRetry(actions, why);
+    return;
+  }
+
+  const n = actions.length;
+  const missed = skipped.length ? ` ${skipped.length} tab(s) skipped: ${skipped.map((s) => s.label).join(', ')}.` : '';
+  // Say it when the cap cut the scope down — "all tabs" that quietly means 16
+  // is worse than 16 tabs and a sentence about it.
+  const capped = overCap ? ` ${overCap} more tab(s) were in scope but past the ${MAX_JURISDICTION_TABS}-tab limit.` : '';
+  if (done.length === 1) {
+    setStatus(done[0].unseen
+      ? `✓ Drove ${done[0].label} in the background — ${n} action(s). Press ⧉ Keep open to watch it happen.${missed}${capped}`
+      : `✓ Drove ${done[0].label} — ${n} action(s) executed with visible cursor.${missed}${capped}`);
+  } else {
+    setStatus(`✓ Drove ${done.length} tabs — ${n} action(s) each: ${done.map((d) => d.label).join(', ')}.${missed}${capped}`);
+  }
+  hideAgentActiveBar();
 }
 
 async function loadPopupChatHistory() {
@@ -2396,7 +2687,9 @@ if (chatFormEl && chatInputEl) {
     try {
       const agentState = await readAgentState();
       const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
+      const juris = normalizeJurisdiction(agentState[JURISDICTION_KEY]);
       let images = [];
+      let tabRefs = [];
       // The server clamps returned control coordinates against THIS box, so it
       // has to be the drive tab's CSS viewport. It used to send the whole
       // screen (e.g. 2560x1440 for a 1200x800 tab), which let coordinates far
@@ -2404,9 +2697,17 @@ if (chatFormEl && chatInputEl) {
       let viewport = await activeTabViewport();
 
       if (seeScreen) {
-        const frameDataUrl = await captureActiveTabFrame();
-        if (frameDataUrl) {
-          images = [frameDataUrl];
+        if (juris === JURISDICTION_DEFAULT) {
+          const frameDataUrl = await captureActiveTabFrame();
+          if (frameDataUrl) images = [frameDataUrl];
+        } else {
+          // Multi-tab jurisdiction: one frame per tab so the model can tell the
+          // screens apart instead of reasoning about all of them from one.
+          const active = await activeTabForDrive();
+          const { tabs: targets } = await resolveJurisdictionTabs(active);
+          const shot = await captureJurisdictionFrames(targets, active);
+          images = shot.images;
+          tabRefs = shot.tabs;
         }
       }
 
@@ -2421,6 +2722,7 @@ if (chatFormEl && chatInputEl) {
         permission_mode: permMode,
       };
       if (images.length) bodyPayload.images = images;
+      if (tabRefs.length) bodyPayload.tabs = tabRefs;
       if (viewport) bodyPayload.viewport = viewport;
 
       const res = await fetch(`${srv}/api/extension/agent_chat`, {

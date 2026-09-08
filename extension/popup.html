@@ -441,10 +441,31 @@
               <span class="chip-status-dot"></span>
               <span class="chip-title">Execute: ON</span>
             </button>
+            <!-- No `active` class: the default jurisdiction IS "this tab", so the
+                 chip only lights up once the agent is looking past the one tab it
+                 would have used anyway. -->
+            <button type="button" class="chat-toggle-chip" id="chatToggleTabs" aria-haspopup="true" aria-expanded="false" title="Jurisdiction: which tabs the agent may see and act in. Pick one, several, or all of them.">
+              <span class="chip-status-dot"></span>
+              <span class="chip-title">Tabs: this one</span>
+            </button>
             <button type="button" class="chat-pause-btn" id="chatQuickPause" title="Instantly halt agent actions (or press Esc)" style="display:none;">
               <svg class="ic ic--xs"><use href="#i-pause" /></svg>
               <span>Pause</span>
             </button>
+          </div>
+
+          <!-- Jurisdiction picker (hidden until the Tabs chip is pressed) -->
+          <div class="tab-juris-panel" id="tabJurisdictionPanel" hidden>
+            <div class="tab-juris-head">
+              <span class="field-label">Agent jurisdiction</span>
+              <button type="button" class="btn-link" id="btnCloseJurisdiction">Close</button>
+            </div>
+            <p class="tab-juris-hint">The same actions run in every tab you select, one after another.</p>
+            <div class="tab-juris-modes">
+              <button type="button" class="juris-mode-btn" data-juris="active">This tab only</button>
+              <button type="button" class="juris-mode-btn" data-juris="all">All open tabs</button>
+            </div>
+            <div class="tab-juris-list" id="tabJurisdictionList"></div>
           </div>
           <div class="chat-effort-row">
             <label class="chat-effort-lbl" for="chatEffortSlider">Effort: <span id="chatEffortVal">500</span></label>

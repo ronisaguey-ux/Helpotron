@@ -7,10 +7,12 @@ import io
 import json
 import logging
 import os
+import re
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -391,6 +393,40 @@ class ChatViewport(BaseModel):
     height: int = Field(..., ge=1, le=20_000, description="captured tab viewport height, CSS px")
 
 
+class ChatTabRef(BaseModel):
+    """One tab inside the turn's jurisdiction (09-08).
+
+    Sent alongside `images` in the SAME order, so frame N is tab N. Without it a
+    multi-tab turn hands the model several screenshots with nothing to say which
+    is which, and the reply talks about "the page" as if there were one.
+    """
+
+    title: str = Field("", max_length=300)
+    url: str = Field("", max_length=2_000)
+    captured: bool = Field(True, description="False when this tab's frame could not be taken")
+
+
+def _tab_ref_label(tab: "ChatTabRef") -> str:
+    """Short human label for one jurisdiction tab.
+
+    Title first because that is what the user recognises; host as the fallback
+    and as the qualifier, since two tabs on the same site often share a title.
+    """
+    title = (tab.title or "").strip()
+    host = ""
+    raw = (tab.url or "").strip()
+    if raw:
+        try:
+            host = urlparse(raw).hostname or ""
+        except Exception:
+            host = ""
+    if title and host:
+        return f'"{title}" ({host})'
+    if title:
+        return f'"{title}"'
+    return host or "unnamed tab"
+
+
 class ExtensionChatRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5_000)
     thread_id: Optional[int] = Field(None, description="chat thread (None/0 = the main agent conversation)")
@@ -403,6 +439,11 @@ class ExtensionChatRequest(BaseModel):
     educational_mode: Optional[bool] = Field(None, description="when False, disables strict study-only restrictions")
     permission_mode: Optional[str] = Field(None, description="manual | auto | yolo permission mode")
     viewport: Optional[ChatViewport] = Field(None, description="captured tab viewport size")
+    tabs: List[ChatTabRef] = Field(
+        default_factory=list,
+        max_length=16,
+        description="jurisdiction tabs, in the same order as images",
+    )
 
 
 class VisionRequest(BaseModel):
@@ -834,7 +875,16 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             viewport_dict = {"width": payload.viewport.width, "height": payload.viewport.height}
         ts = datetime.now().strftime("%H:%M:%S")
         screen_lines: List[str] = []
-        for img in (payload.images or [])[:_MAX_IMAGES_PER_CALL]:
+        # 09-08 jurisdiction: a turn can carry one frame per tab in scope, so
+        # every screen line names its tab — otherwise several screenshots arrive
+        # with nothing to tell them apart and the reply talks about "the page".
+        # The extension pushes a `tabs` entry for EVERY tab in scope but only an
+        # image for the ones it could actually photograph, so the frames line up
+        # with the captured=True entries in order, NOT with `tabs` index-for-index.
+        tab_refs = list(payload.tabs or [])
+        capture_slots = [i for i, t in enumerate(tab_refs) if t.captured]
+        rendered_slots = set()
+        for idx, img in enumerate((payload.images or [])[:_MAX_IMAGES_PER_CALL]):
             analysis = "Vision analysis unavailable this turn — rely on what the user says."
             vision_ok = False
             try:
@@ -849,12 +899,38 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
                 logger.warning("agent-mode vision failed: %s", e)
             if not vision_ok:
                 analysis = "Vision analysis unavailable this turn — rely on what the user says."
+            slot = capture_slots[idx] if idx < len(capture_slots) else None
+            where = ""
+            if slot is not None:
+                rendered_slots.add(slot)
+                label = _tab_ref_label(tab_refs[slot])
+                where = (
+                    f" — tab {slot + 1} of {len(tab_refs)}: {label}"
+                    if len(tab_refs) > 1 else f" — {label}"
+                )
             screen_lines.append(
-                f"[Screen state at {ts}] {analysis.strip()}"
+                f"[Screen state at {ts}{where}] {analysis.strip()}"
                 + (f" (viewport {viewport_dict['width']}x{viewport_dict['height']})" if viewport_dict else "")
             )
             if vision_ok and not is_admin and user.plan != "elite":
                 _charge_tokens(user, db, SCREEN_VISION_CHARGE)
+        # A tab that produced no screen line is stated, never dropped: a silent
+        # omission reads to the model like the tab was seen and found empty. Both
+        # causes land here — the browser refused the frame, or the tab fell past
+        # the per-call frame cap.
+        missed = [t for i, t in enumerate(tab_refs) if i not in rendered_slots]
+        if missed:
+            screen_lines.append(
+                "[Not captured] " + "; ".join(_tab_ref_label(t) for t in missed)
+                + " — in scope but no frame this turn. Do not describe what is on them."
+            )
+        if len(tab_refs) > 1:
+            screen_lines.append(
+                f"[Jurisdiction] The user put {len(tab_refs)} tabs in scope. You return ONE control "
+                "block and it is replayed in every one of those tabs, in order. Only return "
+                "coordinates that hold in all of them; if the step only makes sense in one tab, say "
+                "which tab and ask the user to narrow the scope instead."
+            )
         screen_context = "\n".join(screen_lines)
     resolve_text = payload.text
 
