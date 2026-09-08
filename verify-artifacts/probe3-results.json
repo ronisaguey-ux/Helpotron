@@ -1,0 +1,133 @@
+{
+  "label": "probe3",
+  "extension": "/home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "throttled": false,
+  "results": [
+    {
+      "check": "manifest.version",
+      "status": "PASS",
+      "detail": "loaded build reports version 2.7.0"
+    },
+    {
+      "check": "manifest.sidePanel-api",
+      "status": "PASS",
+      "detail": "typeof chrome.sidePanel = object"
+    },
+    {
+      "check": "A.target-active",
+      "status": "PASS",
+      "detail": "active tab before drive = {'id': 931243755, 'url': 'http://127.0.0.1:39663/drive.html'}"
+    },
+    {
+      "check": "A.action-popup",
+      "status": "PASS",
+      "detail": "genuine action popup open: ['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html']"
+    },
+    {
+      "check": "A.popup-survived",
+      "status": "PASS",
+      "detail": "POPUP context after drive: True (contexts=['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html'])"
+    },
+    {
+      "check": "A.no-focus-switch",
+      "status": "PASS",
+      "detail": "active tab unchanged: 931243755 -> 931243755"
+    },
+    {
+      "check": "A.input-landed",
+      "status": "PASS",
+      "detail": "clicks=1 typed='V270_TYPE_OK' (expected 'V270_TYPE_OK') in 2.0s"
+    },
+    {
+      "check": "A.event-provenance",
+      "status": "PASS",
+      "detail": "page events = ['beforeinput|insertText|\"V270_TYPE_OK\"']"
+    },
+    {
+      "check": "A.burst-state",
+      "status": "PASS",
+      "detail": "{'res': 'ok', 'ms': 1995, 'alive': True} log=['SEND|Runtime.evaluate|t7', 'OK|Runtime.evaluate|t8', 'SEND|Runtime.evaluate|t8', 'OK|Runtime.evaluate|t10', 'SEND|Runtime.evaluate|t10', 'OK|Runtime.evaluate|t16', 'SEND|Runtime.evaluate|t1810', 'OK|Runtime.evaluate|t1811', 'SEND|Input.insertText|t1811', 'OK|Input.insertText|t1813', 'SEND|Runtime.evaluate|t1994', 'OK|Runtime.evaluate|t1995']"
+    },
+    {
+      "check": "B.undrivable-active",
+      "status": "PASS",
+      "detail": "active tab is undrivable: {'id': 931243758, 'url': 'chrome://newtab/'}"
+    },
+    {
+      "check": "B.action-popup",
+      "status": "PASS",
+      "detail": "genuine action popup open: ['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html']"
+    },
+    {
+      "check": "B.popup-survived",
+      "status": "PASS",
+      "detail": "POPUP context after drive: True (contexts=['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html'])"
+    },
+    {
+      "check": "B.no-focus-steal",
+      "status": "PASS",
+      "detail": "active tab unchanged: 931243758 -> 931243758"
+    },
+    {
+      "check": "B.input-landed",
+      "status": "PASS",
+      "detail": "clicks=1 typed='V270_TYPE_OK' (expected 'V270_TYPE_OK') in 10.8s"
+    },
+    {
+      "check": "B.event-provenance",
+      "status": "PASS",
+      "detail": "page events = ['beforeinput|insertText|\"V270_TYPE_OK\"']"
+    },
+    {
+      "check": "B.burst-state",
+      "status": "NOTE",
+      "detail": "{'res': None, 'ms': None, 'alive': True} log=['SEND|Runtime.evaluate|t16', 'OK|Runtime.evaluate|t19', 'SEND|Runtime.evaluate|t19', 'OK|Runtime.evaluate|t23', 'SEND|Runtime.evaluate|t23', 'OK|Runtime.evaluate|t25', 'SEND|Runtime.evaluate|t10720', 'OK|Runtime.evaluate|t10721', 'SEND|Runtime.evaluate|t10721', 'OK|Runtime.evaluate|t10722', 'SEND|Input.insertText|t10722', 'OK|Input.insertText|t10727']"
+    },
+    {
+      "check": "C.action-popup",
+      "status": "PASS",
+      "detail": "genuine action popup open"
+    },
+    {
+      "check": "C.keep-open-click",
+      "status": "PASS",
+      "detail": "\u29c9 Keep open button: 'clicked'"
+    },
+    {
+      "check": "C.side-panel-open",
+      "status": "PASS",
+      "detail": "contexts=['BACKGROUND:', 'TAB:onboarding.html', 'SIDE_PANEL:popup.html?mode=panel']"
+    },
+    {
+      "check": "C.ephemeral-popup-closed",
+      "status": "PASS",
+      "detail": "action popup handed off to the panel: True"
+    },
+    {
+      "check": "C.panel-self-id",
+      "status": "PASS",
+      "detail": "panel document location.search = '?mode=panel'"
+    },
+    {
+      "check": "C.panel-survived",
+      "status": "PASS",
+      "detail": "SIDE_PANEL context after drive: True (contexts=['BACKGROUND:', 'TAB:onboarding.html', 'SIDE_PANEL:popup.html?mode=panel'])"
+    },
+    {
+      "check": "C.watch-it-happen",
+      "status": "PASS",
+      "detail": "panel switched the active tab to the driven page: 931243762 -> 931243761 (drive tab 931243761)"
+    },
+    {
+      "check": "C.input-landed",
+      "status": "PASS",
+      "detail": "clicks=1 typed='V270_TYPE_OK' (expected 'V270_TYPE_OK') in 2.0s"
+    },
+    {
+      "check": "C.burst-state",
+      "status": "NOTE",
+      "detail": "{'res': None, 'ms': None, 'alive': True} log=['SEND|Runtime.evaluate|t19', 'OK|Runtime.evaluate|t21', 'SEND|Runtime.evaluate|t21', 'OK|Runtime.evaluate|t23', 'SEND|Runtime.evaluate|t23', 'OK|Runtime.evaluate|t25', 'SEND|Runtime.evaluate|t1933', 'OK|Runtime.evaluate|t1935', 'SEND|Runtime.evaluate|t1936', 'OK|Runtime.evaluate|t1939', 'SEND|Input.insertText|t1939', 'OK|Input.insertText|t1946']"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+label: v270run1
+browser: /home/roni-saguey/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+extension: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test
+profile: /tmp/helpotron-ext-verify-bwmy6cdp (temp)
+extension id: kgdjkehhfmbodpkifaincamgmfpofjog
+manifest: {
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "helpotron-companion@ronisaguey-ux.dev",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "https://*.instructure.com/*",
+        "https://classroom.google.com/*",
+        "https://*.blackboard.com/*",
+        "https://*.brightspace.com/*",
+        "https://*.d2l.com/*",
+        "https://*.moodle.com/*",
+        "https://*.schoology.com/*",
+        "https://docs.google.com/*",
+        "https://mail.google.com/*",
+        "https://*.notion.so/*",
+        "https://*.notion.site/*",
+        "https://helpotron.dpdns.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "description": "AI study companion. Save course pages, files and rubrics; chat with a screen-aware agent that can act on a tab with your approval.",
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://classroom.google.com/*",
+    "https://*.blackboard.com/*",
+    "https://*.brightspace.com/*",
+    "https://*.d2l.com/*",
+    "https://*.moodle.com/*",
+    "https://*.schoology.com/*",
+    "https://docs.google.com/*",
+    "https://mail.google.com/*",
+    "https://*.notion.so/*",
+    "https://*.notion.site/*",
+    "https://*.office.com/*",
+    "https://*.live.com/*",
+    "https://helpotron.dpdns.org/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "manifest_version": 3,
+  "name": "Helpotron Academic Companion",
+  "options_ui": {
+    "open_in_tab": true,
+    "page": "options.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "tabCapture",
+    "desktopCapture",
+    "notifications",
+    "debugger",
+    "sidePanel"
+  ],
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "version": "2.7.0"
+}
+
+[manifest] Helpotron Academic Companion v2.7.0
+  [invariant] name correct: OK
+  [invariant] version 2.6.1: FAIL
+  [invariant] service_worker present: OK
+  [invariant] debugger required: OK
+  [invariant] downloads absent: OK
+  [invariant] tabs permission: OK
+[feature] drive
+  [PASS    ] drive.target-tab: drive tab created: {'id': 1281380658, 'winId': 1281380655}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:35723/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #1281380659 created
+  [PASS    ] drive.undriveable-tab: newtab tab #1281380659 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 1281380659, 'url': 'chrome://newtab/', 'active': True}
+  [FAIL    ] drive.auto-switch-or-retry: no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=⚠️ Sign in to sync — tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True, 'desc': 'Action 1/3: Clicking (100, 70)', 'statusTxt': '⚠️
+  [FAIL    ] drive.click-evidence: page-side click counter = 0; server counter = 0
+[feature] keepopen
+  [PASS    ] keepopen.spare-tab: spare tab #1281380662 in window 1281380655
+  [key] Enter  #btnPopOut -> pressed
+  [FAIL    ] keepopen.second-window: no popup.html?mode=window page target appeared within 25s (chrome.windows.create may be unsupported in this headless build)
+[sync checks] page console errors: 0
+=== toggle results ===
+=== feature check results ===
+  [PASS    ] drive.target-tab: drive tab created: {'id': 1281380658, 'winId': 1281380655}
+  [PASS    ] drive.target-page: drive.html loaded at http://127.0.0.1:35723/drive.html (clicks=0)
+  [PASS    ] drive.undriveable-tab: newtab tab #1281380659 created
+  [PASS    ] drive.undriveable-tab: newtab tab #1281380659 created
+  [PASS    ] drive.undriveable-active: active tab = {'id': 1281380659, 'url': 'chrome://newtab/', 'active': True}
+  [FAIL    ] drive.auto-switch-or-retry: no landed click and no RETRY bar: clicks=0 bar={'visible': True, 'text': 'PAUSE'} status=⚠️ Sign in to sync — tap the account chip above. drv={'res': None, 'log': [], 'paused': 'false', 'retry': 'false', 'running': 'true', 'activeBar': True
+  [FAIL    ] drive.click-evidence: page-side click counter = 0; server counter = 0
+  [PASS    ] keepopen.spare-tab: spare tab #1281380662 in window 1281380655
+  [FAIL    ] keepopen.second-window: no popup.html?mode=window page target appeared within 25s (chrome.windows.create may be unsupported in this headless build)
+=== screenshots (1) ===
+  /home/roni/Roni_workspace/helpotron/verify-artifacts/v270run1-drive-target.png

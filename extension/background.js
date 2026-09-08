@@ -28,6 +28,18 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
+// The side panel and the browser-action popup BOTH load popup.html, and the
+// document itself has no API to tell which surface it is running in. Stamp the
+// side panel's path so popup.js can detect it (`?mode=panel`). This matters for
+// correctness, not cosmetics: a side panel survives tab/window focus changes,
+// while an action popup is destroyed by them — see executeReturnedActions().
+if (chrome.sidePanel && chrome.sidePanel.setOptions) {
+  try {
+    Promise.resolve(chrome.sidePanel.setOptions({ path: 'popup.html?mode=panel', enabled: true }))
+      .catch(() => {});
+  } catch { /* Firefox / older Chrome: no side panel API at all */ }
+}
+
 const DEFAULT_SERVER = 'https://helpotron.dpdns.org';
 
 async function getServer() {

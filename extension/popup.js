@@ -59,10 +59,29 @@ let effortPatchDebounceTimer = null;
 // ── Window Mode & Appbar Button Controls ─────────────────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
 const isWindowMode = urlParams.get('mode') === 'window' || urlParams.get('window') === '1';
+// background.js stamps the side panel's path with ?mode=panel — the side panel
+// and the action popup both load popup.html and are otherwise identical.
+const isPanelMode = urlParams.get('mode') === 'panel';
+// The distinction that actually matters for driving a tab: a popped-out window
+// and a side panel KEEP their document across tab/window focus changes, while a
+// browser-action popup is destroyed the instant focus leaves it.
+const isPersistentSurface = isWindowMode || isPanelMode;
 if (isWindowMode) {
   document.body.classList.add('window-mode');
-  if (btnPopOut) btnPopOut.style.display = 'none'; // already popped out
 }
+if (isPersistentSurface && btnPopOut) {
+  btnPopOut.style.display = 'none'; // already on a surface that stays open
+}
+
+// chrome.sidePanel.open() is gesture-gated, and the gesture is spent by the
+// first await in the click handler. Resolve the window id NOW so the handler
+// can call open() with no await in front of it.
+let currentWindowId = null;
+try {
+  Promise.resolve(chrome.windows.getCurrent())
+    .then((w) => { currentWindowId = w && w.id; })
+    .catch(() => {});
+} catch { /* no windows API (should not happen in a popup) */ }
 
 // Keep-open: the real window MUST exist before this popup closes. Closing the
 // popup first was killing the in-flight chrome.windows.create — the browser
@@ -78,14 +97,16 @@ if (btnPopOut) {
     btnPopOut.disabled = true;
     const errEl = document.getElementById('popOutError');
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
-      const curTab = tabs && tabs[0];
-      if (chrome.sidePanel && chrome.sidePanel.open && curTab && curTab.windowId) {
+      // Side panel FIRST, and with NO await ahead of it — sidePanel.open() is
+      // gesture-gated, so an intervening `await chrome.tabs.query(...)` can
+      // spend the user gesture and make open() reject. currentWindowId was
+      // resolved at load time precisely so this call stays synchronous.
+      if (chrome.sidePanel && chrome.sidePanel.open && currentWindowId != null) {
         try {
-          await chrome.sidePanel.open({ windowId: curTab.windowId });
+          await chrome.sidePanel.open({ windowId: currentWindowId });
           window.close();
           return;
-        } catch { /* fallback to popup window */ }
+        } catch { /* fall through to a real popup window */ }
       }
       const win = await chrome.windows.create({
         url: chrome.runtime.getURL('popup.html?mode=window'),
@@ -1944,7 +1965,31 @@ async function cdp(tabId, method, params) {
   }
 }
 
+// Set per burst from `drivingUnseen`. When the drive tab is one the user cannot
+// see, the human-like glide is not merely pointless — it is the difference
+// between "it works" and "nothing happens". Chrome blocks
+// Input.dispatchMouseEvent for a fixed 5s on a NON-ACTIVE tab, because the
+// hidden renderer never acks the event. Measured 2026-09-08, headless AND
+// headful: 5.00s per mouse event on a background tab, 5-17ms on the same tab
+// once activated; Runtime.evaluate and Input.insertText stay at 1-2ms either
+// way. A 30-95 point glide therefore costs 2.5-8 MINUTES per click.
+let driveIsUnseen = false;
+
 async function glideMouseTo(tabId, targetX, targetY) {
+  // Nobody is watching this pointer, so jump straight to the target: the same
+  // click lands off one dispatch instead of 30-95.
+  if (driveIsUnseen) {
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(targetX),
+      y: Math.round(targetY),
+      button: 'none',
+      buttons: 0,
+    }).catch(() => {});
+    await moveVirtualCursor(tabId, targetX, targetY);
+    lastCursorPos = { x: targetX, y: targetY };
+    return;
+  }
   const points = humanMovePoints(lastCursorPos.x, lastCursorPos.y, targetX, targetY);
   for (let i = 1; i < points.length; i++) {
     if (isAgentActionPaused) break;
@@ -2100,19 +2145,30 @@ async function executeReturnedActions(actions) {
     return;
   }
 
-  // 2. The user must SEE the page being driven: when the drive tab is not
-  //    already active, switch to it explicitly — and focus its window when it
-  //    lives outside the window the popup is attached to.
-  if (!driveTab.active || (activeTab && activeTab.id !== driveTab.id)) {
+  // 2. Show the user the page being driven — but ONLY from a surface that can
+  //    survive doing so. A browser-action popup document is destroyed the
+  //    moment focus leaves it, so tabs.update({active:true}) /
+  //    windows.update({focused:true}) here kill THIS document mid-await: the
+  //    burst never reaches chrome.debugger.attach below, nothing is ever typed,
+  //    and the UI just vanishes ("typing only closed the extension"). Driving a
+  //    background tab over CDP works fine, so from the ephemeral popup we drive
+  //    in place and label it. Persistent surfaces (popped-out window, side
+  //    panel) still switch to the tab so the user can watch it happen.
+  const needsFocusSwitch = !driveTab.active || (activeTab && activeTab.id !== driveTab.id);
+  const drivingUnseen = Boolean(needsFocusSwitch) && !isPersistentSurface;
+  driveIsUnseen = drivingUnseen;
+  if (needsFocusSwitch && isPersistentSurface) {
     await chrome.tabs.update(driveTab.id, { active: true }).catch(() => {});
   }
-  if (activeTab && driveTab.windowId !== activeTab.windowId) {
+  if (isPersistentSurface && activeTab && driveTab.windowId !== activeTab.windowId) {
     await chrome.windows.update(driveTab.windowId, { focused: true }).catch(() => {});
   }
   const fresh = (await chrome.tabs.get(driveTab.id).catch(() => null)) || driveTab;
 
   activeActionTabId = driveTab.id;
-  showAgentActiveBar(`Driving: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`);
+  showAgentActiveBar(
+    `${drivingUnseen ? 'Driving (background tab)' : 'Driving'}: ${driveTabLabel(fresh)} — ${actions.length} action(s)…`
+  );
 
   try {
     try {
@@ -2241,7 +2297,9 @@ async function executeReturnedActions(actions) {
     if (isAgentActionPaused) {
       setStatus('⏸ Agent action paused.');
     } else {
-      setStatus(`✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
+      setStatus(drivingUnseen
+        ? `✓ Drove ${driveTabLabel(fresh)} in the background — ${actions.length} action(s). Press ⧉ Keep open to watch it happen.`
+        : `✓ Drove ${driveTabLabel(fresh)} — ${actions.length} action(s) executed with visible cursor.`);
       hideAgentActiveBar();
     }
   } catch (err) {

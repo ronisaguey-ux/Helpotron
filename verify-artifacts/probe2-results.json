@@ -1,0 +1,58 @@
+{
+  "label": "probe2",
+  "extension": "/home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "throttled": false,
+  "results": [
+    {
+      "check": "manifest.version",
+      "status": "PASS",
+      "detail": "loaded build reports version 2.7.0"
+    },
+    {
+      "check": "manifest.sidePanel-api",
+      "status": "PASS",
+      "detail": "typeof chrome.sidePanel = object"
+    },
+    {
+      "check": "B.undrivable-active",
+      "status": "PASS",
+      "detail": "active tab is undrivable: {'id': 1712304817, 'url': 'chrome://newtab/'}"
+    },
+    {
+      "check": "B.action-popup",
+      "status": "PASS",
+      "detail": "genuine action popup open: ['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html']"
+    },
+    {
+      "check": "B.popup-survived",
+      "status": "PASS",
+      "detail": "POPUP context after drive: True (contexts=['BACKGROUND:', 'TAB:onboarding.html', 'POPUP:popup.html'])"
+    },
+    {
+      "check": "B.no-focus-steal",
+      "status": "PASS",
+      "detail": "active tab unchanged: 1712304817 -> 1712304817"
+    },
+    {
+      "check": "B.input-landed",
+      "status": "FAIL",
+      "detail": "clicks=0 typed='' (expected 'V270_TYPE_OK') in 60.1s"
+    },
+    {
+      "check": "B.event-provenance",
+      "status": "FAIL",
+      "detail": "page events = []"
+    },
+    {
+      "check": "B.burst-state",
+      "status": "NOTE",
+      "detail": "{'res': None, 'ms': None, 'alive': True} log=['SEND|Runtime.evaluate|t25', 'OK|Runtime.evaluate|t28', 'SEND|Runtime.evaluate|t28', 'OK|Runtime.evaluate|t31', 'SEND|Runtime.evaluate|t32', 'OK|Runtime.evaluate|t33', 'OK|Runtime.evaluate|t50225', 'SEND|Input.dispatchMouseEvent|t50237', 'OK|Input.dispatchMouseEvent|t55239', 'SEND|Runtime.evaluate|t55239', 'OK|Runtime.evaluate|t55240', 'SEND|Input.dispatchMouseEvent|t55252']"
+    },
+    {
+      "check": "C.side-panel-open",
+      "status": "FAIL",
+      "detail": "contexts=['BACKGROUND:', 'TAB:onboarding.html'] err='`sidePanel.open()` may only be called in response to a user gesture.'"
+    }
+  ]
+}
