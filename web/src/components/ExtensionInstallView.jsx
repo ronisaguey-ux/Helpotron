@@ -291,6 +291,60 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
         </div>
       </section>
 
+      {/* SECTION 2.5: GPTZERO WRITING REPORT — a third-party extension we point
+          students at. It records the writing process in Google Docs (keystrokes,
+          pastes, edit count) and turns it into a report. Install it BEFORE you
+          start writing: it can only record from the moment it is running. */}
+      <section className="rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8 space-y-5">
+        <div className="space-y-0.5">
+          <span className="font-label-caps text-xs text-primary uppercase tracking-widest">Recommended Alongside</span>
+          <h2 className="font-title-md text-lg text-on-surface font-semibold">Get a writing report for your work</h2>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-start gap-5">
+          <div className="w-11 h-11 rounded-2xl bg-sem-cyan/10 border border-sem-cyan/20 flex items-center justify-center text-sem-cyan shrink-0">
+            <BookOpen className="w-5 h-5" />
+          </div>
+
+          <div className="space-y-3 flex-1">
+            <p className="font-body-sm text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+              Install the GPTZero extension before you start an essay. It watches your Google Doc
+              while you write and produces a writing report: how long you spent, how the text was
+              built up, and whether anything was pasted in.
+            </p>
+
+            <ul className="space-y-1.5 font-body-sm text-xs text-on-surface-variant">
+              <li className="flex gap-2">
+                <Check className="w-3.5 h-3.5 text-sem-green shrink-0 mt-0.5" />
+                <span>Check your own work before you hand it in, instead of finding out from your teacher.</span>
+              </li>
+              <li className="flex gap-2">
+                <Check className="w-3.5 h-3.5 text-sem-green shrink-0 mt-0.5" />
+                <span>If your work is ever questioned, the report is evidence of how the document was written.</span>
+              </li>
+              <li className="flex gap-2">
+                <Check className="w-3.5 h-3.5 text-sem-green shrink-0 mt-0.5" />
+                <span>Install it first. It can only record from the moment it is running — it cannot go back over a finished doc.</span>
+              </li>
+            </ul>
+
+            <a
+              href="https://chromewebstore.google.com/detail/kgobeoibakoahbfnlficpmibdbkdchap"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto min-h-[44px] px-5 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition active:scale-[0.98] inline-flex items-center justify-center gap-2"
+            >
+              <ExternalLink className="w-4 h-4 text-on-surface-variant" />
+              <span>Get the GPTZero extension</span>
+            </a>
+
+            <p className="font-body-sm text-[11px] text-outline leading-relaxed">
+              Made by GPTZero, not by us. Installing it is between you and them.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* SECTION 3: DEV-MODE ZIP BUILD — collapsed by default. The Chrome Web
           Store listing (one-click "Add to Chrome") is the primary install path;
           the zip + load-unpacked flow is for Firefox builds and orgs that block
