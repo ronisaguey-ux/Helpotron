@@ -1841,8 +1841,10 @@ if (btnPinThread) {
 async function activeTabViewport() {
   const fallback = { width: window.screen.width || 1280, height: window.screen.height || 800 };
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs && tabs[0];
+    // Same trap as activeTabForDrive: {currentWindow:true} inside a popped-out
+    // popup measures the POPUP, so the server was clamping page coordinates to
+    // the chat window's size and every click landed short.
+    const tab = await activeTabForDrive();
     if (!tab || !tab.id || !chrome.scripting) return fallback;
     const res = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -2271,37 +2273,35 @@ function isDriveableTab(tab) {
   return Boolean(tab && tab.id && isDriveableUrl(tab.url));
 }
 
-// The popup lives in its own chrome window on some builds, which makes
-// `currentWindow` ambiguous inside an action popup. Query defensively: the
-// window the popup belongs to first, then the last-focused window.
+// The tab the USER is looking at — never the surface this popup is drawn on.
+//
+// 09-08 bug: a popped-out popup is itself a chrome window, so inside it
+// {active:true, currentWindow:true} returns the popup's OWN extension page.
+// That answer was accepted as "the active tab", failed isDriveableTab, and sent
+// the run to a pickDriveTab fallback that chose whichever normal tab had been
+// touched most recently. That is how "type apple sauce", asked from a plain
+// google tab, landed in a Google Doc — a tab the user never put in scope.
+//
+// So: trust {currentWindow:true} only when it hands back a real web tab (the
+// action popup and the side panel both belong to the user's browser window),
+// and otherwise ask for the last focused NORMAL window explicitly. What comes
+// back is the user's tab whether or not it can be driven; refusing an
+// undriveable tab is the caller's job, and substituting a different one is
+// nobody's.
 async function activeTabForDrive() {
-  let list = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!list || !list.length) list = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return (list && list.length) ? list[0] : null;
-}
-
-// Most recently accessed drivable tab, newest first. `windowId === null`
-// searches every window; `excludeId` keeps the pick off a tab already known
-// to be undriveable.
-async function pickDriveTabInWindow(windowId, excludeId) {
-  const q = { url: ['http://*/*', 'https://*/*'] };
-  if (windowId) q.windowId = windowId;
-  let hits = [];
-  try { hits = await chrome.tabs.query(q); } catch { hits = []; }
-  const list = (hits || [])
-    .filter((t) => t.id !== excludeId && isDriveableTab(t))
-    .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-  return list[0] || null;
-}
-
-// Same window as the active tab first (that is the view the user is on right
-// now), then any window — the drive tab is activated visibly either way.
-async function pickDriveTab(activeTab) {
   let tab = null;
-  if (activeTab && activeTab.windowId) {
-    tab = await pickDriveTabInWindow(activeTab.windowId, activeTab.id);
-  }
-  if (!tab) tab = await pickDriveTabInWindow(null, activeTab ? activeTab.id : null);
+  try {
+    const list = await chrome.tabs.query({ active: true, currentWindow: true });
+    tab = (list && list[0]) || null;
+  } catch { tab = null; }
+  if (isDriveableTab(tab)) return tab;
+
+  try {
+    const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'], populate: true });
+    const act = win && (win.tabs || []).find((t) => t.active);
+    if (act) return act;
+  } catch { /* windowTypes unsupported on this build — keep what we have */ }
+
   return tab;
 }
 
@@ -2340,32 +2340,56 @@ async function listDriveableTabs() {
 
 // The tabs this turn acts on. `activeTab` is the caller's already-resolved
 // active tab (avoids a second query); pass null to let this resolve it.
-// Returns { tabs, dropped } — `dropped` is how many in-scope tabs the cap cut,
-// so the caller can say so instead of quietly acting on a smaller set than the
-// user picked.
+//
+// Returns { tabs, dropped, reason }. `dropped` is how many in-scope tabs the cap
+// cut. `reason` is why the set came back empty — because an empty set now means
+// the turn STOPS. It used to mean "go find some other tab", which is how a run
+// scoped to one tab ended up acting in another. A tab the user did not put in
+// scope is out of bounds even when it is the only driveable tab open.
 async function resolveJurisdictionTabs(activeTab) {
   const st = await readAgentState();
   const juris = normalizeJurisdiction(st[JURISDICTION_KEY]);
   const active = activeTab || await activeTabForDrive();
+  const cap = (list) => ({
+    tabs: list.slice(0, MAX_JURISDICTION_TABS),
+    dropped: Math.max(0, list.length - MAX_JURISDICTION_TABS),
+    reason: '',
+  });
 
-  if (juris !== JURISDICTION_DEFAULT) {
+  if (juris === 'all') {
     const all = await listDriveableTabs();
-    const picked = juris === 'all'
-      ? all
-      : all.filter((t) => juris.includes(t.id));
-    if (picked.length) {
-      return {
-        tabs: picked.slice(0, MAX_JURISDICTION_TABS),
-        dropped: Math.max(0, picked.length - MAX_JURISDICTION_TABS),
-      };
-    }
-    // Chosen tabs are all closed or no longer driveable. Fall through to the
-    // single-tab pick rather than doing nothing — and say so at the call site.
+    if (all.length) return cap(all);
+    return { tabs: [], dropped: 0, reason: 'no driveable web page tab is open' };
   }
 
-  if (active && isDriveableTab(active)) return { tabs: [active], dropped: 0 };
-  const fallback = await pickDriveTab(active);
-  return { tabs: fallback ? [fallback] : [], dropped: 0 };
+  if (Array.isArray(juris)) {
+    // Tab ids die with their tab, so the stored list is re-validated every read.
+    const picked = (await listDriveableTabs()).filter((t) => juris.includes(t.id));
+    if (picked.length) return cap(picked);
+    return {
+      tabs: [], dropped: 0,
+      reason: 'the tabs you picked under Tabs are closed — pick again, or set it back to "this tab"',
+    };
+  }
+
+  // Default scope is this tab and only this tab.
+  if (isDriveableTab(active)) return { tabs: [active], dropped: 0, reason: '' };
+  return {
+    tabs: [], dropped: 0,
+    reason: active
+      ? `the tab you are on (${driveTabLabel(active)}) cannot be driven — chrome://, extension and settings pages are off limits. Switch to a normal web page, or use the Tabs chip to choose one.`
+      : 'no active tab found',
+  };
+}
+
+// What the approval card names as the target. Same resolver the drive uses, so
+// the card cannot promise a different page than the one that gets driven.
+async function jurisdictionTargetSummary() {
+  const { tabs, dropped, reason } = await resolveJurisdictionTabs(null);
+  if (!tabs.length) return reason || 'no tab in scope';
+  const names = tabs.map(driveTabLabel);
+  const head = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} +${names.length - 3} more`;
+  return dropped ? `${head} (${dropped} more past the ${MAX_JURISDICTION_TABS}-tab limit)` : head;
 }
 
 function jurisdictionChipLabel(juris, count) {
@@ -2610,9 +2634,11 @@ async function executeReturnedActions(actions) {
   // against that tab's own live viewport (a coordinate valid in a 1280-wide tab
   // is not valid in a 700-wide one).
   const activeTab = await activeTabForDrive();
-  const { tabs: targets, dropped: overCap } = await resolveJurisdictionTabs(activeTab);
+  const { tabs: targets, dropped: overCap, reason } = await resolveJurisdictionTabs(activeTab);
   if (!targets.length) {
-    offerActionRetry(actions, 'no driveable web page tab found — chrome://, about: and extension pages cannot be driven (switch to a normal web page first)');
+    // Stop and say why. The old fallback drove the most recently used tab
+    // instead, which meant the run silently left the scope the user set.
+    offerActionRetry(actions, reason || 'no tab in scope could be driven');
     return;
   }
 
@@ -2719,7 +2745,6 @@ if (chatFormEl && chatInputEl) {
     try {
       const agentState = await readAgentState();
       const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
-      const juris = normalizeJurisdiction(agentState[JURISDICTION_KEY]);
       let images = [];
       let tabRefs = [];
       // The server clamps returned control coordinates against THIS box, so it
@@ -2729,18 +2754,17 @@ if (chatFormEl && chatInputEl) {
       let viewport = await activeTabViewport();
 
       if (seeScreen) {
-        if (juris === JURISDICTION_DEFAULT) {
-          const frameDataUrl = await captureActiveTabFrame();
-          if (frameDataUrl) images = [frameDataUrl];
-        } else {
-          // Multi-tab jurisdiction: one frame per tab so the model can tell the
-          // screens apart instead of reasoning about all of them from one.
-          const active = await activeTabForDrive();
-          const { tabs: targets } = await resolveJurisdictionTabs(active);
-          const shot = await captureJurisdictionFrames(targets, active);
-          images = shot.images;
-          tabRefs = shot.tabs;
-        }
+        // One path for every scope, single tab included. The old single-tab
+        // branch called captureVisibleTab with no window id, which means "the
+        // current window" — inside a popped-out popup that is the popup itself,
+        // so the model was handed a picture of the chat window instead of the
+        // page it was being asked about. Going through the jurisdiction always
+        // means the frames come from the tabs the run will actually drive.
+        const active = await activeTabForDrive();
+        const { tabs: targets } = await resolveJurisdictionTabs(active);
+        const shot = await captureJurisdictionFrames(targets, active);
+        images = shot.images;
+        tabRefs = shot.tabs;
       }
 
       const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
@@ -2816,8 +2840,12 @@ if (chatFormEl && chatInputEl) {
             pendingApprovals.push({
               reqId,
               title: 'Approve screen control?',
+              // Name the tabs the run will REALLY touch — the same jurisdiction
+              // the drive resolves. This used to name a tab picked by the old
+              // most-recently-used fallback, so the card could promise one page
+              // and the burst land on another.
               summary: data.control_summary
-                ? `${data.control_summary}\n\nOn: ${driveTabLabel(await pickDriveTab(await activeTabForDrive()))}`
+                ? `${data.control_summary}\n\nOn: ${await jurisdictionTargetSummary()}`
                 : `The agent wants to run ${actions.length} action(s) on your screen.`,
               onDecision: async (decision, note, opts) => {
                 if (decision !== 'allow') {
