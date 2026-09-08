@@ -500,6 +500,31 @@ textarea.input { resize: vertical; min-height: 68px; }
 }
 .field-hint { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
 
+/* Password field with a show/hide eye. The input keeps its own padding so the
+   text never runs under the button. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap .input { padding-right: 44px; }
+.pw-toggle {
+  position: absolute;
+  top: 50%; right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  transition: color 140ms ease-out, background 140ms ease-out;
+}
+.pw-toggle:hover { color: var(--on-surface); background: var(--surface-container-high); }
+.pw-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.pw-toggle[aria-pressed="true"] { color: var(--primary); }
+
 /* ---------- Checkbox rows ---------- */
 .check-row {
   display: flex; align-items: center; gap: 10px;

@@ -42,6 +42,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   // Ask Developer / Help Ticket inline drawer
   const [devMessage, setDevMessage] = useState('');
@@ -524,6 +525,8 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 <button
                   type="button"
                   onClick={() => setShowPass((prev) => !prev)}
+                  aria-label={showPass ? 'Hide passphrase' : 'Show passphrase'}
+                  aria-pressed={showPass}
                   className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition cursor-pointer"
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -535,15 +538,26 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               <label htmlFor="recovery-confirm-pass" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
                 Confirm New Master Passphrase
               </label>
-              <input
-                id="recovery-confirm-pass"
-                type="password"
-                required
-                placeholder="Re-enter new passphrase..."
-                value={confirmPass}
-                onChange={(e) => setConfirmPass(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
-              />
+              <div className="relative flex items-center">
+                <input
+                  id="recovery-confirm-pass"
+                  type={showConfirmPass ? 'text' : 'password'}
+                  required
+                  placeholder="Re-enter new passphrase..."
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  className="w-full h-11 px-3.5 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPass((prev) => !prev)}
+                  aria-label={showConfirmPass ? 'Hide passphrase' : 'Show passphrase'}
+                  aria-pressed={showConfirmPass}
+                  className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition cursor-pointer"
+                >
+                  {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <Button
