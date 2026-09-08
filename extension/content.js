@@ -590,6 +590,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ── "Launch to Doc" — Assistive Typing Engine for Students with Disabilities ──
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Letter pairs that come out fast because the hand already knows them. Drawn
+// from the most frequent English digraphs, minus any that sit on one finger.
+const FAST_DIGRAPHS = new Set([
+  'th', 'he', 'in', 'er', 'an', 'nd', 'ou', 'ea', 'to', 'it',
+  'is', 'or', 'ti', 'as', 'te', 'et', 'ng', 'of', 'al', 'de',
+  'se', 'le', 'sa', 'si', 'ar', 've', 'ra', 'ld', 'ur',
+]);
+
+// Which finger types each key, for the same-finger penalty: 0–3 left hand
+// (pinky→index), 4–7 right hand (index→pinky).
+const KEY_FINGER = (() => {
+  const map = {};
+  const groups = [
+    ['qaz1', 0], ['wsx2', 1], ['edc3', 2], ['rfvtgb45', 3],
+    ['yhnujm67', 4], ['ik8', 5], ['ol9', 6], ['p0', 7],
+  ];
+  for (const [keys, finger] of groups) {
+    for (const k of keys) map[k] = finger;
+  }
+  return map;
+})();
+
 var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   constructor() {
     this.state = {
@@ -603,8 +625,8 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       wpm: 65,
       naturalPauses: true,
       jitter: true,
-      typoRate: 0.02,
-      falseStartRate: 0.015,
+      typoRate: 0.06,
+      falseStartRate: 0.025,
       assignmentTitle: '',
       assignmentId: null,
       hudElement: null,
@@ -693,14 +715,19 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     const iframe = document.querySelector('iframe.docs-texteventtarget-iframe');
     if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
       iframe.contentDocument.body.focus();
+      // Docs paints to a canvas and owns its own caret, so the DOM-selection
+      // half of the caret helpers is not just useless here, it is wrong.
+      this.isCanvasEditor = true;
       return iframe.contentDocument.body;
     }
     // 2. Generic contenteditable
     const editable = document.querySelector('div[contenteditable="true"], [contenteditable="true"]');
     if (editable) {
       editable.focus();
+      this.isCanvasEditor = false;
       return editable;
     }
+    this.isCanvasEditor = false;
     return document.activeElement || document.body;
   }
 
@@ -787,6 +814,114 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     target.dispatchEvent(keyup);
   }
 
+  // ── Caret control ───────────────────────────────────────────────────────────
+  // 09-08: corrections used to happen on the spot — wrong key, backspace, right
+  // key, all before the next character. Nobody types like that. A real typist
+  // runs on for a word or so, sees the mistake, walks the caret back over the
+  // good text with the arrow keys, fixes the bad characters in place, and walks
+  // forward again. That needs a caret this engine can move, which is what these
+  // three do.
+  //
+  // Both mechanisms fire every time, because the two kinds of editor this runs
+  // in answer to different ones:
+  //   • Google Docs draws to a canvas and owns its own caret. It reads the
+  //     keydown dispatched at its hidden texteventtarget iframe — the same path
+  //     that already makes ordinary characters land — so arrows, shift-arrows
+  //     and typing over a selection all reach it as key events.
+  //   • A plain contenteditable or textarea ignores synthetic key events; the
+  //     browser only moves a caret for trusted input. Those need the Selection
+  //     (or selectionStart) work done directly.
+  // Whichever half does not apply is inert, so both can run unconditionally.
+
+  dispatchKey(target, key, keyCode, shift) {
+    for (const type of ['keydown', 'keyup']) {
+      target.dispatchEvent(new KeyboardEvent(type, {
+        key, code: key, keyCode, which: keyCode,
+        shiftKey: shift, bubbles: true, cancelable: true,
+      }));
+    }
+  }
+
+  // Move the real DOM caret. No-op inside Google Docs, where the hidden iframe
+  // body holds no text and the key event above has already done the work.
+  nativeCaretMove(target, forward, extend) {
+    if (this.isCanvasEditor) return;
+    try {
+      if (typeof target.selectionStart === 'number') {
+        // <textarea> / <input>: the selection is a pair of offsets, not a Selection.
+        const start = target.selectionStart;
+        const end = target.selectionEnd;
+        if (extend) {
+          target.setSelectionRange(start, Math.max(start, end + (forward ? 1 : -1)));
+        } else {
+          const at = Math.max(0, (forward ? end + 1 : start - 1));
+          target.setSelectionRange(at, at);
+        }
+        return;
+      }
+      const sel = (target.ownerDocument?.defaultView || window).getSelection();
+      // Selection.modify is non-standard but is what Chrome gives us for
+      // character-granularity movement; there is no standard equivalent.
+      if (sel && typeof sel.modify === 'function') {
+        sel.modify(extend ? 'extend' : 'move', forward ? 'forward' : 'backward', 'character');
+      }
+    } catch (e) { /* a hostile editor can throw here; the key event still went out */ }
+  }
+
+  async moveCaret(target, forward, count, extend = false) {
+    const key = forward ? 'ArrowRight' : 'ArrowLeft';
+    const keyCode = forward ? 39 : 37;
+    for (let n = 0; n < count; n++) {
+      if (!this.state.isTyping) return;
+      this.dispatchKey(target, key, keyCode, extend);
+      this.nativeCaretMove(target, forward, extend);
+      // Held arrow keys repeat fast — about 30ms apart once the repeat starts.
+      await new Promise((r) => setTimeout(r, 26 + Math.random() * 34));
+    }
+  }
+
+  // Replace `selLen` characters to the right of the caret with `text`, by
+  // selecting them and typing over the selection. No backspace is involved:
+  // the good text after the mistake is never destroyed and retyped.
+  async overtype(target, selLen, text) {
+    if (selLen > 0) {
+      await this.moveCaret(target, true, selLen, true);
+      await new Promise((r) => setTimeout(r, 60 + Math.random() * 90));
+    }
+    for (let i = 0; i < text.length; i++) {
+      // Only the first character lands on the selection; after that the
+      // selection is gone and the rest are ordinary inserts.
+      await this.insertChar(target, text[i]);
+      if (i < text.length - 1) await new Promise((r) => setTimeout(r, 40 + Math.random() * 60));
+    }
+  }
+
+  // Walk back to a mistake, replace the bad characters in place, walk forward
+  // to where the typing had got to, and carry on. Nothing is backspaced: the
+  // good text between the mistake and the caret is never destroyed and retyped.
+  // Returns the new emitted-character count.
+  async repairTypo(target, fix, emitted) {
+    const back = emitted - fix.startedAt;
+    if (back < 0) return emitted;   // bookkeeping lost — leave the text alone
+
+    this.updateFloatingHUD('Fixing…');
+    // The eye lands on it a beat before the hands answer.
+    await new Promise((r) => setTimeout(r, 240 + Math.random() * 420));
+
+    await this.moveCaret(target, false, back, false);
+    if (!this.state.isTyping) return emitted;
+
+    await this.overtype(target, fix.wrongLen, fix.correct);
+    const after = emitted + (fix.correct.length - fix.wrongLen);
+
+    // Back to the end of what had already been typed.
+    await new Promise((r) => setTimeout(r, 90 + Math.random() * 160));
+    await this.moveCaret(target, true, after - (fix.startedAt + fix.correct.length), false);
+
+    this.updateFloatingHUD();
+    return after;
+  }
+
   // Physical-keyboard neighbor substitution: a letter typed one key off.
   neighborKey(ch) {
     if (!ch || !/[a-zA-Z]/.test(ch)) return ch;
@@ -803,14 +938,35 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     return ch;
   }
 
-  // Per-word realism rolls: at most one neighbour typo and/or one false start
-  // per word, decided when the word starts (same semantics as the server's
-  // HumanizedTypingSimulator). Rates combine the launch payload with the live
-  // HUD toggles so both control paths stay effective.
+  // Per-word realism rolls, decided when the word starts: at most one typo and
+  // at most one false start per word. Rates combine the launch payload with the
+  // live HUD toggles so both control paths stay effective.
+  //
+  // Four kinds of typo, because "wrong neighbouring key" alone reads as one
+  // machine tic repeated. In real hands transposition is the most common of the
+  // four, so it is weighted heaviest.
+  //   substitute — the finger lands one key over        ("wprd" for "word")
+  //   transpose  — two letters come out swapped         ("wrod")
+  //   double     — a key repeats                        ("woord")
+  //   drop       — a key does not register              ("wrd")
+  //
+  // Every typo is corrected before the run ends; the final document always
+  // matches the source text exactly. What varies is WHEN: `fixAfter` is how
+  // many more characters get typed before the typist notices and walks back.
+  //
+  // Two maps, not one. A typo never lands on the first letter of its word, so
+  // keying it by the word start meant the loop looked it up at index
+  // `wordStart` and then rejected it for having `at !== i` — every typo this
+  // engine planned was thrown away unread. A 202-word run came back with zero
+  // corrections in it, which is its own kind of tell.
   computeWordRolls(chars) {
-    const rolls = new Map();
+    const starts = new Map();   // word start  -> { falseStart }
+    const typos = new Map();    // typo index  -> typo
+    const typoRate = this.config.typosEnabled ? this.state.typoRate : 0;
+    const falseStartRate = this.config.falseStarts ? this.state.falseStartRate : 0;
     let inWord = false;
     let wordStart = -1;
+
     for (let i = 0; i <= chars.length; i++) {
       const isBoundary = i >= chars.length || chars[i] === ' ' || chars[i] === '\n';
       if (!inWord && !isBoundary) {
@@ -818,39 +974,143 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
         wordStart = i;
       } else if (inWord && isBoundary) {
         const wordLen = i - wordStart;
-        const roll = { typoAt: -1, wrongChar: '', falseStart: false };
-        if (wordLen > 3) {
-          const typoRate = this.config.typosEnabled ? this.state.typoRate : 0;
-          const falseStartRate = this.config.falseStarts ? this.state.falseStartRate : 0;
-          if (typoRate > 0 && Math.random() < typoRate) {
-            const off = 1 + Math.floor(Math.random() * Math.min(wordLen - 1, 4));
-            roll.typoAt = wordStart + off;
-            roll.wrongChar = this.neighborKey(chars[roll.typoAt]);
-          }
-          if (falseStartRate > 0 && Math.random() < falseStartRate) {
-            roll.falseStart = true;
-          }
+
+        // Short words get typos too, just less often — the old length>3 gate
+        // meant "a", "of" and "the" came out perfect every single time.
+        const lengthWeight = wordLen > 3 ? 1 : 0.45;
+        if (typoRate > 0 && wordLen >= 2 && Math.random() < typoRate * lengthWeight) {
+          const typo = this.planTypo(chars, wordStart, wordLen);
+          if (typo) typos.set(typo.at, typo);
         }
-        rolls.set(wordStart, roll);
+        if (falseStartRate > 0 && wordLen > 3 && Math.random() < falseStartRate) {
+          starts.set(wordStart, { falseStart: true });
+        }
         inWord = false;
       }
     }
-    return rolls;
+    return { starts, typos };
   }
 
-  calculateDelay(char, nextChar, wpm, usePauses, useJitter) {
-    const baseDelay = Math.max(30, Math.round(12000 / Math.max(20, wpm)));
-    let delay = baseDelay;
+  // Pick one mistake inside the word starting at `wordStart`.
+  // Returns { at, kind, typed, correct, fixAfter } where `typed` is what the
+  // fingers produce and `correct` is what belongs there. `at` is a source
+  // index; the loop consumes `correct.length` source characters at that point
+  // and emits `typed` instead.
+  planTypo(chars, wordStart, wordLen) {
+    // Never on the first letter: a wrong first keystroke reads as a false start,
+    // which is already modelled separately.
+    const maxOff = Math.min(wordLen - 1, 5);
+    const at = wordStart + 1 + Math.floor(Math.random() * Math.max(1, maxOff));
+    const here = chars[at];
+    const next = chars[at + 1];
+    if (!here || here === ' ' || here === '\n') return null;
+
+    // Noticing is not instant. Most mistakes are caught within the word or the
+    // next one; a few run on longer. 0 means the fingers stop dead on it.
+    const fixAfter = Math.random() < 0.18 ? 0 : 1 + Math.floor(Math.random() * 13);
+
+    const roll = Math.random();
+    const canTranspose = next && next !== ' ' && next !== '\n' && next !== here;
+    if (roll < 0.40 && canTranspose) {
+      return { at, kind: 'transpose', typed: next + here, correct: here + next, fixAfter };
+    }
+    if (roll < 0.72) {
+      const wrong = this.neighborKey(here);
+      if (wrong && wrong !== here) {
+        return { at, kind: 'substitute', typed: wrong, correct: here, fixAfter };
+      }
+    }
+    if (roll < 0.88 && /[a-z]/i.test(here)) {
+      return { at, kind: 'double', typed: here + here, correct: here, fixAfter };
+    }
+    if (/[a-z]/i.test(here) && wordLen > 3) {
+      return { at, kind: 'drop', typed: '', correct: here, fixAfter };
+    }
+    const wrong = this.neighborKey(here);
+    return wrong && wrong !== here
+      ? { at, kind: 'substitute', typed: wrong, correct: here, fixAfter }
+      : null;
+  }
+
+  // ── Speed ───────────────────────────────────────────────────────────────────
+  // A typist is not a metronome, and per-character jitter alone does not fix
+  // that: jitter is noise around a flat line, and the flatness is what reads as
+  // machine. Three things bend the line instead.
+  //   drift   — a slow random walk of overall pace across the document
+  //   run     — a stretch that comes out markedly faster (a phrase already in
+  //             the head) or slower (hunting for the next one)
+  //   digraph — "th", "he", "in" roll off the fingers; two letters on the same
+  //             finger do not
+  // Each returns a multiplier on the base delay, so >1 is slower.
+
+  tickSpeed() {
+    const s = this.speed;
+    s.drift += (Math.random() - 0.5) * 0.06;
+    s.drift = Math.max(0.78, Math.min(1.32, s.drift));
+
+    if (s.runLeft > 0) {
+      s.runLeft -= 1;
+      return;
+    }
+    if (Math.random() < 0.013) {
+      s.runLeft = 10 + Math.floor(Math.random() * 32);
+      s.runFactor = 0.52 + Math.random() * 0.20;   // a burst
+    } else if (Math.random() < 0.009) {
+      s.runLeft = 6 + Math.floor(Math.random() * 18);
+      s.runFactor = 1.28 + Math.random() * 0.50;   // a stall
+    } else {
+      s.runFactor = 1;
+    }
+  }
+
+  digraphFactor(prev, char) {
+    if (!prev || !/[a-z]/i.test(prev) || !/[a-z]/i.test(char)) return 1;
+    const a = prev.toLowerCase();
+    const b = char.toLowerCase();
+    if (FAST_DIGRAPHS.has(a + b)) return 0.70;
+    const fa = KEY_FINGER[a];
+    const fb = KEY_FINGER[b];
+    if (fa === undefined || fb === undefined) return 1;
+    if (fa === fb) return 1.48;                              // same finger, twice
+    if ((fa < 4) === (fb < 4)) return 1.10;                  // same hand
+    return 0.92;                                             // hands alternate
+  }
+
+  // 09-08, from a GPTZero report on a real run: 202 words took 10m32s on the
+  // 85 WPM preset (~21 WPM) and Google Docs recorded 946 separate edits. Both
+  // numbers have one cause. The delay below is the time to WAIT, but the loop
+  // used to sleep it ON TOP OF however long Docs spent swallowing the
+  // keystroke — and Docs relays out its canvas on every key, which is not
+  // cheap. Every gap came out a few hundred ms longer than asked for, and Docs
+  // only merges keystrokes that land close together, so nothing merged and
+  // every character became its own revision. The loop now subtracts the time
+  // Docs actually took (see runTypingLoop), and this function shapes the
+  // remainder into runs instead of a flat line.
+  calculateDelay(char, prevChar, wpm, usePauses, useJitter) {
+    // WPM counts five-character words, so this is the average millisecond
+    // budget per character — an average, not a metronome tick.
+    const base = Math.max(24, Math.round(12000 / Math.max(20, wpm)));
+
+    // Keys inside a word arrive in a run: the hand plays the whole word as one
+    // movement. Keys at a boundary do not. The two rates average back out to
+    // `base` over ordinary prose, so the preset still means what it says.
+    const boundary = char === ' ' || char === '\n'
+      || prevChar === '' || prevChar === ' ' || prevChar === '\n';
+    let delay = base * (boundary ? 1.9 : 0.55);
+
+    delay *= this.speed.drift * this.speed.runFactor * this.digraphFactor(prevChar, char);
+
+    // Reaching for shift costs a beat.
+    if (/[A-Z]/.test(char) || '~!@#$%^&*()_+{}|:"<>?'.includes(char)) {
+      delay += 18 + Math.random() * 34;
+    }
 
     if (useJitter) {
-      const jitterFactor = 0.65 + Math.random() * 0.70;
-      delay = Math.round(delay * jitterFactor);
+      delay *= 0.68 + Math.random() * 0.64;
     }
 
     if (usePauses) {
-      if (char === ' ') {
-        delay += Math.floor(70 + Math.random() * 110);
-      } else if (['.', '!', '?'].includes(char)) {
+      if (['.', '!', '?'].includes(char)) {
         delay += Math.floor(350 + Math.random() * 400);
       } else if ([',', ';', ':', '-'].includes(char)) {
         delay += Math.floor(150 + Math.random() * 150);
@@ -859,7 +1119,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       }
     }
 
-    return delay;
+    return Math.max(12, Math.round(delay));
   }
 
   async startTyping(payload) {
@@ -889,6 +1149,9 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       assignmentId: payload.assignmentId || null,
       hudElement: null,
     };
+    // Pace wanders per run, so two launches of the same essay do not produce
+    // the same timing trace.
+    this.speed = { drift: 0.9 + Math.random() * 0.25, runLeft: 0, runFactor: 1 };
 
     this.renderFloatingHUD();
     this.broadcastProgress('started');
@@ -900,7 +1163,14 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   async runTypingLoop() {
     const target = this.getTargetElement();
     const chars = Array.from(this.state.text);
-    const rolls = this.computeWordRolls(chars);
+    const { starts, typos } = this.computeWordRolls(chars);
+
+    // `emitted` counts the characters standing in the document, which is not
+    // the same as the source index once a typo has added or dropped one. The
+    // caret walk is measured in emitted characters, so it is tracked separately.
+    let emitted = 0;
+    let pending = null;   // the one mistake currently waiting to be noticed
+    let prevChar = '';
 
     try {
       for (let i = 0; i < chars.length; i++) {
@@ -912,11 +1182,18 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
         if (!this.state.isTyping) break;
 
         const char = chars[i];
-        const nextChar = chars[i + 1] || '';
-        const roll = rolls.get(i);
+
+        // Fix before crossing a line break — arrowing back up over a wrap is
+        // not something a typist does for a one-letter slip.
+        if (pending && (char === '\n' || emitted - pending.endedAt >= pending.fixAfter)) {
+          emitted = await this.repairTypo(target, pending, emitted);
+          pending = null;
+        }
 
         // False start: a few keystrokes get retyped away before the word lands.
-        if (roll && roll.falseStart) {
+        // This one keeps its backspaces — undoing a fragment you have not
+        // finished is what a false start IS.
+        if (starts.get(i)) {
           const fragLen = 2 + Math.floor(Math.random() * 3);
           const frag = Array.from({ length: fragLen }, () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]).join('');
           for (const fc of frag) await this.insertChar(target, fc);
@@ -925,16 +1202,51 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
           await new Promise((r) => setTimeout(r, 450 + Math.random() * 550));
         }
 
-        // Neighbour-key typo: the wrong key lands, a short "double-take"
-        // pause, then backspace + the correct character.
-        if (roll && roll.typoAt === i && roll.wrongChar && roll.wrongChar !== char) {
-          await this.insertChar(target, roll.wrongChar);
-          await new Promise((r) => setTimeout(r, 160 + Math.random() * 320));
-          await this.deleteChar(target);
-          await new Promise((r) => setTimeout(r, 110 + Math.random() * 210));
+        // Typo: emit what the fingers produced instead of what belongs here,
+        // and note where it sits so it can be repaired further down the line.
+        const typo = typos.get(i);
+        if (typo) {
+          // Exactly one mistake may be outstanding. A second typo landing on
+          // top of an unrepaired one used to overwrite the bookkeeping for the
+          // first, which then stood in the finished document forever — a
+          // corrupted essay, silently, with no error anywhere.
+          if (pending) {
+            emitted = await this.repairTypo(target, pending, emitted);
+            pending = null;
+          }
+          for (const tc of typo.typed) {
+            await this.insertChar(target, tc);
+            emitted += 1;
+            await new Promise((r) => setTimeout(r, this.calculateDelay(tc, prevChar, this.state.wpm, false, true)));
+            prevChar = tc;
+          }
+          pending = {
+            startedAt: emitted - typo.typed.length,
+            endedAt: emitted,
+            wrongLen: typo.typed.length,
+            correct: typo.correct,
+            fixAfter: typo.fixAfter,
+          };
+          // The source characters this typo stood in for are now spoken for.
+          i += typo.correct.length - 1;
+          this.state.currentIndex = i + 1;
+
+          if (typo.fixAfter === 0) {
+            // Caught on the spot — the hands stop, then go back for it.
+            await new Promise((r) => setTimeout(r, 180 + Math.random() * 340));
+            emitted = await this.repairTypo(target, pending, emitted);
+            pending = null;
+          }
+          continue;
         }
 
+        // Time the keystroke. In Docs the dispatch is not free — the editor
+        // relays out its canvas before it returns — and that cost has to come
+        // out of the gap, not be added to it.
+        const spentAt = performance.now();
         await this.insertChar(target, char);
+        const spent = performance.now() - spentAt;
+        emitted += 1;
         this.state.currentIndex = i + 1;
 
         if (char === ' ' || char === '\n' || i === chars.length - 1) {
@@ -954,8 +1266,18 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
 
         const usePauses = this.state.naturalPauses && this.config.punctuationPauses !== false;
         const useJitter = this.state.jitter && this.config.jitter !== false;
-        const delay = this.calculateDelay(char, nextChar, this.state.wpm, usePauses, useJitter);
-        await new Promise((r) => setTimeout(r, delay));
+        this.tickSpeed();
+        const delay = this.calculateDelay(char, prevChar, this.state.wpm, usePauses, useJitter);
+        prevChar = char;
+        // Sleep the REMAINDER of the gap. If Docs already burned more than the
+        // whole budget, yield and move on rather than falling further behind.
+        await new Promise((r) => setTimeout(r, Math.max(4, delay - spent)));
+      }
+
+      // Nothing is left standing wrong, whatever the text ended on.
+      if (pending && this.state.isTyping) {
+        emitted = await this.repairTypo(target, pending, emitted);
+        pending = null;
       }
 
       if (this.state.isTyping) {
