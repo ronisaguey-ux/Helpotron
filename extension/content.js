@@ -1135,6 +1135,11 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   // whatever the slider asks for: the shape holds, the clock compresses.
   calculateDelay(char, prevChar, wpm, usePauses, useJitter) {
     const scale = 26 / Math.max(20, wpm);
+    // The measured 26 WPM is the author's real sustained rate, but the slider
+    // is a dial for intent, not just a clock. Fast = more keys merged into one
+    // burst and the thinking-lull at boundaries compressed; slow = more
+    // deliberate, separate keystrokes and a longer lull. `pace` is that dial.
+    const pace = Math.max(0.5, Math.min(2.2, wpm / 26));
 
     let context = 'letter';
     if (char === '\n') context = 'newline';
@@ -1153,17 +1158,26 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       // the whole reason Docs records the burst as one revision like a person's.
       // Measured floor: under 1% of real gaps were below 150ms, and Docs
       // merges ~1.7 chars per burst. So the pair inside a burst lands at 150+
-      // ms — fast enough to merge, slow enough to not look machine-gun.
-      const intra = Math.max(150, (150 + Math.random() * 70)
+      // ms — fast enough to merge, slow enough to not look machine-gun. That
+      // floor belongs to the measured 26 WPM author; a fast dial shrinks it
+      // with the clock, a slow one stretches it.
+      const intra = Math.max(150 * Math.min(1, scale), (150 + Math.random() * 70)
         * Math.min(1, scale)
         * this.digraphFactor(prevChar, char));
-      return Math.max(140, Math.round(intra));
+      return Math.max(20, Math.round(intra));
     }
 
     // Next burst length, matching the measured 40/52/6/2 split (mean 1.70;
     // the long tail of the draw carries it the rest of the way to 1.80).
+    // Speed bias on the dial: a fast hand runs more keys together (Docs merges
+    // them into one revision), a slow/deliberate one separates them.
     const roll = Math.random();
-    this.burst.left = roll < 0.40 ? 0 : roll < 0.92 ? 1 : roll < 0.98 ? 2 : 3;
+    const fastBias = Math.min(0.30, (pace - 1) * 0.15);  // high wpm → more merging
+    const slowBias = Math.min(0.30, (1 - pace) * 0.20);  // low wpm → more separate
+    if (roll < 0.40 - fastBias + slowBias) this.burst.left = 0;
+    else if (roll < 0.92) this.burst.left = 1;
+    else if (roll < 0.98) this.burst.left = 2;
+    else this.burst.left = 3;
 
     // With pauses switched off a full stop is just another character.
     const shape = usePauses ? GAP_SHAPE[context] : GAP_SHAPE.letter;
@@ -1175,6 +1189,9 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     }
 
     delay *= scale * this.speed.drift * this.speed.runFactor;
+    // Boundary thinking-lull is shape, not clock: a fast typist carries
+    // momentum through a full stop, a slow/deliberate one lingers over it.
+    if (context !== 'letter') delay *= Math.pow(pace, -0.4);
     // Finger mechanics move a keystroke, not a pause for thought.
     if (context === 'letter') delay *= this.digraphFactor(prevChar, char);
 
