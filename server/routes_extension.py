@@ -10,7 +10,7 @@ import os
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -23,9 +23,11 @@ from .database import ExtensionRelease, ExtensionReleaseRead, get_db
 from .screen_vision import (
     DEFAULT_EFFORT_SCORE,
     VISION_MODEL,
+    _MAX_CONTROL_ACTIONS,
     _MAX_IMAGES_PER_CALL,
     analyze_screen_image,
     extract_control_actions,
+    extract_control_actions_ex,
     parse_effort_score,
     resolve_vision_model,
     validate_image_b64,
@@ -493,9 +495,14 @@ AGENT_MODE_DIRECTIVE = (
     "minimal steps, never more than 15 actions in one task (09-02 cap; the "
     "extension's stop button and per-action permission prompts are live, so "
     "the user can halt after any action — keep each batch small and wait for the "
-    "user's confirmation between tasks); NEVER type into password or other "
-    "secret fields; NEVER confirm destructive actions without telling the user in "
-    "the reply text first; only act on what the screen state shows."
+    "user's confirmation between tasks); "
+    # 09-08 (operator): nothing is hard-blocked. The user's permission mode is
+    # the only gate — manual asks before every batch, auto asks for risky work,
+    # yolo asks for nothing. Refusing a field class the user explicitly asked
+    # you to fill is the app second-guessing its own owner on their own screen.
+    "say in the reply text what you are about to do before anything destructive "
+    "or anything involving credentials, so the user can stop you; "
+    "only act on what the screen state shows."
 )
 
 
@@ -611,23 +618,110 @@ def _harden_actions(raw: Any, viewport: Dict[str, int]) -> Optional[List[Dict[st
     return normalized or None
 
 
-def _search_burst(query: str, viewport: Dict[str, int]) -> List[Dict[str, Any]]:
-    """move -> click -> type -> Enter aimed at the viewport's own centre.
+def _search_burst(
+    query: str,
+    viewport: Dict[str, int],
+    screen_analysis: Optional[str] = None,
+    hint: str = "",
+) -> List[Dict[str, Any]]:
+    """move -> click -> type -> Enter aimed at a field the vision pass saw.
 
-    The coordinates used to be hard-coded (480, 320), which lands outside a
-    small captured frame; they are derived from the real viewport now and still
-    pass through `_harden_actions` for clamping.
+    Returns [] when no typable element was found. That empty list is the point:
+    09-08 this aimed at the viewport CENTRE whenever the agent produced no
+    control block. On a page whose centre is not an input (the operator hit it
+    on a usage dashboard) the click landed on dead space, the caret blinked
+    somewhere harmless, and the typed text went nowhere — while the reply said
+    the typing was done. A blind guess that silently misses is worse than no
+    action at all, so the guess is gone: aim at a real element or do nothing
+    and let the caller report that it could not find the field.
     """
-    w = int(viewport.get("width") or 1280)
-    h = int(viewport.get("height") or 800)
-    x = max(1, w // 2)
-    y = max(1, min(h // 2, int(h * 0.4)))
+    from .screen_vision import find_input_target
+
+    target = find_input_target(screen_analysis, hint=hint, viewport=viewport)
+    if not target:
+        return []
+    x = max(1, int(target["x"]))
+    y = max(1, int(target["y"]))
     return [
         {"op": "move", "x": x, "y": y},
         {"op": "click", "x": x, "y": y, "button": "left"},
         {"op": "type", "text": query},
         {"op": "key", "key": "Enter", "modifiers": []},
     ]
+
+
+# Why nothing ran, in words the user can act on. Keys are the reasons
+# screen_vision.extract_control_actions_ex returns.
+_DROP_REASON_TEXT: Dict[str, str] = {
+    "no_block": "I didn't produce a usable action for that, so nothing was done on your screen.",
+    "malformed_json": "My action list came back malformed, so nothing was run.",
+    "wrong_shape": "My action list came back in the wrong shape, so nothing was run.",
+    "over_cap": f"That needed more than the {_MAX_CONTROL_ACTIONS} actions allowed in one turn, so nothing was run.",
+    "invalid_op": "One of the steps I planned wasn't allowed, so the whole list was dropped — nothing ran.",
+    "empty": "The action list was empty, so nothing was run.",
+    "no_target": "I couldn't find that field on the current screen, so I didn't click anywhere.",
+}
+
+
+def _execution_verdict(actions: Optional[List[Dict[str, Any]]], reason: str) -> Dict[str, Any]:
+    """Honest execution block for the extension response.
+
+    The client renders this. Before 09-08 a dropped action list produced
+    execution=None and the client silently skipped, leaving the agent's own
+    prose ("I am typing that for you now") as the only thing the user saw.
+    """
+    if actions:
+        return {"status": "success", "actions_count": len(actions)}
+    return {
+        "status": "failed",
+        "actions_count": 0,
+        "reason": reason or "no_block",
+        "detail": _DROP_REASON_TEXT.get(reason or "no_block", _DROP_REASON_TEXT["no_block"]),
+    }
+
+
+def _describe_control_actions(actions: Optional[List[Dict[str, Any]]]) -> str:
+    """One line naming what the agent wants to do, for the approval card.
+
+    The user has to be able to read the card and know what they are allowing,
+    so this names the real ops and quotes the real text — never "the agent
+    would like to perform an action".
+    """
+    if not actions:
+        return ""
+    parts: List[str] = []
+    for op in actions[:6]:
+        kind = str(op.get("op") or "?")
+        if kind == "type":
+            text = str(op.get("text") or "")
+            parts.append(f'type "{text[:60]}"')
+        elif kind == "key":
+            parts.append(f"press {op.get('key')}")
+        elif kind in ("click", "move", "scroll"):
+            parts.append(f"{kind} at {op.get('x')},{op.get('y')}")
+        else:
+            parts.append(kind)
+    more = len(actions) - len(parts)
+    return " → ".join(parts) + (f" (+{more} more)" if more > 0 else "")
+
+
+def _screen_control_allowed(settings: Dict[str, Any], permission_mode: Optional[str]) -> Tuple[bool, str]:
+    """Permission gate for driving the user's screen.
+
+    09-08 (operator: "i had it on manual, and it never asked for my
+    permission"): the two agent-mode branches return control actions before
+    ever reaching the permission gate further down this module, so manual mode
+    was never consulted for the one capability that actually touches the user's
+    machine. Same engine as every other action, so the mode semantics stay in
+    one place: manual asks, auto approves routine work, yolo never asks.
+    """
+    from .overlord_agent import permission_engine  # lazy: import-order parity
+
+    return permission_engine.evaluate_action_permission(
+        user_settings=settings,
+        action_type="browser_action",
+        session_mode_override=(permission_mode or None),
+    )
 
 
 def _charge_tokens(user, db, cost: float) -> None:  # pragma: no cover - thin wrapper
@@ -806,6 +900,9 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     intent = await _resolve_agent_intent(
         user, resolve_settings, resolve_text, is_admin, db=db,
         target_key=thread_key, node="extensions", viewport=viewport_dict,
+        # The keyword fallback aims its browser burst with this (09-08); without
+        # it the fallback used to click the middle of the page and hope.
+        screen_analysis=screen_context,
     )
 
     from .llm import strip_thinking_tokens
@@ -819,24 +916,26 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         reply_text = strip_thinking_tokens(intent.get("reply") or "Interacting with your browser…")
         vp = viewport_dict or {"width": 1280, "height": 800}
         control_actions = _harden_actions(payload_actions, vp)
+        drop_reason = ""
         if not control_actions:
             # payload failed hardening (invalid op / over-cap / empty) — the
             # reply may still carry a fenced ```control``` block; honor that,
             # otherwise NOTHING executes and the execution verdict says so
             # (a phantom "success" with 0 actions would be a fake completion).
-            reply_text, control_actions = extract_control_actions(reply_text, vp)
+            reply_text, control_actions, drop_reason = extract_control_actions_ex(reply_text, vp)
 
+        needs_ok, perm_reason = _screen_control_allowed(settings, payload.permission_mode)
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         return {
             "status": "success",
             "message": agent_reply,
-            "execution": {
-                "status": "success" if control_actions else "failed",
-                "actions_count": len(control_actions or []),
-            },
+            "execution": _execution_verdict(control_actions, drop_reason),
             "reply": reply_text,
             "control_actions": control_actions,
+            "control_requires_approval": bool(control_actions) and not needs_ok,
+            "control_permission_reason": perm_reason,
+            "control_summary": _describe_control_actions(control_actions),
             "token_balance": _tk_balance(user),
             "model": vision_model_id,
             "model_tier": vision_model_tier,
@@ -858,21 +957,32 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             # reply and harden it (allowlist + viewport clamp + caps; the WHOLE
             # list drops on any invalid op — never partial execution).
             vp = viewport_dict or {"width": 1280, "height": 800}
-            reply_text, control_actions = extract_control_actions(reply_text, vp)
+            reply_text, control_actions, drop_reason = extract_control_actions_ex(reply_text, vp)
             if not control_actions:
                 low_text = payload.text.lower()
                 if any(k in low_text for k in ("search", "searchbar", "search bar", "click", "type in", "type into", "touch my browser", "inside my tab", "in my tab")):
                     m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", payload.text, re.IGNORECASE)
                     q = m.group(1).strip(" '\"?,.") if m else payload.text
-                    control_actions = _harden_actions(
-                        _search_burst(q or payload.text, vp), vp
+                    # Aimed at an element the vision pass reported, never at a
+                    # guessed centre point (see _search_burst).
+                    burst = _search_burst(
+                        q or payload.text, vp,
+                        screen_analysis=screen_context, hint=payload.text,
                     )
+                    control_actions = _harden_actions(burst, vp) if burst else None
+                    if not control_actions:
+                        drop_reason = "no_target"
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         resp: Dict[str, Any] = {"status": "success", "message": agent_reply, "execution": None,
                                 "reply": reply_text, "token_balance": _tk_balance(user)}
         if payload.agent_mode:
+            needs_ok, perm_reason = _screen_control_allowed(settings, payload.permission_mode)
             resp["control_actions"] = control_actions
+            resp["execution"] = _execution_verdict(control_actions, drop_reason)
+            resp["control_requires_approval"] = bool(control_actions) and not needs_ok
+            resp["control_permission_reason"] = perm_reason
+            resp["control_summary"] = _describe_control_actions(control_actions)
             resp["model"] = vision_model_id
             resp["model_tier"] = vision_model_tier
             resp["effort_score"] = effort_score

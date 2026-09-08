@@ -69,7 +69,7 @@ def test_plain_answer_reply_never_leaks_think_monologue(client, monkeypatch, uni
 
     async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
                            node="my_agent", assignment_context=None,
-                           humanizer_ctx=None, viewport=None):
+                           humanizer_ctx=None, viewport=None, **kw):
         # the real caller's viewport default must be forwarded
         assert viewport == {"width": 1280, "height": 800}
         return {
@@ -105,7 +105,7 @@ def test_browser_action_payload_is_clamped_to_captured_viewport(client, monkeypa
 
     async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
                            node="my_agent", assignment_context=None,
-                           humanizer_ctx=None, viewport=None):
+                           humanizer_ctx=None, viewport=None, **kw):
         return {
             "action": "browser_action",
             "payload": {"actions": [
@@ -147,7 +147,7 @@ def test_browser_action_invalid_burst_drops_all_and_reports_failed(client, monke
 
     async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
                            node="my_agent", assignment_context=None,
-                           humanizer_ctx=None, viewport=None):
+                           humanizer_ctx=None, viewport=None, **kw):
         return {
             "action": "browser_action",
             "payload": {"actions": [

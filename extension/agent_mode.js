@@ -957,12 +957,17 @@ const OP_LABEL = {
 //             destructive clicks/submits/deletes, downloads, leaving the page
 //             set), act otherwise
 //   yolo    — never ask
-// Hard blocks apply in EVERY mode: credential/OTP/card fields (never type into
-// them) and downloads/file inputs (no arbitrary file downloads). The cap of 15
-// actions (MAX_ACTIONS) is re-enforced locally, and the whole burst is gated by
-// host permissions (the extension may only act where it has host permission).
-const RISKY_CORES = new Set(['credential-adjacent', 'destructive', 'submit', 'leaving']);
-const HARD_CORES = new Set(['credential', 'download']);
+// 09-08 (operator: "nth is hard blocked, allow yolo todo anything and
+// everything, its the users choice"). Credential/OTP/card fields and downloads
+// used to be refused in EVERY mode, YOLO included — the app overruling its own
+// owner on their own screen, in the one mode whose entire promise is that it
+// never asks. They are RISKY now, not forbidden: manual asks for them (manual
+// asks for everything), auto asks for them, YOLO runs them. The classifier is
+// still worth running because its label is what the approval card shows, so
+// "approve" stays an informed click.
+const RISKY_CORES = new Set([
+  'credential', 'credential-adjacent', 'download', 'destructive', 'submit', 'leaving',
+]);
 
 // Builds a single Runtime.evaluate expression returning a JSON string
 // {core, desc} — where core is one of:
@@ -1063,12 +1068,6 @@ function requestApproval(title, summary) {
 
 async function actionApproved(op, cls, idx, total) {
   const label = OP_LABEL[op.op] ? OP_LABEL[op.op](op) : JSON.stringify(op);
-  // HARD blockers first — they apply in EVERY mode and are never asked about.
-  if (HARD_CORES.has(cls.core)) {
-    pushLog('err', `HARD SAFETY BLOCK [${cls.core}] ${label} (${cls.desc}) — skipped without asking, this is always forbidden`);
-    setStatus(`⛔ Hard safety block: ${cls.core} (${label.slice(0, 40)}…) — the agent cannot do this, ever.`);
-    return false;
-  }
   const risky = RISKY_CORES.has(cls.core);
   if (state.agentMode === 'manual') {
     const summary = `Action ${idx + 1}/${total}: ${label}\nClassified: ${cls.core}${cls.desc ? ' (' + cls.desc + ')' : ''}\nManual mode — approve to run, Deny to skip (auto-denies in ~60s).`;
@@ -1167,7 +1166,6 @@ async function runActions(actions) {
       const cls = await classifyAction(op);
       pushLog('op', `${OP_LABEL[op.op] ? OP_LABEL[op.op](op) : JSON.stringify(op)} [${cls.core}${cls.desc ? ` ${cls.desc}` : ''}]`);
       if (!(await actionApproved(op, cls, i, list.length))) {
-        if (HARD_CORES.has(cls.core)) { completed++; continue; } // hard block = consumed slot, nothing ran
         continue; // denied — skip and keep going (per-action granularity)
       }
       asked++;
