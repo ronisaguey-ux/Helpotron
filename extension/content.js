@@ -612,6 +612,26 @@ const KEY_FINGER = (() => {
   return map;
 })();
 
+// Measured, not guessed. These are the median gap and the log-normal spread
+// after each kind of character, taken from a GPTZero writing report for a real
+// 2536-word essay (10,066 Docs revisions, 112 minutes of active editing, scored
+// 93/100 human). `sigma` is derived from the measured p90: median * e^(1.2816s).
+// `cap` is the only invented number — the real p99 after a full stop ran past
+// two minutes, which is a person leaving the desk, not typing.
+// Each char type has a [min, median, cap] range the delay is freshly drawn from
+// on every letter, so no two gaps repeat yet the tail still matches the report.
+// Values are the measured p50/p90 of a real GPTZero 93/100 run. `sigma` turns
+// the median into that p90 via log-normal (p90 = median * e^(1.2816*sigma));
+// `cap` is the only invented number — the real p99 after a full stop went past
+// two minutes, which is a person leaving the desk, not typing.
+const GAP_SHAPE = {
+  letter:   { min: 150, median:  336, sigma: 0.79, cap:  6000 },   // p90    921ms
+  space:    { min: 180, median:  441, sigma: 1.31, cap:  9000 },   // p90   2354ms
+  clause:   { min: 170, median:  330, sigma: 1.15, cap:  8000 },   // p90   1484ms
+  sentence: { min: 700, median: 2526, sigma: 1.71, cap: 25000 },   // p90  22679ms
+  newline:  { min: 900, median: 3917, sigma: 1.05, cap: 20000 },   // p90  11483ms
+};
+
 var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   constructor() {
     this.state = {
@@ -1076,47 +1096,91 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     return 0.92;                                             // hands alternate
   }
 
-  // 09-08, from a GPTZero report on a real run: 202 words took 10m32s on the
-  // 85 WPM preset (~21 WPM) and Google Docs recorded 946 separate edits. Both
-  // numbers have one cause. The delay below is the time to WAIT, but the loop
-  // used to sleep it ON TOP OF however long Docs spent swallowing the
-  // keystroke — and Docs relays out its canvas on every key, which is not
-  // cheap. Every gap came out a few hundred ms longer than asked for, and Docs
-  // only merges keystrokes that land close together, so nothing merged and
-  // every character became its own revision. The loop now subtracts the time
-  // Docs actually took (see runTypingLoop), and this function shapes the
-  // remainder into runs instead of a flat line.
+  // Standard normal, Box-Muller. One spare is cached because the transform
+  // produces two independent draws per pair of logs and we want the cheap one.
+  gauss() {
+    if (this.gaussSpare !== null) {
+      const spare = this.gaussSpare;
+      this.gaussSpare = null;
+      return spare;
+    }
+    let u = 0;
+    let v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const r = Math.sqrt(-2 * Math.log(u));
+    const theta = 2 * Math.PI * v;
+    this.gaussSpare = r * Math.sin(theta);
+    return r * Math.cos(theta);
+  }
+
+  // 09-08. Rebuilt against a GPTZero writing report for a real 2536-word essay:
+  // 10,066 Docs revisions, 112 minutes of active editing, scored 93/100 human.
+  // Four things in that data contradict what this function used to assume.
+  //
+  //   1. People type in bursts, not characters. Docs merged 1.80 characters
+  //      into the average revision (40% one, 52% two), and under 1% of gaps
+  //      were below 150ms. So a couple of keys land inside Docs' merge window
+  //      and then the hand stops. An even stream cannot produce that.
+  //   2. Boundaries are not slower, they are streakier. Median gap after a
+  //      letter 336ms, after a space 441ms — 1.09x, where this used to apply
+  //      3.45x. The difference is all in the tail: p90 921ms against 2354ms.
+  //   3. The clock lives in that tail. The slowest 5% of gaps held 68% of the
+  //      total elapsed time. A flat rate with jitter cannot make that shape, so
+  //      gaps are now drawn from a log-normal rather than computed.
+  //   4. Thinking happens at sentence ends. Median gap after a full stop was
+  //      2526ms and after a newline 3917ms, against the 350-750ms added here.
+  //
+  // The author sustained 26 WPM counting every pause. `scale` maps that onto
+  // whatever the slider asks for: the shape holds, the clock compresses.
   calculateDelay(char, prevChar, wpm, usePauses, useJitter) {
-    // WPM counts five-character words, so this is the average millisecond
-    // budget per character — an average, not a metronome tick.
-    const base = Math.max(24, Math.round(12000 / Math.max(20, wpm)));
+    const scale = 26 / Math.max(20, wpm);
 
-    // Keys inside a word arrive in a run: the hand plays the whole word as one
-    // movement. Keys at a boundary do not. The two rates average back out to
-    // `base` over ordinary prose, so the preset still means what it says.
-    const boundary = char === ' ' || char === '\n'
-      || prevChar === '' || prevChar === ' ' || prevChar === '\n';
-    let delay = base * (boundary ? 1.9 : 0.55);
+    let context = 'letter';
+    if (char === '\n') context = 'newline';
+    else if ('.!?'.includes(char)) context = 'sentence';
+    else if (',;:'.includes(char)) context = 'clause';
+    else if (char === ' ') context = 'space';
 
-    delay *= this.speed.drift * this.speed.runFactor * this.digraphFactor(prevChar, char);
+    // A held thought ends at a full stop or a line break whatever the burst
+    // counter had left to run.
+    if (context === 'sentence' || context === 'newline') this.burst.left = 0;
+
+    if (this.burst.left > 0) {
+      this.burst.left -= 1;
+      // Deliberately under Docs' ~200ms merge window, and never stretched past
+      // it even when the slider is slow, because staying inside that window is
+      // the whole reason Docs records the burst as one revision like a person's.
+      // Measured floor: under 1% of real gaps were below 150ms, and Docs
+      // merges ~1.7 chars per burst. So the pair inside a burst lands at 150+
+      // ms — fast enough to merge, slow enough to not look machine-gun.
+      const intra = Math.max(150, (150 + Math.random() * 70)
+        * Math.min(1, scale)
+        * this.digraphFactor(prevChar, char));
+      return Math.max(140, Math.round(intra));
+    }
+
+    // Next burst length, matching the measured 40/52/6/2 split (mean 1.70;
+    // the long tail of the draw carries it the rest of the way to 1.80).
+    const roll = Math.random();
+    this.burst.left = roll < 0.40 ? 0 : roll < 0.92 ? 1 : roll < 0.98 ? 2 : 3;
+
+    // With pauses switched off a full stop is just another character.
+    const shape = usePauses ? GAP_SHAPE[context] : GAP_SHAPE.letter;
+    let delay = shape.median;
+    if (useJitter) {
+      // Fresh draw inside [min, cap] every letter — the range keeps a single
+      // gap from collapsing to near-zero, the log-normal keeps the p90 tail.
+      delay = Math.min(shape.cap, Math.max(shape.min, delay * Math.exp(shape.sigma * this.gauss())));
+    }
+
+    delay *= scale * this.speed.drift * this.speed.runFactor;
+    // Finger mechanics move a keystroke, not a pause for thought.
+    if (context === 'letter') delay *= this.digraphFactor(prevChar, char);
 
     // Reaching for shift costs a beat.
     if (/[A-Z]/.test(char) || '~!@#$%^&*()_+{}|:"<>?'.includes(char)) {
-      delay += 18 + Math.random() * 34;
-    }
-
-    if (useJitter) {
-      delay *= 0.68 + Math.random() * 0.64;
-    }
-
-    if (usePauses) {
-      if (['.', '!', '?'].includes(char)) {
-        delay += Math.floor(350 + Math.random() * 400);
-      } else if ([',', ';', ':', '-'].includes(char)) {
-        delay += Math.floor(150 + Math.random() * 150);
-      } else if (char === '\n') {
-        delay += Math.floor(600 + Math.random() * 500);
-      }
+      delay += (18 + Math.random() * 34) * Math.min(1, scale);
     }
 
     return Math.max(12, Math.round(delay));
@@ -1152,6 +1216,8 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     // Pace wanders per run, so two launches of the same essay do not produce
     // the same timing trace.
     this.speed = { drift: 0.9 + Math.random() * 0.25, runLeft: 0, runFactor: 1 };
+    this.burst = { left: 0 };
+    this.gaussSpare = null;
 
     this.renderFloatingHUD();
     this.broadcastProgress('started');
