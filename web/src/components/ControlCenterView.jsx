@@ -139,13 +139,15 @@ export default function ControlCenterView({ userId = "" }) {
     }
   };
 
+  // A token balance is a wallet: admins top it up, usage draws it down, and
+  // there is no ceiling anywhere in the API to divide by. The old code invented
+  // one per plan (100k for an unplanned user) and compared against a tenth of
+  // it, which flagged every account on the platform. Low means low.
+  const LOW_TOKEN_BALANCE = 100;
+
   // Derived Needs Attention metrics
   const nearCapUsers = useMemo(() => {
-    return users.filter((u) => {
-      const bal = u.tokens ?? u.token_balance ?? 0;
-      const maxPool = u.plan === "elite" ? 5000000 : u.plan === "pro" ? 2000000 : u.plan === "basic" ? 500000 : 100000;
-      return bal < maxPool * 0.1; // less than 10% remaining
-    });
+    return users.filter((u) => Number(u.tokens ?? u.token_balance ?? 0) < LOW_TOKEN_BALANCE);
   }, [users]);
 
   const bannedUsers = useMemo(() => {
@@ -294,7 +296,7 @@ export default function ControlCenterView({ userId = "" }) {
                 }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-sem-amber" />
-                Near Token Cap ({nearCapUsers.length})
+                Low Balance ({nearCapUsers.length})
               </button>
               <button
                 type="button"
@@ -328,10 +330,10 @@ export default function ControlCenterView({ userId = "" }) {
             <div className="p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/20 bg-surface-container-lowest/40">
               <div>
                 <h3 className="font-title-md text-sm font-semibold text-on-surface">
-                  Active User Directory &amp; Consumption Quotas
+                  Active User Directory
                 </h3>
                 <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                  Identity tracking, real-time token pool consumption, and credential orchestration.
+                  Every account, its plan, its remaining tokens, and what it did last.
                 </p>
               </div>
 
@@ -366,7 +368,7 @@ export default function ControlCenterView({ userId = "" }) {
                       <tr className="bg-surface-container-low/60 text-on-surface-variant font-label-caps text-[10px] uppercase tracking-wider border-b border-outline-variant/20">
                         <th className="py-3 px-6">User / Identifier</th>
                         <th className="py-3 px-4">Plan Tier</th>
-                        <th className="py-3 px-4">Token Pool Utilization</th>
+                        <th className="py-3 px-4">Tokens Remaining</th>
                         <th className="py-3 px-4">Last Activity</th>
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-6 text-right">Actions</th>
@@ -376,25 +378,29 @@ export default function ControlCenterView({ userId = "" }) {
                       {filteredUsers.map((u) => {
                         const targetId = u.public_id || u.id;
                         const plan = (u.plan || "trial").toLowerCase();
-                        const maxPool = plan === "elite" ? 5000000 : plan === "pro" ? 2000000 : plan === "basic" ? 500000 : 100000;
                         const tokens = Number(u.tokens ?? u.token_balance ?? 0);
-                        const pctUsed = Math.min(100, Math.max(0, Math.round(((maxPool - tokens) / maxPool) * 100)));
                         const isBanned = u.is_banned || !!u.temp_ban_until;
+                        // /admin/users returns no alias, so the username IS the
+                        // public id — showing both put a placeholder in the big
+                        // slot and the real name in the small one.
+                        const name = u.alias || targetId;
 
                         return (
                           <tr key={targetId} className="hover:bg-surface-container-low/40 transition">
                             <td className="py-4 px-6">
                               <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center font-semibold text-primary text-xs">
-                                  {(u.alias || targetId).slice(0, 2).toUpperCase()}
+                                  {name.slice(0, 2).toUpperCase()}
                                 </div>
-                                <div>
-                                  <span className="font-title-md text-xs font-semibold text-on-surface block">
-                                    {u.alias || "Anonymous Student"}
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-title-md text-sm font-semibold text-on-surface truncate">
+                                    {name}
                                   </span>
-                                  <span className="font-code-sm text-[11px] text-outline mt-0.5 block">
-                                    {targetId} {u.is_admin ? "(Admin)" : ""}
-                                  </span>
+                                  {u.is_admin && (
+                                    <span className="font-chip-status text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
+                                      admin
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -415,20 +421,20 @@ export default function ControlCenterView({ userId = "" }) {
                               </span>
                             </td>
 
-                            <td className="py-4 px-4 w-64">
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-[11px]">
-                                  <span className="text-on-surface">{tokens.toLocaleString()} rem</span>
-                                  <span className={pctUsed > 85 ? "text-sem-amber" : "text-outline"}>{pctUsed}% used</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-300 ${
-                                      pctUsed > 85 ? "bg-sem-amber" : "bg-primary"
-                                    }`}
-                                    style={{ width: `${pctUsed}%` }}
-                                  />
-                                </div>
+                            <td className="py-4 px-4 w-48">
+                              <div className="flex items-baseline gap-1.5">
+                                <span
+                                  className={`font-code-sm text-sm tabular-nums ${
+                                    tokens <= 0
+                                      ? "text-error"
+                                      : tokens < LOW_TOKEN_BALANCE
+                                      ? "text-sem-amber"
+                                      : "text-on-surface"
+                                  }`}
+                                >
+                                  {tokens.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-wider text-outline">left</span>
                               </div>
                             </td>
 
@@ -489,7 +495,7 @@ export default function ControlCenterView({ userId = "" }) {
                             </span>
                           </div>
                           <div className="font-code-sm text-[11px] text-outline mt-1 truncate">
-                            ID: {targetId} · {(u.tokens ?? u.token_balance ?? 0).toLocaleString()} tok
+                            {Number(u.tokens ?? u.token_balance ?? 0).toLocaleString()} tokens left
                           </div>
                         </div>
 
