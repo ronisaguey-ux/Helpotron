@@ -33,6 +33,10 @@
       <circle cx="12" cy="8" r="4"/>
       <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
     </symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>
+      <path d="M18 15l.9 2.2L21 18l-2.1.8L18 21l-.9-2.2L15 18l2.1-.8z"/>
+    </symbol>
     <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/>
       <path d="m8 12.5 2.5 2.5L16 9.5"/>
@@ -554,6 +558,10 @@
             <span class="field-word-count" id="ltdWordCount">0 words</span>
           </div>
           <textarea class="input text-area-preview" id="ltdTextInput" rows="2" placeholder="Assignment content will appear here, or paste custom text to type…"></textarea>
+          <button class="btn btn--secondary btn--sm" id="btnHumanizeLtd" type="button" title="Send this text through the Helpotron humanizer first">
+            <svg class="ic ic--sm"><use href="#i-spark" /></svg>
+            <span>Humanize text</span>
+          </button>
         </div>
 
         <!-- Target tab selector -->
