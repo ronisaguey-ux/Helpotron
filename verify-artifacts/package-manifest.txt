@@ -1,7 +1,7 @@
-helpotron extension package manifest  (2026-09-08 03:36:02)
-previous-zip-sha256: e21ece854b96bb4f6541fa3baef9096add8ec2cce754ebe1b6071ab0312da97f  (built 2026-09-08 03:31:51)
+helpotron extension package manifest  (2026-09-08 05:59:39)
+previous-zip-sha256: f541d1551eae9c257eb26fdb92a07063fd96aaeafdf39f7678623cb39935532e  (built 2026-09-08 03:36:02)
 zip: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0.zip
-zip-sha256: f541d1551eae9c257eb26fdb92a07063fd96aaeafdf39f7678623cb39935532e
+zip-sha256: 55bee40c22ad810464bdfd4e604f0ce8cea561bdce71bdc40cfa007c1d2e4b11
 listing-sha256 (sorted file list): 687e39adbfc1069c788a901c9d92191277bd391335728d9a0f7aa071ebbcf5b0
 file-count: 30
 test-dir: /home/roni/Roni_workspace/helpotron/helpotron-extension-v2.7.0-test
