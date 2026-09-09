@@ -3019,7 +3019,7 @@ async function loadAssignmentsForLaunch() {
       ltdAssignmentSelect.appendChild(opt);
     });
   } catch (e) {
-    ltdAssignmentSelect.innerHTML = `<option value="">Could not load (${String(e).slice(0, 30)})</option>`;
+    ltdAssignmentSelect.textContent = `Could not load (${String(e).slice(0, 30)})`;
   }
 }
 
