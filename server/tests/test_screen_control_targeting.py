@@ -108,7 +108,7 @@ def test_actions_that_ran_report_success_with_their_count():
 
 
 @pytest.mark.parametrize("reason", [
-    "no_block", "malformed_json", "wrong_shape", "over_cap",
+    "malformed_json", "wrong_shape", "over_cap",
     "invalid_op", "empty", "no_target",
 ])
 def test_every_drop_reason_produces_a_failure_the_user_can_read(reason):
@@ -117,6 +117,19 @@ def test_every_drop_reason_produces_a_failure_the_user_can_read(reason):
     assert verdict["actions_count"] == 0
     assert verdict["reason"] == reason
     assert verdict["detail"] and verdict["detail"][0].isupper()
+
+
+def test_no_block_is_silence_not_a_failure():
+    """09-10: a reply carrying no control fence at all is a plain answer, not a
+    dropped action. Reporting it "failed" drew a warning bubble under every
+    conversational turn in Study Mode, so it must report "none" — and carry no
+    detail text for the client to render."""
+    for reason in ("", None, "no_block"):
+        verdict = _execution_verdict(None, reason)
+        assert verdict["status"] == "none"
+        assert verdict["actions_count"] == 0
+        assert verdict["reason"] == "no_block"
+        assert "detail" not in verdict
 
 
 def test_an_unknown_reason_still_says_that_nothing_ran():

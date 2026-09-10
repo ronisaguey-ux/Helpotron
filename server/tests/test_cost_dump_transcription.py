@@ -20,10 +20,10 @@ def db_session():
 
 
 def test_cost_engine_calculation():
-    # deepseek-v4-flash: $0.0001 per 1K input tokens, $0.0002 per 1K output
-    cost = CostEngine().log_cost("u1", "/api/x", "deepseek-v4-flash", 1000, 500)
+    # deepseek-v4.1-flash: $0.00015 per 1K input tokens, $0.0006 per 1K output
+    cost = CostEngine().log_cost("u1", "/api/x", "deepseek-v4.1-flash", 1000, 500)
     assert isinstance(cost, float)
-    assert abs(cost - (0.0001 + 0.0002 * 0.5)) < 1e-9
+    assert abs(cost - (0.00015 + 0.0006 * 0.5)) < 1e-9
 
     # Unknown models fall back to default rates ($0.001 input, $0.002 output)
     fallback = CostEngine().log_cost("u1", "/api/x", "unknown-model", 1000, 1000)
@@ -37,9 +37,9 @@ def test_user_token_multiplier_and_logging(db_session):
 
     # Engine singleton and module-level helper produce identical math
     direct = cost_engine.log_cost(
-        "TesterRoni", "/api/transcribe", "deepseek-v4-flash", 5000, 1000)
+        "TesterRoni", "/api/transcribe", "deepseek-v4.1-flash", 5000, 1000)
     helper = log_api_cost(
-        "TesterRoni", "/api/transcribe", "deepseek-v4-flash", 5000, 1000)
+        "TesterRoni", "/api/transcribe", "deepseek-v4.1-flash", 5000, 1000)
     assert abs(direct - helper) < 1e-9
     assert helper > 0
 
@@ -117,7 +117,7 @@ def test_presentation_pure_gemini_split():
     res = ModelTieringEngine.resolve_presentation_gemini_models(flash_lite_percent=70)
     assert res["engine_mode"] == "pure_gemini"
     assert "nemotron-3-super" in res["bypassed_subagents"]
-    assert "deepseek-v4-flash" in res["bypassed_subagents"]
+    assert "deepseek-v4.1-flash" in res["bypassed_subagents"]
     assert res["active_models"]["gemini-3.1-flash-lite"]["percentage"] == 70
     assert res["active_models"]["gemini-3.8-flash"]["percentage"] == 30
 

@@ -34,7 +34,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Default model (= middle tier) and the effort-score semantic (09-02).
-VISION_MODEL: str = "deepseek/deepseek-v4-flash-vision"
+VISION_MODEL: str = "deepseek/deepseek-v4.1-flash"
 DEFAULT_EFFORT_SCORE: int = 500
 _MIN_EFFORT_SCORE: int = 1
 _MAX_EFFORT_SCORE: int = 1000
@@ -44,39 +44,32 @@ _MAX_EFFORT_SCORE: int = 1000
 # user's effort level is honored consistently by BOTH the text agent and the
 # screen-vision lane.
 #
-# Owner-pinned set (09-08): low -> gemini 3.1-flash-lite, med -> deepseek v4
-# flash vision, high -> gemini 3.8-flash. Nothing else: no 3.5-flash, no
-# pro-preview, and v4-pro-vision was dropped (see _VISION_FALLBACK).
+# Owner-pinned set (09-08; deepseek id moved to V4.1 Flash 09-10): low ->
+# gemini 3.1-flash-lite, med -> deepseek v4.1 flash, high -> gemini 3.8-flash.
+# Nothing else: no 3.5-flash, no pro-preview, and v4-pro-vision was dropped
+# (see _VISION_FALLBACK).
 VISION_MODEL_TIERS: Dict[str, str] = {
     "google/gemini-3.1-flash-lite": "$0.075 / $0.30",       # cheapest — low
-    "deepseek/deepseek-v4-flash-vision": "$0.14 / $0.28",   # med (default)
+    "deepseek/deepseek-v4.1-flash": "$0.15 / $0.60",        # med (default)
     "google/gemini-3.8-flash": "$0.25 / $1.00",             # most expensive — high
 }
 
-# OpenRouter catalog mapping that llm.call_llm applies (09-01, Bob) for the
-# canonical -> wire slug rewrite: deepseek vision ships as an "-exp" slug. The
-# two gemini ids pass through untouched.
-_OR_SLUG_MAP: Dict[str, str] = {
-    "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
-    "google/gemini-3.1-flash-lite": "google/gemini-3.1-flash-lite",
-    "google/gemini-3.8-flash": "google/gemini-3.8-flash",
-}
+# 09-10: V4.1 Flash is natively vision on OpenRouter, so the canonical id IS the
+# wire id. The old canonical -> "-exp" rewrite is retired. The map is kept as the
+# single place a future tier would go if a rewrite is ever needed again.
+_OR_SLUG_MAP: Dict[str, str] = {}
 
 # 09-08 (operator: "some of the vision tiers dont work"). Measured live against
-# the OpenRouter catalog + a real tab screenshot:
-#   deepseek-v4-flash-vision-exp -> listed, image price null; it ACCEPTS the
-#     request and returns EMPTY content for an image payload.
-#   deepseek-v4-pro              -> not in the image-capable list; HTTP 404.
-# So two of the four tiers answered nothing, and because the default effort is
-# 500 (the flash-vision tier) screen vision was dead for anyone not on low
-# effort — silently, as "Vision analysis unavailable this turn". v4-pro-vision
-# is now dropped from the ladder outright (owner call). v4-flash-vision stays
-# as the med tier, but instead of dying it falls back to 3.8-flash: the user
-# asked for more than low effort, so degrading UP to the working high tier
-# keeps the ladder monotonic. If deepseek ever starts serving images the med
-# tier just starts being used again. The fallback is logged, never silent.
+# the OpenRouter catalog + a real tab screenshot: the old deepseek vision slug
+# was LISTED as image-capable but ACCEPTED the request and returned EMPTY content
+# for an image payload; deepseek-v4-pro was not image-capable at all (HTTP 404).
+# That is why a fallback exists, and it is retained for V4.1 Flash until the model
+# is re-measured end-to-end: a catalog "text,image" modality claim is NOT proof
+# that an image payload comes back non-empty — it lied once already. If V4.1 Flash
+# returns empty content the med tier degrades UP to 3.8-flash, so the ladder stays
+# monotonic. The fallback is logged, never silent.
 _VISION_FALLBACK: Dict[str, str] = {
-    "deepseek/deepseek-v4-flash-vision": "google/gemini-3.8-flash",
+    "deepseek/deepseek-v4.1-flash": "google/gemini-3.8-flash",
 }
 
 MAX_DECODED_BYTES: int = 8 * 1024 * 1024  # ~8MB decoded cap (parent spec)
@@ -102,9 +95,12 @@ _INTERACTIVE_SECTION_RULE: str = (
     "ALWAYS end your answer with a section headed exactly 'INTERACTIVE ELEMENTS:' "
     "listing every clickable or typable element, one per line, in the form "
     "'<name> (<role>) at x=<int>, y=<int>' using CSS pixel coordinates of the "
-    "element's CENTRE inside the given viewport. Estimate when unsure; never "
-    "omit the section, and never write a coordinate you did not derive from "
-    "the image."
+    "element's CENTRE inside the given viewport. The coordinate must be the true "
+    "centre of the element's visible box — before writing it, re-check it against "
+    "where the element actually sits in the image, because a click lands exactly "
+    "there. List the element the user is most likely to want FIRST. Estimate only "
+    "when genuinely unsure; never omit the section, and never write a coordinate "
+    "you did not derive from the image."
 )
 
 # Accepted image signatures when Pillow is unavailable (the fallback path;
@@ -224,7 +220,7 @@ def resolve_vision_model(effort_score: Any = None) -> Tuple[str, str, int]:
     across 1..1000, cheapest -> most expensive (see VISION_MODEL_TIERS):
 
         <=333     -> gemini-3.1-flash-lite      (low)
-        334..666  -> deepseek-v4-flash-vision   (med) [default 500]
+        334..666  -> deepseek-v4.1-flash        (med) [default 500]
         >666      -> gemini-3.8-flash           (high)
     """
     score = parse_effort_score(effort_score)

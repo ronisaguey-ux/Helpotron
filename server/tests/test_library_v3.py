@@ -33,7 +33,7 @@ def test_library_materials_crud_and_save():
             user_id=u.id,
             kind="flashcards",
             content=json.dumps([{"front": "Q1", "back": "A1"}]),
-            model_used="deepseek-v4-flash",
+            model_used="deepseek-v4.1-flash",
         )
         db.add(m)
         db.commit()

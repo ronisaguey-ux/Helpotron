@@ -1,0 +1,22 @@
+{
+  "label": "keepopen-verify",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "features": [
+    {
+      "check": "keepopen.spare-tab",
+      "status": "PASS",
+      "detail": "spare tab #45670779 in window 45670776"
+    },
+    {
+      "check": "keepopen.persistent-surface",
+      "status": "PASS",
+      "detail": "side panel: chrome-extension://kgdjkehhfmbodpkifaincamgmfpofjog/popup.html?mode=panel"
+    },
+    {
+      "check": "keepopen.second-window",
+      "status": "NOTE",
+      "detail": "side panel taken (preferred); windows.create fallback not exercised"
+    }
+  ],
+  "surface_failures": []
+}

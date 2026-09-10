@@ -31,7 +31,7 @@ Server (`server/screen_vision.py`, unit-tested in
 ```
 effort score 1..1000  (default 500, clamped at both ends)
   ≤ 333   → google/gemini-3.1-flash-lite      ($0.075/M in)  tier "low"
-  334-666 → deepseek/deepseek-v4-flash-vision ($0.14/M)       tier "med"  [default]
+  334-666 → deepseek/deepseek-v4.1-flash      ($0.15/M in)   tier "med"  [default]
   > 666   → google/gemini-3.8-flash           ($0.25/M)       tier "high"
 ```
 
@@ -43,23 +43,22 @@ effort score 1..1000  (default 500, clamped at both ends)
   int, clamp to 1..1000. Out-of-range never errors.
 - `analyze_screen_image(..., model_id)` keeps its signature; a caller-supplied
   `model_id` that is NOT one of the three canonical vision ids is ignored and
-  the default (`deepseek/deepseek-v4-flash-vision`) is used.
-- OpenRouter slug: `deepseek/deepseek-v4-flash-vision` → the `-exp` slug; both
-  gemini ids pass through untouched. Mirrored in `_OR_SLUG_MAP` inside
-  `screen_vision.py` to track `llm.call_llm`'s 09-01 map (test asserts both).
+  the default (`deepseek/deepseek-v4.1-flash`) is used.
+- OpenRouter slug: all three ids are canonical and go out untouched. V4.1 Flash
+  is natively vision on OpenRouter (verified live 09-10), so `_OR_SLUG_MAP`
+  inside `screen_vision.py` is now **empty** and `llm.call_llm` applies
+  `.get(cid, cid)` — the retired `-exp` rewrite is gone (test asserts identity).
 
-**Dead-tier fallback (09-08).** Measured live against the OpenRouter catalog
-and a real tab screenshot: `deepseek-v4-flash-vision-exp` is listed but its
-image price is `null` — it returns HTTP 200 with **empty content** for an image
-payload, and `deepseek-v4-pro` is not image-capable at all (HTTP 404). Because
-the default effort of 500 landed on the flash-vision tier, screen vision was
-silently dead ("Vision analysis unavailable this turn") for every user not on
-low effort. `deepseek-v4-pro-vision` is now off the ladder entirely. The med
-tier keeps `deepseek-v4-flash-vision`, but a non-200 or empty response now
-retries once on `_VISION_FALLBACK` → `google/gemini-3.8-flash` (degrading *up*,
-so the ladder stays monotonic) and logs a warning. Transport errors still raise
-so callers fail closed as before. Banned from the ladder outright:
-`gemini-3.5-flash`, `gemini-3.1-pro-preview`, `deepseek-v4-pro*`.
+**Dead-tier fallback (09-10).** `deepseek-v4.1-flash` is natively vision on
+OpenRouter — a real image payload returns content (verified live 09-10: HTTP
+200, non-empty content). Its predecessor was *listed* as image-capable but
+returned HTTP 200 with **empty content**, which is why it is gone.
+`_VISION_FALLBACK` is kept as a safety net anyway, because a catalog listing is
+not proof: a non-200 or empty response on the med tier retries once on
+`google/gemini-3.8-flash` (degrading *up*, so the ladder stays monotonic) and
+logs a warning. Transport errors still raise so callers fail closed as before.
+Banned from the ladder outright: `gemini-3.5-flash`, `gemini-3.1-pro-preview`,
+`deepseek-v4-pro*`.
 
 - The popup/agent UI mirrors the same three bands client-side
   (`effortModelInfo` in `popup.js`) so the visible model line always agrees

@@ -1,7 +1,7 @@
 """API cost tracking — per-call ledger + admin analytics.
 
-Model policy (2026-08-21): rate keys use ONLY allowlisted models
-(deepseek-v4-flash/pro, gemini-3.1-flash-lite/3.8-flash). Legacy keys
+Model policy (09-10): rate keys use ONLY allowlisted models
+(deepseek-v4.1-flash, gemini-3.1-flash-lite/3.8-flash). Legacy keys
 that are never routed to were dropped — banned model names must not
 appear anywhere in code that a policy scanner would flag.
 """
@@ -17,8 +17,7 @@ except (ImportError, ValueError):
 
 # Per-1K-token rates (USD) for policy-allowlisted models only.
 MODEL_RATES = {
-    'deepseek-v4-flash': {'input': 0.0001, 'output': 0.0002},
-    'deepseek-v4-pro': {'input': 0.0014, 'output': 0.0028},
+    'deepseek-v4.1-flash': {'input': 0.00015, 'output': 0.0006},
     'gemini-3.1-flash-lite': {'input': 0.0005, 'output': 0.0015},
     'gemini-3.8-flash': {'input': 0.001, 'output': 0.004},
     'mistral-nemo': {'input': 0.00015, 'output': 0.00015},
@@ -218,8 +217,7 @@ def get_user_cost_intelligence(db: Any = None, user_id: Any = None, mock_mode: b
     assignments = db.query(Assignment).filter(Assignment.user_id == u_id).count() if u_id > 0 else 0
 
     tier_names = {
-        'deepseek-v4-flash': 'Low', 'qwen-cheap': 'Low', 'mistral-nemo': 'Low',
-        'deepseek-v4-pro': 'High',
+        'deepseek-v4.1-flash': 'Balanced', 'qwen-cheap': 'Low', 'mistral-nemo': 'Low',
     }
     tier_totals: Dict[str, float] = {}
     subject_totals: Dict[str, float] = {}
@@ -252,8 +250,8 @@ def get_cost_intelligence_summary(db: Optional[Session] = None) -> Dict[str, Any
         "grunt_savings_usd": 14.85,
         "escalation_events_count": 0,
         "escalations_count": 0,
-        "active_grunt_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4-flash"],
-        "active_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4-flash"],
+        "active_grunt_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4.1-flash"],
+        "active_models": ["qwen-cheap", "mistral-nemo", "deepseek-v4.1-flash"],
         "target_gross_margin_percent": 82.5,
     }
 

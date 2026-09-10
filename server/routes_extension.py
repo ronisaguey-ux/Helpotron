@@ -545,7 +545,21 @@ AGENT_MODE_DIRECTIVE = (
     # you to fill is the app second-guessing its own owner on their own screen.
     "say in the reply text what you are about to do before anything destructive "
     "or anything involving credentials, so the user can stop you; "
-    "only act on what the screen state shows."
+    "only act on what the screen state shows. "
+    # 09-10 (operator): the agent kept re-clicking the same miss. Accuracy is a
+    # contract, not a hope — aim from the freshest element list, and never
+    # repeat an identical click when the screen did not change.
+    "ACCURACY RULES: click the EXACT centre coordinate the freshest INTERACTIVE "
+    "ELEMENTS list gives for the target (name (role) at x=, y=) — never re-estimate "
+    "a coordinate the list already gives you; if the target is absent from the list, "
+    "use the nearest labelled element, never a blind guess. To type into a field, "
+    "click that field's centre FIRST to focus it, THEN type. After every action the "
+    "next [Screen state at] line shows the result — READ it before deciding the next "
+    "action. If the screen did not change, the click missed or the element moved: do "
+    "NOT emit the same click x/y twice in a row — take fresh coordinates from the new "
+    "screen state, try keyboard navigation (Tab/Enter), or scroll the target into view "
+    "first. Never repeat an identical action more than twice: if two attempts at the "
+    "same target fail, STOP and say what you see so the user can help."
 )
 
 
@@ -712,14 +726,24 @@ def _execution_verdict(actions: Optional[List[Dict[str, Any]]], reason: str) -> 
     The client renders this. Before 09-08 a dropped action list produced
     execution=None and the client silently skipped, leaving the agent's own
     prose ("I am typing that for you now") as the only thing the user saw.
+
+    09-10: `no_block` means the reply carried NO control fence at all — a
+    plain answer to a plain question ("describe my screen"). It used to come
+    back status="failed", so every conversational turn in Study Mode drew a
+    "⚠️ I didn't produce a usable action" bubble under a reply that was never
+    asked to act. Only a fence that WAS present and then got dropped is a
+    failure; no_block is reported as "none" and the client stays silent.
     """
     if actions:
         return {"status": "success", "actions_count": len(actions)}
+    resolved = reason or "no_block"
+    if resolved == "no_block":
+        return {"status": "none", "actions_count": 0, "reason": resolved}
     return {
         "status": "failed",
         "actions_count": 0,
-        "reason": reason or "no_block",
-        "detail": _DROP_REASON_TEXT.get(reason or "no_block", _DROP_REASON_TEXT["no_block"]),
+        "reason": resolved,
+        "detail": _DROP_REASON_TEXT.get(resolved, _DROP_REASON_TEXT["no_block"]),
     }
 
 
@@ -1021,6 +1045,22 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             # otherwise NOTHING executes and the execution verdict says so
             # (a phantom "success" with 0 actions would be a fake completion).
             reply_text, control_actions, drop_reason = extract_control_actions_ex(reply_text, vp)
+            if not control_actions and payload_actions and drop_reason in ("", "no_block"):
+                # A direct payload WAS present and hardening dropped all of it,
+                # with no fence to replace it. `extract_control_actions_ex`
+                # reports that as "no_block" (its word for "found no fence"),
+                # which _execution_verdict reads as "nothing was ever asked of
+                # me" -> status "none" -> silence under a reply that just
+                # promised to act. That is the phantom-success this verdict
+                # exists to prevent, so name the real drop: over-cap vs a step
+                # that is not allowed.
+                from .screen_vision import _MAX_CONTROL_ACTIONS
+
+                drop_reason = (
+                    "over_cap"
+                    if len(payload_actions) > _MAX_CONTROL_ACTIONS
+                    else "invalid_op"
+                )
 
         needs_ok, perm_reason = _screen_control_allowed(settings, payload.permission_mode)
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)

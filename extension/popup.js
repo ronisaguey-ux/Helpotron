@@ -18,6 +18,7 @@ const LAST_SCRAPE_KEY = 'helpotron_last_scrapes';
 // ── 09-02 CHAT option state (persisted, backend-synced) ───────────────────────
 const SEE_SCREEN_KEY = 'helpotron_chat_seescreen';
 const EXECUTE_KEY = 'helpotron_chat_execute';
+const CHAT_CONTROLS_COLLAPSED_KEY = 'helpotron_chat_controls_collapsed';
 const MODE_KEY = 'helpotron_agent_mode';
 const EFFORT_KEY = 'helpotron_agent_effort';
 const MODEL_KEY = 'helpotron_agent_model';
@@ -66,6 +67,9 @@ const chatQuickPause = document.getElementById('chatQuickPause');
 const chatEffortSlider = document.getElementById('chatEffortSlider');
 const chatEffortVal = document.getElementById('chatEffortVal');
 const chatModelBadge = document.getElementById('chatModelBadge');
+const chatControlsBar = document.getElementById('chatControlsBar');
+const chatControlsToggle = document.getElementById('chatControlsToggle');
+const chatControlsSummary = document.getElementById('chatControlsSummary');
 const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
 const modeHintEl = document.getElementById('modeHint');
 const modelEffortEl = document.getElementById('modelEffort');
@@ -269,7 +273,7 @@ function clampEffortScore(value) {
 function effortModelInfo(score) {
   const s = clampEffortScore(score);
   if (s <= 333) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-  if (s <= 666) return { tier: 'med', label: 'DeepSeek V4 Flash Vision', model: 'deepseek/deepseek-v4-flash-vision' };
+  if (s <= 666) return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
   return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
 }
 
@@ -360,11 +364,18 @@ function syncInChatControls(st) {
   if (chatToggleExecute) {
     chatToggleExecute.classList.toggle('active', exe);
     const lbl = chatToggleExecute.querySelector('.chip-title');
-    if (lbl) lbl.textContent = exe ? 'Execute: ON' : 'Execute: OFF';
+    if (lbl) lbl.textContent = exe ? 'Study Mode: ON' : 'Study Mode: OFF';
   }
   if (chatEffortSlider) chatEffortSlider.value = score;
   if (chatEffortVal) chatEffortVal.textContent = score;
   if (chatModelBadge) chatModelBadge.textContent = info.label;
+  // One-line digest shown on the collapsed config header, so a folded panel
+  // still says what the agent is currently allowed to do.
+  if (chatControlsSummary) {
+    const mode = st[MODE_KEY] || MODE_DEFAULT;
+    const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+    chatControlsSummary.textContent = `${modeLabel} · screen ${see ? 'on' : 'off'} · study mode ${exe ? 'on' : 'off'}`;
+  }
   // Needs a live tab count for the "all (N)" label, so it repaints itself
   // rather than reading from the snapshot this function was handed.
   refreshJurisdictionChip().catch(() => {});
@@ -523,9 +534,9 @@ async function handleToggleChange(id, val) {
   await persistAgentState({ [key]: val });
   setStatus(val
     ? (id === 'toggleSeeScreen' ? '👁 See screen: ON — the agent receives the screen with each chat message.'
-                                 : '✅ Execute: ON — the agent may act with permission mode.')
+                                 : '✅ Study Mode: ON — the agent may act with permission mode.')
     : (id === 'toggleSeeScreen' ? 'See screen: OFF — chat messages carry no screen.'
-                                 : 'Execute: OFF — the agent will only talk, never act.'));
+                                 : 'Study Mode: OFF — the agent will only talk, never act.'));
 }
 
 Object.keys(modelToggles).forEach((id) => {
@@ -560,6 +571,27 @@ if (chatToggleExecute) {
     const cur = st[EXECUTE_KEY] === undefined ? EXECUTE_DEFAULT : !!st[EXECUTE_KEY];
     await handleToggleChange('toggleExecute', !cur);
     syncInChatControls(await readAgentState());
+  });
+}
+
+// ── Collapsible study-settings block (above the chat session) ───────────────
+// Folded state is remembered across popup opens so a user who prefers a bare
+// chat keeps it that way. The collapsed header still shows the one-line digest
+// (permission mode · screen · study mode) rendered by syncInChatControls.
+async function applyChatControlsCollapsed(collapsed) {
+  if (!chatControlsBar || !chatControlsToggle) return;
+  chatControlsBar.classList.toggle('collapsed', !!collapsed);
+  chatControlsToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+if (chatControlsToggle) {
+  chrome.storage.local.get([CHAT_CONTROLS_COLLAPSED_KEY])
+    .then((st) => applyChatControlsCollapsed(st[CHAT_CONTROLS_COLLAPSED_KEY] === true))
+    .catch(() => {});
+  chatControlsToggle.addEventListener('click', async () => {
+    const st = await chrome.storage.local.get([CHAT_CONTROLS_COLLAPSED_KEY]);
+    const next = st[CHAT_CONTROLS_COLLAPSED_KEY] !== true;
+    await applyChatControlsCollapsed(next);
+    chrome.storage.local.set({ [CHAT_CONTROLS_COLLAPSED_KEY]: next }).catch(() => {});
   });
 }
 
@@ -772,6 +804,7 @@ function renderNextApproval() {
   const item = pendingApprovals[0];
   if (!item) {
     card.style.display = 'none';
+    syncApprovalDock();
     return;
   }
   titleEl.innerText = item.title;
@@ -789,16 +822,25 @@ function renderNextApproval() {
     helper.classList.remove('a-helper--warn');
     helper.textContent = APPROVAL_HELPER_DEFAULT;
   }
-  // Approval cards can render inside the (now collapsed) Agent Controls
-  // accordion: expand the section so the card + chevron stay consistent.
-  const chatOptions = document.getElementById('chat-options');
-  const optionChat = document.getElementById('option-chat');
-  if (chatOptions && chatOptions.hidden) {
-    chatOptions.hidden = false;
-    optionChat?.setAttribute('aria-expanded', 'true');
-  }
+  // The card is a fixed dock (see .approval-dock), so it is reachable from
+  // every view. It used to be a child of the Agent Controls accordion inside
+  // #viewLauncher, so an approval raised while the user was on the Study Buddy
+  // tab rendered into a display:none subtree and was never seen — even though
+  // the status line underneath said it was waiting.
   card.style.display = 'block';
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  syncApprovalDock();
+}
+
+// The dock holds the card AND the answered-status line. It stays up while
+// either is showing, and hides only when both are empty.
+function syncApprovalDock() {
+  const dock = document.getElementById('approvalDock');
+  if (!dock) return;
+  const card = document.getElementById('approvalCard');
+  const statusLine = document.getElementById('approvalStatus');
+  const cardUp = !!card && card.style.display !== 'none';
+  const statusUp = !!statusLine && !statusLine.hidden;
+  dock.hidden = !(cardUp || statusUp);
 }
 
 // Shared answer path: decision is 'allow' | 'deny' | 'neutral' (or the legacy
@@ -896,6 +938,7 @@ function showApprovalStatus(text) {
     statusLine.innerText = text;
     statusLine.hidden = false;
   }
+  syncApprovalDock();
 }
 
 // Neutral REQUIRES a note: an empty Neutral click must not send — flag the
@@ -1611,6 +1654,36 @@ const chatTokenMsg = document.getElementById('chatTokenMsg');
 const btnRefreshChat = document.getElementById('btnRefreshChat');
 let chatBusy = false;
 
+// Copy-to-clipboard control attached to every chat bubble (operator 09-10).
+function makeCopyButton(text) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'chat-copy';
+  btn.textContent = 'Copy';
+  btn.title = 'Copy this message';
+  btn.addEventListener('click', async () => {
+    let done = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      done = true;
+    } catch (e) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        done = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (e2) { done = false; }
+    }
+    btn.textContent = done ? 'Copied' : 'Failed';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+  });
+  return btn;
+}
+
 function addPopupChatMsg(sender, text) {
   if (!chatMessagesEl) return null;
   const div = document.createElement('div');
@@ -1618,12 +1691,13 @@ function addPopupChatMsg(sender, text) {
   if (sender === 'user' || sender === 'agent') {
     const sp = document.createElement('span');
     sp.className = 'chat-sender';
-    sp.textContent = sender === 'user' ? 'You' : 'Agent';
+    sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
   const body = document.createElement('span');
   body.textContent = text;
   div.appendChild(body);
+  div.appendChild(makeCopyButton(text));
   chatMessagesEl.appendChild(div);
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   return div;
@@ -1958,6 +2032,70 @@ function clampToViewport(x, y, vp) {
   const cx = Math.max(0, Math.min(vp.w - 1, Math.round(Number(x) || 0)));
   const cy = Math.max(0, Math.min(vp.h - 1, Math.round(Number(y) || 0)));
   return { x: cx, y: cy };
+}
+
+// The click coordinates come from a vision model reading a screenshot, so they
+// routinely land a few pixels off — inside the right control, or on the padding
+// just outside it. The click then dispatches at the model's guess and the page
+// does nothing, which looks exactly like "the cursor moved but the click
+// missed". This pre-pass asks the PAGE what is actually under each coordinate
+// and, when that is (or is inside) a real interactive element, moves the click
+// to that element's true centre.
+//
+// Deliberately conservative: if the point hits no interactive element the
+// original coordinates are kept untouched, so canvas/map/text clicks and any
+// control the selector list does not know about behave exactly as before.
+const SNAP_TARGET_SELECTOR = [
+  'a[href]', 'button', 'input', 'select', 'textarea', 'summary', 'label',
+  '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
+  '[role="checkbox"]', '[role="radio"]', '[role="switch"]', '[onclick]',
+].join(',');
+
+async function snapActionsToElements(tabId, actions) {
+  if (!chrome.debugger || !Array.isArray(actions) || !actions.length) return actions;
+  const probes = actions.map((op) => (
+    op && op.x !== undefined && op.y !== undefined
+      ? { x: Number(op.x), y: Number(op.y) }
+      : null
+  ));
+  if (!probes.some(Boolean)) return actions;
+  try {
+    const res = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const SEL = ${JSON.stringify(SNAP_TARGET_SELECTOR)};
+        const probes = ${JSON.stringify(probes)};
+        const hits = [];
+        for (const p of probes) {
+          if (!p) { hits.push(null); continue; }
+          let el = null;
+          try { el = document.elementFromPoint(p.x, p.y); } catch (e) { el = null; }
+          let hit = null, n = el, guard = 0;
+          while (n && n.nodeType === 1 && guard++ < 8) {
+            try { if (n.matches && n.matches(SEL)) { hit = n; break; } } catch (e) {}
+            n = n.parentElement;
+          }
+          if (!hit) { hits.push(null); continue; }
+          const r = hit.getBoundingClientRect();
+          if (!r || r.width <= 0 || r.height <= 0) { hits.push(null); continue; }
+          hits.push({
+            x: Math.round(r.left + r.width / 2),
+            y: Math.round(r.top + r.height / 2),
+          });
+        }
+        return hits;
+      })()`,
+      returnByValue: true,
+    });
+    const hits = res && res.result && res.result.value;
+    if (!Array.isArray(hits)) return actions;
+    return actions.map((op, i) => {
+      const hit = hits[i];
+      if (!hit || !op) return op;
+      return { ...op, x: hit.x, y: hit.y };
+    });
+  } catch {
+    return actions;
+  }
 }
 
 // ── Virtual Visible Second Cursor Overlay on Screen ─────────────────────────
@@ -2523,6 +2661,11 @@ async function driveActionsInTab(driveTab, actions, ctx) {
       }
       return op;
     });
+    // Vision coordinates are a pixel guess; snap each one onto the real
+    // interactive element under it before anything is dispatched, so a
+    // near-miss lands on the control instead of beside it. Non-interactive
+    // points are left exactly as they were.
+    actions = await snapActionsToElements(driveTab.id, actions);
     if (lastBurstTabId !== driveTab.id) {
       lastCursorPos = { x: Math.round(vp.w / 2), y: Math.round(vp.h / 2) };
       lastBurstTabId = driveTab.id;
@@ -2776,6 +2919,12 @@ if (chatFormEl && chatInputEl) {
 
       const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
       const permMode = agentState[MODE_KEY] || MODE_DEFAULT;
+      // The server gates the model's screen/execute directives on THESE two
+      // flags (routes_extension.py: sees_can_see = bool(seescreen) and images;
+      // can_execute = bool(execute)). Omitting them made the model announce
+      // "the See screen toggle is off" while the toggle was visibly ON, and
+      // refuse to act on the page.
+      const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
 
       const bodyPayload = {
         text,
@@ -2783,6 +2932,8 @@ if (chatFormEl && chatInputEl) {
         agent_mode: true,
         educational_mode: eduMode,
         permission_mode: permMode,
+        seescreen: !!seeScreen,
+        execute: !!executeOn,
       };
       if (images.length) bodyPayload.images = images;
       if (tabRefs.length) bodyPayload.tabs = tabRefs;
@@ -2836,9 +2987,8 @@ if (chatFormEl && chatInputEl) {
         const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
         const execInfo = data.execution && typeof data.execution === 'object' ? data.execution : null;
         if (actions && actions.length) {
-          const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
           if (!executeOn) {
-            setStatus(`Agent proposed ${actions.length} action(s) — Execute is OFF, so actions were skipped.`);
+            setStatus(`Agent proposed ${actions.length} action(s) — Study Mode is OFF, so actions were skipped.`);
           } else if (data.control_requires_approval && !screenControlSessionAllowed) {
             // Manual mode (09-08): the agent does NOT touch the screen until
             // the user says so. The card carries the real ops, so "Approve"

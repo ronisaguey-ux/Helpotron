@@ -199,11 +199,11 @@ def test_admin_advanced_endpoints():
 
     override_resp = client.post(
         "/api/admin/model-metrics/override",
-        json={"task_type": "essay", "model_id": "deepseek-v4-flash"},
+        json={"task_type": "essay", "model_id": "deepseek-v4.1-flash"},
         headers=admin_headers,
     )
     assert override_resp.status_code == 200
-    assert override_resp.json()["overrides"]["essay"] == "deepseek-v4-flash"
+    assert override_resp.json()["overrides"]["essay"] == "deepseek-v4.1-flash"
 
 
 def _auth_headers(public_id: str) -> dict:

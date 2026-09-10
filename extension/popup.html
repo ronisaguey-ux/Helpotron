@@ -135,7 +135,7 @@
     <button class="icon-btn icon-btn--danger" id="btnHeaderPause" type="button" title="Instantly pause agent actions (Esc)" aria-label="Pause agent action" style="display:none">
       <svg class="ic"><use href="#i-pause" /></svg>
     </button>
-    <button class="icon-btn" id="btnAgentMode" type="button" title="CHAT — the agent can see your screen and, with your approval, act on the selected tab" aria-label="Open Agent chat">
+    <button class="icon-btn" id="btnAgentMode" type="button" title="STUDY BUDDY — sees your screen and, with your approval, acts on the selected tab" aria-label="Open Study Buddy">
       <svg class="ic"><use href="#i-chat" /></svg>
     </button>
     <button class="icon-btn" id="btnOptions" type="button" title="Extension options" aria-label="Open extension options">
@@ -213,9 +213,9 @@
       <svg class="ic ic--sm"><use href="#i-capture" /></svg>
       <span>Scrape</span>
     </button>
-    <button class="nav-tab" id="tabNavChat" type="button" role="tab" aria-selected="false" aria-controls="viewChat" title="Agent chat" aria-label="Agent chat">
+    <button class="nav-tab" id="tabNavChat" type="button" role="tab" aria-selected="false" aria-controls="viewChat" title="Study Buddy chat" aria-label="Study Buddy chat">
       <svg class="ic ic--sm"><use href="#i-chat" /></svg>
-      <span>Chat</span>
+      <span>Study Buddy</span>
     </button>
     <button class="nav-tab" id="tabNavType" type="button" role="tab" aria-selected="false" aria-controls="viewType" title="Launch to Doc — humanized typing" aria-label="Launch to Doc">
       <svg class="ic ic--sm"><use href="#i-doc" /></svg>
@@ -332,14 +332,14 @@
                 <span class="track" aria-hidden="true"></span>
               </span>
             </label>
-            <!-- Toggle 2: Execute -->
+            <!-- Toggle 2: Study Mode (execution) -->
             <label class="switch-row" for="toggleExecute">
               <div class="switch-label">
-                Execute
+                Study Mode
                 <span class="switch-sub">Allow clicks, typing &amp; scrolling</span>
               </div>
               <span class="switch">
-                <input type="checkbox" id="toggleExecute" role="switch" aria-checked="false" aria-label="Execute actions" />
+                <input type="checkbox" id="toggleExecute" role="switch" aria-checked="false" aria-label="Study Mode — allow agent actions" />
                 <span class="track" aria-hidden="true"></span>
               </span>
             </label>
@@ -367,44 +367,15 @@
             <div class="model-line" id="modelLine">
               <span class="model-effort" id="modelEffort">effort 500</span>
               <span class="divider-char">·</span>
-              <span id="modelName">DeepSeek V4 Flash Vision</span>
+              <span id="modelName">DeepSeek V4.1 Flash</span>
               <span id="modelTier" class="model-tier">(mid_lower)</span>
             </div>
 
             <button class="btn btn--primary" id="btnOpenChat" type="button">
               <svg class="ic"><use href="#i-chat" /></svg>
-              <span>Go to Agent Chat</span>
+              <span>Go to Study Buddy</span>
             </button>
 
-            <!-- Approval card: popup IS approval surface. Shared contract ids
-                 (#approvalCard/#approvalTitle/#approvalText/#approvalApprove/
-                 #approvalReject/#approvalNeutral/#approvalInput) — identical
-                 markup in agent_mode.html. Every decision button submits its
-                 decision plus whatever note is in #approvalInput (empty text is
-                 fine for Approve/Reject; Neutral REQUIRES a note). -->
-            <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
-              <div class="a-title">
-                <svg class="ic ic--sm"><use href="#i-shield" /></svg>
-                <span id="approvalTitle">The agent wants to act</span>
-              </div>
-              <div class="a-text" id="approvalText"></div>
-              <div class="a-actions">
-                <button class="btn btn--primary" id="approvalApprove" type="button">Approve</button>
-                <button class="btn btn--secondary" id="approvalReject" type="button">Reject</button>
-                <button class="btn btn--ghost" id="approvalNeutral" type="button">Neutral</button>
-                <button class="btn btn--ghost approval-auto" id="approvalApproveAuto" type="button">
-                  <span>Approve + auto-add</span>
-                  <span class="a-auto-badge">AUTO</span>
-                </button>
-              </div>
-              <div class="a-input-row">
-                <label class="a-input-label" for="approvalInput">Say something…</label>
-                <input class="input" id="approvalInput" type="text" placeholder="Optional note to the agent" autocomplete="off" />
-              </div>
-              <div class="a-helper" id="approvalHelper">Approve = let it act &middot; Reject = stop it &middot; Neutral = don&rsquo;t do it, just send your note.</div>
-            </div>
-            <!-- After an answer the card hides and this status line takes its place -->
-            <div class="approval-status" id="approvalStatus" role="status" aria-live="polite" hidden></div>
           </div>
         </section>
       </div>
@@ -417,7 +388,7 @@
         <div class="chat-header-bar">
           <div class="chat-status-pill">
             <span class="chat-status-dot"></span>
-            <span id="chatModelIndicator">DeepSeek V4 Flash Vision</span>
+            <span id="chatModelIndicator">DeepSeek V4.1 Flash</span>
           </div>
           <div class="chat-actions">
             <button class="icon-btn icon-btn--sm" id="btnNewChat" type="button" title="Start new conversation" aria-label="New chat">
@@ -446,8 +417,16 @@
           </button>
         </div>
 
-        <!-- In-Chat Quick Controls & Toggles (Educational Mode, See Screen, Execute, Effort Score) -->
+        <!-- In-Chat Study Settings (collapsible): educational mode, screen
+             attachment, study mode (execution), jurisdiction, permissions and
+             effort. The header collapses the whole config block. -->
         <div class="chat-controls-bar" id="chatControlsBar">
+          <button type="button" class="chat-controls-head" id="chatControlsToggle" aria-expanded="true" aria-controls="chatControlsBody">
+            <span class="chat-controls-title">Study settings</span>
+            <span class="chat-controls-summary" id="chatControlsSummary"></span>
+            <svg class="ic ic--xs chat-controls-chevron"><use href="#i-chevron" /></svg>
+          </button>
+          <div class="chat-controls-body" id="chatControlsBody">
           <div class="chat-toggles-row">
             <button type="button" class="chat-toggle-chip active" id="chatToggleEdu" title="Educational Mode: ON limits agent to coursework. OFF allows open-ended agent behavior.">
               <span class="chip-status-dot"></span>
@@ -457,9 +436,9 @@
               <span class="chip-status-dot"></span>
               <span class="chip-title">Screen: ON</span>
             </button>
-            <button type="button" class="chat-toggle-chip active" id="chatToggleExecute" title="Execute: ON enables mouse gliding, clicking and typing on page.">
+            <button type="button" class="chat-toggle-chip active" id="chatToggleExecute" title="Study Mode: ON enables mouse gliding, clicking and typing on page.">
               <span class="chip-status-dot"></span>
-              <span class="chip-title">Execute: ON</span>
+              <span class="chip-title">Study Mode: ON</span>
             </button>
             <!-- No `active` class: the default jurisdiction IS "this tab", so the
                  chip only lights up once the agent is looking past the one tab it
@@ -472,6 +451,18 @@
               <svg class="ic ic--xs"><use href="#i-pause" /></svg>
               <span>Pause</span>
             </button>
+          </div>
+
+          <!-- Permission mode: how much the agent may do without asking. Same
+              3-way control as the launcher's Agent Controls panel; both sets of
+              .mode-btn share one handler, so they stay in lockstep. -->
+          <div class="chat-perm-row">
+            <span class="field-label">Permissions</span>
+            <div class="seg" id="chatModeSeg" role="group" aria-label="Permission mode for agent actions">
+              <button type="button" class="seg-btn mode-btn" data-mode="manual" aria-pressed="false">Manual</button>
+              <button type="button" class="seg-btn mode-btn" data-mode="auto" aria-pressed="false">Automatic</button>
+              <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
+            </div>
           </div>
 
           <!-- Jurisdiction picker (hidden until the Tabs chip is pressed) -->
@@ -490,7 +481,8 @@
           <div class="chat-effort-row">
             <label class="chat-effort-lbl" for="chatEffortSlider">Effort: <span id="chatEffortVal">500</span></label>
             <input type="range" class="chat-effort-range" id="chatEffortSlider" min="100" max="1000" step="50" value="500" title="Effort score determines model intelligence and reasoning depth" />
-            <span class="chat-model-badge" id="chatModelBadge">DeepSeek V4 Flash Vision</span>
+            <span class="chat-model-badge" id="chatModelBadge">DeepSeek V4.1 Flash</span>
+          </div>
           </div>
         </div>
 
@@ -508,8 +500,8 @@
         <!-- Scrollable chat thread -->
         <div class="chat-stream" id="popupChatMessages" aria-live="polite">
           <div class="chat-msg agent">
-            <span class="chat-sender">Agent</span>
-            <span>Hi! I'm your Helpotron companion. Ask questions about your coursework, or tell me what to do on this page.</span>
+            <span class="chat-sender">Study Buddy</span>
+            <span>Hi! I'm your Helpotron study buddy. Ask questions about your coursework, or tell me what to do on this page.</span>
           </div>
         </div>
 
@@ -521,7 +513,7 @@
 
         <!-- Chat composer -->
         <form class="chat-composer-box" id="popupChatForm">
-          <textarea class="chat-input" id="popupChatInput" placeholder="Ask or instruct the agent…" rows="2" aria-label="Chat message"></textarea>
+          <textarea class="chat-input" id="popupChatInput" placeholder="Ask or instruct your study buddy…" rows="2" aria-label="Chat message"></textarea>
           <button class="btn btn--primary chat-send-btn" id="btnPopupChatSend" type="submit" aria-label="Send message">
             <svg class="ic ic--sm"><use href="#i-send" /></svg>
           </button>
@@ -668,6 +660,43 @@
     </div>
 
   </main>
+
+  <!-- Approval surface. The popup IS the approval surface, and it has to be
+       reachable from EVERY view. This used to live inside #chat-options, which
+       sits in #viewLauncher — so an approval raised while the user was on the
+       Study Buddy tab rendered into a display:none subtree and was never seen,
+       even though the status line said it was waiting. Fixed overlay above the
+       view panels, so it shows wherever the user happens to be.
+       Shared contract ids (#approvalCard/#approvalTitle/#approvalText/
+       #approvalApprove/#approvalReject/#approvalNeutral/#approvalInput) —
+       identical markup in agent_mode.html. Every decision button submits its
+       decision plus whatever note is in #approvalInput (empty text is fine for
+       Approve/Reject; Neutral REQUIRES a note). -->
+  <div class="approval-dock" id="approvalDock" hidden>
+    <div class="approval-card" id="approvalCard" role="alertdialog" aria-modal="false" aria-labelledby="approvalTitle" style="display:none">
+      <div class="a-title">
+        <svg class="ic ic--sm"><use href="#i-shield" /></svg>
+        <span id="approvalTitle">The agent wants to act</span>
+      </div>
+      <div class="a-text" id="approvalText"></div>
+      <div class="a-actions">
+        <button class="btn btn--primary" id="approvalApprove" type="button">Approve</button>
+        <button class="btn btn--secondary" id="approvalReject" type="button">Reject</button>
+        <button class="btn btn--ghost" id="approvalNeutral" type="button">Neutral</button>
+        <button class="btn btn--ghost approval-auto" id="approvalApproveAuto" type="button">
+          <span>Approve + auto-add</span>
+          <span class="a-auto-badge">AUTO</span>
+        </button>
+      </div>
+      <div class="a-input-row">
+        <label class="a-input-label" for="approvalInput">Say something…</label>
+        <input class="input" id="approvalInput" type="text" placeholder="Optional note to the agent" autocomplete="off" />
+      </div>
+      <div class="a-helper" id="approvalHelper">Approve = let it act &middot; Reject = stop it &middot; Neutral = don&rsquo;t do it, just send your note.</div>
+    </div>
+    <!-- After an answer the card hides and this status line takes its place -->
+    <div class="approval-status" id="approvalStatus" role="status" aria-live="polite" hidden></div>
+  </div>
 
   <!-- ============ Status strip ============ -->
   <div class="status" id="status" role="status" aria-live="polite" hidden>

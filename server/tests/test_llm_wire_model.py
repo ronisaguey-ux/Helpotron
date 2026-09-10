@@ -1,10 +1,10 @@
-"""09-01 (Bob): 'only v4 flash vision is supposed to be used'.
+"""09-10 (owner): 'solely deepseek v4.1 flash'.
 
-The wire map added in 4d8be95 rewrote every deepseek flash request to the
-plain slug — which is TEXT-ONLY on OpenRouter (verified against the live
-catalog 09-01: deepseek/deepseek-v4-flash = text->text, the vision flavor
-is deepseek/deepseek-v4-flash-vision-exp). Pins the payload actually sent
-so a downgrade can never silently return.
+The 4d8be95 wire map rewrote every deepseek request to an "-exp" slug because
+the plain slug was text-only. V4.1 Flash is natively vision on OpenRouter
+(verified live 09-10: a real image payload returns non-empty content), so the
+canonical id IS the wire id and the rewrite is retired. Pins the payload
+actually sent so a stale slug or a silent downgrade can never return.
 """
 import asyncio
 
@@ -38,4 +38,4 @@ def test_flash_alias_wires_to_vision_exp(monkeypatch):
     monkeypatch.setattr(llm.httpx, "AsyncClient", FakeClient)
     out = asyncio.run(llm.call_llm("sys", "hi", model="flash"))
     assert out == "ok"
-    assert captured["payload"]["model"] == "deepseek/deepseek-v4-flash-vision-exp"
+    assert captured["payload"]["model"] == "deepseek/deepseek-v4.1-flash"

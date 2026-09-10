@@ -14,7 +14,7 @@ All environment variables should be defined in a `.env` file at the root of the 
 | `GEMINI_FLASH_LITE_MODEL` | Optional (default: `gemini-3.1-flash-lite`) | Google AI Studio | Economy model ($0.50/1M tokens) for transcription, OCR, initial drafting. |
 | `GEMINI_FLASH_MODEL` | Optional (default: `gemini-3.8-flash`) | Google AI Studio | Flagship model ($2.50/1M tokens) for humanization, detector evasion, and grading. |
 | `OPENAI_API_KEY` | Optional | OpenAI | Fallback for GPT models and embeddings. |
-| `DEEPSEEK_API_KEY` | Optional | DeepSeek | Fast reasoning fallback (`deepseek-v4-flash`). |
+| `DEEPSEEK_API_KEY` | Optional | DeepSeek | Fast reasoning fallback (`deepseek-v4.1-flash`). |
 | `WHISPER_API_KEY` | Optional | OpenAI / OmniRoute | Whisper-1 audio transcription fallback if Gemini is offline. |
 | `PANGRAM_API_KEY` | Optional | Pangram Labs | Multi-engine AI detector verification ($0.0020/call). |
 | `SAPLING_API_KEY` | Optional | Sapling.ai | AI detector and grammatical integrity checks ($0.0015/call). |

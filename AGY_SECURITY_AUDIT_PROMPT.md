@@ -21,7 +21,7 @@
 
 ## Hard rules
 - **Never modify**: `~/.claude`, `~/.claude.json`, MCP configs, hooks, `.env` (report problems, don't self-fix), bot/telegram setups, VPN stacks.
-- **Never route the paid DeepSeek key anywhere**; the app must keep using ONLY the free OpenRouter key (`.env OPENROUTER_API_KEY`/`OMNIROUTE_API_KEY`). If you touch `llm.py`, the wire model map must keep sending `deepseek-v4-flash-vision-exp` (never the plain slug — recent fix; see `test_llm_wire_model.py`).
+- **Never route the paid DeepSeek key anywhere**; the app must keep using ONLY the free OpenRouter key (`.env OPENROUTER_API_KEY`/`OMNIROUTE_API_KEY`). If you touch `llm.py`, the wire id must stay `deepseek/deepseek-v4.1-flash` — the canonical id IS the wire id (the old `-exp` rewrite is retired; V4.1 Flash is natively vision, verified 09-10). See `test_llm_wire_model.py`.
 - **Real fixes only** — no placeholders, TODOs, stubs, or comment-markers. Every fix gets a real code change + a regression test (or an updated existing test) that would have caught the bug.
 - **Data safety**: use ephemeral test users (e.g. `secaudit_<rand>`) and sweep them + their rows afterward; never touch/delete production user rows. Beware: backend tests share the dev DB only via test suite's `sqlite:///./test_helpotron.db` — run tests with `.venv/bin/python -m pytest server/tests -q` from the repo root; never against the prod DB.
 - **No external probing**: do not scan/attack any other host; all testing is localhost/prod-live-site with benign payloads only. Do not send any user data outside the machine.

@@ -10,7 +10,7 @@
    - Any settings request must go through Antigravity -> Telegram approval -> Manual apply.
 
 3. **Web Search & DeepSeek V4 Flash**:
-   - Web search is powered by `websearch-deepseek` with model `deepseek-v4-flash` and thinking enabled.
+   - Web search is powered by `websearch-deepseek` with model `deepseek-flash` and thinking enabled.
 
 4. **Self-Healing & Drift Sanitization**:
    - `clean` / `/clean`: Scrubs refusals, strips exit tools, fabricates alignment context, and restores session.

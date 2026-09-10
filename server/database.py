@@ -73,7 +73,7 @@ class User(Base):
     password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    preferred_model: Mapped[str] = mapped_column(String(64), default="deepseek-v4-flash")
+    preferred_model: Mapped[str] = mapped_column(String(64), default="deepseek-v4.1-flash")
     organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id", use_alter=True, name="fk_users_org_id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(32), default="member")  # admin, moderator, member
     stripe_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -655,7 +655,7 @@ def init_db() -> None:
                 if "trial_expires_at" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN trial_expires_at DATETIME"))
                 if "preferred_model" not in columns_user:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN preferred_model VARCHAR(64) DEFAULT 'deepseek-v4-flash'"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN preferred_model VARCHAR(64) DEFAULT 'deepseek-v4.1-flash'"))
                 if "stripe_customer_id" not in columns_user:
                     conn.execute(text("ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128)"))
                 if "stripe_subscription_id" not in columns_user:

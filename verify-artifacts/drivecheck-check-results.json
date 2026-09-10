@@ -1,0 +1,52 @@
+{
+  "label": "drivecheck",
+  "extension_id": "kgdjkehhfmbodpkifaincamgmfpofjog",
+  "features": [
+    {
+      "check": "drive.target-tab",
+      "status": "PASS",
+      "detail": "drive tab created: {'id': 1154938765, 'winId': 1154938762}"
+    },
+    {
+      "check": "drive.target-page",
+      "status": "PASS",
+      "detail": "drive.html loaded at http://127.0.0.1:44953/drive.html (clicks=0)"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #1154938766 created"
+    },
+    {
+      "check": "drive.undriveable-tab",
+      "status": "PASS",
+      "detail": "newtab tab #1154938766 created"
+    },
+    {
+      "check": "drive.undriveable-active",
+      "status": "PASS",
+      "detail": "active tab = {'id': 1154938766, 'url': 'chrome://newtab/', 'active': True}"
+    },
+    {
+      "check": "drive.auto-switch-or-retry",
+      "status": "PASS",
+      "detail": "RETRY bar shown ({'visible': True, 'text': 'RETRY'}) \u2014 switching active tab to the http target and pressing RETRY"
+    },
+    {
+      "check": "drive.retry-click-landed",
+      "status": "PASS",
+      "detail": "after RETRY clicks=1 (need > 0); status=Retry cancelled."
+    },
+    {
+      "check": "drive.type-landed",
+      "status": "PASS",
+      "detail": "input received 'LH5_TYPE_OK' (expected 'LH5_TYPE_OK')"
+    },
+    {
+      "check": "drive.click-evidence",
+      "status": "PASS",
+      "detail": "page-side click counter = 1; server counter = 1"
+    }
+  ],
+  "surface_failures": []
+}
