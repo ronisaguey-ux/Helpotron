@@ -10,8 +10,8 @@ def harness():
 
 
 def test_harness_tiering_initialization(harness):
-    assert harness.flash_model == "deepseek-v4-flash"
-    assert harness.pro_model == "deepseek-v4-pro"
+    assert harness.flash_model == "deepseek-v4.1-flash"
+    assert harness.pro_model == "deepseek-v4.1-flash"
     assert "style_mutator" in harness.plugins
     assert "context_pruner" in harness.plugins
     assert "telemetry_logger" in harness.plugins
@@ -71,7 +71,7 @@ def test_flash_pro_self_healing_loop(harness):
 
 
 def test_telemetry_logger(harness):
-    res = asyncio.run(harness.log_telemetry("hash123", 450, 85.5, "deepseek-v4-flash", "success"))
+    res = asyncio.run(harness.log_telemetry("hash123", 450, 85.5, "deepseek-v4.1-flash", "success"))
     assert res["logged"] is True
     assert res["event"]["prompt_hash"] == "hash123"
     assert res["event"]["latency_ms"] == 85.5

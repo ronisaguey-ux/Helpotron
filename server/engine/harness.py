@@ -1,7 +1,10 @@
-"""DeepSeek-V4 Dual-Model Tiering & Custom Plugin Harness Architecture.
+"""DeepSeek-V4.1 Flash Execution Harness Architecture.
 
-Tier 1: deepseek-v4-flash -> Sub-300ms, fast AST mutations, schema verification, context pruning.
-Tier 2: deepseek-v4-pro   -> Deep multi-step reasoning, architectural synthesis, essay drafting.
+Single engine (owner 09-10): deepseek-v4.1-flash covers both lanes — the fast
+sub-300ms AST mutations / schema verification / context pruning tier, and the
+deep multi-step reasoning, architectural synthesis and essay drafting tier.
+The two knobs are kept separate so a future split stays a one-line change, but
+both now default to the same model.
 """
 from __future__ import annotations
 
@@ -25,8 +28,8 @@ class DeepSeekHarness:
 
     def __init__(
         self,
-        flash_model: str = "deepseek-v4-flash",
-        pro_model: str = "deepseek-v4-pro",
+        flash_model: str = "deepseek-v4.1-flash",
+        pro_model: str = "deepseek-v4.1-flash",
         api_base: Optional[str] = None,
         api_key: Optional[str] = None,
     ):

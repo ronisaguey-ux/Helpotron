@@ -170,8 +170,7 @@ def test_models_catalog_and_effort_score_tiers():
     assert "nemotron_nano" in model_ids
     assert "qwen_72b" in model_ids
     assert "gemini_31_flash_lite" in model_ids
-    assert "deepseek_v4_flash_vision" in model_ids
-    assert "deepseek_v4_pro_vision" in model_ids
+    assert "deepseek_v4_1_flash" in model_ids
     assert "gemini_38_flash" in model_ids
 
     # 2. Effort Level 1 & 2 -> routes to Nemotron Nano & Qwen 72B
@@ -191,12 +190,12 @@ def test_models_catalog_and_effort_score_tiers():
     # 4. Effort Levels 4-7 -> routes to DeepSeek-V4 Flash Vision
     eff5 = resolve_effort_tier(500)
     assert eff5["level"] == 5
-    assert eff5["draft_model"] == "deepseek_v4_flash_vision"
+    assert eff5["draft_model"] == "deepseek_v4_1_flash"
 
     # 5. Effort Levels 8-10 -> routes to DeepSeek-V4 Pro Vision
     eff9 = resolve_effort_tier(900)
     assert eff9["level"] == 9
-    assert eff9["draft_model"] == "deepseek_v4_pro_vision"
+    assert eff9["draft_model"] == "deepseek_v4_1_flash"
 
 
 def test_auto_start_and_effort_trio_scoping():

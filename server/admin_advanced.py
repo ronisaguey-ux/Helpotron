@@ -23,10 +23,10 @@ class AdminAdvancedService:
     def __init__(self) -> None:
         self._start_time = time.time()
         self._model_routing_overrides: Dict[str, str] = {
-            "essay": "deepseek-v4-flash",
-            "stem": "deepseek-v4-flash",
-            "code": "deepseek-v4-flash",
-            "flashcards": "deepseek-v4-flash",
+            "essay": "deepseek-v4.1-flash",
+            "stem": "deepseek-v4.1-flash",
+            "code": "deepseek-v4.1-flash",
+            "flashcards": "deepseek-v4.1-flash",
         }
 
     # ─── 1. Bulk User Operations ────────────────────────────────────────────

@@ -123,6 +123,13 @@ async function upload() {
   } catch (e) {
     stateEl.textContent = `❌ Upload failed: ${e}`;
   } finally {
+    // Reset the one-shot recorder: restore the record button so a second
+    // lecture can be captured, hide the stop button so it cannot be re-clicked
+    // on an already-stopped MediaRecorder (InvalidStateError), and drop the
+    // handle so the next run builds a fresh one.
+    mediaRecorder = null;
     stopBtn.disabled = false;
+    stopBtn.style.display = 'none';
+    recordBtn.style.display = 'inline-block';
   }
 }

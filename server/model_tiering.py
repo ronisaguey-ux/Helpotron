@@ -147,7 +147,7 @@ class ModelTieringEngine:
         return {
             "is_presentation": True,
             "engine_mode": "pure_gemini",
-            "bypassed_subagents": ["nemotron-3-super", "nemotron-nano", "deepseek-v4-flash", "llama-nemotron"],
+            "bypassed_subagents": ["nemotron-3-super", "nemotron-nano", "deepseek-v4.1-flash", "llama-nemotron"],
             "active_models": {
                 "gemini-3.1-flash-lite": {
                     "role": "Slide Outline, Structural Ingestion, Speaker Bullet Drafting",
@@ -236,6 +236,6 @@ def get_model_for_tier(user_plan: str, task_type: str = 'general') -> str:
     if user_plan == 'elite':
         return 'gemini-3.8-flash'
     elif user_plan == 'pro':
-        return 'deepseek-v4-pro'
+        return 'deepseek-v4.1-flash'
     else:
-        return 'deepseek-v4-flash'
+        return 'deepseek-v4.1-flash'

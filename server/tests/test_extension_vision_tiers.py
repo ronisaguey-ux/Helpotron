@@ -1,8 +1,8 @@
 """09-02: effort-tiered screen-vision model resolution for the extension.
 
-Covers resolve_vision_model (effort 1..1000 -> one of the four spec'd vision
-models, cheapest -> most expensive), parse_effort_score clamping, the
-OpenRouter slug map kept in sync with llm.py, and the 15-action control cap.
+Covers resolve_vision_model (effort 1..1000 -> one of the three spec'd vision
+models, cheapest -> most expensive), parse_effort_score clamping, the retired
+OpenRouter slug map, and the 15-action control cap.
 """
 import pytest
 
@@ -48,7 +48,7 @@ def test_tier_low_below_333():
 
 def test_tier_med_334_666():
     model, tier, _ = resolve_vision_model(334)
-    assert model == VISION_MODEL                          # deepseek flash vision
+    assert model == VISION_MODEL                          # deepseek v4.1 flash
     assert tier == "med"
     model, tier, _ = resolve_vision_model(666)
     assert model == VISION_MODEL
@@ -97,14 +97,13 @@ def test_no_banned_gemini_models_in_ladder():
 
 # ── OpenRouter slug map sync (mirror of llm.call_llm, 09-01) ───────────────────
 
-def test_or_slug_map_matches_llm_call_slug_rules():
-    # flash-vision ships as the "-exp" slug; both gemini slugs pass through
-    # untouched.
-    assert _OR_SLUG_MAP["deepseek/deepseek-v4-flash-vision"] == "deepseek/deepseek-v4-flash-vision-exp"
-    assert _OR_SLUG_MAP["google/gemini-3.1-flash-lite"] == "google/gemini-3.1-flash-lite"
-    assert _OR_SLUG_MAP["google/gemini-3.8-flash"] == "google/gemini-3.8-flash"
-    # every tier model resolves through the map
-    assert set(_OR_SLUG_MAP.keys()) == set(VISION_MODEL_TIERS.keys())
+def test_or_slug_map_is_identity_for_v4_1_flash():
+    # 09-10: V4.1 Flash is natively vision on OpenRouter, so no canonical ->
+    # wire rewrite is needed. The map is empty and every tier id reaches
+    # OpenRouter unchanged (llm.call_llm applies .get(cid, cid)).
+    assert _OR_SLUG_MAP == {}
+    for model_id in VISION_MODEL_TIERS:
+        assert _OR_SLUG_MAP.get(model_id, model_id) == model_id
 
 
 # ── Dead-tier fallback (09-08) ────────────────────────────────────────────────
@@ -121,12 +120,14 @@ def test_fallback_targets_are_live_tier_models():
 
 
 def test_med_tier_degrades_up_not_down():
-    """deepseek v4 flash vision returns empty for image payloads (measured
-    09-08). The user asked for more than low effort, so the retry must land on
-    the HIGH tier, never back down on the cheapest one."""
+    """The med tier's deepseek model stays behind a fallback until it is
+    re-measured end-to-end: its predecessor was LISTED as image-capable but
+    returned empty content for image payloads (measured 09-08). The user asked
+    for more than low effort, so the retry must land on the HIGH tier, never
+    back down on the cheapest one."""
     from server.llm import MODEL_PRICING
     from server.screen_vision import _VISION_FALLBACK
-    src = "deepseek/deepseek-v4-flash-vision"
+    src = "deepseek/deepseek-v4.1-flash"
     dst = _VISION_FALLBACK[src]
     assert MODEL_PRICING[dst]["input"] >= MODEL_PRICING[src]["input"]
 

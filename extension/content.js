@@ -578,6 +578,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request && request.action === 'COLLECT_COURSE_LINKS') {
     sendResponse(collectCourseLinks());
   } else if (request && request.action) {
+    // Actions owned by the other listeners registered in this same isolated
+    // world (the assistive-typing engine and the agent-drive reporter) must
+    // NOT be answered here. chrome.tabs.sendMessage delivers to every listener
+    // and the FIRST sendResponse wins, so answering would starve them and hand
+    // the caller {success:false, error:'unknown action'}.
+    const ownedByOtherListeners =
+      request.action === 'START_ASSISTIVE_TYPING' ||
+      request.action === 'PAUSE_ASSISTIVE_TYPING' ||
+      request.action === 'RESUME_ASSISTIVE_TYPING' ||
+      request.action === 'CANCEL_ASSISTIVE_TYPING' ||
+      request.action === 'GET_TYPING_STATUS' ||
+      request.action === 'BROADCAST_TYPING_PROGRESS';
+    if (ownedByOtherListeners) return false;
     sendResponse({ success: false, error: 'unknown action' });
   } else {
     sendResponse({ success: false, error: 'no action' });

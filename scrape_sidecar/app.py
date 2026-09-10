@@ -51,7 +51,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 
 _HOSTNAME = os.uname().nodename or "helpotron"
 PORT = int(os.getenv("SCRAPE_SIDECAR_PORT", "9778"))
-_MODEL = os.getenv("SCRAPE_MODEL", "deepseek/deepseek-v4-flash-vision-exp")
+_MODEL = os.getenv("SCRAPE_MODEL", "deepseek/deepseek-v4.1-flash")
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root (server/../.env)
 _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "

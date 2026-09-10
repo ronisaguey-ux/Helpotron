@@ -432,17 +432,28 @@ body.window-mode {
 #btnOpenChat { min-height: 32px; padding: 6px 12px; font-size: 12px; justify-content: center; }
 
 /* Approval card in popup — teal primary + label-caps, per design.css tokens.
-   Card lives inside the Agent Controls accordion; renderNextApproval expands
-   the panel AND the rule below force-opens it while a card/status is up. */
+   The card is a fixed dock above the view panels (see .approval-dock), NOT a
+   child of the Agent Controls accordion: that accordion lives in #viewLauncher,
+   so a card rendered there was invisible whenever the user was on the chat tab.
+   Positioned over every view, and hidden entirely while it holds nothing. */
+.approval-dock {
+  position: fixed;
+  left: 8px; right: 8px; bottom: 8px;
+  z-index: 70;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+.approval-dock[hidden] { display: none; }
 .approval-card {
   display: flex; flex-direction: column; gap: 8px;
   padding: 10px;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-low));
   border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
 }
-#chat-options:has(.approval-card[style*="display: block"]),
-#chat-options:has(.approval-status:not([hidden])) { display: flex !important; }
 .approval-card .a-title {
   display: flex; align-items: center; gap: 6px;
   font-family: var(--font-mono); font-size: 12px; line-height: 16px;
@@ -590,6 +601,54 @@ body.window-mode {
   background: var(--surface-container-low);
   border: 1px solid var(--outline-variant);
 }
+/* Collapsible study-settings header. The body folds away; the header keeps a
+   one-line digest so the panel still states what the agent may do. */
+.chat-controls-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.chat-controls-head:hover { color: var(--on-surface); }
+.chat-controls-title { flex: none; }
+.chat-controls-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.chat-controls-chevron {
+  flex: none;
+  transition: transform 160ms ease;
+}
+.chat-controls-bar.collapsed .chat-controls-chevron { transform: rotate(-90deg); }
+.chat-controls-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.chat-controls-bar.collapsed .chat-controls-body { display: none; }
+.chat-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
+}
+.chat-perm-row .field-label { flex: none; }
+.chat-perm-row .seg { flex: 1; margin: 0; }
 .chat-toggles-row {
   display: flex;
   align-items: center;
@@ -863,6 +922,23 @@ body.window-mode {
   letter-spacing: 0.04em;
   opacity: 0.7;
 }
+.chat-copy {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-lg, 999px);
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.chat-copy:hover { opacity: 1; }
+.chat-msg.user .chat-copy { align-self: flex-end; }
 .chat-token-banner {
   display: flex;
   align-items: center;

@@ -30,8 +30,7 @@ class ModelPolicy:
         "nemotron_nano": "nvidia/nemotron-3-nano-30b-a3b",
         "qwen_72b": "qwen/qwen-2.5-72b-instruct",
         "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
-        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
-        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
+        "deepseek_v4_1_flash": "deepseek/deepseek-v4.1-flash",
         "gemini_38_flash": "google/gemini-3.8-flash",
     }
     
@@ -49,10 +48,10 @@ class ModelPolicy:
         "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
         "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "reliability": 0.99},
         "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
-        "deepseek/deepseek-v4-flash-vision": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-flash": {"input": 0.14, "output": 0.28, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-pro-vision": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
-        "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
+        # 09-10: V4.1 Flash is natively vision on OpenRouter (text+image, 1M ctx), so
+        # the old "-exp" wire-slug hack and the separate pro-vision row are both gone.
+        # OpenRouter bills images as prompt tokens for this model — no image_input key.
+        "deepseek/deepseek-v4.1-flash": {"input": 0.15, "output": 0.60, "modalities": ["text", "vision"], "reliability": 0.99},
         "google/gemini-3.8-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
     }
 
@@ -111,8 +110,7 @@ def resolve_model_routing(
     - Level 1: nvidia/nemotron-3-nano-30b-a3b
     - Level 2: qwen/qwen-2.5-72b-instruct
     - Level 3: google/gemini-3.1-flash-lite
-    - Levels 4-7: deepseek/deepseek-v4-flash-vision
-    - Levels 8-10 (7+): deepseek/deepseek-v4-pro-vision
+    - Levels 4-10: deepseek/deepseek-v4.1-flash (single DeepSeek model, per owner 09-10)
     - Gemini 3.8 Flash: ONLY used when effort is maxed out (>=8) on Gemini-exclusive tasks
       (audio, image/video generation/analysis, google slides, fake google doc history).
     """
@@ -184,13 +182,13 @@ def resolve_model_routing(
             tier = "level_3_gemini_lite"
             reason = "Effort level 3 (Gemini 3.1 Flash Lite)"
         elif level <= 7:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
-            tier = "level_4_7_deepseek_v4_flash_vision"
-            reason = f"Effort level {level} (DeepSeek V4 Flash Vision)"
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"]
+            tier = "level_4_7_deepseek_v4_1_flash"
+            reason = f"Effort level {level} (DeepSeek V4.1 Flash)"
         else:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
-            tier = "level_8_10_deepseek_v4_pro_vision"
-            reason = f"Effort level {level} (DeepSeek V4 Pro Vision)"
+            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"]
+            tier = "level_8_10_deepseek_v4_1_flash"
+            reason = f"Effort level {level} (DeepSeek V4.1 Flash)"
 
     cost = calculate_effective_task_cost(selected, modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images, audio_minutes=audio_minutes)
     return {
@@ -211,7 +209,7 @@ def _effort_cascade(primary_model: str, effort: int = 500) -> List[str]:
     if chosen not in candidates:
         candidates.append(chosen)
     for m in [
-        ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"],
+        ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
         ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
         ModelPolicy.PRIMARY_MODELS["qwen_72b"],
     ]:
@@ -307,12 +305,9 @@ def strip_thinking_tokens(text: Optional[str]) -> str:
 
 
 def format_model_identity_prompt(model_id: str) -> str:
-    if "deepseek-v4-flash" in model_id:
-        clean_name = "deepseek-v4-flash-vision"
-        model_id = "deepseek/deepseek-v4-flash-vision"
-    elif "deepseek-v4-pro" in model_id:
-        clean_name = "deepseek-v4-pro-vision"
-        model_id = "deepseek/deepseek-v4-pro-vision"
+    if "deepseek" in model_id:
+        clean_name = "deepseek-v4.1-flash"
+        model_id = "deepseek/deepseek-v4.1-flash"
     else:
         clean_name = model_id.split("/")[-1] if "/" in model_id else model_id
     provider = model_id.split("/")[0] if "/" in model_id else "OpenSource"
@@ -392,15 +387,9 @@ async def call_llm(
     async with httpx.AsyncClient(timeout=60.0) as client:
         for cand_id in attempt_models:
             cand_payload = dict(payload)
-            openrouter_model = {
-                # 09-01 (Bob): plain deepseek-v4-flash is TEXT-ONLY on OpenRouter
-                # (verified against the live catalog) — every app request must land
-                # on the vision flavor. The "-vision" slug doesn't exist in the OR
-                # catalog; "-vision-exp" does (same model the machine's Claude fleet
-                # runs). No pro-vision variant exists on OpenRouter → pro stays plain.
-                "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
-                "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
-            }.get(cand_id, cand_id)
+            # 09-10: V4.1 Flash is natively vision on OpenRouter (text+image), so the
+            # canonical id is already the wire id — the old "-exp" slug rewrite is retired.
+            openrouter_model = cand_id
             cand_payload["model"] = openrouter_model
             
             # Explicit runtime model identity injected into system prompt
@@ -474,10 +463,10 @@ def extract_json(content: Optional[str]) -> Any:
 
 # --- Compatibility Wrappers ---
 MODELS = {
-    "flash": "deepseek/deepseek-v4-flash-vision",
-    "pro": "deepseek/deepseek-v4-pro-vision",
-    "flash_vision": "deepseek/deepseek-v4-flash-vision",
-    "pro_vision": "deepseek/deepseek-v4-pro-vision",
+    "flash": "deepseek/deepseek-v4.1-flash",
+    "pro": "deepseek/deepseek-v4.1-flash",
+    "flash_vision": "deepseek/deepseek-v4.1-flash",
+    "pro_vision": "deepseek/deepseek-v4.1-flash",
     "lite": "google/gemini-3.1-flash-lite",
     "gemini": "google/gemini-3.8-flash",
     "nano": "nvidia/nemotron-3-nano-30b-a3b",
@@ -575,10 +564,8 @@ async def stream_llm(
         async with httpx.AsyncClient(timeout=60.0) as client:
             for cand_id in attempt_models:
                 cand_payload = dict(payload)
-                openrouter_model = {
-                    "deepseek/deepseek-v4-flash-vision": "deepseek/deepseek-v4-flash-vision-exp",
-                    "deepseek/deepseek-v4-pro-vision": "deepseek/deepseek-v4-pro",
-                }.get(cand_id, cand_id)
+                # 09-10: canonical id == wire id for V4.1 Flash (native vision).
+                openrouter_model = cand_id
                 cand_payload["model"] = openrouter_model
 
                 ident_notice = format_model_identity_prompt(cand_id)

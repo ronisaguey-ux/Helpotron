@@ -209,7 +209,7 @@ async function scrapeAndSaveTab(tabId, opts) {
   // Second upsert: same bubble (assignment_id + canvas_id both match) now
   // carries the truth — which files actually made it into the dump flow.
   if (finalMeta.length) {
-    const metaPayload = { ...payload, assignment_id: assignmentId, files_meta: finalMeta };
+    metaPayload = { ...payload, assignment_id: assignmentId, files_meta: finalMeta };
     await postAssignment(metaPayload);
   }
 
@@ -909,6 +909,13 @@ async function executeTabCommand(tabId, command) {
     let a = {};
     if (Array.isArray(command.args)) a = { args: command.args };
     else if (command.args && typeof command.args === 'object') a = command.args;
+    else {
+      // Flat shape: the tool's args ride directly on the command, so take every
+      // key except the envelope ones. Without this, fxArgs stayed {} and every
+      // flat command failed ("navigate requires a url", "Missing selector").
+      const { action: _action, command_id: _commandId, args: _args, ...flat } = command;
+      a = flat;
+    }
     const fxArgs = (a && typeof a === 'object' && !Array.isArray(a)) ? a : {};
 
     // ── Rich read-only tools (inject content.js globals, run the REAL
@@ -1311,7 +1318,7 @@ async function processCrawlPage(state, url) {
     if (tab && tab.id) {
       try { await chrome.tabs.remove(tab.id); } catch (e) { /* already gone */ }
     }
-    state.tabs = (state.tabs || []).filter((id) => id !== tab.id);
+      if (tab && tab.id) state.tabs = (state.tabs || []).filter((id) => id !== tab.id);
     await writeCrawlState(state);
   }
 }
@@ -1341,7 +1348,7 @@ async function processCrawlIndex(state, indexUrl) {
     if (tab && tab.id) {
       try { await chrome.tabs.remove(tab.id); } catch (e) { /* already gone */ }
     }
-    state.tabs = (state.tabs || []).filter((id) => id !== tab.id);
+      if (tab && tab.id) state.tabs = (state.tabs || []).filter((id) => id !== tab.id);
     await writeCrawlState(state);
   }
 }

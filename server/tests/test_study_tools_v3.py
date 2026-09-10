@@ -37,7 +37,7 @@ def test_study_decks_and_review():
             user_id=u.id,
             kind="flashcards",
             content=json.dumps(cards_content),
-            model_used="deepseek-v4-flash",
+            model_used="deepseek-v4.1-flash",
         )
         db.add(m)
         db.commit()

@@ -196,4 +196,4 @@ JWT_ALGORITHM = settings.algorithm
 
 # LLM config aliases
 OPENROUTER_API_KEY = settings.openrouter_api_key if hasattr(settings, 'openrouter_api_key') else ''
-DEFAULT_MODEL = getattr(settings, 'primary_model', 'deepseek-v4-flash')
+DEFAULT_MODEL = getattr(settings, 'primary_model', 'deepseek-v4.1-flash')

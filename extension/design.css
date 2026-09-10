@@ -613,6 +613,21 @@ textarea.input { resize: vertical; min-height: 68px; }
   margin-bottom: 4px;
 }
 .chat-msg.user .chat-sender { color: color-mix(in srgb, var(--on-primary-container) 75%, transparent); }
+.chat-copy {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-lg, 999px);
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 10px; line-height: 14px; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.chat-copy:hover { opacity: 1; }
 .chat-composer { display: flex; gap: 8px; align-items: flex-end; }
 .chat-composer .input { flex: 1; min-width: 0; }
 .chat-send { flex: 0 0 auto; width: 44px; padding-left: 0; padding-right: 0; }

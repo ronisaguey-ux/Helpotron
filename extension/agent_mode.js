@@ -231,7 +231,7 @@ function updateModeChip() {
     chip.classList.toggle(onClass, !!on);
   };
   set('seescreenChip', 'See screen', state.seescreen, 'chip--blue');
-  set('executeChip', 'Execute', state.execute, 'chip--amber');
+  set('executeChip', 'Study Mode', state.execute, 'chip--amber');
 }
 
 async function loadAgentState() {
@@ -268,18 +268,49 @@ async function maybeAutoCapture() {
 }
 
 // ── Chat rendering (mirror of popup.js markup contract) ──────────────────────
+// Copy-to-clipboard control attached to every chat bubble (operator 09-10).
+function makeCopyButton(text) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'chat-copy';
+  btn.textContent = 'Copy';
+  btn.title = 'Copy this message';
+  btn.addEventListener('click', async () => {
+    let done = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      done = true;
+    } catch (e) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        done = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (e2) { done = false; }
+    }
+    btn.textContent = done ? 'Copied' : 'Failed';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+  });
+  return btn;
+}
+
 function addChatMsgEl(sender, text) {
   const div = document.createElement('div');
   div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
   if (sender === 'user' || sender === 'agent') {
     const sp = document.createElement('span');
     sp.className = 'chat-sender';
-    sp.textContent = sender === 'user' ? 'You' : 'Agent';
+    sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
   const body = document.createElement('span');
   body.textContent = text;
   div.appendChild(body);
+  div.appendChild(makeCopyButton(text));
   els.chatMessages.appendChild(div);
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
   return div;
@@ -1299,8 +1330,8 @@ async function sendChatMessage() {
       const n = actions.length;
       if (!state.execute) {
         // 09-02: the Execute toggle is OFF — the agent talks, it never acts.
-        pushLog('warn', `agent proposed ${n} action(s) but “Execute” is OFF — turn it on in the popup (then Control ON + Resume) to let it drive`);
-        setStatus(`Agent proposed ${n} action(s) — “Execute” is OFF, nothing ran.`);
+        pushLog('warn', `agent proposed ${n} action(s) but “Study Mode” is OFF — turn it on in the popup (then Control ON + Resume) to let it drive`);
+        setStatus(`Agent proposed ${n} action(s) — “Study Mode” is OFF, nothing ran.`);
       } else if (!state.controlOn || state.paused) {
         pushLog('warn', `agent proposed ${n} action(s) but control is ${state.controlOn ? 'paused' : 'OFF'} — enable Control (or press Resume) to let it drive`);
       } else {
@@ -1313,7 +1344,7 @@ async function sendChatMessage() {
     await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
   } catch (e) {
     typingEl.replaceWith(addChatMsgEl('agent', `⚠️ ${e.message}`));
-    setStatus('❌ Agent chat failed.');
+    setStatus('❌ Study Buddy chat failed.');
     pushLog('err', `chat failed: ${e.message}`);
   } finally {
     chatBusy = false;
@@ -1336,6 +1367,7 @@ function renderAgentApproval() {
   const item = pendAgentApprovals[0];
   if (!item) {
     card.style.display = 'none';
+    syncAgentApprovalSection();
     return;
   }
   titleEl.innerText = item.title;
@@ -1350,6 +1382,22 @@ function renderAgentApproval() {
     helper.textContent = 'Approve = let it act · Reject = stop it · Neutral = don’t do it, just send your note.';
   }
   card.style.display = 'block';
+  syncAgentApprovalSection();
+}
+
+// #approvalSection carries an inline display:none that nothing ever cleared, so
+// the card rendered into a hidden parent and the full-tab Agent Mode never
+// showed an approval at all — the status line said one was waiting, the card
+// itself was never painted. The section is up while either the card or the
+// answered-status line has something to say. Same rule as the popup's dock.
+function syncAgentApprovalSection() {
+  const section = document.getElementById('approvalSection');
+  if (!section) return;
+  const card = document.getElementById('approvalCard');
+  const statusLine = document.getElementById('approvalStatus');
+  const cardUp = !!card && card.style.display !== 'none';
+  const statusUp = !!statusLine && !statusLine.hidden;
+  section.style.display = (cardUp || statusUp) ? '' : 'none';
 }
 
 function answerAgentApproval(reqId, decision, note, opts) {

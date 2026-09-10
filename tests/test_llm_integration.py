@@ -35,8 +35,8 @@ def test_extract_json_returns_none_on_garbage():
 
 def test_effort_cascade_always_leads_with_primary():
     for effort in (50, 500, 950):
-        cascade = _effort_cascade("deepseek-v4-flash", effort)
-        assert cascade[0] == "deepseek-v4-flash"
+        cascade = _effort_cascade("deepseek-v4.1-flash", effort)
+        assert cascade[0] == "deepseek-v4.1-flash"
         assert len(cascade) > 1, "cascade must have fallback providers"
 
 
@@ -66,7 +66,7 @@ def test_call_llm_cascades_on_provider_failure(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", no_sleep)  # neutralize backoff
 
     result = asyncio.run(
-        call_llm("sys", "user prompt", model="deepseek-v4-flash", effort_score=300)
+        call_llm("sys", "user prompt", model="deepseek-v4.1-flash", effort_score=300)
     )
     assert result == "cascade-ok"
     assert len(attempts) >= 2, "fallback provider must be attempted"
@@ -88,4 +88,4 @@ def test_call_llm_raises_when_all_providers_fail(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", no_sleep)  # neutralize backoff
 
     with pytest.raises(RuntimeError):
-        asyncio.run(call_llm("sys", "user prompt", model="deepseek-v4-flash"))
+        asyncio.run(call_llm("sys", "user prompt", model="deepseek-v4.1-flash"))

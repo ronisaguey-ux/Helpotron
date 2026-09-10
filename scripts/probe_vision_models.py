@@ -20,15 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/probe_vision_models.db")
 
-# The four wire slugs the screen-vision tiers actually call (see
-# screen_vision._OR_SLUG_MAP). No other model belongs here: gemini is pinned to
-# 3.1-flash-lite + 3.8-flash, and openai/anthropic are barred outright by
-# llm.ModelPolicy.PROHIBITED_PREFIXES.
+# The three wire slugs the screen-vision tiers actually call (see
+# screen_vision.VISION_MODEL_TIERS). No other model belongs here: gemini is
+# pinned to 3.1-flash-lite + 3.8-flash, and openai/anthropic are barred
+# outright by llm.ModelPolicy.PROHIBITED_PREFIXES.
 CANDIDATES = [
     "google/gemini-3.1-flash-lite",
-    "deepseek/deepseek-v4-flash-vision-exp",
+    "deepseek/deepseek-v4.1-flash",
     "google/gemini-3.8-flash",
-    "deepseek/deepseek-v4-pro",
 ]
 
 IMAGE = ROOT / "verify-artifacts" / "typefix-drive-target.png"

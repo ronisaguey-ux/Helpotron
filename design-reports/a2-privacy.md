@@ -13,10 +13,10 @@
 - Uploads on disk: uploads/ dir — agent files (agent_files.py:19), assignment dumps (assignment_dump.py:80), avatars, transcripts (transcription.py:28).
 
 ### LLM providers — honest answer
-- Only ONE real outbound inference call: https://openrouter.ai/api/v1/chat/completions with OPENROUTER_API_KEY (server/llm.py:314,366,533,579). Model roster = DeepSeek (deepseek/deepseek-v4-flash-vision, -pro-vision), Google Gemini (google/gemini-3.1-flash-lite, gemini-3.7-flash), Nvidia Nemotron, Qwen (llm.py:31-58). Anthropic/Claude/OpenAI/GPT are PROHIBITED (llm.py:45-47).
+- Only ONE real outbound inference call: https://openrouter.ai/api/v1/chat/completions with OPENROUTER_API_KEY (server/llm.py:314,366,533,579). Model roster = DeepSeek (deepseek/deepseek-v4.1-flash), Google Gemini (google/gemini-3.1-flash-lite, gemini-3.8-flash), Nvidia Nemotron, Qwen (llm.py:31-58). Anthropic/Claude/OpenAI/GPT are PROHIBITED (llm.py:45-47).
 - GEMINI_API_KEY and DEEPSEEK_API_KEY exist in config.py:55-61 but NO code calls api.deepseek.com or Google directly; transcription is Gemini audio model via OpenRouter (transcription.py:64-101, hard-fails without OPENROUTER_API_KEY).
 - Local fallback lanes localhost:8080/8085 only if OpenRouter is down (llm.py:21-25,408-409).
-- Screen frames (extension "See screen"): one base64 JPEG ≤1280 px + viewport (routes_extension.py:369-379); VISION_MODEL = deepseek/deepseek-v4-flash-vision (screen_vision.py:34).
+- Screen frames (extension "See screen"): one base64 JPEG ≤1280 px + viewport (routes_extension.py:369-379); VISION_MODEL = deepseek/deepseek-v4.1-flash (screen_vision.py:34).
 
 ### Payments — honest answer
 - payments.py:17 SUPPORTED_PROVIDERS = {stripe, cashapp, zelle, venmo, paypal}. Stripe Checkout subscriptions used when stripe_secret_key + webhook secret configured (payments.py:29-71); stores stripe_customer_id/subscription_id, webhook grants plan credits + referral rewards (payments.py:74+). Card numbers never on our servers. Manual providers recorded as provider_ref.
