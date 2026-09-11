@@ -2,7 +2,8 @@
 """
 Chrome CDP automation script for Helpotron Design Audit.
 Walks the entire product across Consumer and Admin flows at multiple resolutions.
-Captures screenshots to helpotron_audit/design_pass/screenshots/before/.
+Captures screenshots to artifacts/audit/design_pass/screenshots/before/
+(artifacts/ is gitignored — this is regenerable evidence, not source).
 """
 
 import asyncio
@@ -13,7 +14,7 @@ import time
 import httpx
 import websockets
 
-SCREENSHOT_DIR = "/home/roni/Roni_workspace/helpotron/helpotron_audit/design_pass/screenshots/before"
+SCREENSHOT_DIR = "/home/roni/Roni_workspace/helpotron/artifacts/audit/design_pass/screenshots/before"
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 RESOLUTIONS = {

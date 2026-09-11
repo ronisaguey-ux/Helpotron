@@ -13,7 +13,7 @@ import time
 import httpx
 import websockets
 
-OUTPUT_DIR = "/home/roni/Roni_workspace/helpotron/helpotron_audit/design_pass/screenshots/after"
+OUTPUT_DIR = "/home/roni/Roni_workspace/helpotron/artifacts/audit/design_pass/screenshots/after"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 VIEWPORTS = {
