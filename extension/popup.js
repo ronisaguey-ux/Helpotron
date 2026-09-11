@@ -2935,6 +2935,7 @@ if (chatFormEl && chatInputEl) {
       // outside the page survive clamping and land on nothing.
       let viewport = await activeTabViewport();
 
+      let screenError = null;
       if (seeScreen) {
         // One path for every scope, single tab included. The old single-tab
         // branch called captureVisibleTab with no window id, which means "the
@@ -2943,14 +2944,23 @@ if (chatFormEl && chatInputEl) {
         // page it was being asked about. Going through the jurisdiction always
         // means the frames come from the tabs the run will actually drive.
         const active = await activeTabForDrive();
-        const { tabs: targets } = await resolveJurisdictionTabs(active);
-        const shot = await captureJurisdictionFrames(targets, active);
-        images = shot.images;
-        tabRefs = shot.tabs;
-        // The frames were just normalized into the drive tab's CSS viewport,
-        // so that is the box the server must clamp against. Prefer it over the
-        // pre-capture read — the tab can be resized between the two.
-        if (shot.viewport) viewport = shot.viewport;
+        const { tabs: targets, reason } = await resolveJurisdictionTabs(active);
+        if (!targets.length) {
+          screenError = reason || (active ? `the tab you are on (${driveTabLabel(active)}) cannot be driven or captured — browser internal pages are restricted. Switch to a normal web page.` : 'no active tab found');
+          setStatus(`⚠️ Screen capture: ${screenError}`);
+        } else {
+          const shot = await captureJurisdictionFrames(targets, active);
+          images = shot.images;
+          tabRefs = shot.tabs;
+          // The frames were just normalized into the drive tab's CSS viewport,
+          // so that is the box the server must clamp against. Prefer it over the
+          // pre-capture read — the tab can be resized between the two.
+          if (shot.viewport) viewport = shot.viewport;
+          if (!images.length) {
+            screenError = 'screen capture returned no frames (tab may be restricted, DevTools open, or occluded)';
+            setStatus(`⚠️ Screen capture: ${screenError}`);
+          }
+        }
       }
 
       const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
@@ -2985,6 +2995,7 @@ if (chatFormEl && chatInputEl) {
         execute: !!executeOn,
       };
       if (images.length) bodyPayload.images = images;
+      if (screenError) bodyPayload.screen_error = screenError;
       if (tabRefs.length) bodyPayload.tabs = tabRefs;
       if (viewport) bodyPayload.viewport = viewport;
       if (elements.length) bodyPayload.elements = elements;

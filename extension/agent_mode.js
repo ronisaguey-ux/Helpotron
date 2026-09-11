@@ -1290,6 +1290,7 @@ async function sendChatMessage() {
   let images = [];
   let viewport = null;
   let frameDim = null;
+  let screenError = null;
   if (!state.seescreen) {
     pushLog('info', '“See screen” toggle is OFF — this message carries no screen frame');
   } else {
@@ -1302,6 +1303,9 @@ async function sendChatMessage() {
         frameDim = { w: f.w, h: f.h };
         pushLog('info', `sent frame attached (${f.w}×${f.h}, jpeg q${JPEG_QUALITY})`);
       }
+    }
+    if (!images.length) {
+      screenError = 'no active stream captured — select a tab or navigate to a regular web page';
     }
   }
 
@@ -1320,6 +1324,7 @@ async function sendChatMessage() {
   const typingEl = addChatMsgEl('agent', '…thinking…');
   const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute };
   if (images.length) body.images = images;
+  if (screenError) body.screen_error = screenError;
   if (viewport) body.viewport = viewport;
 
   // The page's own element list — exact measured coordinates, not a vision
