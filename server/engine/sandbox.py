@@ -82,7 +82,7 @@ class VirtualSubagentSandbox:
         self.timeout_seconds = timeout_seconds
         self.created_at = time.time()
         self.workspace_dir = (BASE_SANDBOX_DIR / sandbox_id).resolve()
-        self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        self.workspace_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.is_active = True
 
     def _resolve_safe_path(self, filename: str) -> Path:
@@ -103,6 +103,12 @@ class VirtualSubagentSandbox:
             target.write_text(content, encoding="utf-8")
         else:
             target.write_bytes(content)
+        # Owner-only: the file can carry the assignment text or scraped page
+        # content, and the default umask left it group/other-readable.
+        try:
+            os.chmod(target, 0o600)
+        except OSError:  # pragma: no cover - non-POSIX filesystem
+            pass
         return str(target)
 
     def read_file(self, filename: str) -> str:
@@ -345,7 +351,11 @@ def write_sandbox_file(sandbox_id: str, filename: str, content: str) -> str:
     path = get_sanitized_sandbox_path(sandbox_id, filename)
     if path.suffix.lower() in ('.sh', '.bash', '.exe', '.bat', '.py'):
         raise ValueError('Executable file extensions forbidden in standard sandbox export')
-    with open(path, 'w', encoding='utf-8') as f:
+    # Sandbox output is the agent's working material, not public data. open()
+    # honours the process umask (0664 under a default systemd user manager), so
+    # set the mode explicitly rather than trusting it.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
         f.write(content)
     return str(path)
 

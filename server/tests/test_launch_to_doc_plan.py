@@ -103,6 +103,28 @@ def test_typing_config_is_clamped():
     assert build_typing_config("academic", {"typo_rate": None})["typo_rate"] == 0.018
 
 
+def test_typing_config_asks_for_trusted_keystrokes_by_default():
+    """09-11 audit fix: the typing path must dispatch through CDP, not synthetic
+    DOM events. Measured difference is a single property — Input.dispatchKeyEvent
+    yields keydown/keypress/beforeinput/input/keyup with isTrusted:true, while
+    dispatchEvent yields false — and that is what a page can read to tell
+    automation from a person. The plan carries the flag so the extension never
+    has to guess, and it can still be turned off."""
+    assert build_typing_config()["trusted_keys"] is True
+    assert build_typing_config("academic")["trusted_keys"] is True
+    assert build_launch_plan(text="hi")["typing"]["trusted_keys"] is True
+    assert build_launch_config()["typing"]["trusted_keys"] is True
+    assert build_typing_config("academic", {"trusted_keys": False})["trusted_keys"] is False
+
+
+def test_override_can_never_make_trusted_keys_truthy_from_junk():
+    """bool() is the only coercion — any non-empty value means "on", so a
+    caller cannot accidentally send a string that leaks through unchecked."""
+    assert build_typing_config("academic", {"trusted_keys": "yes"})["trusted_keys"] is True
+    assert build_typing_config("academic", {"trusted_keys": 0})["trusted_keys"] is False
+    assert build_typing_config("academic", {"trusted_keys": ""})["trusted_keys"] is False
+
+
 def test_plan_estimate_uses_the_chosen_cadence():
     """The panel shows a time estimate before typing; it must follow the cadence,
     not a hardcoded 65 wpm."""

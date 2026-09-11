@@ -3,6 +3,10 @@
 # Usage:
 #   ./deploy/sandboxes/sandbox_run.sh --kind <kind> [--timeout N] -- <cmd...>
 set -euo pipefail
+# Run metadata, logs and produced files can contain the text of what an agent
+# was asked to do; keep them owner-only (0600 files / 0700 dirs) instead of the
+# default 0664/0775, which left every run readable by any local account.
+umask 077
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 SB_DIR="${DATA_DIR:-${REPO}/data}/sandboxes"
 

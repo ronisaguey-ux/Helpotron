@@ -77,6 +77,16 @@ TYPING_DEFAULTS: Dict[str, Any] = {
     "jitter": True,
     "false_start_rate": 0.025,
     "target_app": "universal",
+    # Dispatch keystrokes through the DevTools protocol instead of synthetic DOM
+    # events. Measured difference: DOM dispatch produces keydown/keypress/keyup
+    # with isTrusted:false, CDP produces all of them with isTrusted:true. That
+    # one property is what a page (and therefore an LMS integrity monitor) can
+    # read to tell automation from a person, so this is on by default for the
+    # typing surface. The cost is a "being debugged" infobar in the browser
+    # chrome — visible to the user, NOT readable by the page — and a debugger
+    # session that must always be detached (the worker pairs attach/detach on
+    # complete, cancel, error, tab close and navigation).
+    "trusted_keys": True,
 }
 
 # Bounds so a caller-supplied override can never ask for something absurd (a
@@ -131,7 +141,7 @@ def build_typing_config(
         **TYPING_DEFAULTS,
     }
     for key in ("wpm", "typo_rate", "natural_pauses", "jitter",
-                "false_start_rate", "target_app"):
+                "false_start_rate", "target_app", "trusted_keys"):
         if not isinstance(overrides, dict) or key not in overrides:
             continue
         value = overrides[key]
@@ -152,7 +162,7 @@ def build_typing_config(
                 )
             except (TypeError, ValueError):
                 pass
-        elif key in ("natural_pauses", "jitter"):
+        elif key in ("natural_pauses", "jitter", "trusted_keys"):
             cfg[key] = bool(value)
         elif key == "target_app" and isinstance(value, str) and value.strip():
             cfg["target_app"] = value.strip()[:32]
