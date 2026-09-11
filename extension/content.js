@@ -664,6 +664,15 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       assignmentId: null,
       hudElement: null,
     };
+    // When true, keystrokes are dispatched by the service worker through the
+    // Chrome DevTools Protocol (Input.dispatchKeyEvent), which goes through the
+    // browser's real input pipeline and therefore produces events with
+    // isTrusted:true. The DOM path below dispatches synthetic KeyboardEvents,
+    // which are isTrusted:false. Measured: the DOM path yields keydown/keypress/
+    // keyup all false; the CDP path yields keydown/keypress/beforeinput/input/
+    // keyup all true. The engine still owns WHAT and WHEN to type — this flag
+    // only swaps the hand that presses the key.
+    this.trustedKeys = false;
     // HUD realism controls live in this.config (persisted per-user); the
     // engine reads the effective rates as state-rate × config-toggle so both
     // the popup payload and the on-page HUD drawer stay in control.
@@ -764,7 +773,63 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     return document.activeElement || document.body;
   }
 
+  // ── Trusted keystroke bridge ─────────────────────────────────────────────
+  // Ask the service worker to emit one native key event for this tab. Returns
+  // false (and drops out of trusted mode) the moment the bridge is unavailable,
+  // so the DOM fallback below keeps the typing alive instead of stalling.
+  async cdpKey(params) {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'helpotron-cdp-key', params });
+      if (r && r.ok) return true;
+    } catch (e) { /* worker asleep / no session */ }
+    this.trustedKeys = false;
+    return false;
+  }
+
+  // CDP params that make a text character land as a real key press.
+  _cdpCharDown(char) {
+    if (char === '\n') {
+      return { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13,
+               nativeVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' };
+    }
+    const p = { type: 'keyDown', text: char, unmodifiedText: char };
+    if (/^[a-zA-Z]$/.test(char)) {
+      p.key = char;
+      p.code = `Key${char.toUpperCase()}`;
+      p.windowsVirtualKeyCode = char.toUpperCase().charCodeAt(0);
+      if (char !== char.toLowerCase()) p.modifiers = 8;   // Shift held for a capital
+    } else if (/^[0-9]$/.test(char)) {
+      p.key = char;
+      p.code = `Digit${char}`;
+      p.windowsVirtualKeyCode = char.charCodeAt(0);
+    } else if (char === ' ') {
+      p.key = ' ';
+      p.code = 'Space';
+      p.windowsVirtualKeyCode = 32;
+    }
+    return p;
+  }
+
+  async _trustedInsertChar(char) {
+    const down = this._cdpCharDown(char);
+    if (!(await this.cdpKey(down))) return false;
+    const up = { type: 'keyUp' };
+    if (down.key) { up.key = down.key; up.code = down.code; }
+    if (down.windowsVirtualKeyCode) {
+      up.windowsVirtualKeyCode = down.windowsVirtualKeyCode;
+      up.nativeVirtualKeyCode = down.windowsVirtualKeyCode;
+    }
+    return this.cdpKey(up);
+  }
+
+  async _trustedDeleteChar() {
+    const p = { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8 };
+    if (!(await this.cdpKey({ ...p, type: 'keyDown' }))) return false;
+    return this.cdpKey({ ...p, type: 'keyUp' });
+  }
+
   async insertChar(target, char) {
+    if (this.trustedKeys && await this._trustedInsertChar(char)) return;
     if (char === '\n') {
       const enterDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
       target.dispatchEvent(enterDown);
@@ -799,24 +864,31 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     const keypress = new KeyboardEvent('keypress', { key: char, code: `Key${char.toUpperCase()}`, keyCode, which: keyCode, bubbles: true, cancelable: true });
     target.dispatchEvent(keypress);
 
+    // execCommand emits its OWN trusted `input` event when it succeeds, so the
+    // manual dispatch below must run only when it did not — otherwise every
+    // character fires two input events, the second one isTrusted:false.
+    let inserted = false;
     try {
-      document.execCommand('insertText', false, char);
+      inserted = document.execCommand('insertText', false, char);
     } catch (e) {}
 
-    try {
-      const inputEvent = new InputEvent('input', {
-        inputType: 'insertText',
-        data: char,
-        bubbles: true,
-      });
-      target.dispatchEvent(inputEvent);
-    } catch (e) {}
+    if (!inserted) {
+      try {
+        const inputEvent = new InputEvent('input', {
+          inputType: 'insertText',
+          data: char,
+          bubbles: true,
+        });
+        target.dispatchEvent(inputEvent);
+      } catch (e) {}
+    }
 
     const keyup = new KeyboardEvent('keyup', { key: char, code: `Key${char.toUpperCase()}`, keyCode, which: keyCode, bubbles: true, cancelable: true });
     target.dispatchEvent(keyup);
   }
 
   async deleteChar(target) {
+    if (this.trustedKeys && await this._trustedDeleteChar()) return;
     try {
       const beforeInput = new InputEvent('beforeinput', {
         inputType: 'deleteContentBackward',
@@ -867,18 +939,27 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   // Whichever half does not apply is inert, so both can run unconditionally.
 
   dispatchKey(target, key, keyCode, shift) {
+    if (this.trustedKeys) {
+      const p = { key, code: key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
+      if (shift) p.modifiers = 8;
+      return this.cdpKey({ ...p, type: 'keyDown' }).then(() => this.cdpKey({ ...p, type: 'keyUp' }));
+    }
     for (const type of ['keydown', 'keyup']) {
       target.dispatchEvent(new KeyboardEvent(type, {
         key, code: key, keyCode, which: keyCode,
         shiftKey: shift, bubbles: true, cancelable: true,
       }));
     }
+    return Promise.resolve();
   }
 
   // Move the real DOM caret. No-op inside Google Docs, where the hidden iframe
   // body holds no text and the key event above has already done the work.
   nativeCaretMove(target, forward, extend) {
     if (this.isCanvasEditor) return;
+    // Under trusted input the key event ABOVE is a real key: the browser moves
+    // the caret itself, and doing it again here would move it twice.
+    if (this.trustedKeys) return;
     try {
       if (typeof target.selectionStart === 'number') {
         // <textarea> / <input>: the selection is a pair of offsets, not a Selection.
@@ -906,7 +987,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     const keyCode = forward ? 39 : 37;
     for (let n = 0; n < count; n++) {
       if (!this.state.isTyping) return;
-      this.dispatchKey(target, key, keyCode, extend);
+      await this.dispatchKey(target, key, keyCode, extend);
       this.nativeCaretMove(target, forward, extend);
       // Held arrow keys repeat fast — about 30ms apart once the repeat starts.
       await new Promise((r) => setTimeout(r, 26 + Math.random() * 34));
@@ -1243,6 +1324,9 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       assignmentId: payload.assignmentId || null,
       hudElement: null,
     };
+    // Trusted (CDP) keystrokes are opt-in per launch: the worker only offers
+    // them once it has successfully attached the debugger to this tab.
+    this.trustedKeys = payload.trustedKeys === true;
     // Pace wanders per run, so two launches of the same essay do not produce
     // the same timing trace.
     this.speed = { drift: 0.9 + Math.random() * 0.25, runLeft: 0, runFactor: 1 };
@@ -1383,12 +1467,24 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
         this.broadcastProgress('completed');
         setTimeout(() => this.removeFloatingHUD(), 5000);
       }
+      this.releaseTrustedKeys();
     } catch (err) {
       console.error('[Helpotron Assistive Typing Error]', err);
       this.state.isTyping = false;
       this.updateFloatingHUD('Error occurred');
       this.broadcastProgress('error', String(err));
+      this.releaseTrustedKeys();
     }
+  }
+
+  // Tell the worker the trusted-key session is over so it detaches the
+  // debugger. A leaked attach locks DevTools on the tab until it closes.
+  releaseTrustedKeys() {
+    if (!this.trustedKeys) return;
+    this.trustedKeys = false;
+    try {
+      chrome.runtime.sendMessage({ type: 'helpotron-cdp-detach' }).catch(() => {});
+    } catch (e) {}
   }
 
   pauseTyping() {
@@ -1412,6 +1508,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     this.state.isPaused = false;
     this.updateFloatingHUD('Cancelled ⏹');
     this.broadcastProgress('cancelled');
+    this.releaseTrustedKeys();
     setTimeout(() => this.removeFloatingHUD(), 1500);
   }
 
@@ -1913,8 +2010,11 @@ if (
 // is driving, the user's incidental mouse motion must NOT pause it. The first
 // genuine user gesture AFTER the drive window (disarm) fires:
 //   {type:'agent:user-interrupt'}
-// throttled to one per 500 ms (spec). CDP-synthesized input is NEVER isTrusted,
-// so the agent's own clicks/keys/moves can never self-interrupt.
+// throttled to one per 500 ms (spec). Synthetic events (dispatchEvent) are
+// isTrusted:false, so the agent's own DOM-dispatched clicks/keys/moves cannot
+// self-interrupt. Note this does NOT cover the CDP path: Input.dispatchMouseEvent
+// / Input.dispatchKeyEvent go through the real input pipeline and ARE trusted
+// (measured), which is why the drive window is masked while a burst is running.
 (function () {
   try {
     if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.onMessage) return;

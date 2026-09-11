@@ -334,10 +334,64 @@ async function persistInstruction(payload, assignmentId, instruction) {
   return { ok: true, assignment_id: res.json.assignment_id };
 }
 
+// ── Trusted keystrokes via CDP (09-11 audit fix) ─────────────────────────────
+// The assistive typing engine dispatched synthetic KeyboardEvents, which carry
+// isTrusted:false — the one property a page can read to tell automation from a
+// person. Input.dispatchKeyEvent goes through the browser's real input
+// pipeline, so every event it produces is isTrusted:true (measured for
+// keydown/keypress/beforeinput/input/keyup). The content engine still decides
+// WHAT and WHEN; this bridge is only the hand that presses the key. Attach is
+// always paired with detach (completion, cancel, error, tab gone) — a leaked
+// session locks DevTools on the tab until it closes.
+let cdpTypingTabId = null;
+
+async function cdpTypingAttach(tabId) {
+  try {
+    await chrome.debugger.detach({ tabId }).catch(() => {});
+    await chrome.debugger.attach({ tabId }, '1.3');
+    cdpTypingTabId = tabId;
+    return true;
+  } catch (e) {
+    cdpTypingTabId = null;
+    return false;
+  }
+}
+
+async function cdpTypingDetach() {
+  const tabId = cdpTypingTabId;
+  cdpTypingTabId = null;
+  if (tabId === null || tabId === undefined) return;
+  await chrome.debugger.detach({ tabId }).catch(() => {});
+}
+
+// A tab that navigates or closes cannot keep a debugger session; drop it so the
+// next attach starts clean.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === cdpTypingTabId) cdpTypingDetach();
+});
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (tabId === cdpTypingTabId && info.status === 'loading') cdpTypingDetach();
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) {
     sendResponse({ ok: false, error: 'untrusted sender' });
     return;
+  }
+  if (message.type === 'helpotron-cdp-key') {
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId === undefined || tabId !== cdpTypingTabId) {
+      sendResponse({ ok: false, error: 'no trusted-key session on this tab' });
+      return;
+    }
+    chrome.debugger.sendCommand({ tabId }, 'Input.dispatchKeyEvent', message.params || {})
+      .then(() => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
+    return true;
+  }
+  if (message.type === 'helpotron-cdp-detach') {
+    cdpTypingDetach().then(() => sendResponse({ ok: true }));
+    return true;
   }
   if (message.action === 'SYNC_ASSIGNMENTS') {
     syncAssignments(message.assignment).then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: String(e) }));
@@ -764,14 +818,16 @@ async function launchToDoc(payload) {
   await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ['content.js'] }).catch(() => {});
   await new Promise((r) => setTimeout(r, 400));
 
-  // NOTE: An earlier revision could optionally attach chrome.debugger here for
-  // "OS-level input", but nothing in the codebase ever set useDebugger and the
-  // engine always typed via the DOM event path anyway. The dead attach leaked:
-  // it was never detached, which locks DevTools on the tab until the tab
-  // closes. Removed entirely — if a real debugger-driven input path is ever
-  // implemented, it must pair attach with detach on complete/cancel/error.
-
+  // Trusted keystrokes: when the plan asks for them, attach the debugger HERE
+  // and only tell the engine to use CDP once the attach actually succeeded.
+  // Attach is deliberately behind the same gate as the typing itself, and the
+  // engine detaches through the worker on complete/cancel/error (plus the tab
+  // close/navigate hooks) — an attach that outlives the run locks DevTools on
+  // that tab until it closes.
   const typing = plan.typing || {};
+  const wantTrusted = typing.trusted_keys !== false;
+  const trustedKeys = wantTrusted ? await cdpTypingAttach(targetTabId) : false;
+
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(targetTabId, {
       action: 'START_ASSISTIVE_TYPING',
@@ -785,9 +841,13 @@ async function launchToDoc(payload) {
         title: plan.title,
         assignmentId: plan.assignment_id || null,
         targetApp: typing.target_app || 'universal',
+        trustedKeys,
       },
     }, (resp) => {
       if (chrome.runtime.lastError) {
+        // The engine never got the message, so it can never release the keys —
+        // drop the debugger here or it hangs on until the tab closes.
+        if (trustedKeys) cdpTypingDetach();
         resolve({ ok: false, error: chrome.runtime.lastError.message, tabId: targetTabId });
       } else {
         resolve({ ok: true, tabId: targetTabId, ...resp });
