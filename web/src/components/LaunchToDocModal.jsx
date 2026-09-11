@@ -34,6 +34,43 @@ export const CADENCE_PRESETS = [
   },
 ];
 
+// ── Website → Extension bridge ───────────────────────────────────────────────
+// The WEBSITE is the brain and the extension is the hands. This hands a fully
+// composed launch command to the extension, which only performs the browser
+// mechanics (find/create the doc tab, focus it, type). The extension's content
+// script relays window.postMessage <-> chrome.runtime, so no externally_
+// connectable manifest entry is needed.
+//
+// Because the command is composed here (from the server's plan endpoint), the
+// whole feature — cadence, doc target, typo rate — is adjustable from the site
+// without shipping a new extension build.
+function postToExtension(type, payload, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    const requestId = `ltd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let done = false;
+
+    const onMessage = (event) => {
+      if (event.source !== window) return;
+      const d = event.data;
+      if (!d || d.requestId !== requestId) return;
+      if (d.type !== 'HELPOTRON_LAUNCH_TO_DOC_RESULT' && d.type !== 'HELPOTRON_CONTROL_TYPING_RESULT') return;
+      done = true;
+      window.removeEventListener('message', onMessage);
+      resolve(d.result || { ok: false, error: 'the extension returned no result' });
+    };
+
+    window.addEventListener('message', onMessage);
+    window.postMessage({ type, requestId, payload }, '*');
+
+    // The extension may simply not be installed; never hang the UI on it.
+    setTimeout(() => {
+      if (done) return;
+      window.removeEventListener('message', onMessage);
+      resolve({ ok: false, error: 'no response from the Helpotron extension — install or enable it, then try again.' });
+    }, timeoutMs);
+  });
+}
+
 export default function LaunchToDocModal({
   isOpen = true,
   onClose = () => {},
@@ -51,10 +88,49 @@ export default function LaunchToDocModal({
 
   const [streamActive, setStreamActive] = useState(false);
   const [streamPercent, setStreamPercent] = useState(0);
+  const [streamError, setStreamError] = useState('');
   const [copied, setCopied] = useState(false);
   const [docUrl, setDocUrl] = useState('');
+  // The cadence menu is the SERVER's, not this file's. The local list is only a
+  // fallback until the config arrives (or if the site is unreachable).
+  const [presets, setPresets] = useState(CADENCE_PRESETS);
 
   const modalRef = useRef(null);
+
+  // Real typing progress relayed from the extension while it types, plus the
+  // server-owned cadence menu. Both best-effort: the modal still works without.
+  useEffect(() => {
+    function onMessage(event) {
+      if (event.source !== window) return;
+      const d = event.data;
+      if (!d || d.type !== 'HELPOTRON_TYPING_PROGRESS') return;
+      const outer = d.payload || {};
+      const inner = outer.payload || outer;
+      const pct = Number(inner.percentage ?? inner.percent ?? inner.progress);
+      if (Number.isFinite(pct)) setStreamPercent(Math.max(0, Math.min(100, Math.round(pct))));
+      if (inner.state === 'finished' || inner.status === 'finished' || pct >= 100) setStreamActive(false);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.request?.('/api/launch-to-doc/config')
+      .then((cfg) => {
+        if (cancelled || !cfg || !Array.isArray(cfg.presets) || !cfg.presets.length) return;
+        setPresets(cfg.presets.map((p) => ({
+          id: p.id,
+          label: p.label,
+          wpm: p.wpm,
+          // the server stores a rate (0.018); this panel shows a percentage (1.8)
+          typoRate: Math.round(Number(p.typo_rate || 0) * 1000) / 10,
+          description: p.title || p.sub || '',
+        })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Esc and Enter shortcuts
   useEffect(() => {
@@ -75,7 +151,7 @@ export default function LaunchToDocModal({
 
   const handleSelectPreset = (presetId) => {
     setSelectedPreset(presetId);
-    const p = CADENCE_PRESETS.find((cp) => cp.id === presetId);
+    const p = presets.find((cp) => cp.id === presetId);
     if (p) {
       setWpm(p.wpm);
       setTypoRate(p.typoRate);
@@ -105,36 +181,38 @@ export default function LaunchToDocModal({
   const handleStartStream = async () => {
     setStreamActive(true);
     setStreamPercent(0);
+    setDocUrl('');
+    setStreamError('');
 
     try {
-      // Create Google Doc or call gdocs exporter payload endpoint
-      const res = await api.request?.('/api/gdocs/stream', {
+      // 1. The SERVER composes the command: which text, which cadence, where it
+      //    goes, and a clamped typing config. Nothing about the launch is decided
+      //    in the browser any more.
+      const plan = await api.request('/api/launch-to-doc/plan', {
         method: 'POST',
         body: JSON.stringify({
-          assignment_id: assignment?.id,
-          text: text || 'Monograph content ready for document export.',
-          wpm,
-          typo_rate: typoRate,
+          assignment_id: assignment?.id ?? null,
+          preset_id: selectedPreset,
+          text: text || '',
         }),
-      }).catch(() => ({
-        url: `https://docs.google.com/document/d/sample_${Date.now()}/edit`,
-      }));
+      });
 
-      setDocUrl(res?.url || 'https://docs.google.com/document/u/0/');
+      if (!plan || plan.status !== 'success' || !plan.text) {
+        throw new Error((plan && plan.detail) || 'the server did not return a launch plan');
+      }
 
-      // Simulate streaming progress
-      let p = 0;
-      const t = setInterval(() => {
-        p += 15;
-        if (p >= 100) {
-          clearInterval(t);
-          setStreamPercent(100);
-        } else {
-          setStreamPercent(p);
-        }
-      }, 400);
+      // 2. The EXTENSION is the hands: hand it the command verbatim and let it
+      //    type. It decides nothing, so the site stays in control of behaviour.
+      const result = await postToExtension('HELPOTRON_LAUNCH_TO_DOC', plan);
+
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || 'the extension could not start typing');
+      }
+
+      setStreamActive(true);
+      setStreamPercent(0);
     } catch (e) {
-      console.warn('Stream failed:', e);
+      setStreamError(String((e && e.message) || e));
       setStreamActive(false);
     }
   };
@@ -185,7 +263,7 @@ export default function LaunchToDocModal({
             Typing Cadence Persona
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-unit-2">
-            {CADENCE_PRESETS.map((preset) => {
+            {presets.map((preset) => {
               const isSelected = selectedPreset === preset.id;
               return (
                 <button
@@ -292,6 +370,16 @@ export default function LaunchToDocModal({
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
+          </div>
+        )}
+
+        {/* Launch failure — the plan or the extension could not start typing.
+            Surfaced explicitly: the old flow faked a progress bar, so a real
+            failure used to look like success. */}
+        {streamError && (
+          <div className="p-unit-3 rounded-2xl bg-sem-red/10 border border-sem-red/30 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-sem-red shrink-0" />
+            <span className="font-body-sm text-xs text-on-surface">{streamError}</span>
           </div>
         )}
 
