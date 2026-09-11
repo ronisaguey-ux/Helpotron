@@ -1541,6 +1541,7 @@ if (chrome && chrome.storage && chrome.storage.onChanged) {
     } else if (viewName === 'type') {
       loadAssignmentsForLaunch();
       detectDocTabs();
+      loadLaunchConfig();
     } else if (viewName === 'settings') {
       refreshSettingsView();
     }
@@ -1980,17 +1981,37 @@ async function captureBackgroundTabFrame(tabId) {
 async function captureJurisdictionFrames(targets, activeTab) {
   const images = [];
   const tabs = [];
+  let primaryViewport = null;
   for (const t of targets) {
     let frame = null;
     if (images.length < MAX_JURISDICTION_FRAMES) {
       const sameWindowActive = t.active && (!activeTab || t.windowId === activeTab.windowId);
       frame = sameWindowActive ? await captureActiveTabFrame(t.windowId) : null;
       if (!frame) frame = await captureBackgroundTabFrame(t.id);
-      if (frame) images.push(frame);
+      if (frame) {
+        // captureVisibleTab / Page.captureScreenshot return DEVICE pixels
+        // (CSS x devicePixelRatio), while the DOM element list and the mouse
+        // dispatch are CSS. On any display whose scale factor is not 1 those
+        // are different spaces and every model coordinate is off by exactly
+        // that ratio — the click lands somewhere other than where it was
+        // aimed. Resize the frame to the tab's own CSS viewport so one image
+        // pixel IS one CSS pixel and the model, the DOM list, the server's
+        // clamp and the click all speak the same space.
+        const vp = await window.HelpotronElements.getTabViewport(t.id);
+        if (vp) {
+          frame = await window.HelpotronElements.normalizeFrame(frame, vp.width, vp.height);
+          // The single viewport the server clamps against must be the DRIVE
+          // tab's (the one the user is on), not whichever tab the capture
+          // loop happened to photograph first.
+          const isPrimary = t.active && (!activeTab || t.windowId === activeTab.windowId);
+          if (isPrimary || !primaryViewport) primaryViewport = { width: vp.width, height: vp.height };
+        }
+        images.push(frame);
+      }
     }
     tabs.push({ title: driveTabLabel(t), url: String(t.url || ''), captured: Boolean(frame) });
   }
-  return { images, tabs };
+  return { images, tabs, viewport: primaryViewport };
 }
 
 const KEY_MAP = {
@@ -2097,6 +2118,13 @@ async function snapActionsToElements(tabId, actions) {
     return actions;
   }
 }
+
+// ── Live DOM element registry ──────────────────────────────────────────────────────────────────
+// Defined in element_registry.js (loaded by popup.html). Kept in ONE place
+// because the list built at capture time and the list re-read at dispatch
+// time must agree, or a ref silently points at the wrong element.
+const collectInteractiveElements = (...a) => window.HelpotronElements.collectInteractiveElements(...a);
+const resolveActionRefs = (...a) => window.HelpotronElements.resolveActionRefs(...a);
 
 // ── Virtual Visible Second Cursor Overlay on Screen ─────────────────────────
 async function initVirtualCursor(tabId) {
@@ -2650,6 +2678,10 @@ async function driveActionsInTab(driveTab, actions, ctx) {
       return { status: 'paused', ran: 0, label };
     }
 
+    // A ref-based op carries no coordinates: resolve it against the live DOM
+    // first so it joins the coordinate path below like any other click.
+    actions = await resolveActionRefs(driveTab.id, actions);
+
     // Clamp every coordinate against the LIVE viewport, and start the glide
     // from the middle of THIS tab so the cursor never enters from a stale
     // position left behind by a previous page.
@@ -2915,6 +2947,10 @@ if (chatFormEl && chatInputEl) {
         const shot = await captureJurisdictionFrames(targets, active);
         images = shot.images;
         tabRefs = shot.tabs;
+        // The frames were just normalized into the drive tab's CSS viewport,
+        // so that is the box the server must clamp against. Prefer it over the
+        // pre-capture read — the tab can be resized between the two.
+        if (shot.viewport) viewport = shot.viewport;
       }
 
       const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
@@ -2925,6 +2961,19 @@ if (chatFormEl && chatInputEl) {
       // "the See screen toggle is off" while the toggle was visibly ON, and
       // refuse to act on the page.
       const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
+
+      // The page's own element list — exact measured coordinates, not a vision
+      // guess. Gathered only when the run may actually act, so a look-only turn
+      // pays no extra tokens; an empty list leaves the vision path untouched.
+      let elements = [];
+      if (executeOn) {
+        try {
+          const driveTab = await activeTabForDrive();
+          if (driveTab && driveTab.id !== undefined && driveTab.id !== null) {
+            elements = await collectInteractiveElements(driveTab.id);
+          }
+        } catch (e) { elements = []; }
+      }
 
       const bodyPayload = {
         text,
@@ -2938,6 +2987,7 @@ if (chatFormEl && chatInputEl) {
       if (images.length) bodyPayload.images = images;
       if (tabRefs.length) bodyPayload.tabs = tabRefs;
       if (viewport) bodyPayload.viewport = viewport;
+      if (elements.length) bodyPayload.elements = elements;
 
       const res = await fetch(`${srv}/api/extension/agent_chat`, {
         method: 'POST',
@@ -3062,13 +3112,14 @@ const ltdTypingStatus = document.getElementById('ltdTypingStatus');
 const btnPauseTyping = document.getElementById('btnPauseTyping');
 const btnCancelTyping = document.getElementById('btnCancelTyping');
 const btnHumanizeLtd = document.getElementById('btnHumanizeLtd');
-const ltdCadenceButtons = document.querySelectorAll('.ltd-preset');
 
 let typingState = {
   active: false,
   paused: false,
-  wpm: 65,
-  typoRate: 0.018,
+  // The cadence is chosen by PRESET ID, not by raw wpm/typo numbers: the server
+  // owns what each preset means, so this panel and the typing engine can never
+  // disagree about what "Academic" is.
+  presetId: 'academic',
   targetTabId: null,
 };
 
@@ -3121,14 +3172,81 @@ if (btnHumanizeLtd) {
   });
 }
 
-ltdCadenceButtons.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    ltdCadenceButtons.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    typingState.wpm = Number(btn.dataset.wpm) || 65;
-    typingState.typoRate = Number(btn.dataset.typo) || 0.018;
+// The cadence menu is rendered from the server's config (renderCadencePresets).
+// The click handler is delegated from the container rather than bound per button
+// so a re-render cannot orphan it, and the id falls back to the static markup's
+// wpm attribute when the server is unreachable.
+function presetIdFromButton(btn) {
+  if (btn.dataset.preset) return btn.dataset.preset;
+  const wpm = Number(btn.dataset.wpm);
+  if (wpm === 48) return 'careful';
+  if (wpm === 85) return 'fast';
+  return 'academic';
+}
+
+function selectCadence(btn) {
+  const seg = document.getElementById('ltdCadenceSeg');
+  if (seg) seg.querySelectorAll('.ltd-preset').forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  typingState.presetId = presetIdFromButton(btn);
+}
+
+const ltdCadenceSeg = document.getElementById('ltdCadenceSeg');
+if (ltdCadenceSeg) {
+  ltdCadenceSeg.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.ltd-preset');
+    if (btn) selectCadence(btn);
   });
-});
+}
+
+// Draw the cadence menu from the server's presets. This is the point of moving
+// the logic server-side: adding a cadence or re-tuning one is a deploy, not an
+// extension release.
+function renderCadencePresets(presets) {
+  const seg = document.getElementById('ltdCadenceSeg');
+  if (!seg || !Array.isArray(presets) || !presets.length) return;
+  seg.innerHTML = '';
+  presets.forEach((p) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'seg-btn ltd-preset' + (p.default ? ' active' : '');
+    btn.dataset.preset = p.id || '';
+    btn.dataset.wpm = String(p.wpm != null ? p.wpm : '');
+    btn.dataset.typo = String(p.typo_rate != null ? p.typo_rate : '');
+    btn.title = p.title || p.label || '';
+    btn.textContent = p.label || p.id || '';
+    if (p.sub) {
+      const sub = document.createElement('span');
+      sub.className = 'seg-sub';
+      sub.textContent = p.sub;
+      btn.appendChild(sub);
+    }
+    seg.appendChild(btn);
+  });
+  const active = seg.querySelector('.ltd-preset.active') || seg.querySelector('.ltd-preset');
+  if (active) selectCadence(active);
+}
+
+// Pull the UI contract (presets, copy, hint) from the server. Best-effort: on
+// any failure the hardcoded markup stays, so the panel still works offline.
+async function loadLaunchConfig() {
+  const { server } = await chrome.storage.local.get('server');
+  const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  const t = await authToken();
+  if (!t) return;
+  try {
+    const res = await fetch(`${srv}/api/launch-to-doc/config`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg && Array.isArray(cfg.presets)) renderCadencePresets(cfg.presets);
+    const hint = document.querySelector('.launch-doc-panel .field-hint');
+    if (hint && cfg && cfg.ui && cfg.ui.no_docs_tab_hint) hint.textContent = cfg.ui.no_docs_tab_hint;
+  } catch {
+    // keep the static markup
+  }
+}
 
 async function loadAssignmentsForLaunch() {
   if (!ltdAssignmentSelect) return;
@@ -3253,8 +3371,7 @@ if (btnStartLaunchToDoc) {
       payload: {
         text,
         tabId: targetId,
-        wpm: typingState.wpm,
-        typoRate: typingState.typoRate,
+        presetId: typingState.presetId,
         assignmentId: selectedAssignId,
       },
     }).catch((e) => ({ ok: false, error: String(e) }));

@@ -446,6 +446,16 @@ class ExtensionChatRequest(BaseModel):
         max_length=16,
         description="jurisdiction tabs, in the same order as images",
     )
+    # 09-10 accuracy: the page's own interactive elements with EXACT viewport
+    # coordinates, enumerated from the live DOM by the extension. These outrank
+    # the vision pass's coordinates, which are read off a screenshot and are
+    # therefore estimates. Additive — absent/empty leaves the vision path exactly
+    # as it was.
+    elements: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        max_length=80,
+        description="live DOM interactive elements with exact viewport coords",
+    )
 
 
 class VisionRequest(BaseModel):
@@ -509,6 +519,46 @@ SCREEN_VISION_CHARGE = 1.0
 # mis-fire on screen coordinates present in the analysis. Wording resolves
 # the upstream JSON contract's 'no markdown' line: the control fence is DATA
 # inside the reply string, not emitted markdown, and the screen is real.
+def _render_live_elements(elements: Optional[List[Dict[str, Any]]]) -> str:
+    """Authoritative interactive-element list, measured from the page's own DOM.
+
+    The control coordinates used to come only from the vision pass, which reads
+    them off a screenshot — so every x/y was a guess, and a guess that lands on
+    padding is indistinguishable from a click that missed. The extension now
+    sends the real elements with their true getBoundingClientRect centres, and
+    those are exact. This renders them for the model and marks them as the
+    source of truth, so it stops re-estimating what it has already been told.
+
+    Returns "" when there is nothing usable, so the caller can append
+    unconditionally.
+    """
+    lines: List[str] = []
+    for el in (elements or [])[:60]:
+        if not isinstance(el, dict):
+            continue
+        name = str(el.get("name") or "").strip()[:60]
+        role = str(el.get("role") or "").strip()[:24]
+        try:
+            x, y = int(el.get("x")), int(el.get("y"))
+        except (TypeError, ValueError):
+            continue
+        if not name:
+            continue
+        ref = el.get("ref")
+        prefix = ""
+        if isinstance(ref, (int, float)) and not isinstance(ref, bool):
+            prefix = f"[{int(ref)}] "
+        lines.append(f"- {prefix}{name} ({role}) at x={x}, y={y}")
+    if not lines:
+        return ""
+    return (
+        "\n\nLIVE DOM ELEMENTS (measured from the page itself this turn — these "
+        "coordinates are EXACT, not estimated. Prefer them over anything the "
+        "screen description guesses; the [n] is the element's ref, usable as "
+        '{"op":"click","ref":n}.):\n' + "\n".join(lines)
+    )
+
+
 AGENT_MODE_DIRECTIVE = (
     "[TELE-OPERATION MODE — extension agent (09-01). The bracketed lines that "
     "start with [Screen state at] are REAL, LIVE descriptions of the user's "
@@ -526,8 +576,8 @@ AGENT_MODE_DIRECTIVE = (
     "markdown, so it does not violate the envelope's no-markdown rule. "
     "ALLOWED OPS (only these): "
     "{\"op\":\"move\",\"x\":0,\"y\":0}; "
-    "{\"op\":\"click\",\"x\":0,\"y\":0,\"button\":\"left\"|\"right\"}; "
-    "{\"op\":\"dblclick\",\"x\":0,\"y\":0}; "
+    "{\"op\":\"click\",\"x\":0,\"y\":0,\"button\":\"left\"|\"right\"} or {\"op\":\"click\",\"ref\":0}; "
+    "{\"op\":\"dblclick\",\"x\":0,\"y\":0} or {\"op\":\"dblclick\",\"ref\":0}; "
     "{\"op\":\"drag\",\"fromX\":0,\"fromY\":0,\"toX\":0,\"toY\":0}; "
     "{\"op\":\"type\",\"text\":\"...\"}; "
     "{\"op\":\"key\",\"key\":\"Enter\"|\"Escape\"|\"Tab\"|\"Backspace\"|\"ArrowLeft\"|\"ArrowRight\"|\"ArrowUp\"|\"ArrowDown\"|\"Home\"|\"End\"|\"Delete\"|\"PageUp\"|\"PageDown\",\"modifiers\":[\"ctrl\"|\"shift\"|\"alt\"]}; "
@@ -549,10 +599,14 @@ AGENT_MODE_DIRECTIVE = (
     # 09-10 (operator): the agent kept re-clicking the same miss. Accuracy is a
     # contract, not a hope — aim from the freshest element list, and never
     # repeat an identical click when the screen did not change.
-    "ACCURACY RULES: click the EXACT centre coordinate the freshest INTERACTIVE "
-    "ELEMENTS list gives for the target (name (role) at x=, y=) — never re-estimate "
-    "a coordinate the list already gives you; if the target is absent from the list, "
-    "use the nearest labelled element, never a blind guess. To type into a field, "
+    "ACCURACY RULES: the LIVE DOM ELEMENTS list is measured from the page itself, "
+    "so its coordinates are EXACT — when the target appears there, use that x/y (or "
+    "its ref) and never re-estimate it. When the element has a [n] ref, PREFER "
+    "{\"op\":\"click\",\"ref\":n}: a ref is resolved against the page at click time, "
+    "so it cannot drift with a resize or the screen's scale factor the way an x/y can. Only when the target is absent from that "
+    "list fall back to the INTERACTIVE ELEMENTS section of the screen description, "
+    "and take its exact centre from there; if it is in neither, use the nearest "
+    "labelled element, never a blind guess. To type into a field, "
     "click that field's centre FIRST to focus it, THEN type. After every action the "
     "next [Screen state at] line shows the result — READ it before deciding the next "
     "action. If the screen did not change, the click missed or the element moved: do "
@@ -764,6 +818,10 @@ def _describe_control_actions(actions: Optional[List[Dict[str, Any]]]) -> str:
             parts.append(f'type "{text[:60]}"')
         elif kind == "key":
             parts.append(f"press {op.get('key')}")
+        elif op.get("ref") is not None:
+            # DOM-anchored op: the ref is the target, there are no coordinates
+            # to quote. Reading x/y here would print "click at None,None".
+            parts.append(f"{kind} element [{op.get('ref')}]")
         elif kind in ("click", "move", "scroll"):
             parts.append(f"{kind} at {op.get('x')},{op.get('y')}")
         else:
@@ -1011,6 +1069,12 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             directive_block += "\n\n[EXECUTE: ON — actions you emit are actually executed.]"
         if screen_context:
             directive_block += "\n\nCURRENT SCREEN (this exact turn — the frames the extension just captured):\n" + screen_context
+        # The measured element list outranks the vision pass's estimates, so it
+        # is appended AFTER the screen context: the model reads the exact
+        # coordinates last, and the accuracy rule points it here first.
+        live_elements = _render_live_elements(payload.elements)
+        if live_elements:
+            directive_block += live_elements
         ext_cfg["instructions"] = (existing_ix + "\n\n" + directive_block) if existing_ix else directive_block
         hier["extensions"] = ext_cfg
         ai_cfg["hierarchy"] = hier

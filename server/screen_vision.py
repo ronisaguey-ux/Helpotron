@@ -372,6 +372,36 @@ def _clamp_coords(coords: Any, viewport: Optional[Dict[str, int]]) -> Optional[L
     return [xs, ys]
 
 
+def _ref_of(op: Any) -> Optional[int]:
+    """The `ref` of a DOM-anchored op, or None when absent/malformed.
+
+    The 09-10 accuracy upgrade tells the model it may answer with
+    `{"op":"click","ref":N}` instead of x/y (each line of the LIVE DOM ELEMENTS
+    list it is handed carries a ref). Before this existed, `_validate_op`
+    required x/y for every click, so a ref-only op came back as `invalid_op`
+    and the WHOLE action list was dropped — the model followed the
+    instructions and nothing ran. A ref carries no coordinates, so it is not
+    clamped here; the extension resolves it against the live DOM at dispatch.
+    """
+    if not isinstance(op, dict):
+        return None
+    ref = op.get("ref")
+    if isinstance(ref, bool):
+        return None
+    if isinstance(ref, int):
+        n = ref
+    elif isinstance(ref, float) and ref == int(ref):
+        n = int(ref)
+    elif isinstance(ref, str):
+        try:
+            n = int(ref.strip())
+        except ValueError:
+            return None
+    else:
+        return None
+    return n if n >= 0 else None
+
+
 def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[str, Any]]:
     """One action -> normalized dict, or None when invalid (whole list drops)."""
     if not isinstance(op, dict):
@@ -380,12 +410,21 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
     if name not in CONTROL_OPS:
         return None
     if name in ("move", "dblclick"):
+        # DOM-anchored first: a ref is exact, x/y is a vision estimate.
+        ref = _ref_of(op)
+        if ref is not None:
+            return {"op": name, "ref": ref}
         xy = _clamp_coords(op, viewport)
         return None if xy is None else {"op": name, "x": xy[0], "y": xy[1]}
     if name == "click":
-        xy = _clamp_coords(op, viewport)
         button = op.get("button", "left")
-        if xy is None or button not in CONTROL_BUTTONS:
+        if button not in CONTROL_BUTTONS:
+            return None
+        ref = _ref_of(op)
+        if ref is not None:
+            return {"op": "click", "ref": ref, "button": button}
+        xy = _clamp_coords(op, viewport)
+        if xy is None:
             return None
         return {"op": "click", "x": xy[0], "y": xy[1], "button": button}
     if name == "drag":

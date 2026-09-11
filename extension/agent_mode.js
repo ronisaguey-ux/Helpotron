@@ -1143,8 +1143,15 @@ async function runActions(actions) {
     pushLog('warn', 'no captured TAB — actions dropped (pick a tab, not a screen)');
     return;
   }
-  const list = (actions || []).slice(0, MAX_ACTIONS); // 09-02 cap re-enforced locally
+  let list = (actions || []).slice(0, MAX_ACTIONS); // 09-02 cap re-enforced locally
   if (!list.length) return;
+
+  // A ref-based op carries no coordinates: resolve it against the live DOM
+  // before anything is dispatched, so it joins the coordinate path below. An
+  // unresolvable ref is left alone and falls through unchanged.
+  try {
+    list = await window.HelpotronElements.resolveActionRefs(state.driveTabId, list);
+  } catch (e) { /* keep the original list */ }
 
   // Host-permission gate (09-02): only act where the extension's own host
   // permissions cover the page — never on strangers' origins.
@@ -1282,6 +1289,7 @@ async function sendChatMessage() {
   // ON with no capture yet -> auto-capture the active tab right now.
   let images = [];
   let viewport = null;
+  let frameDim = null;
   if (!state.seescreen) {
     pushLog('info', '“See screen” toggle is OFF — this message carries no screen frame');
   } else {
@@ -1291,15 +1299,53 @@ async function sendChatMessage() {
       if (f) {
         images = [f.b64];
         viewport = viewportForServer();
+        frameDim = { w: f.w, h: f.h };
         pushLog('info', `sent frame attached (${f.w}×${f.h}, jpeg q${JPEG_QUALITY})`);
       }
     }
   }
 
+  // CSS viewport of the drive tab — the space the DOM element list is measured
+  // in. Needed both to put that list into frame space when a frame is attached,
+  // and as the clamp box on the (rare) execute-without-frame path.
+  let cssVp = state.cssViewport;
+  if (!cssVp && state.driveTabId) {
+    try {
+      const v = await window.HelpotronElements.getTabViewport(state.driveTabId);
+      if (v) { cssVp = { w: v.width, h: v.height }; state.cssViewport = cssVp; }
+    } catch (e) { /* unknown viewport — frame dims / default below */ }
+  }
+  if (!frameDim && cssVp) viewport = { width: cssVp.w, height: cssVp.h };
+
   const typingEl = addChatMsgEl('agent', '…thinking…');
   const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute };
   if (images.length) body.images = images;
   if (viewport) body.viewport = viewport;
+
+  // The page's own element list — exact measured coordinates, not a vision
+  // guess. Only when the run may actually act, so a look-only turn pays no
+  // extra tokens; an empty list leaves the vision path untouched.
+  if (state.execute && state.driveTabId) {
+    try {
+      let els = await window.HelpotronElements.collectInteractiveElements(state.driveTabId);
+      // The list is measured in CSS px; when a frame is attached the model
+      // reads (and is clamped in) FRAME space. Convert the list so the two
+      // agree — otherwise every listed coordinate is off by the frame's
+      // downscale factor. ref-based ops ignore x/y, so this is the fallback
+      // path's accuracy only; it must not be silently wrong.
+      if (els && els.length && frameDim && cssVp && cssVp.w > 0 && frameDim.w > 0) {
+        const sx = frameDim.w / cssVp.w;
+        const sy = frameDim.h / cssVp.h;
+        els = els.map((e) => ({ ...e,
+          x: Math.round((e.x || 0) * sx),
+          y: Math.round((e.y || 0) * sy),
+          w: Math.round((e.w || 0) * sx),
+          h: Math.round((e.h || 0) * sy),
+        }));
+      }
+      if (els && els.length) body.elements = els;
+    } catch (e) { /* no list — the vision path still works */ }
+  }
   try {
     const headers = await authHeaders();
     const res = await fetch(`${srv}/api/extension/agent_chat`, {
