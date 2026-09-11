@@ -1,87 +1,94 @@
-# 🔑 Helpotron API Requirements & Environment Configuration
+# Helpotron API Requirements & Configuration Guide
 
-This document outlines all external API keys, service integrations, credentials, and environment variables required to run Helpotron, along with setup instructions for each provider.
-
----
-
-## 📋 Master Environment Variables Table
-
-| Category | Variable Name | Purpose | Where to Obtain / Recommended Provider | Status / Default |
-| :--- | :--- | :--- | :--- | :--- |
-| **LLM & Inference** | `OMNIROUTE_API_BASE`<br>`OMNIROUTE_API_KEY` | DeepSeek V4 Flash routing & model failover | Local OmniRoute proxy (`localhost:20128`) | Pre-configured |
-| **LLM & Inference** | `DEEPSEEK_API_KEY` | Direct DeepSeek API fallback | [platform.deepseek.com](https://platform.deepseek.com) | Optional Fallback |
-| **Security & Auth** | `SESSION_SECRET` | Cookie session signing | Generate with `openssl rand -hex 32` | Required in prod |
-| **Security & Auth** | `JWT_SECRET` | Authentication tokens | Generate with `openssl rand -hex 32` | Required |
-| **Security & Auth** | `TOTP_SECRET` | Base32 secret for Authenticator apps | Base32 string (e.g. `JBSWY3DPEHPK3PXP`) | Auto-generated per user |
-| **Email & Verification**| `EMAIL_HOST`<br>`EMAIL_PORT`<br>`EMAIL_USER`<br>`EMAIL_PASSWORD` | 6-digit email signup verification & Email 2FA | **Gmail**: App Passwords<br>**SendGrid**: `smtp.sendgrid.net` (port 587)<br>**Mailgun** / **AWS SES** | Graceful mock if unset |
-| **Email & Verification**| `EMAIL_FROM`<br>`EMAIL_USE_TLS` | Sender display email and TLS toggle | Your domain email (e.g. `noreply@yourdomain.com`) | Default `true` |
-| **SMS 2FA** | `TWILIO_ACCOUNT_SID`<br>`TWILIO_AUTH_TOKEN`<br>`TWILIO_PHONE_NUMBER` | 6-digit SMS 2FA code delivery | [twilio.com/console](https://www.twilio.com/console) | Optional backup |
-| **AI Detectors** | `PANGRAM_API_KEY` | Pangram AI Evasion checking | [api.pangram.com](https://api.pangram.com) | Placeholder / Fallback |
-| **AI Detectors** | `SAPLING_API_KEY` | Sapling AI Detector API | [sapling.ai/docs/api](https://sapling.ai/docs/api) | Placeholder / Fallback |
-| **AI Detectors** | `ORIGINALITY_API_KEY` | Originality.ai Content scan | [app.originality.ai](https://app.originality.ai) | Placeholder / Fallback |
-| **AI Detectors** | `COPYLEAKS_API_KEY`<br>`COPYLEAKS_EMAIL` | Copyleaks LMS/Education detector | [api.copyleaks.com](https://api.copyleaks.com) | Placeholder / Fallback |
-| **AI Detectors** | `WINSTON_API_KEY` | Winston AI Content Detector | [app.gowinston.ai](https://app.gowinston.ai) | Placeholder / Fallback |
-| **Payments** | `STRIPE_SECRET_KEY`<br>`STRIPE_WEBHOOK_SECRET` | Stripe card checkout | [dashboard.stripe.com/apikeys](https://dashboard.stripe.com) | Manual offline fallback |
-| **Telegram** | `TELEGRAM_BOT_TOKEN` | Instant assignment push & alerts | Telegram [@BotFather](https://t.me/BotFather) | Required for bot |
+This document outlines all third-party API integrations, secret keys, pricing parameters, and configuration steps for running Helpotron with full multi-modal capabilities.
 
 ---
 
-## 🔐 1. User Verification & 2FA Setup Guide
+## 🔑 Key Directory & Environment Map
 
-### A. Email Verification (15-Minute Expiration)
-- **Flow**: When a user registers, a 6-digit numeric verification code is generated with a 15-minute TTL.
-- **Provider Setup**:
-  - **Option 1 (Gmail)**: Enable 2-Step Verification on your Google Account $\rightarrow$ Security $\rightarrow$ **App Passwords** $\rightarrow$ Generate 16-character password $\rightarrow$ set `EMAIL_USER=your_email@gmail.com`, `EMAIL_PASSWORD=xxxx xxxx xxxx xxxx`, `EMAIL_HOST=smtp.gmail.com`, `EMAIL_PORT=587`.
-  - **Option 2 (SendGrid)**: Create an API key with Mail Send permissions $\rightarrow$ set `EMAIL_HOST=smtp.sendgrid.net`, `EMAIL_PORT=587`, `EMAIL_USER=apikey`, `EMAIL_PASSWORD=SG.your_key`.
+All environment variables should be defined in a `.env` file at the root of the Helpotron workspace (or injected via your deployment environment). Reference template: [`.env.example`](file:///.env.example).
+
+| Environment Variable | Required / Optional | Service Provider | Primary Purpose & Usage |
+| :--- | :--- | :--- | :--- |
+| `GEMINI_API_KEY` | **Recommended** | Google AI Studio | Powers **Gemini 3.1 Flash-Lite** (Audio transcription & OCR) and **Gemini 3.8 Flash** (Deep reasoning). |
+| `GEMINI_FLASH_LITE_MODEL` | Optional (default: `gemini-3.1-flash-lite`) | Google AI Studio | Economy model ($0.50/1M tokens) for transcription, OCR, initial drafting. |
+| `GEMINI_FLASH_MODEL` | Optional (default: `gemini-3.8-flash`) | Google AI Studio | Flagship model ($2.50/1M tokens) for humanization, detector evasion, and grading. |
+| `OPENAI_API_KEY` | Optional | OpenAI | Fallback for GPT models and embeddings. |
+| `DEEPSEEK_API_KEY` | Optional | DeepSeek | Fast reasoning fallback (`deepseek-v4.1-flash`). |
+| `WHISPER_API_KEY` | Optional | OpenAI / OmniRoute | Whisper-1 audio transcription fallback if Gemini is offline. |
+| `PANGRAM_API_KEY` | Optional | Pangram Labs | Multi-engine AI detector verification ($0.0020/call). |
+| `SAPLING_API_KEY` | Optional | Sapling.ai | AI detector and grammatical integrity checks ($0.0015/call). |
+| `ORIGINALITY_API_KEY` | Optional | Originality.ai | AI detector and plagiarism verification ($0.0030/call). |
+| `COPYLEAKS_API_KEY` | Optional | Copyleaks | Enterprise academic detector verification ($0.0040/call). |
+| `COPYLEAKS_EMAIL` | Optional | Copyleaks | Account email for Copyleaks token generation. |
+| `WINSTON_API_KEY` | Optional | Winston AI | AI content detector verification ($0.0020/call). |
+| `STRIPE_API_KEY` | Optional | Stripe | Public publishable key for client checkout widgets. |
+| `STRIPE_SECRET_KEY` | Optional | Stripe | Backend API key for processing subscription and credit purchases. |
+| `STRIPE_WEBHOOK_SECRET`| Optional | Stripe | Webhook signature secret for handling `invoice.paid` events. |
+| `PAYPAL_CLIENT_ID` | Optional | PayPal Developer | Client ID for PayPal Smart Buttons payment gateway. |
+| `PAYPAL_SECRET` | Optional | PayPal Developer | Secret key for executing PayPal order capture requests. |
+| `TELEGRAM_BOT_TOKEN` | Optional | Telegram BotFather | Outbound notifications and multi-agent coordination. |
+| `TELEGRAM_ADMIN_CHAT_ID`| Optional | Telegram | Destination chat ID for administrator alerts and approval requests. |
+| `DATA_LAKE_DIR` | Optional (default: `./datalake_storage`) | Local Filesystem | Storage path for anonymized empirical rubrics and training samples. |
+| `SESSION_SECRET` | **Required** (32+ chars) | Internal | Secret key used to sign and encrypt session cookies. |
+| `JWT_SECRET` | **Required** (32+ chars) | Internal | Secret key used for signing JWT authorization tokens. |
+| `TOTP_SECRET` | Optional | Internal | Base32 seed for administrative Two-Factor Authentication. |
 
 ---
 
-### B. TOTP Authenticator 2FA (Google Authenticator, Authy, 1Password)
-- **Flow**:
-  1. Client calls `POST /api/auth/2fa/setup` with `method: "totp"`.
-  2. Backend generates a Base32 secret and standard `otpauth://totp/Helpotron:user?secret=...` URI.
-  3. User scans the QR code in Google Authenticator or Authy.
-  4. User submits the rotating 6-digit code to `POST /api/auth/2fa/verify-setup` to activate.
+## 🧠 Model Tiering & Effort Level Matrix
 
----
+Helpotron employs dynamic, cost-aware model tiering driven by the user's **Effort Level (1–10)**:
 
-### C. SMS 2FA (Twilio Backup)
-- **Flow**:
-  1. Client calls `POST /api/auth/2fa/setup` with `method: "sms"` and `phone_number: "+1..."`.
-  2. Backend dispatches a 6-digit numeric code via Twilio Programmable Messaging API.
-  3. User verifies the code via `POST /api/auth/2fa/verify-setup`.
-- **Provider Setup**:
-  - Sign up at [twilio.com](https://www.twilio.com).
-  - Copy **Account SID** and **Auth Token** from your Twilio Console.
-  - Buy a Twilio phone number with SMS capability and set `TWILIO_PHONE_NUMBER`.
-
----
-
-## 🛡️ 2. AI Detectors Configuration
-
-Configure the 5 multi-engine detector keys in `.env` for production stealth validation:
-
-```bash
-PANGRAM_API_KEY=your_pangram_key
-SAPLING_API_KEY=your_sapling_key
-ORIGINALITY_API_KEY=your_originality_key
-COPYLEAKS_API_KEY=your_copyleaks_key
-COPYLEAKS_EMAIL=your_copyleaks_email
-WINSTON_API_KEY=your_winston_key
+```
++-----------------------------------------------------------------------------------+
+| Effort Level | Selected Model         | Target Use Cases                          | Base Cost / 1M Tokens |
+|--------------|------------------------|-------------------------------------------|-----------------------|
+| 1 – 4 (Low)  | Gemini 3.1 Flash-Lite  | Lecture transcription, OCR, quick drafts  | $0.50 input / $1.50   |
+| 5 – 7 (Med)  | Balanced (Lite + 3.7)  | Lite for drafting, 3.7 for humanization   | Blended               |
+| 8 – 10 (High)| Gemini 3.8 Flash       | Deep synthesis, anti-detection evasion    | $2.50 input / $7.50   |
++-----------------------------------------------------------------------------------+
 ```
 
-*(If unconfigured, Helpotron uses local heuristic burstiness and syntactic perplexity scoring without blocking execution)*.
+---
+
+## 🛡️ Admin Cost Controls & Per-User Pricing
+
+Administrators have access to the **Cost & Usage** panel within the Admin Dashboard:
+1. **Per-User Multiplier**:
+   - Default: `1.0x`
+   - Testers: `0.5x`
+   - Premium / High-Load: `1.5x` – `2.0x`
+   - Effective user charge: `Base Cost * User Multiplier`
+2. **Platform Profit Margins**:
+   - Automatically tracks provider API expenses against subscription revenue and user token usage.
+3. **Usage Logging**:
+   - Every API invocation logs `user_id`, `tool_or_model`, `category`, `input_tokens`, `output_tokens`, and timestamp to `ApiUsageLog`.
 
 ---
 
-## 🚀 Quick Setup Instructions
+## 📤 Universal Assignment Dump & Transcription Workflow
 
-1. Copy `.env.example` to `.env`:
+1. **User Drops File**: Supports PDF, DOCX, TXT, MD, MP3, WAV, M4A, FLAC, JPG, PNG, TIFF, MP4, MOV.
+2. **Audio Processing**: Sent to Gemini 3.1 Flash-Lite producing structured Markdown with timestamps (`[MM:SS]`), speaker labels, and takeaway summaries.
+3. **Image / Vision**: Scanned via Gemini 3.8 Flash OCR to extract rubrics and formulas.
+4. **Overlord NLP Routing**: Automatically matches extracted text against active user assignments with a confidence score. If $\ge 60\%$, automatically pairs; otherwise queues for 1-click manual routing.
+
+---
+
+## 🚀 Setup Instructions
+
+1. Obtain your Gemini API Key from [Google AI Studio](https://aistudio.google.com/).
+2. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-2. Fill in your keys and secrets.
-3. Start the backend:
+3. Set `GEMINI_API_KEY=your_actual_key_here`.
+4. Start the backend:
    ```bash
-   .venv/bin/uvicorn server.main:app --port 8000 --reload
+   uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+5. Launch the frontend:
+   ```bash
+   cd web && npm run dev
    ```

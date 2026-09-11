@@ -321,6 +321,22 @@ async def publish_extension_release(payload: ExtensionReleasePayload, request: R
 # server-side (no JS, no sign-in) so the reviewer always sees real content.
 _DOC_ROOT = BASE_DIR.parent if (BASE_DIR.parent / "PRIVACY_POLICY.md").exists() else BASE_DIR
 
+
+def _doc_path(name: str) -> Path:
+    """Locate a markdown doc served to the public.
+
+    The two docs do not share a directory: the privacy policy sits at the repo
+    root (the CWS dashboard links straight at that URL) while the extension
+    setup guide lives under docs/. Searching both keeps a docs-tree
+    reorganisation from silently turning a public page into "not found" — the
+    failure mode this used to have, where the path was one hard-coded dir.
+    """
+    for base in (_DOC_ROOT, _DOC_ROOT / "docs"):
+        candidate = base / name
+        if candidate.exists():
+            return candidate
+    return _DOC_ROOT / name
+
 _DOC_STYLE = (
     "body{font-family:system-ui,-apple-system,sans-serif;max-width:820px;"
     "margin:32px auto;padding:0 20px;line-height:1.55;color:#1a1a1a}"
@@ -355,7 +371,7 @@ def _render_markdown_page(title: str, md_text: str) -> HTMLResponse:
 @public_router.get("/privacy-policy")
 async def privacy_policy_page():
     """CWS privacy-policy URL — renders PRIVACY_POLICY.md for anyone, no auth."""
-    path = _DOC_ROOT / "PRIVACY_POLICY.md"
+    path = _doc_path("PRIVACY_POLICY.md")
     return _render_markdown_page(
         "Helpotron Privacy Policy",
         path.read_text(encoding="utf-8") if path.exists() else "Privacy policy not found.",
@@ -365,7 +381,7 @@ async def privacy_policy_page():
 @public_router.get("/extension-guide")
 async def extension_guide_page():
     """Setup guide advertised by /version — renders EXTENSION_SETUP_GUIDE.md."""
-    path = _DOC_ROOT / "EXTENSION_SETUP_GUIDE.md"
+    path = _doc_path("EXTENSION_SETUP_GUIDE.md")
     return _render_markdown_page(
         "Helpotron Extension Setup Guide",
         path.read_text(encoding="utf-8") if path.exists() else "Setup guide not found.",
