@@ -456,6 +456,7 @@ class ExtensionChatRequest(BaseModel):
     permission_mode: Optional[str] = Field(None, description="manual | auto | yolo permission mode")
     seescreen: Optional[bool] = Field(None, description="true if the extension's 'See screen' toggle is ON")
     execute: Optional[bool] = Field(None, description="true if the extension's 'Execute' toggle is ON")
+    screen_error: Optional[str] = Field(None, description="reason why screen capture was unavailable despite seescreen being ON")
     viewport: Optional[ChatViewport] = Field(None, description="captured tab viewport size")
     tabs: List[ChatTabRef] = Field(
         default_factory=list,
@@ -1071,11 +1072,27 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         sees_can_see = bool(payload.seescreen) and bool(payload.images)
         can_execute = bool(payload.execute)
         if not sees_can_see:
-            directive_block += ("\n\n[SCREEN FEED: OFF — the user has the “See screen” toggle off "
-                                "(or no frame was captured). You CANNOT see any page or screen this turn. "
-                                "Do NOT describe, reference, or pretend to look at the page. If the user "
-                                "asks you to click/type/fill/search on a page, say you have no live view "
-                                "right now and ask them to switch “See screen” on.]")
+            if payload.seescreen:
+                reason_detail = f" Detail: {payload.screen_error}." if payload.screen_error else ""
+                directive_block += (
+                    f"\n\n[SCREEN FEED: UNAVAILABLE — the user has the “See screen” toggle ON, "
+                    f"but no screen frame could be captured from their current tab.{reason_detail} "
+                    "This typically occurs because the active tab is an internal or protected browser page "
+                    "(such as the Chrome New Tab page 'chrome://newtab', 'chrome://extensions', "
+                    "Chrome Web Store, or extension options/sidepanel) where Chrome security strictly "
+                    "prohibits extensions from capturing screenshots or tele-operating. "
+                    "CRITICAL INSTRUCTION: Do NOT tell the user that their 'See screen' toggle is turned off! "
+                    "Their toggle is ON. Acknowledge that 'See screen' is enabled on their end, but explain "
+                    "that browser security blocks screen capture on internal/New Tab pages. Kindly ask them "
+                    "to navigate to any regular web page (such as Canvas, Google Docs, or any website) so "
+                    "you can view and interact with their screen.]"
+                )
+            else:
+                directive_block += ("\n\n[SCREEN FEED: OFF — the user has the “See screen” toggle off. "
+                                    "You CANNOT see any page or screen this turn. "
+                                    "Do NOT describe, reference, or pretend to look at the page. If the user "
+                                    "asks you to click/type/fill/search on a page, say you have no live view "
+                                    "right now and ask them to switch “See screen” on.]")
         else:
             directive_block += "\n\n[SCREEN FEED: ON — you have a live tab frame this turn.]"
         if not can_execute:
