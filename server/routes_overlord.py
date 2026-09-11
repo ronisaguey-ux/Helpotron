@@ -392,6 +392,83 @@ async def get_assignment_launch_doc_payload(assignment_id: int, request: Request
     }
 
 
+class LaunchToDocRequest(BaseModel):
+    """A launch request. Everything is optional: the server owns the defaults, so
+    an extension that sends nothing but an assignment id still gets a full plan."""
+    assignment_id: Optional[int] = None
+    preset_id: Optional[str] = Field(None, max_length=40)
+    text: Optional[str] = Field(None, max_length=200_000)
+    tab_id: Optional[int] = None
+    overrides: Optional[Dict[str, Any]] = None
+
+
+@router.get("/launch-to-doc/config")
+async def get_launch_to_doc_config(request: Request, db: Session = Depends(get_db)):
+    """The Launch to Doc UI contract: cadence presets, copy and typing defaults.
+
+    Served rather than hardcoded in the extension so the panel's menu and the
+    engine's config can never disagree about what "Academic" means, and so either
+    can be changed without shipping a new extension build through review.
+    """
+    _get_current_user(request, db)
+    from .launch_to_doc import build_launch_config
+
+    return build_launch_config()
+
+
+@router.post("/launch-to-doc/plan")
+async def post_launch_to_doc_plan(
+    payload: LaunchToDocRequest, request: Request, db: Session = Depends(get_db)
+):
+    """The complete launch plan, which the extension applies mechanically.
+
+    All decision-making lives here — which preset, what cadence, where the draft
+    goes, and a clamped typing config. The extension resolves the tab, focuses it
+    and dispatches the stream; it holds no policy of its own, so tuning this
+    behaviour is a server deploy rather than an extension release.
+    """
+    user = _get_current_user(request, db)
+    from .launch_to_doc import build_launch_plan
+
+    title: Optional[str] = None
+    text = ""
+    subject = ""
+    assignment_id = payload.assignment_id
+
+    if assignment_id:
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == assignment_id, Assignment.user_id == user.id)
+            .first()
+        )
+        if not assignment:
+            raise HTTPException(404, "Assignment not found")
+        progress = assignment.progress or {}
+        text_to_type = progress.get("do_it_work") or ""
+        if not text_to_type:
+            for m in _assignment_materials(db, assignment_id):
+                content = m.get("content_text") or m.get("content") or ""
+                if content:
+                    text_to_type = content
+                    break
+        if not text_to_type:
+            text_to_type = assignment.prompt or ""
+        title = assignment.title
+        text = text_to_type
+        subject = progress.get("subject") or progress.get("course") or ""
+
+    return build_launch_plan(
+        title=title,
+        text=text,
+        subject=subject,
+        assignment_id=assignment_id,
+        preset_id=payload.preset_id,
+        text_override=payload.text,
+        tab_id=payload.tab_id,
+        overrides=payload.overrides,
+    )
+
+
 # ─── Chat threads (operator 08-26) ──────────────────────────────────────────
 @router.get("/agent/threads")
 async def list_chat_threads(request: Request, db: Session = Depends(get_db)):
