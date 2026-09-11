@@ -572,9 +572,12 @@
         <div class="field">
           <label class="field-label">Typing Cadence</label>
           <div class="seg" id="ltdCadenceSeg" role="group" aria-label="Typing Cadence">
-            <button type="button" class="seg-btn ltd-preset active" data-wpm="65" data-typo="0.018" title="Academic — 65 words per minute">Academic<span class="seg-sub">65 wpm</span></button>
-            <button type="button" class="seg-btn ltd-preset" data-wpm="48" data-typo="0.025" title="Careful — 48 words per minute">Careful<span class="seg-sub">48 wpm</span></button>
-            <button type="button" class="seg-btn ltd-preset" data-wpm="85" data-typo="0.012" title="Fast — 85 words per minute">Fast<span class="seg-sub">85 wpm</span></button>
+            <!-- Static fallback: the server's /api/launch-to-doc/config replaces
+                 this menu at runtime, so cadences can change without a rebuild.
+                 data-preset carries the id the server resolves the cadence from. -->
+            <button type="button" class="seg-btn ltd-preset active" data-preset="academic" data-wpm="65" data-typo="0.018" title="Academic — 65 words per minute">Academic<span class="seg-sub">65 wpm</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-preset="careful" data-wpm="48" data-typo="0.025" title="Careful — 48 words per minute">Careful<span class="seg-sub">48 wpm</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-preset="fast" data-wpm="85" data-typo="0.012" title="Fast — 85 words per minute">Fast<span class="seg-sub">85 wpm</span></button>
           </div>
         </div>
 
@@ -707,6 +710,7 @@
   </div>
 
   <script src="theme.js"></script>
+  <script src="element_registry.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

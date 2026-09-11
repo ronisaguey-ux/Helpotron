@@ -688,22 +688,72 @@ chrome.alarms.onAlarm.addListener((a) => {
   }
 });
 
-async function launchToDoc(payload) {
-  let targetTabId = payload && payload.tabId ? Number(payload.tabId) : null;
+// Launch to Doc — the extension is the HANDS, the website is the brain.
+//
+// A caller that hands us a COMPLETE command (text + typing config, as the site
+// does over the HELPOTRON_LAUNCH_TO_DOC bridge) is obeyed verbatim: we resolve a
+// tab, focus it, inject the content script and dispatch the stream, and we decide
+// nothing. That is what makes the whole feature tunable from the website — a new
+// cadence, a different doc target, a changed typo rate all arrive in the command.
+//
+// Only a caller that supplies just an assignment/preset id (the popup) makes us
+// ask the server to compose the plan for it.
+async function resolveLaunchPlan(payload) {
+  // Already a complete command? Obey it. No round-trip, no policy here.
+  if (payload && payload.text && payload.typing) return payload;
+  if (payload && payload.plan && payload.plan.text) return payload.plan;
 
-  if (!targetTabId) {
-    const docsTabs = await chrome.tabs.query({ url: '*://docs.google.com/*' });
-    if (docsTabs.length > 0) {
-      targetTabId = docsTabs[0].id;
-    } else {
-      const newTab = await chrome.tabs.create({ url: 'https://docs.new' });
-      targetTabId = newTab.id;
-      await waitTabComplete(targetTabId, 15000);
+  const blocked = await requireLoggedIn();
+  if (blocked) return blocked;
+
+  const server = await getServer();
+  try {
+    const res = await fetch(`${server}/api/launch-to-doc/plan`, {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({
+        assignment_id: payload && payload.assignmentId ? Number(payload.assignmentId) : null,
+        preset_id: (payload && payload.presetId) || null,
+        text: (payload && payload.text) || null,
+        tab_id: payload && payload.tabId ? Number(payload.tabId) : null,
+      }),
+    });
+    if (!res.ok) throw new Error(`server ${res.status}`);
+    const plan = await res.json();
+    if (!plan || plan.status !== 'success') {
+      return { ok: false, error: 'the server did not return a launch plan' };
     }
+    return plan;
+  } catch (e) {
+    return { ok: false, error: `could not load the launch plan — ${e.message}` };
+  }
+}
+
+async function launchToDoc(payload) {
+  const plan = await resolveLaunchPlan(payload);
+  if (!plan) return { ok: false, error: 'no launch plan' };
+  if (plan.ok === false) return plan;
+  if (!plan.text) {
+    return { ok: false, error: 'nothing to type — pick an assignment or paste some text' };
+  }
+
+  // Where it goes is the plan's call; resolving that to a real tab is ours.
+  const target = plan.target || {};
+  let targetTabId = target.tab_id ? Number(target.tab_id)
+                 : (payload && payload.tabId ? Number(payload.tabId) : null);
+
+  if (!targetTabId && target.reuse_existing !== false && target.match) {
+    const openTabs = await chrome.tabs.query({ url: `*://${target.match}/*` });
+    if (openTabs.length > 0) targetTabId = openTabs[0].id;
+  }
+  if (!targetTabId) {
+    const newTab = await chrome.tabs.create({ url: target.url || 'https://docs.new' });
+    targetTabId = newTab.id;
+    await waitTabComplete(targetTabId, 15000);
   }
 
   const tab = await chrome.tabs.get(targetTabId).catch(() => null);
-  if (tab) {
+  if (tab && target.focus !== false) {
     await chrome.tabs.update(targetTabId, { active: true });
     if (tab.windowId) {
       await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
@@ -721,19 +771,20 @@ async function launchToDoc(payload) {
   // closes. Removed entirely — if a real debugger-driven input path is ever
   // implemented, it must pair attach with detach on complete/cancel/error.
 
+  const typing = plan.typing || {};
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(targetTabId, {
       action: 'START_ASSISTIVE_TYPING',
       payload: {
-        text: payload.text || '',
-        wpm: payload.wpm || 65,
-        naturalPauses: payload.naturalPauses !== false,
-        jitter: payload.jitter !== false,
-        typoRate: payload.typoRate !== undefined ? payload.typoRate : 0.06,
-        falseStartRate: payload.falseStartRate !== undefined ? payload.falseStartRate : 0.025,
-        title: payload.title || 'Assignment Document',
-        assignmentId: payload.assignmentId || null,
-        targetApp: payload.targetApp || 'universal',
+        text: plan.text,
+        wpm: typing.wpm,
+        naturalPauses: typing.natural_pauses !== false,
+        jitter: typing.jitter !== false,
+        typoRate: typing.typo_rate,
+        falseStartRate: typing.false_start_rate,
+        title: plan.title,
+        assignmentId: plan.assignment_id || null,
+        targetApp: typing.target_app || 'universal',
       },
     }, (resp) => {
       if (chrome.runtime.lastError) {
