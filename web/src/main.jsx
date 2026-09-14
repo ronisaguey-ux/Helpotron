@@ -4,6 +4,7 @@ import App from './App.jsx';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/hanken-grotesk';
 import '@fontsource-variable/jetbrains-mono';
+import 'katex/dist/katex.min.css';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(

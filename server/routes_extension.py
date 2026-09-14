@@ -470,7 +470,7 @@ class ExtensionChatRequest(BaseModel):
     # as it was.
     elements: List[Dict[str, Any]] = Field(
         default_factory=list,
-        max_length=80,
+        max_length=5_000,
         description="live DOM interactive elements with exact viewport coords",
     )
 
@@ -536,21 +536,18 @@ SCREEN_VISION_CHARGE = 1.0
 # mis-fire on screen coordinates present in the analysis. Wording resolves
 # the upstream JSON contract's 'no markdown' line: the control fence is DATA
 # inside the reply string, not emitted markdown, and the screen is real.
-def _render_live_elements(elements: Optional[List[Dict[str, Any]]]) -> str:
-    """Authoritative interactive-element list, measured from the page's own DOM.
+def _render_live_elements(elements: Optional[List[Dict[str, Any]]], limit: int = 60) -> str:
+    """Render measured DOM elements into the system prompt.
 
-    The control coordinates used to come only from the vision pass, which reads
-    them off a screenshot — so every x/y was a guess, and a guess that lands on
-    padding is indistinguishable from a click that missed. The extension now
-    sends the real elements with their true getBoundingClientRect centres, and
-    those are exact. This renders them for the model and marks them as the
-    source of truth, so it stops re-estimating what it has already been told.
-
-    Returns "" when there is nothing usable, so the caller can append
+    Exact coordinates from the page outrank vision estimates. Bounded by limit
+    so a dense SPA cannot flood the model's context. Omits elements with
+    unparseable coordinates, empty names, or refs that are not non-negative
+    integers; non-dict items drop silently. An empty result falls back to
+    the vision pass's estimates — never throws, never reports []
     unconditionally.
     """
     lines: List[str] = []
-    for el in (elements or [])[:60]:
+    for el in (elements or [])[:limit]:
         if not isinstance(el, dict):
             continue
         name = str(el.get("name") or "").strip()[:60]
@@ -588,7 +585,11 @@ AGENT_MODE_DIRECTIVE = (
     "You MUST emit concrete actions to do it! Append to the END of the \"reply\" value — inside that same "
     "JSON string, after your brief conversational prose — one fenced ```control``` block holding an "
     "ORDERED JSON ARRAY: [ {\"op\": ...}, ... ] (a bare array, nothing wrapped). "
-    "For example, to type a query into a search bar: move to the search bar coordinates, click on it, type the query text, and send an Enter key. "
+    "CRITICAL SEARCH & FORM SUBMIT RULE: When searching or filling forms, chain the full sequence: "
+    "1. Click the input/searchbox to focus it. "
+    "2. Type the query text. "
+    "3. Send an Enter key. "
+    "4. AND click the associated search button / submit button / magnifying glass icon from LIVE DOM ELEMENTS to ensure submission! "
     "The app strips that block and executes it via browser debugger: it is DATA, not free-form "
     "markdown, so it does not violate the envelope's no-markdown rule. "
     "ALLOWED OPS (only these): "
@@ -751,31 +752,337 @@ def _search_burst(
     viewport: Dict[str, int],
     screen_analysis: Optional[str] = None,
     hint: str = "",
+    elements: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """move -> click -> type -> Enter aimed at a field the vision pass saw.
-
-    Returns [] when no typable element was found. That empty list is the point:
-    09-08 this aimed at the viewport CENTRE whenever the agent produced no
-    control block. On a page whose centre is not an input (the operator hit it
-    on a usage dashboard) the click landed on dead space, the caret blinked
-    somewhere harmless, and the typed text went nowhere — while the reply said
-    the typing was done. A blind guess that silently misses is worse than no
-    action at all, so the guess is gone: aim at a real element or do nothing
-    and let the caller report that it could not find the field.
-    """
+    """move -> click -> type -> Enter aimed at a typable field on the page."""
     from .screen_vision import find_input_target
 
-    target = find_input_target(screen_analysis, hint=hint, viewport=viewport)
+    target = None
+    # 1. Prioritize measured live DOM elements (highest precision)
+    if elements:
+        w = int((viewport or {}).get("width") or 0)
+        h = int((viewport or {}).get("height") or 0)
+        best_score = 0
+        best_el = None
+        for el in elements:
+            cx, cy = int(el.get("x", 0)), int(el.get("y", 0))
+            if cx < 0 or cy < 0:
+                continue
+            if (w and cx > w) or (h and cy > h):
+                continue
+            role = str(el.get("role") or "").lower()
+            name = str(el.get("name") or "").lower()
+            score = 0
+            if role in ("searchbox", "combobox"):
+                score = 100
+            elif role == "textbox":
+                score = 80
+            elif any(k in name for k in ("search", "ask", "query", "find", "google")):
+                score = 70
+            if score > best_score:
+                best_score = score
+                best_el = el
+        if best_el:
+            target = {
+                "x": int(best_el["x"]),
+                "y": int(best_el["y"]),
+                "ref": best_el.get("ref"),
+            }
+
+    # 2. Vision analysis fallback
+    if not target:
+        v_target = find_input_target(screen_analysis, hint=hint, viewport=viewport)
+        if v_target:
+            target = {"x": int(v_target["x"]), "y": int(v_target["y"])}
+
+    # No target -> no burst. Deliberately there is NO "click the viewport
+    # centre-top and hope" fallback here: a page whose centre is not a field
+    # (a dashboard, a page that lists only buttons and links, or a search box
+    # the vision pass placed off-frame) must report "no typable field" rather
+    # than blind-click a fixed point and drop the query on the floor. A miss
+    # that reports itself beats a blind click that silently lands on nothing.
     if not target:
         return []
+
     x = max(1, int(target["x"]))
     y = max(1, int(target["y"]))
-    return [
+    click_op = {"op": "click", "x": x, "y": y, "button": "left"}
+    if target.get("ref") is not None:
+        click_op["ref"] = target["ref"]
+
+    burst = [
         {"op": "move", "x": x, "y": y},
-        {"op": "click", "x": x, "y": y, "button": "left"},
-        {"op": "type", "text": query},
+        click_op,
+        {"op": "type", "text": query, "clear": True},
         {"op": "key", "key": "Enter", "modifiers": []},
     ]
+
+    # Check for adjacent or associated submit/search button (e.g. magnifying glass icon)
+    if elements:
+        submit_btn = None
+        for el in elements:
+            role = str(el.get("role") or "").lower()
+            if role != "button":
+                continue
+            ex, ey = int(el.get("x", 0)), int(el.get("y", 0))
+            name = str(el.get("name") or "").lower()
+            # If horizontally adjacent in header/toolbar (within +/- 45px vertical, to right within 320px or left within 60px)
+            if abs(ey - y) <= 45 and (0 <= (ex - x) <= 320 or abs(ex - x) <= 60):
+                if any(k in name for k in ("search", "submit", "magnif", "find", "go", "button")):
+                    submit_btn = el
+                    break
+                elif not submit_btn:
+                    submit_btn = el
+        if submit_btn:
+            bx, by = int(submit_btn["x"]), int(submit_btn["y"])
+            btn_op = {"op": "click", "x": bx, "y": by, "button": "left"}
+            if submit_btn.get("ref") is not None:
+                btn_op["ref"] = submit_btn["ref"]
+            burst.extend([
+                {"op": "move", "x": bx, "y": by},
+                btn_op,
+            ])
+    return burst
+
+
+def _click_burst(
+    user_text: str,
+    reply_text: str,
+    viewport: Dict[str, int],
+    elements: Optional[List[Dict[str, Any]]] = None,
+    screen_analysis: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """move -> click aimed at a button, link, or coordinate target."""
+    import difflib
+    from .screen_vision import parse_interactive_elements
+
+    # 1. Candidate target phrases
+    phrases = []
+    # Quoted target names in reply or user prompt
+    phrases.extend(re.findall(r"['\"]([^'\"\n]{2,60})['\"]", (reply_text or "") + " " + (user_text or "")))
+    for txt in [user_text or "", reply_text or ""]:
+        m = re.search(
+            r"(?:click(?:ing)?|tap(?:ping)?|press(?:ing)?|select(?:ing)?)\s+(?:on\s+)?(?:the\s+)?['\"]?(.+?)['\"]?(?:\s+(?:button|link|tab|option|card|item))?(?:\s+(?:at|for|now|please|coordinates).*|$)",
+            txt, re.IGNORECASE,
+        )
+        if m:
+            clean = m.group(1).strip(" '\".,;!?")
+            clean = re.sub(r"\s+(?:button|link|tab|option|card|item)$", "", clean, flags=re.IGNORECASE).strip()
+            if clean and len(clean) >= 2:
+                phrases.append(clean)
+    candidate_phrases = list(dict.fromkeys(p for p in phrases if p))
+
+    # 2. Check measured live DOM elements
+    if elements:
+        for p in candidate_phrases:
+            p_low = p.lower().strip()
+            # Exact or substring match
+            for el in elements:
+                name_low = str(el.get("name") or "").lower().strip()
+                if not name_low:
+                    continue
+                if p_low == name_low or (len(p_low) >= 3 and p_low in name_low) or (len(name_low) >= 3 and name_low in p_low):
+                    cx, cy = int(el.get("x", 0)), int(el.get("y", 0))
+                    ref = el.get("ref")
+                    click_op = {"op": "click", "button": "left"}
+                    if ref is not None:
+                        click_op["ref"] = ref
+                    if cx and cy:
+                        click_op["x"] = cx
+                        click_op["y"] = cy
+                        return [{"op": "move", "x": cx, "y": cy}, click_op]
+                    return [click_op]
+
+            # Fuzzy match
+            best_ratio = 0.0
+            best_el = None
+            for el in elements:
+                name_low = str(el.get("name") or "").lower().strip()
+                if not name_low:
+                    continue
+                ratio = difflib.SequenceMatcher(None, p_low, name_low).ratio()
+                if ratio > best_ratio:
+                    best_ratio, best_el = ratio, el
+            if best_ratio >= 0.65 and best_el:
+                cx, cy = int(best_el.get("x", 0)), int(best_el.get("y", 0))
+                ref = best_el.get("ref")
+                click_op = {"op": "click", "button": "left"}
+                if ref is not None:
+                    click_op["ref"] = ref
+                if cx and cy:
+                    click_op["x"] = cx
+                    click_op["y"] = cy
+                    return [{"op": "move", "x": cx, "y": cy}, click_op]
+                return [click_op]
+
+    # 3. Check explicit coordinates in reply text (e.g. "at coordinates (344, 858)")
+    m_coord = re.search(r"(?:at\s+)?(?:coordinates?\s*)?\(?\s*(\d{1,5})\s*,\s*(\d{1,5})\s*\)?", reply_text or "")
+    if m_coord:
+        try:
+            x, y = int(m_coord.group(1)), int(m_coord.group(2))
+            w = int((viewport or {}).get("width") or 0)
+            h = int((viewport or {}).get("height") or 0)
+            if x > 0 and y > 0 and (not w or x <= w) and (not h or y <= h):
+                return [
+                    {"op": "move", "x": x, "y": y},
+                    {"op": "click", "x": x, "y": y, "button": "left"},
+                ]
+        except (ValueError, TypeError):
+            pass
+
+    # 4. Check screen_analysis (vision)
+    if screen_analysis:
+        vision_elements = parse_interactive_elements(screen_analysis)
+        for p in candidate_phrases:
+            p_low = p.lower().strip()
+            for el in vision_elements:
+                name_low = str(el.get("name") or "").lower().strip()
+                if not name_low:
+                    continue
+                if p_low == name_low or (len(p_low) >= 3 and p_low in name_low) or (len(name_low) >= 3 and name_low in p_low):
+                    x, y = int(el["x"]), int(el["y"])
+                    return [
+                        {"op": "move", "x": x, "y": y},
+                        {"op": "click", "x": x, "y": y, "button": "left"},
+                    ]
+
+    return []
+
+
+def _parse_actions_from_reply(
+    reply_text: str,
+    viewport: Dict[str, int],
+    elements: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Parse sequential control actions directly from agent prose if model failed to emit a control block."""
+    if not reply_text:
+        return []
+
+    w = int((viewport or {}).get("width") or 0)
+    h = int((viewport or {}).get("height") or 0)
+
+    # Find coordinate pairs
+    coords_raw = re.findall(r"(?:at\s+)?(?:coordinates?\s*)?\(?\s*(\d{1,5})\s*,\s*(\d{1,5})\s*\)?", reply_text)
+    valid_coords = []
+    for sx, sy in coords_raw:
+        try:
+            x, y = int(sx), int(sy)
+            if x > 0 and y > 0 and (not w or x <= w) and (not h or y <= h):
+                valid_coords.append((x, y))
+        except (ValueError, TypeError):
+            continue
+
+    # Find typed strings
+    type_matches = re.findall(r"(?:typ(?:ing|e)|search(?:ing)?\s+for)\s+['\"]([^'\"]{1,120})['\"]", reply_text, re.IGNORECASE)
+
+    # Chained search sequence: e.g. click search bar at (448, 60), type 'green eggs and ham', click search button at (582, 60)
+    if len(valid_coords) >= 2 and type_matches:
+        x1, y1 = valid_coords[0]
+        x2, y2 = valid_coords[1]
+        text_to_type = type_matches[0]
+        return [
+            {"op": "move", "x": x1, "y": y1},
+            {"op": "click", "x": x1, "y": y1, "button": "left"},
+            {"op": "type", "text": text_to_type, "clear": True},
+            {"op": "key", "key": "Enter", "modifiers": []},
+            {"op": "move", "x": x2, "y": y2},
+            {"op": "click", "x": x2, "y": y2, "button": "left"},
+        ]
+
+    # Single click + type
+    if len(valid_coords) == 1 and type_matches:
+        x1, y1 = valid_coords[0]
+        text_to_type = type_matches[0]
+        return [
+            {"op": "move", "x": x1, "y": y1},
+            {"op": "click", "x": x1, "y": y1, "button": "left"},
+            {"op": "type", "text": text_to_type, "clear": True},
+            {"op": "key", "key": "Enter", "modifiers": []},
+        ]
+
+    return []
+
+
+def _plan_composite_burst(
+    user_text: str,
+    reply_text: str,
+    viewport: Dict[str, int],
+    elements: Optional[List[Dict[str, Any]]] = None,
+    screen_analysis: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Plan actions for composite instructions like 'click on X, then search for Y in my searchbar'."""
+    split_pattern = r"(?:,\s*)?\b(?:then|and\s+then|after\s+that)\b|;\s*"
+    parts = re.split(split_pattern, user_text or "", flags=re.IGNORECASE)
+    if len(parts) < 2:
+        return []
+
+    from .screen_vision import _MAX_CONTROL_ACTIONS
+    combined_actions: List[Dict[str, Any]] = []
+
+    for part in parts[:3]:
+        part_clean = part.strip(" ,.;!?")
+        if not part_clean:
+            continue
+        low_part = part_clean.lower()
+        is_search = any(k in low_part for k in ("search", "searchbar", "search bar", "type in", "type into", "type"))
+        is_click = any(k in low_part for k in ("click", "tap", "press", "select", "open"))
+        if is_search:
+            m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", part_clean, re.IGNORECASE)
+            q = m.group(1).strip(" '\"?,.") if m else part_clean
+            sub_burst = _search_burst(q or part_clean, viewport, screen_analysis=screen_analysis, hint=part_clean, elements=elements)
+            combined_actions.extend(sub_burst)
+        elif is_click:
+            sub_burst = _click_burst(part_clean, "", viewport, elements=elements, screen_analysis=screen_analysis)
+            combined_actions.extend(sub_burst)
+
+    if combined_actions and len(combined_actions) <= _MAX_CONTROL_ACTIONS:
+        return combined_actions
+    return []
+
+
+def _resolve_fallback_control_actions(
+    user_text: str,
+    reply_text: str,
+    viewport: Dict[str, int],
+    elements: Optional[List[Dict[str, Any]]] = None,
+    screen_analysis: Optional[str] = None,
+) -> Tuple[Optional[List[Dict[str, Any]]], str]:
+    """Hierarchical fallback resolver for extension control actions."""
+    # 1. Prose coordinate + typing extraction from agent reply
+    from_reply = _parse_actions_from_reply(reply_text, viewport, elements=elements)
+    hardened = _harden_actions(from_reply, viewport) if from_reply else None
+    if hardened:
+        return hardened, ""
+
+    # 2. Composite command splitting ("click X then search Y")
+    composite = _plan_composite_burst(user_text, reply_text, viewport, elements=elements, screen_analysis=screen_analysis)
+    hardened = _harden_actions(composite, viewport) if composite else None
+    if hardened:
+        return hardened, ""
+
+    # 3. Single click or search intent
+    low_text = (user_text or "").lower()
+    low_reply = (reply_text or "").lower()
+    is_click = any(k in low_text for k in ("click", "tap", "press", "select")) or any(k in low_reply for k in ("clicking", "tapping", "pressing"))
+    is_search = any(k in low_text for k in ("search", "searchbar", "search bar", "type in", "type into", "just type", "inside my tab", "in my tab", "in my search", "in my browser"))
+
+    if is_click:
+        burst = _click_burst(user_text, reply_text, viewport, elements=elements, screen_analysis=screen_analysis)
+        hardened = _harden_actions(burst, viewport) if burst else None
+        if hardened:
+            return hardened, ""
+        return None, "no_target"
+
+    if is_search:
+        m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", user_text, re.IGNORECASE)
+        q = m.group(1).strip(" '\"?,.") if m else user_text
+        burst = _search_burst(q or user_text, viewport, screen_analysis=screen_analysis, hint=user_text, elements=elements)
+        hardened = _harden_actions(burst, viewport) if burst else None
+        if hardened:
+            return hardened, ""
+        return None, "no_target"
+
+    return None, "no_block"
 
 
 # Why nothing ran, in words the user can act on. Keys are the reasons
@@ -1105,7 +1412,7 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         # The measured element list outranks the vision pass's estimates, so it
         # is appended AFTER the screen context: the model reads the exact
         # coordinates last, and the accuracy rule points it here first.
-        live_elements = _render_live_elements(payload.elements)
+        live_elements = _render_live_elements(payload.elements, limit=150)
         if live_elements:
             directive_block += live_elements
         ext_cfg["instructions"] = (existing_ix + "\n\n" + directive_block) if existing_ix else directive_block
@@ -1122,10 +1429,17 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         # The keyword fallback aims its browser burst with this (09-08); without
         # it the fallback used to click the middle of the page and hope.
         screen_analysis=screen_context,
+        images=(payload.images or [])[:2] if (payload.agent_mode and payload.seescreen is not False and payload.images) else None,
     )
 
     from .llm import strip_thinking_tokens
     from .screen_vision import _validate_op
+
+    # In agent mode, explicit browser/search instructions must drive the browser
+    if payload.agent_mode and intent.get("action") not in ("browser_action", "scrape_assignment"):
+        low_t = (payload.text or "").lower()
+        if any(k in low_t for k in ("search inside", "search in my", "searchbar", "search bar", "click on", "type into", "type in", "just type")):
+            intent["action"] = "browser_action"
 
     # Direct browser action tool call
     if intent["action"] == "browser_action":
@@ -1142,6 +1456,11 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             # otherwise NOTHING executes and the execution verdict says so
             # (a phantom "success" with 0 actions would be a fake completion).
             reply_text, control_actions, drop_reason = extract_control_actions_ex(reply_text, vp)
+            if not control_actions:
+                control_actions, drop_reason = _resolve_fallback_control_actions(
+                    payload.text, reply_text, vp, elements=payload.elements, screen_analysis=screen_context
+                )
+
             if not control_actions and payload_actions and drop_reason in ("", "no_block"):
                 # A direct payload WAS present and hardening dropped all of it,
                 # with no fence to replace it. `extract_control_actions_ex`
@@ -1194,19 +1513,9 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             vp = viewport_dict or {"width": 1280, "height": 800}
             reply_text, control_actions, drop_reason = extract_control_actions_ex(reply_text, vp)
             if not control_actions:
-                low_text = payload.text.lower()
-                if any(k in low_text for k in ("search", "searchbar", "search bar", "click", "type in", "type into", "touch my browser", "inside my tab", "in my tab")):
-                    m = re.search(r"(?:search|type)\s+(?:inside|into|in|for|on)?\s*(?:my\s+)?(?:searchbar|search\s+bar|tab|browser|screen)?(?:\s*,\s*|\s+for\s+|\s+to\s+|\s+in\s+)?(.*)", payload.text, re.IGNORECASE)
-                    q = m.group(1).strip(" '\"?,.") if m else payload.text
-                    # Aimed at an element the vision pass reported, never at a
-                    # guessed centre point (see _search_burst).
-                    burst = _search_burst(
-                        q or payload.text, vp,
-                        screen_analysis=screen_context, hint=payload.text,
-                    )
-                    control_actions = _harden_actions(burst, vp) if burst else None
-                    if not control_actions:
-                        drop_reason = "no_target"
+                control_actions, drop_reason = _resolve_fallback_control_actions(
+                    payload.text, reply_text, vp, elements=payload.elements, screen_analysis=screen_context
+                )
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         resp: Dict[str, Any] = {"status": "success", "message": agent_reply, "execution": None,

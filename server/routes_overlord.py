@@ -1673,7 +1673,21 @@ def _pure_greeting_reply(text: str) -> str:
     return ""
 
 
-async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str, is_admin: bool, db: Session = None, target_key=None, node: str = "my_agent", assignment_context: Optional[str] = None, humanizer_ctx: Optional[dict] = None, viewport: Optional[Dict[str, int]] = None, screen_analysis: Optional[str] = None) -> Dict[str, Any]:
+async def _resolve_agent_intent(
+    user: User,
+    settings: Dict[str, Any],
+    text: str,
+    is_admin: bool,
+    db: Session = None,
+    target_key=None,
+    node: str = "my_agent",
+    assignment_context: Optional[str] = None,
+    humanizer_ctx: Optional[dict] = None,
+    viewport: Optional[Dict[str, int]] = None,
+    screen_analysis: Optional[str] = None,
+    images: Optional[List[str]] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
 
     The model sees the surface's identity + personality + instructions, its
@@ -1708,6 +1722,7 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
     greet_reply = _pure_greeting_reply(text)
     if greet_reply:
         return {"action": "plain_answer", "payload": {}, "reply": greet_reply}
+
 
     actions = dict(_AGENT_ACTIONS)
     if node == "extensions":
@@ -1752,10 +1767,19 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
         f"see_settings, select_settings, see_config, export_assignment_data, get_wallet, "
         f"list_library, list_referrals, list_datalake_entries, get_progress, read_assignment, "
         f"run_shell.\n\n"
-        f'For ANY math/calculation/date/time or "check/prove/compute" question, always use '
+    )
+    math_rule = (
+        f'For math/calculation/date/time questions where the user asks to compute or calculate, use '
+        f'"action": "run_shell" — UNLESS the user is asking to search, type, click, or interact with their '
+        f'browser/tab/screen (e.g. "search inside my tab, how to solve 1+1"), in which case you MUST use '
+        f'"action": "browser_action"!\n\n'
+        if node == "extensions"
+        else f'For ANY math/calculation/date/time or "check/prove/compute" question, always use '
         f'"action": "run_shell" — you pick a tiny SAFE python3 one-liner (or the date one-liner) '
         f'for the payload; NEVER answer such a question from memory. '
         f'Never ask a clarifying question for a self-contained computation — compute it.\n\n'
+    )
+    system_prompt += math_rule + (
         f'NEVER REFUSE OR DOWNGRADE A REQUEST (operator 08-26): if the user asks for any kind of '
         f'content — an essay, an outline, research, a summary, analysis, ideas, full assignment work — '
         f'YOU PRODUCE IT, completely, right now. No "I can\'t generate...", no "I can provide a brief '
@@ -1778,8 +1802,9 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
             "You are operating inside the Helpotron extension popup, connected directly to the user's active browser tab.\n"
             "You have REAL tools to control and interact with their browser:\n"
             "1. `browser_action`: You can physically move the mouse cursor, click elements/buttons/searchbars, double click, drag, type text into inputs/searchbars, press keys (like Enter, Tab, Escape, Backspace), and scroll on the user's active webpage!\n"
-            "   Whenever the user asks you to interact with their browser (e.g. 'search in my searchbar...', 'type ... into search', 'click the button', 'fill out the form', 'solve and enter'):\n"
+            "   Whenever the user asks you to interact with their browser (e.g. 'search in my searchbar...', 'search inside my tab...', 'type ... into search', 'click the button', 'fill out the form', 'solve and enter'):\n"
             "   Choose the action `browser_action`!\n"
+            "   CRITICAL: Whenever the user asks to search or type into their browser/tab/screen, even if the query mentions math, calculation, date or time (e.g. 'search inside my tab, how to solve 1+1'), ALWAYS choose `browser_action` — NEVER choose `run_shell`!\n"
             "   In payload, provide `actions`: an ordered array of operations (e.g. move to search bar -> click search bar -> type query -> key Enter), and in `reply` explain what you are doing on their screen.\n"
             "   Example for searching or typing in searchbar: {\"action\": \"browser_action\", \"payload\": {\"actions\": [{\"op\": \"move\", \"x\": 480, \"y\": 320}, {\"op\": \"click\", \"x\": 480, \"y\": 320, \"button\": \"left\"}, {\"op\": \"type\", \"text\": \"how to solve 1+x=2\"}, {\"op\": \"key\", \"key\": \"Enter\", \"modifiers\": []}]}, \"reply\": \"Searching in your search bar for 'how to solve 1+x=2'…\"}\n"
             "   NEVER refuse browser requests with 'I don't have a tool to search' or 'I cannot use your browser' — you HAVE the `browser_action` tool!\n"
@@ -1841,6 +1866,7 @@ async def _resolve_agent_intent(user: User, settings: Dict[str, Any], text: str,
             response_format="json_object",
             effort_score=effort,
             db=db, user_id=user.public_id,
+            images=images,
         )
     except Exception as err:
         logger.error("agent intent LLM failed: %s", err)

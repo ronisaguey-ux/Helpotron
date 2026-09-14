@@ -89,10 +89,21 @@ const isPanelMode = urlParams.get('mode') === 'panel';
 // The distinction that actually matters for driving a tab: a popped-out window
 // and a side panel KEEP their document across tab/window focus changes, while a
 // browser-action popup is destroyed the instant focus leaves it.
-const isPersistentSurface = isWindowMode || isPanelMode;
+const isPersistentSurface = isWindowMode || isPanelMode || window.innerHeight > 600;
 if (isWindowMode) {
   document.body.classList.add('window-mode');
 }
+if (isPanelMode) {
+  document.body.classList.add('panel-mode');
+}
+if (isPersistentSurface || window.innerHeight > 600 || window.innerWidth > 415) {
+  document.body.classList.add('fluid-mode');
+}
+window.addEventListener('resize', () => {
+  if (window.innerHeight > 600 || window.innerWidth > 415) {
+    document.body.classList.add('fluid-mode');
+  }
+});
 if (isPersistentSurface && btnPopOut) {
   btnPopOut.style.display = 'none'; // already on a surface that stays open
 }
@@ -930,6 +941,7 @@ function answerApproval(reqId, decision, note, opts) {
   renderNextApproval();
 }
 
+let approvalStatusTimer = null;
 function showApprovalStatus(text) {
   const card = document.getElementById('approvalCard');
   const statusLine = document.getElementById('approvalStatus');
@@ -939,6 +951,11 @@ function showApprovalStatus(text) {
     statusLine.hidden = false;
   }
   syncApprovalDock();
+  clearTimeout(approvalStatusTimer);
+  approvalStatusTimer = setTimeout(() => {
+    if (statusLine) statusLine.hidden = true;
+    syncApprovalDock();
+  }, 4500);
 }
 
 // Neutral REQUIRES a note: an empty Neutral click must not send — flag the
@@ -1685,6 +1702,54 @@ function makeCopyButton(text) {
   return btn;
 }
 
+function formatMessageWithMath(rawText) {
+  if (!rawText) return document.createTextNode('');
+  const text = String(rawText);
+  if (typeof window.katex !== 'undefined' && (text.includes('$') || text.includes('\\(') || text.includes('\\['))) {
+    const container = document.createElement('span');
+    container.className = 'chat-msg-body';
+    const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+\$|\\\([\s\S]+?\\\))/g;
+    let lastIdx = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      const token = match[0];
+      const isDisplay = token.startsWith('$$') || token.startsWith('\\[');
+      let mathContent = '';
+      if (token.startsWith('$$') && token.endsWith('$$')) {
+        mathContent = token.slice(2, -2).trim();
+      } else if (token.startsWith('\\[') && token.endsWith('\\]')) {
+        mathContent = token.slice(2, -2).trim();
+      } else if (token.startsWith('$') && token.endsWith('$')) {
+        mathContent = token.slice(1, -1).trim();
+      } else if (token.startsWith('\\(') && token.endsWith('\\)')) {
+        mathContent = token.slice(2, -2).trim();
+      }
+      try {
+        const mathSpan = document.createElement('span');
+        window.katex.render(mathContent, mathSpan, {
+          displayMode: isDisplay,
+          throwOnError: false,
+        });
+        container.appendChild(mathSpan);
+      } catch (e) {
+        container.appendChild(document.createTextNode(token));
+      }
+      lastIdx = regex.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+    return container;
+  }
+  const span = document.createElement('span');
+  span.className = 'chat-msg-body';
+  span.textContent = text;
+  return span;
+}
+
 function addPopupChatMsg(sender, text) {
   if (!chatMessagesEl) return null;
   const div = document.createElement('div');
@@ -1695,8 +1760,7 @@ function addPopupChatMsg(sender, text) {
     sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
-  const body = document.createElement('span');
-  body.textContent = text;
+  const body = formatMessageWithMath(text);
   div.appendChild(body);
   div.appendChild(makeCopyButton(text));
   chatMessagesEl.appendChild(div);
@@ -1978,16 +2042,35 @@ async function captureBackgroundTabFrame(tabId) {
 // reported, marked captured:false when it has no frame. Reporting only the
 // photographed ones would tell the model "4 tabs in scope" while the burst
 // runs in ten, which is exactly the mismatch this labelling exists to stop.
-async function captureJurisdictionFrames(targets, activeTab) {
+async function captureJurisdictionFrames(targets, activeTab, shouldInjectSom = false) {
   const images = [];
   const tabs = [];
   let primaryViewport = null;
+  let primaryElements = [];
   for (const t of targets) {
     let frame = null;
     if (images.length < MAX_JURISDICTION_FRAMES) {
+      let elements = [];
+      if (shouldInjectSom && window.HelpotronElements && t.id) {
+        try {
+          elements = await window.HelpotronElements.collectInteractiveElements(t.id);
+          if (elements && elements.length) {
+            await window.HelpotronElements.injectSetOfMarks(t.id, elements);
+            await new Promise((r) => setTimeout(r, 60));
+          }
+        } catch (e) {}
+      }
+
       const sameWindowActive = t.active && (!activeTab || t.windowId === activeTab.windowId);
       frame = sameWindowActive ? await captureActiveTabFrame(t.windowId) : null;
       if (!frame) frame = await captureBackgroundTabFrame(t.id);
+
+      if (shouldInjectSom && window.HelpotronElements && t.id) {
+        try {
+          await window.HelpotronElements.removeSetOfMarks(t.id);
+        } catch (e) {}
+      }
+
       if (frame) {
         // captureVisibleTab / Page.captureScreenshot return DEVICE pixels
         // (CSS x devicePixelRatio), while the DOM element list and the mouse
@@ -1997,21 +2080,28 @@ async function captureJurisdictionFrames(targets, activeTab) {
         // aimed. Resize the frame to the tab's own CSS viewport so one image
         // pixel IS one CSS pixel and the model, the DOM list, the server's
         // clamp and the click all speak the same space.
-        const vp = await window.HelpotronElements.getTabViewport(t.id);
+        const vp = (window.HelpotronElements && typeof window.HelpotronElements.getTabViewport === 'function')
+          ? await window.HelpotronElements.getTabViewport(t.id).catch(() => null)
+          : null;
         if (vp) {
-          frame = await window.HelpotronElements.normalizeFrame(frame, vp.width, vp.height);
+          if (window.HelpotronElements && typeof window.HelpotronElements.normalizeFrame === 'function') {
+            frame = await window.HelpotronElements.normalizeFrame(frame, vp.width, vp.height).catch(() => frame);
+          }
           // The single viewport the server clamps against must be the DRIVE
           // tab's (the one the user is on), not whichever tab the capture
           // loop happened to photograph first.
           const isPrimary = t.active && (!activeTab || t.windowId === activeTab.windowId);
-          if (isPrimary || !primaryViewport) primaryViewport = { width: vp.width, height: vp.height };
+          if (isPrimary || !primaryViewport) {
+            primaryViewport = { width: vp.width, height: vp.height };
+            if (elements && elements.length) primaryElements = elements;
+          }
         }
         images.push(frame);
       }
     }
     tabs.push({ title: driveTabLabel(t), url: String(t.url || ''), captured: Boolean(frame) });
   }
-  return { images, tabs, viewport: primaryViewport };
+  return { images, tabs, viewport: primaryViewport, elements: primaryElements };
 }
 
 const KEY_MAP = {
@@ -2067,9 +2157,14 @@ function clampToViewport(x, y, vp) {
 // original coordinates are kept untouched, so canvas/map/text clicks and any
 // control the selector list does not know about behave exactly as before.
 const SNAP_TARGET_SELECTOR = [
-  'a[href]', 'button', 'input', 'select', 'textarea', 'summary', 'label',
-  '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
-  '[role="checkbox"]', '[role="radio"]', '[role="switch"]', '[onclick]',
+  'a[href]', 'button', 'input:not([type="hidden"])', 'select', 'textarea',
+  'summary', 'label', '[role="button"]', '[role="link"]', '[role="tab"]',
+  '[role="menuitem"]', '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
+  '[role="textbox"]', '[role="combobox"]', '[role="searchbox"]', '[role="option"]',
+  '[role="treeitem"]', '[contenteditable="true"]', '[contenteditable=""]', '[onclick]',
+  'g-more-button', 'g-raised-button', 'g-flat-button',
+  '[jsaction*="click"]', '[jsaction*="trigger:"]', '[aria-expanded]',
+  '[data-action]', '[data-ved]',
 ].join(',');
 
 async function snapActionsToElements(tabId, actions) {
@@ -2086,16 +2181,67 @@ async function snapActionsToElements(tabId, actions) {
         const SEL = ${JSON.stringify(SNAP_TARGET_SELECTOR)};
         const probes = ${JSON.stringify(probes)};
         const hits = [];
+
+        function matchInteractive(el) {
+          let n = el, guard = 0;
+          while (n && n.nodeType === 1 && guard++ < 8) {
+            try {
+              if (n.matches && n.matches(SEL)) return n;
+              const cs = window.getComputedStyle(n);
+              if (cs && cs.cursor === 'pointer' && n.tagName !== 'BODY' && n.tagName !== 'HTML') {
+                const r = n.getBoundingClientRect();
+                if (r.width >= 10 && r.height >= 10 && r.width < 900 && r.height < 500) return n;
+              }
+            } catch (e) {}
+            n = n.parentElement;
+          }
+          return null;
+        }
+
         for (const p of probes) {
           if (!p) { hits.push(null); continue; }
           let el = null;
           try { el = document.elementFromPoint(p.x, p.y); } catch (e) { el = null; }
-          let hit = null, n = el, guard = 0;
-          while (n && n.nodeType === 1 && guard++ < 8) {
-            try { if (n.matches && n.matches(SEL)) { hit = n; break; } } catch (e) {}
-            n = n.parentElement;
+          let hit = matchInteractive(el);
+
+          // Proximity scan if exact point landed on whitespace, padding, or text container
+          if (!hit) {
+            const offsets = [
+              [0, -10], [0, 10], [-15, 0], [15, 0],
+              [-12, -10], [12, -10], [-12, 10], [12, 10],
+              [0, -20], [0, 20], [-25, 0], [25, 0],
+              [-20, -18], [20, -18], [-20, 18], [20, 18],
+              [0, -35], [0, 35], [-40, 0], [40, 0]
+            ];
+            for (const [dx, dy] of offsets) {
+              const qx = p.x + dx;
+              const qy = p.y + dy;
+              if (qx < 0 || qy < 0 || qx >= window.innerWidth || qy >= window.innerHeight) continue;
+              let qEl = null;
+              try { qEl = document.elementFromPoint(qx, qy); } catch (e) {}
+              const cand = matchInteractive(qEl);
+              if (cand) {
+                const r = cand.getBoundingClientRect();
+                const distX = Math.max(r.left - p.x, 0, p.x - r.right);
+                const distY = Math.max(r.top - p.y, 0, p.y - r.bottom);
+                if (Math.hypot(distX, distY) <= 45) {
+                  hit = cand;
+                  break;
+                }
+              }
+            }
           }
+
           if (!hit) { hits.push(null); continue; }
+
+          // Ensure hit element is brought into view if partially offscreen
+          try {
+            const initialR = hit.getBoundingClientRect();
+            if (initialR.top < 0 || initialR.bottom > window.innerHeight) {
+              hit.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+            }
+          } catch (e) {}
+
           const r = hit.getBoundingClientRect();
           if (!r || r.width <= 0 || r.height <= 0) { hits.push(null); continue; }
           hits.push({
@@ -2123,8 +2269,10 @@ async function snapActionsToElements(tabId, actions) {
 // Defined in element_registry.js (loaded by popup.html). Kept in ONE place
 // because the list built at capture time and the list re-read at dispatch
 // time must agree, or a ref silently points at the wrong element.
-const collectInteractiveElements = (...a) => window.HelpotronElements.collectInteractiveElements(...a);
-const resolveActionRefs = (...a) => window.HelpotronElements.resolveActionRefs(...a);
+const collectInteractiveElements = (...a) => (window.HelpotronElements?.collectInteractiveElements ? window.HelpotronElements.collectInteractiveElements(...a) : (window.collectInteractiveElements ? window.collectInteractiveElements(...a) : Promise.resolve([])));
+const resolveActionRefs = (...a) => (window.HelpotronElements?.resolveActionRefs ? window.HelpotronElements.resolveActionRefs(...a) : (window.resolveActionRefs ? window.resolveActionRefs(...a) : Promise.resolve(a[0])));
+const getTabViewport = (...a) => (window.HelpotronElements?.getTabViewport ? window.HelpotronElements.getTabViewport(...a) : (window.getTabViewport ? window.getTabViewport(...a) : Promise.resolve(null)));
+const normalizeFrame = (...a) => (window.HelpotronElements?.normalizeFrame ? window.HelpotronElements.normalizeFrame(...a) : (window.normalizeFrame ? window.normalizeFrame(...a) : Promise.resolve(a[0])));
 
 // ── Virtual Visible Second Cursor Overlay on Screen ─────────────────────────
 async function initVirtualCursor(tabId) {
@@ -2761,7 +2909,55 @@ async function driveActionsInTab(driveTab, actions, ctx) {
       } else if (op.op === 'type' && op.text) {
         say(stepNum, 'Typing text…');
         await setVirtualCursorAction(driveTab.id, 'Typing…');
+        // Clear field first unless explicitly instructed not to, preventing accumulated duplicate text
+        if (op.clear !== false) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: driveTab.id },
+              func: () => {
+                const el = document.activeElement;
+                if (el && ('value' in el || el.isContentEditable)) {
+                  if ('value' in el) {
+                    el.value = '';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                  } else if (el.isContentEditable) {
+                    el.innerText = '';
+                  }
+                }
+              },
+            }).catch(() => {});
+            // Hardware-level select-all + Backspace via CDP
+            await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
+              type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
+            }).catch(() => {});
+            await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
+              type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
+            }).catch(() => {});
+            await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
+              type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8,
+            }).catch(() => {});
+            await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
+              type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8,
+            }).catch(() => {});
+          } catch {}
+        }
         await cdp(driveTab.id, 'Input.insertText', { text: String(op.text) });
+        // Dispatch synthetic input and change events for React/Vue/Angular
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: driveTab.id },
+            func: (txt) => {
+              const el = document.activeElement;
+              if (el && 'value' in el) {
+                if (!el.value) el.value = txt;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            },
+            args: [String(op.text)],
+          }).catch(() => {});
+        } catch {}
       } else if (op.op === 'key' && op.key) {
         say(stepNum, `Key: ${op.key}…`);
         await setVirtualCursorAction(driveTab.id, `Key: ${op.key}`);
@@ -2770,10 +2966,36 @@ async function driveActionsInTab(driveTab, actions, ctx) {
           await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
             type: 'rawKeyDown', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
           });
+          if (op.key === 'Enter') {
+            await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
+              type: 'char', text: '\r',
+            }).catch(() => {});
+          }
           await new Promise((r) => setTimeout(r, 40));
           await cdp(driveTab.id, 'Input.dispatchKeyEvent', {
             type: 'keyUp', key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
           });
+          if (op.key === 'Enter') {
+            // Trigger form submission or click search button if Enter alone did not navigate
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: driveTab.id },
+                func: () => {
+                  const el = document.activeElement;
+                  if (!el) return;
+                  const form = el.form || el.closest('form');
+                  if (form) {
+                    try { form.requestSubmit(); return; } catch {}
+                  }
+                  const parent = el.closest('form, div, header') || el.parentElement;
+                  if (parent) {
+                    const btn = parent.querySelector('button[type="submit"], button.search-btn, button[aria-label*="search" i], button[aria-label*="find" i], .search-btn, svg.search-icon');
+                    if (btn) (btn.closest('button') || btn).click();
+                  }
+                },
+              }).catch(() => {});
+            } catch {}
+          }
         }
       } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
         say(stepNum, 'Scrolling…');
@@ -2929,6 +3151,7 @@ if (chatFormEl && chatInputEl) {
       const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
       let images = [];
       let tabRefs = [];
+      let elements = [];
       // The server clamps returned control coordinates against THIS box, so it
       // has to be the drive tab's CSS viewport. It used to send the whole
       // screen (e.g. 2560x1440 for a 1200x800 tab), which let coordinates far
@@ -2945,13 +3168,17 @@ if (chatFormEl && chatInputEl) {
         // means the frames come from the tabs the run will actually drive.
         const active = await activeTabForDrive();
         const { tabs: targets, reason } = await resolveJurisdictionTabs(active);
+        const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
         if (!targets.length) {
           screenError = reason || (active ? `the tab you are on (${driveTabLabel(active)}) cannot be driven or captured — browser internal pages are restricted. Switch to a normal web page.` : 'no active tab found');
           setStatus(`⚠️ Screen capture: ${screenError}`);
         } else {
-          const shot = await captureJurisdictionFrames(targets, active);
+          const shot = await captureJurisdictionFrames(targets, active, Boolean(executeOn));
           images = shot.images;
           tabRefs = shot.tabs;
+          if (shot.elements && shot.elements.length) {
+            elements = shot.elements;
+          }
           // The frames were just normalized into the drive tab's CSS viewport,
           // so that is the box the server must clamp against. Prefer it over the
           // pre-capture read — the tab can be resized between the two.
@@ -2975,8 +3202,7 @@ if (chatFormEl && chatInputEl) {
       // The page's own element list — exact measured coordinates, not a vision
       // guess. Gathered only when the run may actually act, so a look-only turn
       // pays no extra tokens; an empty list leaves the vision path untouched.
-      let elements = [];
-      if (executeOn) {
+      if (executeOn && (!elements || !elements.length)) {
         try {
           const driveTab = await activeTabForDrive();
           if (driveTab && driveTab.id !== undefined && driveTab.id !== null) {
@@ -2998,16 +3224,24 @@ if (chatFormEl && chatInputEl) {
       if (screenError) bodyPayload.screen_error = screenError;
       if (tabRefs.length) bodyPayload.tabs = tabRefs;
       if (viewport) bodyPayload.viewport = viewport;
-      if (elements.length) bodyPayload.elements = elements;
+      if (elements.length) bodyPayload.elements = elements.slice(0, 5000);
 
-      const res = await fetch(`${srv}/api/extension/agent_chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${t}`,
-        },
-        body: JSON.stringify(bodyPayload),
-      });
+      const ctrl = new AbortController();
+      const fetchTimer = setTimeout(() => ctrl.abort(), 75000);
+      let res;
+      try {
+        res = await fetch(`${srv}/api/extension/agent_chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify(bodyPayload),
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(fetchTimer);
+      }
 
       const data = await res.json().catch(() => ({}));
       if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
@@ -3077,7 +3311,8 @@ if (chatFormEl && chatInputEl) {
             });
             while (pendingApprovals.length > 5) pendingApprovals.shift();
             renderNextApproval();
-            setStatus('⚠️ Waiting on your approval before touching the screen.');
+            addPopupChatMsg('agent', `⚠️ Action ready: "${data.control_summary || 'Screen control'}". Click **Approve** on the card below to execute, or switch Permissions to **Automatic** or **YOLO** in study settings above to act automatically.`);
+            setStatus('⚠️ Waiting on your approval below before touching the screen.');
           } else {
             setStatus(`Executing ${actions.length} action(s) proposed by agent…`);
             await executeReturnedActions(actions);
@@ -3089,7 +3324,16 @@ if (chatFormEl && chatInputEl) {
           setStatus('No action ran — see the note above.');
         }
       } else {
-        addPopupChatMsg('agent', `⚠️ Error: ${data.detail || `HTTP ${res.status}`}`);
+        const errDetail = data.detail;
+        let errText = `HTTP ${res.status}`;
+        if (typeof errDetail === 'string') {
+          errText = errDetail;
+        } else if (Array.isArray(errDetail)) {
+          errText = errDetail.map((d) => (d && d.msg) || JSON.stringify(d)).join('; ');
+        } else if (errDetail && typeof errDetail === 'object') {
+          errText = errDetail.message || errDetail.msg || JSON.stringify(errDetail);
+        }
+        addPopupChatMsg('agent', `⚠️ Error: ${errText}`);
       }
     } catch (err) {
       if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);

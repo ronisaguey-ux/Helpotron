@@ -1,4 +1,6 @@
 import json
+import re
+import httpx
 from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
@@ -6,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
-from .database import get_db, StudyMaterial, StudyCardState, StudySession, User
+from .database import get_db, StudyMaterial, StudyCardState, StudySession, User, Assignment
 from .routes_features import get_current_authenticated_user
 from .fsrs_scheduler import FSRSScheduler
 from .analytics import log_study_session
@@ -327,3 +329,178 @@ async def get_deck_mastery(
         "total": total_cards,
         "mastery_percentage": mastery_pct,
     }
+
+
+class CanvasSyncRequest(BaseModel):
+    canvas_url: str = Field(..., description="Base URL of the Canvas instance, e.g. https://canvas.instructure.com")
+    api_token: str = Field(..., min_length=10, description="Canvas User API token")
+    course_ids: Optional[List[int]] = Field(default=None, description="Optional list of course IDs to sync")
+    include_completed: bool = Field(default=False, description="Whether to import completed/submitted assignments")
+
+
+def _clean_canvas_html(html: str) -> str:
+    if not html:
+        return ""
+    text = re.sub(r"<(?:br|/p|/li|/tr|/h[1-6])\s*/?>", "\n", html, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+    )
+    return re.sub(r"\n\s*\n\s*\n+", "\n\n", text).strip()
+
+
+def _format_canvas_rubric(rubric_list: List[Dict[str, Any]]) -> str:
+    if not rubric_list or not isinstance(rubric_list, list):
+        return ""
+    lines = ["| Criterion | Points | Description |", "| --- | --- | --- |"]
+    for c in rubric_list:
+        if not isinstance(c, dict):
+            continue
+        crit_desc = (c.get("description") or "").replace("|", "\\|").strip()
+        points = str(c.get("points") or "")
+        long_desc = (c.get("long_description") or "").replace("\n", " ").replace("|", "\\|").strip()
+        lines.append(f"| {crit_desc} | {points} | {long_desc} |")
+    return "\n".join(lines)
+
+
+@router.post("/canvas/sync")
+async def sync_canvas_lms(
+    body: CanvasSyncRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Native Canvas LMS integration endpoint (canvasapi standard pattern).
+
+    Authenticates with Canvas REST API using user-provided API token, fetches
+    active enrolled courses, retrieves assignments with grading rubrics, and
+    upserts them into Helpotron's assignment database.
+    """
+    user: User = get_current_authenticated_user(request, db)
+
+    base_url = body.canvas_url.strip().rstrip("/")
+    if not base_url.startswith("http://") and not base_url.startswith("https://"):
+        base_url = f"https://{base_url}"
+
+    headers = {
+        "Authorization": f"Bearer {body.api_token.strip()}",
+        "Accept": "application/json",
+        "User-Agent": "Helpotron-CanvasSync/2.7.0",
+    }
+
+    async with httpx.AsyncClient(timeout=35.0, headers=headers, follow_redirects=True) as client:
+        # 1. Fetch active courses
+        courses_url = f"{base_url}/api/v1/courses?enrollment_state=active&per_page=50"
+        try:
+            resp = await client.get(courses_url)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Failed to connect to Canvas LMS: {exc}")
+
+        if resp.status_code in (401, 403):
+            raise HTTPException(
+                status_code=401,
+                detail="Canvas authentication failed: Invalid or expired API token",
+            )
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=resp.status_code,
+                detail=f"Canvas API returned status {resp.status_code}: {resp.text[:200]}",
+            )
+
+        courses_data = resp.json()
+        if not isinstance(courses_data, list):
+            courses_data = []
+
+        target_courses = []
+        for c in courses_data:
+            cid = c.get("id")
+            if not cid:
+                continue
+            if body.course_ids and cid not in body.course_ids:
+                continue
+            cname = c.get("name") or c.get("course_code") or f"Course {cid}"
+            target_courses.append({"id": cid, "name": cname})
+
+        synced_assignments = []
+        for c in target_courses:
+            cid = c["id"]
+            assign_url = (
+                f"{base_url}/api/v1/courses/{cid}/assignments"
+                f"?include[]=rubric&include[]=all_dates&per_page=50"
+            )
+            try:
+                a_resp = await client.get(assign_url)
+                if a_resp.status_code != 200:
+                    continue
+                assignments = a_resp.json()
+                if not isinstance(assignments, list):
+                    continue
+            except Exception:
+                continue
+
+            for a in assignments:
+                aid = a.get("id")
+                if not aid:
+                    continue
+
+                has_submitted = bool(a.get("has_submitted_submissions"))
+                if not body.include_completed and has_submitted:
+                    continue
+
+                canvas_key = f"{cid}:{aid}"
+                assignment_row = (
+                    db.query(Assignment)
+                    .filter_by(user_id=user.id, canvas_id=canvas_key)
+                    .first()
+                )
+                if assignment_row is None:
+                    assignment_row = Assignment(
+                        user_id=user.id,
+                        canvas_id=canvas_key,
+                        status="turned_in" if has_submitted else "tracked",
+                    )
+                    db.add(assignment_row)
+
+                assignment_row.title = str(a.get("name") or "Untitled Assignment").strip()[:512]
+                assignment_row.due_date = a.get("due_at")
+
+                raw_desc = a.get("description") or ""
+                clean_prompt = _clean_canvas_html(raw_desc)
+                if clean_prompt:
+                    assignment_row.prompt = clean_prompt
+                elif assignment_row.prompt is None:
+                    assignment_row.prompt = ""
+
+                progress = dict(assignment_row.progress or {})
+                progress["course_name"] = c["name"]
+                progress["course_id"] = cid
+                progress["source_url"] = a.get("html_url") or f"{base_url}/courses/{cid}/assignments/{aid}"
+                progress["synced_from"] = "canvas_api"
+
+                rubric_data = a.get("rubric")
+                if rubric_data:
+                    progress["rubric"] = _format_canvas_rubric(rubric_data)
+
+                assignment_row.progress = progress
+
+                synced_assignments.append({
+                    "id": assignment_row.id,
+                    "canvas_id": canvas_key,
+                    "title": assignment_row.title,
+                    "course": c["name"],
+                    "due_date": assignment_row.due_date,
+                    "has_rubric": bool(rubric_data),
+                })
+
+        db.commit()
+
+        return {
+            "status": "ok",
+            "courses_synced": len(target_courses),
+            "assignments_synced": len(synced_assignments),
+            "assignments": synced_assignments,
+        }
+

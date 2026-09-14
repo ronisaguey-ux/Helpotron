@@ -31,14 +31,15 @@
     'a[href]', 'button', 'input:not([type="hidden"])', 'select', 'textarea',
     'summary', 'label', '[role="button"]', '[role="link"]', '[role="tab"]',
     '[role="menuitem"]', '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
-    '[role="textbox"]', '[role="combobox"]', '[role="searchbox"]',
-    '[contenteditable="true"]', '[contenteditable=""]', '[onclick]',
+    '[role="textbox"]', '[role="combobox"]', '[role="searchbox"]', '[role="option"]',
+    '[role="treeitem"]', '[contenteditable="true"]', '[contenteditable=""]', '[onclick]',
+    'g-more-button', 'g-raised-button', 'g-flat-button',
+    '[jsaction*="click"]', '[jsaction*="trigger:"]', '[aria-expanded]',
+    '[data-action]', '[data-ved]'
   ].join(',');
 
-  // Bounded so a dense SPA cannot flood the model's context. Reading order
-  // (document order, which is close to visual order) means the cap keeps the
-  // elements the user is most likely to mean.
-  const MAX_INTERACTIVE_ELEMENTS = 60;
+  // Bounded to 5000 items so complex and dense pages are captured in full without truncation.
+  const MAX_INTERACTIVE_ELEMENTS = 5000;
 
   // Runs through chrome.scripting rather than the debugger so the list can be
   // gathered BEFORE a run attaches anything, and so a read never depends on
@@ -77,11 +78,15 @@
             const cy = Math.round(Math.max(0, Math.min(vh - 1, r.top + r.height / 2)));
 
             // Only list what a click at that centre would actually reach: an
-            // element sitting under a modal or overlay is not clickable, and
-            // listing it aims the model at a target it cannot hit.
+            // element sitting under a modal or overlay is not clickable. Allow
+            // descendant text nodes, icons, or component wrappers.
             let top = null;
             try { top = document.elementFromPoint(cx, cy); } catch (e) { top = null; }
-            if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+            if (top && top !== el && !el.contains(top) && !top.contains(el)) {
+              const compEl = el.closest('button, [role="button"], a, g-more-button, g-raised-button, [jsaction*="click"]');
+              const compTop = top.closest('button, [role="button"], a, g-more-button, g-raised-button, [jsaction*="click"]');
+              if (!compEl || compEl !== compTop) continue;
+            }
 
             let role = (el.getAttribute('role') || '').toLowerCase();
             if (!role) {
@@ -89,6 +94,7 @@
               if (tag === 'a') role = 'link';
               else if (tag === 'textarea') role = 'textbox';
               else if (tag === 'select') role = 'combobox';
+              else if (tag === 'button' || tag === 'g-more-button' || tag === 'g-raised-button' || tag === 'g-flat-button') role = 'button';
               else if (tag === 'input') {
                 const t = (el.getAttribute('type') || 'text').toLowerCase();
                 role = ({
@@ -108,10 +114,28 @@
               el.innerText || el.textContent ||
               el.getAttribute('name') || ''
             );
-            const name = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-            // An unlabelled text field is still worth listing (the model may be
-            // told to "type in the search box"); an unlabelled link is not.
-            if (!name && role !== 'textbox' && role !== 'combobox') continue;
+            let name = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+            // Preserve icon buttons or SVG buttons without text (e.g. search magnifying glasses, submit icons)
+            if (!name && role === 'button') {
+              const svg = el.querySelector('svg, img, i');
+              const cls = ((el.className || '') + ' ' + (svg ? (svg.className || '') : '')).toLowerCase();
+              const type = (el.getAttribute('type') || '').toLowerCase();
+              if (type === 'submit' || /search|magnif|find|query/i.test(cls)) {
+                name = 'Search button';
+              } else if (/submit/i.test(cls)) {
+                name = 'Submit button';
+              } else if (/close|dismiss|clear/i.test(cls)) {
+                name = 'Close button';
+              } else if (/menu|nav|drawer/i.test(cls)) {
+                name = 'Menu button';
+              } else if (svg || el.tagName === 'BUTTON') {
+                name = 'Button';
+              }
+            }
+
+            // An unlabelled text field or button is still worth listing; an unlabelled link is not.
+            if (!name && role !== 'textbox' && role !== 'combobox' && role !== 'button') continue;
 
             const key = role + '|' + name + '|' + cx + ',' + cy;
             if (seen.has(key)) continue;
@@ -125,6 +149,39 @@
               w: Math.round(r.width), h: Math.round(r.height),
             });
           }
+
+          // Also collect custom cursor:pointer elements if space remains
+          if (out.length < maxItems) {
+            let pointerNodes = [];
+            try { pointerNodes = document.querySelectorAll('div, span, li'); } catch (e) { pointerNodes = []; }
+            for (const pel of pointerNodes) {
+              if (out.length >= maxItems) break;
+              let cs = null;
+              try { cs = getComputedStyle(pel); } catch (e) { continue; }
+              if (cs && cs.cursor === 'pointer' && pel.tagName !== 'BODY' && pel.tagName !== 'HTML') {
+                if (pel.closest('a, button, input, select, textarea, [role="button"], g-more-button')) continue;
+                let r;
+                try { r = pel.getBoundingClientRect(); } catch (e) { continue; }
+                if (!r || r.width < 12 || r.height < 12 || r.width > 900 || r.height > 500) continue;
+                if (r.bottom < 0 || r.right < 0 || r.top > vh || r.left > vw) continue;
+                const cx = Math.round(Math.max(0, Math.min(vw - 1, r.left + r.width / 2)));
+                const cy = Math.round(Math.max(0, Math.min(vh - 1, r.top + r.height / 2)));
+                const raw = (pel.getAttribute('aria-label') || pel.innerText || pel.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+                if (!raw) continue;
+                const key = 'button|' + raw + '|' + cx + ',' + cy;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({
+                  ref: out.length,
+                  name: raw,
+                  role: 'button',
+                  x: cx, y: cy,
+                  w: Math.round(r.width), h: Math.round(r.height),
+                });
+              }
+            }
+          }
+
           return out;
         },
       });
@@ -137,18 +194,70 @@
 
   // A model handed the element list may answer with {"op":"click","ref":N}
   // instead of x/y. Re-enumerate at dispatch time and translate the ref back
-  // into the element's CURRENT centre, so the click still lands if the page
-  // shifted a few pixels since the frame was captured. An unresolvable ref is
-  // left untouched and falls through to the coordinate path unchanged.
-  async function resolveActionRefs(tabId, actions) {
-    if (!Array.isArray(actions) || !actions.some((op) => op && op.ref !== undefined)) return actions;
-    const elements = await collectInteractiveElements(tabId);
-    if (!elements.length) return actions;
-    return actions.map((op) => {
-      if (!op || op.ref === undefined) return op;
-      const hit = elements.find((el) => el.ref === Number(op.ref));
-      return hit ? Object.assign({}, op, { x: hit.x, y: hit.y }) : op;
-    });
+  // Set-of-Marks (SoM) visual grounding — inject numbered markers onto interactive
+  // elements before taking a screenshot, so the vision model sees the exact badge number
+  // on every button/input. Removed immediately after capture so the user's page stays clean.
+  const SOM_CONTAINER_ID = '__helpotron_som_overlay__';
+
+  async function injectSetOfMarks(tabId, elements) {
+    if (!chrome.scripting || !tabId || !Array.isArray(elements) || !elements.length) return false;
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        args: [SOM_CONTAINER_ID, elements.slice(0, 150)],
+        func: (containerId, items) => {
+          let c = document.getElementById(containerId);
+          if (c) c.remove();
+          c = document.createElement('div');
+          c.id = containerId;
+          c.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2147483640;';
+          for (const it of items) {
+            if (it.ref === undefined || it.x === undefined || it.y === undefined) continue;
+            const badge = document.createElement('div');
+            badge.innerText = `${it.ref}`;
+            const bx = Math.max(0, Math.round(it.x - (it.w || 0) / 2));
+            const by = Math.max(0, Math.round(it.y - (it.h || 0) / 2));
+            badge.style.cssText = `
+              position: fixed;
+              left: ${bx}px;
+              top: ${by}px;
+              background: rgba(15, 23, 42, 0.92);
+              color: #38bdf8;
+              border: 1.5px solid #0284c7;
+              border-radius: 4px;
+              padding: 1px 4px;
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              font-size: 11px;
+              font-weight: 700;
+              line-height: 13px;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+              pointer-events: none;
+              white-space: nowrap;
+            `;
+            c.appendChild(badge);
+          }
+          document.documentElement.appendChild(c);
+          void c.offsetHeight;
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function removeSetOfMarks(tabId) {
+    if (!chrome.scripting || !tabId) return;
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        args: [SOM_CONTAINER_ID],
+        func: (containerId) => {
+          const c = document.getElementById(containerId);
+          if (c) c.remove();
+        },
+      });
+    } catch {}
   }
 
   // The tab's own CSS viewport — the ONE coordinate space every other piece
@@ -205,6 +314,86 @@
     });
   }
 
+  // Stagehand-style semantic observer: finds elements by fuzzy text, aria-label, role or title
+  async function observeSemanticElement(tabId, query) {
+    if (!chrome.scripting || !tabId || !query) return null;
+    try {
+      const q = String(query).toLowerCase().trim();
+      const res = await chrome.scripting.executeScript({
+        target: { tabId },
+        args: [INTERACTIVE_SELECTOR, q],
+        func: (sel, targetText) => {
+          const nodes = Array.from(document.querySelectorAll(sel));
+          let best = null;
+          let bestScore = -1;
+          for (const el of nodes) {
+            let r = null;
+            try { r = el.getBoundingClientRect(); } catch (e) { continue; }
+            if (!r || r.width < 4 || r.height < 4) continue;
+            if (r.bottom < 0 || r.right < 0 || r.top > window.innerHeight || r.left > window.innerWidth) continue;
+            const raw = (
+              el.getAttribute('aria-label') ||
+              el.getAttribute('placeholder') ||
+              el.getAttribute('title') ||
+              el.innerText || el.textContent || ''
+            ).toLowerCase().trim();
+            if (!raw) continue;
+            let score = 0;
+            if (raw === targetText) score = 100;
+            else if (raw.startsWith(targetText) || targetText.startsWith(raw)) score = 80;
+            else if (raw.includes(targetText) || targetText.includes(raw)) score = 60;
+            if (score > bestScore) {
+              bestScore = score;
+              best = {
+                x: Math.round(r.left + r.width / 2),
+                y: Math.round(r.top + r.height / 2),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                name: raw.slice(0, 60),
+                role: el.getAttribute('role') || el.tagName.toLowerCase(),
+              };
+            }
+          }
+          return best;
+        },
+      });
+      return res && res[0] && res[0].result;
+    } catch {
+      return null;
+    }
+  }
+
+  // A model handed the element list may answer with {"op":"click","ref":N}
+  // instead of x/y. Re-enumerate at dispatch time and translate the ref back
+  // into the element's CURRENT centre, so the click still lands if the page
+  // shifted a few pixels since the frame was captured. If ref shifted or is missing,
+  // observeSemanticElement dynamically heals the selector by text match.
+  async function resolveActionRefs(tabId, actions) {
+    if (!Array.isArray(actions)) return actions;
+    const hasRefs = actions.some((op) => op && op.ref !== undefined);
+    const hasTargets = actions.some((op) => op && (op.target || op.text_target || op.name));
+    if (!hasRefs && !hasTargets) return actions;
+
+    const elements = await collectInteractiveElements(tabId);
+    return Promise.all(actions.map(async (op) => {
+      if (!op) return op;
+      if (op.ref !== undefined) {
+        const hit = elements.find((el) => el.ref === Number(op.ref));
+        if (hit) return Object.assign({}, op, { x: hit.x, y: hit.y });
+      }
+      const targetQuery = op.target || op.text_target || op.name;
+      if (targetQuery) {
+        const q = String(targetQuery).toLowerCase().trim();
+        const hit = elements.find((el) => el.name.toLowerCase().includes(q) || q.includes(el.name.toLowerCase()));
+        if (hit) return Object.assign({}, op, { x: hit.x, y: hit.y });
+        // Fallback: deep live semantic observation
+        const obs = await observeSemanticElement(tabId, targetQuery);
+        if (obs) return Object.assign({}, op, { x: obs.x, y: obs.y });
+      }
+      return op;
+    }));
+  }
+
   window.HelpotronElements = {
     INTERACTIVE_SELECTOR,
     MAX_INTERACTIVE_ELEMENTS,
@@ -212,5 +401,16 @@
     resolveActionRefs,
     getTabViewport,
     normalizeFrame,
+    injectSetOfMarks,
+    removeSetOfMarks,
+    observeSemanticElement,
   };
+
+  window.getTabViewport = getTabViewport;
+  window.normalizeFrame = normalizeFrame;
+  window.collectInteractiveElements = collectInteractiveElements;
+  window.resolveActionRefs = resolveActionRefs;
+  window.injectSetOfMarks = injectSetOfMarks;
+  window.removeSetOfMarks = removeSetOfMarks;
+  window.observeSemanticElement = observeSemanticElement;
 })();
