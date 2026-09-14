@@ -22,11 +22,14 @@ from sqlalchemy.orm import Session
 from .admin import require_admin
 from .config import BASE_DIR
 from .database import ExtensionRelease, ExtensionReleaseRead, get_db
+from .markdown_render import render_reply as _render_reply_html
 from .screen_vision import (
     DEFAULT_EFFORT_SCORE,
     VISION_MODEL,
+    VISION_MODEL_TIERS,
     _MAX_CONTROL_ACTIONS,
     _MAX_IMAGES_PER_CALL,
+    _MAX_TYPE_TEXT,
     analyze_screen_image,
     extract_control_actions,
     extract_control_actions_ex,
@@ -59,6 +62,77 @@ def get_current_manifest() -> Dict[str, Any]:
 class VersionCheckRequest(BaseModel):
     current_version: Optional[str] = Field(None, description="Current version installed in the browser")
     client_id: Optional[str] = None
+
+
+class RenderRequest(BaseModel):
+    text: str = Field(..., description="Markdown with optional LaTeX ($...$/$$...$$) to render")
+
+
+@router.post("/render")
+async def render_markdown(payload: RenderRequest):
+    """Render markdown + LaTeX to HTML server-side.
+
+    This is the thin-wrapper migration: formatting/math bugs should be fixed
+    once, on the server, not in two clients (one of which needs a CWS review).
+    The extension/web app can POST text and inject the returned HTML (sanitized).
+    No auth — it is a pure, stateless formatter.
+    """
+    if not payload.text or not payload.text.strip():
+        return {"html": ""}
+    return {"html": _render_reply_html(payload.text)}
+
+
+# Server-side source of truth for UI copy and policy that used to live hard-coded
+# in popup.js / agent_mode.js. A wording change or a model-ladder change becomes a
+# server deploy instead of an extension rebuild (thin-wrapper migration, M2).
+_UI_CONFIG = {
+    "version": 1,
+    "mode_hints": {
+        "manual": "Manual — the agent asks you before EVERY action it wants to take.",
+        "auto": "Automatic — the agent acts on its own; you only get asked for risky actions (credentials, deletions/submits, downloads, leaving this site).",
+        "yolo": "YOLO — the agent never asks, and nothing is off limits. It is your screen and your call.",
+    },
+    "approval": {
+        "helper": "Approve = let it act · Reject = stop it · Neutral = don’t do it, just send your note.",
+        "neutral_hint": "Say something first — Neutral needs your note",
+    },
+    "op_labels": {
+        "move": "move → ({x}, {y})",
+        "click": "click {button} → ({x}, {y})",
+        "dblclick": "double-click → ({x}, {y})",
+        "drag": "drag ({fromX}, {fromY}) → ({toX}, {toY})",
+        "type": "type \"{text}\"",
+        "key": "key {combo}{key}",
+        "scroll": "scroll Δ({deltaX}, {deltaY}) @ ({x}, {y})",
+    },
+    "action_cap": _MAX_CONTROL_ACTIONS,
+    "type_text_cap": _MAX_TYPE_TEXT,
+}
+
+
+@router.get("/ui-config")
+async def extension_ui_config():
+    """Versioned UI copy + policy for the extension to render server-side.
+
+    The extension fetches this at load and renders these strings/templates. The
+    model ladder is computed from the server's resolve_vision_model (the single
+    source of truth), not duplicated client-side.
+    """
+    ladder = []
+    labels = {
+        "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
+        "deepseek/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
+        "google/gemini-3.8-flash": "Gemini 3.8 Flash",
+    }
+    for score in (200, 500, 800):
+        model_id, tier, _ = resolve_vision_model(score)
+        ladder.append({
+            "tier": tier,
+            "model": model_id,
+            "label": labels.get(model_id, model_id),
+            "cost": VISION_MODEL_TIERS.get(model_id, ""),
+        })
+    return {**_UI_CONFIG, "model_ladder": ladder}
 
 
 @router.get("/version")
@@ -1519,7 +1593,8 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         resp: Dict[str, Any] = {"status": "success", "message": agent_reply, "execution": None,
-                                "reply": reply_text, "token_balance": _tk_balance(user)}
+                                "reply": reply_text, "token_balance": _tk_balance(user),
+                                "reply_html": _render_reply_html(reply_text)}
         if payload.agent_mode:
             needs_ok, perm_reason = _screen_control_allowed(settings, payload.permission_mode)
             resp["control_actions"] = control_actions
@@ -1617,7 +1692,7 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
 
     await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
     resp = {"status": "success", "message": agent_reply, "execution": exec_res, "reply": reply_text,
-            "token_balance": _tk_balance(user)}
+            "token_balance": _tk_balance(user), "reply_html": _render_reply_html(reply_text)}
     if payload.agent_mode:
         resp["control_actions"] = control_actions
         resp["model"] = vision_model_id
