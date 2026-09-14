@@ -938,6 +938,25 @@ async function executeAction(op) {
   const to = pt(op.x ?? op.toX, op.y ?? op.toY);
   const from = op.fromX !== undefined ? pt(op.fromX, op.fromY) : to;
 
+  // A coordinate op whose target never resolved (a ref/target that did not
+  // match the live page) would carry NaN here: Math.round(undefined * scale) is
+  // NaN, CDP silently drops a NaN mouse event, and the user sees the debugger
+  // attach and then NOTHING happen. Refuse loudly instead — return false so the
+  // burst counts it as not-completed and the caller can say so. `type` and `key`
+  // need no coordinates; everything else does.
+  if (op.op !== 'type' && op.op !== 'key') {
+    const needsFrom = op.op === 'drag';
+    const badTo = !Number.isFinite(to.x) || !Number.isFinite(to.y);
+    const badFrom = needsFrom && (!Number.isFinite(from.x) || !Number.isFinite(from.y));
+    if (badTo || badFrom) {
+      pushLog('warn', `action "${op.op}" has no resolvable target` +
+        (op.target ? ` ("${op.target}")` : op.ref !== undefined ? ` (ref ${op.ref})` : '') +
+        ' — the element was not found on the page, so nothing was clicked');
+      setStatus(`⚠️ Could not find "${op.target || ('ref ' + op.ref) || op.op}" on this page — that step was skipped.`);
+      return false;
+    }
+  }
+
   if (state.driveTabId) {
     const actLabel = op.op ? op.op.toUpperCase() : 'ACTION';
     await setVirtualCursorAction(state.driveTabId, actLabel);
