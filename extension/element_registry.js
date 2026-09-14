@@ -416,7 +416,17 @@
           }
 
           let best = null;
-          let bestScore = -1;
+          // Start at 0, not -1, and require a real match below. With -1 as the
+          // floor every element scored 0 beat it, so a target that matched
+          // NOTHING still returned the last element scanned — a name the model
+          // got slightly wrong silently clicked a random control. That is the
+          // "it clicks randomly on my screen" report: an unmatched target must
+          // resolve to NOTHING, so the caller can report the miss instead of
+          // firing at whatever happened to be scanned last.
+          let bestScore = 0;
+          // Minimum score for a name to be considered a match at all (the same
+          // contains-level threshold bestMatch uses).
+          const MIN_MATCH_SCORE = 60;
           let bestArea = Infinity;
           for (const el of nodes) {
             let r = null;
@@ -434,6 +444,7 @@
             if (raw === targetText) score = 100;
             else if (raw.startsWith(targetText) || targetText.startsWith(raw)) score = 80;
             else if (raw.includes(targetText) || targetText.includes(raw)) score = 60;
+            if (score < MIN_MATCH_SCORE) continue;
             const area = r.width * r.height;
             if (score > bestScore || (score === bestScore && area < bestArea)) {
               bestScore = score;
@@ -508,6 +519,15 @@
         // Fallback: deep live semantic observation (fuzzy text/aria/role/title).
         const obs = await observeSemanticElement(tabId, targetQuery);
         if (obs) return Object.assign({}, op, { x: obs.x, y: obs.y });
+      }
+      // Nothing resolved this op: it is a DOM-anchored op (ref/target) that
+      // could not be matched against the live page. MARK it. Without this it
+      // reached the dispatcher with no x/y, Math.round(undefined * scale) gave
+      // NaN, CDP silently ignored the event, and the user saw the debugger
+      // attach and then absolutely nothing happen. An unresolved op must be
+      // visible, never a silent no-op.
+      if (op.ref !== undefined || targetQuery) {
+        return Object.assign({}, op, { _unresolved: true });
       }
       return op;
     }));
