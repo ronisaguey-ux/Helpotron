@@ -24,6 +24,48 @@ from server.database import engine, init_db, SessionLocal, User
 from server.main import app
 from server.security import create_jwt_token
 
+# ── Stop the tests running the production background loops ───────────────────
+# The `client` fixture below opens `TestClient(app)`, which runs FastAPI's
+# LIFESPAN — and server/main.py's lifespan spawns the production background
+# tasks. One of them, `_cleanup_temp_files_loop`, walks ["./uploads",
+# "./exports", "/tmp/helpotron_exports"] and os.remove()s every file older than
+# 24 hours. Its sleep is at the BOTTOM of the loop, so the first pass executes
+# in the first event-loop iteration; CWD under pytest is the repo root, so those
+# are the LIVE directories.
+#
+# Measured before this guard existed: 10 files in the real uploads/, every one
+# exactly 16 bytes (test_api.py posts a b"not really audio" webm), mtimes inside
+# the test window. Only the 24h age gate has prevented an actual purge — one day
+# a test run will delete a real user's uploads.
+#
+# A test suite must never run a production janitor against production data, so
+# the loops are replaced with sleepers for the duration of the session.
+import asyncio as _asyncio
+
+
+async def _sleeping_loop(*_args, **_kwargs):
+    while True:
+        await _asyncio.sleep(3600)
+
+
+import server.main as _main
+_main._cleanup_temp_files_loop = _sleeping_loop
+_main._datalake_background_loop = _sleeping_loop
+_main.run_monitors_loop = _sleeping_loop
+
+# Same reasoning for the Telegram long-poller: it would reach a real bot API for
+# the whole test session. Patching the source module is enough because
+# server/main.py imports it inside lifespan().
+from server import telegram_agent_link as _telegram_link
+_telegram_link.telegram_agent_loop = _sleeping_loop
+
+# And redirect audio uploads into the session temp dir, so a test upload cannot
+# land in the production uploads/ folder at all.
+from server import transcription as _transcription
+_test_uploads = _SESSION_TEST_LAKE / "uploads"
+_test_uploads.mkdir(parents=True, exist_ok=True)
+_transcription.UPLOAD_DIR = _test_uploads
+
 
 @pytest.fixture(scope="session")
 def client():
