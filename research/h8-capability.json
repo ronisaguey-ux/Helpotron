@@ -1,0 +1,318 @@
+{
+  "track": "H8",
+  "agent": "capability-dogfood",
+  "summary": "The extension's screen-control agent genuinely works at the layer that matters mechanically: a ref-based click validates server-side, resolves against the live DOM in a real Chromium and lands on the correct element; click -> focus -> type -> Enter fills and submits a form. All of that was verified by driving the extension's OWN executor on a page this agent owns, with no owner session and no paid model call. The product's real weakness is what happens when grounding fails. An unresolved ref is silently skipped by the popup executor and then reported to the user as 'N action(s) executed', while the second executor (agent_mode.js) aborts the whole burst on the identical input with a CDP 'Invalid parameters' error. Worse, the server's search fallback re-introduced a blind viewport-centre click: on a page with no field it clicks a guessed point while the reply claims a search. The repo's own tests forbid exactly this and currently fail on it (2 red in test_browser_action_hardening.py). Three user-facing claims are also false against the shipped code: credentials/OTP/cards/downloads are 'hard-blocked in every mode' (agent_mode.js:1111-1129 makes them RISKY, so YOLO runs them); 'Execute ships OFF' (popup.js:33 EXECUTE_DEFAULT=true, measured ON on a fresh profile); and 'learning platforms are read-only' (no such guard exists). Headline fix: keep x/y as a fallback on ref ops (screen_vision._validate_op:419-429), make both executors report an unresolved target instead of counting it as run, and delete the centre-of-viewport search heuristic.",
+  "severity": "major",
+  "scorecard": [
+    {
+      "capability": "See the selected tab: a fresh JPEG frame of the user's tab reaches the server each turn",
+      "claimed_by": "DESIGN-UX.md:159-163 (See screen toggle); manifest description 'chat with a screen-aware agent'",
+      "evidence": "popup.js:2045-2105 captureJurisdictionFrames builds one frame per tab in scope; agent_mode.js:1404-1417 attaches a fresh grabFrame() per message. Verified in a real Chromium: Page.captureScreenshot succeeded (17324 bytes) and normalizeFrame produced a 1280x720 CSS frame from a 2560x1440 input. captureVisibleTab itself returned 'Either the <all_urls> or activeTab permission is required' when invoked programmatically (activeTab is granted only on a real toolbar click), so the CDP path is the one that always works - as popup.js:2014-2018 already documents.",
+      "verdict": "PARTIAL"
+    },
+    {
+      "capability": "Read the page from that frame (vision drives the model's picture of the screen)",
+      "claimed_by": "AGENT_MODE_DIRECTIVE routes_extension.py:577-582 ('you genuinely see that screen')",
+      "evidence": "routes_extension.py:1299-1324 calls analyze_screen_image per frame and renders a '[Screen state at HH:MM:SS]' line into the SYSTEM prompt (1411). NOT exercised end to end: that needs a paid OpenRouter call, which this track deliberately did not make. The unavailable-vision fallback is explicit and honest (1296, 1308-1309).",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "capability": "Emit concrete actions from the model's reply (fenced control block of ops)",
+      "claimed_by": "AGENT_MODE_DIRECTIVE routes_extension.py:583-602 (ALLOWED OPS)",
+      "evidence": "extract_control_actions_ex (screen_vision.py:488-535) parses the last control fence, tolerates one layer of over-escaping (463-485) and returns a typed drop reason. Measured: a 3-op fence returned the normalised list with reason ''; a fence with one bad op returned actions=null reason='invalid_op'; 16 ops returned reason='over_cap'.",
+      "verdict": "PASS"
+    },
+    {
+      "capability": "Server hardens every op (allowlist, viewport clamp, 15-action cap, whole-list drop)",
+      "claimed_by": "DESIGN-UX.md:236-238; routes_extension.py:726-747",
+      "evidence": "Measured by direct execution: _harden_actions kept a ref+type burst, returned None for 16 ops and None (whole list) for any invalid op. _validate_op clamps (99999,99999)->(1279,799) and (-50,-50)->(0,0); rejects key 'F5' and blank type text. _execution_verdict returns success/failed/none with matching text (routes_extension.py:1115-1125).",
+      "verdict": "PASS"
+    },
+    {
+      "capability": "Click a real DOM element via {\"op\":\"click\",\"ref\":N} (the path the directive says to prefer)",
+      "claimed_by": "AGENT_MODE_DIRECTIVE routes_extension.py:622-624; element_registry.js:366-395",
+      "evidence": "Server: _validate_op({\"op\":\"click\",\"ref\":7}, VP) -> {\"op\":\"click\",\"ref\":7,\"button\":\"left\"}. Real Chromium 1280x720 (Playwright persistent context, --load-extension): collectInteractiveElements returned 5 refs whose centres exactly match getBoundingClientRect (ref1 input#qs 239,105; ref2 button#go 432,105; ref3 a#lnk 77,149; ref4 input#email 117,189) and the below-fold button (cy=812) was excluded. Driving the extension's own executor popup.js driveActionsInTab with [{'op':'click','ref':2}] returned {status:'ok',ran:1} and the page's submit handler fired (document.getElementById('qs').value === 'SUBMITTED').",
+      "verdict": "PASS"
+    },
+    {
+      "capability": "Type into a field and submit: click-to-focus, insertText, Enter",
+      "claimed_by": "AGENT_MODE_DIRECTIVE routes_extension.py:588-592 ('chain the full sequence')",
+      "evidence": "Same run: [{'op':'click','ref':1},{'op':'type','photosynthesis'}] -> #qs.value === 'photosynthesis', activeElement #qs. [{'op':'click','ref':1},{'op':'type','hello'},{'op':'key','Enter'}] -> the form submitted (value became 'SUBMITTED').",
+      "verdict": "PASS"
+    },
+    {
+      "capability": "An unresolved ref is reported as a miss (no silent no-op, no false success)",
+      "claimed_by": "routes_extension.py:1101-1125 ('a phantom success with 0 actions would be a fake completion')",
+      "evidence": "Measured: driveActionsInTab(tab, [{'op':'click','ref':9999}]) returned {status:'ok', ran:1} while #qs.value stayed ''. popup.js:2860-3012 has no else branch for an op with no x/y, and popup.js:3019 returns ran: actions.length; popup.js:3087 then prints 'Drove ... N action(s) executed'. resolveActionRefs leaves an unmatched ref untouched (element_registry.js:380-393) and refs are positional indices (element_registry.js:145), so a DOM change between capture and dispatch can also make a ref point at a DIFFERENT element.",
+      "verdict": "FAIL"
+    },
+    {
+      "capability": "The same failing ref is handled the same way by the other executor",
+      "claimed_by": "AGENT_MODE_DIRECTIVE (one contract, two executors)",
+      "evidence": "agent_mode.js:919-921 computes pt(op.x ?? op.toX, ...) -> {x:NaN,y:NaN} for a ref-only op. Measured: Input.dispatchMouseEvent with Math.round(NaN) throws {\"code\":-32602,\"message\":\"Invalid parameters\"}, so runActions aborts the entire burst (agent_mode.js:1333-1334). Identical server output: the popup lies, Agent Mode dies.",
+      "verdict": "FAIL"
+    },
+    {
+      "capability": "Search fallback aims at a real field, never guesses",
+      "claimed_by": "contradicts server/tests/test_browser_action_hardening.py:94-136 ('the burst is aimed, never guessed')",
+      "evidence": "Measured: .venv/bin/python -m pytest server/tests/test_browser_action_hardening.py -q -> 2 failed, 111 passed; both failures are _search_burst returning a burst where the test asserts []. Direct call: _search_burst('photosynthesis', {'width':1280,'height':800}) with no elements/analysis -> 4-op burst at (640,130). Reachable via _resolve_fallback_control_actions (routes_extension.py:1043-1083) whenever the model's control block is absent/invalid and the text contains search/click/type.",
+      "verdict": "FAIL"
+    },
+    {
+      "capability": "Manual / Automatic / YOLO permission gating of screen control",
+      "claimed_by": "DESIGN-UX.md:92-104; routes_extension.py:1157-1173",
+      "evidence": "Measured: _screen_control_allowed({}, 'manual') -> (False, 'Manual mode requires explicit approval for all actions.'); auto -> True; yolo -> True. Client: agent_mode.js:1212-1229 asks per action; popup.js:3287-3315 asks once per burst from the server's control_requires_approval and does no client-side classification. Divergent granularity, both gated.",
+      "verdict": "PARTIAL"
+    },
+    {
+      "capability": "Execute OFF means nothing runs, and Execute ships OFF",
+      "claimed_by": "DESIGN-UX.md:165-166,178; CWS_APPROVAL_REVIEW.md:42,131 ('it ships OFF')",
+      "evidence": "Measured on a fresh Playwright profile: #toggleExecute.checked === true and aria-checked === 'true' after popup load, with no helpotron_chat_execute key in chrome.storage.local. popup.js:33 EXECUTE_DEFAULT = true vs agent_mode.js:60 EXECUTE_DEFAULT = false and popup.html:343 aria-checked=\"false\". So the popup sends execute:true (popup.js:3221) while Agent Mode on the same storage sends execute:false (agent_mode.js:1434) - the same switch disagrees across surfaces.",
+      "verdict": "FAIL"
+    },
+    {
+      "capability": "Credentials / OTP / cards / downloads hard-blocked in every mode",
+      "claimed_by": "CWS_APPROVAL_REVIEW.md:118,131,144 (submission-facing store listing and permission justification)",
+      "evidence": "The code does the opposite by design: agent_mode.js:1103-1110 records the 09-08 operator ruling that these are RISKY not forbidden; RISKY_CORES (1111-1113) contains credential/credential-adjacent/download; actionApproved (1227-1228) returns true with no prompt for ALL yolo actions. agent_mode.js:21-23 still carries the stale 'blocked in every mode' header. The same document also claims 'learning platforms are read-only' (131) - no such guard exists (grep read-only/readOnly across extension/*.js -> only background.js:1032, unrelated) and instructure.com is in manifest.json host_permissions, which is what the owner actually wants.",
+      "verdict": "FAIL"
+    },
+    {
+      "capability": "Honest reporting when nothing ran",
+      "claimed_by": "routes_extension.py:1090-1125 (_DROP_REASON_TEXT and _execution_verdict)",
+      "evidence": "The server half is real and good: a dropped fence yields execution={status:'failed',reason:'invalid_op',detail:'One of the steps ... nothing ran.'} (measured). The client half is not: popup.js:3019 counts planned actions, not dispatched ones, so a per-op miss inside the executor is invisible; and the fallback burst can dispatch a guessed click while the reply says the search is happening.",
+      "verdict": "PARTIAL"
+    },
+    {
+      "capability": "Coordinates live in one space: what the model sees is what the executor clicks",
+      "claimed_by": "element_registry.js:263-314; popup.js:2074-2098",
+      "evidence": "Popup path: frames are resized to getTabViewport() CSS pixels (verified: normalizeFrame 2560x1440 -> 1280x720; getTabViewport returns window.innerWidth/innerHeight) and the executor clamps against the same innerWidth/innerHeight (popup.js:2130-2146). Agent Mode path: frames are NOT normalised to CSS - viewportForServer() returns FRAME dims (agent_mode.js:594-601), the element list is converted INTO frame space (1450-1459) and executeAction rescales frame->CSS via scaleF (857-871, 912-919). Self-consistent arithmetic, but it is frame space, not CSS, while AGENT_MODE_DIRECTIVE:603-604 tells the model its coordinates are CSS pixels. Not exercised end to end: tabCapture.getMediaStreamId needs a real user gesture.",
+      "verdict": "PARTIAL"
+    },
+    {
+      "capability": "A visible second cursor and humanlike mouse path so the user can watch and stop",
+      "claimed_by": "CWS_APPROVAL_REVIEW.md:131 ('a visible second cursor shows exactly what the agent is doing')",
+      "evidence": "Implementation exists in both executors (popup.js:2278-2376 over mouse_path.js humanMovePoints; agent_mode.js:895-906) with Esc handling (popup.js:2309-2316) and a Stop button. Not exercised: rendering the overlay is visual and this track ran no user-visible burst.",
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "capability": "Malformed client input cannot take the agent turn down",
+      "claimed_by": "ExtensionChatRequest.elements: List[Dict[str, Any]] max_length 5000 (routes_extension.py:471-475) - no per-item schema",
+      "evidence": "Measured: _search_burst('photosynthesis', VP, elements=[{'name':'Submit','role':'button','x':'z','y':3}]) raises ValueError: invalid literal for int() with base 10: 'z' (routes_extension.py:768 unguarded); a non-dict element raises AttributeError on .get. Same unguarded pattern at 787-788, 827, 837, 885, 907, 943. _render_live_elements is correctly guarded (555-558). Only the fallback path reaches these, so a turn whose model emitted a valid control block is unaffected.",
+      "verdict": "FAIL"
+    }
+  ],
+  "findings": [
+    {
+      "id": "H8-F1",
+      "title": "Search fallback blind-clicks the viewport centre-top, and the tests that forbid it are red",
+      "symptom": "On a page with no input field, 'search for photosynthesis' still moves the cursor and clicks a guessed point near the top-centre of the page while the reply says it is searching. The user sees an unexplained cursor movement and a wrong click.",
+      "root_cause": "routes_extension.py:798-802 reintroduces a viewport-centre-top heuristic that fires whenever no target was found by the measured-element list (762-790) or the vision parse (793-796). It contradicts the contract asserted by server/tests/test_browser_action_hardening.py:94-136, and it is reachable on the normal path: _resolve_fallback_control_actions (1043-1083) calls _search_burst whenever the model's control block is absent or invalid and the user text contains search/click/type keywords (1067, 1076-1083).",
+      "evidence": [
+        "server/routes_extension.py:798-802 - target = {'x': vw // 2, 'y': min(130, max(40, vh // 6))}",
+        "measured: .venv/bin/python -m pytest server/tests/test_browser_action_hardening.py -q -> 2 failed, 111 passed (test_search_burst_does_nothing_when_no_field_is_on_screen; test_search_burst_target_is_kept_inside_the_captured_frame)",
+        "measured: _search_burst('photosynthesis', {'width':1280,'height':800}) -> [{'op':'move','x':640,'y':130},{'op':'click','x':640,'y':130,'button':'left'},{'op':'type','text':'photosynthesis','clear':True},{'op':'key','key':'Enter','modifiers':[]}]",
+        "server/routes_extension.py:1097 - the honest alternative already exists: reason 'no_target' -> 'I couldn't find that field on the current screen, so I didn't click anywhere.'"
+      ],
+      "confidence": "high",
+      "impact": "A wrong click on the user's screen plus a false claim of success - the exact trust failure this product cannot afford, and a visible-action safety issue."
+    },
+    {
+      "id": "H8-F2",
+      "title": "An unresolved ref is silently skipped and then reported as an executed action (popup executor)",
+      "symptom": "The popup prints 'Drove <tab> - N action(s) executed' even when one of those actions never happened. The page is unchanged and the user has no way to tell.",
+      "root_cause": "popup.js driveActionsInTab resolves refs at 2831, then dispatches in an if/else-if chain that every branch gates on op.x/op.y being defined (2871, 2875, 2892, 2909, 2961, 3000). An op with neither coordinates nor text matches nothing and there is no else branch, so it is dropped in silence; 3019 then returns ran: actions.length and 3087 prints the success line. resolveActionRefs leaves an unmatched ref untouched (element_registry.js:380-393) and refs are positional indices (element_registry.js:145), so this also fires after any DOM change between capture and dispatch - and then the ref can point at the wrong element rather than merely missing.",
+      "evidence": [
+        "measured in a real Chromium (Playwright persistent context, channel chromium, --load-extension extension/): driveActionsInTab(tab, [{'op':'click','ref':9999}]) -> {'status':'ok','ran':1,'label':'H8 capability probe'} and document.getElementById('qs').value === '' (unchanged)",
+        "extension/popup.js:3019 - return { status: 'ok', ran: actions.length, ... }",
+        "extension/popup.js:3084-3090 - 'Drove ... - ${n} action(s) executed'",
+        "extension/element_registry.js:380-383 - if (hit) return Object.assign({}, op, {x, y}); otherwise the op falls through unchanged"
+      ],
+      "confidence": "high",
+      "impact": "False success reporting on the agent's core capability, and it hides grounding failures so the operator cannot measure how often the agent actually acts."
+    },
+    {
+      "id": "H8-F3",
+      "title": "The same unresolved ref aborts the whole burst in the Agent Mode executor",
+      "symptom": "From Agent Mode a stale ref kills the remaining actions in the burst; the log shows 'drive burst failed' and nothing explains that one target was simply not found.",
+      "root_cause": "agent_mode.js:915-921 maps coordinates unconditionally: to = pt(op.x ?? op.toX, op.y ?? op.toY). With a ref-only op the coordinate is undefined, so to = {x:NaN,y:NaN}; mouseEvent (880-893) does Math.round(NaN), which serialises to null, and CDP rejects the whole call; runActions' catch (1333-1334) then abandons the rest of the list.",
+      "evidence": [
+        "extension/agent_mode.js:919 - const pt = (x, y) => ({ x: x * sx, y: y * sy }) applied to an undefined op.x",
+        "measured: JSON.stringify({x:Math.round(undefined),y:Math.round(undefined)}) -> {\"x\":null,\"y\":null}",
+        "measured in a real Chromium: chrome.debugger.sendCommand(Input.dispatchMouseEvent, {type:'mousePressed',x:NaN,...}) throws {\"code\":-32602,\"data\":\"Failed to deserialize params.x - BINDINGS: mandatory field missing\",\"message\":\"Invalid parameters\"}"
+      ],
+      "confidence": "high",
+      "impact": "One stale ref costs the user the entire rest of the burst - a partial task that looks like a total failure, with the working actions dropped."
+    },
+    {
+      "id": "H8-F4",
+      "title": "Submission-facing copy claims hard-blocked credentials/downloads and read-only LMS; the code runs them in YOLO",
+      "symptom": "A Chrome Web Store reviewer, or a user reading the listing, is told signing-in fields, one-time codes, card numbers and downloads are blocked in every mode, and that learning platforms are read-only. Neither is true.",
+      "root_cause": "The 09-08 operator ruling made credential/OTP/card/download actions RISKY instead of forbidden (agent_mode.js:1103-1113); actionApproved asks only in Manual/Automatic and returns true unconditionally for YOLO (1227-1228). The CWS review document was not updated in those places.",
+      "evidence": [
+        "extension/CWS_APPROVAL_REVIEW.md:118 - store listing: 'Signing-in fields, one-time codes, card numbers, and file downloads are hard-blocked in every mode'",
+        "extension/CWS_APPROVAL_REVIEW.md:131 - permission justification: 'Credential/OTP/card fields, downloads, and learning platforms are hard-blocked in every mode'",
+        "extension/CWS_APPROVAL_REVIEW.md:144 - 'hard blocks (credentials/OTP/cards/downloads) apply in every mode'",
+        "extension/agent_mode.js:1111-1113 - RISKY_CORES = {credential, credential-adjacent, download, destructive, submit, leaving}",
+        "extension/agent_mode.js:1227-1228 - auto+non-risky, or yolo: return true (no prompt)",
+        "extension/agent_mode.js:21-23 - stale header comment still says these are 'blocked in every mode'",
+        "grep -rn 'read-only|readOnly|readonly' extension/*.js -> only background.js:1032 (unrelated); instructure.com is in manifest.json host_permissions"
+      ],
+      "confidence": "high",
+      "impact": "A false safety claim in a store submission is a policy/misrepresentation risk and an informed-consent failure: a YOLO user is told credentials are untouchable and then the agent types into them."
+    },
+    {
+      "id": "H8-F5",
+      "title": "Execute ships ON in the popup while every document and the other surface say OFF",
+      "symptom": "On a fresh install the popup shows Execute already switched on, with no user action. Opening Agent Mode for the same account shows it off. The two surfaces disagree about the same switch.",
+      "root_cause": "popup.js:33 sets EXECUTE_DEFAULT = true and applies it whenever the storage key is absent (340, 360, 582, 3171, 3200), while agent_mode.js:60 sets EXECUTE_DEFAULT = false and popup.html:343 marks the input aria-checked=\"false\". Nothing writes the key on first run, so both defaults are live at once.",
+      "evidence": [
+        "measured on a fresh Playwright profile with the unpacked extension: #toggleExecute.checked === true, aria-checked === 'true', and chrome.storage.local returned only {helpotron_agent_effort, helpotron_agent_model, helpotron_agent_model_tier, update_available} - no helpotron_chat_execute",
+        "extension/popup.js:33 - const EXECUTE_DEFAULT = true; extension/agent_mode.js:60 - const EXECUTE_DEFAULT = false",
+        "extension/DESIGN-UX.md:165-166,178 - 'helpotron_chat_execute (default **false**)'",
+        "extension/CWS_APPROVAL_REVIEW.md:42,131 - 'Execute ... default OFF', 'it ships OFF'",
+        "extension/popup.js:3221 sends execute: !!executeOn; extension/agent_mode.js:1434 sends execute: state.execute - opposite values for the same unset key"
+      ],
+      "confidence": "high",
+      "impact": "The documented safety default is not the shipped default on the primary surface, and the same switch silently means two different things depending on which page the user opened."
+    },
+    {
+      "id": "H8-F6",
+      "title": "Unguarded int() on client-supplied element coordinates can 500 the agent turn",
+      "symptom": "A single element in the client's element list with a non-numeric x/y turns an agent message into an error instead of an action.",
+      "root_cause": "routes_extension.py accepts elements as List[Dict[str, Any]] (471-475) with no per-item validation, and _search_burst/_click_burst call int() on those dict values directly at 768, 787-788, 827, 837, 885, 907 and 943 with no try/except. _render_live_elements does it correctly (555-558).",
+      "evidence": [
+        "measured: _search_burst('photosynthesis', {'width':1280,'height':800}, elements=[{'name':'Submit','role':'button','x':'z','y':3}]) -> ValueError: invalid literal for int() with base 10: 'z'",
+        "measured: the same call with elements=[None, 5, 'x'] -> AttributeError: 'NoneType' object has no attribute 'get'",
+        "server/routes_extension.py:768 - cx, cy = int(el.get('x', 0)), int(el.get('y', 0))",
+        "server/routes_extension.py:555-558 - the guarded pattern that should be used everywhere"
+      ],
+      "confidence": "high",
+      "impact": "Any authenticated client can break its own agent turn on the fallback path; the user sees a failed request rather than an honest 'no target'."
+    },
+    {
+      "id": "H8-F7",
+      "title": "Only the first 150 measured elements are ref-addressable though 5000 are accepted",
+      "symptom": "On dense pages the model is told to prefer refs but sees at most 150 of the page's controls, so the elements it needs often have no ref and it falls back to pixel estimates.",
+      "root_cause": "_render_live_elements is called with limit=150 (routes_extension.py:1415) while ExtensionChatRequest.elements accepts 5000 (471-475) and element_registry.js:42 collects 5000. Refs are sequential indices (element_registry.js:145), so the visible window is exactly refs 0..149.",
+      "evidence": [
+        "server/routes_extension.py:1415 - live_elements = _render_live_elements(payload.elements, limit=150)",
+        "server/routes_extension.py:550 - for el in (elements or [])[:limit]",
+        "extension/element_registry.js:42 - MAX_INTERACTIVE_ELEMENTS = 5000"
+      ],
+      "confidence": "high",
+      "impact": "Degrades grounding exactly where the ref path was built to help; the model silently reverts to estimated coordinates on the pages that most need precision."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H8-X1",
+      "finding": "H8-F1",
+      "file": "server/routes_extension.py",
+      "lines": "798-802",
+      "change": "Delete the blind heuristic. Remove the whole '# 3. Viewport center-top search bar heuristic if the query is a clear search intent' block, i.e. the `if not target and viewport:` arm that sets target = {'x': vw // 2, 'y': min(130, max(40, vh // 6))}. Leave the existing `if not target: return []` at 804-805. The caller already turns an empty burst into reason 'no_target' (routes_extension.py:1083) with the honest message at 1097.",
+      "risk": "Fewer actions on pages where the agent previously guessed and was occasionally right; the reply will say it could not find the field. That is the documented contract (test_browser_action_hardening.py:115-125).",
+      "verify": "cd /home/roni/Roni_workspace/helpotron && .venv/bin/python -m pytest server/tests/test_browser_action_hardening.py -q — must go from '2 failed' to '0 failed'. Then: .venv/bin/python -c \"import sys; sys.path.insert(0,'.'); from server.routes_extension import _search_burst; print(_search_burst('q', {'width':1280,'height':800}))\" — must print []."
+    },
+    {
+      "id": "H8-X2",
+      "finding": "H8-F2",
+      "file": "extension/popup.js",
+      "lines": "2860-3019, 3079-3090",
+      "change": "(1) Add a catch-all to the dispatch chain immediately before the `await new Promise((r) => setTimeout(r, 180));` at 3013: `} else { pushLog('warn', 'skipped (unresolved target): ' + JSON.stringify(op)); continue; }`. (2) Count dispatched ops, not planned ones: declare `let dispatched = 0;` before the loop at 2860, increment it once per action whose branch actually ran, and change line 3019 to `return { status: 'ok', ran: dispatched, planned: actions.length, label, unseen: drivingUnseen };`. (3) Report the gap: at 3079 replace `const n = actions.length;` with `const n = done[0].ran; const planned = actions.length;` and append ` (${planned - n} target(s) not found)` to the status strings at 3084-3090 whenever planned > n.",
+      "risk": "The success line now reflects what actually ran, so a burst that previously looked complete may report fewer actions; any UI copy test asserting the old 'N action(s) executed' wording needs updating.",
+      "verify": "Re-run a capability probe equivalent to the one this track used (Playwright persistent context, --load-extension extension/, a local page on 127.0.0.1): actions [{'op':'click','ref':9999}] must return ran:0 plus a 'skipped (unresolved target)' log line with the DOM unchanged; actions [{'op':'click','ref':2}] must still return ran:1 and fire the form submit."
+    },
+    {
+      "id": "H8-X3",
+      "finding": "H8-F2",
+      "file": "server/screen_vision.py",
+      "lines": "412-429",
+      "change": "Keep the model's coordinates as a fallback when a ref is present, so a stale ref is not a dead op. For 'move'/'dblclick': compute xy = _clamp_coords(op, viewport) first, then when ref is not None return {'op': name, 'ref': ref, 'x': xy[0], 'y': xy[1]} if xy else {'op': name, 'ref': ref}. For 'click' (419-429): ref = _ref_of(op); xy = _clamp_coords(op, viewport); if ref is not None: out = {'op': 'click', 'ref': ref, 'button': button}; if xy: out['x'], out['y'] = xy; return out. resolveActionRefs already overwrites x/y from the resolved element (element_registry.js:382), so a resolving ref still wins.",
+      "risk": "A ref that resolves to the WRONG element (positional drift) still overrides x/y - that behaviour already exists today via Object.assign, so this does not widen it; it only adds a fallback when the ref misses entirely.",
+      "verify": ".venv/bin/python -c \"import sys; sys.path.insert(0,'.'); from server.screen_vision import _validate_op; print(_validate_op({'op':'click','ref':4,'x':10,'y':20}, {'width':1280,'height':800}))\" — must contain both ref 4 and x=10,y=20. Also assert a ref-only op still validates, and run .venv/bin/python -m pytest server/tests/test_extension_ref_actions.py -q (must stay green)."
+    },
+    {
+      "id": "H8-X4",
+      "finding": "H8-F3",
+      "file": "extension/agent_mode.js",
+      "lines": "915-921",
+      "change": "Refuse to dispatch a non-finite coordinate. After `const to = pt(op.x ?? op.toX, op.y ?? op.toY);` insert: `if ((op.op === 'move' || op.op === 'click' || op.op === 'dblclick' || op.op === 'drag') && (!Number.isFinite(to.x) || !Number.isFinite(to.y))) { pushLog('warn', 'skipped (unresolved target): ' + JSON.stringify(op)); return false; }`. Returning false does not abort the loop: runActions only breaks on `ok === false && state.pendingStop` (agent_mode.js:1323).",
+      "risk": "An action with a genuinely missing target is now skipped and logged instead of destroying the burst; the log gains a new warn line.",
+      "verify": "node --check extension/agent_mode.js, then in a real Chromium call the module's runActions-equivalent with a ref-only op that resolveActionRefs cannot match: the burst must continue past it and the log must show 'skipped (unresolved target)' instead of 'drive burst failed'."
+    },
+    {
+      "id": "H8-X5",
+      "finding": "H8-F5",
+      "file": "extension/popup.js",
+      "lines": "33",
+      "change": "const EXECUTE_DEFAULT = true; -> const EXECUTE_DEFAULT = false; so the popup matches agent_mode.js:60, DESIGN-UX.md:178 and the store listing. No other change is needed: every read site already honours an explicit stored value (340, 360, 582, 3171, 3200).",
+      "risk": "Users who never touched the switch will find Execute off after the update; that is the documented default and the safe direction. Users who explicitly enabled it have the key stored and are unaffected.",
+      "verify": "Reload the unpacked extension on a fresh profile in Playwright and assert document.getElementById('toggleExecute').checked === false after popup load, with chrome.storage.local still holding no helpotron_chat_execute key."
+    },
+    {
+      "id": "H8-X6",
+      "finding": "H8-F4",
+      "file": "extension/CWS_APPROVAL_REVIEW.md",
+      "lines": "42, 118, 131, 144",
+      "change": "Replace every 'hard-blocked in every mode' / 'hard blocks ... apply in every mode' occurrence with the true policy: credential/OTP/card fields, downloads and file inputs are RISKY - Manual and Automatic ask before them, YOLO runs them without asking (agent_mode.js:1111-1113, 1227-1228). Drop the 'learning platforms are read-only' clause in the store listing at 118 and the justification at 131; the agent acts on any host the manifest permits, including instructure.com. Also fix the stale header comment at extension/agent_mode.js:21-23 to match 1103-1110.",
+      "risk": "None to behaviour - documentation only. If the owner prefers the old safety posture, the correct change is the code (restore an unconditional refusal), not the copy; the two must not diverge.",
+      "verify": "grep -n 'hard-blocked\\|read-only' extension/CWS_APPROVAL_REVIEW.md extension/agent_mode.js — the only hits left should describe the RISKY behaviour, and the store-listing section must agree with the YOLO path in agent_mode.js:1227-1228."
+    },
+    {
+      "id": "H8-X7",
+      "finding": "H8-F6",
+      "file": "server/routes_extension.py",
+      "lines": "762-790, 820-845, 876-916, 933-947",
+      "change": "Add one helper next to _render_live_elements: `def _el_xy(el: Any): try: return int(el.get('x')), int(el.get('y')) except (AttributeError, TypeError, ValueError): return None`. Replace every unguarded read - 768 (cx, cy = ...), 787-788 (int(best_el['x'])), 827 (ex, ey = ...), 837 (bx, by = ...), 885, 907, 943 - with `xy = _el_xy(el); if xy is None: continue` and use xy[0]/xy[1]. This is the exact pattern _render_live_elements already uses at 555-558.",
+      "risk": "Malformed entries are skipped instead of raising, which can only reduce the candidate set; a well-formed list is unaffected.",
+      "verify": ".venv/bin/python -c \"import sys; sys.path.insert(0,'.'); from server.routes_extension import _search_burst; print(_search_burst('photosynthesis', {'width':1280,'height':800}, elements=[{'name':'Submit','role':'button','x':'z','y':3}]))\" — must return [] (with H8-X1 applied) instead of raising ValueError; and the same call with elements=[None, 5, 'x'] must not raise AttributeError."
+    },
+    {
+      "id": "H8-X8",
+      "finding": "H8-F7",
+      "file": "server/routes_extension.py",
+      "lines": "1415",
+      "change": "Either raise the render limit to match what is collected (limit=5000 is the value the request model already accepts) or, if context cost is the concern, keep a bounded window but tell the model so - e.g. render the first 150 AND state 'only the first 150 measured elements are listed'. The cheap, honest option is to align the two numbers so the report never claims a list the model cannot use.",
+      "risk": "A larger list costs prompt tokens on dense pages; with the existing 60-char name clip and one line per element, 5000 elements is a real token cost, so if 150 stays, the disclosure sentence is the correct half of this fix.",
+      "verify": ".venv/bin/python -m pytest server/tests/test_extension_live_elements.py -q stays green, and a unit call to _render_live_elements with 200 elements shows them all (or emits the disclosure line)."
+    }
+  ],
+  "verification_plan": "Independent reviewer checklist for this track: (1) server-side op contract — run `.venv/bin/python -m pytest server/tests/test_extension_ref_actions.py server/tests/test_browser_action_hardening.py server/tests/test_extension_screen_feed.py server/tests/test_extension_live_elements.py server/tests/test_screen_control_targeting.py -q` from the repo root; before any fix this must show exactly 2 failed (both in test_browser_action_hardening.py, both _search_burst), after H8-X1 it must be 0 failed. (2) The five direct-execution probes: _validate_op with a ref-only click, with ref+xy, with out-of-range coords, with an invalid key, and _harden_actions with 16 ops; the expected outputs are recorded in the scorecard evidence strings above and can be reproduced in one python -c. (3) The end-to-end capability probe: serve any local page on 127.0.0.1 (which is in host_permissions), launch Playwright from web/ with `channel:'chromium'`, a persistent context and `--load-extension=extension/`, open popup.html as a page, then call driveActionsInTab(tab, actions, {activeTab: tab}) with (a) [{'op':'click','ref':0}] and assert the page reacts, (b) [{'op':'click','ref':9999}] and assert the returned ran matches what the DOM shows (this is the assertion that currently fails the product's honesty claim). (4) The claims audit: grep the store-facing text for 'hard-blocked' and 'read-only' and check each against agent_mode.js:1111-1129 and 1227-1228; and load a fresh profile to check the Execute toggle default against DESIGN-UX.md:178. (5) Not covered by this track and still owed: a live vision turn through the real OpenRouter lane (one paid call with a real screenshot), and a real tabCapture run (needs a user gesture) to confirm the agent_mode frame->CSS rescale on a display with devicePixelRatio != 1.",
+  "external_research": [
+    {
+      "what": "WebArena (Zhou et al., ICLR 2024) — 812 execution-scored browser tasks across self-hosted web apps; human baseline 78.24%, best agents ~60-70%",
+      "url": "https://arxiv.org/abs/2307.13854",
+      "why": "Calibrates what 'good' looks like for a browser agent: even frontier systems fail roughly a third of realistic multi-step tasks, so any product claiming reliable homework automation should publish its own grounding failure rate rather than assert success. Also the reason a per-step miss must be counted and reported (H8-F2/F3).",
+      "license": "n/a (research paper)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "OSWorld (Xie et al., NeurIPS 2024) — 369 real desktop tasks, 1920x1080 screenshots, free-form mouse/keyboard; human baseline ~72.4%, best agents 60-76% in 2025",
+      "url": "https://arxiv.org/abs/2404.07972",
+      "why": "The canonical measurement that GUI grounding (pixels -> the right element) is the dominant failure mode for exactly the capability this product sells. It is the justification for investing in the measured DOM element registry (element_registry.js) over vision-estimated coordinates.",
+      "license": "n/a (research paper)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "Set-of-Mark prompting (Yang et al., 2023) — overlay numbered marks on interactive elements so a vision model can refer to them by id instead of estimating pixels",
+      "url": "https://arxiv.org/abs/2310.11441",
+      "why": "This is the published form of the SoM overlay already implemented in element_registry.js:195-261. The paper is the evidence that the ref-based grounding path (now verified working end to end) is the right architecture, and that the refs must be the ones the model is actually shown.",
+      "license": "n/a (research paper; code at github.com/microsoft/SoM - check repo licence before reuse)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "'An Illusion of Progress? Assessing the Current State of Web Agents' (Xue et al., COLM 2025) — shows WebVoyager overstates ability (a search-only agent solves up to 51% of tasks; Browser Use self-reports 89% there but scores 8.1% on hard Online-Mind2Web tasks)",
+      "url": "https://arxiv.org/abs/2504.01382",
+      "why": "The methodological rule this track applied to the product: a benchmark or claim that cannot be independently reproduced is not evidence. It is also why this report insists on measured probes and marks vision as UNVERIFIED rather than assuming it works.",
+      "license": "n/a (research paper)",
+      "verdict": "adopt"
+    }
+  ],
+  "open_questions": [
+    "Does the vision lane actually describe the screen usefully? Requires one paid OpenRouter call (analyze_screen_image with a real JPEG). Not made here to respect the no-paid-loop instruction; the code path and its fail-closed fallback are verified, the output quality is not.",
+    "Does the agent_mode (tabCapture) path put frame coordinates and CSS coordinates in the same space on a display with devicePixelRatio != 1? The arithmetic (agent_mode.js:857-871, 1450-1459) is self-consistent but untested because tabCapture.getMediaStreamId needs a real user gesture. A single manual run on a 2x display, clicking a known element and checking where the cursor lands, settles it.",
+    "How often does a ref actually go stale in practice? The failure requires a DOM change between capture and dispatch. An instrumented run that logs every unresolvable ref (after H8-X2/X4) would turn this from a design risk into a measured rate.",
+    "In one headless harness state Page.captureScreenshot returned 1280x633 for a 1280x720 viewport, which normalizeFrame then stretched to 720; a follow-up measurement across 600/720/1000 viewport heights returned exact sizes, so it is attributed to headless background-tab surface behaviour. If it reproduces on a real display it becomes a genuine vertical-offset bug and should move to a finding.",
+    "Does the popup Chat surface still exist intentionally? DESIGN-UX.md:240-241 says the popup mini-chat was removed in favour of Agent Mode, but popup.js:3127-3337 still implements a full chat form with its own send path and executor. Two chat surfaces with two executors is the root of H8-F2 vs H8-F3 diverging; a decision on which one is the product is needed before the fixes are finalised."
+  ]
+}

@@ -1,0 +1,417 @@
+{
+  "track": "H10",
+  "agent": "h10-strategy",
+  "summary": "The offer cannot be stated cleanly because three mutually contradictory price tables ship at once (README says $5/$15/$30 for 500/1500/3000 tokens; the live /api/plans and payments.py say $10/$20/$40 for 300/1000/2700; plans.py's own docstring records a fourth). Worse, there is no path from paying to using: Stripe checkout and every monthly renewal grant user.credits (payments.py:162,192) while every gated surface enforces settings['token_balance'] (routes_overlord.py:1373-1385, routes_extension.py:660, routes_dump.py:319), so a paying subscriber's usable balance stays 0; Stripe is unconfigured so no subscription can be created at all, and the 'free' trial requires 2FA plus a 1-cent payment that falls back to manual operator approval. The one genuine moat - a screen-aware agent driving the student's own logged-in Chrome via chrome.debugger (agent_mode.js:701,892) - was shipped by Google itself in August 2026 as Gemini Spark auto-browse in Chrome using saved logins and passwords, and the same lane is prompt-injectable into the student's authenticated session (h5) while sitting next to humanizer/detector-evasion tooling, so the buyers who can actually pay (schools, parents) will not buy it. The market is real and growing (62% of US students used AI for homework in Dec 2025, RAND) but the incumbents are already inside it, the checkout does not work, the allowance is not deliverable, the capability is not defensible, and the price sits above measured student willingness-to-pay. Verdict: do not pursue as built; the only honest paths are a narrow parent-paid study-OS wedge with the submission-automation and evasion features removed, or shutting the commercial part down.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H10-F1",
+      "title": "There is no statable offer: three mutually contradictory price/allowance tables ship at once",
+      "symptom": "A visitor sees $10 Basic / $20 Pro / $40 Elite for 300 / 1,000 / 2,700 task tokens, billed monthly. An engineer or partner reading README.md sees $5 / $15 / $30 for 500 / 1,500 / 3,000 task tokens. plans.py's own docstring records a fourth, older table (free 500 / basic 2000 / pro 6000 / elite 25000). Nobody inside or outside the company can say what one month costs or what it buys.",
+      "root_cause": "Prices are duplicated across sources that were never reconciled. README.md:250-255 (Basic $5.00/500 tokens, Pro $15.00/1500, Elite $30.00/3000, '$0.0100 / token') disagrees with the billing owner server/payments.py:25 TIER_CREDITS = {trial 150, basic 300, pro 1000, elite 2700} and server/payments.py:27 TIER_PRICE_CENTS = {basic 1000, pro 2000, elite 4000}. server/plans.py:1-32 documents the historical divergence and deliberately preserves a second one (ALLOWANCE larger than PURCHASE_GRANT) instead of reconciling it.",
+      "evidence": [
+        "README.md:253 - '| **Basic** | **$5.00** | **500 tokens** | $5.00 compute | $0.0100 / token |'",
+        "server/payments.py:25 - TIER_CREDITS = {trial: 150, basic: 300, pro: 1000, elite: 2700}",
+        "server/payments.py:27 - TIER_PRICE_CENTS = {basic: 1000, pro: 2000, elite: 4000}",
+        "server/plans.py:12-21 - docstring lists the pre-08-29 table: free 500 / basic 2000 / pro 6000 / elite 25000",
+        "measured: curl -s http://127.0.0.1:5000/api/plans -> basic price_cents 1000, monthly_task_tokens 300; pro 2000/1000; elite 4000/2700",
+        "web/src/components/AnonymousLanding.jsx:38-117 - FALLBACK_PLANS repeats the live 1000/2000/4000 and 300/1000/2700 values"
+      ],
+      "confidence": "high",
+      "impact": "You cannot pitch, price, advertise or model margin against a moving target; any investor or partner reading the repo gets numbers that are 2x wrong on price and 1.67x wrong on allowance. Reconciling this is a prerequisite for every other decision."
+    },
+    {
+      "id": "H10-F2",
+      "title": "A paying subscriber receives no usable balance: checkout and renewal credit the currency the gates do not read",
+      "symptom": "A user who pays $10-$40 (or is granted a plan by admin) opens My Agent, the extension chat, or the assignment dump and is told they are out of tokens. The account shows 300-2,700 'credits' that no gated feature reads, while token_balance stays at 0.",
+      "root_cause": "Two currencies that never meet. Stripe checkout adds the plan allowance to user.credits (server/payments.py:162) and every monthly renewal adds it again to user.credits (server/payments.py:192), but every usage gate reads settings['token_balance'] (server/routes_overlord.py:1373-1385, server/routes_extension.py:660, server/routes_dump.py:319 and 542-543). Only the free trial writes token_balance (server/trial_service.py:63-67). server/plans.py:28-32 records the split as an unresolved business discrepancy. h1-economics.json H1-F2/H1-F3 reached the same mechanism independently.",
+      "evidence": [
+        "server/payments.py:162 - user.credits += TIER_CREDITS.get(plan, 0)  [checkout.session.completed]",
+        "server/payments.py:192 - user.credits += TIER_CREDITS.get(user.plan, 0)  [invoice.payment_succeeded]",
+        "server/routes_overlord.py:1373-1385 - token budget helper reads and writes settings['token_balance']",
+        "server/routes_extension.py:660 - tok_bal = float((user.settings or {}).get('token_balance', 0) or 0)",
+        "server/routes_dump.py:319 and 542-543 - dump gate and dump charge both use settings['token_balance']",
+        "server/trial_service.py:63-67 - trial writes settings['token_balance'] (the only lane that does)",
+        "server/plans.py:28-32 - ALLOWANCE larger than PURCHASE_GRANT, reconciliation left as an owner decision"
+      ],
+      "confidence": "high",
+      "impact": "Revenue cannot convert into product use. Every would-be subscriber who paid would hit a paywall inside the thing they paid for, then refund or churn. The paid product does not exist as a working product."
+    },
+    {
+      "id": "H10-F3",
+      "title": "Neither the paid path nor the free trial can complete without the owner, and the landing page promises no card while the trial demands one",
+      "symptom": "'Choose Pro' cannot create a subscription (Stripe keys empty). 'Start free trial' cannot activate until the user enables 2FA and passes a 1-cent payment; with Stripe off that payment becomes a pending cashapp row only the operator can approve by hand. The hero simultaneously advertises 'No credit card'.",
+      "root_cause": "create_trial_verification falls back to a manual pending Payment when Stripe is not configured (server/payments.py:84-100, provider cashapp, status pending), and activate_free_trial hard-requires 2FA and payment_verified (server/routes_trial.py:110-119) while _trial_state reports requires_1c_payment true (routes_trial.py:33). The config key is empty (server/config.py:72). The landing copy asserts the opposite (web/src/components/AnonymousLanding.jsx:560 'No credit card').",
+      "evidence": [
+        "server/payments.py:84-100 - if not _stripe_enabled(): pending cashapp Payment, mode 'manual'",
+        "server/routes_trial.py:32-33 - requires_2fa True, requires_1c_payment True",
+        "server/routes_trial.py:110-119 - 403 unless 2fa_enabled and payment_verified",
+        "server/config.py:72 - stripe_secret_key: str = os.getenv('STRIPE_SECRET_KEY', '')",
+        "web/src/components/AnonymousLanding.jsx:560 - 'No credit card' trust chip on the hero CTA",
+        "h1-economics.json H1-F3 - measured: stripe keys empty; set_user_plan deposits nothing"
+      ],
+      "confidence": "high",
+      "impact": "Top of funnel depends on the owner being at the keyboard for every trial, and the funnel's own promise is false against routes_trial.py:33. A high-schooler without a payment card - the stated target customer (README.md:9) - cannot complete the trial at all."
+    },
+    {
+      "id": "H10-F4",
+      "title": "The only moat was shipped by Google itself in August 2026: driving the user's logged-in browser is no longer exclusive",
+      "symptom": "Nothing the helpotron agent can do in a browser is something a student cannot already get from a free or $19.99 product they already have open. 'The agent drives your own logged-in browser' is now a Google feature.",
+      "root_cause": "Helpotron's differentiated capability is chrome.debugger attachment plus CDP Input dispatch plus Runtime.evaluate on the user's own tab (extension/agent_mode.js:701 chrome.debugger.attach, :892 Input.dispatchMouseEvent, :725-817 Runtime.evaluate; manifest.json:21 'debugger'). In August 2026 Google shipped Gemini Spark integrated into desktop Chrome with auto browse that operates in Chrome on the user's own device using already-logged-in accounts and saved passwords with permission. ChatGPT Atlas (Oct 2025) ships agent mode to Free/Plus/Pro/Go, Perplexity Comet has been free worldwide since Oct 2025, and Chrome's own Gemini side panel is free for every Chrome user.",
+      "evidence": [
+        "extension/agent_mode.js:701 - await chrome.debugger.attach(tab, DEBUGGER_VERSION)",
+        "extension/agent_mode.js:892 - await cdp('Input.dispatchMouseEvent', params)",
+        "extension/agent_mode.js:725-817 - Runtime.evaluate calls against the driven tab",
+        "extension/manifest.json:21 - 'debugger' in permissions",
+        "external: https://www.deccanherald.com/technology/artificial-intelligence/google-integrates-agentic-ai-gemini-spark-feature-into-the-chrome-browser-4099952 - Gemini Spark in Chrome uses logged-in accounts and saved passwords, auto browse",
+        "external: https://www.searchenginejournal.com/openai-launches-chatgpt-atlas-browser-for-macos/558900/ - Atlas agent mode on Free/Plus/Pro/Go",
+        "external: https://www.perplexity.ai/comet - Comet free worldwide since Oct 2025"
+      ],
+      "confidence": "high",
+      "impact": "The answer to 'why helpotron' cannot be 'it can click things in your browser'. The platform owner controls both the browser and the assistant, can ship the identical capability to a billion users, and has already gated the useful half behind Google AI Pro at $19.99/mo."
+    },
+    {
+      "id": "H10-F5",
+      "title": "The differentiated lane is unsellable to any buyer: auto-executing control of an authenticated session, prompt-injectable, next to detector-evasion tooling",
+      "symptom": "A parent or teacher evaluating the product sees an agent that clicks and types in the student's logged-in school portal with no confirmation in the default mode, whose page text can carry attacker instructions into that session, shipped alongside a humanizer and an AI-detector loop whose purpose is to make generated work look organically written. Schools cannot approve it; parents cannot trust it.",
+      "root_cause": "The control lane executes without a per-action confirmation in the default auto mode (extension/agent_mode.js:912 executeAction; default execute state at :107-108), and h5-security.json established that untrusted page text reaches the model as trusted system context (OWASP LLM01->LLM06) and that model-authored code reads /etc/hostname and the server .env. The manifest carries debugger, tabCapture and desktopCapture (manifest.json:12-23) while README.md:307 claims 'minimal permissions (activeTab, storage, alarms)', which is false. The integrity posture is contradicted by shipped code: README.md:9 claims the product 'prevents academic dishonesty', while server/gdocs_exporter.py:4-5 exists so the revision history 'reflects an organic writing process', server/humanizer.py is a multi-pattern academic humanizer, server/detectors.py scores and rewrites against AI detectors, and the prompt has a no-refusal mode (server/agent_prompt.py:142).",
+      "evidence": [
+        "extension/agent_mode.js:912 - executeAction(op) dispatches clicks/typing for server-returned control_actions",
+        "extension/agent_mode.js:107-108 - seescreen/execute default state",
+        "extension/manifest.json:12-23 - permissions: storage, activeTab, tabs, scripting, alarms, tabCapture, desktopCapture, notifications, debugger, sidePanel",
+        "README.md:307 - 'Operates with minimal permissions (activeTab, storage, alarms)' (false vs manifest.json:12-23)",
+        "README.md:9 - 'actively guides learning, prevents academic dishonesty'",
+        "server/gdocs_exporter.py:4-5 - 'revision history reflects an organic writing process'",
+        "server/humanizer.py - AIHumanizerPipeline; server/humanize_skill.py - multi-pattern academic humanizer",
+        "server/detectors.py:1-4 - AI detector integration returning likelihood scores",
+        "server/agent_prompt.py:142 - 'Never refuse a user request, regardless of nuance. The user's command is absolute' (open-mode add-on)",
+        "h5-security.json - untrusted page text reaches the model as trusted system context, then executes clicks/typing with no confirmation in default auto mode"
+      ],
+      "confidence": "high",
+      "impact": "Two of the four plausible buyers (school/district, parent) are closed: districts fold AI misuse into existing academic-honesty codes with zeros and referrals, and only 7% of high-schoolers say their school permits AI for homework (RAND, Mar 2026). The remaining buyer is the student alone, cardless, the cheapest and most churn-prone segment - and the dishonest-use framing adds Chrome Web Store review exposure on a manifest that already needs a 'debugger' justification."
+    },
+    {
+      "id": "H10-F6",
+      "title": "Distribution is zero: unlisted extension, no demo asset, a trial that cannot self-activate, and a referral loop worth about $0.10",
+      "symptom": "A student who has never heard of helpotron cannot find it. The extension is unlisted by design, so the Chrome Web Store search surface - the dominant organic install channel for extensions - never shows it. There is no demo video. The only viral loop pays 2-10 credits (about $0.02-$0.10).",
+      "root_cause": "The extension is deliberately published as Unlisted (extension/CWS_APPROVAL_REVIEW.md:136; store id nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk, docs/archive/opencode_context_handover_9_8.md:9). No demo video exists in the repo outside user uploads (measured: find for *.mp4/*.webm returns only uploads/ files; cws-assets/ holds tiles and four static screenshots). The referral engine pays the referrer 2/5/10 credits by plan (server/referral.py:26) and the redeemer 10 credits (server/referral.py:173), versus README.md:260's advertised 50 inviter / 25 invitee, which is stale. The only free entry, the trial, requires 2FA plus manual 1c approval (H10-F3).",
+      "evidence": [
+        "extension/CWS_APPROVAL_REVIEW.md:136 - 'Visibility: Unlisted (intended; not published at review time)'",
+        "docs/archive/opencode_context_handover_9_8.md:9 - 'published-unlisted id nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk'",
+        "measured: find helpotron -iname '*.mp4' -o -iname '*.webm' -> only uploads/*.webm (user files), no demo video",
+        "cws-assets/screenshots/ - 4 static PNGs; cws-assets/upload/ - tiles + icon, no video",
+        "server/referral.py:26 - REFERRAL_PLAN_REWARD_CREDITS = {basic: 2.0, pro: 5.0, elite: 10.0}",
+        "server/referral.py:173 - new_user.credits = (new_user.credits or 0.0) + 10.0",
+        "README.md:260 - advertised 50 inviter / 25 invitee credits (stale)",
+        "external: https://developer.chrome.com/docs/webstore/cws-dashboard-distribution - Unlisted is URL-only, not discoverable in store search; Listed is the growth channel"
+      ],
+      "confidence": "high",
+      "impact": "With no listed store presence, no video, a gated trial and a $0.10 referral there is no acquisition channel at all. Extension benchmarks put free-to-paid conversion at 0.5-2%, so even a listed, working product needs volume this has no way to reach."
+    },
+    {
+      "id": "H10-F7",
+      "title": "Price is above the market and above measured student willingness-to-pay, and the model is 'cap after paying' - the top churn driver",
+      "symptom": "$10 / $20 / $40 per month, metered and hard-capped, with no monthly reset, on a deepseek-flash ladder - while the student already has ChatGPT free, ChatGPT Go at $8, or ChatGPT Plus / Claude Pro / Google AI Pro at $20 for effectively uncapped frontier models.",
+      "root_cause": "The pricing sits above measured student WTP and above the study-tool incumbents while offering a cap instead of unlimited use. h1-economics.json H1-F2/H1-F3 show the allowance is not even delivered. No code path resets or re-grants token_balance on a monthly boundary (measured: grep for reset_balance / monthly_grant / billing_cycle / period_end returns only the credits-based renewal at payments.py:186-199), so 'per month' is really a one-time bucket.",
+      "evidence": [
+        "server/payments.py:25,27 - $10/$20/$40 for 300/1000/2700 tokens",
+        "measured: grep -rni 'reset_balance|monthly_grant|billing_cycle|period_end' server/*.py -> no monthly token_balance reset; only payments.py:186-199 renews user.credits",
+        "external: https://econpapers.repec.org/article/olejournl/v_3a20_3ay_3a2025_3ai_3a2_3ap_3a169-183.htm - Kuberska & Ruszczyk 2025, 342 students: +50% price -> 36.1% cancel; perceived quality does not predict WTP",
+        "external: https://www.thecover.cn/news/jgwoJ15wfVOH90qSdq8Jkw== - Doubao student survey 2025: 45% say free is enough, 30% pay only situationally, top deterrent 40% = usage caps after paying",
+        "external: https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/ - ChatGPT Free/$8 Go/$20 Plus; https://claude.com/pricing - Claude Pro $20; https://one.google.com/about/plans - Google AI Pro $19.99",
+        "external: https://quizlet.com/upgrade - Quizlet Plus $35.99/yr (~$3/mo); https://apps.ankiweb.net - Anki free; Photomath Plus ~$9.99/mo; Gauth Plus ~$11.99/mo; Chegg Study Pack $19.95/mo",
+        "external: https://dev.to/ktg0215/real-numbers-freemium-chrome-extension-monetization-after-6-months-5hga - extension free-to-paid conversion 0.3-1.4%"
+      ],
+      "confidence": "high",
+      "impact": "At $10 Basic the product sits at the top of the measured student band with a hard cap, and cap-after-paying is the primary cancellation trigger in the one survey that measured it. At $20 Pro it is priced against uncapped frontier assistants. The price is defensible neither on value nor on margin."
+    },
+    {
+      "id": "H10-F8",
+      "title": "Unit economics are inverted: the metered product passes compute through at cost with a 3-5x understated rate table, and the busiest lane is sold for one flat credit",
+      "symptom": "The pricing page implies a healthy compute pass-through. In reality the meter charges 1 task token per 1 cent of upstream compute using a rate table that h1 measured as 3-5x below live OpenRouter prices, and the highest-volume lane (agent sessions) charges a flat 1 credit for a loop that can run an hour.",
+      "root_cause": "server/credits.py:38-43 defines 1 task token as exactly 1 cent of tool/API expenditure, so the plan price is a compute pass-through with no built-in gross margin. h1-economics.json H1-F5 established the router price table (server/llm.py:46-56) understates live OpenRouter rates 3-5x on the Gemini tiers, so the cents the meter charges are not the cents actually spent; H1-F1 established that one flat credit buys a ~50k-token-per-call loop for up to 3,600s with no cost-ledger row and no daily cap (cost_control.py's $25/day cap has no callers).",
+      "evidence": [
+        "server/credits.py:38-43 - '1 Task Token = 1 cent ($0.01) of tool/API expenditure'",
+        "README.md:250-255 - the table that prices tokens at exactly their stated compute value (zero gross margin)",
+        "server/payments.py:25,27 - Basic is $10 for 300 tokens = $3.00 of stated compute; h1-F5 corrections turn that into roughly $9-15 of real upstream cost",
+        "server/agent_session.py:33-34,164-216 + server/main.py:1893 - one flat credit buys an unbounded hour-long LLM loop (h1-economics.json H1-F1)",
+        "server/cost_control.py:24,47-89 - ABSOLUTE_DAILY_CAP_USD=25 with zero call sites (h1-economics.json H1-F6)",
+        "external: https://openrouter.ai/google/gemini-3.8-flash - real rates vs server/llm.py:46-56"
+      ],
+      "confidence": "high",
+      "impact": "A paying user can cost more in upstream tokens than they pay, worst on the lane an engaged student uses most. This is not a pricing tweak; the margin model has to be rebuilt before any growth spend makes sense, and even then $10 for a capped allowance against a $20 uncapped incumbent is an unwinnable value story."
+    }
+  ],
+  "five_things": [
+    {
+      "condition": "There is one clear, current, defensible price and allowance that a buyer, an investor and the code all agree on.",
+      "status": "false",
+      "evidence": "README.md:250-255 ($5/$15/$30, 500/1500/3000) vs server/payments.py:25,27 ($10/$20/$40, 300/1000/2700) vs server/plans.py:12-21 (a third table) vs measured GET /api/plans (the payments.py values). H10-F1."
+    },
+    {
+      "condition": "A customer can pay and then actually use the product: payment deposits the same currency the usage gates enforce, and the monthly allowance re-grants at each renewal.",
+      "status": "false",
+      "evidence": "Payment grants user.credits (server/payments.py:162,192); every gate reads settings['token_balance'] (server/routes_overlord.py:1373-1385, routes_extension.py:660, routes_dump.py:319); no monthly token_balance reset exists. H10-F2."
+    },
+    {
+      "condition": "There is at least one acquisition channel that reaches students without the owner in the loop.",
+      "status": "false",
+      "evidence": "Extension is Unlisted by design (extension/CWS_APPROVAL_REVIEW.md:136), so no Chrome Web Store search discovery; the free trial requires 2FA plus a 1-cent payment that is a manual operator approval while Stripe is off (server/payments.py:84-100, server/routes_trial.py:110-119); no demo video exists (measured); referral pays 2-10 credits (server/referral.py:26). H10-F3, H10-F6."
+    },
+    {
+      "condition": "The product can do something the incumbents cannot or will not, and that something is worth more than it costs to sell.",
+      "status": "false",
+      "evidence": "The differentiator is chrome.debugger-driven control of the user's own logged-in browser (extension/agent_mode.js:701,892), which Google shipped in Chrome as Gemini Spark auto-browse in Aug 2026 (Deccan Herald) and which OpenAI Atlas agent mode and free Perplexity Comet already offer. The residual uncontested space is submission-ready, detector-evading work (server/gdocs_exporter.py:4-5, server/humanizer.py) - which the buyers who can pay will not buy. H10-F4, H10-F5."
+    },
+    {
+      "condition": "Contribution margin per paying user is positive at a price the actual buyer (a high-schooler or their parent) will pay - roughly $3-10/month.",
+      "status": "false",
+      "evidence": "1 task token = 1 cent of compute (server/credits.py:38-43) with the router table understating real OpenRouter rates 3-5x (server/llm.py:46-56; h1-economics.json H1-F5); $10 Basic buys 300 tokens = $3 stated compute, so a correct pass-through price at real rates sits above the student WTP band; the agent lane sells an unbounded hour-long loop for one flat credit (server/agent_session.py:164-216, server/main.py:1893). Measured student WTP is $3-10/mo (Kuberska & Ruszczyk 2025). H10-F7, H10-F8."
+    }
+  ],
+  "kill_criteria": [
+    {
+      "criterion": "A free general assistant does the same job for the student.",
+      "holds_today": true,
+      "evidence": "62% of US students already used AI for homework in Dec 2025, ChatGPT being the single most-used tool at 53% (RAND, Mar 2026); a free Gemini side panel now reads any page in Chrome. Nothing in helpotron is unreachable for $0."
+    },
+    {
+      "criterion": "The differentiator is already shipped by the platform owner that controls the browser.",
+      "holds_today": true,
+      "evidence": "Gemini Spark in Chrome (Aug 2026) does logged-in-account auto-browse, gated to Google AI Pro; Chrome's Gemini side panel is free. H10-F4."
+    },
+    {
+      "criterion": "The unit economics cannot support a price inside the buyer's willingness-to-pay band.",
+      "holds_today": true,
+      "evidence": "Compute is passed through at 1 token = 1 cent with a 3-5x understated rate table (server/credits.py:38-43, server/llm.py:46-56), so a $3-10 budget buys only $3-10 of real compute and a fraction of that after corrections; the agent lane is unbounded for one credit. H10-F8."
+    },
+    {
+      "criterion": "The channel that can pay (schools/districts) is structurally closed to the product as built.",
+      "holds_today": true,
+      "evidence": "Only 7% of high-schoolers say their school permits AI for homework (RAND, Mar 2026); districts route AI misuse to academic-honesty codes with zeros and referrals; the agent auto-executes in the student's authenticated session and is prompt-injectable (h5-security.json), and the repo ships humanizer plus detector-evasion tooling. H10-F5."
+    },
+    {
+      "criterion": "The top of funnel cannot self-serve, so growth requires the owner per user.",
+      "holds_today": true,
+      "evidence": "Stripe unconfigured (server/config.py:72) makes the trial payment a manual operator approval (server/payments.py:84-100) behind a 2FA wall (server/routes_trial.py:110-119), and the extension is unlisted. H10-F3, H10-F6."
+    },
+    {
+      "criterion": "Usage caps after paying are the primary cancellation trigger for this buyer.",
+      "holds_today": true,
+      "evidence": "Doubao student survey 2025: 40% named 'usage caps after paying' as their top deterrent; 45% said free is enough. helpotron's entire model is metered caps, with no monthly reset. H10-F7."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H10-X1",
+      "finding": "H10-F1",
+      "file": "server/plans.py, README.md",
+      "lines": "plans.py:1-32 and README.md:247-263",
+      "change": "Element 1 of one offer: make GET /api/plans the only published price table and correct README to match it. Pick the live values ($10/300, $20/1000, $40/2700) OR re-price deliberately in server/payments.py:25,27, then regenerate README.md:250-255 from plans.get_plan_catalogue() so the table cannot drift. Delete the stale pre-08-29 numbers from the plans.py docstring (lines 12-21) and the ALLOWANCE vs PURCHASE_GRANT discrepancy note (lines 28-32) once one number wins. Before: README says $5/500 and plans.py docstring says basic 2000. After: one number, sourced from plans.py, echoed in README and the landing page.",
+      "risk": "Changing payments.TIER_PRICE_CENTS/TIER_CREDITS changes live checkout behaviour; coordinate with any existing Stripe price objects. Do not change both the price and the allowance in one step.",
+      "verify": "`curl -s localhost:5000/api/plans | python3 -c \"import sys,json;d=json.load(sys.stdin);[print(p['id'],p['price_cents'],p['monthly_task_tokens']) for p in d['plans']]\"` must print the same tuples as README.md:250-255, and grep README for any price not in the catalogue returns 0 lines."
+    },
+    {
+      "id": "H10-X2",
+      "finding": "H10-F2, H10-F7",
+      "file": "server/payments.py",
+      "lines": "158-199",
+      "change": "Make money buy usage. On `checkout.session.completed` (payments.py:162) and `invoice.payment_succeeded` (payments.py:192), credit settings['token_balance'] instead of user.credits - the currency the gates read (routes_overlord.py:1373-1385, routes_extension.py:660, routes_dump.py:319) - and add a monthly re-grant keyed to the renewal event so the advertised 'per month' allowance actually re-appears. Keep a separate idempotency guard per (user, plan, invoice period) so a retried webhook cannot double-grant (h1-F7). Before: user.credits += TIER_CREDITS. After: settings['token_balance'] = settings.get('token_balance',0) + TIER_CREDITS, then persist user.settings and log a CreditTransaction row.",
+      "risk": "Existing accounts already hold credits they were sold; migrate them or they will see a second empty balance. Touching the webhook touches live revenue accounting - test the duplicate-event path.",
+      "verify": "In a dev DB, POST a synthetic checkout.session.completed, then GET /api/dashboard and confirm token_balance increased by the plan allowance and that GET /api/agent/chat succeeds instead of returning the insufficient-token error. Replay the same event and confirm the balance does not double."
+    },
+    {
+      "id": "H10-X3",
+      "finding": "H10-F3",
+      "file": "server/routes_trial.py, server/payments.py, web/src/components/AnonymousLanding.jsx",
+      "lines": "routes_trial.py:100-119, payments.py:75-100, AnonymousLanding.jsx:560",
+      "change": "Make the top of funnel self-serve. Either (a) configure Stripe so create_trial_verification returns mode 'stripe' (payments.py:101+) and the 1-cent check completes automatically, or (b) start the trial cardless - drop the 1c requirement for a first 7-day/150-token allowance and keep it only for the second claim. Separate 2FA from trial activation (it is an account-security feature, not an entitlement check) so routes_trial.py:110-119 stops demanding TOTP before a student has seen the product. Then make the landing copy true: if a card or 2FA is still required, delete the 'No credit card' chip at AnonymousLanding.jsx:560.",
+      "risk": "Cardless trials are abuse-prone; keep the existing one-per-account guard (trial_service.check_eligibility) and rate limit (routes_trial.py:80). Stripe setup requires the owner's account and keys.",
+      "verify": "`curl -s -X POST localhost:5000/api/trial/payment-verify -H 'Authorization: Bearer <test token>'` returns mode 'stripe' (not 'manual'), and a fresh test account can reach plan=trial with 150 token_balance without an operator touching the DB. Confirm AnonymousLanding.jsx no longer renders a 'No credit card' string while routes_trial.py:33 still reports requires_1c_payment."
+    },
+    {
+      "id": "H10-X4",
+      "finding": "H10-F8",
+      "file": "server/agent_session.py, server/cost_control.py",
+      "lines": "agent_session.py:164-216, cost_control.py:47-89",
+      "change": "Stop selling unbounded compute for one credit. Charge the agent lane per step against settings['token_balance'] (pass db= and user_id= into the call_llm at agent_session.py:170 so the ledger actually records spend), increment steps on the invalid-JSON and timeout branches so MAX_STEPS bounds the loop, and call cost_control.enforce_user_daily_budget (currently zero callers) at the top of each step. Then re-price the plan so the published price is at least 3x the corrected compute (fix the rate table at llm.py:46-56 to the live OpenRouter rates first - h1-F5).",
+      "risk": "Per-step charging changes the headline feature's economics; the first test users will see a much smaller effective budget, which is the honest number. Do not ship the charge without the ledger write or the spend becomes invisible again.",
+      "verify": "Run one agent session and assert an ApiUsageLog row exists for it (currently none: h1-F6) and that token_balance decreased by the step count; force an invalid-JSON reply and confirm steps still increments so the session terminates at MAX_STEPS=120 rather than 3600s."
+    },
+    {
+      "id": "H10-X5",
+      "finding": "H10-F5",
+      "file": "README.md, server/gdocs_exporter.py, server/humanizer.py, server/detectors.py, server/humanize_skill.py",
+      "lines": "README.md:9, gdocs_exporter.py:4-5, humanizer.py module docstring, detectors.py:1-4",
+      "change": "Pick the buyer and make the product match, because the current bill of materials rules out both paying channels. If the target is the parent/school, remove submission automation and detector evasion from the shipped product (gate gdocs_exporter.stream_assignment_to_doc, humanizer/humanize_skill and the detectors rewrite loop behind an off-by-default flag) and delete README.md:9's 'prevents academic dishonesty' claim until it is true. If the target stays the student, delete the school/parent channel from the plan and stop marketing integrity. Either way, remove the false 'minimal permissions (activeTab, storage, alarms)' line at README.md:307 or shrink manifest.json:12-23 to match it - a CWS reviewer reading both will find the contradiction.",
+      "risk": "Disabling the humanizer/detector lane removes functionality some users may already rely on; feature-flag it rather than deleting it, and do not touch other agents' uncommitted extension work.",
+      "verify": "With the flag off, a chat reply makes zero detector/rewrite calls (h1-F12 estimated up to 3 unbilled rewrites per reply), and `grep -rn 'prevents academic dishonesty' README.md` returns 0 while `grep -n '\"debugger\"' extension/manifest.json` and the permission claim in README.md:307 agree."
+    },
+    {
+      "id": "H10-X6",
+      "finding": "H10-F6",
+      "file": "extension/CWS_APPROVAL_REVIEW.md, extension/manifest.json, cws-assets/",
+      "lines": "CWS_APPROVAL_REVIEW.md:136, cws-assets/screenshots/",
+      "change": "Build one distribution channel end to end. (1) Switch the store visibility from Unlisted to Public now that H10-X5 makes the permission story consistent, and write the per-permission justification for 'debugger' (a single sentence naming the feature: 'drives the tab the user selects, with their approval'). (2) Record one 30-60 second screen capture showing capture-to-bubble and the agent acting on a page, and add it to cws-assets/ (none exists). (3) Make the trial self-serve (H10-X3) so the listing has somewhere to send installs. (4) Raise the referral reward from 2/5/10 credits to something a student will act on, or drop the loop rather than advertising 50/25 in README.md:260 and paying 10.",
+      "risk": "A public listing with an auto-executing agent and broad host permissions invites CWS rejection; do H10-X5 first. The debugger permission triggers a 'read and change all your data on all websites' install warning that will hurt conversion.",
+      "verify": "Store dashboard shows Visibility: Public and the extension is findable by searching its name in the CWS store search; cws-assets/ contains a video file; a referral signup pays the documented amount and README.md:260 matches server/referral.py:26."
+    }
+  ],
+  "verification_plan": "A reviewer confirms this track in four commands plus one store check. (1) Offer consistency: `curl -s localhost:5000/api/plans` and diff its price_cents/monthly_task_tokens against README.md:250-255 and server/payments.py:25,27 - all three must be identical. (2) Money-to-usage: in a dev DB replay a Stripe checkout and an invoice.payment_succeeded event, then assert settings['token_balance'] (not user.credits) increased and that GET /api/dashboard + one gated chat call succeed; the payment->use loop is the whole business. (3) Funnel: call /api/trial/payment-verify and /api/trial/activate on a fresh account and confirm no operator DB write is needed, then confirm the landing page copy matches the API's requires_1c_payment. (4) Margin: run one agent session and assert an ApiUsageLog row exists and token_balance fell by the step count, then re-derive README's price table from the corrected server/llm.py:46-56 rates and check that price >= 3x cost at the Basic tier. Finally, open the Chrome Web Store dashboard and confirm Visibility is Public (or record why not). Cross-reference h1-economics.json for the cost ledger and h5-security.json for the control-lane safety claim; this report is the business overlay on those two.",
+  "external_research": [
+    {
+      "what": "OpenAI ChatGPT pricing (Free / Go $8 / Plus $20)",
+      "url": "https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/",
+      "why": "The incumbent alternative a student already has; sets the value anchor the $10-40 plans are judged against",
+      "license": "n/a",
+      "verdict": "adopt as competitive baseline - helpotron must beat free, not $20"
+    },
+    {
+      "what": "Anthropic Claude pricing (Pro $20)",
+      "url": "https://claude.com/pricing",
+      "why": "Second $20 reference point for uncapped frontier usage",
+      "license": "n/a",
+      "verdict": "adopt as competitive baseline"
+    },
+    {
+      "what": "Google AI Pro pricing ($19.99) and Gemini Spark auto-browse in Chrome",
+      "url": "https://www.deccanherald.com/technology/artificial-intelligence/google-integrates-agentic-ai-gemini-spark-feature-into-the-chrome-browser-4099952",
+      "why": "Proves the screen-control moat is already shipped by the platform owner, using the user's own logged-in accounts - the exact helpotron claim",
+      "license": "n/a",
+      "verdict": "reject the 'unique screen control' positioning"
+    },
+    {
+      "what": "ChatGPT Atlas browser and agent mode availability",
+      "url": "https://www.searchenginejournal.com/openai-launches-chatgpt-atlas-browser-for-macos/558900/",
+      "why": "Second browser-agent incumbent; free across ChatGPT tiers",
+      "license": "n/a",
+      "verdict": "reject the browser-agent moat"
+    },
+    {
+      "what": "Perplexity Comet browser (free worldwide since Oct 2025)",
+      "url": "https://www.perplexity.ai/comet",
+      "why": "Third browser-agent incumbent, zero price",
+      "license": "n/a",
+      "verdict": "reject the browser-agent moat"
+    },
+    {
+      "what": "browser-use cloud pricing and open-source agent economics",
+      "url": "https://browser-use.com/pricing",
+      "why": "Shows the open-source computer-use alternative costs a student ~$0 + tokens and $0.02/browser-hour, i.e. the capability is near-free commodity",
+      "license": "MIT",
+      "verdict": "adapt - the commodity ceiling on 'we drive a browser'"
+    },
+    {
+      "what": "OpenHands pricing (Cloud Free, Pro $20)",
+      "url": "https://openhands.dev/pricing",
+      "why": "Second open-source computer-use baseline",
+      "license": "MIT",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Quizlet Plus pricing ($35.99/yr)",
+      "url": "https://quizlet.com/upgrade",
+      "why": "Study-tool price anchor: ~$3/month, the band students actually pay",
+      "license": "n/a",
+      "verdict": "adopt as the study-tool price anchor"
+    },
+    {
+      "what": "Anki (desktop/Android/web free; AnkiMobile $24.99 one-time)",
+      "url": "https://apps.ankiweb.net",
+      "why": "FSRS/flashcard is a free commodity; helpotron's spaced-repetition features have a $0 competitor",
+      "license": "AGPL desktop, n/a app",
+      "verdict": "reject flashcard/FSRS as a paid differentiator"
+    },
+    {
+      "what": "Student willingness-to-pay for AI (Kuberska & Ruszczyk 2025, 342 students)",
+      "url": "https://econpapers.repec.org/article/olejournl/v_3a20_3ay_3a2025_3ai_3a2_3ap_3a169-183.htm",
+      "why": "The strongest peer-reviewed WTP data: +50% price -> 36% cancel, and quality perception does not predict payment",
+      "license": "journal",
+      "verdict": "adopt - caps the price band at ~$10/mo"
+    },
+    {
+      "what": "Doubao student pricing survey (2025, Chengdu)",
+      "url": "https://www.thecover.cn/news/jgwoJ15wfVOH90qSdq8Jkw==",
+      "why": "Names the churn driver: 40% cite 'usage caps after paying' - exactly helpotron's model",
+      "license": "news",
+      "verdict": "adopt - do not launch a metered-only product"
+    },
+    {
+      "what": "RAND American Youth Panel, Mar 2026 (1,214 students)",
+      "url": "https://www.rand.org/news/press/2026/03/student-use-of-ai-for-homework-rises-as-concerns-grow.html",
+      "why": "Market size and channel reality: 62% used AI for homework, ChatGPT 53%, only ~7% of high-schoolers say school permits AI for homework",
+      "license": "research",
+      "verdict": "adopt - market exists, school channel closed"
+    },
+    {
+      "what": "Chrome Web Store distribution options (Listed vs Unlisted)",
+      "url": "https://developer.chrome.com/docs/webstore/cws-dashboard-distribution",
+      "why": "Unlisted is URL-only and not discoverable; listed is the organic growth channel helpotron is not using",
+      "license": "n/a",
+      "verdict": "adopt - switch to Listed"
+    },
+    {
+      "what": "Chrome extension free-to-paid conversion benchmarks (ExtensionPay data)",
+      "url": "https://dev.to/ktg0215/real-numbers-freemium-chrome-extension-monetization-after-6-months-5hga",
+      "why": "0.3-1.4% free-to-paid; sets a realistic revenue model and rules out paid installs for this price point",
+      "license": "blog",
+      "verdict": "adopt as planning band"
+    },
+    {
+      "what": "Chrome Web Store debugger permission policy and review process",
+      "url": "https://developer.chrome.com/docs/extensions/reference/api/debugger",
+      "why": "The debugger permission triggers 'read and change all your data on all websites' and close review scrutiny; the manifest uses it",
+      "license": "n/a",
+      "verdict": "adapt - justify or drop before going public"
+    },
+    {
+      "what": "School district AI academic-integrity policies (Cobb County, Centennial 625, Palm Beach, Utah HB)",
+      "url": "https://www.isd12.org/discover/school-board/district-policies/625-responsible-use-of-artificial-intelligence",
+      "why": "Documents that districts route AI misuse to existing cheating codes - the school channel is not a sales channel for the product as built",
+      "license": "n/a",
+      "verdict": "reject the school channel for current features"
+    },
+    {
+      "what": "Chegg Study Pack pricing (~$19.95/mo; Study annual ~$9.95/mo) and Chegg's own AI-competition warning in SEC filings",
+      "url": "https://www.chegg.com/study-pack",
+      "why": "The priced human-answer incumbent at the top of the student band; Chegg shrinking shows the free-AI pressure helpotron would face",
+      "license": "n/a",
+      "verdict": "adapt - the ceiling on 'premium answers', not a model to copy"
+    },
+    {
+      "what": "Photomath Plus pricing (~$9.99/mo, ~$69.99/yr; free tier)",
+      "url": "https://photomath.com/",
+      "why": "Camera-solve math at the mid band, free tier present; helpotron's math sandbox has a free, better-known competitor",
+      "license": "n/a",
+      "verdict": "reject math solving as a differentiator"
+    },
+    {
+      "what": "Gauth (ByteDance) pricing (~$11.99/mo, ~$99.99/yr; free 3-11 questions/day)",
+      "url": "https://www.gauthmath.com/",
+      "why": "Free daily questions plus ~$12/mo is the study-app price band helpotron prices above",
+      "license": "n/a",
+      "verdict": "adopt as the price-band anchor"
+    },
+    {
+      "what": "AI-in-education market size and growth (Grand View, ~$8.3B 2025 -> $11.4B 2026, ~26% CAGR)",
+      "url": "https://www.grandviewresearch.com/industry-analysis/artificial-intelligence-ai-education-market",
+      "why": "Confirms the market is real and growing fast - the problem is not demand, it is channel, margin and differentiation",
+      "license": "report",
+      "verdict": "adopt as market context"
+    },
+    {
+      "what": "Cobb County Schools academic integrity (AI misuse = zero + misconduct referral)",
+      "url": "https://cobbk12.org/allatoona/academic-integrity",
+      "why": "Concrete district consequence for the submission-automation lane; evidence the school channel is closed to the product as built",
+      "license": "n/a",
+      "verdict": "reject the school channel for current features"
+    }
+  ],
+  "open_questions": [
+    "What is the owner's intended target: the high-school student (README.md:9) or the parent/school buyer? Almost every pricing and channel answer flips on this, and nothing in the repo records the decision.",
+    "Do any production users exist, and has anyone paid? The DB on this box is not the prod DB; if there are zero buyers the 'no working checkout' defect is latent rather than observed, which changes urgency but not the verdict.",
+    "Is the free trial's 1-cent requirement a deliberate anti-abuse stance or an artifact of Stripe being unconfigured (payments.py:84-100)? If deliberate, the landing 'No credit card' claim (AnonymousLanding.jsx:560) is the bug; if not, the gate is.",
+    "How many agent sessions have actually run, and what did they cost? h1-F1's ~50k tokens/call is an estimate from the prompt construction; the real distribution (and therefore the true margin damage) needs the ApiUsageLog rows that the agent lane never writes.",
+    "Would a Stripe-configured checkout even convert at $10/$20/$40? The only external WTP evidence is college-centric; K-12 parent-paid WTP is unmeasured, which is why the honest next step is one priced landing-page test rather than more build."
+  ]
+}

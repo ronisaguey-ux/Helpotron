@@ -1,0 +1,297 @@
+{
+  "track": "H6",
+  "agent": "test-quality",
+  "summary": "The suite is larger and better-asserted than feared - 479 tests, measured 4 failed/475 passed in 283.50s then 2 failed/477 passed in 266.76s, 0 skipped, 0 errors, 0 testing functions with no assertion, 0 mock-call assertions, 0 bare assert True, every skip carries a reason - but the trust other agents place in it is misplaced in four concrete ways. (1) Running the suite starts the production FastAPI lifespan, whose temp-file cleaner immediately deletes any top-level file older than 24h in ./uploads and ./exports, and server/tests/test_api.py writes 16-byte junk .webm files into the real uploads/ directory (10 observed, 02:11-02:32 today). (2) Tests make live HTTPS calls to api.telegram.org (18 per run) because the lifespan starts the Telegram poller and the test DB carries a stored bot token; the conftest OMNIROUTE_API_BASE pin is inert since server/llm.py hardcodes openrouter.ai, so isolation is accidental rather than enforced. (3) The money path is untested: credits.charge, charge_with_rollback, deduct_credits_atomic, safe_deduct_with_rollback, refund and apply_discount have zero test references and /api/stripe/webhook has zero; the one economy test asserts >= lower bounds. (4) The CONTEXT.md known-red list is stale: the named deterministic red actually passes, and two browser_action_hardening tests plus test_run_python_math_bash_executes_safe_math fail unreported. Headline fix: a conftest that blocks non-loopback sockets, redirects uploads/exports to a temp dir, and suppresses the lifespan background loops; plus a CI job that deploy.yml actually depends on.",
+  "severity": "major",
+  "findings": [
+    {
+      "id": "H6-F1",
+      "title": "Running the suite deletes real files from uploads/ and exports/ and writes test junk into the production uploads directory",
+      "symptom": "Running `pytest server/tests/` boots the production lifespan. The temp-file cleanup loop runs its first pass before its first sleep and purges every top-level file older than 24h in ./uploads and ./exports. The same suite leaves 16-byte garbage .webm files in the production uploads directory (10 present now). Owner/user files can be destroyed by an unrelated test run.",
+      "root_cause": "server/tests/conftest.py:31 uses `with TestClient(app) as c` (session fixture, conftest.py:28-33), which runs FastAPI's lifespan. server/main.py:187-207 is the production lifespan; lines 201-204 create the background tasks including `_cleanup_temp_files_loop` (server/main.py:167-184). That loop iterates `[./uploads, ./exports, /tmp/helpotron_exports]` (line 173) and `os.remove`s any top-level file with mtime older than 86400s (lines 175-181). The sleep is at the BOTTOM of the loop (line 184), so the first deletion pass executes within the first event-loop iteration of the test session. CWD is the repo root, so `./uploads` is the production /home/roni/Roni_workspace/helpotron/uploads. Separately server/tests/test_api.py:355,366 POST a 16-byte `lecture.webm`; server/transcription.py:28 sets `UPLOAD_DIR = BASE_DIR / \"uploads\"` and save_upload (server/transcription.py:37-43) writes `uploads/<uuid>.webm` with no cleanup and no test-dir override.",
+      "evidence": [
+        "server/main.py:167-184 - _cleanup_temp_files_loop removes files in ./uploads, ./exports, /tmp/helpotron_exports older than 86400s; first pass runs before the sleep on line 184",
+        "server/main.py:201-204 - lifespan creates cleanup/lake/monitor/telegram tasks on every TestClient boot",
+        "server/tests/conftest.py:28-33 - `with TestClient(app) as c:` triggers that lifespan",
+        "server/transcription.py:28,37-43 - UPLOAD_DIR = BASE_DIR/\"uploads\"; save_upload writes uuid4().hex+ext, never cleaned",
+        "server/tests/test_api.py:355,366 - uploads 16 bytes b\"not really audio\" as lecture.webm",
+        "measured: `find uploads -maxdepth 1 -type f -name '*.webm' | wc -l` = 10; every `stat -c %s` = 16; mtimes 02:11-02:32 today (test-suite window)",
+        "measured: `find uploads -maxdepth 1 -type f -mtime +1 | wc -l` = 0 today, so the 24h gate has prevented an actual purge so far - the mechanism is live"
+      ],
+      "confidence": "high",
+      "impact": "Data-loss risk on the production box: any top-level upload/export older than 24h disappears on a test run, and the except at server/main.py:180-181 swallows the errors. Plus permanent pollution of a production directory with test artefacts that later get served/backed up as user data."
+    },
+    {
+      "id": "H6-F2",
+      "title": "Tests make live HTTPS calls to api.telegram.org; the OMNIROUTE_API_BASE isolation pin is inert",
+      "symptom": "Every test session emits 18 outbound POST https://api.telegram.org/bot<fake>/getUpdates calls that return 401. The suite is not offline, so it flakes on DNS/network/Telegram outage, and nothing stops a future test from calling a live paid API. The conftest 'never reachable' pin suggests this is handled when it is not.",
+      "root_cause": "server/tests/conftest.py:7 sets `os.environ['OMNIROUTE_API_BASE'] = 'http://localhost:9'` with the comment 'never reachable in tests', but server/llm.py never reads that variable: it hardcodes the endpoint at server/llm.py:429 and server/llm.py:606 (`https://openrouter.ai/api/v1/chat/completions`). The pin only reaches server/config.py:52 (`omniroute_api_base`), which the LLM client does not consult. The live Telegram traffic comes from the same lifespan: server/main.py:206-207 starts telegram_agent_loop() (server/telegram_agent_link.py:339), which long-polls every stored bot token; the persistent test DB still holds a `telegram_bot_token` service setting from a previous test_telegram_agent run. There is no socket guard in conftest.",
+      "evidence": [
+        "server/tests/conftest.py:7 - OMNIROUTE_API_BASE = http://localhost:9",
+        "server/config.py:52 - only consumer of that env var; server/llm.py:429,606 - URL hardcoded to openrouter.ai, config value never read",
+        "server/main.py:206-207 - lifespan starts telegram_agent_loop(); server/telegram_agent_link.py:339 - the loop",
+        "measured: grep -o 'https://[a-z0-9.-]*' /tmp/h6/run1.log | sort | uniq -c -> 18 https://api.telegram.org; 0 openrouter.ai; 0 localhost:9",
+        "measured (read-only sqlite): test_helpotron.db has a users row whose settings carry key `telegram_bot_token`; data/db/helpotron.db has none",
+        "measured: 0 openrouter.ai requests in run1 - LLM tests stub httpx.AsyncClient (server/tests/test_llm_blank_content.py:35-36, tests/test_llm_integration.py:46-60) - but nothing enforces it"
+      ],
+      "confidence": "high",
+      "impact": "Flake and cost exposure. One test that forgets an httpx stub bills OpenRouter; a stored real bot token would make the suite long-poll and consume the owner's production Telegram updates, stealing real user messages."
+    },
+    {
+      "id": "H6-F3",
+      "title": "The money path has no unit tests: charge/refund/atomic-debit functions and the Stripe webhook are never referenced",
+      "symptom": "A bug in credit debiting, rollback-on-failure, refunds or discounts ships green; the Stripe webhook that converts payment into credits has no test at all; economy tests assert bounds so an off-by-one or double-charge passes.",
+      "root_cause": "No test file references the core credit functions. The only credit assertions are end-to-end and loose: server/tests/test_economy_v3.py:86-93 asserts `total_charged_tokens >= 1` / `succeeded >= 1`, never an exact balance delta; server/tests/test_api.py:71 covers a one-off admin grant; server/tests/test_extension_agent_chat.py:98 is the single exact debit in the suite (5.0 -> 4.0). The Stripe route server/main.py:1863 (`@app.post(\"/api/stripe/webhook\")`) is referenced by no test file.",
+      "evidence": [
+        "measured: grep -rl for 'charge_with_rollback' -> 0 files; 'charge(' -> 0; 'deduct_credits_atomic' -> 0; 'safe_deduct_with_rollback' -> 0; 'apply_discount' -> 0; 'refund(' -> 1 (server/tests/test_security.py:217, which asserts no refund happens)",
+        "measured: grep -rl '/api/stripe/webhook' server/tests tests -> 0 files",
+        "server/credits.py:81 charge_with_rollback, :123 charge, :161 refund, :207 safe_deduct_with_rollback, :267 deduct_credits_atomic - none directly tested",
+        "server/tests/test_economy_v3.py:86-93 - `>=` lower bounds rather than exact deltas",
+        "server/tests/test_extension_agent_chat.py:98 - the one exact debit assertion"
+      ],
+      "confidence": "high",
+      "impact": "Direct money risk: the code most expensive to get wrong is the least tested, and the highest-value entry point (Stripe webhook signature, idempotency, credit grant) is entirely uncovered."
+    },
+    {
+      "id": "H6-F4",
+      "title": "The documented known-red list is stale - the named red passes, two different tests fail deterministically, and two more flip between runs",
+      "symptom": "CONTEXT.md tells reviewers to expect test_browser_search_with_math_query_never_intercepted_by_shell and occasionally test_deterministic_math_ast_whitelist. The first actually PASSES; two browser_action_hardening tests plus test_run_python_math_bash_executes_safe_math fail unreported. A reviewer trusting the list calls the suite green.",
+      "root_cause": "The list was not re-measured after the uncommitted Sept 11-12 work. The failing tests exercise the extension action path that the uncommitted work modified: server/routes_extension.py:750 `_search_burst`, pinned by server/tests/test_browser_action_hardening.py:123,131, now emits a 4-op burst (move/click/type) even when no typable field is on screen and when the target is outside the captured frame - exactly the two guards the file documents. The math-exec reds are a separate, load-sensitive problem, not deterministic path outputs.",
+      "evidence": [
+        "measured run1: `.venv/bin/python -m pytest server/tests/ -q` -> 4 failed, 475 passed, 0 skipped, 0 errors, 5 warnings in 283.50s (0:04:43)",
+        "measured run2 (same command): 2 failed, 477 passed, 0 skipped, 0 errors, 5 warnings in 266.76s (0:04:26)",
+        "deterministic in BOTH runs (2): test_browser_action_hardening.py::test_search_burst_does_nothing_when_no_field_is_on_screen (assert [4 ops] == []); ::test_search_burst_target_is_kept_inside_the_captured_frame (assert [4 ops] == [])",
+        "changed between runs (2, flaky under load): test_security_hardened.py::test_run_python_math_bash_executes_safe_math (FAILED run1 with `assert ok -> False`, PASSED run2) and ::test_deterministic_math_ast_whitelist (FAILED run1 at line 373 `assert clean_res['success'] is True`, PASSED run2) - CONTEXT.md:68-69 already calls the second one a 5s timeout under load; both go through server/math_executor.py via a subprocess",
+        "CONTEXT.md:66-69 names test_browser_search_with_math_query_never_intercepted_by_shell as the deterministic red - it did NOT fail in either run",
+        "server/tests/test_browser_action_hardening.py:1-19 - docstring says these regressions were pinned from the live 2.6.1 build",
+        "server/routes_extension.py:750 - _search_burst, the function under test"
+      ],
+      "confidence": "high",
+      "impact": "Everyone reading CONTEXT.md is misled about which failures are expected: two real extension-action regressions are disguised as 'known', the labelled red is actually fixed, and two more tests change result between identical runs so the suite cannot be used as a bisection tool."
+    },
+    {
+      "id": "H6-F5",
+      "title": "No automated test loads the extension; the CDP harness exists but is manual-only and outside CI",
+      "symptom": "None of the extension's runtime behaviour - service worker alive, manifest invariants, content-script injection, popup rendering, coordinate replay - is covered by pytest. The only browser-level verification ever run was a hand-executed script recorded as prose, which can rot silently.",
+      "root_cause": "All eight server/tests/test_extension*.py files are HTTP-level simulations against FastAPI: they POST payloads to /api/extension/agent_chat and assert on directive text (see server/tests/test_extension_screen_feed.py and test_extension_live_elements.py docstrings). None launches a browser or loads extension/*.js. The real harness is scripts/verify_extension.py (74,898 bytes, executable): it launches a Chromium build with --load-extension and drives it over raw CDP websockets (class Cdp at line 151). It is referenced by nothing - not a test file, not ci.yml, no Makefile exists. The Playwright recipe in extension/CWS_APPROVAL_REVIEW.md:148 is a one-off hand run, not a test.",
+      "evidence": [
+        "measured: grep -rl 'subprocess|Popen|chrome|chromium|selenium|cdp' server/tests tests -> 5 files, all using subprocess for shell/ffmpeg math, none for a browser",
+        "scripts/verify_extension.py - 74,898 bytes, argparse entry point, raw CDP (class Cdp at line 151), persistent temp profile; grep -rl 'verify_extension' server/tests tests .github -> 0 hits",
+        "extension/CWS_APPROVAL_REVIEW.md:148 - 'loaded in a real Chromium engine (Chrome-152-based Playwright build, --headless=new --no-sandbox --load-extension), verified end-to-end over CDP' - manual result recorded as markdown",
+        ".github/workflows/ci.yml - only `pytest server/tests -v`; no browser/extension step",
+        "measured: no Makefile (find . -maxdepth 2 -iname Makefile -> nothing)"
+      ],
+      "confidence": "high",
+      "impact": "The extension can break on any browser update, manifest change or content-script edit with the suite still green. The uncommitted extension changes (agent_mode.js, content.js, element_registry.js, manifest.json) have no regression net."
+    },
+    {
+      "id": "H6-F6",
+      "title": "CI exists but tests gate nothing: deploy.yml ships to production on a push to main without depending on the test job",
+      "symptom": "A red suite does not stop a deployment. Pushing to main runs the tests and deploys to the production VPS independently, so the reds have no consequence.",
+      "root_cause": ".github/workflows/ci.yml (push/PR to main) runs `pytest server/tests -v`. .github/workflows/deploy.yml (push to main or workflow_dispatch) SSHs to the VPS, does `git reset --hard origin/main`, pip install, npm build and `systemctl restart helpotron-api.service helpotron-bot.service`. deploy.yml has no `needs:` on the test job and no test step, so a failing ci.yml does not block it. Locally .pre-commit-config.yaml runs only gitleaks and generic hygiene hooks - no pytest hook - and there is no Makefile.",
+      "evidence": [
+        ".github/workflows/ci.yml:1-26 - tests only on push/PR to main",
+        ".github/workflows/deploy.yml:1-49 - deploys on push to main; no needs:, no pytest step",
+        ".pre-commit-config.yaml:1-19 - gitleaks + hygiene hooks only",
+        "measured: no Makefile (find . -maxdepth 2 -iname Makefile -> nothing)",
+        "measured: current branch is audit/2026-09-14-swarm, so ci.yml's main-only push trigger does not run for this work; `git log -1 -- .github/workflows/ci.yml` -> 2026-08-24 d89706c"
+      ],
+      "confidence": "high",
+      "impact": "The suite is decorative on any branch other than main and deployable-red on main. This is the mechanism by which the pre-existing reds stayed red."
+    },
+    {
+      "id": "H6-F7",
+      "title": "The test database is a persistent repo-root file that is never reset - state leaks across runs and drives the live polling",
+      "symptom": "Results depend on history: the DB holds hundreds of accumulated users and a stored bot token, so later runs behave differently from a first run. A fixed public_id can collide with a previous run.",
+      "root_cause": "server/tests/conftest.py:6 pins `DATABASE_URL = \"sqlite:///./test_helpotron.db\"` - a relative path resolved against CWD (repo root), not tmp_path or :memory:. The client fixture calls init_db() (conftest.py:28-33), which only runs Base.metadata.create_all (server/database.py:634) - no drop, no truncate. server/tests/test_api.py:18 states the persistence in a comment. So every run appends to the same file, and the lifespan poller reads it. This is NOT the production DB: server/config.py:30 defaults to `sqlite:///{BASE_DIR}/data/db/helpotron.db` and the conftest override is applied before server imports, so the prod-DB blocker does not apply.",
+      "evidence": [
+        "server/tests/conftest.py:6 - DATABASE_URL = sqlite:///./test_helpotron.db (relative to repo root)",
+        "server/tests/conftest.py:28-33 + server/database.py:634 - create_all only, never drops",
+        "server/tests/test_api.py:18 - comment: 'the suite DB (sqlite:///./test_helpotron.db) persists between runs'",
+        "measured (read-only sqlite3): test_helpotron.db >= 500 users and a settings key telegram_bot_token; data/db/helpotron.db has 15 users and no telegram key -> the pin works, prod is untouched",
+        "server/tests/test_extension_releases.py:2 - works around the shared DB with a 9.4.x version family plus pre-test cleanup 'so reruns ... stay deterministic'"
+      ],
+      "confidence": "high",
+      "impact": "Order- and history-dependent results as the DB grows, plus it is the stored token that causes the live-network calls in H6-F2."
+    },
+    {
+      "id": "H6-F8",
+      "title": "The assertion audit is largely clean - weaknesses are 15 truthiness-only tests and two tests asserting a stub's return value",
+      "symptom": "The feared failure mode is not widespread: there are no empty tests. The residual weakness is concentrated and cheap to fix.",
+      "root_cause": "An AST audit of all 462 test functions across 60 files classified every assertion. No test has zero assertions and no raises; none asserts only `is not None`; none contains a bare `assert True`; none asserts on a mock's call_count/call_args (only 2 files import unittest.mock at all). Fifteen tests contain only truthiness assertions and most are legitimate boolean checks (server/tests/test_security.py:14-17 asserts a limiter allows then blocks). The genuinely weak pair assert an unconfigured stub's return value: server/tests/test_auth_2fa.py:67-70 asserts send_verification_code(...) is True, which is server/auth_2fa.py:94-96's 'no SMTP configured -> log and return True' branch; server/tests/test_auth_2fa.py:73-78 does the same for the Twilio +1555 mock at server/auth_2fa.py:162-165.",
+      "evidence": [
+        "measured (AST script, server/tests/*.py + tests/*.py, 60 files): 462 test functions; no-assert/no-raises = 0; truthiness-only = 15; is-not-None-only = 0; assert True = 0; unittest.mock importers = 2; assert_called/call_count/call_args in tests = 0",
+        "measured truthiness-only lines: test_security.py:14,21,136,207,217,227; test_security_hardened.py:33,44,52,60; test_export_latex.py:98; tests/test_assignment_turnin.py:73; tests/test_llm_integration.py:12; tests/test_rate_limiting.py:16,36",
+        "server/tests/test_auth_2fa.py:67-78 - asserts mock-path returns, i.e. server/auth_2fa.py:94-96 and :162-165",
+        "measured: every pytest.skip/importorskip has a reason - test_detector_ensemble.py:41,83,100,216; test_sandbox_file_permissions.py:56; test_security_hardened.py:286,304 - so 'skip with no reason' = 0"
+      ],
+      "confidence": "high",
+      "impact": "Low direct cost, but it establishes that the hollow-assertion hypothesis is false; the real exposure is coverage gaps (F3, F5, F9), not empty tests."
+    },
+    {
+      "id": "H6-F9",
+      "title": "Authz coverage is thin and the only dedicated IDOR suite sits outside the documented test command",
+      "symptom": "Cross-user access is exercised three times inside the measured suite. The 7-test IDOR file that would catch leaks lives in tests/, which `pytest server/tests/` does not collect - so the green run proves nothing about it.",
+      "root_cause": "Within server/tests there are three cross-user assertions: server/tests/test_approval_protocol.py:211 (other user's request -> 403), server/tests/test_launch_to_doc_plan.py:201 (another user's assignment -> 404), server/tests/test_nuclear_auth_surface.py:124 (agent_chat requires ownership). The real IDOR file, tests/test_idor_protection.py, has 7 tests at lines 51-86 but tests/ has no conftest.py and is not part of the documented run. Only assignments have per-resource authz tests; credits, exports, study groups, datalake, overlord/sandbox and extension sessions have none.",
+      "evidence": [
+        "measured: grep -rniE 'def test_.*(idor|cross_user|other_user|forbidden|authz|ownership)' server/tests/*.py -> 3 hits",
+        "tests/test_idor_protection.py:51-86 - 7 authz tests, assignments only",
+        "measured: `find tests -name conftest.py` -> nothing; documented command `pytest server/tests/ -q` does not collect tests/",
+        "measured: the 479-test run1 did not execute tests/test_idor_protection.py"
+      ],
+      "confidence": "high",
+      "impact": "A resource-ownership bug on any non-assignment endpoint is invisible, and the suite's green colour is being cited as authz evidence it does not support."
+    },
+    {
+      "id": "H6-F10",
+      "title": "The git origin remote embeds a GitHub personal access token in cleartext in .git/config",
+      "symptom": "Anyone able to read the working tree, any backup of it, or any command printing remotes obtains a live GitHub credential that pre-commit and CI gitleaks cannot see.",
+      "root_cause": "The origin URL is of the form https://<token>@github.com/<owner>/<repo>.git. .git/config is untracked, so neither the gitleaks pre-commit hook (.pre-commit-config.yaml:2-5) nor the gitleaks CI job (.github/workflows/ci.yml:25-30) inspects it.",
+      "evidence": [
+        "measured: `git remote -v` in /home/roni/Roni_workspace/helpotron prints an origin URL containing an inline `ghp_...` token (the value is deliberately not reproduced here)",
+        ".pre-commit-config.yaml:2-5 and .github/workflows/ci.yml:25-30 - gitleaks scans tracked/staged content, not .git/config"
+      ],
+      "confidence": "high",
+      "impact": "Credential compromise if the tree is cloned, backed up or shared. Rotate the PAT and rewrite the remote to a credential-helper URL. Out of my track; flagged because it is severe."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H6-X1",
+      "finding": "H6-F1",
+      "file": "server/tests/conftest.py, server/transcription.py, server/main.py",
+      "lines": "conftest.py:1-10 and 28-33; transcription.py:28; main.py:167-184",
+      "change": "Redirect every writable production path to a per-session temp dir and stop the destructive lifespan. (a) In server/tests/conftest.py next to the existing DATABASE_URL pin add: `_SESSION_WORKDIR = Path(tempfile.mkdtemp(prefix='helpotron_test_work_'))`, `os.environ['HELPOTRON_UPLOAD_DIR'] = str(_SESSION_WORKDIR/'uploads')`, `os.environ['HELPOTRON_EXPORT_DIR'] = str(_SESSION_WORKDIR/'exports')`, `os.environ['HELPOTRON_TESTING'] = '1'`, and `Path(os.environ['HELPOTRON_UPLOAD_DIR']).mkdir(parents=True, exist_ok=True)` (+ exports). (b) server/transcription.py:28 change `UPLOAD_DIR = BASE_DIR / \"uploads\"` -> `UPLOAD_DIR = Path(os.getenv(\"HELPOTRON_UPLOAD_DIR\", str(BASE_DIR / \"uploads\")))` (add `import os` if absent). (c) server/main.py:167-184: move `await asyncio.sleep(interval_seconds)` to the TOP of the while body so a short-lived process never purges, and guard the task creation at lines 201-204 with `if not os.getenv('HELPOTRON_TESTING'):` for cleanup_task, or simply make the client fixture not enter the context manager (see verify). (d) Cheapest option that fixes both the purge and the Telegram polling: in server/tests/conftest.py:31 change `with TestClient(app) as c:` to `c = TestClient(app)` then `yield c` - no lifespan, so none of the four loops run; conftest already calls init_db() explicitly at line 33 so the DB is still created.",
+      "risk": "Option (d) disables the lifespan for tests; any test that depends on a lifespan-created resource (uploads/exports dirs, datalake loop) would fail - grep the suite for tests asserting those first. Renaming the upload env var requires matching every writer; grep `BASE_DIR / \"uploads\"` and `\"exports\"`. Moving the sleep delays the production purge by one hour, which is the correct behaviour anyway.",
+      "verify": "Before: `find uploads -maxdepth 1 -type f -name '*.webm' | wc -l` = 10 and `find uploads -maxdepth 1 -type f -mtime +1 | wc -l` = 0. After: `touch -d '2 days ago' uploads/__h6_sentinel && .venv/bin/python -m pytest server/tests/test_api.py -q; test -f uploads/__h6_sentinel && echo PURGE-BLOCKED` must print PURGE-BLOCKED, and `find uploads -maxdepth 1 -type f -name '*.webm' | wc -l` must stay 0 while a .webm appears under $HELPOTRON_UPLOAD_DIR."
+    },
+    {
+      "id": "H6-X2",
+      "finding": "H6-F2",
+      "file": "server/tests/conftest.py",
+      "lines": "insert after line 12 (after the datalake rebind block)",
+      "change": "Add an autouse session-scoped socket kill-switch and clear stored bot tokens. Fixture: `@pytest.fixture(autouse=True, scope='session')\ndef _block_network():\n    import socket\n    real_connect = socket.socket.connect\n    real_create = socket.create_connection\n    def guard_connect(self, address, *a, **k):\n        host = address[0] if isinstance(address, tuple) else str(address)\n        if host not in ('127.0.0.1', '::1', 'localhost'):\n            raise RuntimeError(f'network blocked in tests: {address}')\n        return real_connect(self, address, *a, **k)\n    def guard_create(address, *a, **k):\n        host = address[0] if isinstance(address, tuple) else str(address)\n        if host not in ('127.0.0.1', '::1', 'localhost'):\n            raise RuntimeError(f'network blocked in tests: {address}')\n        return real_create(address, *a, **k)\n    socket.socket.connect = guard_connect\n    socket.create_connection = guard_create\n    yield\n    socket.socket.connect = real_connect\n    socket.create_connection = real_create`. Also strip stored tokens before the client boots: in the session `client` fixture, after init_db(), run `from server.database import User` and for every user pop 'telegram_bot_token' from settings and commit (or delete the users rows with that key), so telegram_agent_loop() finds nothing to poll. Fix the misleading pin: replace conftest.py:8's OMNIROUTE_API_BASE line with a comment naming server/llm.py:429,606 and stating that the URL is hardcoded, or keep the env var and additionally monkeypatch the two literals in llm.py to http://localhost:9 via an autouse fixture.",
+      "risk": "A test that genuinely needs a live call would now fail loudly - that is the intent, since none exists today (even test_telegram_agent monkeypatches tg_get_me). Starlette's TestClient uses an in-process ASGI transport and opens no sockets, so it is unaffected; verify. ssl and smtplib both go through socket.create_connection, so both are covered.",
+      "verify": "`.venv/bin/python -m pytest server/tests/ -q 2>&1 | grep -c 'api.telegram.org'` must be 0 (measured 18 before). The suite must still report >= 475 passed. Then `.venv/bin/python -m pytest server/tests/ -q 2>&1 | grep -c 'runtimeerror\\|network blocked'` should be 0, proving no test needed the network."
+    },
+    {
+      "id": "H6-X3",
+      "finding": "H6-F3",
+      "file": "server/tests/test_credits_ledger.py (new file)",
+      "lines": "new file, ~120 lines",
+      "change": "Add the missing money tests with EXACT arithmetic, not bounds. Skeleton:\n```\nimport pytest\nfrom server.database import SessionLocal, User\nfrom server import credits\n\ndef _user(unique_user, balance=10.0):\n    db = SessionLocal()\n    u = User(public_id=unique_user, plan='basic', credits=balance, settings={'token_balance': balance})\n    db.add(u); db.commit(); db.refresh(u); db.close(); return u.public_id\n\ndef test_charge_debits_exactly_once(client, unique_user):\n    pid = _user(unique_user, 10.0)\n    # two calls of the same chargeable op must move balance by exactly 2 units\n    ...\n    db = SessionLocal(); u = db.query(User).filter_by(public_id=pid).first()\n    assert float(u.settings['token_balance']) == 8.0   # exact, not >=\n\ndef test_charge_is_idempotent_with_same_key(client, unique_user):\n    # two calls with the same idempotency_key must debit once\n    ...\n    assert float(u.settings['token_balance']) == 9.0\n\ndef test_charge_rollback_on_downstream_exception(monkeypatch, unique_user):\n    pid = _user(unique_user, 5.0)\n    def boom(*a, **k): raise RuntimeError('downstream')\n    monkeypatch.setattr(credits, '_post_charge_hook', boom)  # exact name to be confirmed by reading credits.py:81-119\n    with pytest.raises(RuntimeError): credits.charge_with_rollback(...)\n    db = SessionLocal(); u = db.query(User).filter_by(public_id=pid).first()\n    assert float(u.settings['token_balance']) == 5.0   # unchanged\n\ndef test_refund_restores_balance(unique_user):\n    ...; credits.refund(...); assert balance back to 5.0\n\ndef test_stripe_webhook_requires_signature(client):\n    r = client.post('/api/stripe/webhook', data=b'{}', headers={})\n    assert r.status_code in (400, 401, 403)   # never 200 without a valid signature\n```\nRead server/credits.py:81-119 and server/main.py:1863-1900 first to use the real argument names and the real ledger model; the names above are a sketch, not a claim.",
+      "risk": "Chargeable endpoints may need stubbed LLM calls (the charge often happens after a billed call), so pair each test with the existing httpx stub pattern from server/tests/test_llm_blank_content.py. Do not test against fixture-specific balances that other tests mutate - always create a fresh user.",
+      "verify": "`.venv/bin/python -m pytest server/tests/test_credits_ledger.py -q` must report 5 passed. Mutation check: temporarily change server/credits.py's debit amount +1 and confirm at least test_charge_debits_exactly_once fails (a green suite under mutation proves the test is hollow)."
+    },
+    {
+      "id": "H6-X4",
+      "finding": "H6-F4",
+      "file": "server/routes_extension.py",
+      "lines": "750-820 (_search_burst)",
+      "change": "Re-baseline or fix. First decide which is wrong by reading _search_burst: server/tests/test_browser_action_hardening.py:123 asserts that with no typable element on screen `_search_burst('q', VP, screen_analysis=no_input) == []`, and :131 asserts a target outside the viewport yields no ops. Restore the two guards: (a) return `[]` when the parsed element list contains no element whose label matches /search|textbox|input|field/i AND no element of type textbox/input; (b) drop any candidate whose x/y falls outside the captured frame (x>width-? or y>height-? per VP) before building the burst. If instead the new behaviour is intentional, do NOT delete the tests - update them and the CONTEXT.md known-red list in the same commit, stating the new intended semantics.",
+      "risk": "Changing _search_burst affects live extension behaviour on the public web; the uncommitted work that changed it belongs to the owner. If the intent is unclear, leave the code and fix the documentation/baseline instead. Do not revert the owner's uncommitted edit.",
+      "verify": "`.venv/bin/python -m pytest server/tests/test_browser_action_hardening.py -q` must go from 2 failed to 0 failed. Full suite: `.venv/bin/python -m pytest server/tests/ -q` must report 2 failed (the math ones) or 0 once test_security_hardened is fixed, and CONTEXT.md's known-red list must be updated to match the printed summary exactly."
+    },
+    {
+      "id": "H6-X5",
+      "finding": "H6-F5",
+      "file": "server/tests/test_extension_browser.py (new file) + server/tests/conftest.py",
+      "lines": "new file; extension launch fixture",
+      "change": "Wire the extension into an automated test. (a) Add `playwright` and `pytest-playwright` to the dev requirements (they are absent: measured `python -c 'import playwright'` fails in .venv). (b) New module server/tests/test_extension_browser.py with a session fixture and 5 assertions:\n```\nimport pytest\nplaywright_api = pytest.importorskip('playwright.sync_api', reason='pip install playwright && playwright install chromium')\nfrom playwright.sync_api import sync_playwright\nfrom pathlib import Path\n\nEXT = str(Path(__file__).resolve().parents[2] / 'extension')\n\n@pytest.fixture(scope='session')\ndef ext_context():\n    with sync_playwright() as p:\n        ctx = p.chromium.launch_persistent_context('', channel='chromium',\n            args=[f'--disable-extensions-except={EXT}', f'--load-extension={EXT}'])\n        yield ctx\n        ctx.close()\n\ndef test_service_worker_boots(ext_context):\n    sw = ext_context.service_workers or ext_context.wait_for_event('serviceworker')\n    m = sw.evaluate('() => chrome.runtime.getManifest()')\n    assert m['version'] == _manifest_json_version()          # no mocked manifest\n    assert 'debugger' not in (m.get('permissions') or [])     # debugger must be optional\n    assert m['manifest_version'] == 3\n\ndef test_popup_renders(ext_context):\n    sw = ext_context.service_workers or ext_context.wait_for_event('serviceworker')\n    ext_id = sw.url.split('/')[2]\n    page = ext_context.new_page(); page.goto(f'chrome-extension://{ext_id}/popup.html')\n    assert page.get_by_text('Helpotron Companion').count() == 1\n```\n(c) Mark the module with `@pytest.mark.browser` and register the marker so headless CI can skip it; add a matching CI job that installs Chromium.",
+      "risk": "Playwright Chromium must be downloaded (large); the suite gains a non-Python dependency. Use `pytest.importorskip` so a box without it skips loudly rather than failing. Only Playwright's bundled Chromium honours --load-extension; system Chrome ignores it (documented in the Playwright guide), so pin `channel='chromium'`.",
+      "verify": "`.venv/bin/pip install playwright pytest-playwright && .venv/bin/playwright install chromium` then `.venv/bin/python -m pytest server/tests/test_extension_browser.py -q` -> 2 passed, and `python -c \"import json;print(json.load(open('extension/manifest.json'))['version'])\"` equals what getManifest() returned. Then delete a required manifest field in a scratch copy and confirm the test fails."
+    },
+    {
+      "id": "H6-X6",
+      "finding": "H6-F6",
+      "file": ".github/workflows/ci.yml and .github/workflows/deploy.yml",
+      "lines": "ci.yml:4-8 (trigger), deploy.yml:1-20 (jobs)",
+      "change": "Make tests a gate rather than decoration. (a) ci.yml: change the trigger to `on: [push, pull_request]` (drop the branches:[main] filter) so any branch is tested, and add `--cov=server --cov-report=term-missing --cov-fail-under=<current>` once pytest-cov is installed (start at the measured floor, then ratchet). (b) deploy.yml: split into two jobs - `test` that runs `pytest server/tests -q` and `deploy` with `needs: [test]` - so a red suite cannot ship. Keep the existing deploy steps unchanged. (c) Add a pre-commit hook that runs the fast subset (`pytest server/tests/test_security.py server/tests/test_credits_ledger.py -q`) on `stages: [pre-push]`, or at minimum add a `Makefile` with a `test:` target so the command is discoverable.",
+      "risk": "Enabling tests on every push will surface the four current reds in every PR immediately; either fix them first (H6-X4) or mark the two math tests with an explicit, documented xfail so the gate is honest. A coverage floor set too high blocks legitimate work; start at the measured value.",
+      "verify": "Push a branch with a deliberately failing test and confirm the `test` job fails AND the `deploy` job does not start (`needs` satisfied only on success). Locally: `gh run list --workflow=ci.yml --limit 1` shows the run against this branch (today it never runs because of the main-only filter)."
+    },
+    {
+      "id": "H6-X7",
+      "finding": "H6-F7",
+      "file": "server/tests/conftest.py",
+      "lines": "6 (DATABASE_URL) and 28-33 (client fixture)",
+      "change": "Stop sharing one growing DB file. Replace line 6's `os.environ['DATABASE_URL'] = 'sqlite:///./test_helpotron.db'` with a per-session temp file: `_SESSION_DB = Path(tempfile.mkdtemp(prefix='helpotron_test_db_')) / 'test.db'` then `os.environ['DATABASE_URL'] = f'sqlite:///{_SESSION_DB}'`, and register `atexit.register(lambda: shutil.rmtree(_SESSION_DB.parent, ignore_errors=True))`. If some tests genuinely need a warm DB, keep the file but make the session fixture drop and recreate: in the `client` fixture replace `init_db()` with `Base.metadata.drop_all(engine); Base.metadata.create_all(engine)` before `yield`, and remove the fixed-public_id cleanup hacks in test_extension_releases.py:49 and test_canvas_sync.py that exist only because the DB is shared.",
+      "risk": "Any test that implicitly depends on a row left by an earlier run will start failing - that is the finding (it will expose hidden coupling). The suite currently takes ~4:43 with a 500-user DB; a fresh DB should be faster, not slower. Do not run this against the production DB; the env var is still set before server imports.",
+      "verify": "Run the suite twice in a row and diff: `.venv/bin/python -m pytest server/tests/ -q` twice must produce identical pass/fail lists (see verification_plan for the exact diff command). Also `ls test_helpotron.db` must remain absent/unchanged after a run, i.e. the repo root gains no new .db file."
+    },
+    {
+      "id": "H6-X8",
+      "finding": "H6-F3",
+      "file": "server/tests/test_assignment_golden_path.py (new file)",
+      "lines": "new file, ~70 lines",
+      "change": "Add the golden-path assignment test that does not exist - the suite has many endpoint tests but no single test that walks create -> estimate -> charge -> generate -> submit and asserts the money and the artefact at each step.\n```\ndef test_assignment_golden_path(client, unique_user):\n    # 1. fresh user with a known balance\n    headers = _auth(unique_user, token_balance=100)\n    # 2. create an assignment\n    r = client.post('/api/assignments', json={'title':'Golden','prompt':'Solve 2+2','subject':'math'}, headers=headers)\n    assert r.status_code in (200,201); aid = r.json()['id']\n    # 3. estimate is an exact cost for a known input (stub the LLM via httpx.AsyncClient)\n    est = client.get(f'/api/assignments/{aid}/estimate', headers=headers).json()\n    assert est['tokens'] == EXPECTED_TOKENS        # exact constant, reviewable\n    # 4. run it - LLM stubbed, so the ONLY variable is the charge\n    before = _balance(unique_user)\n    run = client.post(f'/api/assignments/{aid}/run', headers=headers)\n    assert run.status_code == 200\n    # 5. the debit is exact and recorded once\n    assert _balance(unique_user) == before - EXPECTED_TOKENS\n    # 6. the artefact exists and is non-trivial\n    doc = client.get(f'/api/assignments/{aid}', headers=headers).json()\n    assert len(doc['body']) > 50 and doc['status'] in ('done','complete')\n    # 7. idempotency: running twice does not double-charge\n    client.post(f'/api/assignments/{aid}/run', headers=headers)\n    assert _balance(unique_user) == before - EXPECTED_TOKENS\n```",
+      "risk": "Requires stubbing the LLM at the httpx layer; the exact token constant depends on the pricing table in server/llm.py and will need updating if pricing changes - make it a module constant with a comment naming server/llm.py's price dict. Endpoint names above must be confirmed against server/main.py before writing the test.",
+      "verify": "`.venv/bin/python -m pytest server/tests/test_assignment_golden_path.py -q` -> 1 passed. Mutation check: change `calculate_task_token_cost` in server/credits.py:38 by +1 and confirm the test fails on the balance assertion."
+    },
+    {
+      "id": "H6-X9",
+      "finding": "H6-F9",
+      "file": "tests/test_idor_protection.py -> move/copy to server/tests/test_authz_matrix.py",
+      "lines": "new file ~120 lines, modelled on tests/test_idor_protection.py:51-86",
+      "change": "Bring the IDOR suite into the measured run and extend it from one resource to all of them. Create server/tests/test_authz_matrix.py with a parametrised test that, for each (resource_path, method, id_factory) in a table, creates user A with an object and user B without, then asserts B gets 404/403 and never 200:\n```\nCASES = [\n  ('/api/assignments/{id}', 'get'),\n  ('/api/assignments/{id}', 'delete'),\n  ('/api/exports/{id}', 'get'),\n  ('/api/study-groups/{id}', 'get'),\n  ('/api/dump/{id}', 'get'),\n  ('/api/overlord/sessions/{id}', 'get'),\n]\n@pytest.mark.parametrize('path,method', CASES)\ndef test_other_user_is_denied(client, seeded_pair, path, method):\n    a_headers, b_headers, obj_id = seeded_pair(path)\n    r = getattr(client, method)(path.format(id=obj_id), headers=b_headers)\n    assert r.status_code in (403, 404), f'{path} leaked to a foreign user: {r.status_code}'\n```\nCopy the module-level DATABASE_URL/temp-db preamble from tests/test_idor_protection.py:6-16 only if it is not moved under server/tests (where conftest already pins the DB). The endpoint list must be confirmed against the route table first.",
+      "risk": "Endpoints not in the table stay untested; the point is the table is explicit and reviewable. Some resources legitimately allow cross-user access (shared study groups) - those go in an explicit allow-list with a reason, never silently.",
+      "verify": "`.venv/bin/python -m pytest server/tests/test_authz_matrix.py -q` -> one pass per case. Negative control: temporarily make one endpoint return the object regardless of owner and confirm the parametrised case fails."
+    },
+    {
+      "id": "H6-X10",
+      "finding": "H6-F4",
+      "file": "server/tests/test_vision_coordinate_regression.py (new file)",
+      "lines": "new file, ~60 lines",
+      "change": "Add the coordinate regression test the suite lacks. Existing tests cover the tier resolver (server/tests/test_extension_vision_tiers.py) but nothing pins the pixel outputs. Add golden fixtures:\n```\ndef test_search_burst_coordinates_are_golden():\n    # fixed viewport + fixed screen_analysis string -> exact op list\n    from server.routes_extension import _search_burst\n    analysis = 'INTERACTIVE ELEMENTS:\\n- Search bar (textbox) at x=320, y=64\\n'\n    ops = _search_burst('admissions deadline', (1280, 720), screen_analysis=analysis)\n    assert ops == GOLDEN_SEARCH_BURST   # literal list recorded once, reviewed once\n\ndef test_no_typable_target_returns_no_ops():\n    ops = _search_burst('q', (1280, 720), screen_analysis='- Upgrade plan (button) at x=900, y=300\\n')\n    assert ops == []\n\ndef test_offscreen_target_is_dropped():\n    ops = _search_burst('q', (400, 200), screen_analysis='- Search bar (textbox) at x=980, y=640\\n')\n    assert ops == []\n```\nThe last two already exist (red) in server/tests/test_browser_action_hardening.py:123,131; this file generalises them and adds the positive golden case so coordinates cannot drift silently.",
+      "risk": "Golden lists are brittle against intentional coordinate changes - that is their purpose, but each change must update the golden in the same commit. Record the golden by running the function once and pasting the literal, never by hand.",
+      "verify": "`.venv/bin/python -m pytest server/tests/test_vision_coordinate_regression.py -q` -> 3 passed after the guard is restored. Failing test proves the net: change the x offset in the burst builder by +1 and confirm test_search_burst_coordinates_are_golden fails."
+    },
+    {
+      "id": "H6-X11",
+      "finding": "H6-F5",
+      "file": "server/tests/test_extension_releases.py",
+      "lines": "57-64 (the _set_manifest_version monkeypatch)",
+      "change": "The release tests currently monkeypatch `routes_extension.get_current_manifest` to a fake dict, so a real bump in extension/manifest.json is never asserted. Add one test that reads the real file: `def test_repo_manifest_version_is_announced(): import json, pathlib; v = json.loads(pathlib.Path('extension/manifest.json').read_text())['version']; r = client.get('/api/extension/version'); assert r.json()['latest_version'] == v` - i.e. whatever version is shipped in the repo must have a release row and be served by /version, which is exactly the settled rule that any manifest bump is a publish action. Keep the existing mocked tests for the mechanics.",
+      "risk": "If the repo manifest is bumped without adding a release row, this test fails - which is the desired guard, but it will fail on the current uncommitted manifest.json change (it is modified in git status). Confirm the intended version before enabling.",
+      "verify": "`python -c \"import json;print(json.load(open('extension/manifest.json'))['version'])\"` must equal the `latest_version` from `curl -s http://127.0.0.1:5000/api/extension/version`. Then bump the manifest version in a scratch copy without touching the DB and confirm `.venv/bin/python -m pytest server/tests/test_extension_releases.py -q` fails."
+    }
+  ],
+  "verification_plan": "Reproduce every number in this report from the repo root (/home/roni/Roni_workspace/helpotron). 1) THE SUITE, TWICE. Run `.venv/bin/python -m pytest server/tests/ -q -p no:cacheprovider` and record the summary line. Measured 2026-09-14: run1 `4 failed, 475 passed, 5 warnings in 283.50s (0:04:43)`; run2 `2 failed, 477 passed, 5 warnings in 266.76s (0:04:26)`. 479 test items collected, 0 skipped, 0 errors, both runs. NOTE the box is shared with other audit agents, so absolute times are inflated; treat only the pass/fail sets as authoritative. 2) THE DELTA. Diff the two runs' failure sets: run1 had test_security_hardened.py::test_run_python_math_bash_executes_safe_math and ::test_deterministic_math_ast_whitelist as extra reds; both are green in run2. The two test_browser_action_hardening.py reds are in both. So the maths pair is load-flaky and the search-burst pair is a real regression. 3) KNOWN-RED CHECK. `grep -c 'test_browser_search_with_math_query_never_intercepted_by_shell' /tmp/run*.log` returns 0 failures in both runs while CONTEXT.md:66 still lists it as the known red. 4) ASSERTION AUDIT. Re-run the AST audit (script reproduced in the agent log at /tmp/h6/audit.py, or rewrite it: parse each test_ function with ast, walk all descendant statements including nested async defs, and classify each Assert as compare / is-not-None / truthy / assert True). Expected: 462 test functions across 60 files (server/tests/*.py and tests/*.py), 0 with no assert and no pytest.raises, 15 truthiness-only, 0 is-not-None-only, 0 assert True. 5) ISOLATION. (a) `grep -n DATABASE_URL server/tests/conftest.py` -> line 6 pins sqlite:///./test_helpotron.db, and `grep -n 'data/db/helpotron.db' server/config.py` -> line 30 is the prod default, so the pin works. (b) `grep -o 'https://[a-z0-9.-]*' /tmp/h6/run1.log | sort | uniq -c` -> 18 api.telegram.org, 0 openrouter.ai. (c) `grep -n 'OMNIROUTE_API_BASE' server/llm.py` -> no hits, while `grep -n 'openrouter.ai/api/v1' server/llm.py` -> lines 429 and 606, proving the conftest:8 pin is inert. (d) `ls uploads/*.webm | wc -l` = 10 and `stat -c %s` = 16 for each, created during the test windows; `find uploads -maxdepth 1 -type f -mtime +1 | wc -l` = 0 shows why no real data was purged yet. 6) MONEY PATH. `grep -rl 'charge_with_rollback\\|deduct_credits_atomic\\|safe_deduct_with_rollback\\|apply_discount' server/tests tests` -> no output; `grep -rl '/api/stripe/webhook' server/tests tests` -> no output. 7) CI. `cat .github/workflows/deploy.yml | grep -n 'needs\\|pytest'` -> no match, so deploy does not depend on tests; `git branch --show-current` -> audit/2026-09-14-swarm, which ci.yml's main-only trigger ignores. 8) EXTENSION. `grep -rl 'verify_extension' server/tests tests .github` -> no output, confirming scripts/verify_extension.py is unreferenced. 9) To confirm the isolation blocker end to end after a fix: `touch -d '2 days ago' uploads/__h6_sentinel && .venv/bin/python -m pytest server/tests/test_api.py -q; test -f uploads/__h6_sentinel && echo BLOCKED` must print BLOCKED, and `python -m pytest server/tests/ -q 2>&1 | grep -c api.telegram.org` must be 0.",
+  "external_research": [
+    {
+      "what": "pytest-cov - --cov-fail-under / [tool.coverage.report] fail_under coverage gate",
+      "url": "https://pytest-cov.readthedocs.io/en/latest/config.html",
+      "why": "Turns the suite into a ratchet instead of a report. Fails the build when total coverage drops, which is exactly what the current CI lacks. Note it checks TOTAL coverage only - no per-file gate - and since 7.0.0 subprocess coverage moved to coverage's patch options (the old .pth trick is gone), so instrumenting the sandbox subprocess path needs that config.",
+      "license": "MIT",
+      "verdict": "adopt - add pytest-cov, run `--cov=server --cov-branch --cov-report=term-missing --cov-fail-under=<measured floor>` and ratchet. Measured: coverage.py is NOT installed in .venv today (`import coverage` fails), so this is a new dev dependency."
+    },
+    {
+      "what": "mutmut 3.x - mutation testing",
+      "url": "https://github.com/boxed/mutmut",
+      "why": "The direct answer to 'do these tests assert anything'. It mutates server/credits.py, server/security.py and server/routes_extension.py and reports survivors; a surviving mutant is a tested-but-unasserted line. This is the only tool that would have caught the money-path gap mechanically. Requires Python 3.10+ and fork(); the box is Linux. v3 mutates only code inside functions and renames paths_to_mutate -> source_paths in 3.6.",
+      "license": "BSD-3-Clause",
+      "verdict": "adapt - do not run on the whole repo (99 server modules, ~4:43 per full suite run means a full mutation run is hours). Start with `[tool.mutmut] source_paths=['server/credits.py','server/security.py']` and `pytest_add_cli_args=['-q','-x']`, weekly, not per-push."
+    },
+    {
+      "what": "Hypothesis - property-based testing",
+      "url": "https://hypothesis.readthedocs.io/en/latest/",
+      "why": "The suite's weakest money tests are example-based with loose bounds. Hypothesis writes the invariants once and generates the inputs: 'for any random sequence of N charges and refunds, the final balance equals the initial balance plus sum(grants) minus sum(charges)', and 'parse_effort_score(x) is always in [1,1000] for any int/str/None/float'. Its shrinking turns a failure into the minimal counterexample, which is exactly what a credit arithmetic bug needs. Also has stateful testing (RuleBasedStateMachine) suited to a credit ledger.",
+      "license": "MPL-2.0",
+      "verdict": "adapt - use it for parse_effort_score, the credits ledger invariant, and ids/amount parsing; do not rewrite the whole suite. One or two @given tests in server/tests/test_credits_ledger.py would cover more of the input space than the entire current economy file."
+    },
+    {
+      "what": "Playwright - Chrome extensions testing (launchPersistentContext + --load-extension)",
+      "url": "https://playwright.dev/docs/chrome-extensions",
+      "why": "The official recipe for loading an unpacked MV3 extension: chromium.launchPersistentContext(userDataDir, {channel:'chromium', args:['--disable-extensions-except=<path>','--load-extension=<path>']}), then take context.serviceWorkers() or waitForEvent('serviceworker') and read the extension id from the worker URL (never hard-code it - it is path-hashed). Only Playwright's bundled Chromium honours these flags; Google Chrome and Edge refuse them, which matches extension/CWS_APPROVAL_REVIEW.md:148's note about branded Chrome. MV3 workers suspend after ~30s idle and Playwright's existing handle survives the restart; only an in-flight evaluate() throws 'Service worker restarted'.",
+      "license": "Apache-2.0",
+      "verdict": "adopt - this is the missing automated extension layer (H6-F5/H6-X5). It replaces the manual scripts/verify_extension.py CDP run with a pytest fixture, and its SW-restart semantics are the documented way to test the agent_mode background worker."
+    }
+  ],
+  "open_questions": [
+    "Are the two test_security_hardened math reds (test_run_python_math_bash_executes_safe_math, test_deterministic_math_ast_whitelist) a load timeout or a genuine nondeterminism? They flip between identical runs; the box was concurrently running >=4 other audit agents, and CONTEXT.md:68-69 already calls the second a 5s timeout under load. Settle by running them 10x in isolation: `.venv/bin/python -m pytest server/tests/test_security_hardened.py::test_run_python_math_bash_executes_safe_math -q --count=10` while the box is otherwise idle and reading the actual assertion at server/tests/test_security_hardened.py:115 and :373.",
+    "Are the two test_browser_action_hardening reds a real regression in server/routes_extension.py:750 _search_burst, or have the tests gone stale against an intentional behaviour change? The uncommitted work on server/routes_extension.py belongs to the owner; the file's docstring claims the guards are pinned regressions, but the code now emits a 4-op burst. Settle by reading the _search_burst body against the assertions at test_browser_action_hardening.py:110-135 and asking the owner which semantics are intended - do not revert the uncommitted edit either way.",
+    "Is the GitHub PAT in .git/config live and in use by the deploy path? I verified the token's presence in the origin URL but did not make any network call with it (no fetch, no push). Settle by checking whether the token still authenticates (`gh auth status` / a read-only API call) and whether any systemd unit or script reads .git/config; if live, rotate immediately and switch the remote to a credential helper. Flagged, not remediated - out of my track and it is the owner's credential.",
+    "Does .github/workflows/ci.yml ever actually run? I can see the trigger and the last commit touching it (d89706c, 2026-08-24) but not the Actions history from this box. If the repository has no CI minutes or Actions are disabled, the four reds have never been seen by a machine. Settle with `gh run list --limit 20` on the repo.",
+    "What is the real production uploads/exports retention expectation? I measured 0 top-level files older than 24h today, so the cleanup loop has not destroyed anything visible, but the mechanism is unconditional. Settle by asking the owner whether ./uploads and ./exports are meant to hold persistent user artifacts (the avatars/ subdirectory suggests yes) - if they are, the cleanup loop's file-fragility is a product bug, not just a test bug."
+  ]
+}

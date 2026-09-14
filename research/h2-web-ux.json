@@ -1,0 +1,296 @@
+{
+  "track": "H2",
+  "agent": "H2 web app design & UX",
+  "summary": "The web app is a coherent product, not a pile of views: a real anonymous landing page (h1, features, pricing, CTAs), a working signup/login modal with 2FA and Turnstile, an auth-gated OS shell with 11 destinations, and genuinely good a11y infrastructure (global :focus-visible, reduced-motion, high-contrast, dyslexia mode, skip link, near-zero unnamed controls). The failures are concentrated in the first five minutes. The primary create-an-assignment flow is dead: NewAssignmentModal calls api.createAssignment, which does not exist on the api client, so the wizard always throws and renders an error box - blocking first value for every new account. The 150-token free trial promised at signup is activated only by TrialActivationCard, which is mounted only inside Billing, while the Dashboard the user lands on never shows it. Token cost is a hardcoded 420 with a dead Add-tokens button; the Billing balance is labelled Available Credits but shows tokens against a 10x-wrong plan table; 596 hardcoded pixel font sizes render most of the customer UI at 9-12px; and 21 modals declare aria-modal without trapping focus (measured: Tab escapes the signup dialog on the first press). Root cause across F1-F3 is an incomplete refactor - the shell was rebuilt but the creation call and the trial surface were never rewired. Headline fix: point the wizard at POST /api/assignments, render TrialActivationCard on the dashboard, and replace the fake cost and dead CTA with real values. No repo file was edited except this report; the uncommitted ChatBubble.jsx/main.jsx work was left untouched.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H2-F1",
+      "title": "Primary create-an-assignment flow is dead: api.createAssignment does not exist",
+      "symptom": "A new user clicks NEW STUDY SESSION (sidebar) or Import Assignment on an empty subject tile, completes the 3-step intake wizard, and on Initialize gets a red error box instead of an assignment. The one action the product is built around cannot complete.",
+      "root_cause": "web/src/components/NewAssignmentModal.jsx:111 calls api.createAssignment?.(payload).catch(...). The api object (web/src/api.js:330-335) exposes only get/post/put/delete/request; there is no createAssignment member, and the identifier appears exactly once in all of web/src. api.createAssignment is therefore undefined, the optional call yields undefined, and the chained .catch throws TypeError: Cannot read properties of undefined (reading 'catch'), caught at NewAssignmentModal.jsx:117-126 and rendered as errorText at :219-223. The backend endpoint it should call exists: POST /api/assignments (server/main.py:1314; AssignmentIn at server/main.py:757).",
+      "evidence": [
+        "web/src/components/NewAssignmentModal.jsx:111 -- api.createAssignment?.(payload).catch(...)",
+        "measured: grep -rn createAssignment web/src -> exactly 1 hit, components/NewAssignmentModal.jsx:111; api.js contains no createAssignment",
+        "web/src/api.js:330-335 -- api members are get/post/put/delete/request plus named endpoints",
+        "server/main.py:1314 -- @app.post('/api/assignments'); AssignmentIn needs only title+prompt (server/main.py:757-764), both present in the payload built at NewAssignmentModal.jsx:100-109"
+      ],
+      "confidence": "high",
+      "impact": "Blocks first-run activation for every new account. Signup -> first assignment is the core loop; without it the dashboard is permanently empty and no token is ever consumed, so the trial and paywall are never reached."
+    },
+    {
+      "id": "H2-F2",
+      "title": "The free trial promised at signup is unreachable from where the user lands",
+      "symptom": "The signup modal says 'Start with a free 7-day trial - 150 task tokens' and the landing's primary CTA is Start Free Trial. After signup the user lands on Dashboard with a 0-token balance and no trial card; the activation card (2FA + 1-cent payment verification) renders only inside Billing.",
+      "root_cause": "TrialActivationCard is imported and rendered only at web/src/components/CreditsView.jsx:17 and :73. web/src/components/AssignmentCardDashboard.jsx (the default authed landing view, App.jsx:829) contains no reference to it.",
+      "evidence": [
+        "web/src/components/TrialActivationCard.jsx:6-12 -- the card drives the 2FA + 1-cent sequence and grants 150 tokens",
+        "measured: grep -rn TrialActivationCard web/src -> only CreditsView.jsx:17 (import) and :73 (render)",
+        "measured (Playwright, authed demo boot): text 'Activate your 7-day Free Trial' count = 0 on Dashboard, = 1 on Billing",
+        "web/src/components/AnonymousLanding.jsx:42 -- '7-day starter trial with 150 task tokens'; AuthModal signup copy promises the same"
+      ],
+      "confidence": "high",
+      "impact": "Zero-to-value dead end: the new user sees Import/Deploy CTAs everywhere with nothing to spend and no visible route to the trial that was the reason they signed up. Directly suppresses activation and therefore conversion."
+    },
+    {
+      "id": "H2-F3",
+      "title": "Cost preview is a hardcoded 420 and the 'Add tokens' remedy is a dead button",
+      "symptom": "Every task is quoted at exactly ~420 tokens regardless of scope or model. When the balance is short, the amber Token Budget Notice appears with an Add tokens button that does nothing when clicked.",
+      "root_cause": "web/src/components/NewAssignmentModal.jsx:48 hardcodes 'const tokenCost = 420' (used at :49, :108 token_estimate, :427). The remedy CTA at NewAssignmentModal.jsx:429-435 has type/className but no onClick or any handler.",
+      "evidence": [
+        "web/src/components/NewAssignmentModal.jsx:48 -- const tokenCost = 420",
+        "web/src/components/NewAssignmentModal.jsx:426-435 -- the amber tile and an Add tokens button with no onClick",
+        "web/src/components/EffortDial.jsx:13-15 -- per-turn figures 300/840/1800 tokens/turn are also static constants",
+        "web/src/components/AssignmentDumpView.jsx:638 -- the batch dump path does have a real 2-step spend confirmation, so the pattern exists elsewhere"
+      ],
+      "confidence": "high",
+      "impact": "A user cannot tell what an action will cost before doing it, and when short the only control offered is inert. Removes both cost transparency and the top-up funnel."
+    },
+    {
+      "id": "H2-F4",
+      "title": "Credit/token dual currency: mislabelled balance, two units side by side, 10x-wrong limit table",
+      "symptom": "The Billing balance strip is headed Available Credits but renders the token balance under the unit TOKENS. Sidebar and quick-settings show SYS_CREDITS and TOKENS (and cr) simultaneously. The low-credit warning compares credits against a table built on the token scale.",
+      "root_cause": "web/src/components/CreditsView.jsx:84 renders the label 'Available Credits' around CreditsView.jsx:96 tokenVal and :98 'TOKENS'. web/src/components/AppShell.jsx:332-342 renders SYS_CREDITS and TOKENS in one block; web/src/components/QuickSettings.jsx:115-121 renders credits 'cr' beside token_balance. web/src/App.jsx:746 uses planLimit {basic:30, pro:100, elite:280} || 30 and compares credits, while the plans grant 300/1000/2700 task tokens (AnonymousLanding.jsx:64,82,102) - a 10x scale error - and falls back to 30 for trial/none. Separately App.jsx:360/391 set plan 'none' while the 25s poll at App.jsx:491 falls back to 'basic', so the plan label can change on its own.",
+      "evidence": [
+        "web/src/components/CreditsView.jsx:84 'Available Credits'; :96 tokenVal; :98 'TOKENS'",
+        "web/src/components/AppShell.jsx:332-342 -- SYS_CREDITS and TOKENS together in one WalletLine",
+        "web/src/components/QuickSettings.jsx:115-121 -- 'CREDITS ... cr' beside 'TOKENS'",
+        "web/src/App.jsx:746 -- planLimit {basic:30,pro:100,elite:280} vs plan grants 300/1000/2700 at AnonymousLanding.jsx:64,82,102",
+        "web/src/App.jsx:360/391 ('none') vs :491 ('basic') -- inconsistent plan fallback"
+      ],
+      "confidence": "high",
+      "impact": "Users cannot tell which balance they hold, how much, or when it runs out; the low-credit banner fires on a 10x-wrong runway, producing both false alarms and missed warnings."
+    },
+    {
+      "id": "H2-F5",
+      "title": "596 hardcoded pixel font sizes; the customer UI renders at 9-12px",
+      "symptom": "Metadata, chips, table cells, labels and helper text across the authenticated app render at 10px or 11px, some at 9px. The smallest rendered text is 9px ('Academic Co-pilot' in the sidebar).",
+      "root_cause": "Components use arbitrary Tailwind sizes instead of the design system's own type tokens. Counted: 596 occurrences of text-[Npx] across 9 distinct values - 327 at 10px, 215 at 11px, 47 at 9px. index.css defines a token scale (web/src/index.css:420-440) and a 16px base (index.css:481); the component code bypasses both.",
+      "evidence": [
+        "measured: grep -rhoE text-[Npx] web/src --include=*.jsx -> 596 total; 327 @10px, 215 @11px, 47 @9px; 9 distinct values",
+        "web/src/index.css:481 -- html { font-size: 16px }",
+        "web/src/index.css:420-440 -- type tokens exist but are unused by components",
+        "measured (Playwright, authed dashboard) rendered text-node histogram: 3 nodes at 9px, 29 at 10px, 2 at 11px, 63 at 12px, 16 at 14px",
+        "measured (Playwright, anonymous landing): 1 node at 9px, 8 at 10px, 6 at 11px"
+      ],
+      "confidence": "high",
+      "impact": "Readability failure on every screen of a product whose users read dense text. Pixel sizing also defeats the browser minimum-font-size preference; WCAG 1.4.4 assumes text can be resized."
+    },
+    {
+      "id": "H2-F6",
+      "title": "21 modals declare aria-modal but none traps focus - keyboard users tab into the page behind",
+      "symptom": "Open the signup dialog and press Tab once: focus moves to Start Free Trial behind the modal, then Read the Guide, Choose Basic, and on through the landing page. Focus never enters the dialog on open and is never contained.",
+      "root_cause": "Dialogs set role=dialog and aria-modal=true (web/src/components/AuthModal.jsx:369-370) but nothing implements a focus trap or inerts the background: grep across web/src/components for Tab-key handling, focus trap or inert returns zero hits, while 21 files declare aria-modal. The dependency radix-ui (web/package.json) is installed but imported nowhere in web/src, so the accessible dialog primitive that would fix this is available and unused.",
+      "evidence": [
+        "measured (Playwright): with the signup dialog open (role=dialog, aria-modal=true, label 'Helpotron sign in'), 28 of 40 Tab presses focused an element OUTSIDE the dialog; the first 8 escapes were Start Free Trial, Read the Guide, Start free trial, Choose Basic, Choose Pro, Choose Elite, Start free, Privacy Policy",
+        "measured: grep for Tab-key handling / focusTrap / inert across web/src/components -> 0 hits",
+        "measured: grep -rn aria-modal web/src/components -> 21 hits across 21 files",
+        "measured: grep -rn radix web/src -> 0 hits, while radix-ui is a declared dependency (web/package.json)"
+      ],
+      "confidence": "high",
+      "impact": "aria-modal is a false promise on every dialog. Keyboard and screen-reader users can operate the page behind the modal and lose context; a WCAG 2.4.3 / focus-management failure affecting signup, payment, privacy and destructive-action dialogs."
+    },
+    {
+      "id": "H2-F7",
+      "title": "Global backend-unreachable banner can never render, and names the wrong port",
+      "symptom": "If the API is down while the browser is online, no app-level banner appears. The banner written for this case is dead code, and its remediation text points at the wrong port.",
+      "root_cause": "web/src/App.jsx:174 declares 'const [connected, setConnected] = useState(true)'; setConnected is never referenced anywhere in web/src, so connected is permanently true and the block at App.jsx:798-803 is unreachable. It also tells the operator to run '.venv/bin/uvicorn server.main:app --port 8000', while the API serves :5000 (project CONTEXT) via start_stack.sh. The remaining offline surface, OfflineBanner (web/src/components/ui/OfflineBanner.jsx:20-33), reacts only to navigator.onLine and a manual Force Reconnect fetch.",
+      "evidence": [
+        "web/src/App.jsx:174 -- useState(true) for connected",
+        "measured: grep -rn setConnected web/src -> 1 hit, the declaration only",
+        "web/src/App.jsx:798-803 -- the unreachable block, including '--port 8000'",
+        "web/src/components/ui/OfflineBanner.jsx:20-33 -- online/offline events plus a manual /health fetch"
+      ],
+      "confidence": "high",
+      "impact": "A reachable browser with a dead API produces no global failure signal, so screens silently show empty or partial data. Any later fix would send an operator to a port nothing listens on."
+    },
+    {
+      "id": "H2-F8",
+      "title": "34 hardcoded hex colours outside index.css contradict the 'zero hex literals in components' claim",
+      "symptom": "Some surfaces and charts ignore the theme: switching to light mode or high contrast leaves those elements on their dark-theme hardcoded colour.",
+      "root_cause": "web/src/index.css:6 claims 'Zero hex literals in components - all via CSS vars'. Counted outside index.css: 34 six-digit hex literals across jsx/js - components/CreditsCostTab.jsx 8 (duplicating #78f5e5/#59d8c9/#9aefea instead of using --st-primary or --chart-*), components/ui/background-beams.jsx 10 (vendored), lib/preferences.js 5, mock.js 3 (demo fixtures), MonitorsView.jsx 2, ActivityView.jsx 2, and four singletons.",
+      "evidence": [
+        "web/src/index.css:6 -- the zero-hex claim",
+        "measured: grep for 6-digit hex across web/src jsx/js -> 34 hits outside index.css; distribution CreditsCostTab 8, background-beams 10, preferences.js 5, mock.js 3, MonitorsView 2, ActivityView 2, four x 1",
+        "web/src/components/CreditsCostTab.jsx:166-194 -- svg gradient and marker stops hardcode #78f5e5/#59d8c9/#9aefea"
+      ],
+      "confidence": "high",
+      "impact": "Theme and contrast modes are only partially honoured; a user switching to light or high-contrast gets inconsistent surfaces and the design system's own guard is unenforced."
+    },
+    {
+      "id": "H2-F9",
+      "title": "Light-theme muted text fails WCAG AA contrast (4.07-4.49:1) and is used at 10-11px",
+      "symptom": "In light mode, secondary and label text is hard to read, and it is the colour used for the smallest text on the page.",
+      "root_cause": "--text-muted resolves to --st-outline (web/src/index.css:275), which in the light theme is #6F7978 (index.css:210). Measured contrast: 4.07:1 on #F2F4F5 (surface-container-low), 4.28:1 on #F8FAFB (background), 4.49:1 on #FFFFFF - all below the 4.5:1 AA threshold for normal text. The dark theme passes comfortably (5.15-6.25:1).",
+      "evidence": [
+        "web/src/index.css:210 -- light --st-outline: #6F7978",
+        "web/src/index.css:275 -- --text-muted: var(--st-outline)",
+        "measured (WCAG 2.x relative-luminance computation): #6F7978 on #F2F4F5 = 4.07; on #F8FAFB = 4.28; on #FFFFFF = 4.49",
+        "dark-theme control: #8E9192 on #0E1113 = 5.97; on #1D2024 = 5.15"
+      ],
+      "confidence": "high",
+      "impact": "AA contrast failure on secondary text in light mode, compounded by 10-11px sizing (H2-F5). Affects every user who switches to the light theme."
+    },
+    {
+      "id": "H2-F10",
+      "title": "Sandbox/demo toggle is exposed to every customer in the production top bar",
+      "symptom": "A paying or trial customer sees a SANDBOX / LIVE switch in the top bar; one click reloads the app into a fabricated dataset (demo assignments, courses, leaderboards), and a signed-out visitor can use it to view the authenticated shell.",
+      "root_cause": "DemoModeToggle is mounted unconditionally in the authed top bar at web/src/components/AppShell.jsx:424. The mock layer itself is well-guarded - opt-in only, never defaulting on (web/src/mock.js:15-25, web/src/demoData.js:37-44) and labelled by DemoRibbon - but web/src/mock.js:189 makes /api/me return 'authenticated: true' client-side while demo mode is on.",
+      "evidence": [
+        "web/src/components/AppShell.jsx:424 -- DemoModeToggle in the top bar, visible to all users",
+        "web/src/mock.js:15-25 -- isDemoMode requires explicit 'on'/'true'; safe default",
+        "web/src/mock.js:189 -- the /api/me demo handler returns authenticated: true",
+        "web/src/components/DemoRibbon.jsx:26-38 -- the sandbox banner, rendered whenever demo mode is on",
+        "measured (Playwright, demo mode + token indicator): the authenticated shell booted with 11 sidebar items and the DEMO MODE ribbon visible"
+      ],
+      "confidence": "high",
+      "impact": "No real data is exposed - all fixtures are client-side - so this is a trust and clarity issue rather than a breach: a customer can mistake fabricated coursework for their own, and the paywall/shell can be previewed without an account. A debug affordance should not ship in the customer top bar."
+    },
+    {
+      "id": "H2-F11",
+      "title": "Agent-chat token telemetry is fabricated; uncommitted ChatBubble markdown change is sound but adds a circular chunk warning",
+      "symptom": "Per-message token figures in the agent chat are invented constants, so the cost feedback a user sees cannot be trusted. Separately, the uncommitted chat-rendering change produces a build warning.",
+      "root_cause": "web/src/components/MyAgentView.jsx hardcodes the token counts shown during and after generation - tokens: 120 at :351, 'tokens: res?.tokens_used || 420' at :453, tokens: 650 at :484, and a +15-per-event loop at :379 - never reconciled with the server's actual charge. The uncommitted work (web/src/main.jsx and web/src/components/ChatBubble.jsx) adds react-markdown/remark-math/rehype-katex and renders both user and assistant bubble text through ReactMarkdown.",
+      "evidence": [
+        "web/src/components/MyAgentView.jsx:351, :379, :453, :484 -- hardcoded token counters",
+        "measured: git diff --numstat web/src -> ChatBubble.jsx +10/-3, main.jsx +1/-0 (uncommitted; left untouched, not reverted)",
+        "web/src/components/ChatBubble.jsx:2-4 imports; :91-93 and :113-115 ReactMarkdown wrappers; :90 and :112 add select-text",
+        "web/src/main.jsx:7 -- import 'katex/dist/katex.min.css'",
+        "measured: cd web && npm run build -> exit 0 in 27.76s, ONE warning 'Circular chunk: markdown -> vendor -> markdown'; dist/assets/markdown-TFpHTtqd.js 265.76 kB / gzip 79.46 kB",
+        "safety: react-markdown without rehype-raw escapes embedded HTML, so rendering user text as markdown is not an injection vector"
+      ],
+      "confidence": "high",
+      "impact": "The token numbers users rely on to judge spend are fiction, compounding the missing real cost estimate (H2-F3). The markdown change itself is a genuine improvement (math and formatting in chat, selectable text); the warning is a chunking smell, not a correctness bug."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H2-X1",
+      "finding": "H2-F1",
+      "file": "web/src/components/NewAssignmentModal.jsx",
+      "lines": "111",
+      "change": "Replace the line 'const res = await api.createAssignment?.(payload).catch(() => ({ id: ..., ...payload }));' with 'const res = await api.post(\"/api/assignments\", payload);'. api.post already JSON-stringifies the body (web/src/api.js:331) and the endpoint exists (server/main.py:1314). Delete the fabricated-success .catch fallback entirely so the existing catch at :117-126 surfaces the real error and never a phantom assignment. If AssignmentIn rejects the client's extra keys (subject/course_name/status/token_estimate), map the payload explicitly to {title, due_date, prompt} rather than widening the schema.",
+      "risk": "The /api/assignments route is the extension scrape-save path; if it needs canvas_id or >=200 chars in prompt to kick the agent, short manual intakes may 422 or create a card with no team launched. Verify the response and surface it honestly.",
+      "verify": "cd web && npm run build; then click NEW STUDY SESSION, complete steps 1-3, Initialize. Before: errorText reads 'Cannot read properties of undefined'. After: step 4 renders and no red error box appears. Static: grep -n createAssignment web/src/components/NewAssignmentModal.jsx returns nothing."
+    },
+    {
+      "id": "H2-X2",
+      "finding": "H2-F2",
+      "file": "web/src/components/AssignmentCardDashboard.jsx",
+      "lines": "446-455",
+      "change": "Add 'const TrialActivationCard = React.lazy(() => import('./TrialActivationCard.jsx'));' beside the other lazy imports, and render '<TrialActivationCard userId={userId} />' at the top of the returned dashboard body, above the Active Subjects header (before line 457). No extra gating is needed: the card already returns null when the trial is claimed or absent (web/src/components/TrialActivationCard.jsx:54-55).",
+      "risk": "TrialActivationCard calls api.getTrialStatus() and silently hides on failure (TrialActivationCard.jsx:28-34), so it is fail-safe. Lazy-loading adds one chunk fetch on first dashboard paint.",
+      "verify": "Playwright: boot the authed shell and assert the count of text matching /Activate your 7-day Free Trial/i on Dashboard goes from 0 (measured before) to 1, and stays 1 on Billing."
+    },
+    {
+      "id": "H2-X3",
+      "finding": "H2-F3",
+      "file": "web/src/components/NewAssignmentModal.jsx",
+      "lines": "48, 429-435",
+      "change": "Two edits. (1) Line 48: replace 'const tokenCost = 420;' with a value from the real estimate - have the server return it (or read the model min_effort from /api/user/models, mocked at web/src/mock.js:192-196) and hold it in state; if no estimate exists render 'estimated at finalize' instead of a number. (2) Line 429-435: add an onClick to the Add tokens button: onClick={() => { onClose?.(); window.dispatchEvent(new CustomEvent('helpotron:nav', { detail: 'credits' })); }} - App.jsx:613 already listens for helpotron:nav and routes to the Billing view.",
+      "risk": "Routing out of the modal drops the wizard state; acceptable for a top-up detour, and App.jsx:670-678 owns the modal state so onClose is safe. A dynamic estimate needs a backend endpoint that may not exist yet.",
+      "verify": "Playwright: with an account at 0 tokens, assert the insufficient-token tile shows and clicking Add tokens renders the Billing heading. Static: grep -n 'tokenCost = 420' web/src/components/NewAssignmentModal.jsx returns nothing."
+    },
+    {
+      "id": "H2-X4",
+      "finding": "H2-F4",
+      "file": "web/src/components/CreditsView.jsx, web/src/App.jsx, web/src/components/AppShell.jsx",
+      "lines": "CreditsView.jsx 84-98; App.jsx 746 and 491; AppShell.jsx 332-342",
+      "change": "(1) CreditsView.jsx:84 relabel 'Available Credits' to 'Available Tokens' so it matches the value at :96 and the unit at :98. (2) App.jsx:746 change planLimit to the token scale the plans actually grant: { trial: 150, basic: 300, pro: 1000, elite: 2700 }[userPlan] || 300, and compare tokenBalance (not credits) against it. (3) App.jsx:491 change data.plan || 'basic' to data.plan || 'none' so the polling fallback matches the initial state at :360/:391. (4) AppShell.jsx:332-342 and QuickSettings.jsx:115-121: drop one of the two simultaneous balances - keep TOKENS (what actions actually spend) and remove SYS_CREDITS / cr, or relabel the second as Discount credits if it is genuinely distinct.",
+      "risk": "If credits and tokens serve different purposes (discount/referral credits vs task tokens), removing one loses information - verify backend semantics first. Changing the plan fallback alters the low-balance banner for plan-less accounts.",
+      "verify": "Render Billing and assert the label reads Available Tokens above the TOKENS figure; render the sidebar and assert only one balance unit is shown. For the banner: with plan basic, confirm the percentage uses limit 300 so the banner does not fire at 150 tokens remaining."
+    },
+    {
+      "id": "H2-X5",
+      "finding": "H2-F5",
+      "file": "web/src/index.css and the component files carrying text-[Npx]",
+      "lines": "index.css 420-440; 596 arbitrary-size sites across components",
+      "change": "Adopt the existing type tokens. Define the missing small tokens beside index.css:420-440 (e.g. --text-label-sm: 0.75rem / 12px; --text-meta: 0.8125rem / 13px) and replace text-[10px] and text-[11px] with those tokens, file by file, starting with the densest (AdminAdvancedDashboard 59, ScopedSetting 24, MonitorsView 24, AuthModal 20, AdminToolsView 21, ControlCenterView 20, AdminCostView 20). Hard floor for customer-visible copy: 12px. Do not touch the vendored ui/lip-scroll-zoomin-animation.jsx and ui/background-beams.jsx files.",
+      "risk": "Many files, so a bulk replace risks visual reflow in dense tables and chips; go file by file with a screenshot diff. Larger sizes can overflow fixed-height rows that assume 10px line boxes.",
+      "verify": "cd web && npm run build; then re-run the rendered histogram. The authed dashboard must report 0 text nodes below 12px (measured before: 3 at 9px, 29 at 10px, 2 at 11px)."
+    },
+    {
+      "id": "H2-X6",
+      "finding": "H2-F6",
+      "file": "web/src/components/AuthModal.jsx and the other 20 aria-modal files",
+      "lines": "AuthModal.jsx 366-378",
+      "change": "Adopt Radix Dialog, already a declared dependency (web/package.json) and currently unused. Wrap the modal root in Dialog.Root / Dialog.Portal / Dialog.Overlay / Dialog.Content, replacing the hand-rolled role=dialog + aria-modal=true div at AuthModal.jsx:367-378; Radix supplies focus trap, focus restore, background inert and Escape handling. Apply the same to the other 20 dialogs, highest stakes first: BillingView payment (BillingView.jsx:498, :644), PrivacyPolicyModal, DestructiveConfirmModal, SessionExpiryModal. Minimum acceptable interim fix if Radix adoption is deferred: on open move focus to the first field, cycle Tab within the dialog, and set the app root to inert while the dialog is open.",
+      "risk": "Radix owns mounting and animation; the existing modals use AnimatePresence and custom outside-click handlers (AuthModal.jsx:372-374) that must be rewired. The 2FA/OTP input and Turnstile widget have their own focus timing that must be retested.",
+      "verify": "Playwright: open the signup dialog, press Tab 40 times, assert every focused element is inside [role=dialog]. Measured before: 28 of 40 focused an element outside."
+    },
+    {
+      "id": "H2-X7",
+      "finding": "H2-F7",
+      "file": "web/src/App.jsx",
+      "lines": "174, 798-803",
+      "change": "Either delete the dead block at :798-803 and rely on OfflineBanner plus the per-view error states, or wire it: add a shared health probe (fetch /api/health on the existing 25s poll cadence, or listen for repeated network failures in web/src/api.js:194-211) that calls setConnected(false) on failure and setConnected(true) on the next success. If the banner is kept, correct the command to the real deployment: port 5000 and ./start_stack.sh, not '--port 8000'.",
+      "risk": "A new polling probe adds load per open tab; reuse the existing balance-poll cadence instead. Deleting the block affects only the never-rendered path.",
+      "verify": "Stop the API on a test box, load the authed app, assert the banner text 'Backend server ... is unreachable' is visible; restart and assert it clears. If deleted instead: grep -n 'is unreachable' web/src/App.jsx returns nothing."
+    },
+    {
+      "id": "H2-X8",
+      "finding": "H2-F8",
+      "file": "web/src/components/CreditsCostTab.jsx",
+      "lines": "166-194",
+      "change": "Replace the eight hardcoded gradient/marker colours (#78f5e5, #59d8c9, #9aefea) with theme variables: stopColor=\"var(--st-primary)\" for the line and area, and stroke/fill=\"var(--chart-1)\" for the markers. Then sweep the remaining literals: lib/preferences.js:13-17 accent presets should reference the same tokens; MonitorsView.jsx:420-421, ActivityView.jsx:14-15, AnalyticsDashboard.jsx:242 and AssignmentTurnInView.jsx:28 should use var(--chart-*) / var(--sem-*). Leave mock.js (demo fixtures) and the vendored ui files as-is.",
+      "risk": "Chart colours were chosen for legibility on dark backgrounds; a straight token swap may reduce series separation if two tokens resolve to near-identical values - check the rendered chart in both themes.",
+      "verify": "cd web && npm run build; then assert the 6-digit hex count in CreditsCostTab.jsx is 0 and the cost chart still renders under both data-theme=dark and data-theme=light."
+    },
+    {
+      "id": "H2-X9",
+      "finding": "H2-F9",
+      "file": "web/src/index.css",
+      "lines": "210",
+      "change": "Darken the light-theme muted token so --text-muted clears 4.5:1 on all light surfaces: change line 210 '--st-outline: #6F7978' to a value at or below roughly #5C6463, chosen so the computed ratio is >= 4.5:1 on #F2F4F5, #FFFFFF and #F8FAFB. Do not change --st-outline-variant (borders are non-text and exempt).",
+      "risk": "Darkening the outline token also affects borders and separators drawn with --st-outline; check that dividers do not become visually heavy.",
+      "verify": "Recompute the WCAG ratio for the new value on #F2F4F5, #FFFFFF and #F8FAFB - all must be >= 4.5. Spot-check the light theme in the browser that muted labels stay distinguishable from primary text."
+    },
+    {
+      "id": "H2-X10",
+      "finding": "H2-F10",
+      "file": "web/src/components/AppShell.jsx",
+      "lines": "424",
+      "change": "Gate the sandbox toggle behind admin, matching the existing admin-only nav pattern at AppShell.jsx:67-70: render {isAdmin && <DemoModeToggle />} at line 424. Keep DemoRibbon unconditional so any user who still has demo flagged sees the labelled banner.",
+      "risk": "Removing the toggle from the customer UI makes local design review harder for non-admin testers; they can still set localStorage helpotron_demo_mode='on' manually, which is exactly how the mock layer is designed to be driven (web/src/mock.js:15-25).",
+      "verify": "Playwright: boot the authed shell as a non-admin and assert [role=switch] count is 0; boot with is_admin true (Control Center reachable) and assert it is 1. Static: grep -n 'DemoModeToggle' web/src/components/AppShell.jsx shows the guarded render."
+    }
+  ],
+  "verification_plan": "1) BUILD: cd web && npm run build must exit 0. Expected result measured today: exit 0 in 27.76s with exactly ONE warning, 'Circular chunk: markdown -> vendor -> markdown' (introduced by the uncommitted ChatBubble change), and a 265.76 kB markdown chunk. 2) PUBLIC PATH (Playwright against the running read-only preview at http://127.0.0.1:5173 - do NOT restart it; it answered 200 today): load '/', assert h1 'Your Academic Co-pilot, Redefined', section ids features and pricing, zero unnamed buttons, zero images without alt, zero page/console errors; click Get Started and assert the dialog with aria-label 'Helpotron sign in' and its Public ID / Password / Confirm / consent / CREATE ACCOUNT fields. Measured today: all pass. 3) AUTHTED SHELL: set localStorage helpotron_demo_mode='on' plus a token/public_id so the auth gate resolves (the mock layer answers /api/me), then assert the 11 sidebar items, the DEMO MODE ribbon, and the dashboard's Active Subjects empty states. Measured today: 11 items, ribbon present, 8 empty-state blocks and 8 Import Assignment CTAs. 4) THE HEADLINE FIX: click NEW STUDY SESSION and assert the wizard reaches step 4 without the error box; before the fix the error string is the TypeError from H2-F1. 5) THE TRIAL FIX: assert the 'Activate your 7-day Free Trial' count on Dashboard goes 0 -> 1. 6) THE A11Y FIX: open the signup dialog, press Tab 40 times, assert 0 escapes (measured before: 28). 7) FONT FIX: re-run the rendered text-node histogram on the dashboard and assert 0 nodes below 12px (measured before: 3 at 9px, 29 at 10px, 2 at 11px). 8) CONTRAST FIX: recompute #6F7978 replacements and assert >= 4.5:1 on the three light surfaces. The throwaway Playwright scripts live at /tmp/opencode/h2_pw.cjs, h2_pw_auth.cjs and h2_pw_focus.cjs and write nothing into the repo. No write to any repo file other than research/h2-web-ux.json; the uncommitted work was neither reverted nor modified.",
+  "external_research": [
+    {
+      "what": "W3C - What's New in WCAG 2.2 (SC 2.4.7 Focus Visible, 2.5.8 Target Size 24x24 AA, 1.4.4 Resize Text, 2.4.11 Focus Not Obscured)",
+      "url": "https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/",
+      "why": "Settles the two a11y claims in this report. (a) There is NO minimum font size in WCAG - 10px is a design judgment, not a violation - but 1.4.4 requires text to be resizable and warns against pixel-locked sizing, which is exactly what the 596 text-[Npx] sites do. (b) The 21 modals' lack of a focus trap plus a first-Tab escape is a 2.4.7 / focus-management failure, and 2.5.8 clarifies the 24x24 target expectation for the small icon-only controls found in the shell.",
+      "license": "W3C Document License",
+      "verdict": "adopt - use SC 2.4.7 and 1.4.4 as the review criteria for H2-X5 and H2-X6, and stop citing a non-existent minimum font size in the fix notes."
+    },
+    {
+      "what": "Userpilot / Skene / GTM Vault - SaaS activation, empty-state and reverse-trial benchmarks (2024-2026)",
+      "url": "https://userpilot.com/blog/saas-average-conversion-rate/",
+      "why": "Quantifies the cost of H2-F1 and H2-F2. Reported medians: ~60-70% of signups never reach activation, cross-SaaS activation ~37.5%, median activation ~30% (Lenny survey); every 1% of activation correlates with ~2% lower churn; card-optional trials convert at 8-25% (median ~15-18.5%) vs 30-60% for card-required. A 7-day / 150-token trial is a short value window, which makes the missing in-product activation path and the broken first action directly revenue-affecting rather than cosmetic.",
+      "license": "vendor blog / commercial research (numbers are directional, not auditable)",
+      "verdict": "adapt - use the direction (fix first-action and first-value path before any paywall tuning) and measure our own cohort rather than treating the multipliers as targets."
+    },
+    {
+      "what": "Empty-state / first-run onboarding patterns (Candu, Simplileap case study, Thoughtlytics)",
+      "url": "https://www.candu.ai/blog/the-complete-guide-to-self-service-saas-onboarding",
+      "why": "The app's default subjects render six empty states, each with an Import Assignment CTA, and no single first action or progress cue. The literature says pre-loaded sample data plus one primary action lifts activation, and - importantly for H2-F10 - that sample data MUST be labelled as sample data or users delete the wrong record. The 07-2025 Simplileap case (blank dashboard, integration required before value, skipped tours -> 7-day activation 11%->29%) is the same failure shape as this app's dashboard.",
+      "license": "vendor blog / case study",
+      "verdict": "adapt - adopt 'one primary action + honest sample-data label' for the dashboard, which we already have in DemoRibbon (H2-F10 should keep that label, not remove it)."
+    },
+    {
+      "what": "React a11y / focus-visible guidance and radix-ui (already a dependency in web/package.json, imported nowhere in web/src)",
+      "url": "https://www.radix-ui.com/primitives/docs/components/dialog",
+      "why": "The fix for H2-F6 needs a focus-trapping dialog primitive. Radix Dialog is already installed and provides focus trap, focus restore, background inert and Escape handling; the codebase has none of those (0 hits). Adopting it is a wiring change, not a new dependency.",
+      "license": "MIT",
+      "verdict": "adopt - swap the hand-rolled role=dialog/aria-modal shell for Radix Dialog across the 21 dialogs, starting with AuthModal and the payment/privacy/destructive confirms."
+    }
+  ],
+  "open_questions": [
+    "I could not sign in with a real account or read .env, so every authenticated check was rendered through the app's own demo/mock layer against the running preview (read-only). Verify H2-F1 and H2-F2 with a real account on a test box: does POST /api/assignments accept the NewAssignmentModal payload as-is, and does a brand-new account genuinely start at 0 tokens with the trial unclaimed?",
+    "Are 'credits' and 'tokens' actually distinct balances in the backend (referral/discount credits vs task tokens), or is the dual display purely a UI artefact? That decides whether H2-X4 should relabel or delete one of the two surfaces. Settle by reading the /api/me and /api/dashboard response schema in server/.",
+    "The CONTEXT brief states the model ladder is deepseek/deepseek-v4.1-flash only, but server/llm.py:29-35 lists gemini_31_flash_lite and gemini_38_flash alongside it, and the UI badge reads 'Gemini Flash - effort-routed' (web/src/components/EffortDial.jsx:24, passed at MyAgentView.jsx:579 and ThreadsRail.jsx:18). Which is authoritative - the stale brief, the server policy table, or the UI string? I did not convert this into a finding because I could not decide without the backend track; the UI string is hardcoded in two places and is not derived from the routing response either way.",
+    "Are the 10px/11px sizes a deliberate density decision for the operator/admin surfaces? If so, H2-X5's 12px floor should be scoped to customer-facing views only and the admin console exempted - confirm with the owner before the bulk replace.",
+    "The mock layer is driven by localStorage, so a customer can reach demo data without the visible toggle. Is the intended policy to remove the sandbox from production entirely, or keep it as a labelled preview? H2-X10 assumes keep-but-hide-behind-admin."
+  ]
+}

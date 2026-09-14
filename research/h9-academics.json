@@ -1,0 +1,339 @@
+{
+  "track": "h9-academics",
+  "agent": "helpotron-research-h9",
+  "summary": "The academic layer is not pedagogy; it is a chat wrapper with a study-themed UI on top.\nThe spaced-repetition engine is real FSRS v4.5 code (server/fsrs_scheduler.py) but the route never\npersists or reloads stability/difficulty, so schedule_review always takes its new-card branch and\nevery card gets the same constant interval (measured: 10 consecutive 'Good' reviews through the route\nsignature return [4,4,4,...] days). Mastery is one click: rating>=3 sets state='mastered'\n(routes_study_tools.py:120) and mastery% counts it, so a deck reads 100% mastered after one pass.\nQuiz grading is doubly broken: the generated practice test is a dict {multiple_choice,short_answer}\nbut both the grader and the web player expect a list, so a real quiz yields zero questions; and when\na list IS passed the MCQ answer key is read from keys the generator never emits, leaving\ncorrect_answer='' so the containment test `correct_answer in submitted` marks every answer correct\n(measured: 2/2 wrong answers -> 100%). Underneath, the flagship 'do_it_for_me' direction writes the\nstudent's complete assignment draft (draft.py:89) and then runs an AI-detector-evasion humanizer loop\nplus CDP keystroke injection configured so an LMS integrity monitor cannot tell automation from a\nperson (launch_to_doc.py:80-87) - directly contradicting PRIVACY_POLICY.md:87. Canvas integration is\ngenuinely read-only and token-based, but a second Canvas route bypasses the SSRF guard while carrying\nthe student's Bearer token.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H9-F1",
+      "title": "Quiz grading marks every multiple-choice answer correct (score is always 100%)",
+      "symptom": "A student finishes a practice test answering every question wrong and the score screen says 100%. The 'Retry only wrong questions' button then has nothing to retry.",
+      "root_cause": "grade_quiz resolves the answer key from keys the practice-test generator never emits.\nstudy_tools.py:155-165 generates items shaped {\"q\",\"options\",\"answer_index\",\"explanation\"}, but\nroutes_study_tools.py:197-203 reads only correct_answer|answer|definition|back, so correct_answer\nbecomes \"\". The comparison at routes_study_tools.py:209 is\n`submitted == correct_answer or submitted in correct_answer or correct_answer in submitted`; with\ncorrect_answer==\"\" the third clause is an empty string contained in any non-empty string, which is\nalways True. The `bool(submitted and ...)` guard only requires a non-empty submission.",
+      "evidence": [
+        "server/routes_study_tools.py:196-209 - correct_answer built from {correct_answer,answer,definition,back}; `is_correct = bool(submitted and (submitted == correct_answer or submitted in correct_answer or correct_answer in submitted))`",
+        "server/study_tools.py:156-163 - generator returns {\"q\",\"options\",\"answer_index\",\"explanation\"} (no correct_answer/answer/back key)",
+        "measured: reproduced the exact loop with two generated MCQ items, both answers wrong -> correct_count=2, percentage=100.0",
+        "server/tests/test_study_tools_v3.py:32-35,78-93 - the only grade_quiz test uses a legacy {front,back} deck, never the practice_test MCQ shape, so the suite stays green"
+      ],
+      "confidence": "high",
+      "impact": "The core 'practice test' value proposition is false. Students get confident confirmation of wrong answers; the missed-concept/adaptive-review features built on this score (web/src/components/IntelligenceView.jsx:256) run on fabricated data."
+    },
+    {
+      "id": "H9-F2",
+      "title": "Generated practice tests are unplayable: writer emits a dict, grader and player require a list",
+      "symptom": "A student opens a generated practice test in the Active Recall Player and sees 'No quiz questions available'; if submitted anyway the server returns total:0, percentage:0.0.",
+      "root_cause": "generate_practice_test returns a dict {multiple_choice:[...], short_answer:[...]}\n(study_tools.py:155-178) and assignment_team stores it under kind='practice_test' as\njson.dumps(parsed) (assignment_team.py:274-275). Every reader assumes a flat list: main.py:680-685\njson.loads a practice_test back into a dict; routes_library.py:14-18 does the same;\nroutes_study_tools.py:184-185 sets `parsed_content = []` for non-list content before grading;\nweb/src/components/LibraryView.jsx:444-447 (and 431-434) pass `Array.isArray(content) ? content : []`.\nNothing anywhere flattens multiple_choice.",
+      "evidence": [
+        "server/study_tools.py:158-163 - required JSON shape is an object with multiple_choice/short_answer",
+        "server/main.py:680-685 - _material_payload json.loads practice_test content back to a dict",
+        "server/routes_library.py:14-18 - _serialize_material returns the same dict",
+        "server/routes_study_tools.py:184-185 - non-list content replaced with []",
+        "web/src/components/LibraryView.jsx:444-447 - questions={Array.isArray(content) ? content : []}",
+        "web/src/components/LibraryView.jsx:404 - practice_test materials are routed to the quiz player, so this is the normal path",
+        "code trace: a study_tools practice_test dict reaches QuizPlayer as [] -> empty state at web/src/components/study/QuizPlayer.jsx:148-151"
+      ],
+      "confidence": "high",
+      "impact": "The 'Practice Exam & Quiz' feature (web/src/components/AssignmentDumpView.jsx:33, advertised as '10 multiple-choice questions with full answer keys and explanations') is non-functional end to end. Credits are charged for a quiz the student cannot take."
+    },
+    {
+      "id": "H9-F3",
+      "title": "FSRS is never actually run - no spaced repetition, every interval is a constant 4-value lookup",
+      "symptom": "Every card is rescheduled identically regardless of history: Again=1 day, Hard=2, Good=4, Easy=16. No card is ever 'due today' and no UI shows a review queue.",
+      "root_cause": "review_card calls `scheduler.schedule_review(rating=payload.rating)` with no\ncurrent_stability, current_difficulty or last_review_time (routes_study_tools.py:118).\nfsrs_scheduler.schedule_review branches to the new-card path whenever any of those is None\n(fsrs_scheduler.py:105), so the entire DSR update code (retrievability/next_difficulty/\nnext_stability_recall/next_stability_forget, fsrs_scheduler.py:45-83) is dead in production. There is\nnowhere to persist the state anyway: StudyCardState has `difficulty` as a String(16) and no numeric\nstability/difficulty columns (database.py:272-286). The client-supplied `difficulty` is stored\nverbatim and never read by the scheduler (routes_study_tools.py:128,136).",
+      "evidence": [
+        "server/routes_study_tools.py:118 - review_res = scheduler.schedule_review(rating=payload.rating) (no prior state passed)",
+        "server/fsrs_scheduler.py:105 - `if current_stability is None or current_difficulty is None or last_review_time is None:` -> initial-only branch",
+        "server/fsrs_scheduler.py:37-38 - new-card interval is w[rating-1]: 0.403 / 1.184 / 3.173 / 15.691 -> 1/2/4/16 days",
+        "server/database.py:279-280 - StudyCardState.difficulty is a String; no stability/difficulty-value float columns exist",
+        "measured: .venv/bin/python - 10 x schedule_review(rating=3) through the route signature -> [4,4,4,4,4,4,4,4,4,4]",
+        "measured: read-only sqlite PRAGMA table_info(study_card_states) on data/db/helpotron.db -> ['id','user_id','material_id','card_index','state','difficulty','due','lapses','last_practiced','created_at']",
+        "server/tests/test_osr_engines.py:20-36 - the only FSRS test supplies stability/difficulty/elapsed itself, so it exercises the class and never the route"
+      ],
+      "confidence": "high",
+      "impact": "The central claim ('Study Materials & Spaced Repetition', 'adaptive spaced repetition player', web/src/components/LibraryView.jsx:151,462) is false. The scheduler is a 4-row constant table; the 'FSRS v4.5 / OSR-007' header (fsrs_scheduler.py:1-9) misrepresents shipped behaviour."
+    },
+    {
+      "id": "H9-F4",
+      "title": "'Mastery' is awarded on a single button press",
+      "symptom": "One pass through a deck pressing Good shows '100% mastered' and an empty learning queue.",
+      "root_cause": "review_card sets `new_state = 'mastered' if payload.rating >= 3 else ...`\n(routes_study_tools.py:120) with no interval, lapse or repetition threshold. Both mastery aggregations\nthen count that state: decks counts ('mastered','known','review') (routes_study_tools.py:75), mastery\ncounts ('mastered','known') (routes_study_tools.py:321).",
+      "evidence": [
+        "server/routes_study_tools.py:120 - new_state = \"mastered\" if payload.rating >= 3 else (\"known\" if payload.rating == 2 else \"learning\")",
+        "server/routes_study_tools.py:75 - mastered_count = sum(... cs.state in (\"mastered\",\"known\",\"review\"))",
+        "server/routes_study_tools.py:321-323 - mastered counts ('mastered','known'); mastery_pct = mastered/total",
+        "server/tests/test_study_tools_v3.py:57-75 - the test asserts state=='mastered' after one rating-3 review and mastery_percentage==50.0, locking in the wrong behaviour"
+      ],
+      "confidence": "high",
+      "impact": "The most persuasive number on the study screen is unearned. It rewards clicking through once, the opposite of the retrieval-practice effect the UI invokes."
+    },
+    {
+      "id": "H9-F5",
+      "title": "Academic integrity: the product writes the assignment and runs a detector-evasion + human-typing-simulation pipeline, contradicting its own published policy",
+      "symptom": "'do_it_for_me' returns a complete assignment draft written from the student's transcript in the student's own writing voice; 'Launch to Doc' then types it into Google Docs at 65 wpm with jitter, typos and false starts using trusted (non-synthetic) keystrokes.",
+      "root_cause": "assignment_team._do_it_for_me calls draft.generate_draft with the user's stored\nwriting style and stores the result as the assignment draft (assignment_team.py:127-213).\ndraft.build_style_prompt instructs 'Write a complete draft that directly addresses the assignment\nprompt' with 'Do not include any meta-commentary' (draft.py:76-91, echoed at 100-118). The draft then\nruns through AIHumanizerPipeline.humanize_loop, whose module docstring is 'Multi-engine AI detection\nevasion' (humanizer.py:1) and whose LLM pass says 'Transform the student's assignment draft to\neliminate all statistical AI markers' (humanizer.py:539-540), exposing an `is_stealth_ready` flag\n(humanizer.py:567). draft._draft_workflow_async retries generation up to MAX_RETRIES=5 until the\ndetector suite passes (draft.py:31,225-293). launch_to_doc.TYPING_DEFAULTS sets trusted_keys=True\nbecause 'that one property is what a page (and therefore an LMS integrity monitor) can read to tell\nautomation from a person' (launch_to_doc.py:75-87), with false_start_rate 0.025. PRIVACY_POLICY.md:87\nstates the opposite: 'The detector scoring shown in your dashboard is a transparency risk meter, not a\nconcealing tool.' No generation prompt requires citations or disclosure; study_tools._SYSTEM says only\n'Be accurate to the transcript' and 'Never fabricate sources or quotes' (study_tools.py:36-43).",
+      "evidence": [
+        "server/assignment_team.py:127-213 - _do_it_for_me produces and stores a full first draft on the assignment",
+        "server/draft.py:89 - 'Write a complete draft that directly addresses the assignment prompt. Do not include any meta-commentary.'",
+        "server/draft.py:73-91,121-139 - build_style_prompt embeds the student's writing sample and generate_draft uses it; server/assignment_team.py:156-172 passes the stored style in",
+        "server/humanizer.py:1 - docstring: 'Multi-engine AI detection evasion, Kimhons 38-pattern scrubbing...'",
+        "server/humanizer.py:539-540 - 'Transform the student's assignment draft to eliminate all statistical AI markers, robotic cadence, uniform sentence lengths, and banned slop.'",
+        "server/humanizer.py:562-578 - detector suite with threshold 100-self.threshold and an is_stealth_ready verdict",
+        "server/draft.py:225-293 - `for attempt in range(1, MAX_RETRIES + 1)` regenerating until detectors pass; MAX_RETRIES=5 (draft.py:31)",
+        "server/launch_to_doc.py:79-87 - trusted_keys=True 'on by default for the typing surface... what a page (and therefore an LMS integrity monitor) can read to tell automation from a person'",
+        "server/launch_to_doc.py:41-64 - cadence presets carry wpm and typo_rate (academic: 65 wpm, 0.018)",
+        "PRIVACY_POLICY.md:87 - 'Submitting unreviewed AI output ... is prohibited by our Terms of Service. The detector scoring shown in your dashboard is a transparency risk meter, not a concealing tool.'"
+      ],
+      "confidence": "high",
+      "impact": "Largest legal/ethical exposure with educational institutions. The code implements exactly the concealment the published policy disclaims, turning a policy statement into an admission. Detector-evasion plus trusted-keystroke simulation is evidence of intent in a misconduct proceeding (external research: Exeter - 'hiding it could be a breach of academic integrity'; Langara found humanizer tools defeat Turnitin's detector)."
+    },
+    {
+      "id": "H9-F6",
+      "title": "Study-material prompts have no source grounding, no citations, no difficulty calibration and no hallucination exit",
+      "symptom": "A study guide or deck can state concepts the lecture never covered, with nothing distinguishing transcript fact from model invention.",
+      "root_cause": "The generators are single-shot prompts with no retrieval and no citation contract.\nThe only grounding instruction is a generic system line (study_tools.py:36-43). 'Reading level' is\nfree client input defaulted silently to 'college-freshman' (study_tools.py:45-56). Nothing asks the\nmodel to cite the student's material, quote a transcript span, or refuse when the transcript lacks the\nanswer; retries check JSON shape only, never content (study_tools.py:129-144,169-178). Answer keys are\nmodel-authored and never verified. There is no difficulty parameter at all:\ngenerate_flashcards takes only (transcript, count, reading_level) and generate_practice_test only\n(transcript, mc_count, short_answer_count, reading_level) (study_tools.py:112-125,147-165).",
+      "evidence": [
+        "server/study_tools.py:36-43 - _SYSTEM: only 'Be accurate to the transcript; when the transcript doesn't cover something, say so instead of inventing it. Never fabricate sources or quotes.'",
+        "server/study_tools.py:96-103 - study-guide prompt asks for key concepts/exam questions, no citation or source-span requirement",
+        "server/study_tools.py:119-125 - flashcard prompt asks only for q/a JSON, no grounding field",
+        "server/study_tools.py:155-165 - practice-test prompt asks for q/options/answer_index/explanation; answer keys are model-asserted, never checked",
+        "server/study_tools.py:45-56 - reading level normalised to a fixed list, default 'college-freshman'; no difficulty parameter",
+        "server/study_tools.py:129-144,169-178 - retries validate JSON shape only",
+        "server/study_tools.py:228-249 - generate_study_pack is a second thinner path with the same absence of grounding"
+      ],
+      "confidence": "high",
+      "impact": "A confidently wrong study guide is worse than none and nothing here would detect one. Students cannot tell which claims came from their lecture. The AI-tutor RCT (Kestin & Miller) attributes its gains to expert-authored solution content and step-by-step accuracy guardrails, none of which exist here."
+    },
+    {
+      "id": "H9-F7",
+      "title": "The draft_section agent action is a hardcoded stub that returns fake prose",
+      "symptom": "Any path executing the agent's 'draft_section' action returns one canned sentence instead of drafting: 'Drafted comprehensive academic {section} addressing all primary inquiry parameters with structured argumentation.'",
+      "root_cause": "The action handler builds a string literal and returns it without calling any model (overlord_agent.py:1274-1281). 'draft_section' is in ROUTINE_ACTION_TYPES (overlord_agent.py:70) and is a reachable advertised capability keyword (assignment_direction.py:84-90).",
+      "evidence": [
+        "server/overlord_agent.py:1274-1281 - content = f\"Drafted comprehensive academic {section_name} addressing all primary inquiry parameters with structured argumentation.\" returned as the action result",
+        "server/overlord_agent.py:70 - 'draft_section' in ROUTINE_ACTION_TYPES",
+        "server/assignment_direction.py:84-90 - 'outline'/'explain'/'notes' capability keywords can route here"
+      ],
+      "confidence": "high",
+      "impact": "Silent placeholder in shipped, charged code. A student acting on this output gets nothing and cannot see it was never generated."
+    },
+    {
+      "id": "H9-F8",
+      "title": "Study routes do not check material ownership (IDOR on decks, review, mastery)",
+      "symptom": "Any authenticated user can POST a review against, and read the mastery of, another user's study material id.",
+      "root_cause": "list_study_decks filters on user_id/shared_with (routes_study_tools.py:43-54), but\nreview_card, grade_quiz and get_deck_mastery fetch with `.filter(StudyMaterial.id == material_id)\n.first()` and never compare material.user_id to the caller (routes_study_tools.py:102,174,300).\nreview_card writes a StudyCardState row for the caller against the foreign material_id\n(routes_study_tools.py:122-140); get_deck_mastery can infer another user's deck size and state counts\n(321-331); grade_quiz reads the foreign deck's content and answer keys (178-219).",
+      "evidence": [
+        "server/routes_study_tools.py:43-54 - list endpoint correctly filters by user_id/shared_with",
+        "server/routes_study_tools.py:102 - m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first() (no owner filter) in review_card",
+        "server/routes_study_tools.py:174 - same pattern in grade_quiz",
+        "server/routes_study_tools.py:300 - same pattern in get_deck_mastery",
+        "server/routes_study_tools.py:122-140 - writes StudyCardState for the caller's user_id against material_id",
+        "server/database.py:286 - unique key (user_id, material_id, card_index) is shared across users"
+      ],
+      "confidence": "high",
+      "impact": "Cross-account content and answer-key disclosure, plus the ability to poison another user's card states. Attack cost is one authenticated request with a guessed integer id."
+    },
+    {
+      "id": "H9-F9",
+      "title": "Second Canvas sync route bypasses SSRF validation while carrying the student's Bearer token",
+      "symptom": "POST /api/study/canvas/sync accepts an arbitrary canvas_url and sends the student's Canvas API token to it, following redirects.",
+      "root_cause": "routes_study_tools.sync_canvas_lms builds the base URL from the request body with\nonly an http/https prefix check and calls httpx.AsyncClient(timeout=35,\nheaders={Authorization: Bearer <token>}, follow_redirects=True) (routes_study_tools.py:384-394). The\nproject already has the correct guard, ssrf.validate_safe_url (ssrf.py:98-111) with a redirect hook\n(ssrf.py:104-111), and the other Canvas engine calls it (canvas_sync.py:26). This route omits it. The\ntoken is not persisted but is exfiltratable in transit.",
+      "evidence": [
+        "server/routes_study_tools.py:384-394 - user-supplied base_url used verbatim; Bearer token in headers; follow_redirects=True; no validate_safe_url",
+        "server/canvas_sync.py:26 - the other engine does validate_safe_url(self.base_url)",
+        "server/ssrf.py:98-111 - validate_safe_url / check_redirect_ssrf available but unused by this route",
+        "server/tests/test_canvas_sync.py:86-96 - the route is tested only with a mocked httpx client at a benign host",
+        "server/tests/test_security_hardened.py:66-72 - SSRF rejection is tested for CanvasSyncEngine only",
+        "server/main.py:423-448 - a second, guarded Canvas implementation (/api/canvas/test, /api/canvas/sync) via CanvasSyncEngine"
+      ],
+      "confidence": "high",
+      "impact": "Theft of a student's long-lived LMS token (full account API access) and an SSRF primitive from the public host, plus two divergent Canvas implementations that will drift."
+    },
+    {
+      "id": "H9-F10",
+      "title": "'Tutor savings' ROI is fabricated arithmetic over client-supplied study time",
+      "symptom": "The dashboard shows a money-saved figure (study_hours * $50 - monthly_cost) presented as return on the subscription.",
+      "root_cause": "calculate_value_metrics hardcodes plan costs {basic:10, pro:20, elite:40} and a\n$50/hour tutor rate and derives study_hours from StudySession.time_spent_minutes (analytics.py:114-133).\nThat time is client-supplied: review defaults to 1 minute per card (routes_study_tools.py:24,151) and\nquiz to 5 (routes_study_tools.py:34,228) with no server-side validation or timing.",
+      "evidence": [
+        "server/analytics.py:119-126 - hardcoded plan_costs and `tutor_savings = study_hours * 50 - cost`",
+        "server/analytics.py:116-117 - study_hours summed from StudySession.time_spent_minutes",
+        "server/routes_study_tools.py:24,151 - review time defaults to 1 minute per card, client-supplied",
+        "server/routes_study_tools.py:34,228 - quiz time defaults to 5, client-supplied",
+        "server/analytics.py:136-144 - module history: compute_next_best_action was already rewritten to stop returning invented recommendations"
+      ],
+      "confidence": "high",
+      "impact": "A billing-adjacent claim that is effectively fabricated and gameable by posting a large time_spent_minutes."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H9-X1",
+      "finding": "H9-F1",
+      "file": "server/routes_study_tools.py",
+      "lines": "193-219",
+      "change": "In grade_quiz resolve the answer key per item type and never let an empty key match.\nReplace the correct_answer block (lines 194-206) with an MCQ-index-first resolver:\n  if isinstance(item, dict):\n      opts = item.get(\"options\") or item.get(\"choices\") or []\n      ai = item.get(\"answer_index\")\n      if isinstance(ai, int) and 0 <= ai < len(opts):\n          correct_answer = str(opts[ai]).strip().lower()\n      else:\n          correct_answer = str(item.get(\"correct_answer\") or item.get(\"answer\") or item.get(\"definition\") or item.get(\"back\") or \"\").strip().lower()\n      explanation = str(item.get(\"explanation\") or item.get(\"hint\") or \"\")\nChange line 209 to:\n  is_correct = bool(correct_answer and submitted and (submitted == correct_answer or (len(correct_answer) > 12 and (submitted in correct_answer or correct_answer in submitted))))\ni.e. exact match for MCQ, no empty-key match, containment only for long free-text answers. Add before\nthe loop (after line 187): if not parsed_content: raise HTTPException(status_code=422, detail=\"Quiz material has no questions in a gradeable shape\").",
+      "risk": "Legitimate near-miss short answers shorter than 12 chars no longer match; MCQ strings sent as indices ('0') fall back to the old key path and now correctly score 0 rather than always-correct, so scores will visibly drop - which is the point.",
+      "verify": "Add to server/tests/test_study_tools_v3.py a test that stores StudyMaterial(kind='practice_test', content=json.dumps({\"multiple_choice\":[{\"q\":\"Q\",\"options\":[\"A\",\"B\"],\"answer_index\":0,\"explanation\":\"\"}],\"short_answer\":[]})) and POSTs a single wrong answer; assert percentage == 0.0. Run `.venv/bin/python -m pytest server/tests/test_study_tools_v3.py -q` -> 6 passed (was 5)."
+    },
+    {
+      "id": "H9-X2",
+      "finding": "H9-F2",
+      "file": "server/routes_study_tools.py",
+      "lines": "178-187",
+      "change": "Add a module-level normaliser above grade_quiz:\n  def _flatten_questions(content):\n      if isinstance(content, dict):\n          return list(content.get(\"multiple_choice\") or []) + list(content.get(\"short_answer\") or [])\n      return content if isinstance(content, list) else []\nIn grade_quiz replace lines 178-185 with:\n  parsed_content = _flatten_questions(json.loads(m.content) if isinstance(m.content, str) else m.content)\nIn list_study_decks (line 64) apply `parsed = _flatten_questions(parsed)` before total_cards and before the \"cards\" field (line 88). Mirror the flattening in server/routes_library.py:_serialize_material (lines 14-18) when kind == 'practice_test' so /api/library/materials also returns a list.",
+      "risk": "Deck total_cards for a practice_test changes from 0 to MC+SA count and the quiz player starts rendering; stored practice_test rows benefit with no migration. Consumers that expected the raw dict break - grep shows only LibraryView.jsx:431-447 and the tests, both of which expect a list.",
+      "verify": "Add a test storing a 1-MC + 1-SA practice_test dict and assert GET /api/study/decks reports total_cards == 2 and POST /api/study/quiz/{id}/grade returns total == 2. Run `.venv/bin/python -m pytest server/tests/test_study_tools_v3.py server/tests/test_canvas_sync.py -q` (all pass). Then curl /api/library/materials?kind=practice_test and confirm `content` is a JSON array."
+    },
+    {
+      "id": "H9-X3",
+      "finding": "H9-F3",
+      "file": "server/database.py + server/routes_study_tools.py",
+      "lines": "database.py:272-286; routes_study_tools.py:118,122-141",
+      "change": "database.py: add to StudyCardState `stability: Mapped[float | None] = mapped_column(Float, nullable=True)` and `difficulty_value: Mapped[float | None] = mapped_column(Float, nullable=True)`. In init_db (database.py:633+) add, next to the study_materials migration at 684-687:\n  columns_cards = [row[1] for row in conn.execute(text(\"PRAGMA table_info(study_card_states)\")).fetchall()]\n  if \"stability\" not in columns_cards: conn.execute(text(\"ALTER TABLE study_card_states ADD COLUMN stability FLOAT\"))\n  if \"difficulty_value\" not in columns_cards: conn.execute(text(\"ALTER TABLE study_card_states ADD COLUMN difficulty_value FLOAT\"))\nroutes_study_tools.py:118 becomes\n  review_res = scheduler.schedule_review(rating=payload.rating, current_stability=card_state.stability if card_state else None, current_difficulty=card_state.difficulty_value if card_state else None, last_review_time=card_state.last_practiced if card_state else None)\nand in both branches (lines 122-140) set card_state.stability = review_res[\"stability\"] and card_state.difficulty_value = review_res[\"difficulty\"]. Also set `due` from review_res and drop the unused client `difficulty` string from scheduling (keep storing it for display).",
+      "risk": "ALTER TABLE is additive and null-safe; existing rows keep NULL and behave exactly as today until their next review. A card's first post-deploy review starts real FSRS tracking. Requires the server process to re-run init_db on restart (it already does).",
+      "verify": "After applying, `.venv/bin/python -c \"from server.database import init_db; init_db()\"` then verify the new columns with `sqlite3 data/db/helpotron.db 'PRAGMA table_info(study_card_states)'`. Unit check: review the same card twice with rating=3 in one test and assert the second response's interval_days/max(...) grow rather than both being 4; run `.venv/bin/python -m pytest server/tests/test_osr_engines.py server/tests/test_study_tools_v3.py -q`."
+    },
+    {
+      "id": "H9-X4",
+      "finding": "H9-F4",
+      "file": "server/routes_study_tools.py",
+      "lines": "120, 75, 321-323",
+      "change": "Replace the single-click mastery rule at line 120 with a real threshold:\n  interval = review_res.get(\"interval_days\", 0)\n  if payload.rating == 1:\n      new_state = \"learning\"\n  elif payload.rating >= 3 and interval >= 21 and (card_state.reps if hasattr(card_state, \"reps\") else 0) >= 2:\n      new_state = \"mastered\"\n  elif payload.rating >= 2:\n      new_state = \"known\" if interval >= 4 else \"learning\"\n  else:\n      new_state = \"learning\"\nThen exclude the transitional \"review\" state from the mastered counts: change line 75 to\n`cs.state in (\"mastered\",)` and line 321 to `cs.state == \"mastered\"`, so the percentage means\n\"retained long-term\", not \"seen once\".",
+      "risk": "Mastery percentages drop sharply for existing decks (they should). Any test or UI copy asserting mastery after one press must be updated - server/tests/test_study_tools_v3.py:66,73,74 currently encodes the wrong behaviour and will need its expectations corrected.",
+      "verify": "Add a test that reviews a card with rating=3 once and asserts state != 'mastered' and mastery_percentage == 0.0, then reviews it twice more and asserts it eventually reaches 'mastered'. Run `.venv/bin/python -m pytest server/tests/test_study_tools_v3.py -q` and confirm the updated test passes."
+    },
+    {
+      "id": "H9-X5",
+      "finding": "H9-F5",
+      "file": "server/draft.py + server/launch_to_doc.py + PRIVACY_POLICY.md",
+      "lines": "draft.py:73-118,225-293; launch_to_doc.py:75-87; PRIVACY_POLICY.md:87",
+      "change": "Make the shipped behaviour match the published policy. Three mechanical edits:\n1) draft.py: add an integrity clause to both build_style_prompt (line 76-91) and build_default_style_prompt (line 100-118): 'Do not submit this draft as your own work. It is a revision scaffold: cite only sources the student supplied, never invent a citation, and mark every unattributed claim. Begin the output with the line: \"AI-GENERATED DRAFT - NOT FOR SUBMISSION (Helpotron).\"'\n2) launch_to_doc.py:79-87: flip TYPING_DEFAULTS[\"trusted_keys\"] to False so keystrokes are ordinary DOM events (isTrusted:false) unless the user explicitly opts in, and change the comment's stated rationale from detector evasion to accessibility. Keep the cadence presets but document them as assistive-typing pacing, not authorship simulation.\n3) PRIVACY_POLICY.md:87: either delete the 'transparency risk meter, not a concealing tool' sentence or make it true by removing the retry-until-detectors-pass loop (draft.py:225-293) and the 'is_stealth_ready' verdict (humanizer.py:567). Recommended: keep the sentence and make the code honest.\nIf the owner deliberately wants the evasion product, then this finding is a knowing risk acceptance - but the policy text must stop claiming the opposite.",
+      "risk": "This is a product-positioning change, not a bug fix. Flipping trusted_keys may break typing on sites that reject synthetic events; the opt-in switch preserves that. Removing the detector-retry loop raises average detector scores and will surface more 'risky' drafts to users who relied on it. All three are reversible config/prompt changes.",
+      "verify": "Grep proves the intent strings are gone: `rg -n 'detection evasion|eliminate all statistical AI markers|trusted_keys.: True' server/` -> 0 hits for the evasion phrasing. Then generate one draft through POST /api/drafts and assert the returned text starts with 'AI-GENERATED DRAFT - NOT FOR SUBMISSION'. Run `.venv/bin/python -m pytest server/tests/ -q` and compare to the recorded baseline."
+    },
+    {
+      "id": "H9-X6",
+      "finding": "H9-F6",
+      "file": "server/study_tools.py",
+      "lines": "36-43, 96-103, 119-125, 155-165",
+      "change": "Ground every generator in the student's source. In _SYSTEM (36-43) add: 'Every claim in your output must be traceable to the supplied transcript. For each flashcard, quiz question and study-guide bullet, include a \"source\" field containing a verbatim span of at most 25 words copied from the transcript. If the transcript does not contain the answer, omit the item and add it to a top-level \"not_covered\" list instead of guessing.'\nChange the JSON contracts: flashcards become {\"q\",\"a\",\"source\"}; practice-test MC items gain \"source\" and \"answer_index\"; study guide and summary must end each section with a 'From the transcript:' quote. In generate_flashcards (129-144) and generate_practice_test (169-178) reject parsed items lacking a non-empty \"source\" and retry once. Add a `difficulty: str = \"medium\"` parameter to generate_flashcards/generate_practice_test that scales distractor similarity and Bloom level, wired from the existing client `difficulty` selector (web/src/components/study/MasteryRing.jsx:82-98) instead of the currently cosmetic field.",
+      "risk": "Output length grows and strict source validation can exhaust the 2-attempt retry budget on poor transcripts (the honest outcome is an item being dropped, which is intended). Distractor difficulty changes may alter existing tests that assert item shape. Transcripts that are images-only will now legitimately produce sparse decks.",
+      "verify": "Add a unit test feeding a short transcript and asserting every returned flashcard has a non-empty source span that is a substring of the transcript, and feeding an unrelated transcript asserting items land in not_covered rather than being invented. Run `.venv/bin/python -m pytest server/tests/test_study_tools_v3.py -q`."
+    },
+    {
+      "id": "H9-X7",
+      "finding": "H9-F7",
+      "file": "server/overlord_agent.py",
+      "lines": "1274-1281",
+      "change": "Replace the hardcoded string with a real generation call. Reuse the existing draft path:\n  from .draft import generate_draft\n  assignment = db.get(Assignment, assignment_id) if assignment_id else None\n  source = (getattr(assignment, \"prompt\", \"\") or \"\").strip()\n  if not source:\n      return {\"action\": action_type, \"status\": \"failed\", \"message\": \"No assignment material to draft from - paste or upload content first.\"}\n  style_text = None\n  try:\n      style_text = get_style(user.id, db)\n  except Exception:\n      pass\n  content, model_used = await generate_draft(user.id, assignment_id, source, source, style_text)\n  return {\"action\": action_type, \"status\": \"completed\", \"section\": section_name, \"content\": content, \"model_used\": model_used}\nDelete the literal. If draft_section is meant to be a study scaffold (per H9-F5), call generate_study_guide instead and label the output accordingly.",
+      "risk": "This action now costs an LLM call, so it must respect the credit gate and the approval modes that ROUTINE_ACTION_TYPES already route through. An assignment_id that is not owned by the caller must be resolved first (same ownership check as _build_flashcard_deck, overlord_agent.py:118-125).",
+      "verify": "Add a test that dispatches action_type='draft_section' and asserts the result is non-empty, is not the literal 'Drafted comprehensive academic', and differs between two different section names. Run `.venv/bin/python -m pytest server/tests/ -q -k 'agent or overlord'` and compare to baseline."
+    },
+    {
+      "id": "H9-X8",
+      "finding": "H9-F8",
+      "file": "server/routes_study_tools.py",
+      "lines": "102, 174, 300",
+      "change": "Add one ownership helper and use it in all three per-material endpoints:\n  def _get_owned_material(material_id: int, user: User, db: Session) -> StudyMaterial:\n      m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()\n      if m is None or (m.user_id != user.id and user.id not in (m.shared_with or [])):\n          raise HTTPException(status_code=404, detail=\"Material not found\")\n      return m\nReplace lines 102, 174 and 300 with `m = _get_owned_material(material_id, user, db)`. Return 404 (not 403) to avoid confirming the existence of another user's material, matching the convention in server/assignments.py:59-68.",
+      "risk": "Shared decks remain readable because shared_with is honoured; only foreign private ids start 404ing. Any client relying on the previous permissive behaviour (there is none in web/src - the only calls are for materials the user owns) is unaffected.",
+      "verify": "Add a test: create a material owned by user A, authenticate as user B, call review/mastery/grade and assert all three return 404. Run `.venv/bin/python -m pytest server/tests/test_study_tools_v3.py -q`."
+    },
+    {
+      "id": "H9-X9",
+      "finding": "H9-F9",
+      "file": "server/routes_study_tools.py",
+      "lines": "384-394",
+      "change": "Validate the Canvas base URL before it is used and before the token header is attached.\nAfter the scheme normalisation at lines 384-386, insert:\n  from .ssrf import validate_safe_url, is_safe_url\n  try:\n      validate_safe_url(base_url)\n  except ValueError:\n      raise HTTPException(status_code=400, detail=\"Canvas URL is not allowed\")\nand build the client with the redirect guard:\n  async with httpx.AsyncClient(timeout=35.0, headers=headers, follow_redirects=False, event_hooks={\"response\": [check_redirect_ssrf]}) as client:\nAlso disable redirects and re-raise as 400 for a 3xx response so the token is never re-sent to a\nredirect target. Prefer deleting this duplicate route and keeping the guarded CanvasSyncEngine path at\nmain.py:423-448.",
+      "risk": "Canvas instances behind a legitimate redirect (rare; the canonical URLs do not redirect) would be rejected. No effect on the mocked test host. Deleting the duplicate route would break server/tests/test_canvas_sync.py:96, which should instead target /api/canvas/sync.",
+      "verify": "Add a test posting canvas_url='http://169.254.169.254' and asserting HTTP 400 (mirroring server/tests/test_security_hardened.py:66-72). Run `.venv/bin/python -m pytest server/tests/test_canvas_sync.py server/tests/test_security_hardened.py -q` and confirm all pass with the new case."
+    },
+    {
+      "id": "H9-X10",
+      "finding": "H9-F10",
+      "file": "server/analytics.py",
+      "lines": "114-133",
+      "change": "Stop presenting invented arithmetic as measured savings. Either (a) delete tutor_savings and\ncost_per_hour from the payload, or (b) keep them but rename to `estimated_tutor_cost_avoided_usd` and\nadd `\"estimate_basis\": \"assumed $50/hr market tutor rate; not measured\"` plus source the plan price\nfrom the real plan table (server/plans.py) instead of the hardcoded dict at analytics.py:119-123.\nAlso clamp study time at the source: reject time_spent_minutes above a sane ceiling in\nCardReviewRequest/QuizGradeRequest instead of trusting the client (routes_study_tools.py:24,34).",
+      "risk": "Dashboard copy that references tutor_savings must be updated or it will render undefined; grep web/src for tutor_savings before renaming. Clamping client time will reduce inflated study-hour totals.",
+      "verify": "Grep `rg -n 'tutor_savings' server web` to find consumers, update them, then run `.venv/bin/python -m pytest server/tests/ -q` and confirm the analytics endpoint still returns 200. Add a test asserting a time_spent_minutes of 10_000 is rejected with 422."
+    }
+  ],
+  "verification_plan": "An independent reviewer confirms this track in five commands plus two reads.\n1) Prove the quiz is broken, then fixed: use the reproduction in H9-F1/H9-F2 (a two-item MCQ list with\nall answers wrong returns percentage 100.0; a real practice_test dict returns total 0). Run\n`.venv/bin/python -m pytest server/tests/test_study_tools_v3.py server/tests/test_osr_engines.py -q`\nbefore the fix (measured baseline: 5 passed, 1 warning in 3.68s) and confirm the new MCQ/shape/ownership\ntests are added and pass after it.\n2) Prove the FSRS route is stateless: `.venv/bin/python -c` calling\nFSRSScheduler().schedule_review(rating=3) ten times through the route's argument signature prints a\nconstant interval (measured [4,4,4,4,4,4,4,4,4,4]); after H9-X3 the same loop grows. Confirm the new\ncolumns with a read-only PRAGMA table_info(study_card_states).\n3) Prove the integrity posture: `rg -n 'detection evasion|eliminate all statistical AI markers|trusted_keys' server/` and read draft.py:73-118,225-293, humanizer.py:1,539-575, launch_to_doc.py:75-87 against\nPRIVACY_POLICY.md:87. The claim to adjudicate is not opinion: the code's own comments state the intent.\n4) Prove the Canvas gap: POST /api/study/canvas/sync with canvas_url='http://169.254.169.254' and a dummy\ntoken; before H9-X9 it attempts an outbound request, after it returns 400.\n5) Confirm no regression: run the full suite `.venv/bin/python -m pytest server/tests/ -q` from the repo\nroot and diff against the recorded baseline, allowing for the two known pre-existing reds named in\nresearch/CONTEXT.md. Finally read research/h9-academics.json and check every finding cites a path:line\nthat resolves in this working tree.",
+  "external_research": [
+    {
+      "what": "Free Spaced Repetition Scheduler (FSRS) - the algorithm helpotron claims to implement; reference implementations and parameters",
+      "url": "https://github.com/open-spaced-repetition/ts-fsrs",
+      "why": "Gives the canonical DSR transitions and the persisted-state contract Helpotron is missing (stability, difficulty, elapsed days, desired retention). Adopting it as the specification for H9-X3 makes the scheduler testable against a known oracle.",
+      "license": "MIT",
+      "verdict": "adopt"
+    },
+    {
+      "what": "FSRS4Anki tutorial + Anki FAQ on which algorithm Anki uses",
+      "url": "https://github.com/open-spaced-repetition/fsrs4anki",
+      "why": "Documents that FSRS state must be carried per card across reviews and that user-tunable retention is the only knob; confirms that calling it stateless is not an implementation of FSRS at all.",
+      "license": "MIT (docs)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "Anki FAQ - what spaced repetition algorithm does Anki use",
+      "url": "https://faqs.ankiweb.net/what-spaced-repetition-algorithm",
+      "why": "Independent statement of the SM-2 -> FSRS transition and why Anki made FSRS the default for new decks; useful as the neutral reference in the report.",
+      "license": "Anki manual (public docs)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "SM-2 (SuperMemo-2, Wozniak 1987) algorithm description",
+      "url": "https://en.wikipedia.org/wiki/SM-2_(algorithm)",
+      "why": "The classic baseline: fixed ease factor + interval, reset to 1 day on a lapse. Even SM-2 persists per-card EF and interval - more than Helpotron does. Establishes that the current route is below even the 1987 algorithm.",
+      "license": "CC BY-SA (Wikipedia text)",
+      "verdict": "reject+because inferior to FSRS for long-term retention, but it is the correct floor to benchmark against"
+    },
+    {
+      "what": "Retrieval practice / distributed practice efficacy meta-analysis (Donoghue & Hattie 2021)",
+      "url": "https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2021.581216/full",
+      "why": "Practice testing d=0.74 and distributed practice d=0.85 across 242 studies - the exact two techniques Helpotron's UI invokes. Grounds the claim that a constant-interval deck and a 100%-always quiz deliver none of the benefit they advertise.",
+      "license": "Open access (CC BY)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Kestin & Miller et al., 'AI tutoring outperforms in-class active learning' (Nature Scientific Reports 2025; Research Square preprint 2024)",
+      "url": "https://www.nature.com/articles/s41598-025-97652-6",
+      "why": "The strongest RCT evidence for AI tutors: effect size ~0.63-1.3 SD. Crucially the paper attributes the gain to expert-authored solution content, one-step-at-a-time scaffolding and accuracy guardrails - the opposite of Helpotron's answer-emission and ungrounded generation. Defines what a real AI study tool must do.",
+      "license": "Open access (CC BY)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Harvard Gazette coverage of the PS2 AI-tutor study",
+      "url": "https://news.harvard.edu/gazette/story/2024/09/professor-tailored-ai-tutor-to-physics-course-engagement-doubled/",
+      "why": "Plain-language corroboration of the design-centred framing (scaffolds, not answers) for the report's value test.",
+      "license": "News - citation only",
+      "verdict": "adapt"
+    },
+    {
+      "what": "University of Exeter academic honesty guidance on GenAI use (2025-26)",
+      "url": "https://libguides.exeter.ac.uk/c.php?g=731482&p=5345418",
+      "why": "Representative tiered policy: AI-assisted use is permitted only with prompt/output logging and disclosure; 'using AI may not be cheating - but hiding it could be a breach of academic integrity'. Helpotron has no disclosure mechanism and actively hides, which is the exposure.",
+      "license": "Institutional policy page - citation only",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Langara College EdTech, 'Accuracy of Turnitin's AI Detection' (Sept 2025)",
+      "url": "https://iweb.langara.ca/edtech/files/2026/02/Turnitin_AI_Detection_Accuracy-Sept2025.pdf",
+      "why": "Measured evidence that humanizer/paraphraser tools drive AI-generated text to 0% detected, including after Turnitin's Aug 2025 update. Shows the Helpotron humanizer loop is both effective at concealment and that detector scores are not integrity evidence.",
+      "license": "Institutional report - citation only",
+      "verdict": "adapt"
+    },
+    {
+      "what": "UCT discontinues Turnitin AI Score (Oct 2025)",
+      "url": "https://capetimes.co.za/news/2025-07-29-uct-discontinues-ai-detection-tools-including-turnitins-ai-score/",
+      "why": "Institutional pushback showing detection is losing legitimacy as an enforcement mechanism - so a study tool's integrity value must come from scaffolding and disclosure, not from detector evasion.",
+      "license": "News - citation only",
+      "verdict": "adapt"
+    }
+  ],
+  "open_questions": [
+    "Is the detector-evasion behaviour (H9-F5) an owner-intended feature or an inherited artifact? The brief says not to re-litigate settled rules, and the code comments read as deliberate ('operator' attributed in launch_to_doc.py:79-87). I report the contradiction with PRIVACY_POLICY.md:87 either way; the owner should decide whether to fix the code or the policy.",
+    "Whether any live users currently have StudyCardState rows whose `due` values are being consumed anywhere - I found no due-queue endpoint or UI, but I did not audit the full 122KB routes_overlord.py or the extension for a consumer of study_card_states.due. Settled by `rg -n 'study_card_states|StudyCardState' server extension web`.",
+    "Whether the Canvas API token is ever written to logs or telemetry by request-body logging middleware. I confirmed the token is not stored in a table (rg for canvas_token/canvas_access_token found no persistence) but I did not trace access_log.py or ApiUsageLog for body capture.",
+    "Whether `generate_study_pack` (study_tools.py:228-249) is reachable from any route - it is in the GENERATORS map but no route key 'study_pack' appears in the GenerateIn endpoint list; if unreachable it is dead code rather than a live defect.",
+    "The exact current production detector scores for real generated drafts (would show how often the retry loop actually fires), which requires either reading data-lake JSONL or running a live generation. Not attempted to avoid spend and prod writes."
+  ]
+}

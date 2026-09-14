@@ -1,0 +1,432 @@
+{
+  "track": "H3",
+  "agent": "extension-architecture-reliability",
+  "summary": "The MV3 extension is three independent executors (popup, agent_mode, background) with no shared debugger owner and no enforced message contract, and its two accuracy mechanisms are unsound. The server prompt tells the model that a DOM ref 'cannot drift' (server/routes_extension.py:622-624), but a ref is a positional index re-enumerated at click time (extension/element_registry.js:145, 381): if the DOM shifted, the ref resolves to a DIFFERENT element, and if it resolves to nothing the click op is skipped silently while the run still reports 'N action(s) executed' (extension/popup.js:2875, 3019). The 'healing' fallback that is supposed to rescue a bad ref never returns null and matches one-character element names, so it converts failures into wrong clicks (element_registry.js:328, 341-345, 387). The trusted-typing bridge leaks chrome.debugger attachments three ways (no detach of the previous tab in cdpTypingAttach:348-358; releaseTrustedKeys early-returns once trustedKeys is false, content.js:1616/918; no chrome.debugger.onDetach listener anywhere in the repo), can double-type a character when the keyUp fails after a successful keyDown (content.js:946-965, 1003-1017), and silently degrades to isTrusted:false mid-run. The capture path can measure the wrong box: activeTabViewport falls back to window.screen (popup.js:1981), the frame keeps device pixels when the tab is not scriptable (popup.js:2083-2098), and the server silently substitutes 1280x800 (server/routes_extension.py:1279). The manifest is mid-change and unpublishable: the uncommitted diff deletes background.scripts (which breaks Firefox while only muting a Chrome warning) and does NOT bump 2.7.0, so the real fix cannot reach installed users and no What's New row is created - the feared un-announced bump did not happen, the opposite did. Approval broker state lives only in worker memory (background.js:627-628, 648-649, 738-743), so after any restart the Allow/Deny notification is a dead button. The WS agent subsystem (background.js:893-1230) is unreachable dead code with no sender anywhere in the repo. A genuine end-to-end harness exists (scripts/verify_extension.py) but its last green run (2026-09-11) predates the current uncommitted tree (2026-09-12) and it cannot see popup-destroyed-mid-await bugs; the keystroke, ref, DPR and non-study-host paths have no check at all.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H3-F1",
+      "title": "A ref that no longer resolves is a silent no-op, and the run still reports every action executed",
+      "symptom": "The agent says it clicked or typed, the status line says 'Drove <tab> - N action(s) executed', but nothing happened on the page. No error, no log line, no cursor movement. The user asks again; the model re-emits the same ref; it silently does nothing again.",
+      "root_cause": "resolveActionRefs returns the op UNCHANGED when the ref does not resolve (extension/element_registry.js:381-393 - `if (hit) return Object.assign({}, op, {x: hit.x, y: hit.y});` then `return op;`), so the op still has no x/y. Every dispatch branch requires coordinates: `op.op === 'click' && op.x !== undefined && op.y !== undefined` (extension/popup.js:2875), same shape at :2871 (move), :2892 (dblclick), :3000 (scroll) - an x/y-less op matches no branch and is skipped with no log and no counter. The burst then returns `{ status: 'ok', ran: actions.length, ... }` (extension/popup.js:3019) and the caller renders it as success (extension/popup.js:3084-3090). The server is what hands the model this unstable key and tells it to prefer it (server/routes_extension.py:571-572, 622-624) and passes ref-only ops straight through (server/screen_vision.py:413-429).",
+      "evidence": [
+        "extension/element_registry.js:381-383 - a non-resolving ref falls through to `return op` with no x/y and no marker",
+        "extension/popup.js:2875 - `} else if (op.op === 'click' && op.x !== undefined && op.y !== undefined) {` is the only click branch",
+        "extension/popup.js:3019 - `return { status: 'ok', ran: actions.length, label, unseen: drivingUnseen };` counts unresolvable ops as executed",
+        "server/screen_vision.py:413-429 - _validate_op emits `{\"op\":\"click\",\"ref\":N}` with no bounds check against the elements list",
+        "server/routes_extension.py:622-624 - the prompt tells the model to PREFER refs and claims 'a ref is resolved against the page at click time, so it cannot drift'"
+      ],
+      "confidence": "high",
+      "impact": "The headline agent feature silently does nothing while reporting success. The user cannot distinguish a missed click from a model refusal, and the prompt's own rule ('never repeat an identical action more than twice') makes the agent burn turns retrying the same dead ref."
+    },
+    {
+      "id": "H3-F2",
+      "title": "Refs are positional indices re-enumerated at dispatch - a shifted DOM clicks the WRONG element",
+      "symptom": "The agent clicks a plausible but wrong control: a neighbouring button, a nav item, a different row. The cursor lands on a real element, so it reads as a model mistake rather than a bug.",
+      "root_cause": "`ref` is the array position at enumeration time: `ref: out.length` (extension/element_registry.js:145; again at :175 for the cursor:pointer pass). resolveActionRefs re-runs collectInteractiveElements at dispatch time and matches the bare integer: `const hit = elements.find((el) => el.ref === Number(op.ref));` (extension/element_registry.js:381). The enumeration is a live DOM-order walk (a 27-selector querySelectorAll, element_registry.js:30-39, plus a full div/span/li cursor:pointer pass, :154-183), so it is not stable across the capture turn and the dispatch turn on any page that renders ads, lazy sections, toasts or infinite scroll. No identity is carried with the element (no id, name+role+tag key, or DOM path), so one inserted node earlier in document order shifts every ref after it and the click lands on the wrong node. The file's own comment (extension/element_registry.js:16-21) states the two enumerations MUST agree or 'a ref silently points at the wrong element' - nothing in the payload makes them agree.",
+      "evidence": [
+        "extension/element_registry.js:145 - `ref: out.length,` (positional index, not an identity)",
+        "extension/element_registry.js:381 - `const hit = elements.find((el) => el.ref === Number(op.ref));` matches the raw integer only",
+        "extension/element_registry.js:62-89 - the primary pass walks document order and filters by viewport/computed style, so viewport and lazy-render changes shift indices",
+        "extension/element_registry.js:154-183 - the dynamic pass appends refs for every cursor:pointer div/span/li across the whole document, so one new node shifts the tail",
+        "extension/element_registry.js:16-21 - the file's own warning: 'a ref silently points at the wrong element'"
+      ],
+      "confidence": "high",
+      "impact": "Wrong clicks on the user's real screen - the worst failure class for this product, since a wrong click in an LMS can submit, delete or navigate. It also makes the advertised accuracy feature non-deterministic run to run."
+    },
+    {
+      "id": "H3-F3",
+      "title": "observeSemanticElement never returns null, and the ref fallback matches one-character element names",
+      "symptom": "A target query that matches nothing on the page resolves to an arbitrary unrelated element and the click lands there - silently, with no low-confidence marker.",
+      "root_cause": "Two matchers fail open. (a) observeSemanticElement starts `bestScore = -1` (extension/element_registry.js:328) and a NON-match scores 0 (:341-345), so `if (score > bestScore)` is true for the first element that has any text at all: the function cannot return null while one interactive element carries a label, and resolveActionRefs applies any non-null result as coordinates (:390-391). (b) The cheap path matches substrings in both directions: `el.name.toLowerCase().includes(q) || q.includes(el.name.toLowerCase())` (:387). With a one-character element name (a link labelled 'a' or 'x' is common), `'search'.includes('a')` is true, so almost any query matches the first such element in document order.",
+      "evidence": [
+        "extension/element_registry.js:328 - `let bestScore = -1;`",
+        "extension/element_registry.js:341-345 - a non-match scores 0 and `if (score > bestScore)` accepts it over -1, so best is always set when any node has text",
+        "extension/element_registry.js:387 - `elements.find((el) => el.name.toLowerCase().includes(q) || q.includes(el.name.toLowerCase()))` (bidirectional substring, unsafe for short names)",
+        "extension/element_registry.js:390-391 - any non-null observeSemanticElement result is applied as x/y with no score threshold and no confidence field"
+      ],
+      "confidence": "high",
+      "impact": "The 'healing' path that is supposed to rescue an unresolved ref is itself a wrong-click generator, so it amplifies H3-F2 instead of containing it. Any page with a one-letter link turns every unresolved query into a click on that link."
+    },
+    {
+      "id": "H3-F4",
+      "title": "chrome.debugger attachments leak three ways - the user's tab stays locked with the debugging infobar",
+      "symptom": "After a typing run, or after starting typing in a second tab, the tab keeps the yellow 'is debugging this browser' infobar and DevTools refuses to open on it. A later drive on that tab can fail with 'Another debugger is already attached'. The user cannot clear it without closing the tab.",
+      "root_cause": "Three leaks share one global. (a) cdpTypingAttach detaches only the tab it is about to attach and then OVERWRITES the global: `await chrome.debugger.detach({tabId}).catch(()=>{}); await chrome.debugger.attach({tabId},'1.3'); cdpTypingTabId = tabId;` (extension/background.js:348-353) - the previous cdpTypingTabId is never detached, so a launch into tab A followed by a launch into tab B leaks A. (b) The only engine-side detach trigger, releaseTrustedKeys, returns early once the flag is false: `if (!this.trustedKeys) return;` (extension/content.js:1616), and cdpKey sets that same flag to false on any single failed key event (extension/content.js:918). So one hiccup permanently disables the release path for that run and leaves the attach up. (c) There is no chrome.debugger.onDetach listener anywhere in the repo (grep: 0 matches), so a browser-forced detach (canceled_by_user from the infobar Cancel button, replaced_with_devtools, an extension reload) leaves cdpTypingTabId stale: the next helpotron-cdp-key is forwarded to a dead session, sendCommand rejects, content.js drops out of trusted mode, and the worker's belief and Chrome's state disagree forever.",
+      "evidence": [
+        "extension/background.js:346-358 - a single `let cdpTypingTabId = null;` and cdpTypingAttach detaching only the new tab",
+        "extension/background.js:360-365 - cdpTypingDetach only ever targets that one global",
+        "extension/content.js:918 - `this.trustedKeys = false;` on any cdpKey failure",
+        "extension/content.js:1615-1621 - `releaseTrustedKeys() { if (!this.trustedKeys) return; ... }`, the only engine-side detach, called at content.js:1603, 1609, 1644",
+        "extension/background.js:369-374 - the only cleanup hooks are tabs.onRemoved and tabs.onUpdated('loading'); no chrome.debugger.onDetach handler exists (repo-wide grep 'onDetach' -> 0)",
+        "external: a chrome.debugger attach is owned by the extension, not the worker, so a stale attach survives worker restart and blocks the next attach with 'Another debugger is already attached' (Chrome debugger API reference; the same ghost-attach class is reported in anthropics/claude-code#54760 and openclaw#30994)"
+      ],
+      "confidence": "high",
+      "impact": "Leaves the user's browser tab in a scary, permanently-debugged state with no in-product recovery, and makes the trusted-typing promise unverifiable because the worker's session bookkeeping silently diverges from reality."
+    },
+    {
+      "id": "H3-F5",
+      "title": "The trusted-typing path can double-type a character and silently downgrade to isTrusted:false mid-run",
+      "symptom": "A character appears twice in the user's essay (or one backspace deletes two), and the caret-repair arithmetic then walks to the wrong characters so the auto-typo fix repairs the wrong text. No error is shown and the run continues. Separately, the second half of the typing can fall back to synthetic isTrusted:false key events while the first half was trusted.",
+      "root_cause": "(a) The character is committed by CDP and then possibly committed again by the DOM fallback: `if (this.trustedKeys && await this._trustedInsertChar(char)) return;` (extension/content.js:965), where _trustedInsertChar is `if (!(await this.cdpKey(down))) return false; ... return this.cdpKey(up);` (extension/content.js:946-955) and the keyDown carries `text: char, unmodifiedText: char` (extension/content.js:928) - that keyDown is what inserts the glyph. A failed keyUp returns false, cdpKey has already cleared this.trustedKeys (content.js:918), and insertChar then runs the DOM path `document.execCommand('insertText', false, char)` (content.js:1005): the same character a second time. deleteChar has the identical shape (content.js:1023-1024 against the DOM fallback `document.execCommand('delete')` at :1040), where the failure destroys an extra character instead of duplicating one. (b) The same flag flip means every later character silently takes the synthetic path; the engine never reports the downgrade - broadcastProgress has no 'trusted-lost' status (content.js:1648-1659) and the only outward signal is the progress percentage. (c) dispatchKey/nativeCaretMove compound it: the real arrow key moves the caret, and nativeCaretMove skips its DOM move only while this.trustedKeys is still true (content.js:1095); after a keyUp failure it is false, so the caret moves twice.",
+      "evidence": [
+        "extension/content.js:946-955 - _trustedInsertChar returns the keyUp promise result, so a failed keyUp after a successful keyDown returns false",
+        "extension/content.js:928 - `const p = { type: 'keyDown', text: char, unmodifiedText: char };` - the keyDown inserts the glyph through the real input pipeline",
+        "extension/content.js:964-965 - `insertChar` falls through to the DOM path on a false return",
+        "extension/content.js:1003-1017 - the DOM fallback inserts the same char via document.execCommand('insertText')",
+        "extension/content.js:1023-1040 - deleteChar double-applies in the same way (real Backspace then execCommand('delete'))",
+        "extension/content.js:1074-1087 and 1091-1095 - dispatchKey + nativeCaretMove move the caret twice once trustedKeys is false",
+        "extension/content.js:1462 - trustedKeys is opt-in from the worker's attach result (extension/background.js:829), so a mid-run CDP failure is invisible to the popup"
+      ],
+      "confidence": "high",
+      "impact": "Corrupts the user's own document (duplicate and lost characters) with no error, and breaks the isTrusted guarantee the bridge exists to provide - an essay can end up half trusted and half synthetic, which is exactly the property that matters for the product's stated purpose."
+    },
+    {
+      "id": "H3-F6",
+      "title": "Coordinate-space fallback: screen size vs device-pixel frame vs the server's silent 1280x800",
+      "symptom": "The cursor moves but the click lands short or off by roughly the display scale factor, or by the difference between the screen size and the tab size. Systematic on a high-DPI display or a non-maximised window.",
+      "root_cause": "Three boxes are in play and none are reconciled. (a) activeTabViewport returns whole-SCREEN dimensions on any failure: `const fallback = { width: window.screen.width || 1280, height: window.screen.height || 800 };` (extension/popup.js:1980-1996) - e.g. 2560x1440 for a 1200x800 tab, which is the exact bug the surrounding comment claims to have fixed. (b) The frame is only converted out of device pixels when the viewport read succeeds: `const vp = ... getTabViewport(t.id).catch(() => null); if (vp) { frame = await normalizeFrame(frame, vp.width, vp.height) ... }` (extension/popup.js:2083-2098); with vp null the frame keeps DEVICE pixels (CSS x devicePixelRatio) while the reported viewport is the screen-size fallback. (c) If no viewport reaches the server, the server silently substitutes 1280x800 (server/routes_extension.py:1279, 1281-1283) and clamps the model's coordinates into it, with nothing in the response saying so; the extension then clamps a third time against the live viewport at dispatch (extension/popup.js:2836-2843), and readViewport itself defaults to 1280x800 when Runtime.evaluate fails (extension/popup.js:2139). devicePixelRatio is read in exactly one place, getTabViewport (extension/element_registry.js:270-287), and only when the tab is scriptable.",
+      "evidence": [
+        "extension/popup.js:1980-1996 - `const fallback = { width: window.screen.width || 1280, height: window.screen.height || 800 };` returned on any executeScript failure",
+        "extension/popup.js:2083-2098 - normalisation is conditional on vp; the frame keeps device pixels when vp is null",
+        "extension/element_registry.js:295-315 - normalizeFrame is the only device->CSS conversion and silently returns the input frame on decode failure",
+        "server/routes_extension.py:1279 - `viewport_dict = {\"width\": 1280, \"height\": 800}` is the silent default, used for the vision call and the clamp, with no error surfaced to the user or the model",
+        "extension/popup.js:2836-2843 - a second clamp against readViewport (default 1280x800 at popup.js:2139)",
+        "extension/element_registry.js:263-269 - the file's own comment: the frame and the click 'live in different spaces' whenever devicePixelRatio is not 1"
+      ],
+      "confidence": "high",
+      "impact": "This is the 'cursor moved but the click missed' class the 09-10/09-12 accuracy work set out to kill. On a 2x display with a non-maximised window the error is deterministic, not random, so it reproduces for an entire class of users and makes the agent look broken."
+    },
+    {
+      "id": "H3-F7",
+      "title": "Side panel does not grant activeTab, so the primary capture path fails there and every frame costs a debugger attach",
+      "symptom": "From the side panel - the manifest's own persistent surface - screen turns are slower and carry the debugging infobar, and on pages outside the 14 study hosts the screenshot either comes from a CDP attach or is missing entirely ('screen capture returned no frames').",
+      "root_cause": "manifest.json serves the same popup.html as the side panel (`side_panel.default_path`, extension/manifest.json:54-56) while host_permissions are 14 specific patterns with no <all_urls> (extension/manifest.json:24-41). captureVisibleTab requires either <all_urls> or a GRANTED activeTab. Opening the browser-action popup grants activeTab; a side panel does not - Chrome deliberately does not grant it there (issues.chromium.org/issues/40916430). captureActiveTabFrame therefore returns null in panel mode (extension/popup.js:1998-2012) and every frame falls through to captureBackgroundTabFrame, which attaches and detaches chrome.debugger per frame (extension/popup.js:2019-2037), called once per tab in scope (extension/popup.js:2064-2066). popup.js asserts the side panel is a correct capture surface (extension/popup.js:31-35, 2779-2782) but never accounts for the permission difference.",
+      "evidence": [
+        "extension/manifest.json:54-56 - side_panel.default_path = popup.html",
+        "extension/manifest.json:24-41 - host_permissions are the study sites plus localhost/127.0.0.1 only; no <all_urls>",
+        "extension/popup.js:1998-2012 - captureActiveTabFrame logs nothing and returns null on any lastError",
+        "extension/popup.js:2019-2037 - the CDP fallback attaches and detaches chrome.debugger around a single Page.captureScreenshot",
+        "extension/popup.js:2064-2066 - `frame = sameWindowActive ? await captureActiveTabFrame(t.windowId) : null; if (!frame) frame = await captureBackgroundTabFrame(t.id);`",
+        "external: captureVisibleTab requires <all_urls> host permission or a granted activeTab, and the side panel does not grant activeTab (Chrome docs; chromium issue 40916430)"
+      ],
+      "confidence": "high",
+      "impact": "The surface the product recommends for watching the agent is the one with the least reliable capture, it flashes the debugger infobar on the user's page for every frame, and each attach risks colliding with the leaks in H3-F4 and with a pending drive attach."
+    },
+    {
+      "id": "H3-F8",
+      "title": "Set-of-Marks overlay is left painted on the user's page if the popup dies between inject and remove",
+      "symptom": "Numbered badges sit on top of the user's real page, over buttons and links, and do not go away until the page is reloaded.",
+      "root_cause": "injectSetOfMarks appends `#__helpotron_som_overlay__` to document.documentElement at z-index 2147483640 (extension/element_registry.js:202-247). The only removal is the paired call inside the capture loop (extension/popup.js:2068-2072) - no try/finally and no page-side watchdog. If the popup/panel document is destroyed mid-capture (the popup is destroyed by any focus change, as the code itself documents at extension/popup.js:2772-2780), if the tab is discarded and restored, or if the removal injection throws, the overlay stays. Its badges are `position: fixed` (extension/element_registry.js:216-236), so they do not even scroll out of the way.",
+      "evidence": [
+        "extension/element_registry.js:200-247 - injectSetOfMarks appends a fixed full-viewport overlay to document.documentElement; no timeout, no onUnload cleanup",
+        "extension/popup.js:2068-2072 - removal is a bare sequential await in the loop, not a finally",
+        "extension/element_registry.js:249-261 - removeSetOfMarks has exactly two callers, both inside captureJurisdictionFrames",
+        "extension/popup.js:2772-2780 - the file documents that the browser-action popup document is destroyed the moment focus leaves it"
+      ],
+      "confidence": "medium",
+      "impact": "Visible defacement of the user's own page with no in-product recovery, and the next capture turn photographs the overlay on top of the very controls the model is told to click."
+    },
+    {
+      "id": "H3-F9",
+      "title": "Approval broker state is worker-memory only; the alarm mirror can never settle anything after a restart",
+      "symptom": "After a worker restart a system notification with Allow and Deny buttons is still on screen but clicking either does nothing, and the agent page's action gate has already auto-denied. Queued prompts also vanish when the popup closes (deny-default, so fail-safe, but the user is left clicking dead buttons).",
+      "root_cause": "PENDING_APPROVALS is a Map and popupPort a module variable (extension/background.js:627-628), both destroyed with the worker. The documented 'one-shot chrome.alarms mirror, so a killed worker still expires it' (extension/background.js:621-624) does fire, but its only handler reads that same empty Map: `chrome.alarms.onAlarm.addListener((a) => { ... settleApproval(reqId, false, 'timed-out'); });` (extension/background.js:738-743) and settleApproval returns immediately when the entry is gone: `const p = PENDING_APPROVALS.get(reqId); if (!p) return;` (extension/background.js:649-650). chrome.notifications.onButtonClicked (extension/background.js:722-727) is dead in the same way, and the notification is created with requireInteraction: true (:700-707) so it persists on screen inviting a click that can never land. chrome.storage.session exists for exactly this and is used nowhere in the extension (repo grep for 'chrome.storage.session': 0 matches).",
+      "evidence": [
+        "extension/background.js:627-628 - `const PENDING_APPROVALS = new Map();` and `let popupPort = null;`",
+        "extension/background.js:738-743 - the alarm handler calls settleApproval on the in-memory Map",
+        "extension/background.js:649-650 - `const p = PENDING_APPROVALS.get(reqId); if (!p) return;` makes the alarm a no-op after a restart",
+        "extension/background.js:700-707 - the notification is created with requireInteraction: true and Allow/Deny buttons that outlive the Map",
+        "extension/background.js:722-736 - onButtonClicked / onClosed also resolve against the same Map",
+        "repo grep 'chrome.storage.session' -> 0 matches in extension/"
+      ],
+      "confidence": "high",
+      "impact": "After any worker restart the agent's approval surface is a dead UI: the user presses Allow and nothing happens, while the product's own honesty rules (deny-default, always answer) make the agent report a denial the user never gave. It also makes the 60s TTL claim in the comment false as soon as the worker turns over."
+    },
+    {
+      "id": "H3-F10",
+      "title": "The WS agent subsystem in background.js is unreachable dead code, and its session state is worker-memory",
+      "symptom": "No user-visible symptom today, because no shipped UI can reach it. The handlers are still registered, so the maintenance and review cost is live even though the feature is not.",
+      "root_cause": "background.js registers 25 message branches (:376-614). Nine of them have no sender anywhere in the repo: SYNC_ASSIGNMENTS (:396), getTabs (:400), persistInstruction (:415), activateAgent (:437), scrapeContext (:442), scrapeWithInstruction (:449), agentStatus (:459), startRecording (:464), getEditableTabs (:478 - only the getGDocsTabs alias is sent). Nothing calls activateAgent, so the whole WebSocket agent - connectAgentSocket (:934-984), executeTabCommand (:1003-1163), ingestScrapedAssignment (:1186-1216) - and its three module-level session variables (`agentSocket`, `agentSessionId`, `targetTabId` plus sessionInstruction/sessionAssignmentId at :893-900) are unreachable. Those globals are the classic MV3 lifetime bug (an in-memory socket and session id that die with the worker and cannot be rehydrated), so the code is both dead and wrong; a future caller inherits the bug. Symmetrically, popup.js listens for `unparseable_report` (:3704) which nothing ever sends, so that UI path (showUnparseable, popup.js:259) is unreachable from the message channel - the real report only arrives as the startScrape response body (popup.js:1231).",
+      "evidence": [
+        "extension/background.js:396-476 - nine registered handlers; repo-wide grep for each action name finds senders only in background.js itself",
+        "extension/background.js:893-900 - `let agentSocket = null; let agentSessionId = null; let targetTabId = null;` plus sessionInstruction/sessionAssignmentId",
+        "extension/background.js:934-984 - the socket is opened once and never persisted or reconnected; onclose only nulls the global",
+        "extension/background.js:1218-1226 - agentStatus reads the in-memory agentSessionId and returns active:false after any restart",
+        "extension/popup.js:3704 - `else if (msg && msg.action === 'unparseable_report')` with no sender anywhere in the repo",
+        "external: MV3 workers are terminated on ~30s of inactivity and module-scope state is destroyed on termination; state that must survive belongs in chrome.storage.session/local (Chrome service-worker lifecycle docs, 'Persist data')"
+      ],
+      "confidence": "high",
+      "impact": "Reviewers and future agents will keep auditing and 'fixing' a subsystem that cannot run, and if anyone wires it up the in-memory socket/session id will fail in production exactly as the other background globals do."
+    },
+    {
+      "id": "H3-F11",
+      "title": "Manifest is mid-change: background.scripts deleted (breaks Firefox), version NOT bumped (the fix cannot ship)",
+      "symptom": "The CWS/AMO artifact cannot be published as an update: the version is unchanged, so no installed user receives the fix and no What's New row is created. On Firefox the background never loads at all.",
+      "root_cause": "The uncommitted diff to extension/manifest.json removes the `scripts` array and leaves only `service_worker` (git diff: `- \"service_worker\": \"background.js\", - \"scripts\": [\"background.js\"]` -> `+ \"service_worker\": \"background.js\"`). Chrome 121+ only WARNS about MV2 background keys, while Firefox MV3 has no service-worker support at all and needs `background.scripts`; the sanctioned single-manifest pattern is both keys present, with Firefox logging BACKGROUND_SERVICE_WORKER_IGNORED and giving `scripts` precedence. Deleting `scripts` therefore trades a Chrome console warning for a Firefox build whose background never starts - and it makes the Firefox event-page fallback at extension/background.js:14-21 dead code. Separately, the version is still 2.7.0 (extension/manifest.json:4) and sync_extension_releases is idempotent per version (server/routes_extension.py:204-226), so no release row is created: the brief's feared un-announced bump did NOT happen - the opposite did. A manifest edit with no version bump is unpublishable (CWS rejects a duplicate version) and /api/extension/version still advertises 2.7.0 (server/routes_extension.py:64-83), which is also served by the live download route that zips whatever is on disk (server/routes_extension.py:105-132).",
+      "evidence": [
+        "git diff -- extension/manifest.json - only the background block changes: `scripts` is removed, `service_worker` stays",
+        "extension/manifest.json:4 - `\"version\": \"2.7.0\"` (unchanged by the uncommitted work); git log shows 5fae10e already released v2.7.0",
+        "extension/manifest.json:61-63 - `background: { service_worker: background.js }` with no `scripts`",
+        "extension/manifest.json:5-10 - browser_specific_settings.gecko strict_min_version 121.0, i.e. the manifest is explicitly claiming Firefox 121 support",
+        "extension/background.js:14-21 - the Firefox event-page path (`typeof importScripts !== 'function'` -> inject crawl-core.js via document) is now unreachable",
+        "server/routes_extension.py:204-226 - sync_extension_releases only creates a row when the manifest version is not already known",
+        "external: Chrome 121 made invalid background keys a warning rather than a load failure; Firefox MV3 requires background.scripts and ignores background.service_worker (MDN / Mozilla MV3 update; w3c/webextensions #784; mozilla/addons-linter #4604)"
+      ],
+      "confidence": "high",
+      "impact": "The real fix in this diff can never reach an installed user through the update channel without a bump, and if the same manifest is used for AMO the extension ships with a dead background. Publishing the same version twice is a hard store rejection."
+    },
+    {
+      "id": "H3-F12",
+      "title": "Message contract: tab-targeted messages with no listener, and a control path that reports success unconditionally",
+      "symptom": "A Pause/Resume/Cancel button that does nothing but flips its own label; an agent drive on a non-study page with no user-interrupt detection; a finished page whose unparseable report never reaches the UI.",
+      "root_cause": "The contract is enforced by nothing: chrome.tabs.sendMessage rejects when no content listener exists, and several call sites swallow that. (a) controlTypingInTabs resolves ok:true regardless of the outcome: the specific-tab branch ignores chrome.runtime.lastError entirely (extension/background.js:859-866) and the broadcast branch per-tab catches everything (`chrome.tabs.sendMessage(t.id, { action }).catch(() => {});`, :868-872), so the popup's Pause/Cancel (extension/popup.js:3649, 3658) always reports success. (b) The interrupt channel is only present on the 14 host-matched pages: content.js installs the agent-drive/interrupt reporter in an IIFE gated by the content_scripts match list (extension/content.js:2151-2191), yet agent_mode's tab picker accepts ANY http/https tab (extension/agent_mode.js:541) and the drive arm/disarm is a best-effort tab message whose failure is explicitly swallowed: `catch (e) { /* no content script on this page (non-matched host) - interrupts untracked there */ }` (extension/agent_mode.js:873-878). So on every non-study page the user can grab the mouse mid-burst and the agent will not pause. (c) A message with no listener is silent by construction: chrome.runtime.sendMessage from the background to a popup that is not open rejects, and the broker's fallback is a notification, which is the only reason approvals are not lost entirely (extension/background.js:683-687). (d) popup.js:1367 fires `chrome.runtime.sendMessage({ action: 'openDataLake' })` with neither await nor catch, so a worker failure there becomes an unhandled rejection in the popup.",
+      "evidence": [
+        "extension/background.js:859-873 - controlTypingInTabs: the specific-tab branch never reads lastError and always resolves `{ ok: true, ...resp }`",
+        "extension/popup.js:3646-3663 - the Pause and Cancel buttons flip their own labels and call setStatus without checking the response",
+        "extension/content.js:2151-2191 - the interrupt reporter exists only in the content script (match-list gated)",
+        "extension/agent_mode.js:873-878 - driveMessage swallows the missing-listener rejection for non-matched hosts",
+        "extension/agent_mode.js:531-548 - the tab picker offers every http/https tab, including hosts with no content script",
+        "extension/popup.js:1367 - `chrome.runtime.sendMessage({ action: 'openDataLake' });` with no catch",
+        "extension/popup.js:3704 - a listener for 'unparseable_report' that no sender can satisfy"
+      ],
+      "confidence": "high",
+      "impact": "Buttons that lie (Pause/Cancel report success while the typing engine keeps typing), a safety mechanism (user interrupt) silently absent on most pages, and a class of failure the user only discovers by watching the page."
+    },
+    {
+      "id": "H3-F13",
+      "title": "Testability: a real harness exists but no run covers the current tree, and the keystroke/ref/DPR paths are uncovered",
+      "symptom": "The extension can be driven end to end without a human, but the newest artifact is a day older than the code it is supposed to vouch for, and the paths most likely to be wrong have no check at all.",
+      "root_cause": "scripts/verify_extension.py is a real, working harness: it launches a browser with --load-extension against a temp profile (scripts/verify_extension.py:1280-1299), derives the extension id, walks seven surfaces with keyboard-only interactions, and runs feature checks for the approval card, the drive path and keep-open with page-side evidence (a local DriveServer counts a real click and echoes typed text, :460-571, 946-1135). It is not covered by pytest (server/tests/* is server-side only) and its own docstring records the blind spot: it loads popup.html as an ordinary TAB, so 'the popup document dies mid-await' bugs are invisible to it (:596-606). The newest artifacts are 2026-09-11 14:48 (verify-artifacts/drivecheck-summary.txt, keepopen-verify-summary.txt, both green) while the uncommitted extension work is dated 2026-09-12 (popup.js 21:20, element_registry.js 19:58, manifest.json 19:43) - so the 250-line element_registry change, the SoM overlay, the viewport/normalise path and the new ref fallbacks have never been executed by the harness in their current form. Nothing exercises: the trusted-keystroke attach/detach balance (the harness never enables Launch-to-Doc typing with trustedKeys), a stale/absent ref, a devicePixelRatio != 1 capture, or a non-study host (the interrupt path). The older v270run1 artifact (2026-09-08) even shows the drive failing with clicks=0 while the bar read PAUSE, which is precisely the class a harness run would have caught earlier.",
+      "evidence": [
+        "scripts/verify_extension.py:1280-1299 - real browser launch with --load-extension and a fresh temp profile; no Playwright Python dependency, it uses the Playwright Chromium build plus raw CDP over websockets",
+        "scripts/verify_extension.py:460-571 - DriveServer provides an independent oracle (page-side click counter and typed-text echo) instead of asserting DOM text",
+        "scripts/verify_extension.py:596-606 - the harness's own documented blind spot: popup.html is loaded as a tab, so popup-destroyed-mid-await bugs cannot be seen",
+        "scripts/verify_extension.py:1503-1522 - --features approval,drive,keepopen and --features-only; there is no feature for typing/keys, refs, or DPR",
+        "measured: verify-artifacts/drivecheck-summary.txt mtime 2026-09-11 14:48 (all drive checks PASS, clicks=1, typed 'LH5_TYPE_OK'); newest extension source mtime 2026-09-12 21:20 (extension/popup.js)",
+        "measured: verify-artifacts/v270run1-check-results.json (2026-09-08) - drive.auto-switch-or-retry FAIL 'clicks=0' with drv.running='true', desc='Action 1/3: Clicking (100, 70)'",
+        "repo: no file under server/tests/ or tests/ references extension JS behaviour; the extension has no package.json, no JS test runner and no CI job that loads it"
+      ],
+      "confidence": "high",
+      "impact": "Every change to the most fragile surface in the product ships unverified; the owner's only feedback loop is a manual harness run whose results already contradicted the source tree once (the 09-08 drive failure)."
+    },
+    {
+      "id": "H3-F14",
+      "title": "Element list inflated 60x on the wire and a forced computed-style walk on the user's live page",
+      "symptom": "Agent turns with Execute ON carry a ~0.3-0.5 MB JSON body; on dense SPAs the user's page visibly hitches during a capture turn.",
+      "root_cause": "MAX_INTERACTIVE_ELEMENTS was raised from 60 to 5000 (extension/element_registry.js:42; the old comment said the cap existed so 'a dense SPA cannot flood the model's context'). Every element is serialised into the request (extension/popup.js:3227 `bodyPayload.elements = elements.slice(0, 5000)`, matched by the server's max_length 5000 at server/routes_extension.py:471-475), while the server renders only the first 150 into the prompt (`_render_live_elements(payload.elements, limit=150)`, server/routes_extension.py:1415, default limit 60 at :539). The extra 4850 elements are uploaded and discarded. On top of that the collector runs `getComputedStyle` over every div/span/li in the document looking for cursor:pointer (extension/element_registry.js:154-183), and the SoM pass re-injects up to 150 badges over the user's page before every frame (:202-247).",
+      "evidence": [
+        "extension/element_registry.js:41-42 - `const MAX_INTERACTIVE_ELEMENTS = 5000;` with the previous cap of 60 removed in the uncommitted diff",
+        "extension/element_registry.js:154-183 - a full div/span/li getComputedStyle sweep as a second pass",
+        "extension/popup.js:3227 - `if (elements.length) bodyPayload.elements = elements.slice(0, 5000);`",
+        "server/routes_extension.py:471-475 - elements field allows max_length 5000",
+        "server/routes_extension.py:1415 - only 150 are rendered into the prompt",
+        "extension/popup.js:2054-2062 - SoM injection runs only when Execute is ON, i.e. only on the expensive path"
+      ],
+      "confidence": "high",
+      "impact": "Wasted upload bandwidth and server parse cost on every acting turn, and a measurable main-thread hitch on the user's page during capture - on a low-end laptop this is the difference between a usable and an unusable agent."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H3-X1",
+      "finding": "H3-F1",
+      "file": "extension/element_registry.js",
+      "lines": "371-395",
+      "change": "Make an unresolvable ref loud and non-countable. In resolveActionRefs, replace the silent fall-through `return op;` with an explicit marker plus a drop decision: after the observeSemanticElement attempt fails, `return Object.assign({}, op, { unresolved_ref: Number(op.ref) });`. Then in extension/popup.js driveActionsInTab, before the dispatch loop, split the list: `const runnable = actions.filter((op) => !(op && op.unresolved_ref !== undefined)); const skipped = actions.length - runnable.length;` iterate `runnable`, and change the return to `{ status: 'ok', ran: runnable.length, skipped, label, unseen: drivingUnseen }`; in executeReturnedActions (popup.js:3084-3090) render `skipped` as a warning line (`setStatus('⚠️ ' + skipped + ' action(s) could not be aimed at the page and were not run.')`). Add `'ref_unresolved'` to the log via pushLog where the agent page renders logs.",
+      "risk": "A model that emits a valid ref against a page whose DOM changes between capture and dispatch will now see an explicit skip instead of a silent no-op; the agent may retry with coordinates, which is the desired behaviour. Any caller that relied on `ran` being the input length must be updated (only executeReturnedActions reads it).",
+      "verify": "Harness: `python3 scripts/verify_extension.py --label refcheck --features-only --features drive` with a new DriveServer case that calls `executeReturnedActions([{op:'click',ref:9999}])` and asserts (a) the server-side click counter stays 0, (b) window.__lh5driveResult is 'ok' with `skipped >= 1`, and (c) the status line contains 'could not be aimed'. Before the fix the counter is 0 but skipped is undefined and the status reads 'N action(s) executed' (measured baseline: verify-artifacts/drivecheck-summary.txt 'drive.click-evidence: PASS ... server counter = 1' for the aiming case)."
+    },
+    {
+      "id": "H3-X2",
+      "finding": "H3-F2",
+      "file": "extension/element_registry.js",
+      "lines": "144-150, 174-180, 371-395",
+      "change": "Give every element a stable identity and resolve by it. In the collector, add to each pushed object `fingerprint: [role, (el.id || ''), (el.getAttribute('name') || ''), name, Math.round(r.width) + 'x' + Math.round(r.height)].join('|')` (computed from the values already in scope; keep `ref` as the display index for the prompt). In resolveActionRefs, first try the existing integer match, then verify identity is still plausible by re-checking the fingerprint of the matched element is unchanged; if the integer match is absent OR its fingerprint differs, fall back to `elements.find((el) => el.fingerprint === op.fingerprint)` when the op carries one, and if the model sent only an integer with no fingerprint, degrade to the marker from H3-X1 rather than random relocation. Also have the server keep whatever extra keys the model echoes: server/screen_vision.py `_validate_op` currently rebuilds `{op, ref, button}` and DROPS every other field, so a `fingerprint` returned by the model must be preserved - change the ref branches (screen_vision.py:413-429) to `out = {\"op\": name, \"ref\": ref}; if isinstance(op.get(\"fingerprint\"), str): out[\"fingerprint\"] = op[\"fingerprint\"][:200]; return out`.",
+      "risk": "Fingerprints are heuristic: two identical buttons (e.g. two 'Add' links at different coordinates) can share one. Mitigate by including the geometry in the fingerprint (already in the string) and by treating a multi-match as unresolved rather than picking the first. Any consumer that renders the elements list must ignore the new key (the server renderer reads only name/role/x/y/ref).",
+      "verify": "Node stub test (no browser needed): build a page in JSDOM, run the collector, mutate the DOM by prepending one button, re-run, then call resolveActionRefs with the OLD ref; assert the returned op carries either the fingerprint-correct x/y of the original element or `unresolved_ref`, and in no case the coordinates of the newly inserted element. Number that must change: wrong-element resolutions go from >0 to 0 for the shifted case. In the harness, extend the DriveServer page with a dynamically inserted button and assert the click counter for the intended button only."
+    },
+    {
+      "id": "H3-X3",
+      "finding": "H3-F5",
+      "file": "extension/content.js",
+      "lines": "946-965, 1023-1024",
+      "change": "Make the trusted insert atomic so the fallback can never re-apply it. Change _trustedInsertChar to return a tri-state result and only ever fall back when NOTHING was committed: `const down = this._cdpCharDown(char); if (!(await this.cdpKey(down))) return 'none'; const up = {...}; return (await this.cdpKey(up)) ? 'ok' : 'partial';`. In insertChar: `if (this.trustedKeys) { const r = await this._trustedInsertChar(char); if (r === 'ok') return; if (r === 'partial') return; /* the glyph is already in the document - never re-insert */ }`. Apply the same shape to deleteChar/_trustedDeleteChar. In cdpKey, do NOT clear this.trustedKeys on a failure that occurs AFTER a successful down (pass a flag), and add a one-line report to the workerHUD/progress: extend broadcastProgress with `trusted: this.trustedKeys` in getStatus() so a downgrade is visible. Add the same guard to dispatchKey/nativeCaretMove: `if (this.trustedKeys) return;` after a 'partial' arrow key, so the caret is not moved twice.",
+      "risk": "On a 'partial' failure the keyUp is missing, so the browser may believe a key is still held (relevant for modifiers/shift). Mitigation: on 'partial', attempt the keyUp once more and, if it still fails, send a best-effort `{type:'keyUp'}` for the key plus log; do not fall back to synthesis. Behaviour change: a run that loses trusted mode now stops augmenting with synthetic events instead of double-typing, which is strictly safer for the user's document.",
+      "verify": "Deterministic stub: run the engine in a page with a stubbed chrome.runtime.sendMessage that returns {ok:true} for the first keyDown and {ok:false} for the keyUp of character 5. Assert the contenteditable receives exactly the source characters (no duplicates, no deletions) - the count of committed characters must equal the source length. For the caret, assert a single ArrowLeft moves the caret by exactly one after a 'partial'. Harness: add a `--features typing` case that launches Launch-to-Doc into the DriveServer page with trustedKeys forced true and asserts the echoed text equals the source exactly."
+    },
+    {
+      "id": "H3-X4",
+      "finding": "H3-F4",
+      "file": "extension/background.js",
+      "lines": "337-374, 820-857",
+      "change": "Make one owner for the debugger and never leak. (a) Add a session registry: `const DEBUG_SESSIONS = new Map(); // tabId -> {owner, since}` with helpers `async function debuggerDetachAll()` and `async function debuggerDetachTab(tabId)`. In cdpTypingAttach, before attaching: `for (const [t] of DEBUG_SESSIONS) if (t !== tabId) await chrome.debugger.detach({tabId: t}).catch(()=>{}), DEBUG_SESSIONS.delete(t);` then attach and `DEBUG_SESSIONS.set(tabId, {owner:'typing', since: Date.now()})`. (b) Add `chrome.debugger.onDetach.addListener((source, reason) => { DEBUG_SESSIONS.delete(source.tabId); if (source.tabId === cdpTypingTabId) cdpTypingTabId = null; });` at the TOP LEVEL of background.js (synchronously, next to the other onX listeners). (c) Persist the attach so a restarted worker can still release it: write `chrome.storage.session.set({helpotron_cdp_attach: tabId})` on attach and remove it on detach; at worker startup, `const {helpotron_cdp_attach} = await chrome.storage.session.get('helpotron_cdp_attach'); if (helpotron_cdp_attach != null && !DEBUG_SESSIONS.has(helpotron_cdp_attach)) await chrome.debugger.detach({tabId: helpotron_cdp_attach}).catch(()=>{});`. (d) Fix releaseTrustedKeys in content.js:1615-1621 so the detach message is sent even when the flag is already false (`const wasTrusted = this.trustedKeys; this.trustedKeys = false; if (wasTrusted || this.__cdpEverAttached) chrome.runtime.sendMessage({type:'helpotron-cdp-detach', tabId: ...})`), and set `__cdpEverAttached` when the payload's trustedKeys is true.",
+      "risk": "The registry must not detach a session owned by another extension (it cannot - chrome.debugger only sees this extension's sessions) or by a concurrent popup drive (popup.js owns its own attaches; a typing attach will now forcibly drop a popup drive on the same tab). The popup's drive path must also register with the registry or accept being pre-empted; document that the last writer wins and surface it in the UI. chrome.storage.session requires the storage permission (already present) and is available from Chrome 102.",
+      "verify": "Harness: add `--features typing` and a case that (1) attaches typing to tab A via launchToDoc, (2) launches again into tab B, (3) asserts `chrome.debugger.getTargets()` in the worker (via the worker CDP like FeatureRunner._worker_cdp) reports `attached:false` for A, (4) asserts `helpotron_cdp_attach` is 'B'. Then cancel the run and assert no target is attached. Number that must change: leaked attachments after the full sequence goes from 1 to 0. Stub-only variant: node test with a fake chrome.debugger recording attach/detach calls, asserting attach(A);attach(B) => detach(A) was called between them."
+    },
+    {
+      "id": "H3-X5",
+      "finding": "H3-F6",
+      "file": "extension/popup.js",
+      "lines": "1978-1996, 2083-2098, 3223-3227",
+      "change": "Fail closed on the viewport instead of silently using the screen. (a) Delete the screen-size fallback: activeTabViewport returns `null` when the tab cannot be scripted, with the reason logged; keep `{width: window.screen...}` out of the extension entirely. (b) In captureJurisdictionFrames, skip the frame when `vp` is null: `if (!vp) { screenError = 'could not measure the tab viewport — the screen would not be in the same coordinate space'; continue; }` and always normalise when a frame exists. (c) Do not send `viewport` unless it came from getTabViewport; if it is absent, send `execute: false` for that turn (the server already treats `can_execute = bool(payload.execute)`), so no action burst is ever clamped against a fabricated box. (d) On the server, make the default loud: when `payload.agent_mode and payload.execute and payload.viewport is None`, set `control_actions = None` and include `execution = {'status':'failed','detail':'no viewport supplied - refusing to clamp coordinates into an assumed 1280x800 box'}` (server/routes_extension.py:1278-1283, 1405-1420) rather than defaulting viewport_dict.",
+      "risk": "Turns on pages the extension cannot script (chrome://, other extensions' pages, the Web Store) will now report that they cannot act instead of acting blind. That is the intended trade; the RETRY/status copy must say so. Any user who relied on 'it usually works' on a non-permitted site loses the guess, which was the source of the miss.",
+      "verify": "Harness: `python3 scripts/verify_extension.py --label vpcheck --features-only --features drive` extended so the popup is opened with a forced `Emulation.setDeviceMetricsOverride` deviceScaleFactor of 2 on the target and the frame normalisation asserted: read `window.innerWidth/innerHeight` in the target and compare against the JPEG dimensions posted (log the payload with a fetch interceptor), asserting `image.width == innerWidth` and `image.height == innerHeight`. Then block scripting on the target (navigate the drive tab to chrome://newtab while keeping the payload path) and assert no control_actions are executed and the status names the viewport problem. Number that must change: the mismatch in pixels between the frame and innerWidth goes from 2x to 0; the click counter for the blind-clamp case goes from 1 (wrong-position click) to 0."
+    },
+    {
+      "id": "H3-X6",
+      "finding": "H3-F9",
+      "file": "extension/background.js",
+      "lines": "616-743",
+      "change": "Move the approval broker's pending set into chrome.storage.session and make the alarm path able to act on it. Replace the Map value with a plain serialisable record `{reqId, title, summary, via, notifId, expiresAt}` written under `chrome.storage.session` key `helpotron_approvals` (an object keyed by reqId); keep only the in-flight `resolve` function in a memory Map (it cannot be persisted). settleApproval becomes async: read the session record, delete it, clear the alarm and notification, then resolve the in-memory promise if present. The onAlarm handler reads the session record so it can always clear the notification even after a restart. Add an `await chrome.storage.session.set(...)` in brokerApproval before sendResponse and a startup sweep: on worker start, for every record with `expiresAt < Date.now()` clear its notification and delete the record; for unexpired records whose via is 'popup' and no popup port exists, deny them. Also change the notification to `requireInteraction: false` for restart-survivable prompts, or use a single notification id so a stale one can be cleared.",
+      "risk": "chrome.storage.session survives worker restarts but not a browser restart, which is the right lifetime for an approval prompt. Two contexts can now race on the same record (popup answer vs alarm); the read-dedupe-delete inside settleApproval must be a single awaited transaction guarded by a re-read. Do not store the user's note text anywhere but the server call it already makes.",
+      "verify": "Harness: extend FeatureRunner.check_approval with a restart case - pump a REQ_APPROVAL, then force the worker down (CDP `Target.closeTarget` on the service_worker target or `chrome.runtime.reload()` is not equivalent; use the worker CDP `Runtime.evaluate('chrome.runtime.getBackgroundPage?0:0')` no-op plus a 35s idle wait, or kill the worker via the CDP Target domain), then assert (a) the notification id is still clearable, (b) after the TTL the record is gone from chrome.storage.session, and (c) the notification is dismissed. Number that must change: notifications left on screen with no resolvable record goes from 1 to 0; the existing approval suite must stay PASS (measured baseline verify-artifacts/v270run1 has no approval run; drivecheck has the drive suite green)."
+    },
+    {
+      "id": "H3-X7",
+      "finding": "H3-F11",
+      "file": "extension/manifest.json",
+      "lines": "4, 12-23, 61-63",
+      "change": "Three edits. (1) Restore the dual-key background block so both engines load: `\"background\": { \"service_worker\": \"background.js\", \"scripts\": [\"background.js\"] }` - Chrome 121+ warns and uses service_worker, Firefox uses scripts and logs BACKGROUND_SERVICE_WORKER_IGNORED. (2) Bump `\"version\"` to 2.7.1 (or 2.8.0) as a deliberate publish action in the same commit as the fix, and add the release notes to PRESET_RELEASE_NOTES in server/routes_extension.py:142 so the What's New row is created by sync_extension_releases - do NOT bump without the notes, and do not ship a manifest edit under an already-published version. (3) Add `\"minimum_chrome_version\": \"120\"` because the code depends on 30-second chrome.alarms (extension/background.js:1578 `periodInMinutes: 0.5`), on active debugger sessions keeping the worker alive (Chrome 118+) and on WebSockets extending the lifetime (Chrome 116+).",
+      "risk": "The version bump publishes What's New to every installed user (the brief's own rule) - it must be intentional and the notes must be true. The dual-key background block re-introduces a Chrome console warning (no functional cost on 121+; on Chrome <=120 it is a hard load failure, which minimum_chrome_version 120 now excludes). Bumping the version also makes /api/extension/version advertise the new version immediately (server/routes_extension.py:64-83), so the release notes row must exist before the manifest is pushed.",
+      "verify": "After the edit: `python3 -c \"import json;m=json.load(open('extension/manifest.json'));print(m['version'], 'scripts' in m['background'], m.get('minimum_chrome_version'))\"` must print `2.7.1 True 120`. Harness: `python3 scripts/verify_extension.py --label bumpcheck --surfaces launch` must log `[invariant] version matches extension/manifest.json (2.7.1): OK` (the harness compares the loaded manifest to the source manifest at scripts/verify_extension.py:1394-1402) and `[invariant] service_worker present: OK`. Server: `curl -s http://127.0.0.1:5000/api/extension/version | python3 -c \"import sys,json;print(json.load(sys.stdin)['latest_version'])\"` must print the new version, and GET /api/extension/releases must return a row for it."
+    },
+    {
+      "id": "H3-X8",
+      "finding": "H3-F3",
+      "file": "extension/element_registry.js",
+      "lines": "318-364, 384-393",
+      "change": "Make both matchers fail closed. (a) observeSemanticElement: initialise `let bestScore = 0;` so a score of 0 never wins, and return null when bestScore is still 0 (add `if (bestScore <= 0) return null;` before the return). (b) resolveActionRefs' name fallback: require a match quality threshold - only accept a hit when the name length is >= 3 AND the match is a whole-word or exact prefix match (`el.name.toLowerCase() === q || el.name.toLowerCase().startsWith(q + ' ') || el.name.toLowerCase().startsWith(q)` with `q.length >= 3`), otherwise treat it as unresolved (and emit the H3-X1 marker). (c) Add a `score` field to the observe result and only use it when `score >= 60`.",
+      "risk": "Legitimate short labels ('OK', 'Go', '↗') become unclickable by name; those cases fall through to coordinates, which is the pre-existing path. The threshold must be documented in the prompt so the model is not told a ref-by-name is always available.",
+      "verify": "Node stub: a page with a single link named 'a' plus a real search box; call observeSemanticElement(tabId, 'nonexistent-target') and assert null (before the fix it returns the link), and call it with 'search' and assert it returns the search box. Number that must change: false-positive resolutions for a non-matching query goes from 1 to 0."
+    },
+    {
+      "id": "H3-X9",
+      "finding": "H3-F13",
+      "file": "scripts/verify_extension.py",
+      "lines": "1425-1439, 1503-1522",
+      "change": "Close the coverage gaps in the harness that already exists rather than adding a new framework. (1) Add `typing` and `refs` to the feature map at :1432-1434. `typing` = launch Launch-to-Doc through the real bridge into a DriveServer page with trustedKeys forced true, then assert the page-side echo equals the source exactly (covers H3-F5 and the attach/detach balance of H3-X4 via `chrome.debugger.getTargets()`). `refs` = call `executeReturnedActions([{op:'click',ref:9999}])` and `[{op:'click',ref:0}]` and assert the counter/skip reporting (covers H3-X1/X2). (2) Add a `dpr` case that sets `Emulation.setDeviceMetricsOverride` deviceScaleFactor 2 on the target, captures through the popup, and asserts the posted frame dimensions equal the target's innerWidth/innerHeight (covers H3-X5). (3) Add a `nonstudy` case: open a drive tab on http://127.0.0.1 (not in the content_script match list), arm the agent, dispatch a trusted mousemove, and assert the interrupt message is NOT received (documents the H3-F12 gap) - then decide whether to widen the content_script matches. (4) Wire the whole run into the repo's check command (`python3 scripts/verify_extension.py --label ci-$(date +%s) --features approval,drive,keepopen,typing,refs,dpr` with `--max-failures 0`) so a green run is a gate, and record the newest artifact mtime against the newest extension/*.js mtime in the summary.",
+      "risk": "The harness mutates a real (temp-profile) browser and drives real tabs; the typing case must use only the local DriveServer page and must never be pointed at a user profile. The DPR case depends on Emulation.setDeviceMetricsOverride being honoured for captureVisibleTab, which is build-dependent - mark it PENDING with the raw numbers when the override is ignored rather than failing the run.",
+      "verify": "`python3 scripts/verify_extension.py --label h3gate --features approval,drive,keepopen,typing,refs,dpr --max-failures 0; echo $?` must exit 0 with every feature row PASS or PENDING (never FAIL), and verify-artifacts/h3gate-check-results.json must contain a `typing.type-landed` entry whose detail shows the echoed text equals the source. Number that must change: currently 0 of the 6 feature groups exists; after the change 6 do, and the artifact mtime is newer than every extension/*.js mtime."
+    },
+    {
+      "id": "H3-X10",
+      "finding": "H3-F12",
+      "file": "extension/background.js",
+      "lines": "859-873",
+      "change": "Stop reporting success for a message that was never delivered. Rewrite controlTypingInTabs to inspect lastError and return it: the specific-tab branch becomes `chrome.tabs.sendMessage(Number(specificTabId), { action }, (resp) => { const err = chrome.runtime.lastError; resolve(err ? { ok:false, error: err.message, tabId: Number(specificTabId) } : { ok:true, ...resp }); });` and the broadcast branch counts failures (`const results = await Promise.all((tabs||[]).map((t) => chrome.tabs.sendMessage(t.id, {action}).then(() => ({ok:true})).catch((e) => ({ok:false, tabId:t.id, error:String(e && e.message || e)})))); return { ok: results.some((r) => r.ok), delivered: results.filter((r)=>r.ok).length, attempted: results.length };`). Then in popup.js:3646-3663 gate the button's optimistic label flip on `resp && resp.ok !== false`, and show 'the typing engine is not running in that tab' otherwise. Also add a `catch` to the openDataLake sendMessage at popup.js:1367.",
+      "risk": "Broadcasts to every tab now produce a larger response object; callers that read `resp.success` from the content script must still find it (the spread keeps it). Tabs without a content script will now surface as failures in the pause/cancel flow, which is the point - but the UI text must not read as an error when the typing had already finished.",
+      "verify": "Harness: in the existing drive/typing case, call `chrome.runtime.sendMessage({action:'pauseTyping', tabId: <a tab with no content script>})` from the popup context and assert the response has `ok:false` (before the fix it is `{ok:true}`), then call it on the DriveServer tab with a typing run active and assert `ok:true` and that `percentage` stops advancing."
+    },
+    {
+      "id": "H3-X11",
+      "finding": "H3-F7",
+      "file": "extension/popup.js",
+      "lines": "1998-2037, 2045-2105",
+      "change": "Make the panel's capture path explicit instead of accidental. Detect the surface once (`isPanelMode`) and, in panel mode, skip captureVisibleTab entirely and call captureBackgroundTabFrame directly with a recorded reason, so the panel does one debugger attach per frame knowingly rather than one failed call plus one attach. Surface it in the status line ('panel preview uses the debugger; keep DevTools closed on that tab'). If a smoother path is wanted, declare a narrow `host_permissions` addition is NOT enough; the documented alternatives are <all_urls> (rejected here for store reasons) or routing the panel capture through the agent_mode tab-stream surface (chrome.tabCapture) which already exists at extension/agent_mode.js:458-489.",
+      "risk": "More attaches, not fewer, if the panel is the primary surface - the real fix is either adding an optional host permission the user grants on demand (chrome.permissions.request from the panel does count as a user gesture) or moving panel capture to the tabCapture stream. The permission-request route is the one to prefer: `chrome.permissions.request({origins:['<all_urls>']})` behind an explicit button keeps the install narrow and gives the panel a real capture path.",
+      "verify": "Harness: `python3 scripts/verify_extension.py --label panelcheck --features keepopen` already opens the side panel or the popup window; extend it to press See-screen and record whether `captureVisibleTab` returned a dataUrl in each surface. Assert: popup -> captureVisibleTab succeeds; panel -> the chosen fallback runs exactly once per frame (count `chrome.debugger.attach` calls via a Runtime.evaluate wrapper on chrome.debugger in the panel). Number that must change: failed captureVisibleTab calls per captured frame goes from 1 to 0 in panel mode."
+    },
+    {
+      "id": "H3-X12",
+      "finding": "H3-F8",
+      "file": "extension/element_registry.js",
+      "lines": "202-261",
+      "change": "Make the SoM overlay self-healing. (a) Give the injected container an attribute the page can clean up on its own: in the inject func, before appending, `setTimeout(() => { const c = document.getElementById(containerId); if (c && c.__hkeep !== true) c.remove(); }, 15000)` (a page-side watchdog; clear it when removeSetOfMarks runs by setting `c.__hkeep = true` first). (b) Wrap the capture loop in popup.js:2054-2072 in try/finally so removal runs even when the frame capture throws: `let injected = false; try { ... injected = await injectSetOfMarks(...); ... } finally { if (injected) await removeSetOfMarks(t.id).catch(()=>{}); }`. (c) Have removeSetOfMarks also run on `window.addEventListener('pagehide')` in the popup so a closing panel clears the overlay it added.",
+      "risk": "A 15s watchdog could remove the badges while a slow frame is still being captured, producing a screenshot without marks. Mitigate by refreshing the timeout on each capture and by only arming the watchdog after the inject returns; the capture is well under 15s in every measured run.",
+      "verify": "Harness: start a capture for a tab, and mid-flight close the popup (or navigate the capture surface away), then assert (in the target page via a separate CDP session) that `document.getElementById('__helpotron_som_overlay__')` is null within 16 seconds. Before the fix it stays non-null indefinitely. Number that must change: orphaned overlays goes from 1 to 0."
+    },
+    {
+      "id": "H3-X13",
+      "finding": "H3-F10",
+      "file": "extension/background.js",
+      "lines": "376-614, 893-1230",
+      "change": "Choose explicitly: delete or persist. If the WS agent is not shipping, remove the unreachable branches (SYNC_ASSIGNMENTS, getTabs, persistInstruction, activateAgent, scrapeContext, scrapeWithInstruction, agentStatus, startRecording, getEditableTabs) plus connectAgentSocket/executeTabCommand/ingestScrapedAssignment/agentStatus and the five session globals, and remove the dead popup listener for 'unparseable_report' (popup.js:3704-3706) - this deletes ~330 lines of unaudited surface and removes a false impression that the agent scrape runs. If it is shipping, persist the session: on activateAgent write `chrome.storage.session.set({helpotron_agent: {sessionId, tabId, instruction, assignmentId}})` and reconnect on startup (Chrome 116+ keeps the worker alive while a WebSocket is active, so the socket itself is viable once it exists). Either way, register every background listener synchronously at top level (they already are) and never rely on module state across an event boundary.",
+      "risk": "Deleting the branches breaks any out-of-repo caller (a web page using the postMessage bridge cannot reach them today - only getGDocsTabs/launchToDoc/controlTyping/storeSession are bridged, extension/content.js:2038-2123 - but a future web-client build could). If the intent is to revive it soon, keep the code and do the persistence work; a half-dead subsystem is the worst option.",
+      "verify": "Static: after removal, `grep -n \"sendMessage({ action: '\" extension/*.js` and `grep -n \"message.action === '\" extension/background.js` must produce two sets with no element of the first missing from the second and no handler whose action name appears nowhere in the repo - assert by script and fail if any handler has zero senders. If kept instead: harness case that calls activateAgent, forces a worker restart (idle or Target domain), then asserts `GET /api/agent/<id>` still returns the session and a subsequent command is delivered."
+    },
+    {
+      "id": "H3-X14",
+      "finding": "H3-F14",
+      "file": "extension/element_registry.js",
+      "lines": "41-42",
+      "change": "Separate the on-page cap from the on-the-wire cap. Restore a conservative default: `const MAX_INTERACTIVE_ELEMENTS = 300;` and add a second constant the caller uses for the prompt-bound payload; in popup.js:3227 send at most 400 (`bodyPayload.elements = elements.slice(0, 400)`), matching the server's own render limit comfortably (150 rendered, server/routes_extension.py:1415). Keep the cursor:pointer second pass but bound it to a budget of the remaining slots (it already checks `out.length < maxItems` at :154) and break out of the getComputedStyle sweep after 1500 inspected nodes so a dense page cannot force a whole-document style recalc.",
+      "risk": "A very dense page with its real target beyond element 300 falls back to the vision path, which is the pre-existing behaviour. Model accuracy may drop if the intended element was previously inside the 5000 and is now outside the 400 - mitigate by ordering the list so viewport-visible, named, and button/input elements come first (they already dominate the output order by document order; sorting by role priority + viewport position before slicing is the follow-up if accuracy regresses).",
+      "verify": "Measure the payload: harness case that captures a dense page (the DriveServer page duplicated 500x) and reads the POST body size through a fetch wrapper in the popup; assert it drops from the current multi-hundred-KB to under 60 KB while the model still receives the target element. Server-side: `curl -s -X POST .../api/extension/agent_chat -d '{\"text\":\"x\",\"agent_mode\":true,\"execute\":true,\"elements\":[...5000...]}'` must still accept 5000 (contract backstop) - the change is client-side only."
+    }
+  ],
+  "verification_plan": "Everything here is confirmable without the owner's profile, from a fresh temp-profile Chromium, using the harness that already exists. (1) Baseline the tree: `python3 scripts/verify_extension.py --label h3-baseline --features approval,drive,keepopen --max-failures 0` and record the artifact mtimes against `stat -c %y extension/*.js` - a run older than the source is the proof that the current tree is unverified (measured: newest artifact 2026-09-11 14:48, newest source extension/popup.js 2026-09-12 21:20). (2) Ref contract: with the harness's DriveServer as the target, call `executeReturnedActions([{op:'click',ref:9999}])` and `[{op:'click',ref:0}]` in the popup context and read the popup's status line plus the DriveServer click counter - the pre-fix output is a success status with 0 clicks and no mention of the skipped op; the post-fix output names the skipped action with `skipped >= 1`. (3) Stale ref: mutate the target page (prepend one button) between capture and dispatch and assert the intended button's counter increments and the inserted button's does not. (4) Typing: launch Launch-to-Doc into the DriveServer page through the real background bridge (`chrome.runtime.sendMessage({action:'launchToDoc', payload:{text:'LH5_TYPE_OK', typing:{trusted_keys:true}}})`), then (a) assert the page-side echo equals the source exactly, and (b) assert with worker-side CDP that `chrome.debugger.getTargets()` shows no attached target after the run, and with a two-tab launch that the first tab is detached. (5) Broker restart: pump a REQ_APPROVAL, force the worker down, then assert `chrome.storage.session` holds no orphaned record and the notification is dismissable. (6) Coordinate space: `Emulation.setDeviceMetricsOverride` with deviceScaleFactor 2 on the target and assert the posted JPEG dimensions equal the target's innerWidth/innerHeight. (7) Manifest: `python3 -c \"import json;m=json.load(open('extension/manifest.json'));print(m['version'],'scripts' in m['background'],m.get('minimum_chrome_version'))\"` and the harness invariant lines '[invariant] version matches extension/manifest.json ...: OK' and '[invariant] service_worker present: OK'. (8) Static contract check: script the two greps (every `message.action === '...'` handler in background.js must have a sender somewhere in extension/; every `action: '...'` sender must have a handler) and fail the run when they disagree - today they disagree in ten places (nine dead handlers, one dead listener). A reviewer who runs (1) before and after the fixes and (2) through (8) as gates can confirm the whole track from the artifact JSON alone.",
+  "external_research": [
+    {
+      "what": "Chrome for Developers - The extension service worker lifecycle (idle/shutdown rules, persist state, register listeners synchronously at top level)",
+      "url": "https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle",
+      "why": "Grounds the whole H3-F9/F10 class: 30s of inactivity terminates the worker, module-scope state is destroyed, and state that must survive belongs in chrome.storage. It is the authority for the claim that PENDING_APPROVALS/agentSocket/agentSessionId cannot be trusted across an event.",
+      "license": "Chrome documentation (Google; CC-BY 4.0 site content)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "Chrome for Developers - Longer extension service worker lifetimes (Chrome 110 events reset the timer; 116 WebSockets extend it; 118 active chrome.debugger sessions keep the worker alive; 120 chrome.alarms minimum 30s)",
+      "url": "https://developer.chrome.com/blog/longer-esw-lifetimes",
+      "why": "Two-sided: it explains why an active debugger session makes the typing run survivable (Chrome 118+), and why the crawl's periodInMinutes: 0.5 and the 09-12 code need a declared minimum_chrome_version. Without it the H3-F4 leak analysis would be wrong in both directions.",
+      "license": "Chrome documentation (Google; CC-BY 4.0 site content)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Chrome for Developers - chrome.debugger API reference (attach/detach, onDetach and its reasons cancelled_by_user / replaced_with_devtools / target_closed, DevTools mutual exclusion)",
+      "url": "https://developer.chrome.com/docs/extensions/reference/api/debugger",
+      "why": "The fix for H3-F4 depends on the attach being owned by the extension rather than the worker (so the new worker can still detach a ghost) and on onDetach being the only reliable signal that the browser took the session away. It also confirms that opening DevTools on a tab terminates the extension's session.",
+      "license": "Chrome documentation (Google; CC-BY 4.0 site content)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "MDN - manifest.json background key / Mozilla 'Manifest V3 & Manifest V2 (March 2024)' - Firefox MV3 does not support background.service_worker",
+      "url": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background",
+      "why": "Directly decides the manifest finding: deleting `scripts` breaks Firefox MV3, whose only background form is an event page declared with background.scripts. It also documents the importScripts guard pattern that extension/background.js:14-21 already implements and which becomes dead code after the deletion.",
+      "license": "MDN content (CC-BY-SA 2.5 / Mozilla)",
+      "verdict": "adopt"
+    },
+    {
+      "what": "w3c/webextensions issue #784 'Handling of empty background script definitions' plus mozilla/addons-linter #4604 - the cross-browser convergence on a dual-key background block (Chrome uses service_worker, Firefox uses scripts and logs BACKGROUND_SERVICE_WORKER_IGNORED)",
+      "url": "https://github.com/w3c/webextensions/issues/784",
+      "why": "Establishes that restoring both keys is the sanctioned fix, not a hack, and that Chrome 121+ downgraded the MV2 keys to a warning - which is exactly why the uncommitted deletion is unnecessary on Chrome and harmful on Firefox.",
+      "license": "W3C contributor content / Mozilla Public License 2.0 (addons-linter repo)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Chromium issue 40916430 - activeTab is not granted from the side panel (chrome.tabs.captureVisibleTab fails in a side panel)",
+      "url": "https://issues.chromium.org/issues/40916430",
+      "why": "Explains why the manifest's own side-panel surface silently loses the primary capture path in extension/popup.js:1998-2037 and why every panel frame costs a debugger attach. It also rules out the 'just declare activeTab' fix, since it is already declared.",
+      "license": "Chromium issue tracker content (BSD-style project terms)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Chrome for Developers - chrome.tabs API reference (captureVisibleTab requires <all_urls> host permission or a granted activeTab; restricted schemes)",
+      "url": "https://developer.chrome.com/docs/extensions/reference/api/tabs",
+      "why": "Pins the exact permission condition the extension half-satisfies, so the fix can be argued from the API contract rather than from observation. Also documents that chrome:// and the Web Store cannot be captured.",
+      "license": "Chrome documentation (Google; CC-BY 4.0 site content)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Playwright - Chrome extensions testing guide (launchPersistentContext, --load-extension, channel: 'chromium', derive the extension id from the service worker url)",
+      "url": "https://playwright.dev/docs/chrome-extensions",
+      "why": "Evaluates the owner's Playwright recipe against the harness that exists: scripts/verify_extension.py already does the equivalent with raw CDP over websockets and a persistent temp profile, so the recipe's value here is the parts the harness lacks - a standard fixture, the SW handle for worker-restart tests, and the documented rule that only a bundled Chromium honours --load-extension.",
+      "license": "Apache-2.0 (Playwright project)",
+      "verdict": "adapt"
+    },
+    {
+      "what": "scripts/verify_extension.py (this repo) - the existing extension verification harness",
+      "url": "local:scripts/verify_extension.py",
+      "why": "The cheapest correct answer to 'is there a test harness?': yes, and it already has independent oracles (a page-side click counter and typed-text echo), a documented popup blind spot, and feature checks for approval/drive/keep-open. The plan extends it rather than adding a second framework.",
+      "license": "repo-internal (owner's)",
+      "verdict": "adopt"
+    }
+  ],
+  "open_questions": [
+    "Does the ghost chrome.debugger attach that H3-F4 leaks actually survive a worker termination on the owner's Chrome build? The docs put active-debugger keep-alive at Chrome 118+, and the manifest declares no minimum_chrome_version; settling it needs a measured run: attach via cdpTypingAttach, force the worker down (CDP Target.closeTarget on the service_worker target), restart it, and read chrome.debugger.getTargets() for attached:true plus the next attach's error text.",
+    "Does holding a chrome.tabCapture MediaStream on a tab (extension/agent_mode.js:458-489) conflict with attaching chrome.debugger to the same tab for driving? agent_mode does both simultaneously and I could not verify the interaction from source; a two-step harness run (startTabStream, then ensureDebugger) with the attach error text would settle it.",
+    "Does the side panel in the owner's actual Chrome build still refuse to grant activeTab (issue 40916430 may have been fixed after the versions I could confirm)? A one-line probe - open the panel, call chrome.tabs.captureVisibleTab and log chrome.runtime.lastError - decides whether H3-F12's panel path is a real failure or already mitigated by a newer Chrome.",
+    "Has v2.7.0 with the old `background.scripts` key already been submitted to the Chrome Web Store, and is the store artifact built from this working tree or from a separately kept package? If the store copy differs from extension/manifest.json, the version-bump advice in H3-X7 must be applied to the artifact that actually ships, and /api/extension/download (which zips whatever is on disk) would be serving a different build from the store.",
+    "Are the untracked `extension/assets/katex/` files included in whatever pipeline publishes the extension? popup.html and agent_mode.html now load them (uncommitted), and scripts/package_extension.sh walks the extension directory, so the zip is fine - but a git-based or CI-based publish would drop them and both surfaces would log 404s for the stylesheet and script.",
+    "What is the intended owner of the debugger when a popup drive and a Launch-to-Doc typing run overlap on the same tab? popup.js and background.js each attach independently (popup.js:2806-2807, background.js:351) and the documented behaviour is only 'detach first, best-effort'; the H3-X4 registry needs a stated precedence rule rather than last-writer-wins."
+  ]
+}
