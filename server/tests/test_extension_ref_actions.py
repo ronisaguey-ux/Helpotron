@@ -81,6 +81,36 @@ def test_click_without_ref_falls_back_to_clamped_coordinates():
     assert out == [{"op": "click", "x": 399, "y": 10, "button": "left"}]
 
 
+# ── semantic target (Stagehand-style grounding, 2026-09-14) ────────────────────
+
+def test_click_by_target_is_accepted_and_kept():
+    out = _harden_actions([{"op": "click", "target": "Search button"}], VP)
+    assert out == [{"op": "click", "target": "Search button", "button": "left"}]
+
+
+def test_move_and_dblclick_by_target_are_accepted():
+    out = _harden_actions(
+        [{"op": "move", "target": "Foo"}, {"op": "dblclick", "target": "Bar"}], VP)
+    assert out == [
+        {"op": "move", "target": "Foo"},
+        {"op": "dblclick", "target": "Bar"},
+    ]
+
+
+def test_target_preferred_over_x_y_but_ref_wins_over_target():
+    # ref is the most precise anchor; target beats a coordinate estimate.
+    assert _harden_actions([{"op": "click", "ref": 1, "target": "X", "x": 9, "y": 9}], VP) == [
+        {"op": "click", "ref": 1, "button": "left"}]
+    assert _harden_actions([{"op": "click", "target": "X", "x": 9, "y": 9}], VP) == [
+        {"op": "click", "target": "X", "button": "left"}]
+
+
+def test_empty_target_drops_the_list():
+    for bad in ({"op": "click", "target": ""}, {"op": "click", "target": "   "},
+                {"op": "click", "target": 5}):
+        assert _harden_actions([bad], VP) is None, bad
+
+
 def test_click_with_neither_ref_nor_coordinates_drops_the_list():
     assert _harden_actions([{"op": "click"}], VP) is None
 

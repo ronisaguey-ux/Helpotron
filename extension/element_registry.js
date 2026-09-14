@@ -375,6 +375,32 @@
     if (!hasRefs && !hasTargets) return actions;
 
     const elements = await collectInteractiveElements(tabId);
+
+    // Stagehand-style semantic grounding: score each element against the
+    // target string (exact > starts-with > contains) and take the best, so a
+    // target like "Search button" lands on the search button and not the first
+    // element whose name merely contains "button". A strong score on a name is
+    // trusted; a weak one falls through to the deep text/aria/role observer.
+    function bestMatch(query) {
+      const q = String(query).toLowerCase().trim();
+      if (!q) return null;
+      let best = null, bestScore = 0;
+      for (const el of elements) {
+        const name = String(el.name || '').toLowerCase().trim();
+        if (!name) continue;
+        let score = 0;
+        if (name === q) score = 100;
+        else if (name.startsWith(q) || q.startsWith(name)) score = 80;
+        else if (name.includes(q) || q.includes(name)) score = 60;
+        // Favour short, exact names over long noisy ones at equal score.
+        if (score > bestScore || (score === bestScore && best && name.length < best.name.length)) {
+          bestScore = score;
+          best = el;
+        }
+      }
+      return bestScore >= 60 ? best : null;
+    }
+
     return Promise.all(actions.map(async (op) => {
       if (!op) return op;
       if (op.ref !== undefined) {
@@ -383,10 +409,9 @@
       }
       const targetQuery = op.target || op.text_target || op.name;
       if (targetQuery) {
-        const q = String(targetQuery).toLowerCase().trim();
-        const hit = elements.find((el) => el.name.toLowerCase().includes(q) || q.includes(el.name.toLowerCase()));
+        const hit = bestMatch(targetQuery);
         if (hit) return Object.assign({}, op, { x: hit.x, y: hit.y });
-        // Fallback: deep live semantic observation
+        // Fallback: deep live semantic observation (fuzzy text/aria/role/title).
         const obs = await observeSemanticElement(tabId, targetQuery);
         if (obs) return Object.assign({}, op, { x: obs.x, y: obs.y });
       }

@@ -668,8 +668,8 @@ AGENT_MODE_DIRECTIVE = (
     "markdown, so it does not violate the envelope's no-markdown rule. "
     "ALLOWED OPS (only these): "
     "{\"op\":\"move\",\"x\":0,\"y\":0}; "
-    "{\"op\":\"click\",\"x\":0,\"y\":0,\"button\":\"left\"|\"right\"} or {\"op\":\"click\",\"ref\":0}; "
-    "{\"op\":\"dblclick\",\"x\":0,\"y\":0} or {\"op\":\"dblclick\",\"ref\":0}; "
+    "{\"op\":\"click\",\"x\":0,\"y\":0,\"button\":\"left\"|\"right\"} or {\"op\":\"click\",\"ref\":0} or {\"op\":\"click\",\"target\":\"Search button\"}; "
+    "{\"op\":\"dblclick\",\"x\":0,\"y\":0} or {\"op\":\"dblclick\",\"ref\":0} or {\"op\":\"dblclick\",\"target\":\"...\"}; "
     "{\"op\":\"drag\",\"fromX\":0,\"fromY\":0,\"toX\":0,\"toY\":0}; "
     "{\"op\":\"type\",\"text\":\"...\"}; "
     "{\"op\":\"key\",\"key\":\"Enter\"|\"Escape\"|\"Tab\"|\"Backspace\"|\"ArrowLeft\"|\"ArrowRight\"|\"ArrowUp\"|\"ArrowDown\"|\"Home\"|\"End\"|\"Delete\"|\"PageUp\"|\"PageDown\",\"modifiers\":[\"ctrl\"|\"shift\"|\"alt\"]}; "
@@ -695,7 +695,13 @@ AGENT_MODE_DIRECTIVE = (
     "so its coordinates are EXACT — when the target appears there, use that x/y (or "
     "its ref) and never re-estimate it. When the element has a [n] ref, PREFER "
     "{\"op\":\"click\",\"ref\":n}: a ref is resolved against the page at click time, "
-    "so it cannot drift with a resize or the screen's scale factor the way an x/y can. Only when the target is absent from that "
+    "so it cannot drift with a resize or the screen's scale factor the way an x/y can. "
+    "EVEN BETTER: when you know the element's NAME or LABEL, emit "
+    "{\"op\":\"click\",\"target\":\"<exact name from the LIVE DOM ELEMENTS list>\"} — "
+    "the target is matched against the live page by text, role and label at click "
+    "time, which survives scrolling, resizing and DOM reflow far better than any "
+    "coordinate. NEVER invent coordinates when you can name the element: prefer "
+    "target over ref over x/y, in that order. Only when the target is absent from that "
     "list fall back to the INTERACTIVE ELEMENTS section of the screen description, "
     "and take its exact centre from there; if it is in neither, use the nearest "
     "labelled element, never a blind guess. To type into a field, "
@@ -1220,6 +1226,9 @@ def _describe_control_actions(actions: Optional[List[Dict[str, Any]]]) -> str:
             # DOM-anchored op: the ref is the target, there are no coordinates
             # to quote. Reading x/y here would print "click at None,None".
             parts.append(f"{kind} element [{op.get('ref')}]")
+        elif op.get("target"):
+            # Semantic target (Stagehand-style grounding): name what it is after.
+            parts.append(f"{kind} \"{str(op.get('target'))[:40]}\"")
         elif kind in ("click", "move", "scroll"):
             parts.append(f"{kind} at {op.get('x')},{op.get('y')}")
         else:
