@@ -56,8 +56,54 @@
           const vh = window.innerHeight || 0;
           const out = [];
           const seen = new Set();
-          let nodes;
-          try { nodes = document.querySelectorAll(selector); } catch (e) { return []; }
+
+          // Shadow-DOM piercing (ported from Stagehand, browserbase/stagehand,
+          // MIT). `document.querySelectorAll` only sees the light DOM; a page
+          // built of web components — YouTube, Google apps, most 2026 SPAs —
+          // hides its controls inside shadow roots the flat query never enters,
+          // so the agent was handed a list with the very button the user asked
+          // for MISSING, and had to guess a coordinate. Walk every shadow root
+          // (open AND closed via chrome.dom, an extension-only API) and query
+          // each root, so the element list is the page the user actually sees.
+          const openOrClosedShadowRoot = (el) => {
+            try {
+              if (typeof globalThis.chrome !== 'undefined' && chrome.dom && chrome.dom.openOrClosedShadowRoot) {
+                const r = chrome.dom.openOrClosedShadowRoot(el);
+                if (r) return r;
+              }
+            } catch (e) { /* fall through to open roots */ }
+            try { return el.shadowRoot || null; } catch (e) { return null; }
+          };
+
+          const nodes = [];
+          const seenRoots = new WeakSet();
+          const queue = [document];
+          while (queue.length && nodes.length < maxItems * 4) {
+            const root = queue.shift();
+            if (!root || seenRoots.has(root)) continue;
+            seenRoots.add(root);
+            try {
+              const matches = root.querySelectorAll(selector);
+              for (let i = 0; i < matches.length && nodes.length < maxItems * 4; i++) {
+                const m = matches[i];
+                if (seen.has(m)) continue;
+                seen.add(m);
+                nodes.push(m);
+              }
+            } catch (e) { /* invalid selector in this root — skip */ }
+
+            // Enqueue nested shadow roots for the next pass.
+            try {
+              const doc = root instanceof Document ? root : (root.host ? root.host.ownerDocument : document);
+              const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+              let n;
+              while ((n = walker.nextNode())) {
+                if (!(n instanceof Element)) continue;
+                const sr = openOrClosedShadowRoot(n);
+                if (sr) queue.push(sr);
+              }
+            } catch (e) { /* traversal failure — skip this subtree */ }
+          }
 
           for (const el of nodes) {
             if (out.length >= maxItems) break;
@@ -79,9 +125,18 @@
 
             // Only list what a click at that centre would actually reach: an
             // element sitting under a modal or overlay is not clickable. Allow
-            // descendant text nodes, icons, or component wrappers.
+            // descendant text nodes, icons, or component wrappers. Pierces
+            // shadow roots: elementFromPoint stops at a shadow host, so drill
+            // into the host's root and re-test the point there.
             let top = null;
-            try { top = document.elementFromPoint(cx, cy); } catch (e) { top = null; }
+            try {
+              top = document.elementFromPoint(cx, cy);
+              while (top && top.shadowRoot) {
+                const inner = top.shadowRoot.elementFromPoint(cx, cy);
+                if (!inner || inner === top) break;
+                top = inner;
+              }
+            } catch (e) { top = null; }
             if (top && top !== el && !el.contains(top) && !top.contains(el)) {
               const compEl = el.closest('button, [role="button"], a, g-more-button, g-raised-button, [jsaction*="click"]');
               const compTop = top.closest('button, [role="button"], a, g-more-button, g-raised-button, [jsaction*="click"]');
@@ -323,9 +378,46 @@
         target: { tabId },
         args: [INTERACTIVE_SELECTOR, q],
         func: (sel, targetText) => {
-          const nodes = Array.from(document.querySelectorAll(sel));
+          const openOrClosedShadowRoot = (el) => {
+            try {
+              if (typeof globalThis.chrome !== 'undefined' && chrome.dom && chrome.dom.openOrClosedShadowRoot) {
+                const r = chrome.dom.openOrClosedShadowRoot(el);
+                if (r) return r;
+              }
+            } catch (e) { /* fall through */ }
+            try { return el.shadowRoot || null; } catch (e) { return null; }
+          };
+
+          // Pierces shadow roots so a target inside a web component is found,
+          // and — ported from Stagehand's text resolver — ties on score go to
+          // the SMALLEST element (the deepest, most specific match), not the
+          // first big wrapper whose innerText merely contains the needle.
+          const nodes = [];
+          const seenRoots = new WeakSet();
+          const queue = [document];
+          while (queue.length) {
+            const root = queue.shift();
+            if (!root || seenRoots.has(root)) continue;
+            seenRoots.add(root);
+            try {
+              const m = root.querySelectorAll(sel);
+              for (let i = 0; i < m.length; i++) nodes.push(m[i]);
+            } catch (e) { /* skip */ }
+            try {
+              const doc = root instanceof Document ? root : (root.host ? root.host.ownerDocument : document);
+              const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+              let n;
+              while ((n = walker.nextNode())) {
+                if (!(n instanceof Element)) continue;
+                const sr = openOrClosedShadowRoot(n);
+                if (sr) queue.push(sr);
+              }
+            } catch (e) { /* skip */ }
+          }
+
           let best = null;
           let bestScore = -1;
+          let bestArea = Infinity;
           for (const el of nodes) {
             let r = null;
             try { r = el.getBoundingClientRect(); } catch (e) { continue; }
@@ -342,8 +434,10 @@
             if (raw === targetText) score = 100;
             else if (raw.startsWith(targetText) || targetText.startsWith(raw)) score = 80;
             else if (raw.includes(targetText) || targetText.includes(raw)) score = 60;
-            if (score > bestScore) {
+            const area = r.width * r.height;
+            if (score > bestScore || (score === bestScore && area < bestArea)) {
               bestScore = score;
+              bestArea = area;
               best = {
                 x: Math.round(r.left + r.width / 2),
                 y: Math.round(r.top + r.height / 2),
