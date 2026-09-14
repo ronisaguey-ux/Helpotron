@@ -172,7 +172,7 @@ def test_browser_action_invalid_burst_drops_all_and_reports_failed(client, monke
     assert data["execution"]["actions_count"] == 0
 
 
-def test_browser_search_with_math_query_never_intercepted_by_shell(client, unique_user):
+def test_browser_search_with_math_query_never_intercepted_by_shell(client, monkeypatch, unique_user):
     """'search inside my tab, how to solve 1+1' or 'search in my searchbar, how to solve 1+x=2'
     must NEVER be intercepted by _extract_shell_query into a failing math bash command.
     It must resolve to browser_action with real control actions."""
@@ -182,6 +182,12 @@ def test_browser_search_with_math_query_never_intercepted_by_shell(client, uniqu
     t2 = "search in my searchbar, how to solve 1+x=2"
     assert _extract_shell_query(t1) == ""
     assert _extract_shell_query(t2) == ""
+
+    async def fake_call_llm(*args, **kwargs):
+        return '{"action": "browser_action", "payload": {"actions": [{"op": "move", "x": 480, "y": 320}, {"op": "click", "x": 480, "y": 320, "button": "left"}, {"op": "type", "text": "how to solve 1+1"}, {"op": "key", "key": "Enter", "modifiers": []}]}, "reply": "Searching for how to solve 1+1"}'
+
+    import server.llm as _llm
+    monkeypatch.setattr(_llm, "call_llm", fake_call_llm)
 
     headers, _uid = _make_user(unique_user, token_balance=5.0)
     resp = client.post("/api/extension/agent_chat", json={
@@ -231,3 +237,92 @@ def test_plain_answer_click_fallback_does_not_crash_the_endpoint(client, monkeyp
     assert data["control_actions"] is None
     assert data["execution"]["status"] == "failed"
     assert data["execution"]["actions_count"] == 0
+
+
+def test_search_burst_chains_associated_search_button():
+    """When a search input has an adjacent search button, _search_burst must click both."""
+    from server.routes_extension import _search_burst
+
+    elements = [
+        {"name": "Search allrecipes", "role": "searchbox", "x": 448, "y": 60, "ref": 10},
+        {"name": "Search button", "role": "button", "x": 582, "y": 60, "ref": 11},
+    ]
+    burst = _search_burst("green eggs and ham", {"width": 1280, "height": 800}, elements=elements)
+    assert len(burst) >= 5
+    # Must click the searchbox
+    assert burst[1]["op"] == "click" and burst[1]["ref"] == 10
+    # Must type with clear=True
+    assert burst[2]["op"] == "type" and burst[2]["text"] == "green eggs and ham" and burst[2].get("clear") is True
+    # Must press Enter
+    assert burst[3]["op"] == "key" and burst[3]["key"] == "Enter"
+    # Must click the adjacent search button
+    assert burst[-1]["op"] == "click" and burst[-1]["x"] == 582 and burst[-1]["y"] == 60
+
+
+def test_parse_actions_from_reply_prose():
+    """When the model writes prose detailing clicking search bar, typing, and clicking search button, actions are parsed."""
+    from server.routes_extension import _parse_actions_from_reply
+
+    reply = "I am clicking the search bar at (448, 60), typing 'green eggs and ham', and then clicking the search button at (582, 60) to ensure the search is submitted."
+    actions = _parse_actions_from_reply(reply, {"width": 1280, "height": 800})
+    assert len(actions) == 6
+    assert actions[1]["op"] == "click" and actions[1]["x"] == 448 and actions[1]["y"] == 60
+    assert actions[2]["op"] == "type" and actions[2]["text"] == "green eggs and ham"
+    assert actions[3]["op"] == "key" and actions[3]["key"] == "Enter"
+    assert actions[5]["op"] == "click" and actions[5]["x"] == 582 and actions[5]["y"] == 60
+
+
+def test_composite_prompt_planning():
+    """Instructions with 'then' sequence the operations in order."""
+    from server.routes_extension import _plan_composite_burst
+
+    elements = [
+        {"name": "Sarah's Homemade Applesauce", "role": "link", "x": 300, "y": 400, "ref": 5},
+        {"name": "search", "role": "searchbox", "x": 448, "y": 60, "ref": 10},
+    ]
+    prompt = "click on sarahs homemade applesauce, then search for green eggs and ham"
+    actions = _plan_composite_burst(prompt, "", {"width": 1280, "height": 800}, elements=elements)
+    assert len(actions) > 0
+    # First action clicks link
+    assert actions[0]["op"] == "move" and actions[0]["x"] == 300
+    assert actions[1]["op"] == "click" and actions[1]["ref"] == 5
+    # Subsequent action searches
+    type_ops = [a for a in actions if a.get("op") == "type"]
+    assert len(type_ops) == 1
+    assert type_ops[0]["text"] == "green eggs and ham"
+
+
+def test_extension_agent_chat_forwards_images_to_resolver(client, monkeypatch, unique_user):
+    """Screenshots provided by the extension must be forwarded to the intent resolver as multimodal input."""
+    headers, _uid = _make_user(unique_user, token_balance=5.0)
+
+    received_images = []
+
+    async def fake_resolve(user, settings, text, is_admin, db=None, target_key=None,
+                           node="my_agent", assignment_context=None,
+                           humanizer_ctx=None, viewport=None, images=None, **kw):
+        nonlocal received_images
+        received_images = list(images or [])
+        return {
+            "action": "plain_answer",
+            "payload": {},
+            "force_permission": False,
+            "reply": "I can see your screen image directly.",
+        }
+
+    import server.routes_overlord as _ro
+    monkeypatch.setattr(_ro, "_resolve_agent_intent", fake_resolve)
+
+    img_b64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP"
+    resp = client.post("/api/extension/agent_chat", json={
+        "text": "what is on my screen right now",
+        "agent_mode": True,
+        "seescreen": True,
+        "images": [img_b64],
+        "viewport": {"width": 1280, "height": 800},
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert len(received_images) == 1
+    assert received_images[0] == img_b64
+
+

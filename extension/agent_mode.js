@@ -298,6 +298,54 @@ function makeCopyButton(text) {
   return btn;
 }
 
+function formatMessageWithMath(rawText) {
+  if (!rawText) return document.createTextNode('');
+  const text = String(rawText);
+  if (typeof window.katex !== 'undefined' && (text.includes('$') || text.includes('\\(') || text.includes('\\['))) {
+    const container = document.createElement('span');
+    container.className = 'chat-msg-body';
+    const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+\$|\\\([\s\S]+?\\\))/g;
+    let lastIdx = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      const token = match[0];
+      const isDisplay = token.startsWith('$$') || token.startsWith('\\[');
+      let mathContent = '';
+      if (token.startsWith('$$') && token.endsWith('$$')) {
+        mathContent = token.slice(2, -2).trim();
+      } else if (token.startsWith('\\[') && token.endsWith('\\]')) {
+        mathContent = token.slice(2, -2).trim();
+      } else if (token.startsWith('$') && token.endsWith('$')) {
+        mathContent = token.slice(1, -1).trim();
+      } else if (token.startsWith('\\(') && token.endsWith('\\)')) {
+        mathContent = token.slice(2, -2).trim();
+      }
+      try {
+        const mathSpan = document.createElement('span');
+        window.katex.render(mathContent, mathSpan, {
+          displayMode: isDisplay,
+          throwOnError: false,
+        });
+        container.appendChild(mathSpan);
+      } catch (e) {
+        container.appendChild(document.createTextNode(token));
+      }
+      lastIdx = regex.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+    return container;
+  }
+  const span = document.createElement('span');
+  span.className = 'chat-msg-body';
+  span.textContent = text;
+  return span;
+}
+
 function addChatMsgEl(sender, text) {
   const div = document.createElement('div');
   div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
@@ -307,8 +355,7 @@ function addChatMsgEl(sender, text) {
     sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
-  const body = document.createElement('span');
-  body.textContent = text;
+  const body = formatMessageWithMath(text);
   div.appendChild(body);
   div.appendChild(makeCopyButton(text));
   els.chatMessages.appendChild(div);
@@ -939,7 +986,42 @@ async function executeAction(op) {
     case 'type':
       // Focus is where the prior click left it; inserting text is a native
       // composition event — moves the cursor? No: only the caret (no teleport).
+      if (op.clear !== false && state.driveTabId) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: state.driveTabId },
+            func: () => {
+              const el = document.activeElement;
+              if (el && ('value' in el || el.isContentEditable)) {
+                if ('value' in el) {
+                  el.value = '';
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (el.isContentEditable) {
+                  el.innerText = '';
+                }
+              }
+            },
+          }).catch(() => {});
+        } catch {}
+      }
       await cdp('Input.insertText', { text: String(op.text || '') });
+      if (state.driveTabId) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: state.driveTabId },
+            func: (txt) => {
+              const el = document.activeElement;
+              if (el && 'value' in el) {
+                if (!el.value) el.value = txt;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            },
+            args: [String(op.text || '')],
+          }).catch(() => {});
+        } catch {}
+      }
       break;
 
     case 'key': {
@@ -950,11 +1032,36 @@ async function executeAction(op) {
         modifiers: modMask, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
         text: '', unmodifiedText: '',
       });
+      if (op.key === 'Enter') {
+        await cdp('Input.dispatchKeyEvent', {
+          type: 'char', text: '\r',
+        }).catch(() => {});
+      }
       await sleep(rand(30, 70));
       await cdp('Input.dispatchKeyEvent', {
         type: 'keyUp', key: k.key, code: k.code,
         modifiers: modMask, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk,
       });
+      if (op.key === 'Enter' && state.driveTabId) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: state.driveTabId },
+            func: () => {
+              const el = document.activeElement;
+              if (!el) return;
+              const form = el.form || el.closest('form');
+              if (form) {
+                try { form.requestSubmit(); return; } catch {}
+              }
+              const parent = el.closest('form, div, header') || el.parentElement;
+              if (parent) {
+                const btn = parent.querySelector('button[type="submit"], button.search-btn, button[aria-label*="search" i], button[aria-label*="find" i], .search-btn, svg.search-icon');
+                if (btn) (btn.closest('button') || btn).click();
+              }
+            },
+          }).catch(() => {});
+        } catch {}
+      }
       break;
     }
 
@@ -1315,7 +1422,9 @@ async function sendChatMessage() {
   let cssVp = state.cssViewport;
   if (!cssVp && state.driveTabId) {
     try {
-      const v = await window.HelpotronElements.getTabViewport(state.driveTabId);
+      const v = (window.HelpotronElements && typeof window.HelpotronElements.getTabViewport === 'function')
+        ? await window.HelpotronElements.getTabViewport(state.driveTabId).catch(() => null)
+        : (typeof window.getTabViewport === 'function' ? await window.getTabViewport(state.driveTabId).catch(() => null) : null);
       if (v) { cssVp = { w: v.width, h: v.height }; state.cssViewport = cssVp; }
     } catch (e) { /* unknown viewport — frame dims / default below */ }
   }
@@ -1353,11 +1462,19 @@ async function sendChatMessage() {
   }
   try {
     const headers = await authHeaders();
-    const res = await fetch(`${srv}/api/extension/agent_chat`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    const ctrl = new AbortController();
+    const fetchTimer = setTimeout(() => ctrl.abort(), 75000);
+    let res;
+    try {
+      res = await fetch(`${srv}/api/extension/agent_chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(fetchTimer);
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     if (data && data.status === 'permission_required') {

@@ -1,6 +1,13 @@
 /* popup.css — browser-action popup shell over the shared design system. */
 @import url('design.css');
 
+html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 body {
   width: 410px;
   height: 600px;
@@ -12,17 +19,41 @@ body {
   background: var(--surface);
   color: var(--on-surface);
   font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .chat-stream, .chat-input, .text-area-preview, .field-hint, .panel-desc {
   user-select: text;
 }
 
-/* Standalone / Pop-out Window mode (remains open on screen) */
-body.window-mode {
-  width: 100vw;
-  height: 100vh;
-  max-height: 100vh;
+/* Standalone / Pop-out Window mode, Side Panel mode, or fluid full-height */
+body.window-mode,
+body.panel-mode,
+body.fluid-mode {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+}
+
+@media (min-height: 601px) {
+  body {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+  }
+}
+
+@media (min-width: 415px) {
+  body {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
 /* ═══ App Bar ═══ */

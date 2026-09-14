@@ -336,19 +336,23 @@ async def call_llm(
     effort_score: Optional[int] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
+    images: Optional[List[str]] = None,
 ) -> str:
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
 
+    effective_modality = "vision" if images else modality
     route = resolve_model_routing(
         effort=effort,
-        modality=modality,
+        modality=effective_modality,
         required_capabilities=required_capabilities,
         complexity_score=complexity_score,
         effort_score=effort_score,
     )
     model_id = MODELS.get(model, model) if model else route["model"]  # short names (flash/pro/...) → real slug 08-28
-    if json_mode and model_id == ModelPolicy.PRIMARY_MODELS["nemotron_nano"]:
+    if images and model_id in ModelPolicy.GRUNT_CANDIDATES:
+        model_id = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
+    elif json_mode and model_id == ModelPolicy.PRIMARY_MODELS["nemotron_nano"]:
         model_id = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
     
     for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
@@ -383,6 +387,16 @@ async def call_llm(
 
     openrouter_err = None
     attempt_models = _effort_cascade(model_id, effort=effort_score or 500)
+    if images:
+        vision_capable = {
+            ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
+            ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
+            ModelPolicy.PRIMARY_MODELS["gemini_38_flash"],
+        }
+        attempt_models = [m for m in attempt_models if m in vision_capable] or [
+            ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
+            ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
+        ]
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         for cand_id in attempt_models:
@@ -399,7 +413,16 @@ async def call_llm(
                 cand_messages.append({"role": "system", "content": f"{ident_notice}\n\n{system_prompt}"})
             else:
                 cand_messages.append({"role": "system", "content": ident_notice})
-            cand_messages.append({"role": "user", "content": user_prompt})
+            if images:
+                user_content: List[Dict[str, Any]] = [{"type": "text", "text": user_prompt}]
+                for img in images[:4]:
+                    if not img or not isinstance(img, str):
+                        continue
+                    url = img if img.startswith("data:") else f"data:image/jpeg;base64,{img}"
+                    user_content.append({"type": "image_url", "image_url": {"url": url}})
+                cand_messages.append({"role": "user", "content": user_content})
+            else:
+                cand_messages.append({"role": "user", "content": user_prompt})
             cand_payload["messages"] = cand_messages
 
             try:

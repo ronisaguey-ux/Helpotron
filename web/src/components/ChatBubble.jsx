@@ -1,4 +1,7 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { Bot, User, AlertCircle, RefreshCw, Sparkles, CheckCircle2, Clock } from 'lucide-react';
 
 /**
@@ -84,8 +87,10 @@ export default function ChatBubble({
     return (
       <div className={`flex justify-end my-3 ${className}`}>
         <div className="flex flex-col items-end max-w-[80%] sm:max-w-md gap-1">
-          <div className="p-4 rounded-2xl rounded-br-sm bg-primary text-on-primary font-body-sm text-xs leading-relaxed shadow-sm break-words">
-            {text}
+          <div className="p-4 rounded-2xl rounded-br-sm bg-primary text-on-primary font-body-sm text-xs leading-relaxed shadow-sm break-words select-text">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {text}
+            </ReactMarkdown>
           </div>
           {timestamp && (
             <span className="font-code-sm text-[10px] text-on-surface-variant/70 px-1">
@@ -105,7 +110,9 @@ export default function ChatBubble({
       </div>
       <div className="flex flex-col max-w-[85%] sm:max-w-xl gap-1">
         <div className="p-4 rounded-2xl rounded-tl-sm bg-surface-container-low border border-outline-variant/20 text-on-surface font-body-sm text-xs leading-relaxed shadow-sm break-words select-text">
-          {text}
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {text}
+          </ReactMarkdown>
         </div>
         {timestamp && (
           <span className="font-code-sm text-[10px] text-on-surface-variant px-1">

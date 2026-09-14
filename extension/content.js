@@ -20,6 +20,139 @@ function capScrapeText(s) {
     'the missing sections, or use the file links below.]';
 }
 
+// ── Crawl4AI-style DOM-to-Clean-Markdown Engine ──────────────────────────────
+function htmlToCleanMarkdown(root) {
+  if (!root) return '';
+  let container = root;
+  if (typeof root === 'string') {
+    const d = document.createElement('div');
+    d.innerHTML = root;
+    container = d;
+  }
+
+  let clone;
+  try {
+    clone = container.cloneNode(true);
+  } catch (e) {
+    return container.innerText || '';
+  }
+
+  // Strip non-content / boilerplate elements
+  const dropSelectors = [
+    'script', 'style', 'noscript', 'svg', 'iframe',
+    'header', 'footer', 'nav',
+    '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+    '[class*="cookie"]', '[id*="cookie"]',
+    '[class*="modal"]', '[id*="modal"]',
+    '[class*="popup"]', '[id*="popup"]',
+    '.ad', '.ads', '[class*="advertisement"]',
+  ];
+  for (const sel of dropSelectors) {
+    try {
+      clone.querySelectorAll(sel).forEach((el) => el.remove());
+    } catch (e) {}
+  }
+
+  function tableToMarkdown(tbl) {
+    const rows = Array.from(tbl.querySelectorAll('tr'));
+    if (!rows.length) return '';
+    const matrix = [];
+    let maxCols = 0;
+
+    for (const r of rows) {
+      const cells = Array.from(r.querySelectorAll('th, td')).map((c) =>
+        (c.innerText || c.textContent || '').replace(/\r?\n|\r/g, ' ').replace(/\|/g, '\\|').trim()
+      );
+      if (cells.length > maxCols) maxCols = cells.length;
+      matrix.push(cells);
+    }
+    if (maxCols === 0) return '';
+
+    const lines = [];
+    const firstRow = matrix[0];
+    const headerPadded = firstRow.concat(Array(Math.max(0, maxCols - firstRow.length)).fill(''));
+    lines.push('| ' + headerPadded.join(' | ') + ' |');
+    lines.push('| ' + Array(maxCols).fill('---').join(' | ') + ' |');
+
+    for (let i = 1; i < matrix.length; i++) {
+      const row = matrix[i];
+      const padded = row.concat(Array(Math.max(0, maxCols - row.length)).fill(''));
+      lines.push('| ' + padded.join(' | ') + ' |');
+    }
+    return '\n\n' + lines.join('\n') + '\n\n';
+  }
+
+  function nodeToMd(node) {
+    if (!node) return '';
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'table') {
+      return tableToMarkdown(node);
+    }
+
+    let inner = '';
+    for (const child of node.childNodes) {
+      inner += nodeToMd(child);
+    }
+
+    switch (tag) {
+      case 'h1': return `\n\n# ${inner.trim()}\n\n`;
+      case 'h2': return `\n\n## ${inner.trim()}\n\n`;
+      case 'h3': return `\n\n### ${inner.trim()}\n\n`;
+      case 'h4': return `\n\n#### ${inner.trim()}\n\n`;
+      case 'h5': return `\n\n##### ${inner.trim()}\n\n`;
+      case 'h6': return `\n\n###### ${inner.trim()}\n\n`;
+      case 'p': return `\n\n${inner.trim()}\n\n`;
+      case 'br': return '\n';
+      case 'hr': return '\n\n---\n\n';
+      case 'strong':
+      case 'b':
+        return inner.trim() ? ` **${inner.trim()}** ` : '';
+      case 'em':
+      case 'i':
+        return inner.trim() ? ` *${inner.trim()}* ` : '';
+      case 'code':
+        return inner.trim() ? (node.parentNode && node.parentNode.tagName.toLowerCase() === 'pre' ? inner : ` \`${inner.trim()}\` `) : '';
+      case 'pre':
+        return `\n\n\`\`\`\n${inner.trim()}\n\`\`\`\n\n`;
+      case 'blockquote':
+        return `\n\n> ${inner.trim().replace(/\n/g, '\n> ')}\n\n`;
+      case 'li': {
+        const isOrdered = node.parentNode && node.parentNode.tagName.toLowerCase() === 'ol';
+        const prefix = isOrdered ? '1. ' : '- ';
+        return `\n${prefix}${inner.trim()}`;
+      }
+      case 'ul':
+      case 'ol':
+        return `\n${inner}\n`;
+      case 'a': {
+        const href = node.getAttribute('href');
+        const text = inner.trim();
+        if (text && href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+          return `[${text}](${href})`;
+        }
+        return text;
+      }
+      case 'div':
+      case 'section':
+      case 'article':
+        return `\n${inner}\n`;
+      default:
+        return inner;
+    }
+  }
+
+  const rawMd = nodeToMd(clone);
+  return rawMd
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
+    .trim();
+}
+
 function detectPlatform() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
@@ -216,10 +349,10 @@ function scrapeCanvas() {
     '';
 
   const promptEl = document.querySelector('#assignment_description, .user_content, .description');
-  const prompt = promptEl ? capScrapeText(promptEl.innerText || '') : '';
+  const prompt = promptEl ? capScrapeText(htmlToCleanMarkdown(promptEl) || promptEl.innerText || '') : '';
 
   const rubrics = Array.from(document.querySelectorAll('.rubric_criterion, .rubric-criterion, table.rubric'))
-    .map((e) => e.innerText.trim())
+    .map((e) => htmlToCleanMarkdown(e) || e.innerText.trim())
     .join('\n---\n');
 
   const files = extractAllFileLinks();
@@ -240,8 +373,8 @@ function scrapeGoogleClassroom() {
 
   const promptEl = document.querySelector('div[dir="auto"].c3I1v, div[jsname="V67aGc"], .asQXV');
   const prompt = promptEl
-    ? capScrapeText(promptEl.innerText || '')
-    : (document.body ? capScrapeText(document.body.innerText || '') : '');
+    ? capScrapeText(htmlToCleanMarkdown(promptEl) || promptEl.innerText || '')
+    : (document.body ? capScrapeText(htmlToCleanMarkdown(document.body) || document.body.innerText || '') : '');
 
   const files = extractAllFileLinks();
   return { title, dueDate, prompt, rubric: '', files };
@@ -257,10 +390,10 @@ function scrapeBlackboard() {
   const dueDate = dueDateEl ? dueDateEl.innerText.trim() : '';
 
   const promptEl = document.querySelector('.vtbegenerated, .contentList, #content_listContainer');
-  const prompt = promptEl?.innerText?.trim() || '';
+  const prompt = promptEl ? capScrapeText(htmlToCleanMarkdown(promptEl) || promptEl.innerText?.trim() || '') : '';
 
   const rubrics = Array.from(document.querySelectorAll('.rubric-table, table[summary*="Rubric"]'))
-    .map((e) => e.innerText.trim())
+    .map((e) => htmlToCleanMarkdown(e) || e.innerText.trim())
     .join('\n---\n');
 
   const files = extractAllFileLinks();
@@ -274,10 +407,10 @@ function scrapeBrightspace() {
     'Untitled Brightspace Assignment';
 
   const promptEl = document.querySelector('.d2l-htmlblock, .d2l-typography, .d2l-htmleditor');
-  const prompt = promptEl?.innerText?.trim() || '';
+  const prompt = promptEl ? capScrapeText(htmlToCleanMarkdown(promptEl) || promptEl.innerText?.trim() || '') : '';
 
   const rubrics = Array.from(document.querySelectorAll('.d2l-rubric, d2l-rubric'))
-    .map((e) => e.innerText.trim())
+    .map((e) => htmlToCleanMarkdown(e) || e.innerText.trim())
     .join('\n---\n');
 
   return { title, dueDate: '', prompt, rubric: rubrics, files: extractAllFileLinks() };
@@ -290,7 +423,7 @@ function scrapeMoodle() {
     'Untitled Moodle Assignment';
 
   const promptEl = document.querySelector('.activity-description, #intro, .box.py-3.generalbox');
-  const prompt = promptEl?.innerText?.trim() || '';
+  const prompt = promptEl ? capScrapeText(htmlToCleanMarkdown(promptEl) || promptEl.innerText?.trim() || '') : '';
 
   return { title, dueDate: '', prompt, rubric: '', files: extractAllFileLinks() };
 }
@@ -314,8 +447,8 @@ function scrapeGeneric() {
   // Extract main article or body content
   const mainEl = document.querySelector('article, main, #main-content, #content, .assignment, .post-content');
   const prompt = mainEl
-    ? capScrapeText(mainEl.innerText || '')
-    : capScrapeText(bodyText);
+    ? capScrapeText(htmlToCleanMarkdown(mainEl) || mainEl.innerText || '')
+    : capScrapeText(htmlToCleanMarkdown(document.body) || bodyText);
 
   // Extract tables that resemble rubrics
   const rubrics = Array.from(document.querySelectorAll('table'))
@@ -323,7 +456,7 @@ function scrapeGeneric() {
       const text = tbl.innerText.toLowerCase();
       return text.includes('rubric') || text.includes('criteria') || text.includes('points') || text.includes('grade');
     })
-    .map((t) => t.innerText.trim())
+    .map((t) => htmlToCleanMarkdown(t) || t.innerText.trim())
     .join('\n---\n');
 
   const files = extractAllFileLinks();
@@ -478,7 +611,7 @@ async function deepScrapeUniversal(options) {
   if (!base) return null;
   if ((base.prompt || '').trim().length < 200) {
     const main = document.querySelector('article, main, #main-content, #content, .assignment, .post-content, .user_content');
-    const altText = (main ? main.innerText : '') || document.body.innerText || '';
+    const altText = (main ? htmlToCleanMarkdown(main) : '') || htmlToCleanMarkdown(document.body) || '';
     if (altText.trim().length > (base.prompt || '').trim().length) {
       base.prompt = capScrapeText(altText);
     }
