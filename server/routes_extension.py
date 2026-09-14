@@ -1752,8 +1752,18 @@ async def get_extension_chat_history(request: Request, thread_id: int = Query(0,
         load_chat_history_from_db(db, user.id, thread_id)
     except Exception:
         pass
+    chat = overlord_agent.get_chat_history(thread_id, user=user)
+    # Attach server-rendered HTML to every message so history is rendered by the
+    # server too, not re-rendered client-side (thin-wrapper). A message with no
+    # text is left untouched.
+    for msg in chat:
+        if msg.get("text"):
+            try:
+                msg["html"] = _render_reply_html(msg["text"])
+            except Exception:
+                pass
     return {
         "status": "success",
         "thread_id": thread_id,
-        "chat": overlord_agent.get_chat_history(thread_id, user=user),
+        "chat": chat,
     }

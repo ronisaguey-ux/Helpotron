@@ -298,55 +298,37 @@ function makeCopyButton(text) {
   return btn;
 }
 
-function formatMessageWithMath(rawText) {
-  if (!rawText) return document.createTextNode('');
-  const text = String(rawText);
-  if (typeof window.katex !== 'undefined' && (text.includes('$') || text.includes('\\(') || text.includes('\\['))) {
-    const container = document.createElement('span');
-    container.className = 'chat-msg-body';
-    const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+\$|\\\([\s\S]+?\\\))/g;
-    let lastIdx = 0;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIdx) {
-        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+// Server-rendered HTML injection (thin-wrapper, 2026-09-14). Same contract as
+// popup.js: the server renders markdown+LaTeX to HTML; the client injects it
+// (sanitized) instead of shipping a KaTeX bundle or a math renderer.
+function sanitizeHtml(html) {
+  if (!html) return '';
+  const div = document.createElement('div');
+  div.innerHTML = String(html);
+  div.querySelectorAll('script, iframe, object, embed, link, meta, style').forEach((n) => n.remove());
+  div.querySelectorAll('*').forEach((n) => {
+    for (const attr of Array.from(n.attributes || [])) {
+      if (attr.name.toLowerCase().startsWith('on') || (attr.name.toLowerCase() === 'href' && String(attr.value).trim().toLowerCase().startsWith('javascript:'))) {
+        n.removeAttribute(attr.name);
       }
-      const token = match[0];
-      const isDisplay = token.startsWith('$$') || token.startsWith('\\[');
-      let mathContent = '';
-      if (token.startsWith('$$') && token.endsWith('$$')) {
-        mathContent = token.slice(2, -2).trim();
-      } else if (token.startsWith('\\[') && token.endsWith('\\]')) {
-        mathContent = token.slice(2, -2).trim();
-      } else if (token.startsWith('$') && token.endsWith('$')) {
-        mathContent = token.slice(1, -1).trim();
-      } else if (token.startsWith('\\(') && token.endsWith('\\)')) {
-        mathContent = token.slice(2, -2).trim();
-      }
-      try {
-        const mathSpan = document.createElement('span');
-        window.katex.render(mathContent, mathSpan, {
-          displayMode: isDisplay,
-          throwOnError: false,
-        });
-        container.appendChild(mathSpan);
-      } catch (e) {
-        container.appendChild(document.createTextNode(token));
-      }
-      lastIdx = regex.lastIndex;
     }
-    if (lastIdx < text.length) {
-      container.appendChild(document.createTextNode(text.slice(lastIdx)));
-    }
-    return container;
-  }
+  });
+  return div.innerHTML;
+}
+
+function formatMessage(rawText, html) {
   const span = document.createElement('span');
   span.className = 'chat-msg-body';
-  span.textContent = text;
+  const clean = sanitizeHtml(html);
+  if (clean) {
+    span.innerHTML = clean;
+  } else {
+    span.textContent = rawText || '';
+  }
   return span;
 }
 
-function addChatMsgEl(sender, text) {
+function addChatMsgEl(sender, text, html) {
   const div = document.createElement('div');
   div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
   if (sender === 'user' || sender === 'agent') {
@@ -355,7 +337,7 @@ function addChatMsgEl(sender, text) {
     sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
-  const body = formatMessageWithMath(text);
+  const body = formatMessage(text, html);
   div.appendChild(body);
   div.appendChild(makeCopyButton(text));
   els.chatMessages.appendChild(div);
@@ -378,7 +360,7 @@ function renderChat(msgs) {
     addChatMsgEl('note', '💡 Try: “What is on this screen?” then “click the blue button”.');
     return;
   }
-  msgs.forEach((m) => addChatMsgEl(m.sender === 'user' ? 'user' : 'agent', m.text));
+  msgs.forEach((m) => addChatMsgEl(m.sender === 'user' ? 'user' : 'agent', m.text, m.html || ''));
 }
 
 async function cacheChat(msgs) {
@@ -1492,7 +1474,7 @@ async function sendChatMessage() {
       setStatus('⚠️ The agent needs your approval before it can act.');
     }
     const reply = chatReplyText(data, '✅ Done.');
-    typingEl.replaceWith(addChatMsgEl('agent', reply));
+    typingEl.replaceWith(addChatMsgEl('agent', reply, data.reply_html || ''));
     const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
     if (actions && actions.length) {
       const n = actions.length;

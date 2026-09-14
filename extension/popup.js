@@ -1702,55 +1702,42 @@ function makeCopyButton(text) {
   return btn;
 }
 
-function formatMessageWithMath(rawText) {
-  if (!rawText) return document.createTextNode('');
-  const text = String(rawText);
-  if (typeof window.katex !== 'undefined' && (text.includes('$') || text.includes('\\(') || text.includes('\\['))) {
-    const container = document.createElement('span');
-    container.className = 'chat-msg-body';
-    const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+\$|\\\([\s\S]+?\\\))/g;
-    let lastIdx = 0;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIdx) {
-        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+// Server-rendered HTML injection (thin-wrapper, 2026-09-14). The server's
+// /api/extension/render turns markdown+LaTeX into HTML; the client no longer
+// ships a KaTeX bundle or a markdown/math renderer. sanitizeHtml is defensive:
+// the server renderer already escapes raw HTML, but strip <script> and inline
+// event handlers anyway so injected content can never execute.
+function sanitizeHtml(html) {
+  if (!html) return '';
+  const div = document.createElement('div');
+  div.innerHTML = String(html);
+  div.querySelectorAll('script, iframe, object, embed, link, meta, style').forEach((n) => n.remove());
+  div.querySelectorAll('*').forEach((n) => {
+    for (const attr of Array.from(n.attributes || [])) {
+      if (attr.name.toLowerCase().startsWith('on') || (attr.name.toLowerCase() === 'href' && String(attr.value).trim().toLowerCase().startsWith('javascript:'))) {
+        n.removeAttribute(attr.name);
       }
-      const token = match[0];
-      const isDisplay = token.startsWith('$$') || token.startsWith('\\[');
-      let mathContent = '';
-      if (token.startsWith('$$') && token.endsWith('$$')) {
-        mathContent = token.slice(2, -2).trim();
-      } else if (token.startsWith('\\[') && token.endsWith('\\]')) {
-        mathContent = token.slice(2, -2).trim();
-      } else if (token.startsWith('$') && token.endsWith('$')) {
-        mathContent = token.slice(1, -1).trim();
-      } else if (token.startsWith('\\(') && token.endsWith('\\)')) {
-        mathContent = token.slice(2, -2).trim();
-      }
-      try {
-        const mathSpan = document.createElement('span');
-        window.katex.render(mathContent, mathSpan, {
-          displayMode: isDisplay,
-          throwOnError: false,
-        });
-        container.appendChild(mathSpan);
-      } catch (e) {
-        container.appendChild(document.createTextNode(token));
-      }
-      lastIdx = regex.lastIndex;
     }
-    if (lastIdx < text.length) {
-      container.appendChild(document.createTextNode(text.slice(lastIdx)));
-    }
-    return container;
-  }
+  });
+  return div.innerHTML;
+}
+
+// Render a chat message body. When the server sent reply_html, inject it
+// (sanitized); otherwise fall back to plain text so a missing field can never
+// blank a message. The copy button always copies the raw text.
+function formatMessage(rawText, html) {
   const span = document.createElement('span');
   span.className = 'chat-msg-body';
-  span.textContent = text;
+  const clean = sanitizeHtml(html);
+  if (clean) {
+    span.innerHTML = clean;
+  } else {
+    span.textContent = rawText || '';
+  }
   return span;
 }
 
-function addPopupChatMsg(sender, text) {
+function addPopupChatMsg(sender, text, html) {
   if (!chatMessagesEl) return null;
   const div = document.createElement('div');
   div.className = 'chat-msg ' + (sender === 'user' ? 'user' : sender === 'agent' ? 'agent' : 'chat-note');
@@ -1760,7 +1747,7 @@ function addPopupChatMsg(sender, text) {
     sp.textContent = sender === 'user' ? 'You' : 'Study Buddy';
     div.appendChild(sp);
   }
-  const body = formatMessageWithMath(text);
+  const body = formatMessage(text, html);
   div.appendChild(body);
   div.appendChild(makeCopyButton(text));
   chatMessagesEl.appendChild(div);
@@ -1775,7 +1762,7 @@ function renderPopupChatHistory(msgs) {
     addPopupChatMsg('agent', "Hi! I'm your Helpotron companion. Ask questions about your coursework, or tell me what to do on this page.");
     return;
   }
-  msgs.forEach((m) => addPopupChatMsg(m.sender === 'user' ? 'user' : 'agent', m.text));
+  msgs.forEach((m) => addPopupChatMsg(m.sender === 'user' ? 'user' : 'agent', m.text, m.html || ''));
 }
 
 let currentThreadId = 0;
@@ -3269,7 +3256,7 @@ if (chatFormEl && chatInputEl) {
         }
       } else if (res.ok) {
         const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
-        addPopupChatMsg('agent', reply);
+        addPopupChatMsg('agent', reply, data.reply_html || '');
         // Persist message to local chat mirror
         const cacheKey = currentThreadId === 0 ? CHAT_KEY : `${CHAT_KEY}_t${currentThreadId}`;
         const st = await chrome.storage.local.get(cacheKey);
