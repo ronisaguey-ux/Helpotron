@@ -2874,7 +2874,10 @@ async function driveActionsInTab(driveTab, actions, ctx) {
         // attached" (and the debugging banner never clears).
         await removeVirtualCursor(driveTab.id).catch(() => {});
         await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
-        return { status: 'no_targets', ran: 0, label };
+        // Carry the reason: the caller buckets a non-ok result as "skipped" and
+        // surfaces result.error, so without this the retry bar says "unknown
+        // reason" for a failure we just diagnosed precisely.
+        return { status: 'no_targets', ran: 0, label, error: `could not locate ${names} — ${why}` };
       }
     }
 
