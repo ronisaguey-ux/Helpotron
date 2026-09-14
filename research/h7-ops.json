@@ -1,0 +1,320 @@
+{
+  "track": "H7",
+  "agent": "OPS - deployment, public infrastructure, 3am failure modes",
+  "summary": "The stack is genuinely up: helpotron-api (:5000), helpotron-web (:5173) and helpotron-tunnel are all enabled, active and Restart=always, user lingering is on so they survive a reboot, and both the local and the public /api/health paths return 200. The healthcheck is no longer the dead-port-8000 version - it probes :5000, :5173 and the public hostname and it does send Telegram alerts (the wake log proves alerts on 09-11, 09-12 and 09-13). What is broken is everything around the edge. The only backup script, scripts/backup_db.sh:11-17, does not list the production database (data/db/helpotron.db) among its candidate paths, so it would resolve to a 19-day-stale repo-root copy instead, and nothing schedules it at all - the live DB has no backup since 2026-09-01. The API also binds 0.0.0.0:5000 (LAN-reachable), the units set no UMask so the service writes world-readable files that the /uploads proxy then serves publicly with no auth, and the unauthenticated /api/monitors/overview endpoint publicly leaks cost and activity telemetry. Headline fix: repoint and schedule the backup, then bind the API to 127.0.0.1 and set UMask=0077 in the three drop-ins.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H7-F1",
+      "title": "Production DB has no working backup - the only backup script targets the wrong database and nothing runs it",
+      "symptom": "If data/db/helpotron.db is lost or corrupted the owner loses every user, credit balance, assignment, study material and feedback row with no recoverable copy. The one script that claims to back it up would print a success line while archiving a different, 19-day-stale file.",
+      "root_cause": "scripts/backup_db.sh:11-17 lists candidate paths in order: DB_PATH, PROJECT_DIR/helpotron.db, PROJECT_DIR/data/helpotron.db, /var/www/helpotron/helpotron.db, /opt/helpotron/data/helpotron.db. The real DB is data/db/helpotron.db (the default at server/config.py:30 and the value of DATABASE_URL in .env). data/db/ is never in the list, so the loop at scripts/backup_db.sh:20-26 matches PROJECT_DIR/helpotron.db first - a 323,584-byte file at the repo root last written 2026-08-26 15:48. The script also defaults BACKUP_DIR to the VPS-era path /opt/helpotron/backups (scripts/backup_db.sh:7) and no cron entry or systemd timer references it.",
+      "evidence": [
+        "scripts/backup_db.sh:11-17 - CANDIDATE_PATHS = ( DB_PATH, PROJECT_DIR/helpotron.db, PROJECT_DIR/data/helpotron.db, /var/www/helpotron/helpotron.db, /opt/helpotron/data/helpotron.db ) - data/db/helpotron.db absent",
+        "measured: ls -la helpotron.db data/db/helpotron.db -> 323584 bytes 2026-08-26 15:48 ./helpotron.db  vs  13893632 bytes 2026-09-13 20:20 ./data/db/helpotron.db",
+        "measured: crontab -l -> only the T2B ops block installed 2026-09-02 (t2b_backup.sh 03:33, t2b_alert.sh every 2 min). No helpotron job.",
+        "measured: systemctl --user list-timers --all | grep -i backup -> empty",
+        "measured: find /home/roni/Roni_workspace/helpotron -name *.db -printf mtime,size,path -> newest real copy is data/db/helpotron.db.bak-20260902-025103 (2026-09-01 22:51, 11624448 bytes); prod DB is 2026-09-13 20:20, 13893632 bytes",
+        "measured: ls -la backups/ -> newest regular file helpotron.db.bak.20260901_creditsfix (2026-09-01 21:28)",
+        "measured: df -h / -> /dev/nvme0n1p2 468G total 104G used 341G avail 24% - source and destination are the same filesystem, so this is not off-machine even if it ran"
+      ],
+      "confidence": "high",
+      "impact": "Unrecoverable loss of all production data on disk failure, corruption or a bad migration. 13,893,632 bytes of live DB are covered only by a copy that ends 2026-09-01: 12+ days of writes including 33 assignments, 499 user_feedback rows, 351 microcredit_submissions, 17 study_materials and every credit balance, all on one disk."
+    },
+    {
+      "id": "H7-F2",
+      "title": "The API listens on 0.0.0.0:5000 - reachable from every device on the LAN although the tunnel only needs loopback",
+      "symptom": "Any phone, guest laptop or IoT device on the same WiFi can call the full API directly on http://192.168.86.49:5000 - /api/health, /api/monitors/overview, /api/plans and every authenticated route - without passing through Cloudflare. The WAF, rate limiting and access rules are bypassed entirely.",
+      "root_cause": "~/.config/systemd/user/helpotron-api.service:8 starts uvicorn with --host 0.0.0.0. The tunnel ingress at ~/.cloudflared/helpotron.yml:8 points t2b.helpotron.dpdns.org at http://localhost:5000, so loopback would suffice; 0.0.0.0 is strictly wider than needed. The --forwarded-allow-ips 127.0.0.1 on the same line shows the author expected loopback-only origin access.",
+      "evidence": [
+        "~/.config/systemd/user/helpotron-api.service:8 - ExecStart=.../uvicorn server.main:app --host 0.0.0.0 --port 5000 --proxy-headers --forwarded-allow-ips 127.0.0.1",
+        "measured: ss -ltnp | grep :5000 -> LISTEN 0 2048 0.0.0.0:5000 0.0.0.0:* users:(uvicorn,pid=2392946,fd=15)",
+        "measured: hostname -I -> 192.168.86.49 172.18.0.1 172.17.0.1 plus IPv6",
+        "measured: curl -s -o /dev/null -w '%{http_code}' http://192.168.86.49:5000/api/health -> 200",
+        "contrast, measured: ss -ltnp | grep 5173 -> LISTEN 127.0.0.1:5173 only, so the web tier is correctly loopback-bound"
+      ],
+      "confidence": "high",
+      "impact": "All auth, rate-limit and WAF controls are edge-based, so a LAN peer sees the raw origin. On a laptop carried onto a campus, cafe or hotel network this becomes an internet-facing origin with no edge protection."
+    },
+    {
+      "id": "H7-F3",
+      "title": "The public web tier is vite preview, a dev-preview server Vite explicitly disclaims for production",
+      "symptom": "Every public page load takes an extra hop: browser -> Cloudflare -> cloudflared -> vite preview :5173 -> uvicorn :5000 for /api and /uploads. When either hop stalls the user gets a bare Cloudflare 502 with no way to tell which side broke, and there is no compression or caching policy.",
+      "root_cause": "~/.cloudflared/helpotron.yml:5-6 maps the public hostname helpotron.dpdns.org to http://localhost:5173, which is the unit at ~/.config/systemd/user/helpotron-web.service:8, vite preview --host 127.0.0.1 --port 5173. The API is reached only through the preview proxy block at web/vite.config.js:166-183. deploy/README.md and deploy/cloudflared.md still document a tunnel pointing at :8000 and a bare cloudflared tunnel run, so the docs describe a deployment that no longer exists.",
+      "evidence": [
+        "~/.cloudflared/helpotron.yml:4-9 - ingress: helpotron.dpdns.org -> http://localhost:5173 ; t2b.helpotron.dpdns.org -> http://localhost:5000 ; default http_status:404",
+        "~/.config/systemd/user/helpotron-web.service:8 - ExecStart=.../node .../vite.js preview --host 127.0.0.1 --port 5173",
+        "web/vite.config.js:166-183 - preview.proxy: /api -> http://127.0.0.1:5000, /uploads -> 127.0.0.1:5000, /privacy-policy, /extension-guide",
+        "deploy/README.md:22 - 'point the tunnel to http://localhost:8000 (ingress config)' - stale, the live config uses :5173",
+        "measured: curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/api/health -> 200 (the proxy hop works today)",
+        "measured: /tmp/helpotron_tunnel.log 2026-09-13T01:19:58Z - repeated ERR failed to serve incoming request ... Unable to reach the origin service ... dial tcp 127.0.0.1:5173: connect: connection refused / read: connection reset by peer, originService=http://localhost:5173 - the failed hop is the web tier, not uvicorn",
+        "measured: systemctl --user show helpotron-tunnel -p NRestarts -> NRestarts=1; journalctl --user -u helpotron-tunnel -> 'Main process exited, code=exited, status=11/n/a' at 2026-09-12 15:04:12 (SIGSEGV, healed by Restart=always)"
+      ],
+      "confidence": "high",
+      "impact": "Vite's docs state vite preview is intended for previewing the build locally and not meant as a production server, so there is no gzip/brotli, no caching policy and no stability guarantee - preview behaviour may change without being treated as breaking. It also inserts a second process able to produce the 502, which the 2026-09-13 outage demonstrates."
+    },
+    {
+      "id": "H7-F4",
+      "title": "Units set no UMask (0002): the service writes world-readable files, and /uploads is proxied publicly with no auth",
+      "symptom": "Uploaded user files are created mode 0664 and sandbox directories 0775, so any local account can read them. The same files are served to the whole internet by the web tier: an existing upload returns HTTP 200 with no session, token or signature.",
+      "root_cause": "None of the three units declare UMask, so they inherit the user manager UMask=0002. systemd-analyze --user security reports the gap directly. web/vite.config.js:175 proxies /uploads to the API and web/vite.config.js:41 deliberately exempts /uploads from the app security headers, so the public proxy path exists because the app exposes that directory.",
+      "evidence": [
+        "measured: systemctl --user show helpotron-api.service -p UMask -> UMask=0002",
+        "measured: systemd-analyze --user security helpotron-api.service -> 'X UMask=  Files created by service are world-readable by default  0.1' and 'Overall exposure level 7.9 EXPOSED' (identical 7.9 for helpotron-web and helpotron-tunnel)",
+        "measured: stat -c '%A %U:%G %s %n' uploads uploads/084a6888ce3244c1a8c44615d1a74263.webm -> drwxrwxr-x roni-saguey:roni-saguey uploads ; -rw-rw-r-- roni-saguey:roni-saguey 16 uploads/084a6888ce3244c1a8c44615d1a74263.webm",
+        "measured: curl -s -o /dev/null -w '%{http_code} len=%{size_download}' https://helpotron.dpdns.org/uploads/084a6888ce3244c1a8c44615d1a74263.webm -> 200 len=16 (existing upload fetchable with no credentials)",
+        "measured control: curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/uploads/definitely-not-a-real-file-xyz.bin -> 404, so the 200 above is the real file and not an SPA fallback",
+        "measured: ls -l on a sandbox run dir -> '-rw------- logs/run.log' and '-rw------- state.json' (file contents are already owner-only, so the prior world-readable run files are fixed) while the directories themselves remain drwxrwxr-x",
+        "web/vite.config.js:41 - if (path.startsWith('/api/') || path.startsWith('/uploads/')) return next();"
+      ],
+      "confidence": "high",
+      "impact": "Any lecture recording, PDF or study document a user uploads is readable by every local account and, if the filename leaks, by anyone on the internet - against the privacy posture the product markets. One line per unit (UMask=0077) closes it."
+    },
+    {
+      "id": "H7-F5",
+      "title": "The units receive no environment at all - config arrives only through an import-time load_dotenv, and .env defines JWT_SECRET twice with different values",
+      "symptom": "Nothing about the API configuration is declared where systemd can see it. 'systemctl --user show -p Environment' is empty and /proc/<uvicorn pid>/environ contains no DATABASE_URL, no OPENROUTER_API_KEY and no JWT_SECRET. Which database and which secret the process uses is decided by Python import order, and .env lines 21 and 46 disagree about JWT_SECRET.",
+      "root_cause": "helpotron-api.service has no EnvironmentFile= and no Environment= line. server/llm.py:16-21 calls load_dotenv(repo/.env, override=True) at import time and re-pins DATABASE_URL/ENVIRONMENT afterwards. server/config.py:30 reads DATABASE_URL via os.getenv when the config module is first imported. Whichever module is imported first wins; today the config.py default happens to equal the .env value so it works by coincidence. Separately .env declares JWT_SECRET on line 21 and line 46 with two different 64-hex values, and python-dotenv resolves duplicates last-wins, so the line-21 value is dead.",
+      "evidence": [
+        "measured: for u in helpotron-api helpotron-web helpotron-tunnel; do systemctl --user show $u -p Environment; done -> 'Environment=' (empty) for all three; no EnvironmentFiles listed",
+        "measured: tr NUL newline < /proc/2392946/environ -> ambient session vars only (HOME, PATH, DISPLAY, XDG_*, ...); no DATABASE_URL, no OPENROUTER_API_KEY, no JWT_SECRET, no SESSION_SECRET",
+        "server/llm.py:16-21 - from dotenv import load_dotenv ; _PINNED = {k: os.environ[k] for k in (DATABASE_URL, ENVIRONMENT) if k in os.environ} ; load_dotenv(Path(__file__).resolve().parent.parent / .env, override=True) ; for _k,_v in _PINNED.items(): os.environ[_k] = _v",
+        "server/config.py:30 - database_url: str = os.getenv(DATABASE_URL, f'sqlite:///{BASE_DIR}/data/db/helpotron.db')",
+        "measured: grep -n '^JWT_SECRET' .env -> 21:JWT_SECRET=<redacted> and 46:JWT_SECRET=<redacted>; sha256-prefix comparison of the two values -> 0a089f9ed95f vs 53db85375e16, i.e. two different secrets under one key",
+        "measured: .env key/set audit, values never printed -> 28 keys; OMNIROUTE_API_KEY set (73 chars) and OMNIROUTE_API_BASE=http://localhost:20128/api/v1 set, but ss -ltnp shows nothing listening on 20128 (dead lane, and a violation of the settled OpenRouter-only no-omni-lanes rule). STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and TELEGRAM_* are EMPTY, consistent with /api/health reporting stripe_configured:false.",
+        "measured: ps -eo pid,cmd filtered for token/secret/api-key/password/sk- -> no helpotron process carries a secret on its command line (clean)"
+      ],
+      "confidence": "high",
+      "impact": "Production config is invisible to systemd and reproducible only by reading Python import order; any refactor that imports config before llm silently repoints the app at the wrong SQLite file, which per the comment at server/llm.py:12-15 has already happened once. The duplicated JWT_SECRET means a loader change flips the signing secret and invalidates every session at once."
+    },
+    {
+      "id": "H7-F6",
+      "title": "The healthcheck detects and alerts, but only on problem-set transition - a persistent problem is alerted once and then silent indefinitely",
+      "symptom": "The state file currently reads claude-client-down and the last alert of any kind was 2026-09-13T02:40:26Z. The stack has been in a known-bad state for about 28 hours and the healthcheck has said nothing, because silence is its design when the problem set has not changed. If Telegram itself breaks, the only trace is one WARN line in journald that nobody reads.",
+      "root_cause": "helpotron_healthcheck.sh:73-77 compares the current problem set with the previous one and exits 0 printing 'health OK (unchanged: ...)' whenever they match - it never re-notifies an unresolved problem and has no escalation or digest. The alert transport is a shell-out to telebridge/tg_send.sh (helpotron_healthcheck.sh:82-86) whose failure path only echoes to stdout, and the unit is Type=oneshot with no OnFailure=.",
+      "evidence": [
+        "measured: cat /tmp/helpotron_health_state.json -> claude-client-down,",
+        "measured: tail /tmp/helpotron_wake.log -> last line 'HEALTH ALERT 2026-09-13T02:40:26Z problems=[claude-client-down,] prev=[none]' and nothing after it",
+        "measured: journalctl --user -u helpotron-health.service -n 40 -> every run since 2026-09-13 19:41 logs 'health OK (unchanged: claude-client-down,)' and exits status=0/SUCCESS, roughly every 30 min",
+        "helpotron_healthcheck.sh:73-77 - if [ $PROBLEMS = $OLD ]; then echo health OK (unchanged: ${PROBLEMS:-none}); exit 0; fi",
+        "helpotron_healthcheck.sh:39-42 - probe uvicorn:5000 curl -fsS -m 5 $API ; probe web:5173 curl -fsS -m 5 http://127.0.0.1:5173/ ; probe public-site curl -fsS -m 8 https://helpotron.dpdns.org/api/health - all three hops that actually serve, including the /api path specifically",
+        "helpotron_healthcheck.sh:64 - for u in helpotron-api helpotron-web helpotron-tunnel tele-poller; do systemctl --user is-active --quiet $u.service",
+        "helpotron_healthcheck.sh:82-83 - bash $BASE/telebridge/tg_send.sh ... >/dev/null 2>&1 || echo WARN: telegram send failed",
+        "measured: ls -la /home/roni/Roni_workspace/telebridge/tg_send.sh -> -rwxrwxr-x, present and executable; bot.env present mode 0600 (contents not read)",
+        "historical, the owner note about a dead :8000 probe is FIXED: the wake log shows uvicorn:8000 from 2026-09-09T01:35:35Z through 2026-09-11T05:11:52Z, then uvicorn:5000 from 2026-09-12T00:09:59Z onward"
+      ],
+      "confidence": "high",
+      "impact": "Mean time to notice a persistent 3am failure is unbounded once the first alert has fired; the only thing that resumes signalling is a recovery, so a down that becomes a different down is silent. The healthcheck is real - it is not the dead-port-8000 version - but it is a notifier, not a supervisor."
+    },
+    {
+      "id": "H7-F7",
+      "title": "cloudflared exposes 54 Prometheus metrics on 127.0.0.1:20241 and nothing scrapes them, so the tunnel error rate is unobserved",
+      "symptom": "The only tunnel-side evidence of a failing origin is a stream of ERR lines in /tmp/helpotron_tunnel.log that nobody tails. When cloudflared segfaulted on 2026-09-12 the only record is one systemd journal line and a roughly 5 second outage.",
+      "root_cause": "cloudflared runs with its default metrics server on 127.0.0.1:20241 and exports 54 cloudflared_* series including request-error and register-connection metrics. There is no prometheus, node_exporter or any scraper unit on this box, and ~/.cloudflared/helpotron.yml sets no logfile or rotation, so logs land in /tmp via the unit StandardError=append.",
+      "evidence": [
+        "measured: ss -ltnp | grep 20241 -> LISTEN 0 4096 127.0.0.1:20241 0.0.0.0:* users:(cloudflared,pid=2245389,fd=9)",
+        "measured: curl -s http://127.0.0.1:20241/metrics | grep -c '^cloudflared' -> 54 ; sample series: cloudflared_proxy_connect_streams_errors 0, cloudflared_config_local_config_pushes_errors 0, cloudflared_rpc_client_latency_secs_count{handler=registration,method=register_connection} 4",
+        "measured: systemctl list-units | grep -iE 'prometheus|node_exporter' -> empty ; systemctl --user list-units | grep -iE 'prom|grafana' -> empty",
+        "measured: /tmp/helpotron_tunnel.log 2026-09-13T01:19:58Z - repeated 'ERR failed to serve incoming request ... Unable to reach the origin service ... originService=http://localhost:5173' - a 502 storm that produced no alert of its own; the healthcheck caught public-site only because a 30-minute probe happened to coincide"
+      ],
+      "confidence": "high",
+      "impact": "Origin-down 502s are invisible at the tunnel layer and only sampled every 30 minutes by the healthcheck. Cloudflare's own documentation states that tunnel status Healthy says nothing about the origin; the request-error metric is the early warning, and it is already served on this box and unused."
+    },
+    {
+      "id": "H7-F8",
+      "title": "Logs written to /tmp are never rotated and the shipped logrotate rule points at a directory that does not exist",
+      "symptom": "The units append stdout/stderr to /tmp/helpotron_api.log, /tmp/helpotron_web.log and /tmp/helpotron_tunnel.log with no rotation and no size cap. The logrotate config written for them targets /var/log/helpotron/*.log, and /var/log/helpotron has never existed on this box.",
+      "root_cause": "The unit files use StandardOutput=append:/tmp/helpotron_*.log. deploy/logrotate.d/helpotron:1 declares the log set as /var/log/helpotron/*.log with 'create 0640 spark spark' (a user that does not exist here), and the file is not installed into /etc/logrotate.d at all. The application's own access logs do rotate correctly (server/access_log.py:66 RotatingFileHandler, 10485760 bytes x 10), so this gap is the systemd stdout stream only.",
+      "evidence": [
+        "~/.config/systemd/user/helpotron-api.service:11-12 - StandardOutput=append:/tmp/helpotron_api.log ; StandardError=append:/tmp/helpotron_api.log",
+        "deploy/logrotate.d/helpotron:1 - /var/log/helpotron/*.log with daily, rotate 30, compress, delaycompress, create 0640 spark spark",
+        "measured: ls -la /var/log/helpotron/ -> ABSENT",
+        "measured: ls /etc/logrotate.d/ -> anacron, e2scrub_all, placeholder, sysstat only (no helpotron rule)",
+        "measured: stat -c '%s %y %n' /tmp/helpotron_api.log /tmp/helpotron_web.log /tmp/helpotron_tunnel.log -> api 407937 2026-09-14 02:28:46 ; web 72453 2026-09-12 21:19:59 ; tunnel 256460 2026-09-12 21:19:58",
+        "measured: df -h / -> 468G total, 104G used, 341G available, 24% used - not urgent today, but unbounded"
+      ],
+      "confidence": "high",
+      "impact": "Slow unbounded growth, and worse: the file an operator needs after an incident is a single unrecycled stream that an error storm can push into hundreds of megabytes - exactly the scenario the 2026-09-13 origin-reset burst created."
+    },
+    {
+      "id": "H7-F9",
+      "title": "The unauthenticated /api/monitors/overview endpoint is public and leaks cost, token and activity telemetry",
+      "symptom": "Anyone on the internet can GET https://helpotron.dpdns.org/api/monitors/overview and read live business metrics: total requests, top endpoint names, status-code mix, datalake counts, study and assignment counts, and LLM spend in USD with token totals. It is also the endpoint the healthcheck uses as its liveness probe.",
+      "root_cause": "The route has no auth dependency and no admin gate, and it is reachable both directly (t2b.helpotron.dpdns.org -> :5000) and through the vite preview proxy (helpotron.dpdns.org/api/... -> :5000). The healthcheck depends on that unauthenticated shape: helpotron_healthcheck.sh:18 and :39 set API=http://127.0.0.1:5000/api/monitors/overview and probe it with curl -fsS.",
+      "evidence": [
+        "measured: curl -s https://helpotron.dpdns.org/api/monitors/overview -> 200 with traffic.total_requests 1340, top_endpoints including 'GET /api/health' 952 and 'GET /api/plans' 5, status_counts {200:1308, 401:28, 404:3, 422:1}, datalake_counts {operational_events:795, user_feedback:499, microcredit_submissions:351}, activity {study_materials:17, assignments:33}, cost {cost_usd:1.0233, calls:225, input_tokens:867636, output_tokens:77867}",
+        "measured: the same body is served from https://t2b.helpotron.dpdns.org/api/monitors/overview -> 200",
+        "measured: /tmp/helpotron_api.log shows '104.183.234.17:0 - GET /api/monitors/overview HTTP/1.1 200 OK' from a non-loopback client",
+        "helpotron_healthcheck.sh:18 - API=http://127.0.0.1:5000/api/monitors/overview - the probe works today only because the route is unauthenticated",
+        "measured contrast: /docs and /openapi.json on :5000 return the SPA HTML (3289 bytes, type text/html), not Swagger - FastAPI docs are shadowed, so this specific leak is the observability route rather than the API schema"
+      ],
+      "confidence": "high",
+      "impact": "Financial and competitive disclosure (LLM spend, token burn, user activity counts, endpoint inventory) to anonymous visitors, and the monitoring path is coupled to the same unauthenticated contract, so locking it down naively breaks the healthcheck."
+    },
+    {
+      "id": "H7-F10",
+      "title": "834 sandbox run directories accumulate unreaped and nothing deletes them",
+      "symptom": "data/sandboxes holds 834 timestamped run directories going back to 2026-08-26 (17 MB). Each run leaves a directory behind, no cleanup job exists, and the directories are mode 0775 (group and other readable).",
+      "root_cause": "deploy/README.md promises 'cleanup after run' and 'one temp workdir per subagent run', but no reaper is wired: no systemd tmpfiles rule, timer or cron job references data/sandboxes.",
+      "evidence": [
+        "measured: ls /home/roni/Roni_workspace/helpotron/data/sandboxes | wc -l -> 834",
+        "measured: du -sh data/sandboxes -> 17M ; oldest entry 20260826175208_shell_673993 (2026-08-26 17:52)",
+        "measured: ls -la data/sandboxes/ -> the parent and each run dir are drwxrwxr-x",
+        "measured: find data/sandboxes -maxdepth 3 -type f | head -8 | stat -> '-rw------- logs/run.log' and '-rw------- state.json' (file contents owner-only; directories are not)",
+        "measured: systemctl --user list-timers --all | grep -iE 'sandbox|cleanup' -> empty"
+      ],
+      "confidence": "high",
+      "impact": "Low today at 17 MB, but it is a monotonic leak of directory entries and a growing set of world-traversable paths; at a few thousand runs it becomes a directory-scan and inode cost rather than a disk-space one."
+    },
+    {
+      "id": "H7-F11",
+      "title": "Failure-mode audit: every service auto-restarts and the box survives reboot, so the real gap is detection latency, not recovery",
+      "symptom": "Nothing in the stack dies silently at the process level. The gap is that an outage beginning and ending between two 30-minute probes is invisible, and a persistent one is alerted exactly once.",
+      "root_cause": "All three helpotron units are UnitFileState=enabled, WantedBy=default.target, Restart=always, RestartSec=5, and user lingering is on, so they start at boot without a login and heal within about 5 seconds. helpotron-health.timer is enabled and fires OnBootSec=1min then every 30 min. The detection gap is the 30-minute probe interval combined with the transition-only dedup at helpotron_healthcheck.sh:73-77. helpotron-tunnel has After=helpotron-api.service helpotron-web.service but no Requires=, so the tunnel can be up while its origin is not - which is exactly the 2026-09-13 state.",
+      "evidence": [
+        "measured: systemctl --user list-units --type=service --all -> helpotron-api active running, helpotron-web active running, helpotron-tunnel active running, tele-poller active running, envy-scrape-sidecar active running, helpotron-health.service inactive dead (expected for a timer-triggered Type=oneshot)",
+        "measured: systemctl --user is-enabled helpotron-api.service helpotron-web.service helpotron-tunnel.service helpotron-health.timer -> enabled, enabled, enabled, enabled",
+        "measured: systemctl --user show per unit -p Restart -p RestartUSec -p NRestarts -p MemoryMax -> api Restart=always RestartUSec=5s NRestarts=4 MemoryMax=10737418240 ; web Restart=always NRestarts=0 MemoryMax=infinity ; tunnel Restart=always NRestarts=1 MemoryMax=infinity ; tele-poller Restart=always NRestarts=0 MemoryMax=infinity",
+        "measured: journalctl --user -u helpotron-api --since '2026-09-12 21:15:30' --until '2026-09-12 21:17:30' -> 'Scheduled restart job, restart counter is at 1, 2, 3, 4' between 21:16:06 and 21:16:35 - a 30-second crash loop that healed on the fourth attempt",
+        "measured: loginctl show-user roni-saguey -p Linger -> Linger=yes ; ls /var/lib/systemd/linger -> roni-saguey",
+        "measured: systemctl --user status helpotron-health.timer -> active (waiting) since 2026-09-08 21:34:50, Trigger every 30 min, Triggers helpotron-health.service",
+        "measured: systemctl --user show helpotron-tunnel -p After -p Requires -> After includes helpotron-api.service helpotron-web.service, Requires empty (ordering only, not a dependency)",
+        "measured: systemctl --user show helpotron-api -p OOMPolicy -> OOMPolicy=stop (an OOM kill stops the unit and Restart=always brings it back)"
+      ],
+      "confidence": "high",
+      "impact": "Recovery is handled; detection is not. The 3am answer: if the API died at 3am, systemd restarts it in ~5s and the owner sees nothing at all for a transient death. Only if the API is still down at a :11 or :41 probe does one Telegram alert fire - and then nothing further until it recovers. A crash-looping API is caught within 30 minutes; a 10-minute outage that self-heals is never reported."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H7-X1",
+      "finding": "H7-F1",
+      "file": "scripts/backup_db.sh",
+      "lines": "7, 11-17",
+      "change": "Two edits. (1) line 11-17 CANDIDATE_PATHS: insert \"$PROJECT_DIR/data/db/helpotron.db\" as the FIRST element after ${DB_PATH:-}, i.e. CANDIDATE_PATHS=( \"${DB_PATH:-}\" \"$PROJECT_DIR/data/db/helpotron.db\" \"$PROJECT_DIR/helpotron.db\" ... ). (2) line 7: change BACKUP_DIR=\"${BACKUP_DIR:-/opt/helpotron/backups}\" to BACKUP_DIR=\"${BACKUP_DIR:-/home/roni/Roni_workspace/helpotron/backups}\" so it stops depending on a VPS path. Then add the missing schedule: write ~/.config/systemd/user/helpotron-backup.service with Type=oneshot, Environment=DB_PATH=/home/roni/Roni_workspace/helpotron/data/db/helpotron.db, Environment=BACKUP_DIR=/home/roni/Roni_workspace/helpotron/backups, ExecStart=/usr/bin/env bash /home/roni/Roni_workspace/helpotron/scripts/backup_db.sh, plus helpotron-backup.timer with OnCalendar=*-*-* 03:15:00 and Persistent=true, then systemctl --user enable --now helpotron-backup.timer. Finally copy the newest .db.gz off-machine (the current destination is the same filesystem as the source).",
+      "risk": "None to the running stack - the script only reads the DB through sqlite3 .backup(), which is safe on a live SQLite file. The schedule fires at 03:15, once daily. Do NOT point DB_PATH at anything under /tmp.",
+      "verify": "cd /home/roni/Roni_workspace/helpotron && bash scripts/backup_db.sh | tail -2  # must print 'Backup completed successfully' and the gz must be > 1 MB and mtime == now. Then: gzip -t backups/helpotron_*.db.gz && python3 -c \"import gzip,sqlite3,tempfile;d=tempfile.mkdtemp();import glob,os,shutil;f=sorted(glob.glob('backups/helpotron_*.db.gz'))[-1];sqlite3.connect(f).backup(sqlite3.connect(d+'/r.db'))\" ; control test: DB_PATH=/home/roni/Roni_workspace/helpotron/helpotron.db bash scripts/backup_db.sh must produce a gz that is ~10x SMALLER than the data/db one - that size difference is the proof the old path was wrong."
+    },
+    {
+      "id": "H7-X2",
+      "finding": "H7-F4",
+      "file": "/home/roni-saguey/.config/systemd/user/helpotron-api.service.d/hardening.conf",
+      "lines": "append to the [Service] section (line 12, after RestrictNamespaces=yes)",
+      "change": "Add the line UMask=0077 to the [Service] section of all three drop-ins: ~/.config/systemd/user/helpotron-api.service.d/hardening.conf, ~/.config/systemd/user/helpotron-web.service.d/hardening.conf and ~/.config/systemd/user/helpotron-tunnel.service.d/hardening.conf. This makes every file the services create owner-only (0600) and every directory 0700, so uploads and sandbox dirs stop being world-readable. Apply with systemctl --user daemon-reload - the units only re-read UMask on the next start, so the change takes effect when the service is next restarted (do NOT restart the owner's services to verify; check the setting with systemctl --user show instead). Also chmod the existing data: chmod 700 data/sandboxes data/uploads uploads, find data uploads -type f -exec chmod 600 {} +, find data uploads -type d -exec chmod 700 {} +.",
+      "risk": "UMask=0077 applies to newly created files only. If any external process (the extension, a scraper, a root-owned cron) reads uploads as a group member, that read will start failing. The API and the web tier both run as roni-saguey so their own reads are unaffected. Low risk, high value.",
+      "verify": "systemctl --user daemon-reload && systemctl --user show helpotron-api.service -p UMask  # must print UMask=0077. Then after the next natural restart: ls -l uploads | head  # new files must be -rw------- not -rw-rw-r--. Current state to confirm the defect before the fix: systemctl --user show helpotron-api.service -p UMask -> UMask=0002."
+    },
+    {
+      "id": "H7-X3",
+      "finding": "H7-F2",
+      "file": "/home/roni-saguey/.config/systemd/user/helpotron-api.service",
+      "lines": "8",
+      "change": "Change --host 0.0.0.0 to --host 127.0.0.1 on the ExecStart line: ExecStart=/home/roni/Roni_workspace/helpotron/.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 5000 --proxy-headers --forwarded-allow-ips 127.0.0.1. The tunnel ingress already targets localhost:5000 (~/.cloudflared/helpotron.yml:8) and the vite preview proxy targets http://127.0.0.1:5000 (web/vite.config.js:171), so nothing loses access. Apply with systemctl --user daemon-reload; the bind address changes on the next start of the unit.",
+      "risk": "Anything that reaches the API over the LAN IP 192.168.86.49:5000 (a phone testing the extension against the laptop, a second machine) will stop working. Check for such a dependency first: the API access log at data/logs/access.log records client IPs, so grep it for non-127.0.0.1 addresses before applying. Low risk given the tunnel is the only intended ingress.",
+      "verify": "Before: ss -ltnp | grep :5000 -> 0.0.0.0:5000. After the unit next starts: ss -ltnp | grep :5000 -> 127.0.0.1:5000, and curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5000/api/health -> 200, and curl from the LAN IP must now fail to connect. Then curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/api/health -> 200 (public path must be unaffected)."
+    },
+    {
+      "id": "H7-X4",
+      "finding": "H7-F5",
+      "file": "/home/roni-saguey/.config/systemd/user/helpotron-api.service",
+      "lines": "after line 8 (new EnvironmentFile= before ExecStart)",
+      "change": "Declare the environment explicitly instead of relying on import-order dotenv: add EnvironmentFile=/home/roni/Roni_workspace/helpotron/.env to [Service] of helpotron-api.service (and helpotron-web.service if the vite proxy ever needs env). Because systemd EnvironmentFile does not strip quotes identically to python-dotenv, first confirm the file is plain KEY=value with no inline comments on value lines. Then remove the duplicate: delete the stale JWT_SECRET line in .env (line 21) keeping the in-use one at line 46, or vice versa, but KEEP the value the running process actually loaded - determine it with: python3 -c \"from dotenv import dotenv_values; print(list(dotenv_values('/home/roni/Roni_workspace/helpotron/.env').keys()).count('JWT_SECRET'))\" and by grepping for JWT_SECRET readers. Also delete the dead OMNIROUTE_API_BASE / OMNIROUTE_API_KEY pair, since nothing listens on 20128 and the settled rule is OpenRouter-only.",
+      "risk": "If the .env value the app currently uses differs from the line-46 value, sessions signed with the old secret break on restart. Make the JWT change in a quiet window and expect a one-time re-login. systemd EnvironmentFile parsing rejects some shell syntax, so a malformed line will stop the unit from starting at all - validate with systemd-analyze verify ~/.config/systemd/user/helpotron-api.service before the next start.",
+      "verify": "systemd-analyze verify /home/roni-saguey/.config/systemd/user/helpotron-api.service && systemctl --user daemon-reload && systemctl --user show helpotron-api.service -p EnvironmentFiles # must list the .env path. Then confirm the process sees it after its next start: tr NUL newline < /proc/$(systemctl --user show -p MainPID --value helpotron-api.service)/environ | grep -c '^DATABASE_URL=' -> 1. Duplicate-key check: grep -c '^JWT_SECRET=' .env -> 1."
+    },
+    {
+      "id": "H7-X5",
+      "finding": "H7-F6",
+      "file": "helpotron_healthcheck.sh",
+      "lines": "73-86",
+      "change": "Add re-notification and escalation next to the existing transition logic. Keep the change-detection, but when PROBLEMS is non-empty and equals OLD, also re-alert if the last alert is older than a threshold. Concretely, before line 73 add: LASTALERT=$(stat -c %Y /tmp/helpotron_health_state.last 2>/dev/null || echo 0) and change the guard to require both no-change AND freshness, i.e. if [ \"$PROBLEMS\" = \"$OLD\" ] && [ -n \"$PROBLEMS\" ] && [ $((NOW - LASTALERT)) -lt 21600 ]; then echo health OK (unchanged: ${PROBLEMS:-none}); exit 0; fi - so a persistent problem re-alerts every 6 hours. In the alert block (after line 80) add: touch /tmp/helpotron_health_state.last. Also make a failed Telegram send loud: replace the '|| echo \"WARN: telegram send failed\"' tail with '|| { echo \"WARN: telegram send failed\"; exit 1; }' and add OnFailure= to the service so a dead alert path cannot itself be silent - or, simpler and safer, make the first line of the script touch a heartbeat file that a second check verifies.",
+      "risk": "Re-alerting every 6 hours for a known-bad state increases Telegram traffic and could annoy. 6 hours is deliberately long; the claude-client-down condition already qualifies and would start re-notifying, so expect one extra message per 6h until that clears. Do not lower the threshold below 1 hour or the fix becomes noise.",
+      "verify": "bash /home/roni/Roni_workspace/helpotron_healthcheck.sh; echo exit=$?  # must be 0 and must print 'health OK (unchanged: ...)' in the non-stale case. Then simulate: printf 'none' > /tmp/helpotron_health_state.json; bash helpotron_healthcheck.sh  # must now print 'ALERT: [<problems>] (was [none])' and telegram must return 200. Force the escalation path by backdating the heartbeat: touch -d '7 hours ago' /tmp/helpotron_health_state.last; bash helpotron_healthcheck.sh  # must re-alert. Restore normal operation afterwards by running the script once clean."
+    },
+    {
+      "id": "H7-X6",
+      "finding": "H7-F9",
+      "file": "server/main.py",
+      "lines": "the route decorator for /api/monitors/overview",
+      "change": "Two-part change so monitoring does not break. (1) Add a lightweight unauthenticated liveness route that exposes nothing but status: @app.get('/api/health') already exists and returns status/database/llm_configured with no business data - repoint the healthcheck's API probe from /api/monitors/overview to /api/health by editing helpotron_healthcheck.sh:18 to API=\"http://127.0.0.1:5000/api/health\". (2) Gate /api/monitors/overview behind the existing admin dependency used by other admin routes (add the same Depends/require_admin the neighbouring admin endpoints use), so aggregate traffic, cost and token figures stop being world-readable.",
+      "risk": "If anything else polls /api/monitors/overview without credentials (a dashboard, envy-health, the monitors_dash at 127.0.0.1:37701), it will start getting 401. grep the repo and ~/.config/systemd for the string before applying: grep -rn 'monitors/overview' /home/roni/Roni_workspace --include=*.py --include=*.sh --include=*.js. The healthcheck edit must land in the same change as the gate or monitoring breaks.",
+      "verify": "Before: curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/api/monitors/overview -> 200 with a cost_usd body. After: same command -> 401 (or 403), while curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/api/health -> 200 and bash helpotron_healthcheck.sh still exits 0. Confirm no business data leaks: curl -s https://helpotron.dpdns.org/api/monitors/overview | grep -c cost_usd -> 0."
+    },
+    {
+      "id": "H7-X7",
+      "file": "~/.config/systemd/user/ (new helpotron-tunnel-health.service + .timer)",
+      "finding": "H7-F7",
+      "lines": "new files",
+      "change": "Turn the metrics cloudflared already serves into an alert. Add a small oneshot that reads http://127.0.0.1:20241/metrics, extracts the origin/request error counters, and calls telebridge/tg_send.sh when the rate rises - or, if Prometheus is preferred, add prometheus + node_exporter units and scrape 127.0.0.1:20241 with an alert rule on rate(cloudflared_tunnel_request_errors[5m]) > 0. Cheapest first step that needs no new dependency: a one-line addition to helpotron_healthcheck.sh just after the public-site probe (line 42) - probe 'tunnel-errors' bash -c 'v=$(curl -fsS -m 3 http://127.0.0.1:20241/metrics | awk \"/^cloudflared_tunnel_request_errors/{s+=$2} END{print s+0}\"); [ \"$v\" -eq 0 ]' - which alerts whenever the tunnel has seen any request error since it started.",
+      "risk": "cloudflared_tunnel_request_errors is cumulative for the process lifetime, so a single early 502 keeps the counter non-zero forever and would produce a permanently-stuck problem entry. Either reset-baseline the value on each run, or use the Prometheus rate() form which is the correct instrument. Start with a warn-only log line rather than a Telegram alert until the baseline is understood.",
+      "verify": "curl -s http://127.0.0.1:20241/metrics | grep -E '^cloudflared_tunnel_request_errors|^cloudflared_proxy_connect_streams_errors'  # must return lines (54 cloudflared_* series exist today). Then reproduce an origin outage in isolation - point a scratch cloudflared at a dead port - and confirm the counter increments. Do not stop the live tunnel to test."
+    },
+    {
+      "id": "H7-X8",
+      "finding": "H7-F8",
+      "file": "/etc/logrotate.d/helpotron (replace deploy/logrotate.d/helpotron)",
+      "lines": "1-11",
+      "change": "Make the shipped rule match where the units actually write. Either (a) change deploy/logrotate.d/helpotron line 1 from /var/log/helpotron/*.log to /tmp/helpotron_*.log and drop the impossible 'create 0640 spark spark' (use 'create 0640 roni-saguey roni-saguey'), install it with sudo cp deploy/logrotate.d/helpotron /etc/logrotate.d/helpotron, or (b) better, change the three units' StandardOutput=/StandardError= to append:/home/roni/Roni_workspace/helpotron/data/logs/helpotron-<svc>.log (a directory the app already rotates under server/access_log.py:66) so logs stop living in /tmp at all. Option (b) also survives a reboot's /tmp cleanup. Note the postrotate line 'systemctl reload helpotron-api.service' is a no-op for uvicorn and can be deleted.",
+      "risk": "logrotate runs as root; a rule matching /tmp/helpotron_*.log with 'create' will recreate the file with a new owner, which can break append-only writers mid-write. Option (b) avoids that entirely and is preferred. Verify the logrotate rule with logrotate -d (debug, no action) before enabling.",
+      "verify": "sudo logrotate -d /etc/logrotate.d/helpotron  # dry run must parse with no error and must list the three files it would rotate. Then after a real rotation: ls -l /tmp/helpotron_api.log* -> a .1 file exists and /tmp/helpotron_api.log is small again. Baseline sizes today: api 407937, web 72453, tunnel 256460 bytes."
+    },
+    {
+      "id": "H7-X9",
+      "file": "~/.cloudflared/helpotron.yml + deploy/README.md",
+      "finding": "H7-F3",
+      "lines": "4-9 (yml), 20-24 (README)",
+      "change": "Two things. (1) Documentation truth: correct deploy/README.md:20-24 and deploy/cloudflared.md to describe the deployment that exists - helpotron.dpdns.org -> http://localhost:5173 (vite preview) and t2b.helpotron.dpdns.org -> http://localhost:5000, with the units helpotron-api.service / helpotron-web.service / helpotron-tunnel.service and their drop-ins. (2) The real fix: serve web/dist with a production static server instead of vite preview. Smallest safe step is to keep the port and swap the ExecStart in helpotron-web.service to a hardened static server that still proxies /api and /uploads - e.g. Caddy with a two-line reverse_proxy, or serve the dist directory through the existing FastAPI static mount and point the tunnel straight at :5000, which removes the extra hop entirely. Do not change the tunnel ingress until the replacement answers /api/health and / on 5173.",
+      "risk": "Changing the web tier is the highest-blast-radius change in this report - a mistake takes the public site down. Do it behind a verification gate: bring the replacement up on a spare port, curl / and /api/health there, then swap. Keep vite preview's unit file intact as the rollback path.",
+      "verify": "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/ -> 200 and curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/api/health -> 200 on the NEW server before touching the tunnel; then after the swap the same two public checks: curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/ and https://helpotron.dpdns.org/api/health must both still be 200, and the SPA must render (the page is 3289 bytes of index.html today)."
+    },
+    {
+      "id": "H7-X10",
+      "file": "data/sandboxes (new reaper, e.g. deploy/clean_sandboxes.sh + user timer)",
+      "finding": "H7-F10",
+      "lines": "n/a - new file",
+      "change": "Add a retention job: a oneshot script that deletes data/sandboxes/* run directories older than N days (7 is generous for debugging) using find /home/roni/Roni_workspace/helpotron/data/sandboxes -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + and is driven by a ~/.config/systemd/user/helpotron-sandbox-reaper.timer on a daily OnCalendar. Also fix the directory mode: the UMask=0077 change (H7-X2) is what makes newly created run dirs 0700.",
+      "risk": "rm -rf on a glob: the -mindepth 1 -maxdepth 1 -type d guards are load-bearing and must be kept, or the command can match the parent. Run it once with -print instead of -exec rm -rf in a dry run first. Sandboxes are per-run scratch, so deleting old ones is safe, but confirm nothing reads a sandbox by run-id after the fact.",
+      "verify": "Before: ls /home/roni/Roni_workspace/helpotron/data/sandboxes | wc -l -> 834 (baseline, 17M). Dry run: find data/sandboxes -mindepth 1 -maxdepth 1 -type d -mtime +7 -print | wc -l -> count of what would be removed; the command must not print the sandboxes directory itself. After the reaper runs once: ls data/sandboxes | wc -l must drop to the number of runs from the last 7 days, and du -sh data/sandboxes must drop well below 17M."
+    }
+  ],
+  "verification_plan": "Independent confirmation of this whole track, in order, using only read-only commands. (1) SERVICE GRAPH: systemctl --user list-units --type=service --all | grep helpotron ; systemctl --user list-unit-files | grep -E 'helpotron|tele-poller' - expect helpotron-api, helpotron-web, helpotron-tunnel, tele-poller all 'enabled' and active, and helpotron-health.service 'static' (timer-driven). For each: systemctl --user show helpotron-<svc> -p Restart -p RestartUSec -p NRestarts -p MemoryMax -p UnitFileState -p WantedBy - expect Restart=always, RestartUSec=5s, UnitFileState=enabled, api MemoryMax=10737418240, web/tunnel MemoryMax=infinity. (2) PORTS: ss -ltnp | grep -E ':(5000|5173)' - expect 0.0.0.0:5000 (the defect in H7-F2) and 127.0.0.1:5173. (3) PUBLIC PATH, the exact commands and the exact codes measured on 2026-09-14: curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5000/api/health -> 200 ; curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/api/health -> 200 ; curl -s -o /dev/null -w '%{http_code}' https://helpotron.dpdns.org/api/health -> 200 ; curl -s https://helpotron.dpdns.org/api/health -> {\"status\":\"ok\",...,\"database\":\"ok\",\"llm_configured\":true,\"stripe_configured\":false}. Also check root on all three and both /api and / paths, not just root. (4) HEALTHCHECK: bash /home/roni/Roni_workspace/helpotron_healthcheck.sh ; echo exit=$? ; cat /tmp/helpotron_health_state.json ; tail /tmp/helpotron_wake.log ; journalctl --user -u helpotron-health.service -n 20 - expect exit 0, a state string, and the run history. Then confirm it can actually reach a human: ls -la /home/roni/Roni_workspace/telebridge/tg_send.sh (executable) and confirm the state file changes when a probe is forced to fail. (5) BACKUPS: crontab -l | grep -i helpotron (expect nothing today - the finding); ls -la /home/roni/Roni_workspace/helpotron/backups/ and ls -la --time-style=long-iso /home/roni/Roni_workspace/helpotron/data/db/ - compare the newest backup mtime with data/db/helpotron.db mtime; the gap is the finding. Then run bash scripts/backup_db.sh and read WHICH file it names as RESOLVED_DB - that single line proves the wrong-database bug. (6) SECRETS/CONFIG: systemctl --user show helpotron-api.service -p Environment -p EnvironmentFiles (expect empty today); pid=$(systemctl --user show -p MainPID --value helpotron-api.service); tr NUL newline < /proc/$pid/environ | sed -E 's/=.*/=<set>/' - expect no DATABASE_URL/JWT_SECRET/OPENROUTER_API_KEY today; grep -c '^JWT_SECRET=' .env (expect 2 today, 1 after H7-X4); grep -n '^JWT_SECRET' .env must never be run in a way that prints values. ps -eo pid,cmd | grep -iE 'secret|token|api[_-]?key|sk-' - expect no helpotron process with a secret on its command line. (7) DISK AND GROWTH: du -sh data logs uploads exports artifacts backups web/dist data_lake ; stat -c '%s %y %n' /tmp/helpotron_api.log /tmp/helpotron_web.log /tmp/helpotron_tunnel.log ; ls /var/log/helpotron 2>&1 ; ls /etc/logrotate.d | grep -i help ; ls data/sandboxes | wc -l ; stat -c '%A %n' uploads data/sandboxes/*/. - expect the sizes in the findings and the logrotate/dir-permission gaps. (8) HARDENING: systemd-analyze --user security helpotron-api.service --no-pager | tail -8 - expect '7.9 EXPOSED' and the UMask line today, and a lower score after H7-X2 and H7-X3. (9) FAILURE MODES: systemctl --user show helpotron-api -p Restart -p OOMPolicy -p MemoryMax ; loginctl show-user roni-saguey -p Linger ; journalctl --user -u helpotron-tunnel | grep -E 'status=|Scheduled restart' - this is the evidence for the 3am answer. Every command above was run in this session on 2026-09-14 between 02:2x and 02:3x EDT and its literal output is quoted in the evidence arrays.",
+  "external_research": [
+    {
+      "what": "systemd.exec(5) and the systemd --user manager's capability semantics - why a user unit dies with status=218/CAPABILITIES and which sandbox directives are actually available to an unprivileged manager",
+      "url": "https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html",
+      "why": "Explains the exact failure the owner already hit ('Failed to drop capabilities: Operation not permitted', status=218/CAPABILITIES on helpotron-tunnel at 2026-09-11 15:03:27) and validates the existing drop-ins, which correctly omit ProtectKernelModules/ProtectKernelLogs/ProtectClock/PrivateNetwork/ProtectControlGroups. Also identifies the one directive those drop-ins are still missing - UMask - which is the H7-F4 fix.",
+      "license": "LGPL-2.1-or-later (systemd) / CC-BY-SA documentation",
+      "verdict": "adopt - keep the current safe subset, add UMask=0077, and use 'systemd-analyze --user security <unit>' as the scoreboard (7.9 EXPOSED today). The 218 mechanism is corroborated by the systemd issue tracker: https://github.com/systemd/systemd/issues/33167"
+    },
+    {
+      "what": "Cloudflare Tunnel monitoring - what tunnel 'Healthy' actually measures, and where origin-down 502s become visible",
+      "url": "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/monitoring/",
+      "why": "States the single fact this track turns on: tunnel status reflects only the cloudflared-to-Cloudflare connection, so a tunnel can read Healthy while every user gets a 502. That is exactly the shape of this deployment (helpotron.dpdns.org -> :5173 -> :5000) and it means the origin must be probed separately and by the right metric. It also points at cloudflared's own Prometheus metrics - which this box already serves on 127.0.0.1:20241 with 54 series and nothing scraping them (H7-F7).",
+      "license": "Cloudflare documentation, all rights reserved (docs); cloudflared is Apache-2.0",
+      "verdict": "adapt - the instrumentation is already installed and free (cloudflared_tunnel_request_errors and the register-connection metrics on :20241); adopt the layered probe model and skip any new vendor dependency"
+    },
+    {
+      "what": "Vite CLI documentation - the `vite preview` command's intended use",
+      "url": "https://vite.dev/guide/cli",
+      "why": "Documents that vite preview is 'intended for previewing the build locally and not meant as a production server'. helpotron's entire public web tier is that command (helpotron-web.service:8, tunnel ingress line 6), so the product's production edge is an unsupported component. Maintainer detail on the missing production features (no gzip/brotli, unoptimised sirv config, no stability guarantee): https://github.com/vitejs/vite/discussions/16607 and https://github.com/vitejs/vite/discussions/2834",
+      "license": "MIT (Vite)",
+      "verdict": "reject as a production server (recognise the risk); adapt by keeping vite preview only as the local sanity check and serving web/dist behind a real static server or through the existing FastAPI static mount, which also removes the :5173 hop"
+    },
+    {
+      "what": "SQLite online backup API as used by scripts/backup_db.sh",
+      "url": "https://sqlite.org/backup.html",
+      "why": "The script's python3 -c 'con.backup(bck)' call is the correct, safe way to copy a live SQLite database without locking writers - so the mechanism is sound and only the path selection and the schedule are broken. This matters because the fix (H7-X1) is a two-line path change plus a timer, not a rewrite. It also justifies backing up to a different filesystem: an online copy on the same disk protects against corruption but not against disk loss.",
+      "license": "Public domain (SQLite)",
+      "verdict": "adopt - keep the backup mechanism exactly as written, change CANDIDATE_PATHS to put data/db/helpotron.db first and add the timer plus an off-machine destination"
+    }
+  ],
+  "open_questions": [
+    "Why did helpotron-api restart four times in thirty seconds on 2026-09-12 21:16:06-21:16:35? journalctl shows 'Scheduled restart job, restart counter is at 1..4' but no 'Main process exited' line for those cycles, and /tmp/helpotron_api.log contains no traceback for that window, so the trigger is not determinable from the surviving logs. What would settle it: journalctl --user -u helpotron-api --since '2026-09-12 21:15:00' --until '2026-09-12 21:17:00' -o short-precise --output-fields=_EXIT_CODE,_EXIT_STATUS,MESSAGE, plus a longer retention window for the API log.",
+    "Was a restore from backups/helpotron.db.bak.20260901_creditsfix or data/db/helpotron.db.bak-20260902-025103 ever tested? No restore log, script or note was found anywhere in the repo or the systemd journal. What would settle it: a written restore drill with the date, the source file and the row counts observed afterwards.",
+    "Is anything other than the healthcheck polling /api/monitors/overview? If a dashboard, envy-health or telebridge/monitors_dash.py depends on the unauthenticated shape, H7-X6 will break it. What would settle it: grep -rn 'monitors/overview' across /home/roni/Roni_workspace and ~/.config/systemd, and a week of 401s in data/logs/access.log after the gate lands.",
+    "Which JWT_SECRET value is the running process actually using - line 21 or line 46 of .env? The two differ and only the last-wins rule tells us the survivor, which was inferred rather than observed. What would settle it: a throwaway script that imports server.config under the same conditions as uvicorn and compares hashes, or signing a token and verifying it against each candidate. Until then, treat any secret rotation as session-invalidating.",
+    "Is DATABASE_URL in .env really the data/db/helpotron.db path? It was inferred from its length (66 characters, which matches sqlite:////home/roni/Roni_workspace/helpotron/data/db/helpotron.db exactly) and corroborated by which .db file has a live mtime, not read directly. What would settle it: starting a scratch uvicorn with the same WorkingDirectory and logging config.config.database_url, or a one-off python3 -c that prints only the path component - never the whole value.",
+    "Would binding the API to 127.0.0.1 (H7-X3) break anything that currently reaches it over the LAN IP 192.168.86.49:5000? The extension on a phone pointed at the laptop would be the casualty. What would settle it: grep data/logs/access.log for non-127.0.0.1 client addresses on the :5000 listener over the past week.",
+    "The tunnel ingress maps t2b.helpotron.dpdns.org to the helpotron :5000 API while helpotron.dpdns.org serves the SPA from :5173. Whether the t2b hostname is meant to front a different product, or is a deliberate direct-API door for the extension, could not be determined from this repo. What would settle it: the Cloudflare Zero Trust public-hostname configuration and the t2b repo's own tunnel expectations."
+  ]
+}

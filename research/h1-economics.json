@@ -1,0 +1,364 @@
+{
+  "track": "H1",
+  "agent": "h1-economics",
+  "summary": "HEADLINE: /api/agent/start charges 1 credit but spawns an LLM loop whose invalid-JSON and command-timeout branches `continue` without incrementing steps, so only the 3600s clock bounds it; each of hundreds of steps re-sends ~50k tokens with no db/user_id (no cost ledger) and no max_tokens, with no per-user concurrency cap. That is a ~100x worst-case daily negative margin. Second, the economy is two currencies that never meet: grants land in settings.token_balance while study/agent/transcription charge user.credits (and the Stripe webhook grants credits while chat/vision gate on token_balance), so every plan is missing half the product. Third, the two hardcoded price tables disagree and understate real OpenRouter cost 3-5x on the Gemini tiers, and the $25/day cap in cost_control.py has zero callers. Suite measured: 5 failed, 474 passed in 275s.",
+  "severity": "blocker",
+  "findings": [
+    {
+      "id": "H1-F1",
+      "title": "Agent sessions: 1 credit buys an unbounded, unmetered, ~50k-token-per-call LLM loop",
+      "symptom": "User pays 1 credit (nominal ~1.5-3.3c) to Activate the agent; the server runs LLM steps for up to one hour, re-sending the growing observation history, and none of the spend appears in any ledger or budget check.",
+      "root_cause": "server/agent_session.py:164 loops `while elapsed < MAX_SESSION_SECONDS and steps < MAX_STEPS`, but the invalid-JSON branch (175-178) and timeout branch (210-216) `continue` WITHOUT incrementing session.steps, so MAX_STEPS=120 bounds only the normal path and the 3600s clock bounds the rest. agent_session.py:170 calls llm.call_llm with no db=, user_id=, max_tokens= or model=, so it never logs cost, applies no output cap, and resolves effort='auto'/complexity=3.0 to level 2 = qwen/qwen-2.5-72b-instruct (server/llm.py:150-155,176-179; max_tokens only for GRUNT_CANDIDATES at llm.py:379-384). _agent_prompt (agent_session.py:258-261) re-sends the last 10 messages at 20000 chars each (~50k tokens) every step. Charge is flat 1 credit (server/main.py:1893; server/credits.py:16) and /api/agent/start (main.py:1891-1898) has no per-user concurrency cap.",
+      "evidence": [
+        "server/agent_session.py:33-34 MAX_SESSION_SECONDS=3600, MAX_STEPS=120",
+        "server/agent_session.py:164-178 and 210-216 - both `continue` paths skip the step increment",
+        "server/agent_session.py:170 - call_llm with no db/user_id/max_tokens/model",
+        "server/agent_session.py:258-261 - last 10 messages x 20000 chars",
+        "server/main.py:1893 + server/credits.py:16 - flat 1 credit per session",
+        "estimated: ~50k input tokens/call; 20 calls ~= $0.15, 300 calls ~= $2.25-3.75, all for 1 credit"
+      ],
+      "confidence": "high",
+      "impact": "Direct negative margin and denial-of-wallet. 1 credit is worth ~1.5-3.3c of plan revenue; one session can cost $0.15-$3.75. With no concurrency cap a 300-credit Basic account can run 300 concurrent hour-long sessions for up to ~$1,100 of spend on a $10 plan (~100x). Invisible to cost tracking."
+    },
+    {
+      "id": "H1-F2",
+      "title": "Two currencies that never meet: grants land in token_balance, paid features charge credits (and vice versa)",
+      "symptom": "Free-Trial user sees 150 tokens but study/agent calls return 402 'insufficient credits'. Stripe subscriber sees 300 credits but My Agent and vision say 'token balance is 0'. No plan can use the whole product.",
+      "root_cause": "Two independent balances. user.credits (server/database.py:63 Float) is charged by credits.charge (server/credits.py:93,98) and by study material, transcription and agent-start. settings['token_balance'] is the counter chat/vision/dump gates read (server/routes_overlord.py:2103-2105, routes_extension.py:1253-1255 and 659-661, routes_dump.py:319). Grants disagree: signup gives neither (main.py:1045-1054); Free Trial grants ONLY token_balance (trial_service.py:67-72); admin welcome-tokens grants ONLY token_balance (admin.py:241); the Stripe webhook grants ONLY credits (payments.py:162,192). No conversion exists.",
+      "evidence": [
+        "server/credits.py:93 - gate reads locked_user.credits",
+        "server/trial_service.py:67-72 - trial grant goes to token_balance only",
+        "server/admin.py:241 - welcome grant goes to token_balance only",
+        "server/payments.py:162,192 - subscription adds user.credits only",
+        "server/routes_overlord.py:2103-2105, routes_extension.py:1253-1255 - chat/vision gate on token_balance",
+        "server/main.py:702,1555,1893 - study/transcription/agent charge user.credits"
+      ],
+      "confidence": "high",
+      "impact": "Fulfilment failure / chargeback risk: paying subscribers cannot use chat or vision, trial users cannot use study tools. The advertised 'monthly_task_tokens' (server/plans.py:78-87) is not the currency the product spends, so margin math is meaningless until unified."
+    },
+    {
+      "id": "H1-F3",
+      "title": "A paid plan grants no usable balance: manual payments never capture; plan assignment never deposits",
+      "symptom": "Stripe unconfigured on this box, so no subscription can be created. A cashapp/zelle/venmo/paypal payment writes a 'pending' Payment row and adds ZERO credits; an admin setting the plan to basic/pro/elite deposits nothing.",
+      "root_cause": "server/payments.py:249 sets `status = 'captured' if provider == 'stripe' else 'pending'`; credits are added only under `if status == 'captured'` (payments.py:260-272), so manual providers never credit. /api/payments rejects stripe when Stripe is on (main.py:1827-1828) and create_checkout_session returns stripe_not_configured when off (payments.py:36-40). verify_trial_payment flips only the 1-cent payment to captured with no grant (admin.py:249-274); set_user_plan changes the label only (admin.py:277-286).",
+      "evidence": [
+        "server/payments.py:249 - only 'stripe' captures",
+        "server/payments.py:260-272 - credit grant inside the captured branch",
+        "server/main.py:1827-1828 - stripe rejected on /api/payments",
+        "server/admin.py:249-274 - verify_trial_payment grants no credits",
+        "server/admin.py:277-286 - set_user_plan grants no credits",
+        "measured: config.stripe_secret_key and config.stripe_webhook_secret are empty"
+      ],
+      "confidence": "high",
+      "impact": "Money can be collected (Payment row) with no entitlement; every paid user depends on an operator manually granting tokens. Classic refund/chargeback exposure."
+    },
+    {
+      "id": "H1-F4",
+      "title": "Model ladder is not deepseek-only: five slugs and three silent non-deepseek routes",
+      "symptom": "Routes that must be deepseek/deepseek-v4.1-flash resolve to nemotron, qwen, gemini-3.1-flash-lite or gemini-2.0-flash, and wrappers default to Gemini.",
+      "root_cause": "ModelPolicy.PRIMARY_MODELS has five slugs (server/llm.py:29-35). resolve_model_routing sends level 1 to nemotron, 2 to qwen, 3 to gemini-3.1-flash-lite, and only 4-10 to deepseek (llm.py:172-191); effort='auto' with default complexity_score=3.0 lands level 2 = qwen (llm.py:150-155). generate_with_deepseek and chat_complete default model='google/gemini-3.1-flash-lite' (llm.py:513-519). Transcription hardcodes google/gemini-2.0-flash (transcription.py:31), off-ladder. cost_tracking.MODEL_RATES still lists qwen-cheap and mistral-nemo (cost_tracking.py:23-24). config.primary_model is read only by capabilities.py:55 and validate() - llm.py never consults PRIMARY_MODEL, so any code assuming .env controls routing is wrong.",
+      "evidence": [
+        "server/llm.py:29-35 PRIMARY_MODELS (5 slugs)",
+        "server/llm.py:172-191 ladder branches",
+        "server/llm.py:488-499 MODELS short-name map",
+        "server/llm.py:513-519 wrapper defaults -> gemini-3.1-flash-lite",
+        "server/transcription.py:31 GEMINI_AUDIO_MODEL=google/gemini-2.0-flash",
+        "server/config.py:58 primary_model only used at capabilities.py:55"
+      ],
+      "confidence": "high",
+      "impact": "Settled-policy violation plus a cost blind spot: margin depends on which model ran, and three of five slugs are priced in a second contradictory table."
+    },
+    {
+      "id": "H1-F5",
+      "title": "Price tables conflict and understate real OpenRouter cost 3-5x on the Gemini tiers",
+      "symptom": "Cost estimates and the ApiUsageLog ledger disagree with each other and with OpenRouter's rates.",
+      "root_cause": "ModelPolicy.PRICING (server/llm.py:46-56) says gemini-3.1-flash-lite $0.075/$0.30 and gemini-3.8-flash $0.25/$1.00; cost_tracking.MODEL_RATES (cost_tracking.py:19-25) says $0.50/$1.50 and $1.00/$4.00. Live OpenRouter list: lite $0.25/$1.50, 3.8-flash $0.75/$3.75, so PRICING understates lite ~3.3x/5x and 3.8-flash ~3x/3.75x. qwen is listed $0.09/$0.18 (llm.py:49) vs real ~$0.12/$0.39. Only deepseek ($0.15/$0.60, llm.py:54) matches. calculate_effective_task_cost returns inf for unknown models (llm.py:64-66); get_deepseek_baseline_cost actually prices gemini-lite (llm.py:73-76).",
+      "evidence": [
+        "server/llm.py:46-56 vs server/cost_tracking.py:19-25 - two rate tables",
+        "server/llm.py:64-66 unknown model -> float('inf')",
+        "server/llm.py:73-76 get_deepseek_baseline_cost prices gemini-3.1-flash-lite",
+        "external: openrouter.ai/google/gemini-3.1-flash-lite = $0.25/$1.50; openrouter.ai/google/gemini-3.8-flash = $0.75/$3.75; deepseek-v4.1-flash = $0.15/$0.60"
+      ],
+      "confidence": "high",
+      "impact": "Vision on the high tier and every gemini route cost 3-4x more than the engine believes; margin computed in code is optimistic by that factor."
+    },
+    {
+      "id": "H1-F6",
+      "title": "Daily spend cap is dead code; agent and vision writes no cost-ledger row",
+      "symptom": "Nothing stops spend past $25/day; the admin Cost & Usage view sees none of the agent or vision spend.",
+      "root_cause": "server/cost_control.py defines check_user_daily_budget / enforce_user_daily_budget / ABSOLUTE_DAILY_CAP_USD=$25, but a repo-wide grep finds zero callers. The ApiUsageLog ledger they read is written only by record_routing_telemetry (llm.py:242, called at llm.py:446 when db+user_id are passed) and transcription (transcription.py:86). Agent sessions pass neither (agent_session.py:170) and screen vision uses a direct httpx POST (screen_vision.py:319-341), so both are invisible to todays_spend().",
+      "evidence": [
+        "server/cost_control.py:24 ABSOLUTE_DAILY_CAP_USD=25.0",
+        "server/cost_control.py:47-89 check/enforce functions",
+        "measured: no call sites for check_user_daily_budget/enforce_user_daily_budget",
+        "server/llm.py:445-446 telemetry only with db+user_id",
+        "server/agent_session.py:170 and server/screen_vision.py:319-341 - no ledger write"
+      ],
+      "confidence": "high",
+      "impact": "Removes the last backstop for the runaway agent loop; the profit dashboard is structurally blind to the largest cost centres."
+    },
+    {
+      "id": "H1-F7",
+      "title": "Stripe webhook is not idempotent - a retried event grants credits twice",
+      "symptom": "On any webhook retry (timeout, deploy, cold start, non-2xx), checkout.session.completed and invoice.payment_succeeded run again and add the full TIER_CREDITS again.",
+      "root_cause": "handle_stripe_webhook (server/payments.py:125-222) verifies the signature but records no event id and checks no unique key before user.credits += TIER_CREDITS.get(plan, 0) (payments.py:162) and user.credits += TIER_CREDITS.get(user.plan, 0) (payments.py:192). Stripe delivers at-least-once, so every retry double-grants. The separate process_successful_payment (payments.py:320-341) does dedup on Payment.provider_ref (324-326), proving the pattern exists but was never applied to the webhook.",
+      "evidence": [
+        "server/payments.py:143-167 - checkout.session.completed credits with no event-id guard",
+        "server/payments.py:186-199 - invoice.payment_succeeded credits with no event-id guard",
+        "server/payments.py:324-326 - provider_ref dedup in process_successful_payment, absent in the webhook",
+        "external: Stripe webhooks are at-least-once; dedup on event.id in the same transaction"
+      ],
+      "confidence": "high",
+      "impact": "Unbounded over-crediting on any flaky delivery or redeploy. Latent now (Stripe keys empty) but activates the moment Stripe is configured."
+    },
+    {
+      "id": "H1-F8",
+      "title": "Failed study generation keeps the charge: refund path raises KeyError for practice_test / study_pack",
+      "symptom": "/api/practice-test fails: the user gets a 500 AND loses a credit, because the refund branch itself raises before refunding.",
+      "root_cause": "server/main.py:702 charges credits.charge(user, kind, db) with kind='practice_test' (route at main.py:1586-1588). On failure the except calls credits.top_up(db, user, credits.TASK_COSTS[kind], ...) (main.py:725) with direct indexing, but TASK_COSTS has no 'practice_test' or 'study_pack' key (credits.py:10-22), so the except raises KeyError, masking the original error and skipping the refund. The charge was already committed (credits.py:148) and the outer db.rollback() cannot undo it. charge() also silently prices unknown kinds at 1 via TASK_COSTS.get(task_name, 1) (credits.py:126).",
+      "evidence": [
+        "server/credits.py:10-22 - no practice_test / study_pack keys",
+        "measured: TASK_COSTS['practice_test'] -> KeyError; .get -> MISSING",
+        "server/main.py:702 - charge for kind='practice_test'",
+        "server/main.py:724-726 - direct TASK_COSTS[kind] index inside except",
+        "server/credits.py:126 - unknown task defaults to 1"
+      ],
+      "confidence": "high",
+      "impact": "Charge-without-delivery on every failed practice-test/study-pack run - systematic dispute material."
+    },
+    {
+      "id": "H1-F9",
+      "title": "Token gate and token charge use different defaults; balance is an unlocked JSON read-modify-write",
+      "symptom": "An action absent from the cost table passes the affordability gate free but is charged 2 tokens; concurrent requests can both spend the same last token.",
+      "root_cause": "The gate reads _AGENT_ACTION_COSTS.get(action, 0) (server/routes_overlord.py:2177) while the charge reads _action_cost() = _AGENT_ACTION_COSTS.get(action, 2) (routes_overlord.py:1367-1369) - defaults 0 vs 2 despite the comment claiming they match. A dead duplicate _ACTION_COSTS table with conflicting values sits at 1359-1364. _charge_tokens (1372-1379) does an unlocked JSON read-modify-write of user.settings; gate (2177) and charge (2244) are separate statements, so concurrent requests each read the same balance, all pass, and a deduction is lost (clamped to 0.0). Same after-the-fact pattern in extension vision (routes_extension.py:1323-1324) and in safe_deduct_with_rollback (credits.py:215-224, not row-locked, unlike the atomic charge() at credits.py:135-138).",
+      "evidence": [
+        "server/routes_overlord.py:2177 gate default 0",
+        "server/routes_overlord.py:1367-1369 charge default 2",
+        "server/routes_overlord.py:1359-1364 dead _ACTION_COSTS (run_shell 2 vs 3)",
+        "server/routes_overlord.py:1372-1379 unlocked settings write",
+        "server/routes_overlord.py:2103-2105 vs 2243-2244 gate and charge separate",
+        "server/credits.py:215-224 vs 135-138 - non-atomic vs atomic deduction"
+      ],
+      "confidence": "high",
+      "impact": "Quota bypass under concurrency (free usage) and post-hoc negative balances; undermines every account-level enforcement claim."
+    },
+    {
+      "id": "H1-F10",
+      "title": "Expired trials and past-due subscriptions keep working",
+      "symptom": "A 7-day trial's token balance never expires; a past_due or canceled subscription keeps its plan and balance.",
+      "root_cause": "trial_expires_at is written at activation (server/trial_service.py:63) and read only for display (routes_trial.py:56, trial_service.py:91); no gate compares it to now(), so the trial never ends. subscription_status='past_due' is set by the webhook (payments.py:206) but the only reader is referral eligibility (referral.py:40); payments.py:210-218 only downgrades canceled to plan='basic' (still paid), and nothing blocks a past_due user.",
+      "evidence": [
+        "server/trial_service.py:60-63 sets trial_expires_at",
+        "server/routes_trial.py:56 - expiry only serialised",
+        "measured: no trial_expires_at comparison anywhere in server/*.py",
+        "server/payments.py:201-208 past_due unenforced",
+        "server/payments.py:210-218 cancel keeps a paid plan",
+        "server/referral.py:40 - only consumer of subscription_status"
+      ],
+      "confidence": "high",
+      "impact": "Entitlement leak: dead trials and churned accounts keep consuming at platform expense; compounds H1-F1."
+    },
+    {
+      "id": "H1-F11",
+      "title": "Reporting numbers fabricated or from a fourth tier table; refund_unused reverses nothing; float credits",
+      "symptom": "Admin profit/margin figures are hardcoded or count free users as payers; the low-balance banner uses different tier limits than the dashboard; refund_unused is a no-op; credits are a float with inconsistent rounding.",
+      "root_cause": "get_cost_summary counts every non-elite/pro user as $10 revenue (server/cost_tracking.py:136-143), so platform_profit_summary is fabricated. get_cost_intelligence_summary hardcodes grunt_savings_usd 14.85 and margin 82.5 (cost_tracking.py:246-256) and llm.ROUTING_TELEMETRY hardcodes grunt_offload_pct 82.5 (llm.py:521-526). usage_percent uses a fourth tier table free100/basic2000/pro2000/elite10000 (payments.py:296-308) while plans.py/dashboard use TIER_MONTHLY_CREDITS 300/1000/2700, so the telegram low-balance warning (telegram_bot.py:181-183) fires against wrong limits. refund_unused returns a message and reverses no credits (payments.py:291-293). credits is a Float (database.py:63); payments.py:244 rounds credits_added, apply_discount truncates with int() (credits.py:203-205), and record_data_submission overwrites discount_balance=1.0 instead of accumulating (credits.py:262). refund() refunds the base TASK_COSTS ignoring cost_override (credits.py:161-169).",
+      "evidence": [
+        "server/cost_tracking.py:136-143 - free users counted as $10 revenue",
+        "server/cost_tracking.py:246-256 and server/llm.py:521-526 - hardcoded margin/grunt numbers",
+        "server/payments.py:296-308 vs server/credits.py:28-35 - two monthly-allowance tables",
+        "server/telegram_bot.py:181-183 - banner reads usage_percent",
+        "server/payments.py:291-293 - refund_unused stub",
+        "server/database.py:63 float credits; credits.py:203-205 int truncation; credits.py:262 overwrite",
+        "server/credits.py:161-169 - refund ignores cost_override"
+      ],
+      "confidence": "high",
+      "impact": "Operators cannot trust margin reporting; low-credit warnings fire at the wrong time; refunds are wrong or absent. Business decisions built on these numbers are unsafe."
+    },
+    {
+      "id": "H1-F12",
+      "title": "Detection-standard rewrite loop adds up to 3 unbilled LLM calls to every chat reply",
+      "symptom": "With the AI Detection Standard on, one 1-token chat reply can trigger the intent LLM call plus three full rewrite LLM calls and three detector scoring passes, all for the same single token charge.",
+      "root_cause": "server/routes_overlord.py:1433-1446 calls ensure_human_standard on every prose reply. server/humanize_skill.py:384 `for _ in range(3): # original + up to 2 rewrites` - the loop still calls call_llm (humanize_skill.py:398-408) on the third iteration before exiting, so it is up to 3 rewrites, not 2. Each rewrite sends up to 12000 chars of draft plus the rulebook and requests up to 8000 output tokens (humanize_skill.py:405-406). The chat charge stays at 1 token (server/routes_overlord.py:2057-2058, 2152-2153). The same turn also runs _human_of -> score_text up to 3 times, which with Pangram and Sapling keys configured calls paid external detector APIs (server/detectors.py:130-200). The other loop classes I checked are bounded: MAX_IMAGES_PER_CALL=4 vision frames per turn (server/screen_vision.py:76), the search burst is capped by _MAX_CONTROL_ACTIONS=15 and does not fan out to the network, and the background loops (monitors.py:221, main.py:157-184, telegram_agent_link.py:342) sleep after each unit of work so they do not overlap themselves.",
+      "evidence": [
+        "server/routes_overlord.py:2057-2058,2152-2153 - one token charged for the reply",
+        "server/routes_overlord.py:1433-1446 - ensure_human_standard runs on every prose reply",
+        "server/humanize_skill.py:382-410 - range(3) loop still calling call_llm on the third pass",
+        "server/humanize_skill.py:405-406 - rewrite input up to 12000 chars, max 8000 output tokens",
+        "server/detectors.py:130-200 - Pangram and Sapling paid detectors; both keys are configured (measured: config keys non-empty)",
+        "server/screen_vision.py:76 MAX_IMAGES_PER_CALL=4; server/routes_overlord.py:1123-1140 action cap 15 - bounded"
+      ],
+      "confidence": "high",
+      "impact": "Per-reply cost multiplier of up to ~4x the billed 1 token plus paid detector scans, concentrated in the core chat path. Combined with F1/F6 (no daily cap) it compounds the margin loss."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "H1-X1",
+      "finding": "H1-F1",
+      "file": "server/agent_session.py",
+      "lines": "164-216",
+      "change": "Increment session.steps on EVERY loop iteration, including the invalid-JSON branch (before line 178) and the command-timeout branch (before line 216). On line 170 pass db=None is wrong for cost: change the call to `await llm.call_llm(AGENT_SYSTEM + '\\n\\n' + TOOL_DOC, _agent_prompt(messages), max_tokens=1024, db=<session db>, user_id=session.public_id)`, and add a hard per-session cost ceiling (e.g. read ApiUsageLog sum for the session and stop) plus an in-memory set of running public_ids in AgentManager.create to cap concurrent sessions per user to 1-2.",
+      "risk": "Capping steps may shorten legitimate long scrapes; cap by measured cost rather than hard step count if the product needs 120 steps. Passing db requires AgentSession to hold a Session - use SessionLocal() inside run() and close it.",
+      "verify": "Run a session whose model always returns invalid JSON: assert session.steps increments every call and the loop exits at MAX_STEPS; assert api_usage_logs gains one row per step for the user."
+    },
+    {
+      "id": "H1-X2",
+      "finding": "H1-F2",
+      "file": "server/credits.py",
+      "lines": "77-118, 239-257",
+      "change": "Pick ONE currency. Minimal unification: make charge()/get_balance()/top_up() operate on settings['token_balance'] and have subscription webhook + trial + admin grants all target the same field, then delete the credits-vs-token branch. If credits must stay, add a helper `grant_tokens(user, db, amount)` and call it from the Stripe webhook (payments.py:162,192) alongside credits, and from trial_service. Do not leave the two gates reading different fields.",
+      "risk": "Touches every gated route; a migration is needed for existing users' balances. Behaviour change for elite bypass (keep is_usage_unlimited).",
+      "verify": "Create a trial user, then hit /api/study-guide and /api/agent/chat; both must pass the same balance check. A subscriber must be able to call both."
+    },
+    {
+      "id": "H1-X3",
+      "finding": "H1-F3",
+      "file": "server/payments.py",
+      "lines": "249-288",
+      "change": "Grant the purchased credits/tokens at the point of capture for manual providers too: after an operator confirms a Payment for a plan, add the TIER_CREDITS/TOKEN grant. Simplest: in admin confirm (server/admin.py: verify_trial_payment and a new confirm_payment) set `status='captured'` AND call the same grant the Stripe webhook uses. In process_payment, return a clear 'pending operator confirmation' contract so the UI does not claim success.",
+      "risk": "Double-granting if both the webhook and the manual confirm run; guard by only granting on the pending->captured transition once.",
+      "verify": "POST /api/payments with provider='zelle', admin-confirm it, then read /api/dashboard and /api/me: balance must increase by the plan allowance exactly once."
+    },
+    {
+      "id": "H1-X4",
+      "finding": "H1-F5",
+      "file": "server/cost_tracking.py",
+      "lines": "19-27",
+      "change": "Delete MODEL_RATES and import ModelPolicy.PRICING as the single rate source; or correct both tables to OpenRouter list rates: deepseek $0.15/$0.60, qwen $0.12/$0.39, gemini-3.1-flash-lite $0.25/$1.50, gemini-3.8-flash $0.75/$3.75. Add a unit test asserting the two tables agree for every slug in PRIMARY_MODELS.",
+      "risk": "Charged-cost reports change value; historical rows are unaffected.",
+      "verify": ".venv/bin/python -m pytest server/tests/ -q and a new test that iterates ModelPolicy.PRIMARY_MODELS asserting identical rates in both tables."
+    },
+    {
+      "id": "H1-X5",
+      "finding": "H1-F6",
+      "file": "server/llm.py",
+      "lines": "220-253",
+      "change": "Call enforce_user_daily_budget(db, user, projected_cost_usd) at the top of call_llm/stream_llm when db and user are present, and make analyze_screen_image log through cost_engine.log_api_call so vision reaches ApiUsageLog. Then wire check_user_daily_budget into /api/agent/start before spawning the task.",
+      "risk": "A strict cap can block legitimate bursts; the projected_cost estimate is rough. Start with a generous projected estimate. Elite/admin must stay exempt.",
+      "verify": "Set a user's monthly_budget_usd to a small value, issue enough calls to exceed the daily limit, assert the next call raises BudgetExceededError and that api_usage_logs has a vision row."
+    },
+    {
+      "id": "H1-X6",
+      "finding": "H1-F8",
+      "file": "server/main.py",
+      "lines": "724-726",
+      "change": "Replace `credits.TASK_COSTS[kind]` with `credits.TASK_COSTS.get(kind, 1)` (matching charge's own default) and add a 'practice_test' key to TASK_COSTS in server/credits.py:10-22 (and 'study_pack' if it must be priced). Then the except can refund instead of raising KeyError.",
+      "risk": "None material; the refund amount now matches what charge took only if the same default is used - both use .get(kind,1).",
+      "verify": "Force a generator failure for kind='practice_test' (monkeypatch the generator to raise), call the endpoint, assert 500 and that the user's balance is unchanged (charged then refunded)."
+    },
+    {
+      "id": "H1-X7",
+      "finding": "H1-F7",
+      "file": "server/payments.py",
+      "lines": "139-222",
+      "change": "Add a processed_webhook_events table keyed on the Stripe event id (unique). In handle_stripe_webhook, after construct_event, try INSERT of event['id'] and return {'status':'ok','duplicate':True} on conflict BEFORE granting credits. Commit the event insert and the grant in one transaction.",
+      "risk": "A new table migration; if the insert and grant are not in one transaction the gap reopens.",
+      "verify": "POST the same signed event body twice to /api/stripe/webhook; assert the second response is duplicate and the user's credits increased only once."
+    },
+    {
+      "id": "H1-X8",
+      "finding": "H1-F9",
+      "file": "server/routes_overlord.py",
+      "lines": "2177,2243-2244,1372-1379",
+      "change": "Make gate and charge share one lookup: gate with `_action_cost(intent['action'])` (or make the default 0 in both). Delete the dead _ACTION_COSTS table (1359-1364). Make _charge_tokens atomic: replace the settings read-modify-write with an UPDATE against a dedicated integer column, or SELECT ... FOR UPDATE the user row before mutating settings (SQLite serialises; on Postgres use with_for_update).",
+      "risk": "Changing the default cost changes pricing for unmapped actions; choose deliberately. Row-locking on SQLite is a no-op, so the atomic UPDATE form is preferable.",
+      "verify": "Unit test issuing two concurrent _charge_tokens for the same user with a 1-token balance; assert the balance never goes below 0 and exactly one charge lands."
+    },
+    {
+      "id": "H1-X9",
+      "finding": "H1-F10",
+      "file": "server/main.py",
+      "lines": "1891-1898, 2103-2112",
+      "change": "Add an entitlement check at the request boundary: if user.plan=='trial' and user.trial_expires_at and user.trial_expires_at < utcnow(), zero/deny further use (and set plan='none'); if user.subscription_status in ('past_due','canceled'), deny paid features. Put it in one helper used by every gated route.",
+      "risk": "Timezone comparison: trial_expires_at is naive UTC; compare against utcnow().replace(tzinfo=None).",
+      "verify": "Set a user's trial_expires_at to yesterday and assert /api/agent/chat and /api/vision return the insufficient/expired response."
+    },
+    {
+      "id": "H1-X10",
+      "finding": "H1-F4",
+      "file": "server/llm.py",
+      "lines": "29-35,96-202,488-499,513-519",
+      "change": "Either reduce PRIMARY_MODELS to the single deepseek slug and let the ladder escalate only on capability (vision/audio), or codify the non-deepseek lanes explicitly as owner-approved. Change the wrapper defaults at llm.py:513/516 to model='deepseek/deepseek-v4.1-flash'. Replace transcription.py:31 GEMINI_AUDIO_MODEL with the ladder's audio model (google/gemini-3.1-flash-lite) or add an explicit audio-lane exception. Remove mistral-nemo/qwen-cheap from cost_tracking.MODEL_RATES.",
+      "risk": "Deepseek is not audio-capable, so transcription must keep a Gemini audio lane; make that exception explicit rather than accidental. Level 1-3 routing removal changes latency/cost for cheap tasks.",
+      "verify": "Unit test asserting resolve_model_routing(model) for every level 1-10 and every non-Gemini-exclusive capability returns 'deepseek/deepseek-v4.1-flash'; grep shows no non-ladder slug in a routing table."
+    },
+    {
+      "id": "H1-X11",
+      "finding": "H1-F11",
+      "file": "server/cost_tracking.py",
+      "lines": "136-143,246-256",
+      "change": "Compute estimated_revenue from actual Payment rows with status='captured' (server/admin.py:434 already does this) instead of plan-count x $10. Delete the hardcoded grunt_savings_usd/target_gross_margin_percent and ROUTING_TELEMETRY.grunt_offload_pct, or source them from ApiUsageLog. Make usage_percent import TIER_MONTHLY_CREDITS from plans.py so the banner and dashboard share one table. Store credits as integer minor units (or Decimal) and make apply_discount/record_data_submission accumulate rather than overwrite/truncate. Give refund() a cost_override parameter mirroring charge().",
+      "risk": "Existing Free tier displays may change value; integer migration needs a data migration. Historical discount rows are untouched.",
+      "verify": "Assert get_cost_summary().platform_profit_summary.estimated_revenue_usd equals the sum of captured Payment.amount_cents/100; assert usage_percent('basic') uses 300; assert record_data_submission twice yields discount_balance 2.0."
+    },
+    {
+      "id": "H1-X12",
+      "finding": "H1-F12",
+      "file": "server/humanize_skill.py",
+      "lines": "382-410",
+      "change": "Change `for _ in range(3)` to `for _ in range(2)` so the code matches the documented 'up to 2 rewrites', or restructure to score-first so the final rewrite is scored. Charge the rewrite calls: pass the chat's per-token cost through, or deduct one token per rewrite via _charge_tokens. Cache detector results (already 24h cached on identical text) and skip the paid detectors when only heuristics are enabled.",
+      "risk": "Fewer rewrites may lower the human-score pass rate for borderline drafts; keep the 'return best score so far' behaviour so quality never drops below the original.",
+      "verify": "Call /api/agent/chat with detection on and a draft that always scores below the minimum; count call_llm invocations (mock) and assert at most 3 total (1 intent + 2 rewrites) and that the token deduction reflects the rewrites."
+    }
+  ],
+  "verification_plan": "1) Read server/credits.py:10-44,87,126,161-169 and confirm TASK_COSTS keys vs the kinds passed in server/main.py:702,1586-1593,725. 2) Read server/agent_session.py:33-34,164-216,258-261 and confirm neither `continue` path increments steps and no db/user_id is passed. 3) Confirm cost_control has no callers (grep check_user_daily_budget). 4) Confirm the two-currency split by grepping every write to token_balance and to user.credits and noting the gates. 5) Confirm Stripe keys empty and manual process_payment yields status 'pending' with credits_added 0. 6) Re-run `.venv/bin/python -m pytest server/tests/ -q` and expect the measured 5 failed / 474 passed (pre-existing reds: test_browser_action_hardening 2, test_humanizer_kimhons 1, test_security_hardened 2). Note: the two browser_action_hardening failures and the humanizer_kimhons failure are NOT the reds named in CONTEXT.md (which lists test_browser_search_with_math_query_never_intercepted_by_shell and occasionally test_security_hardened::test_deterministic_math_ast_whitelist); they are reported here as measured, not fixed.",
+  "external_research": [
+    {
+      "what": "OpenRouter model pricing - deepseek/deepseek-v4.1-flash",
+      "url": "https://openrouter.ai/deepseek/deepseek-v4.1-flash",
+      "why": "Confirms the ladder's primary slug is real and that llm.py PRICING $0.15/$0.60 is correct; the model is vision+text 1M ctx.",
+      "license": "n/a",
+      "verdict": "adopt"
+    },
+    {
+      "what": "OpenRouter pricing - google/gemini-3.1-flash-lite",
+      "url": "https://openrouter.ai/google/gemini-3.1-flash-lite",
+      "why": "Real rate $0.25 in / $1.50 out vs llm.py's $0.075/$0.30 - the vision lite tier is under-priced ~3.3x/5x.",
+      "license": "n/a",
+      "verdict": "adopt (correct the table)"
+    },
+    {
+      "what": "OpenRouter pricing - google/gemini-3.8-flash",
+      "url": "https://openrouter.ai/google/gemini-3.8-flash",
+      "why": "Real rate $0.75/$3.75 vs llm.py's $0.25/$1.00 - the high vision tier is under-priced ~3x/3.75x.",
+      "license": "n/a",
+      "verdict": "adopt (correct the table)"
+    },
+    {
+      "what": "OpenRouter pricing - qwen/qwen-2.5-72b-instruct",
+      "url": "https://openrouter.ai/qwen/qwen-2.5-72b-instruct/api",
+      "why": "Real ~$0.12/$0.39 vs llm.py's $0.09/$0.18; this is the model the agent loop silently falls to at level 2.",
+      "license": "n/a",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Stripe - set up a credit-based pricing model",
+      "url": "https://docs.stripe.com/billing/subscriptions/usage-based/use-cases/credits-based-pricing-model",
+      "why": "Canonical credit-ledger design: emit/ingest/meter/invoice, DB is source of truth for raw usage, integer credit units - maps directly onto the two-currency fix.",
+      "license": "n/a",
+      "verdict": "adapt"
+    },
+    {
+      "what": "Idempotent usage metering (dedup and late arrivals)",
+      "url": "https://usagebox.com/articles/idempotent-usage-metering-dedup-late-events",
+      "why": "Concrete pattern for H1-F7: dedup key + unique constraint inside the same transaction as the side effect.",
+      "license": "n/a",
+      "verdict": "adopt"
+    },
+    {
+      "what": "Why payment calculations break at scale (float money math)",
+      "url": "https://dev.to/saith_ibraheem_3282/why-your-payment-calculations-break-at-scale-and-how-to-fix-it-44p4",
+      "why": "Supports storing credits as integers/minor units; the app stores credits as Float and rounds inconsistently.",
+      "license": "n/a",
+      "verdict": "adapt"
+    }
+  ],
+  "open_questions": [
+    "Are credits ever granted in production besides the Stripe webhook and admin endpoints? If not, the study-material/agent/transcription features are dead on this box (credits=0 for every normal account), which is a stronger statement than H1-F2.",
+    "Exact real cost of google/gemini-2.0-flash audio transcription on OpenRouter (used at transcription.py:31): I could not pin the audio-input rate, so the transcription margin is an estimate.",
+    "Whether any production traffic currently enables the AI Detection Standard (humanize_skill.ensure_human_standard), which adds up to 3 unbilled LLM rewrites plus 2 paid detector API scans per chat reply (Pangram and Sapling keys are present).",
+    "Whether token_balance is expected to reset monthly; no reset code exists, so a one-time grant is effectively permanent.",
+    "The exact count of call_llm sites that reach OpenRouter without db/user_id (agent_session.py:170, draft.py:137, humanizer.py:554, orchestrator.py:259 all qualify) - each is invisible to the cost ledger."
+  ]
+}
