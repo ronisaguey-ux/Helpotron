@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import logging
 import os
 import re
@@ -152,6 +153,47 @@ async def classify_assignment_meta(source_text: str, file_name: str) -> dict:
     return fallback
 
 
+def _extract_with_anydoc(file_path: str) -> Optional[str]:
+    """Convert a document to Markdown with anydoc (MIT, Rust core).
+
+    Returns None when anydoc is unavailable or cannot convert the file, so the
+    caller falls back to the legacy extractors. Raises nothing.
+
+    Why this exists: the previous PDF path imported `pypdf`, which is not
+    installed in this venv, so the ImportError was swallowed and extraction fell
+    through to reading the PDF as text. On a real 2 MB assignment that produced
+    **1,103,733 characters of raw PDF object syntax** (`%PDF-1.7`, `1 0 obj`,
+    `<< /Pages 2 0 R >>`) which was then stored and fed to the model. anydoc
+    returns the actual document text (121,163 chars from the same file, in
+    319 ms) and raises NeedsOcrError on a genuinely scanned file instead of
+    emitting binary noise.
+    """
+    try:
+        import anydoc
+    except ImportError:
+        return None
+
+    try:
+        markdown = anydoc.to_markdown(file_path)
+    except getattr(anydoc, "NeedsOcrError", Exception):
+        # Scanned/image-only document: no text layer to extract. The caller
+        # routes this to vision OCR.
+        raise
+    except Exception as exc:
+        logger.warning("anydoc could not convert %s: %s", os.path.basename(file_path), exc)
+        return None
+
+    text = (markdown or "").strip()
+    if len(text) <= 30:
+        return None
+
+    if len(text) > 2_000_000:
+        text = text[:2_000_000] + (
+            "\n\n[extraction truncated at 2,000,000 chars — "
+            "original file retained in the dump file store]")
+    return text
+
+
 class AssignmentDumpManager:
     @staticmethod
     def detect_file_category(filename: str) -> str:
@@ -173,8 +215,11 @@ class AssignmentDumpManager:
         """Extracts text, Markdown transcript, or OCR text based on file type."""
         ext = os.path.splitext(file_path)[1].lower()
 
-        # 1. Plain Text / Markdown
-        if ext in [".txt", ".md", ".rtf"]:
+        # 1. Plain Text / Markdown. RTF is deliberately NOT here: it is a markup
+        # format, so reading it as text handed the model `{\rtf1\ansi\deff0
+        # {\fonttbl...}}` control words instead of the document. It goes through
+        # the anydoc branch below, which converts it properly.
+        if ext in [".txt", ".md"]:
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
@@ -184,6 +229,30 @@ class AssignmentDumpManager:
 
         # 2. PDF / Document text extraction
         elif ext == ".pdf":
+            # 2a. anydoc first — real text, real speed, and an honest error on a
+            # scanned file. Replaces a broken path: pypdf is NOT installed in
+            # this venv, so the import failed silently and extraction degraded to
+            # reading the PDF as text (1.1M chars of `obj` syntax on a 2 MB
+            # assignment), which was stored and sent to the model.
+            try:
+                text = _extract_with_anydoc(file_path)
+                if text:
+                    return text, "anydoc"
+            except Exception as anydoc_exc:
+                # NeedsOcrError and friends: no text layer. Try vision OCR, which
+                # is the correct tool for a scan, rather than emitting binary.
+                logger.info(
+                    "anydoc reports no extractable text for %s (%s); routing to OCR",
+                    os.path.basename(file_path), type(anydoc_exc).__name__)
+                try:
+                    ocr_text = await AssignmentDumpManager._ocr_pdf_pages_gemini(
+                        file_path, user_id)
+                    if ocr_text and len(ocr_text.strip()) > 30:
+                        return ocr_text.strip(), "gemini-ocr"
+                except Exception as ocr_exc:
+                    logger.warning("PDF OCR fallback failed: %s", ocr_exc)
+
+            # 2b. Legacy pypdf, if it ever becomes installed.
             try:
                 import pypdf
                 reader = pypdf.PdfReader(file_path)
@@ -192,27 +261,30 @@ class AssignmentDumpManager:
                     return text.strip(), "pypdf"
             except Exception:
                 pass
-            # Fallback to simulated/Gemini document reading
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    raw = f.read()
-                clean = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
-                # 08-28 truncation fix: 4000 chars silently cut every real
-                # scanned-contract PDF. The storage column is TEXT — keep the
-                # printable text in full (a 2M-char guard only stops pathological
-                # binary blobs; any cut is explicitly marked).
-                if len(clean) > 2_000_000:
-                    clean = clean[:2_000_000] + (
-                        "\n\n[extraction truncated at 2,000,000 chars — "
-                        "original PDF retained in the dump file store]")
-                return clean, "pypdf_fallback"
-            except Exception as e:
-                return f"PDF extract: {os.path.basename(file_path)}", "pdf_meta"
 
-        # 2b. DOCX -> stdlib ZIP/XML text extraction (no python-docx dep on the
-        # box). Paragraphs + tables in document order; tables add tab-joined
-        # cell text so a rubric table keeps its shape.
+            # 2c. Last resort. Only reached when anydoc is missing/failed, OCR
+            # failed and pypdf is unavailable. A PDF has no meaningful plain-text
+            # form, so do not pretend otherwise: return a marker, not megabytes
+            # of compressed object streams.
+            return (
+                f"# PDF Document: {os.path.basename(file_path)}\n\n"
+                "[No text layer could be extracted from this PDF. It is most "
+                "likely a scanned/image document and needs OCR, or it is "
+                "encrypted or malformed. The original file is retained in the "
+                "dump file store.]"
+            ), "pdf_unreadable"
+
+        # 2b. DOCX -> anydoc first (real Markdown: headings, lists, tables),
+        # then the stdlib ZIP/XML pass as a no-dependency fallback.
         elif ext in [".docx"]:
+            try:
+                text = _extract_with_anydoc(file_path)
+                if text:
+                    return text, "anydoc"
+            except Exception as anydoc_exc:
+                logger.info("anydoc could not read %s (%s); using stdlib extractor",
+                            os.path.basename(file_path), type(anydoc_exc).__name__)
+
             try:
                 import zipfile
                 from xml.etree import ElementTree
@@ -232,6 +304,24 @@ class AssignmentDumpManager:
                     return text.strip(), "docx-xml"
             except Exception as e:
                 logger.warning("DOCX extraction failed: %s", e)
+
+        # 2c. Spreadsheets / OpenDocument / RTF / EPUB -> anydoc. None of these
+        # were readable at all before: .xlsx fell through to the generic branch
+        # and produced a one-line placeholder, so a rubric or a gradebook
+        # uploaded as a spreadsheet carried no content.
+        elif ext in [".xlsx", ".xlsm", ".ods", ".odt", ".rtf", ".epub"]:
+            try:
+                text = _extract_with_anydoc(file_path)
+                if text:
+                    return text, "anydoc"
+            except Exception as anydoc_exc:
+                logger.info("anydoc could not read %s (%s)",
+                            os.path.basename(file_path), type(anydoc_exc).__name__)
+                return (
+                    f"# {ext.lstrip('.').upper()} Document: {os.path.basename(file_path)}\n\n"
+                    "[No text could be extracted from this file. The original is "
+                    "retained in the dump file store.]"
+                ), "document_unreadable"
 
         # 3. Audio file -> Gemini 3.1 Flash-Lite Transcription
         elif file_category == "audio":
@@ -291,6 +381,107 @@ class AssignmentDumpManager:
                 return f"Image document: {os.path.basename(file_path)}", "image_meta"
 
         return f"File content: {os.path.basename(file_path)}", "generic"
+
+    @staticmethod
+    async def _ocr_pdf_pages_gemini(file_path: str, user_id: Optional[str] = None,
+                                    max_pages: int = 25) -> str:
+        """OCR a scanned PDF by rendering pages to images and reading them.
+
+        Reached only when there is no text layer (anydoc raises NeedsOcrError).
+        Five of the fifteen real assignments in the dump store are scans, and
+        before this they returned 1-11 MB of raw PDF object syntax that was then
+        stored and fed to the model. Rendering each page and reading it with the
+        same vision model used for images is the correct handling.
+
+        Bounded by max_pages so a 500-page scan cannot run away; the cut is
+        stated in the output rather than being silent.
+        """
+        try:
+            import pypdfium2 as pdfium
+        except ImportError:
+            logger.warning("pypdfium2 unavailable; cannot OCR scanned PDF")
+            return ""
+
+        try:
+            doc = pdfium.PdfDocument(file_path)
+        except Exception as exc:
+            logger.warning("Could not open PDF for OCR: %s", exc)
+            return ""
+
+        page_count = len(doc)
+        limit = min(page_count, max_pages)
+        chunks: List[str] = []
+
+        for index in range(limit):
+            try:
+                image = doc[index].render(scale=1.6).to_pil()
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                page_text = await AssignmentDumpManager._ocr_image_bytes_gemini(
+                    buffer.getvalue(), user_id)
+                if page_text and page_text.strip():
+                    chunks.append(f"## Page {index + 1}\n\n{page_text.strip()}")
+            except Exception as exc:
+                logger.warning("OCR failed for page %d of %s: %s",
+                               index + 1, os.path.basename(file_path), exc)
+
+        if page_count > limit:
+            chunks.append(
+                f"\n\n[OCR covered the first {limit} of {page_count} pages. "
+                f"The original PDF is retained in the dump file store.]")
+
+        return "\n\n".join(chunks)
+
+    @staticmethod
+    async def _ocr_image_bytes_gemini(img_bytes: bytes,
+                                      user_id: Optional[str] = None) -> str:
+        """Vision OCR for in-memory image bytes (a rendered PDF page).
+
+        Shares the OpenRouter call with _ocr_image_gemini; that one takes a path
+        because most callers have a file, this one takes bytes because a PDF page
+        only exists in memory.
+        """
+        api_key = (os.getenv("OPENROUTER_API_KEY") or config.openrouter_api_key).strip()
+        if not api_key or not img_bytes:
+            return ""
+
+        base_url = "https://openrouter.ai/api/v1"
+        model_name = config.gemini_flash_model or "google/gemini-2.0-flash"
+        b64_img = base64.b64encode(img_bytes).decode("utf-8")
+
+        prompt = (
+            "Transcribe every word on this page of a scanned document, preserving "
+            "headings, lists, tables and math (LaTeX). Return Markdown only. If the "
+            "page is blank or contains no legible text, return an empty response."
+        )
+        payload = {
+            "model": model_name,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/png;base64,{b64_img}"}},
+                ],
+            }],
+            "temperature": 0.1,
+        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(f"{base_url}/chat/completions",
+                                         headers=headers, json=payload)
+            if resp.status_code != 200:
+                logger.warning("OpenRouter OCR HTTP %s: %s", resp.status_code, resp.text[:200])
+                return ""
+            return (resp.json()["choices"][0]["message"]["content"] or "").strip()
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            logger.error("Unexpected OCR response shape: %s", exc)
+            return ""
+        except Exception as exc:
+            logger.warning("OCR request failed: %s", exc)
+            return ""
 
     @staticmethod
     async def _ocr_image_gemini(image_path: str, user_id: str) -> str:
