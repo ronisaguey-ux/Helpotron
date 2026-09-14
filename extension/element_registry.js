@@ -45,13 +45,11 @@
   // gathered BEFORE a run attaches anything, and so a read never depends on
   // debugger state. Resolves to [] for any tab it cannot reach (chrome://, a
   // refused frame, a page mid-navigation) — it never throws into the caller.
-  async function collectInteractiveElements(tabId, limit) {
-    if (!chrome.scripting || tabId === undefined || tabId === null) return [];
-    try {
-      const results = await chrome.scripting.executeScript({
-        target: { tabId },
-        args: [INTERACTIVE_SELECTOR, Number(limit) || MAX_INTERACTIVE_ELEMENTS],
-        func: (selector, maxItems) => {
+  // The page-side walker, hoisted so BOTH transports can run the SAME code:
+  // chrome.scripting injects it, and the debugger path serialises it into a
+  // Runtime.evaluate expression. It must stay fully self-contained (no closures
+  // over this module) or the injection breaks.
+  const COLLECT_WALKER = (selector, maxItems) => {
           const vw = window.innerWidth || 0;
           const vh = window.innerHeight || 0;
           const out = [];
@@ -238,7 +236,94 @@
           }
 
           return out;
-        },
+  };
+
+  // ── transport 1: chrome.debugger (works on ANY page) ──────────────────────
+  //
+  // chrome.scripting needs a host permission for the origin. The manifest's
+  // host_permissions are a 16-entry whitelist of academic sites, so on anything
+  // else — google.com/search, a customer's portal, any ordinary page — injection
+  // is refused, the element list comes back EMPTY, and every ref/target op the
+  // model was told to prefer fails to resolve. Measured: 4 elements on a
+  // permitted origin, 0 on a non-permitted one.
+  //
+  // The debugger has no such restriction — `debugger` is a required manifest
+  // permission and grants full CDP access to any tab (it is the same session
+  // that already draws the "Chrome is debugging this browser" banner). When a
+  // session is attached, read the DOM through Runtime.evaluate instead. No new
+  // permission, no manifest change, no re-approval.
+  // `chrome.debugger.getTargets().attached` is UNUSABLE as a "is a session
+  // live?" test: measured on this build it reports true for a tab with no
+  // session at all (the tell is that a following detach answers "Debugger is
+  // not attached"), so trusting it skips the attach and the read then fails.
+  // The only honest test is to try a command and see whether it throws.
+  async function cdpEval(tabId, expression) {
+    const res = await chrome.debugger.sendCommand(
+      { tabId }, 'Runtime.evaluate', { expression, returnByValue: true });
+    const value = res && res.result && res.result.value;
+    return typeof value === 'string' ? value : null;
+  }
+
+  async function collectViaDebugger(tabId, selector, maxItems, allowAttach) {
+    if (!chrome.debugger || typeof chrome.debugger.sendCommand !== 'function') return null;
+    const expression =
+      `JSON.stringify((${COLLECT_WALKER.toString()})(${JSON.stringify(selector)}, ${Number(maxItems) || MAX_INTERACTIVE_ELEMENTS}))`;
+
+    // 1. Use a session that isALREADY live without disturbing it. In the drive
+    //    path the run has the debugger attached, and detaching here would break
+    //    the very run this read serves.
+    try {
+      const value = await cdpEval(tabId, expression);
+      if (value !== null) {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : null;
+      }
+    } catch (e) { /* no live session — fall through */ }
+
+    // 2. No usable session. Only a caller that opted in may arm the debugger,
+    //    and only then do we open a session we are responsible for closing.
+    if (!allowAttach) return null;
+    let opened = false;
+    try {
+      // Best-effort: clear a leaked session so attach is not refused with
+      // "Another debugger is already attached". If DevTools genuinely holds it
+      // this rejects, which is correct — that is the user's to close.
+      await chrome.debugger.detach({ tabId }).catch(() => {});
+      await chrome.debugger.attach({ tabId }, '1.3');
+      opened = true;
+      const value = await cdpEval(tabId, expression);
+      if (value === null) return null;
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+      return null;
+    } finally {
+      // Leave the tab as we found it — detach only the session WE opened.
+      if (opened) await chrome.debugger.detach({ tabId }).catch(() => {});
+    }
+  }
+
+  // ── transport 2: chrome.scripting (before a run attaches anything) ────────
+  async function collectInteractiveElements(tabId, limit, opts) {
+    if (tabId === undefined || tabId === null) return [];
+    const maxItems = Number(limit) || MAX_INTERACTIVE_ELEMENTS;
+    const allowAttach = !!(opts && opts.allowAttach);
+
+    // Debugger first: it is the only transport that works on a page the
+    // extension lacks a host permission for — which is every page outside the
+    // manifest's 16-entry whitelist (google.com/search, any customer portal,
+    // most of the web). chrome.scripting is refused there with "Cannot access
+    // contents of url … manifest must request permission", the list comes back
+    // EMPTY, and every ref/target op the model prefers then fails to resolve.
+    const viaCdp = await collectViaDebugger(tabId, INTERACTIVE_SELECTOR, maxItems, allowAttach);
+    if (viaCdp && viaCdp.length) return viaCdp;
+
+    if (!chrome.scripting) return [];
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        args: [INTERACTIVE_SELECTOR, maxItems],
+        func: COLLECT_WALKER,
       });
       const list = results && results[0] && results[0].result;
       return Array.isArray(list) ? list : [];

@@ -288,6 +288,27 @@ function effortModelInfo(score) {
   return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
 }
 
+// ONE place that writes the model name to every model surface.
+//
+// There are three elements that show the model — the settings line
+// (#modelName), the chat status pill (#chatModelIndicator) and the badge beside
+// the effort slider (#chatModelBadge) — and each used to be updated by a
+// DIFFERENT code path. Moving the settings slider updated modelName +
+// chatModelIndicator but never the chat badge; the initial load updated
+// modelName + chatModelBadge but never the indicator. The result was the popup
+// showing two different models at once (e.g. "DeepSeek V4.1 Flash" in the
+// header and "Gemini 3.1 Flash Lite" at the bottom) even though it is ONE
+// setting. Every path now calls this, so they cannot disagree.
+function applyModelLabels(score) {
+  const info = effortModelInfo(score);
+  if (modelNameEl) modelNameEl.innerText = info.label;
+  if (chatModelIndicator) chatModelIndicator.innerText = info.label;
+  if (chatModelBadge) chatModelBadge.innerText = info.label;
+  if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  if (modelEffortEl) modelEffortEl.innerText = `effort ${clampEffortScore(score)}`;
+  return info;
+}
+
 async function persistAgentState(patch) {
   await chrome.storage.local.set(patch);
 }
@@ -346,12 +367,9 @@ async function applyAgentStateToUI(st) {
   }
   // Effort -> model line (mirror of the backend resolver).
   const score = clampEffortScore(st[EFFORT_KEY] === undefined ? EFFORT_DEFAULT : st[EFFORT_KEY]);
-  const info = effortModelInfo(score);
-  if (modelEffortEl) modelEffortEl.innerText = `effort ${score}`;
   if (effortScoreVal) effortScoreVal.innerText = `${score}`;
   if (effortScoreSlider) effortScoreSlider.value = score;
-  if (modelNameEl) modelNameEl.innerText = info.label;
-  if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+  applyModelLabels(score);
   syncInChatControls(st);
 }
 
@@ -379,7 +397,9 @@ function syncInChatControls(st) {
   }
   if (chatEffortSlider) chatEffortSlider.value = score;
   if (chatEffortVal) chatEffortVal.textContent = score;
-  if (chatModelBadge) chatModelBadge.textContent = info.label;
+  // Route the label through the one shared writer so the chat badge, the
+  // settings line and the header pill can never disagree (they did).
+  applyModelLabels(score);
   // One-line digest shown on the collapsed config header, so a folded panel
   // still says what the agent is currently allowed to do.
   if (chatControlsSummary) {
@@ -718,12 +738,7 @@ if (chatEffortSlider) {
     if (chatEffortVal) chatEffortVal.innerText = `${val}`;
     if (effortScoreSlider) effortScoreSlider.value = val;
     if (effortScoreVal) effortScoreVal.innerText = `${val}`;
-    const info = effortModelInfo(val);
-    if (modelEffortEl) modelEffortEl.innerText = `effort ${val}`;
-    if (modelNameEl) modelNameEl.innerText = info.label;
-    if (chatModelIndicator) chatModelIndicator.innerText = info.label;
-    if (chatModelBadge) chatModelBadge.innerText = info.label;
-    if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+    applyModelLabels(val);
   });
 
   chatEffortSlider.addEventListener('change', async () => {
@@ -758,11 +773,7 @@ if (effortScoreSlider) {
   effortScoreSlider.addEventListener('input', () => {
     const val = clampEffortScore(effortScoreSlider.value);
     if (effortScoreVal) effortScoreVal.innerText = `${val}`;
-    const info = effortModelInfo(val);
-    if (modelEffortEl) modelEffortEl.innerText = `effort ${val}`;
-    if (modelNameEl) modelNameEl.innerText = info.label;
-    if (chatModelIndicator) chatModelIndicator.innerText = info.label;
-    if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
+    applyModelLabels(val);
   });
 
   effortScoreSlider.addEventListener('change', async () => {
@@ -2828,6 +2839,45 @@ async function driveActionsInTab(driveTab, actions, ctx) {
       }
       return op;
     });
+
+    // A ref/target op that did not resolve against this page has no x/y, so the
+    // executor below falls through every branch and SKIPS IT SILENTLY — the
+    // cursor never moves, nothing is clicked, and the user is told nothing.
+    // That is the "it just does nothing" report. Resolution needs DOM access
+    // (chrome.scripting), which is refused on any origin outside the manifest's
+    // host_permissions — e.g. google.com/search, which the agent can SEE but
+    // not script. Name that here instead of going quiet.
+    const unresolved = actions.filter((op) => op && op._unresolved);
+    if (unresolved.length) {
+      const names = unresolved
+        .map((op) => op.target || (op.ref !== undefined ? `ref ${op.ref}` : op.op))
+        .slice(0, 3).join(', ');
+      // Distinguish "the element is genuinely not there" from "we are not
+      // allowed to look" — they need different fixes (retry vs host access).
+      const canScript = await chrome.scripting.executeScript({
+        target: { tabId: driveTab.id }, func: () => true,
+      }).then(() => true).catch(() => false);
+      let host = '';
+      try { host = new URL(driveTab.url).host; } catch (e) { host = driveTab.url || 'this page'; }
+      const why = canScript
+        ? 'not found on the page'
+        : `this site is outside the extension's page access (${host})`;
+      setStatus(`⚠️ Could not locate ${unresolved.length} target(s) (${names}) — ${why}. Nothing was clicked.`);
+      updateAgentActiveDesc(`${step}⚠️ ${names} not found — skipped`);
+      // Drop them so the burst runs the actions that CAN run, and the count the
+      // user is told is the count that actually executed.
+      actions = actions.filter((op) => !(op && op._unresolved));
+      if (!actions.length) {
+        // This early exit SKIPS the two explicit detaches further down, so it
+        // must release the debugger itself — otherwise the session leaks and
+        // every later attach on this tab fails "Another debugger is already
+        // attached" (and the debugging banner never clears).
+        await removeVirtualCursor(driveTab.id).catch(() => {});
+        await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
+        return { status: 'no_targets', ran: 0, label };
+      }
+    }
+
     // Vision coordinates are a pixel guess; snap each one onto the real
     // interactive element under it before anything is dispatched, so a
     // near-miss lands on the control instead of beside it. Non-interactive
@@ -3193,7 +3243,12 @@ if (chatFormEl && chatInputEl) {
         try {
           const driveTab = await activeTabForDrive();
           if (driveTab && driveTab.id !== undefined && driveTab.id !== null) {
-            elements = await collectInteractiveElements(driveTab.id);
+            // allowAttach: on a site outside the manifest's host_permissions
+            // chrome.scripting is refused and the list would be empty, so the
+            // model gets no element refs at all. A brief debugger session reads
+            // the same DOM through CDP on any page. Read-only callers do not
+            // pass this, so they never arm the debugger.
+            elements = await collectInteractiveElements(driveTab.id, undefined, { allowAttach: true });
           }
         } catch (e) { elements = []; }
       }

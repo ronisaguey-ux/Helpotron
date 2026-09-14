@@ -1498,6 +1498,28 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         live_elements = _render_live_elements(payload.elements, limit=150)
         if live_elements:
             directive_block += live_elements
+        else:
+            # NO element list this turn. Most likely the page is outside the
+            # manifest's host_permissions, where chrome.scripting is refused —
+            # the agent can SEE such a page but not script it. (The extension
+            # falls back to the debugger, so this branch is the case where even
+            # that produced nothing: a chrome:// page, a mid-navigation frame,
+            # or a capture that failed.) Either way there are no refs and no
+            # target/name resolution available, and the accuracy rules above tell
+            # the model to prefer exactly those ops — so it would follow its
+            # instructions and NOTHING would execute. Tell it the truth for this
+            # turn: aim by coordinate, which the debugger can dispatch anywhere.
+            directive_block += (
+                "\n\nNO LIVE DOM ELEMENTS THIS TURN. The extension could not read "
+                "this page's DOM, so there are no element refs and no target/name "
+                "resolution available. "
+                "OVERRIDE THE ACCURACY RULES FOR THIS TURN: emit plain coordinate "
+                "ops {\"op\":\"click\",\"x\":N,\"y\":N} taken from the CURRENT "
+                "SCREEN description, and do NOT emit \"ref\" or \"target\" — they "
+                "cannot be resolved and the action would be dropped. Take each "
+                "coordinate from a labelled INTERACTIVE ELEMENTS entry in the "
+                "screen description when one is present."
+            )
         ext_cfg["instructions"] = (existing_ix + "\n\n" + directive_block) if existing_ix else directive_block
         hier["extensions"] = ext_cfg
         ai_cfg["hierarchy"] = hier
