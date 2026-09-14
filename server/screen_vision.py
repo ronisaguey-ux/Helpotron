@@ -402,6 +402,26 @@ def _ref_of(op: Any) -> Optional[int]:
     return n if n >= 0 else None
 
 
+def _target_of(op: Any) -> Optional[str]:
+    """The semantic target of an op, or None when absent.
+
+    Stagehand-style semantic grounding (2026-09-14): the model may answer with
+    {"op":"click","target":"Search button"} instead of a coordinate or ref. The
+    target is a name/label matching the LIVE DOM ELEMENTS list (or a short
+    natural-language description the extension resolves against the live DOM at
+    dispatch time). This is the most robust form: it survives resize, scroll,
+    and scale, because it is resolved against the page at click time rather
+    than aimed at a coordinate that may have drifted.
+    """
+    if not isinstance(op, dict):
+        return None
+    for key in ("target", "text_target", "name", "selector_hint"):
+        val = op.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()[:120]
+    return None
+
+
 def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[str, Any]]:
     """One action -> normalized dict, or None when invalid (whole list drops)."""
     if not isinstance(op, dict):
@@ -410,10 +430,14 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
     if name not in CONTROL_OPS:
         return None
     if name in ("move", "dblclick"):
-        # DOM-anchored first: a ref is exact, x/y is a vision estimate.
+        # DOM-anchored first: a ref is exact, a semantic target is robust, x/y
+        # is a vision estimate.
         ref = _ref_of(op)
         if ref is not None:
             return {"op": name, "ref": ref}
+        target = _target_of(op)
+        if target is not None:
+            return {"op": name, "target": target}
         xy = _clamp_coords(op, viewport)
         return None if xy is None else {"op": name, "x": xy[0], "y": xy[1]}
     if name == "click":
@@ -423,6 +447,9 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
         ref = _ref_of(op)
         if ref is not None:
             return {"op": "click", "ref": ref, "button": button}
+        target = _target_of(op)
+        if target is not None:
+            return {"op": "click", "target": target, "button": button}
         xy = _clamp_coords(op, viewport)
         if xy is None:
             return None

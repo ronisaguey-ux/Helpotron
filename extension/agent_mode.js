@@ -557,9 +557,22 @@ function grabFrame() {
     return null;
   }
   try {
-    const scale = Math.min(1, MAX_FRAME_DIM / Math.max(video.videoWidth || state.videoW, video.videoHeight || state.videoH));
-    const w = Math.max(1, Math.round((video.videoWidth || state.videoW) * scale));
-    const h = Math.max(1, Math.round((video.videoHeight || state.videoH) * scale));
+    // Target dims. When the CSS viewport is known, render the frame AT that
+    // size so one frame pixel == one CSS pixel: then the frame the model reads,
+    // the DOM element list (getBoundingClientRect = CSS), and the CDP mouse
+    // dispatch all share ONE coordinate space, and no scale factor can drift a
+    // click. Without it, fall back to the raw video (device) dims and let
+    // scaleF() rescale at dispatch — the degraded path.
+    const cssVp = state.cssViewport;
+    let w, h;
+    if (cssVp && cssVp.w > 0 && cssVp.h > 0) {
+      w = Math.max(1, Math.round(cssVp.w));
+      h = Math.max(1, Math.round(cssVp.h));
+    } else {
+      const scale = Math.min(1, MAX_FRAME_DIM / Math.max(video.videoWidth || state.videoW, video.videoHeight || state.videoH));
+      w = Math.max(1, Math.round((video.videoWidth || state.videoW) * scale));
+      h = Math.max(1, Math.round((video.videoHeight || state.videoH) * scale));
+    }
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -583,6 +596,7 @@ function viewportForServer() {
 }
 
 async function lookNow() {
+  await ensureCssViewport();  // frame in CSS space before grab
   if (!state.videoStream || !state.frame && !grabFrame()) {
     setStatus('⚠️ Grab a frame first — select a tab or screen and press “Look now”.');
     pushLog('warn', 'Look now skipped: nothing captured');
@@ -829,6 +843,28 @@ async function getCssViewport() {
       return state.cssViewport;
     }
   } catch (e) { /* fall through to video-based scale */ }
+  return null;
+}
+
+// Populate state.cssViewport without needing the debugger attached. Uses
+// chrome.scripting (the element registry's getTabViewport), which works on any
+// scriptable tab — so the frame can be normalized to CSS space BEFORE a run
+// attaches anything. Returns the viewport or null.
+async function ensureCssViewport() {
+  if (state.cssViewport && state.cssViewport.w > 0) return state.cssViewport;
+  if (!state.driveTabId) {
+    try { await getCssViewport(); } catch (e) { /* no debugger yet */ }
+    return state.cssViewport || null;
+  }
+  try {
+    const v = (window.HelpotronElements && typeof window.HelpotronElements.getTabViewport === 'function')
+      ? await window.HelpotronElements.getTabViewport(state.driveTabId).catch(() => null)
+      : null;
+    if (v && v.width > 0 && v.height > 0) {
+      state.cssViewport = { w: v.width, h: v.height };
+      return state.cssViewport;
+    }
+  } catch (e) { /* fall through */ }
   return null;
 }
 
@@ -1385,6 +1421,7 @@ async function sendChatMessage() {
   } else {
     if (!state.videoStream && hasTabCapture) await maybeAutoCapture();
     if (state.videoStream && state.videoW && state.videoH) {
+      await ensureCssViewport();  // so grabFrame renders the frame in CSS space
       const f = grabFrame();
       if (f) {
         images = [f.b64];
