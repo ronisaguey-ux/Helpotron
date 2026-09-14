@@ -1479,7 +1479,11 @@ async function sendChatMessage() {
   // extra tokens; an empty list leaves the vision path untouched.
   if (state.execute && state.driveTabId) {
     try {
-      let els = await window.HelpotronElements.collectInteractiveElements(state.driveTabId);
+      // allowAttach: chrome.scripting cannot read a page outside the manifest's
+      // host_permissions, which is most of the web — the list came back empty
+      // and the model was left guessing coordinates. The debugger reads any tab.
+      let els = await window.HelpotronElements.collectInteractiveElements(
+        state.driveTabId, undefined, { allowAttach: true });
       // The list is measured in CSS px; when a frame is attached the model
       // reads (and is clamped in) FRAME space. Convert the list so the two
       // agree — otherwise every listed coordinate is off by the frame's

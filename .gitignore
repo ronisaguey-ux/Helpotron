@@ -76,3 +76,6 @@ verify-artifacts/_mock-account.json
 #                output. Kept on disk for inspection, never committed.
 /dist/
 /artifacts/
+
+# vibedoctor scan artifacts
+.vibedoctor/
