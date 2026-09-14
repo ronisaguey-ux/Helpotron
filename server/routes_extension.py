@@ -215,10 +215,13 @@ async def download_extension_zip():
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
     "2.7.0": [
-        "🖱️ Driving actually works: the agent auto-picks a real web page (new-tab/extension pages are skipped with a clear RETRY), then moves a visible cursor and clicks for you.",
-        "✅ Same approval card everywhere — popup, popped-out window, and the Helpotron site: Approve, Reject, or Neutral (with an optional note the agent sees).",
-        "⚡ Approve + auto-add: approve an action type once and future identical actions run without asking.",
-        "🗝️ Agent prompt hardened: the agent never refuses a legit request, and Educational Mode limits it to school/study tasks.",
+        "🌐 The agent works on ANY site now — it reads the page you're on and clicks, types and scrolls for you, not just on a short list of school sites. This fixes the bug where it silently did nothing.",
+        "🎯 Clicks land where they're aimed — fixed a display-scaling bug that threw the cursor off on high-DPI screens, and the agent now targets controls BY NAME, so it still hits the right one after the page shifts or scrolls.",
+        "🧩 Sees inside modern web components — YouTube, Google apps and other sites built from components hide their controls; the agent can read and click them now.",
+        "💬 Honest failures — if it can't find what you asked for it says so, and tells you whether the control isn't on the page or the site is outside the extension's access. No more silent nothing.",
+        "🖱️ Driving works end to end — the agent auto-picks a real web page (new-tab/extension pages are skipped with a clear RETRY), then moves a visible cursor and acts for you.",
+        "✅ Same approval card in the popup, the popped-out window and the Helpotron site — Approve, Reject, or Neutral (with an optional note the agent sees), plus approve-once for identical actions.",
+        "⚡ Lighter install, smaller updates — the 2.6 MB math-rendering bundle is gone (replies, markdown and equations render on the server), and the popup shows one consistent model name instead of two.",
     ],
     "2.6.1": [
         "🖥️ Natural mouse glide: agent moves cursor smoothly along Bezier curves before clicking or typing.",
