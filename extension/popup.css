@@ -1460,3 +1460,15 @@ body.fluid-mode {
 .field-header { gap: 10px; }
 .field-header .btn-link,
 .field-header .field-word-count { padding-right: 2px; }
+
+/* Server-rendered markdown/math (thin-wrapper). Injected HTML: paragraphs,
+   links, code, tables, and native <math> MathML. No client-side renderer. */
+.chat-msg-body p { margin: 0 0 6px; }
+.chat-msg-body p:last-child { margin-bottom: 0; }
+.chat-msg-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(127,127,127,.14); padding: 1px 5px; border-radius: 4px; }
+.chat-msg-body pre { background: rgba(0,0,0,.28); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+.chat-msg-body pre code { background: transparent; padding: 0; }
+.chat-msg-body a { color: var(--accent, #7dd3fc); }
+.chat-msg-body table { border-collapse: collapse; margin: 6px 0; }
+.chat-msg-body th, .chat-msg-body td { border: 1px solid rgba(127,127,127,.35); padding: 3px 8px; }
+.chat-msg-body math[display="block"] { display: block; margin: 8px 0; overflow-x: auto; }
