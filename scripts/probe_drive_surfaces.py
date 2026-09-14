@@ -516,8 +516,12 @@ class Probe:
             await self.connect_sw()
             print(f"[extension] {self.ext_id} @ {self.ext_dir}", flush=True)
             ver = await self.sw_js("chrome.runtime.getManifest().version")
-            self.mark("manifest.version", "PASS" if ver == "2.7.0" else "FAIL",
-                      f"loaded build reports version {ver}")
+            # Compare against the manifest on disk, not a hardcoded string: the
+            # point is "the build under test is the tree I am testing", and a
+            # literal here turns every future version bump into a false FAIL.
+            want = json.load(open(os.path.join(_REPO, "extension", "manifest.json")))["version"]
+            self.mark("manifest.version", "PASS" if ver == want else "FAIL",
+                      f"loaded build reports version {ver} (tree says {want})")
             api = await self.sw_js("typeof chrome.sidePanel")
             self.mark("manifest.sidePanel-api", "PASS" if api == "object" else "FAIL",
                       f"typeof chrome.sidePanel = {api}")
