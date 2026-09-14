@@ -51,6 +51,10 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
   }, []);
 
   const liveVersion = versionData?.latest_version || (versionLoading ? 'Loading...' : 'v4.2.0');
+  // Safe label for the early-access CTAs: `liveVersion` can legitimately read
+  // "Loading..." or the stale fallback above, and "Download Loading… (.zip)" is
+  // worse than admitting we don't know the number yet.
+  const displayVersion = versionData?.latest_version || 'the newest build';
 
   const handleDownloadZip = () => {
     setIsDownloading(true);
@@ -184,6 +188,117 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
               </p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* SECTION 1.5: EARLY-ACCESS BUILD — the newest version, available now.
+          The store listing lags its newest build by Chrome's review time, so a
+          user who wants today's fixes has to load the zip unpacked. This block
+          exists to make that path obvious instead of a collapsed footnote, and
+          it renders the SERVER's release notes so the copy cannot drift from
+          the build the download button actually serves. */}
+      <section
+        id="whats-new"
+        className="relative rounded-3xl overflow-hidden border border-primary/30 bg-surface-container-lowest/80 backdrop-blur-xl p-6 sm:p-8 shadow-2xl"
+      >
+        <div className="absolute -top-20 right-0 w-[400px] h-[200px] bg-primary/10 rounded-full blur-[90px] pointer-events-none" />
+
+        <div className="relative space-y-5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sem-amber/15 text-sem-amber font-chip-status text-[10px] uppercase tracking-wider font-semibold">
+              <Sparkles className="w-3.5 h-3.5" />
+              Early access
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/15 text-primary font-chip-status text-[10px] uppercase tracking-wider font-semibold">
+              <Zap className="w-3.5 h-3.5" />
+              {displayVersion} available now
+            </span>
+          </div>
+
+          <div className="space-y-1.5 max-w-2xl">
+            <h2 className="font-headline-lg-mobile md:font-headline-lg text-xl sm:text-2xl text-on-surface font-bold tracking-tight">
+              What&apos;s new in <span className="text-primary">{displayVersion}</span>
+            </h2>
+            <p className="font-body-sm text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+              The Chrome Web Store reviews every build before it reaches you, which can take days.
+              The zip below is the <strong className="text-on-surface">same signed build</strong> the
+              store will serve once it clears review — so you can have today&apos;s fixes right now,
+              without waiting for the rollout.
+            </p>
+          </div>
+
+          {Array.isArray(versionData?.release_notes) && versionData.release_notes.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2.5">
+              {versionData.release_notes.map((note, i) => {
+                const line = String(note || '').trim();
+                // The notes carry plain-text group headings ("AGENT — IT
+                // ACTUALLY WORKS NOW") and blank spacer lines, because the popup
+                // renders the same strings as plain text. Style them here rather
+                // than shipping markup the popup would have to strip: a heading
+                // is the only line that is all-caps and has no leading emoji.
+                const isHeading = line !== ''
+                  && line === line.toUpperCase()
+                  && /[A-Z]/.test(line)
+                  && !/^\p{Emoji}/u.test(line);
+                if (line === '') return <div key={i} className="hidden lg:block h-1" aria-hidden="true" />;
+                if (isHeading) {
+                  return (
+                    <div
+                      key={i}
+                      className="lg:col-span-2 pt-3 first:pt-0 font-label-caps text-[11px] text-primary uppercase tracking-widest font-semibold"
+                    >
+                      {line}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <span className="font-body-sm text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+                      {line}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              disabled={isDownloading}
+              onClick={handleDownloadZip}
+              className="w-full sm:w-auto min-h-[44px] px-6 py-3 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold shadow-[0_0_24px_rgba(120,245,229,0.25)] hover:brightness-105 active:scale-[0.98] transition flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4 text-on-primary" />
+              <span>
+                {isDownloading
+                  ? 'Downloading…'
+                  : downloadSuccess
+                    ? 'Downloaded!'
+                    : `Download ${displayVersion} (.zip)`}
+              </span>
+            </button>
+
+            <a
+              href="#manual-setup"
+              className="w-full sm:w-auto min-h-[44px] px-5 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Terminal className="w-4 h-4 text-on-surface-variant" />
+              <span>How to install it</span>
+            </a>
+
+            <a
+              href={STORE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto font-body-sm text-xs text-on-surface-variant hover:text-primary transition inline-flex items-center gap-1.5 justify-center sm:justify-start"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              Or wait for the store version
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </section>
 
@@ -348,13 +463,17 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
       {/* SECTION 3: DEV-MODE ZIP BUILD — collapsed by default. The Chrome Web
           Store listing (one-click "Add to Chrome") is the primary install path;
           the zip + load-unpacked flow is for Firefox builds and orgs that block
-          store installs, so it must never front-load the UX. */}
-      <section className="rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8">
-        <details className="group">
+          store installs, so it must never front-load the UX. The early-access
+          block above deep-links here with #manual-setup. */}
+      <section
+        id="manual-setup"
+        className="rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 p-6 sm:p-8 scroll-mt-6"
+      >
+        <details className="group" open>
           <summary className="font-label-caps text-xs text-on-surface-variant uppercase tracking-widest list-none flex items-center justify-between cursor-pointer select-none">
             <span className="flex items-center gap-2">
               <Terminal className="w-4 h-4" />
-              Want the newest version asap? Manual build — zip &amp; load unpacked (skips store rollout)
+              Install the latest build manually — zip &amp; load unpacked (skips store rollout)
             </span>
             <ChevronRight className="w-4 h-4 text-on-surface-variant group-open:rotate-90 transition-transform" />
           </summary>
