@@ -215,13 +215,33 @@ async def download_extension_zip():
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
     "2.7.0": [
-        "🌐 The agent works on ANY site now — it reads the page you're on and clicks, types and scrolls for you, not just on a short list of school sites. This fixes the bug where it silently did nothing.",
-        "🎯 Clicks land where they're aimed — fixed a display-scaling bug that threw the cursor off on high-DPI screens, and the agent now targets controls BY NAME, so it still hits the right one after the page shifts or scrolls.",
-        "🧩 Sees inside modern web components — YouTube, Google apps and other sites built from components hide their controls; the agent can read and click them now.",
-        "💬 Honest failures — if it can't find what you asked for it says so, and tells you whether the control isn't on the page or the site is outside the extension's access. No more silent nothing.",
-        "🖱️ Driving works end to end — the agent auto-picks a real web page (new-tab/extension pages are skipped with a clear RETRY), then moves a visible cursor and acts for you.",
-        "✅ Same approval card in the popup, the popped-out window and the Helpotron site — Approve, Reject, or Neutral (with an optional note the agent sees), plus approve-once for identical actions.",
-        "⚡ Lighter install, smaller updates — the 2.6 MB math-rendering bundle is gone (replies, markdown and equations render on the server), and the popup shows one consistent model name instead of two.",
+        # Grouped, in rough order of how much they change for the user. Rendered
+        # verbatim by the popup's What's New and by the site's early-access
+        # block, so keep each line self-contained and jargon-free.
+        "AGENT — IT ACTUALLY WORKS NOW",
+        "🌐 Works on ANY website. Before, the agent could only operate on a short list of school sites; everywhere else it silently did nothing. It now reads whatever page you're on and clicks, types and scrolls for you.",
+        "🎯 Clicks land where they're aimed. Fixed a display-scaling bug that threw the cursor off on high-resolution screens, so the agent clicked a slightly wrong spot on most laptops.",
+        "🏷️ Targets controls by NAME, not by guessed coordinates — so it still hits the right button after the page shifts, loads late, or scrolls. A named target can't go stale the way a pixel can.",
+        "🧩 Sees inside modern web components. Sites like YouTube and Google apps hide their controls inside shadow DOM where ordinary page-reading can't reach; the agent reads and clicks them now.",
+        "🪟 Works across several tabs in one request — point it at the tabs you want and it drives each in turn.",
+        "🖱️ Visible second cursor glides to each action, so you can see exactly what it's about to do before it does it.",
+        "⏸️ Pause or press Esc at any moment and the run stops instantly.",
+        "💬 Honest failures. If it can't find what you asked for it says so — and tells you whether the control isn't on the page or the site is outside the extension's access. No more silent nothing.",
+        "",
+        "EDITING & WRITING",
+        "✍️ Launch to Doc types your work like a person — human-like cadence and rhythm, rebuilt from a measured typing-timing distribution, with speed you control (careful / academic / fast).",
+        "🧮 Real math rendering in chat — equations and markdown display properly instead of showing raw symbols.",
+        "🛡️ AI-detection reports built in — self-hosted detectors check your writing and link the full report; no third-party upload.",
+        "",
+        "SPEED & FOOTPRINT",
+        "⚡ Much lighter and faster. The 2.6 MB math-rendering bundle is gone — replies, markdown and equations now render on Helpotron's server, so the extension ships ~90% smaller and updates in a fraction of the time.",
+        "🎛️ One consistent model name in the popup — it used to show two different models at once for a single setting.",
+        "",
+        "RELIABILITY & PRIVACY",
+        "🔒 Trusted keystrokes — typed characters now look like real user input, so sites that reject scripted typing accept them.",
+        "🗝️ Hardened sandbox and file permissions — your session data and run logs are owner-only on disk.",
+        "🐛 Fixed PDF and document reading, which was returning raw file syntax instead of your actual document to the agent.",
+        "✅ Same approval card in every surface — popup, popped-out window and the Helpotron site: Approve, Reject, or Neutral with a note the agent actually sees.",
     ],
     "2.6.1": [
         "🖥️ Natural mouse glide: agent moves cursor smoothly along Bezier curves before clicking or typing.",
