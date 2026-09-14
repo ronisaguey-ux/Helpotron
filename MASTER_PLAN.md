@@ -69,20 +69,24 @@ Two independent tracks found the same live secret:
 
 ## IMPLEMENTED ON THIS BRANCH
 
-Only the plan and the research are committed — helpotron has **1,508 lines of
-uncommitted owner work** across the extension, server and web, so applying
-in-flight fixes on top of it unattended would either collide with that work or
-bury it in an unreviewable diff. That is a deliberate boundary, not an omission.
+Each is an individual commit, verified before the next. **No file the owner has
+uncommitted was touched** — helpotron carries ~1,508 lines of in-flight work
+across 16 files, and every fix below lands in a file that is clean.
 
-| Commit | What |
-|---|---|
-| *(this branch)* | `research/` (10 agent reports) + this plan |
+| Commit | What | Why it mattered |
+|---|---|---|
+| `4d88545` | research + this plan | 10 reports, 107 findings |
+| `585d045` | **tests no longer run the production background loops** | `TestClient(app)` triggers the lifespan, which spawns `_cleanup_temp_files_loop` — it `os.remove`s anything older than 24h from the **live** `./uploads`, `./exports`, `/tmp/helpotron_exports`, and its first pass runs before its first sleep. Measured: 10 test files already written into the real `uploads/` (each exactly 16 bytes, mtimes inside the test window). Only the 24h gate had prevented an actual purge |
 
-**Why nothing was applied:** the four highest-value helpotron fixes all change
-behaviour on surfaces the owner is actively editing (extension ref dispatch,
-credit ledger, price tables) or require a product decision (which price table is
-canonical). Applying them blind would produce a diff the owner cannot review
-against their own uncommitted work.
+**Verified:** `server/tests/test_api.py` 16 passed, and the real `uploads/` file
+count was **10 before and 10 after** — unchanged.
+
+**Why the other 106 findings were not applied:** the highest-value ones change
+surfaces the owner is actively editing (extension ref dispatch in
+`extension/*`, the credit ledger and agent loop in `server/main.py`, the price
+tables) or need a product decision (which of the three price tables is
+canonical, whether to keep the detector-evasion lane at all). Applying them
+blind would produce a diff the owner cannot review against their own work.
 
 ---
 
