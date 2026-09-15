@@ -430,6 +430,17 @@ export const api = {
     }
   },
   updateSettings: (settings) => request('/api/user/settings', { method: 'PATCH', body: JSON.stringify(settings) }),
+
+  /* ── Trash (soft delete) ─────────────────────────────────────────────────
+   * Deletes are recoverable for a retention window; these are the operations
+   * behind the Settings → Trash panel. */
+  listTrash: () => request('/api/trash', { method: 'GET' }),
+  restoreTrashItem: (id) => request(`/api/trash/${id}/restore`, { method: 'POST' }),
+  purgeTrashItem: (id) => request(`/api/trash/${id}`, { method: 'DELETE' }),
+  restoreAllTrash: () => request('/api/trash/restore-all', { method: 'POST' }),
+  emptyTrash: () => request('/api/trash', { method: 'DELETE' }),
+  deleteLibraryMaterial: (id) => request(`/api/library/materials/${id}`, { method: 'DELETE' }),
+  billingPortal: () => request('/api/billing/portal', { method: 'POST' }),
   getAgentActions: () => request('/api/agent/actions'),
   undoAgentAction: (actionId) => request(`/api/agent/actions/${actionId}/undo`, { method: 'POST' }),
   pay: (body) => request('/api/payments', { method: 'POST', body: JSON.stringify(body) }),
