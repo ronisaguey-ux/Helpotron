@@ -141,7 +141,15 @@ def test_api_auth_2fa_routes():
 
 
 def test_api_mandatory_purchase_2fa_routes():
-    user_id = "test_purchase_user_2fa"
+    # Unique id per run. This test used a hardcoded public_id against the
+    # PERSISTENT test database, and once `2fa_enabled` was ever set on that
+    # account, login correctly returns `2fa_required` and deliberately issues NO
+    # session cookie (a 2FA-enabled account must complete the second factor).
+    # The test then had no session and failed forever, on a product behaving
+    # exactly as designed. A fresh account cannot inherit that state.
+    import uuid
+
+    user_id = f"test_purchase_user_2fa_{uuid.uuid4().hex[:8]}"
     password = "SuperSecretPassword123!"
 
     # Create user and get session cookies
