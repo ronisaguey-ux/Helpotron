@@ -17,6 +17,37 @@ router = APIRouter(prefix="/api/study", tags=["study_tools"])
 scheduler = FSRSScheduler()
 
 
+def _owned_material_or_404(db: Session, material_id: int, user: User) -> StudyMaterial:
+    """Fetch a StudyMaterial the caller is allowed to read, else 404.
+
+    This is the only sanctioned way to fetch a single material by id in this
+    module. Before it, review/grade/mastery each ran
+    ``filter(StudyMaterial.id == material_id)`` with no user predicate, so any
+    authenticated user could read another user's quiz answers by enumerating
+    ids (sweep#2 S1-2) — the listing filter below had the predicate, the
+    single-item lookups did not.
+
+    Ownership is the same rule the listing and the library routes use: the
+    creator, or someone the material is `shared_with`. The predicate is part of
+    the QUERY rather than a check afterwards, so a foreign id is simply not
+    found and the 404 stays truthful — this also avoids leaking which ids exist.
+    """
+    m = (
+        db.query(StudyMaterial)
+        .filter(
+            StudyMaterial.id == material_id,
+            or_(
+                StudyMaterial.user_id == user.id,
+                StudyMaterial.shared_with.contains([user.id]),
+            ),
+        )
+        .first()
+    )
+    if not m:
+        raise HTTPException(status_code=404, detail="Material not found")
+    return m
+
+
 class CardReviewRequest(BaseModel):
     card_index: int = Field(..., ge=0)
     rating: int = Field(..., ge=1, le=4)  # 1: Again, 2: Hard, 3: Good, 4: Easy
@@ -99,9 +130,7 @@ async def review_card(
     db: Session = Depends(get_db),
 ):
     user: User = get_current_authenticated_user(request, db)
-    m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
-    if not m:
-        raise HTTPException(status_code=404, detail="Deck not found")
+    m = _owned_material_or_404(db, material_id, user)
 
     now = datetime.now(timezone.utc)
 
@@ -171,9 +200,7 @@ async def grade_quiz(
     db: Session = Depends(get_db),
 ):
     user: User = get_current_authenticated_user(request, db)
-    m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
-    if not m:
-        raise HTTPException(status_code=404, detail="Quiz material not found")
+    m = _owned_material_or_404(db, material_id, user)
 
     parsed_content = []
     try:
@@ -304,9 +331,7 @@ async def get_deck_mastery(
     db: Session = Depends(get_db),
 ):
     user: User = get_current_authenticated_user(request, db)
-    m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
-    if not m:
-        raise HTTPException(status_code=404, detail="Material not found")
+    m = _owned_material_or_404(db, material_id, user)
 
     parsed_cards = []
     try:
