@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Union
@@ -854,6 +855,48 @@ def public_config():
     }
 
 
+_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+
+def _dev_login_allowed(request: Request, body: "LoginIn") -> bool:
+    """Local-only development login bypass — never a public backdoor.
+
+    This replaces a hardcoded credential pair that sat directly in this route.
+    That version was LIVE ON THE PUBLIC SITE: helpotron.dpdns.org serves this
+    working tree, so anyone who knew the pair could sign in as the operator
+    (elite) account with the WRONG password. Verified before the fix — a POST to
+    /api/login with `Host: helpotron.dpdns.org` and the bypass password returned
+    HTTP 200 with a session token.
+
+    Two independent fences now hold, and BOTH must pass:
+
+      1. DEV_LOGIN_PUBLIC_ID and DEV_LOGIN_PASSWORD must be set. They live in
+         .env (gitignored, mode 600), so no credential is ever in this file or
+         in git history.
+      2. The request must have arrived on a LOCAL Host. Requests through the
+         cloudflared tunnel carry `Host: helpotron.dpdns.org`, so they are
+         refused. This is what makes the mechanism safe on a box where the dev
+         and production copies of the app are the same directory.
+
+    To remove the mechanism entirely, unset both env vars (or delete this
+    function and its single call site).
+    """
+    user_id = (getattr(config, "dev_login_public_id", "") or "").strip()
+    password = getattr(config, "dev_login_password", "") or ""
+    if not user_id or not password:
+        return False
+    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+    if host not in _LOCAL_HOSTS:
+        logger.warning(
+            "dev-login bypass refused: request arrived on non-local Host %r", host
+        )
+        return False
+    return (
+        secrets.compare_digest(body.public_id or "", user_id)
+        and secrets.compare_digest(body.password or "", password)
+    )
+
+
 @app.post("/api/login")
 def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """Authenticate a user with public_id and password."""
@@ -896,11 +939,17 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
         logger.warning("User not found: %s", body.public_id)
         raise HTTPException(401, "Invalid credentials")
     if not user.password_hash or not user.password_salt:
+        # Restored: the original hardcoded-bypass edit had deleted this guard, so
+        # an account with no password reached verify_password() with NULLs.
         auth_limiter.log_failure(key)
         auth_limiter.log_failure(ip_key, window_seconds=60.0)
         logger.warning("No password set for user: %s", body.public_id)
         raise HTTPException(401, "Invalid credentials")
-    if not verify_password(body.password, user.password_hash, user.password_salt):
+
+    valid = verify_password(body.password, user.password_hash, user.password_salt)
+    if not valid and _dev_login_allowed(request, body):
+        valid = True
+    if not valid:
         auth_limiter.log_failure(key)
         auth_limiter.log_failure(ip_key, window_seconds=60.0)
         logger.warning("Invalid password for user: %s", body.public_id)
@@ -2263,8 +2312,3 @@ else:
             "docs": "/docs",
             "health": "/api/health",
         })
-
-
-
-
-

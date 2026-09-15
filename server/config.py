@@ -140,6 +140,14 @@ class Settings(BaseSettings):
     twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "+13187688667")
     # Twilio Verify service — SMS OTP with no A2P 10DLC campaign needed.
     twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
+
+    # Local development login bypass. Both must be set for it to do anything,
+    # and it is additionally refused for any request that did not arrive on a
+    # local Host (see _dev_login_allowed in main.py). They live in .env
+    # (gitignored, mode 600) so no credential is ever in the repository.
+    # Unset both to disable the mechanism entirely.
+    dev_login_public_id: str = os.getenv("DEV_LOGIN_PUBLIC_ID", "")
+    dev_login_password: str = os.getenv("DEV_LOGIN_PASSWORD", "")
     # Owner directive: purchases require 2FA enabled by default
     purchases_require_2fa: bool = os.getenv("PURCHASES_REQUIRE_2FA", "true").lower() == "true"
 
