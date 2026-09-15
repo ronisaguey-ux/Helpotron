@@ -15,18 +15,21 @@ Usage::
     git show HEAD:server/main.py > /tmp/opencode/main_head.py
     git diff --no-index /tmp/opencode/main_head.py server/main.py > full.diff
     python3 scripts/maintenance/select_main_hunks.py full.diff econ.diff \\
-        "<REDACTED-DEV-PASSWORD>|||<REDACTED-DEV-PASSWORD>"
+        "<the-bypass-password>|||<alternate-spelling>"
     sed -i 's|^--- server/main.py|--- a/server/main.py|;
             s|^+++ server/main.py|+++ b/server/main.py|' econ.diff
     git update-index --no-skip-worktree server/main.py
     git apply --cached --check econ.diff && git apply --cached econ.diff
 
+The denylist is passed on the command line and is deliberately NOT recorded here:
+the bypass credential must not appear in the repository, including in a docstring.
+
 Then PROVE both directions before committing — the check is the safety net, not
 this script::
 
-    git show :server/main.py | grep -c "<REDACTED-DEV-PASSWORD>"   # MUST be 0
-    git show :server/main.py | grep -c "<your new code>" # MUST be > 0
-    diff <(git show :server/main.py) server/main.py     # ONLY the bypass hunk
+    git show :server/main.py | grep -c "<the-bypass-string>"   # MUST be 0
+    git show :server/main.py | grep -c "<your new code>"       # MUST be > 0
+    diff <(git show :server/main.py) server/main.py            # ONLY the bypass hunk
 
 Expected output is ``kept N hunks, dropped M: [...]`` — read the dropped count and
 confirm it is exactly the one hunk you meant to drop. A silent extra drop means a
