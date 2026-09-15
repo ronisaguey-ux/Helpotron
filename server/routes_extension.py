@@ -59,6 +59,54 @@ def get_current_manifest() -> Dict[str, Any]:
     return {"version": "2.7.0", "name": "Helpotron Academic Companion"}
 
 
+# The published listing id (see docs/helpotron-extension-cws-ready.md). The store
+# serves whatever build CWS has approved, which LAGS the version in this repo
+# whenever a submission is in review — so "latest" and "what the store installs"
+# are two different numbers and the site must not conflate them.
+STORE_EXTENSION_ID = "nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk"
+
+# Chrome's own update-check endpoint. It answers with the version of the crx the
+# store is currently serving, so reading it gives the real store version instead
+# of a number we have to remember to update by hand.
+_STORE_UPDATE_URL = (
+    "https://clients2.google.com/service/update2/crx"
+    "?response=updatecheck&prodversion=131&acceptformat=crx2,crx3&x=id%3D{id}%26uc"
+)
+_store_version_cache: Dict[str, Any] = {"value": None, "at": 0.0}
+_STORE_VERSION_TTL = 900.0  # seconds
+
+
+def fetch_store_version() -> Optional[str]:
+    """Version currently served by the Chrome Web Store, or None if unknown.
+
+    Never raises: a network problem must degrade the page to "unknown", not
+    500 the endpoint every client polls. Cached briefly so a page render does
+    not hit Google on every request.
+    """
+    import time
+    now = time.time()
+    if _store_version_cache["value"] and (now - _store_version_cache["at"]) < _STORE_VERSION_TTL:
+        return _store_version_cache["value"]
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            _STORE_UPDATE_URL.format(id=STORE_EXTENSION_ID),
+            headers={"User-Agent": "Helpotron/1.0 (extension version check)"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            body = resp.read(64 * 1024).decode("utf-8", "replace")
+        # <updatecheck ... version="2.6.0"/> — deliberately NOT anchored on status
+        # or attribute order, which Google has changed before.
+        m = re.search(r'version="(\d+(?:\.\d+)+)"', body)
+        if m:
+            _store_version_cache["value"] = m.group(1)
+            _store_version_cache["at"] = now
+            return m.group(1)
+    except Exception as e:  # noqa: BLE001 - degrade, never break the endpoint
+        logger.warning("store version check failed: %s", e)
+    return _store_version_cache["value"] or None
+
+
 class VersionCheckRequest(BaseModel):
     current_version: Optional[str] = Field(None, description="Current version installed in the browser")
     client_id: Optional[str] = None
@@ -145,9 +193,19 @@ async def get_extension_version(db: Session = Depends(get_db)):
     latest_version = manifest.get("version", "2.0.0")
     top = releases[0] if releases else None
 
+    # `latest_version` is the newest build we SERVE for manual install; the store
+    # installs something older until Chrome approves the submission. Clients show
+    # both, so "the extension is out of date" is never a mystery.
+    store_version = fetch_store_version()
+    update_pending = bool(
+        store_version and _version_tuple(store_version) < _version_tuple(latest_version)
+    )
+
     return {
         "status": "success",
         "latest_version": latest_version,
+        "store_version": store_version,
+        "update_pending": update_pending,
         "minimum_supported_version": "1.0.0",
         "release_date": top.created_at.strftime("%Y-%m-%d") if top and top.created_at else "2026-09-01",
         "is_critical_update": bool(top and top.is_major),
