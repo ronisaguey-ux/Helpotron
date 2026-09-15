@@ -63,6 +63,23 @@ CRITICAL_ACTION_TYPES = {
     "bulk_wipe",
     "modify_security_settings",
     "mint_credits",
+    # sweep#2 S1-1: arbitrary code execution must never be silently approved.
+    # `run_sandbox_script` takes a model-authored `script` string and executes it
+    # (overlord_agent.py, action_type == "run_sandbox_script"). It was absent
+    # from this set, so AUTO mode ran it unchallenged — which is the difference
+    # between "the agent suggested some code" and "the agent ran code on the
+    # server with no one asked". The sandbox cannot be a namespace jail on this
+    # box (see engine/sandbox_isolation.py), so the confirmation step is doing
+    # real work here: a user (or a page steering the agent) cannot get code
+    # executed without an explicit approval.
+    #
+    # `run_shell` is deliberately NOT here — it is AST-locked to safe maths
+    # (`_validated_argv` / `_is_safe_compute_code`: no imports outside
+    # math/datetime/decimal/fractions/statistics/sympy, no open/eval/exec/
+    # __import__/ctypes, no shell metacharacters, argv-only, never shell=True),
+    # verified against a ten-attempt escape suite. Gating it would prompt on
+    # every arithmetic step for no security gain.
+    "run_sandbox_script",
     # sweep#2 S1-3: `browser_commit` is a browser burst that TRANSMITS something
     # — a click on a submit/send/delete/buy control, or typing into a field and
     # pressing Enter. `routes_extension` classifies each burst and raises this
