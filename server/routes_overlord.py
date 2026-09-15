@@ -416,6 +416,38 @@ class LaunchToDocRequest(BaseModel):
     overrides: Optional[Dict[str, Any]] = None
 
 
+def _resolve_launch_text(payload: "LaunchToDocRequest", user, db) -> tuple:
+    """Resolve the text a launch will type: the assignment's do_it_work, else the
+    first material with content, else the prompt. Shared by the plan and stream
+    endpoints so both agree on WHAT gets typed; only the HOW (plan vs stream) differs."""
+    title: Optional[str] = None
+    text = ""
+    subject = ""
+    assignment_id = payload.assignment_id
+    if assignment_id:
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == assignment_id, Assignment.user_id == user.id)
+            .first()
+        )
+        if not assignment:
+            raise HTTPException(404, "Assignment not found")
+        progress = assignment.progress or {}
+        text_to_type = progress.get("do_it_work") or ""
+        if not text_to_type:
+            for m in _assignment_materials(db, assignment_id):
+                content = m.get("content_text") or m.get("content") or ""
+                if content:
+                    text_to_type = content
+                    break
+        if not text_to_type:
+            text_to_type = assignment.prompt or ""
+        title = assignment.title
+        text = text_to_type
+        subject = progress.get("subject") or progress.get("course") or ""
+    return title, text, subject, assignment_id
+
+
 @router.get("/launch-to-doc/config")
 async def get_launch_to_doc_config(request: Request, db: Session = Depends(get_db)):
     """The Launch to Doc UI contract: cadence presets, copy and typing defaults.
@@ -444,32 +476,7 @@ async def post_launch_to_doc_plan(
     user = _get_current_user(request, db)
     from .launch_to_doc import build_launch_plan
 
-    title: Optional[str] = None
-    text = ""
-    subject = ""
-    assignment_id = payload.assignment_id
-
-    if assignment_id:
-        assignment = (
-            db.query(Assignment)
-            .filter(Assignment.id == assignment_id, Assignment.user_id == user.id)
-            .first()
-        )
-        if not assignment:
-            raise HTTPException(404, "Assignment not found")
-        progress = assignment.progress or {}
-        text_to_type = progress.get("do_it_work") or ""
-        if not text_to_type:
-            for m in _assignment_materials(db, assignment_id):
-                content = m.get("content_text") or m.get("content") or ""
-                if content:
-                    text_to_type = content
-                    break
-        if not text_to_type:
-            text_to_type = assignment.prompt or ""
-        title = assignment.title
-        text = text_to_type
-        subject = progress.get("subject") or progress.get("course") or ""
+    title, text, subject, assignment_id = _resolve_launch_text(payload, user, db)
 
     return build_launch_plan(
         title=title,
@@ -481,6 +488,56 @@ async def post_launch_to_doc_plan(
         tab_id=payload.tab_id,
         overrides=payload.overrides,
     )
+
+
+@router.post("/launch-to-doc/stream")
+async def post_launch_to_doc_stream(
+    payload: LaunchToDocRequest, request: Request, db: Session = Depends(get_db)
+):
+    """The server-driven action stream: the plan PLUS the primitive action list.
+
+    The extension plays the stream verbatim through its fixed executor; it holds
+    no cadence or humanization policy of its own. Tuning those is a server deploy.
+    """
+    user = _get_current_user(request, db)
+    from .launch_to_doc import build_launch_plan
+    from .action_stream import (
+        ACTION_STREAM_VERSION,
+        build_action_stream,
+        validate_action_stream,
+    )
+
+    title, text, subject, assignment_id = _resolve_launch_text(payload, user, db)
+
+    plan = build_launch_plan(
+        title=title,
+        text=text,
+        subject=subject,
+        assignment_id=assignment_id,
+        preset_id=payload.preset_id,
+        text_override=payload.text,
+        tab_id=payload.tab_id,
+        overrides=payload.overrides,
+    )
+
+    typing = plan["typing"]
+    actions = build_action_stream(
+        plan["text"],
+        speed=typing["speed"],
+        typo_rate=typing["typo_rate"],
+        natural_pauses=typing["natural_pauses"],
+        jitter=typing["jitter"],
+        false_start_rate=typing["false_start_rate"],
+    )
+    ok, err = validate_action_stream(actions)
+    if not ok:
+        raise HTTPException(500, f"action stream did not validate: {err}")
+
+    plan["action_stream"] = {
+        "stream_version": ACTION_STREAM_VERSION,
+        "actions": actions,
+    }
+    return plan
 
 
 # ─── Chat threads (operator 08-26) ──────────────────────────────────────────
@@ -2540,4 +2597,3 @@ def cleanup_sandbox_endpoint(payload: Dict[str, str], request: Request, db: Sess
     from .engine.sandbox import sandbox_manager
     success = sandbox_manager.cleanup_sandbox(sandbox_id)
     return {"status": "success" if success else "not_found", "sandbox_id": sandbox_id}
-
