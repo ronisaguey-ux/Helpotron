@@ -622,6 +622,32 @@ class ClaimedTrialPhone(Base):
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class TrashItem(Base):
+    """A soft-deleted item, recoverable for a retention window.
+
+    Nothing a user deletes should vanish instantly and irreversibly. A delete
+    moves a snapshot here (see server/trash.py); the original row is removed, and
+    `payload` holds everything needed to rebuild it. A background sweep (and each
+    read of the trash list) purges anything past `expires_at`, so storage stays
+    bounded without a scheduler.
+
+    `item_type` names the handler that knows how to restore this kind; `item_id`
+    is the original primary key, kept so a restore recreates the same id where
+    the table allows it.
+    """
+    __tablename__ = "trash_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    item_type: Mapped[str] = mapped_column(String(48), index=True)
+    item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    subtitle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 def get_db() -> Generator[Any, None, None]:
     db = SessionLocal()
     try:

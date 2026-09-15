@@ -5,12 +5,13 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Sliders, User, Moon, Bell, Shield, CreditCard, Send,
+  Sliders, User, Moon, Bell, Shield, CreditCard, Send, Trash2,
   Check, CheckCircle2, Loader2, Search, Sparkles, ExternalLink
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings } from '../demoData.js';
 import { SettingsSections } from './SettingsSections.jsx';
+import TrashPanel from './TrashPanel.jsx';
 
 export const SETTINGS_NAV_ITEMS = [
   { id: 'all', label: 'All Settings', icon: Sliders },
@@ -20,6 +21,7 @@ export const SETTINGS_NAV_ITEMS = [
   { id: 'privacy', label: 'Privacy & Security', icon: Shield },
   { id: 'credits', label: 'Credits & Billing', icon: CreditCard },
   { id: 'integrations', label: 'Integrations', icon: Send },
+  { id: 'trash', label: 'Trash', icon: Trash2 },
 ];
 
 export function applyFontScale(score) {
@@ -185,6 +187,10 @@ export default function SettingsApp({
 
       {/* Main Bare-Bones Sections */}
       <main className="flex flex-col gap-unit-6">
+        {activeSection === 'trash' && (
+          <TrashPanel onNotice={(m) => { try { window.dispatchEvent(new CustomEvent('helpotron:toast', { detail: m })); } catch (e) {} }} />
+        )}
+
         <SettingsSections
           section={activeSection}
           settings={settings}

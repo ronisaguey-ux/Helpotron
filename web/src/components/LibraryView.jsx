@@ -82,6 +82,19 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment })
     setTimeout(() => setFeedbackNotice(""), 3500);
   };
 
+  // Delete — recoverable. The server moves it to the trash rather than
+  // destroying it, so the copy says so and the button warns before acting.
+  const handleDelete = async (m) => {
+    if (!window.confirm('Move this to the trash? You can restore it from Settings → Trash for 10 days.')) return;
+    try {
+      await api.deleteLibraryMaterial(m.id);
+      setMaterials((prev) => prev.filter((item) => item.id !== m.id));
+      triggerNotice('Moved to trash — restore it from Settings → Trash.');
+    } catch (e) {
+      triggerNotice(e?.message || 'Delete failed.');
+    }
+  };
+
   // Save / Unsave
   const handleToggleSave = async (m) => {
     try {
@@ -372,15 +385,26 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment })
                         <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${tint}`}>
                           <Icon className="w-4 h-4" />
                         </div>
-                        {/* 44px Unsave Button (Spec Requirement) */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSave(m)}
-                          className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
-                          title="Unsave material"
-                        >
-                          <BookmarkCheck className="w-4 h-4 text-primary hover:text-error" />
-                        </button>
+                        <div className="flex items-center gap-0.5">
+                          {/* 44px Unsave Button (Spec Requirement) */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSave(m)}
+                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
+                            title="Unsave material"
+                          >
+                            <BookmarkCheck className="w-4 h-4 text-primary hover:text-error" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(m)}
+                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-error/15 flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
+                            title="Move to trash (recoverable for 10 days)"
+                            aria-label={`Delete ${m.kind || 'material'} #${m.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-2 space-y-1">

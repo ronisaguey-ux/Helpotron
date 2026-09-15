@@ -123,6 +123,12 @@ async def delete_library_material(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Move a library material to the trash.
+
+    This used to `db.delete(m)` outright — one click and the material was gone
+    with no way back. It now snapshots the row into the trash first (recoverable
+    for the retention window, see server/trash.py) and only then removes it.
+    """
     user: User = get_current_authenticated_user(request, db)
     m = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
     if not m:
@@ -130,10 +136,30 @@ async def delete_library_material(
     if m.user_id != user.id:
         raise HTTPException(status_code=403, detail="Only material creator may delete")
 
+    from .trash import move_to_trash
+    move_to_trash(
+        db,
+        user_id=user.id,
+        item_type="study_material",
+        item_id=m.id,
+        title=f"{str(m.kind or 'material').replace('_', ' ').title()} #{m.id}",
+        subtitle=(m.content or "")[:120] or None,
+        payload={
+            "id": m.id,
+            "assignment_id": m.assignment_id,
+            "transcript_id": m.transcript_id,
+            "kind": m.kind,
+            "content": m.content,
+            "model_used": m.model_used,
+            "saved_at": m.saved_at.isoformat() if m.saved_at else None,
+            "shared_with": list(m.shared_with or []),
+        },
+    )
     db.delete(m)
     db.commit()
 
     return {
         "status": "ok",
         "deleted_id": material_id,
+        "trashed": True,
     }
