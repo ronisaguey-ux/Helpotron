@@ -63,6 +63,17 @@ CRITICAL_ACTION_TYPES = {
     "bulk_wipe",
     "modify_security_settings",
     "mint_credits",
+    # sweep#2 S1-3: `browser_commit` is a browser burst that TRANSMITS something
+    # — a click on a submit/send/delete/buy control, or typing into a field and
+    # pressing Enter. `routes_extension` classifies each burst and raises this
+    # instead of plain `browser_action` when it sees one, so AUTO mode confirms
+    # the irreversible step.
+    #
+    # Deliberately NOT the blanket `browser_action`: that would put a prompt in
+    # front of every click and scroll, which is exactly the capability the
+    # extension exists to provide. Reading and navigating stay fluid; only the
+    # action that actually commits or transmits is confirmed.
+    "browser_commit",
 }
 
 ROUTINE_ACTION_TYPES = {

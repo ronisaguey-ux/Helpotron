@@ -1542,6 +1542,35 @@ async function sendChatMessage() {
         // 09-02: the Execute toggle is OFF — the agent talks, it never acts.
         pushLog('warn', `agent proposed ${n} action(s) but “Study Mode” is OFF — turn it on in the popup (then Control ON + Resume) to let it drive`);
         setStatus(`Agent proposed ${n} action(s) — “Study Mode” is OFF, nothing ran.`);
+      } else if (data.control_requires_approval && !agentControlSessionAllowed) {
+        // Server permission gate (09-14, S1-3). The server refuses a burst the
+        // current mode does not authorise — e.g. a COMMITTING one (submit /
+        // send / delete / buy, or a type-then-Enter) in Auto mode, which is
+        // exactly what a page trying to steer the agent would aim at. The card
+        // carries the real ops so "Approve" is an informed click. Nothing runs
+        // unless the user says allow.
+        const reqId = `agentctl-${Date.now()}`;
+        pendAgentApprovals.push({
+          reqId,
+          title: 'Approve screen control?',
+          summary: data.control_summary
+            ? `${data.control_summary}` + (data.control_permission_reason ? `\n\nReason: ${data.control_permission_reason}` : '')
+            : `The agent wants to run ${n} action(s) on your screen.`,
+          onDecision: async (decision, note, opts) => {
+            if (decision !== 'allow') {
+              pushLog('warn', 'screen control rejected — nothing ran');
+              setStatus('Screen control rejected — nothing ran.');
+              return;
+            }
+            if (opts && opts.autoAdd) agentControlSessionAllowed = true;
+            setStatus(`Executing ${n} action(s) after approval…`);
+            await runActions(actions);
+            setStatus('✓ Actions finished.');
+          },
+        });
+        while (pendAgentApprovals.length > 5) pendAgentApprovals.shift();
+        renderAgentApproval();
+        setStatus(`⚠️ ${n} action(s) need your approval (mode: ${state.agentMode}).`);
       } else if (!state.controlOn || state.paused) {
         pushLog('warn', `agent proposed ${n} action(s) but control is ${state.controlOn ? 'paused' : 'OFF'} — enable Control (or press Resume) to let it drive`);
       } else {
@@ -1567,6 +1596,10 @@ async function sendChatMessage() {
 // /api/extension/approval/respond. pendAgentApprovals holds server-channel
 // prompts delivered by an agent_chat "permission_required" response.
 const pendAgentApprovals = [];
+// Set once the user approves a screen-control card with "auto-add", so a run
+// that needs several confirmed bursts does not re-ask for each one. Mirrors
+// popup.js's screenControlSessionAllowed; per-session only, never persisted.
+let agentControlSessionAllowed = false;
 const AGENT_NEUTRAL_HINT = 'Say something first — Neutral needs your note';
 
 function renderAgentApproval() {
@@ -1617,7 +1650,28 @@ function answerAgentApproval(reqId, decision, note, opts) {
   const text = String(note || '').trim();
   const autoAdd = Boolean(opts && opts.autoAdd);
   const ix = pendAgentApprovals.findIndex((p) => p.reqId === reqId);
+  // Local prompts (screen control, 09-14). The actions are already in hand on
+  // this side — there is nothing to resume server-side, so the card just gates
+  // the dispatch. Without this hook `control_requires_approval` was ignored
+  // here and runActions() executed anyway, so the server's confirmation gate
+  // was silently discarded in Agent Mode (the popup already honoured it).
+  const onDecision = ix >= 0 ? pendAgentApprovals[ix].onDecision : null;
   if (ix >= 0) pendAgentApprovals.splice(ix, 1);
+  if (typeof onDecision === 'function') {
+    const card0 = document.getElementById('approvalCard');
+    const status0 = document.getElementById('approvalStatus');
+    Promise.resolve(onDecision(d, text, { autoAdd })).catch(() => {});
+    if (card0) card0.style.display = 'none';
+    if (status0) {
+      status0.innerText = d === 'allow'
+        ? (autoAdd ? '✅ Allowed — won’t ask again this session.' : '✅ Allowed the agent action.')
+        : d === 'deny' ? '⛔ Rejected — nothing ran on your screen.'
+        : '⚪ Neutral — nothing ran; the agent got your note.';
+      status0.hidden = false;
+    }
+    renderAgentApproval();
+    return;
+  }
   const card = document.getElementById('approvalCard');
   const statusLine = document.getElementById('approvalStatus');
   const done = (msg) => {
