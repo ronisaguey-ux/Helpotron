@@ -183,13 +183,68 @@ class TwilioSMSService:
                     auth=auth_tuple,
                 )
                 if resp.status_code in (200, 201):
-                    logger.info("Successfully sent SMS 2FA to %s", to_phone)
+                    # Twilio returns 201 for an ACCEPTED message, not a DELIVERED
+                    # one. The carrier can still reject it downstream — e.g. US
+                    # A2P 10DLC error 30034 (unregistered sender) returns 201
+                    # here and `undelivered` in the Twilio message log, and all
+                    # four messages ever sent to the owner's number were exactly
+                    # that. So capture the SID and log it: without the SID an
+                    # undelivered code is untraceable and every send looks fine.
+                    # Callers that need delivery truth poll the Messages API
+                    # (status: queued|sent|delivered|undelivered|failed) or use
+                    # the statusCallback URL below.
+                    sid = ""
+                    status = ""
+                    try:
+                        body = resp.json()
+                        sid = body.get("sid", "")
+                        status = body.get("status", "")
+                    except Exception:
+                        pass
+                    logger.info(
+                        "Twilio accepted SMS to %s (sid=%s, status=%s) — acceptance is "
+                        "not delivery; check the message status for 30034/30007.",
+                        to_phone, sid or "?", status or "?",
+                    )
                     return True
                 logger.error("Twilio SMS failed with HTTP %d: %s", resp.status_code, resp.text)
                 return False
         except Exception as e:
             logger.error("Failed sending SMS via Twilio: %s", e)
             return False
+
+    @staticmethod
+    async def message_status(message_sid: str) -> Optional[Dict[str, Any]]:
+        """Fetch a sent message's real delivery status from Twilio.
+
+        `send_sms_async` returning True only means Twilio ACCEPTED the request.
+        This is how a caller learns whether the carrier actually delivered it —
+        `undelivered`/`failed` comes with an `error_code` (30034 = the sending
+        US 10DLC number is not on an approved A2P campaign).
+        """
+        account_sid = getattr(config, "twilio_account_sid", "") or os.getenv("TWILIO_ACCOUNT_SID", "")
+        api_key_sid = getattr(config, "twilio_api_key_sid", "") or os.getenv("TWILIO_API_KEY_SID", "") or os.getenv("TWILIO_SID", "")
+        api_key_secret = getattr(config, "twilio_api_key_secret", "") or os.getenv("TWILIO_API_KEY_SECRET", "") or os.getenv("TWILIO_SECRET", "")
+        auth_tuple = (api_key_sid, api_key_secret) if (api_key_sid and api_key_secret) else None
+        if not auth_tuple or not message_sid:
+            return None
+        acct_id = account_sid if (account_sid and account_sid.startswith("AC")) else "ACa445da2bd4ea5bc6afb1e7fa092919b9"
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{acct_id}/Messages/{message_sid}.json"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, auth=auth_tuple)
+                if resp.status_code == 200:
+                    body = resp.json()
+                    return {
+                        "status": body.get("status"),
+                        "error_code": body.get("error_code"),
+                        "error_message": body.get("error_message"),
+                        "to": body.get("to"),
+                    }
+                logger.error("Twilio status query failed HTTP %d: %s", resp.status_code, resp.text)
+        except Exception as e:
+            logger.error("Failed querying SMS status: %s", e)
+        return None
 
     @classmethod
     async def send_sms_code(cls, to_phone: str, code: str) -> bool:
