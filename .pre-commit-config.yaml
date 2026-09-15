@@ -1,3 +1,14 @@
+# NOTE on server/main.py: it is `git update-index --skip-worktree`, so its working
+# copy is INTENTIONALLY different from the index (it carries a local dev-login
+# bypass that must never be committed). pre-commit therefore sees a permanent
+# divergence, runs its fixers over it on every commit, "fixes" it, and fails the
+# commit with "files were modified by this hook" — forever, no matter how clean
+# the file is.
+#
+# So the file is excluded from the two FIXERS only (they are the ones that
+# rewrite and then fail). gitleaks and detect-private-key still scan it: a secret
+# in main.py must always block a commit. Verified: the exclusion does not stop
+# gitleaks reporting leaks found on that path.
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.2
@@ -8,7 +19,9 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: '^server/main\.py$'
       - id: end-of-file-fixer
+        exclude: '^server/main\.py$'
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files

@@ -942,8 +942,12 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
                             400,
                             "SMS messages are disabled for this number (you replied STOP). Reply START from that phone, or use email/authenticator 2FA.",
                         )
-                    new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
-                    if not send_sms_sync(phone, f"Your Helpotron 2FA code is: {new_code}. Valid for 15 minutes."):
+                    # Twilio Verify owns the code when configured, which is what
+                    # makes US SMS deliverable without an A2P campaign; the local
+                    # code store is only the fallback. send_sync/check_sync must
+                    # be used as a pair — see SMSVerification.
+                    from .auth_2fa import SMSVerification
+                    if not SMSVerification.send_sync(phone):
                         raise HTTPException(502, "SMS could not be delivered right now — try again in a moment.")
                 else:  # email
                     from .auth_2fa import email_service
@@ -955,6 +959,19 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
         if method == "totp":
             secret = user.settings.get("2fa_totp_secret")
             if not totp_service.verify_code_with_replay(user.id, secret, code):
+                auth_limiter.log_failure(ip_key, window_seconds=60.0)
+                raise HTTPException(401, "Invalid 2FA code")
+        elif method == "sms":
+            from .auth_2fa import SMSVerification
+            from .routes_auth_2fa import _e164
+            settings_ = user.settings or {}
+            phone = settings_.get("phone_number") or (settings_.get("profile") or {}).get("phone") or ""
+            try:
+                phone = _e164(phone) if phone else ""
+            except ValueError:
+                phone = ""
+            valid, msg = SMSVerification.check_sync(phone, code)
+            if not valid:
                 auth_limiter.log_failure(ip_key, window_seconds=60.0)
                 raise HTTPException(401, "Invalid 2FA code")
         else:
@@ -988,7 +1005,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     )
     # Set CSRF cookie (readable by JS)
     csrf_token = set_csrf_cookie(response, request)
-    
+
     return {
         "message": "Logged in",
         "public_id": user.public_id,
@@ -2080,7 +2097,7 @@ def retry_draft(draft_id: int, db: Session = Depends(get_db), current_user: User
         raise HTTPException(400, "Only risky drafts can be retried")
     if current_user.credits < DRAFT_COST:
         raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
-    
+
     from .credits import get_token_balance, set_token_balance, is_unmetered
     if not is_unmetered(current_user):
         if get_token_balance(current_user) < DRAFT_COST:

@@ -254,7 +254,9 @@ def test_sms_2fa_setup_persists_phone_and_login_sends_code():
     assert setup.json()["method"] == "sms"
 
     # 2) Verify setup (UI sends method+code+phone_number, no user_id)
-    code_entry = code_store._store.get((uid, "2fa_setup"))
+    # SMS codes are keyed by the PHONE NUMBER under SMSVerification (that is what
+    # the provider checks against), not by the public_id.
+    code_entry = code_store._store.get(("+15551234567", "sms_otp"))
     assert code_entry is not None
     verify = client.post(
         "/api/auth/2fa/verify-setup",
@@ -276,9 +278,9 @@ def test_sms_2fa_setup_persists_phone_and_login_sends_code():
     resp = client.post("/api/login", json={"public_id": uid, "password": pwd})
     assert resp.status_code == 200
     assert resp.json()["status"] == "2fa_required"
-    challenge = code_store._store.get((uid, "2fa_challenge"))
+    challenge = code_store._store.get(("+15551234567", "sms_otp"))
     assert challenge is not None
-    assert len(challenge["code"]) == 12
+    assert challenge["code"].isdigit()
 
     # 5) Login WITH the code → full session
     final = client.post(
