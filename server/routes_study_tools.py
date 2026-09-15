@@ -1,7 +1,7 @@
 import json
 import re
 import httpx
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from pydantic import BaseModel, Field
@@ -263,7 +263,14 @@ async def get_study_streak(
             session_dates.add(s[0].date())
 
     sorted_dates = sorted(session_dates, reverse=True)
-    today = date.today()
+    # Compare in UTC, the same clock the rows were written with.
+    #
+    # `StudySession.created_at` defaults to `utcnow()`, but `date.today()` reads
+    # the server's LOCAL date. West of UTC those disagree for the last hours of
+    # every day (20:00 EDT is already tomorrow in UTC), so a user who had just
+    # studied was shown a 0-day streak every evening — the UTC date of their
+    # session was "tomorrow" and matched neither today nor yesterday.
+    today = datetime.now(timezone.utc).date()
     yesterday = today - timedelta(days=1)
 
     # Streak only counts if user studied today or yesterday

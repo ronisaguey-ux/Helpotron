@@ -358,9 +358,9 @@
             <div class="field" style="margin-top:2px;">
               <div class="field-header">
                 <label class="field-label" for="effortScoreSlider">Effort score</label>
-                <span class="field-word-count" id="effortScoreVal">500</span>
+                <span class="field-word-count" id="effortScoreVal">5</span>
               </div>
-              <input type="range" class="range-slider" id="effortScoreSlider" min="100" max="1000" step="50" value="500" />
+              <input type="range" class="range-slider" id="effortScoreSlider" min="1" max="10" step="1" value="5" />
             </div>
 
             <!-- Effort-driven vision model line -->
@@ -479,8 +479,8 @@
             <div class="tab-juris-list" id="tabJurisdictionList"></div>
           </div>
           <div class="chat-effort-row">
-            <label class="chat-effort-lbl" for="chatEffortSlider">Effort: <span id="chatEffortVal">500</span></label>
-            <input type="range" class="chat-effort-range" id="chatEffortSlider" min="100" max="1000" step="50" value="500" title="Effort score determines model intelligence and reasoning depth" />
+            <label class="chat-effort-lbl" for="chatEffortSlider">Effort: <span id="chatEffortVal">5</span></label>
+            <input type="range" class="chat-effort-range" id="chatEffortSlider" min="1" max="10" step="1" value="5" title="Effort level 1-10 — higher means deeper reasoning and more tokens per turn" />
             <span class="chat-model-badge" id="chatModelBadge">DeepSeek V4.1 Flash</span>
           </div>
           </div>

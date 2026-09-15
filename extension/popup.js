@@ -32,7 +32,11 @@ const JURISDICTION_KEY = 'helpotron_agent_jurisdiction';
 const SEE_SCREEN_DEFAULT = true;
 const EXECUTE_DEFAULT = true;
 const MODE_DEFAULT = 'manual';
-const EFFORT_DEFAULT = 500; // backend fallback when unauthenticated/offline
+// Effort is a LEVEL of 1–10, which is what the model router accepts natively
+// (server/llm.py clamps 1–10 directly). It used to be a 0–1000 score driven by a
+// 19-stop slider, so only multiples of 50 were reachable and the number shown
+// did not match any level the router used.
+const EFFORT_DEFAULT = 5;
 const EDUCATIONAL_MODE_DEFAULT = true;
 const JURISDICTION_DEFAULT = 'active';
 const MODELS = ['manual', 'auto', 'yolo'];
@@ -278,13 +282,27 @@ async function activeTabId() {
 function clampEffortScore(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || Number.isNaN(num)) return EFFORT_DEFAULT;
-  return Math.min(1000, Math.max(1, Math.round(num)));
+  // Legacy saves hold a 0–1000 score; map it to a level rather than clamping it
+  // to 10, which would silently max out every existing user on upgrade.
+  if (num > 10) {
+    if (num <= 150) return 1;
+    if (num <= 250) return 2;
+    if (num <= 350) return 3;
+    if (num <= 450) return 4;
+    if (num <= 550) return 5;
+    if (num <= 650) return 6;
+    if (num <= 750) return 7;
+    if (num <= 850) return 8;
+    if (num <= 950) return 9;
+    return 10;
+  }
+  return Math.min(10, Math.max(1, Math.round(num)));
 }
 
 function effortModelInfo(score) {
   const s = clampEffortScore(score);
-  if (s <= 333) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-  if (s <= 666) return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
+  if (s <= 3) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
+  if (s <= 6) return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
   return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
 }
 
@@ -305,7 +323,7 @@ function applyModelLabels(score) {
   if (chatModelIndicator) chatModelIndicator.innerText = info.label;
   if (chatModelBadge) chatModelBadge.innerText = info.label;
   if (modelTierEl) modelTierEl.innerText = `(${info.tier})`;
-  if (modelEffortEl) modelEffortEl.innerText = `effort ${clampEffortScore(score)}`;
+  if (modelEffortEl) modelEffortEl.innerText = `effort ${clampEffortScore(score)}/10`;
   return info;
 }
 
