@@ -885,12 +885,28 @@ def _dev_login_allowed(request: Request, body: "LoginIn") -> bool:
     password = getattr(config, "dev_login_password", "") or ""
     if not user_id or not password:
         return False
-    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
-    if host not in _LOCAL_HOSTS:
-        logger.warning(
-            "dev-login bypass refused: request arrived on non-local Host %r", host
-        )
-        return False
+    # Check EVERY host the request reports, not just `Host`. The vite preview
+    # proxy sets `changeOrigin: true`, which REWRITES Host to the target
+    # (127.0.0.1:5000) — so `Host` alone reads as local for traffic that
+    # actually came from the public domain. The original hostname survives in
+    # X-Forwarded-Host (set by the proxy/tunnel), so any non-local value there
+    # is equally disqualifying. Verified: without this, a public request still
+    # logged in.
+    hosts = []
+    for header in ("host", "x-forwarded-host"):
+        value = request.headers.get(header) or ""
+        # X-Forwarded-Host can be a comma-separated chain; the first entry is
+        # the client-facing host.
+        for part in value.split(","):
+            part = part.split(":")[0].strip().lower()
+            if part:
+                hosts.append(part)
+    for host in hosts:
+        if host not in _LOCAL_HOSTS:
+            logger.warning(
+                "dev-login bypass refused: request arrived on non-local host %r", host
+            )
+            return False
     return (
         secrets.compare_digest(body.public_id or "", user_id)
         and secrets.compare_digest(body.password or "", password)
