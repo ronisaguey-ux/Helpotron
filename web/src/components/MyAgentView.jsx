@@ -15,7 +15,6 @@ import { normalizeCards, computeAssignmentEvents } from '../lib/assignmentEvents
 import { deriveAssignmentEvent, HONEST_EVENT_CHIPS, formatTokenMetric } from '../lib/agentEvents.js';
 import { PRESET_PERSONAS, DEFAULT_IDENTITIES, DEFAULT_SKILLS } from '../lib/agentPresets.js';
 import ModeControl from './ModeControl.jsx';
-import IdentityPill from './IdentityPill.jsx';
 import ThreadsRail from './ThreadsRail.jsx';
 import AgentConfigsSidebar from './AgentConfigsSidebar.jsx';
 import ApprovalCard from './ApprovalCard.jsx';
@@ -61,6 +60,11 @@ export default function MyAgentView({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [thinkingState, setThinkingState] = useState({ visible: false, text: '', tokens: 0 });
+  // The reasoning of the CURRENT turn. `thinkingState` drives the live bubble,
+  // but it is cleared when the reply commits — which used to throw the chain of
+  // thought away the moment the answer arrived. This ref survives the commit so
+  // the reasoning can be stored ON the message and stay inspectable afterwards.
+  const reasoningRef = useRef('');
   const [abortController, setAbortController] = useState(null);
 
   // ── Permissions & Modals ──
@@ -242,6 +246,46 @@ export default function MyAgentView({
     }
   };
 
+  // ── Identity (persona) selection ──
+  // Identity is CONFIGURATION, chosen in the Configs sidebar — it deliberately
+  // has no control in the chat header. Applying it writes the persona into the
+  // agent's stored settings so it reaches the model on every surface, not just
+  // this one.
+  //
+  // It writes persona_name / persona_instructions rather than personality /
+  // instructions: the latter two are the user's OWN agent config (settable by
+  // chat), and an identity switch must not silently destroy them. The server
+  // composes the persona block from these fields (server/agent_prompt.py).
+  //
+  // It MUST PATCH the server. `saveSettings` only writes localStorage, and the
+  // agent's prompt is built from the server's copy of settings — so a selection
+  // that stopped at localStorage looked applied in the UI while the model kept
+  // running whatever identity was already on the account. That is the "config
+  // selections do not actually update" bug.
+  const applyIdentity = (id) => {
+    const merged = [
+      ...PRESET_PERSONAS,
+      ...identities.filter((i) => !PRESET_PERSONAS.some((p) => p.id === i.id)),
+    ];
+    const persona = merged.find((p) => p.id === id) || null;
+    // 'none' is the explicit "no persona" state: it clears the block entirely so
+    // the agent answers plainly. An unresolvable id is treated the same way —
+    // injecting a character we cannot describe would be worse than none.
+    const off = !persona || persona.id === 'none';
+    const ai = {
+      ...(settings.ai || {}),
+      persona_id: id,
+      persona_name: off ? '' : (persona.title || persona.name || ''),
+      persona_instructions: off ? '' : (persona.instructions || ''),
+    };
+    setActiveIdentityId(id);
+    const updated = { ...settings, ai };
+    setSettings(updated);
+    saveSettings(updated);
+    // The server is what the agent actually reads.
+    api.updateSettings?.({ ai }).catch((e) => console.warn('identity save failed:', e));
+  };
+
   const handleEffortChange = async (score) => {
     setEffortScore(score);
     try {
@@ -357,6 +401,7 @@ export default function MyAgentView({
     // stale closure value inside the async finally below, so it cannot be used
     // to persist the completed reply).
     let replyBuffer = '';
+    reasoningRef.current = '';
     try {
       // Check if streaming is available
       if (api.agentChatStream) {
@@ -372,12 +417,11 @@ export default function MyAgentView({
           },
           (evt) => {
             if (evt.type === 'reasoning') {
-              setThinkingState((prev) => ({
-                ...prev,
-                visible: true,
-                text: (evt.delta ? `${prev.text} ${evt.delta}` : prev.text).trim(),
-                tokens: prev.tokens + 15,
-              }));
+              setThinkingState((prev) => {
+                const next = (evt.delta ? `${prev.text} ${evt.delta}` : prev.text).trim();
+                reasoningRef.current = next;   // survives the commit below
+                return { ...prev, visible: true, text: next, tokens: prev.tokens + 15 };
+              });
             } else if (evt.type === 'delta') {
               replyBuffer += evt.delta || '';
               setStreamingText((prev) => prev + (evt.delta || ''));
@@ -482,12 +526,19 @@ export default function MyAgentView({
             text: replyBuffer,
             timestamp: new Date().toISOString(),
             tokens: 650,
+            // Stored on the message so the thinking block stays with the answer
+            // instead of disappearing once the turn ends.
+            reasoning: reasoningRef.current || '',
           },
         ]);
       }
       setIsStreaming(false);
       setStreamingText('');
       setAbortController(null);
+      // The reasoning now lives on the committed message (above), so drop the
+      // live bubble. Without this the same thinking rendered twice, and a
+      // turn with no reply left the bubble stranded.
+      setThinkingState({ visible: false, text: '', tokens: 0 });
     }
   };
 
@@ -639,19 +690,6 @@ export default function MyAgentView({
                 </span>
               </button>
 
-              {/* Identity Pill Trigger & Switcher */}
-              <IdentityPill
-                identities={identities}
-                activeIdentityId={activeIdentityId}
-                onSelectIdentity={(id) => {
-                  setActiveIdentityId(id);
-                  const updated = { ...settings, ai: { ...(settings.ai || {}), persona_id: id } };
-                  setSettings(updated);
-                  saveSettings(updated);
-                }}
-                onNewIdentity={() => setShowConfigsSidebar(true)}
-              />
-
               {/* Config Matrix Toggle Button */}
               <button
                 type="button"
@@ -683,14 +721,19 @@ export default function MyAgentView({
 
             {/* Render Messages */}
             {messages.map((msg) => (
-              <ChatBubble
-                key={msg.id}
-                message={msg}
-                onRetry={() => {
-                  setInputQuery(msg.text);
-                  handleSendMessage();
-                }}
-              />
+              <div key={msg.id} className="flex flex-col gap-2">
+                {/* The thinking that produced this reply, kept with it. */}
+                {msg.reasoning ? (
+                  <ThinkingBubble thought={msg.reasoning} isStreaming={false} />
+                ) : null}
+                <ChatBubble
+                  message={msg}
+                  onRetry={() => {
+                    setInputQuery(msg.text);
+                    handleSendMessage();
+                  }}
+                />
+              </div>
             ))}
 
             {/* Active Streaming Thinking Bubble */}
@@ -867,12 +910,7 @@ export default function MyAgentView({
             ai={settings.ai}
             identities={identities}
             activeIdentityId={activeIdentityId}
-            onSelectIdentity={(id) => {
-              setActiveIdentityId(id);
-              const updated = { ...settings, ai: { ...(settings.ai || {}), persona_id: id } };
-              setSettings(updated);
-              saveSettings(updated);
-            }}
+            onSelectIdentity={applyIdentity}
             onAddIdentity={(newId) => {
               const next = [...identities, newId];
               setIdentities(next);
