@@ -329,21 +329,21 @@ export default function AppShell({
               </div>
               <div className="flex items-baseline justify-between font-mono">
                 <div>
-                  <span className="text-[9px] text-on-surface-variant block">SYS_CREDITS</span>
+                  <span className="text-[9px] text-on-surface-variant block">TASK_TOKENS</span>
                   <span className="text-xs font-semibold text-primary tabular-nums">
-                    {Number(user?.credits ?? 0).toLocaleString()}
+                    {user?.unlimited ? '\u221e' : Number(user?.token_balance ?? 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[9px] text-on-surface-variant block">TOKENS</span>
+                  <span className="text-[9px] text-on-surface-variant block">CREDITS</span>
                   <span className="text-xs font-semibold text-secondary tabular-nums">
-                    {user?.unlimited ? '∞' : Number(user?.token_balance ?? 0).toLocaleString()}
+                    {Number(user?.credits ?? 0).toLocaleString()}
                   </span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex justify-center" title={`${user?.credits ?? 0} credits`}>
+            <div className="flex justify-center" title={`${user?.token_balance ?? 0} task tokens`}>
               <Coins className="w-5 h-5 text-primary" />
             </div>
           )}

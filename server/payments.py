@@ -22,7 +22,10 @@ STRIPE_PRICE_IDS = {
     "elite": os.getenv("STRIPE_PRICE_ELITE", ""),
 }
 
-TIER_CREDITS = {"trial": 150, "basic": 300, "pro": 1000, "elite": 2700}
+# Monthly TASK TOKEN allowances. Tokens are the usage currency; the legacy
+# name is kept as an alias so existing importers keep working.
+TIER_TOKENS = {"trial": 150, "basic": 300, "pro": 1000, "elite": 2700}
+TIER_CREDITS = TIER_TOKENS  # legacy alias — these values were never credits
 # Owner 09-06: Basic $10 · Pro $20 · Elite $40 (the original 08-29 audit values)
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}
 
@@ -159,12 +162,15 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
                 user.stripe_subscription_id = subscription_id
                 user.subscription_status = "active"
                 user.plan = plan
-                user.credits += TIER_CREDITS.get(plan, 0)
-                db.add(CreditTransaction(
-                    user_id=user.id,
-                    delta=TIER_CREDITS.get(plan, 0),
-                    reason=f"subscription:{plan}:checkout",
-                ))
+                # A subscription buys TASK TOKENS (the usage allowance). It must
+                # NOT touch credits: credits are an earn-only discount currency
+                # funded by data-lake entries and referral codes, and handing
+                # them out with a plan was both wrong and the reason a paying
+                # subscriber could find `token_balance` still at 0.
+                _grant = TIER_TOKENS.get(plan, 0)
+                if _grant:
+                    from .credits import add_tokens as _add_tokens
+                    _add_tokens(db, user, _grant, reason=f"subscription:{plan}:checkout")
                 # Operator 08-31 (Bob): the referral reward is paid when the
                 # referee BUYS the plan — 2 credits (basic) / 5 (pro) /
                 # 10 (elite) to the code generator, once, idempotently.
@@ -189,12 +195,10 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
             user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
             if user:
                 user.subscription_status = "active"
-                user.credits += TIER_CREDITS.get(user.plan, 0)
-                db.add(CreditTransaction(
-                    user_id=user.id,
-                    delta=TIER_CREDITS.get(user.plan, 0),
-                    reason=f"subscription:{user.plan}:renewal",
-                ))
+                _renew = TIER_TOKENS.get(user.plan, 0)
+                if _renew:
+                    from .credits import add_tokens as _add_tokens
+                    _add_tokens(db, user, _renew, reason=f"subscription:{user.plan}:renewal")
                 db.commit()
                 logger.info("Subscription renewed for user %s", user.public_id)
 
@@ -239,12 +243,24 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
 
     referral_pct = float(getattr(user, "referral_discount_pct", 0.0) or 0.0)
 
+    # Earned credits are a PERCENT DISCOUNT on an order — they are not a currency
+    # you can buy and not a balance you top up. A payment buys TASK TOKENS; the
+    # discount only reduces what the order costs.
     discount_pct = compute_applicable_discount(user)
-    discount_factor = 1.0 - (discount_pct / 100.0)
-    credits_added = round((amount_cents / 100.0) * discount_factor, 2)
+    # Tokens are granted on the NOMINAL value of the order: a discount reduces
+    # the CHARGE, not the value delivered ("30% off the order, not 30% fewer
+    # credits" — the documented operator ruling). $1 = 1 task token.
+    tokens_added = max(1, int(round(amount_cents / 100.0))) if amount_cents > 0 else 0
 
-    # Referral discount: the order price drops by pct%, credits stay at full value.
-    charged_cents = max(1, round(amount_cents * (1.0 - referral_pct / 100.0))) if referral_pct > 0 else amount_cents
+    # Both discounts reduce the CHARGE: the one-time referral entitlement, and
+    # the earned credit balance (spent as a percent off). Tokens are still
+    # granted on the nominal order value, so a discount never shrinks what the
+    # user receives — it only lowers the bill.
+    effective_pct = referral_pct + discount_pct
+    charged_cents = (
+        max(1, round(amount_cents * (1.0 - effective_pct / 100.0)))
+        if effective_pct > 0 else amount_cents
+    )
 
     status = "captured" if provider == "stripe" else "pending"
     payment = Payment(
@@ -258,18 +274,13 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     db.flush()
 
     if status == "captured":
-        user.credits += credits_added
+        from .credits import add_tokens as _add_tokens
         reason = f"payment:{provider}:${charged_cents/100:.2f}"
         if referral_pct > 0:
             reason += f" (referral discount: {referral_pct:g}%)"
         if discount_pct > 0:
             reason += f" (discount: {discount_pct}%)"
-        tx = CreditTransaction(
-            user_id=user.id,
-            delta=credits_added,
-            reason=reason
-        )
-        db.add(tx)
+        _add_tokens(db, user, tokens_added, reason=reason)
 
     # Referral entitlement is one-time: consumed by this order.
     if referral_pct > 0:
@@ -282,8 +293,11 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     return {
         "id": payment.id,
         "status": payment.status,
-        "credits_added": credits_added if status == "captured" else 0,
+        "tokens_added": tokens_added if status == "captured" else 0,
+        # Legacy key kept for any existing caller; it now reports tokens.
+        "credits_added": tokens_added if status == "captured" else 0,
         "amount_charged_cents": charged_cents,
+        "discount_pct_applied": discount_pct,
         "referral_discount_pct": referral_pct,
     }
 
@@ -340,7 +354,8 @@ def process_successful_payment(transaction_id: str, public_id: str, amount_cents
         )
         db.add(payment)
 
-        user.credits += credits_amount
+        from .credits import add_tokens as _add_tokens
+        _add_tokens(db, user, credits_amount, reason="stripe webhook: payment succeeded")
         tx = CreditTransaction(
             user_id=user.id,
             delta=credits_amount,

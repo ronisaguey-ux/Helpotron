@@ -136,8 +136,13 @@ def _get_auth_headers_for_user(public_id: str, plan: str = "none") -> dict:
             user = User(
                 public_id=public_id,
                 plan=plan,
-                credits=100.0 if plan in ("basic", "pro", "elite") else 0.0,
-                settings={"2fa_enabled": True},
+                # Usage is TOKEN-denominated; `credits` is the earn-only discount
+                # currency. A paid plan is funded with tokens, not credits.
+                credits=0.0,
+                settings={
+                    "2fa_enabled": True,
+                    "token_balance": 100.0 if plan in ("basic", "pro", "elite") else 0.0,
+                },
             )
             db.add(user)
             db.commit()

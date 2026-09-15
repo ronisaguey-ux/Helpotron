@@ -1725,7 +1725,10 @@ print(f"Active files: {os.listdir('.')}")
                 if not target:
                     return {"action": action_type, "status": "failed", "message": "User not found."}
                 delta = float(payload.get("delta", 0))
-                target.credits = max(0.0, (target.credits or 0.0) + delta)
+                # Admin/persona adjustment moves TASK TOKENS (the usage
+                # currency), not credits — credits are earn-only discounts.
+                from .credits import get_token_balance, set_token_balance
+                set_token_balance(target, max(0.0, get_token_balance(target) + delta))
                 _db.commit()
                 return {"action": action_type, "status": "completed", "message": f"{target.public_id} credits now {target.credits:.0f}."}
             finally:

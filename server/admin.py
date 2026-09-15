@@ -128,7 +128,8 @@ class TokenManager:
             credits = 75
         else:
             credits = 10
-        user.credits += credits
+        from .credits import add_tokens as _add_tokens
+        _add_tokens(db, user, credits, reason="admin invite token redeemed")
         tokens[idx] = {**token_data, "uses": token_data["uses"] + 1, "used_by": [*token_data["used_by"], user.public_id]}
         new_settings["tokens"] = tokens
         admin.settings = new_settings  # fresh dict — see generate_token
@@ -214,7 +215,9 @@ async def adjust_user_credits(
     if not user:
         raise HTTPException(404, "User not found")
     # Clamp so a balance can never go negative (operator 08-26).
-    user.credits = max(0, (user.credits or 0) + amount)
+    # Manual balance adjustment targets the USAGE currency (tokens).
+    from .credits import get_token_balance, set_token_balance
+    set_token_balance(user, max(0.0, get_token_balance(user) + amount))
     tx = CreditTransaction(user_id=user.id, delta=amount, reason=f"admin: {reason}")
     db.add(tx)
     db.commit()

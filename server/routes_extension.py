@@ -1719,9 +1719,11 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
             resp["effort_score"] = effort_score
         return resp
 
-    # Credit gate for work actions (same as the web chat).
+    # Token gate for work actions (same as the web chat). Only the operator
+    # account is unmetered; paid plans spend their monthly token allowance.
     cost = _AGENT_ACTION_COSTS.get(intent["action"], 0)
-    privileged = bool(getattr(user, "plan", "") == "elite" or is_admin)
+    from .credits import is_unmetered as _is_unmetered
+    privileged = _is_unmetered(user)
     tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
     if cost > 0 and not privileged and tok_bal < cost:
         return _insufficient_tokens_response(thread_key, user, cost, db)

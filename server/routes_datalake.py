@@ -321,7 +321,9 @@ async def redeem_microcredits(
         new_bal = bal - credits_to_redeem
         user_settings_service.update_user_settings(db, user, {"micro_credits_balance": new_bal})
 
-        user.credits = (user.credits or 0) + compute_credits_gained
+        # Data-lake contributions EARN discount credits (bill reduction), which
+        # is exactly what "credits" means. They are not usage tokens.
+        user.discount_balance = (user.discount_balance or 0.0) + compute_credits_gained
         db.add(CreditTransaction(
             user_id=user.id,
             delta=compute_credits_gained,

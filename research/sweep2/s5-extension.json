@@ -1,0 +1,107 @@
+{
+  "track": "S5",
+  "agent": "Chrome extension UX, reliability & failure behaviour",
+  "summary": "The dominant bug class in this product's history — SILENT failure, the agent acting but nothing happening — is largely fixed in v2.7.0: unresolved ref/target ops are marked and surfaced (popup.js:2868-2899), NaN-coordinate dispatches are refused loudly (agent_mode.js:947-957), attach failures get a RETRY bar (popup.js:2733-2769), and the early-exit debugger leak is closed (popup.js:2889-2894). The one genuine consent hole left is a storage-key desync: the extension writes the permission mode to ai.mode but the server's PermissionEngine reads operation_mode, so 'manual' is silently not enforced for non-browser actions, and the agent_mode.html surface never sends the mode at all. CWS compliance is clean (CSP 'self', no eval/remote code/deprecated APIs, correct MV3 worker + alarm patterns). Two trust-UX gaps remain: Chrome's 'debugging this browser' banner is never explained anywhere, and onboarding teaches only the scrape feature, not the screen-driving agent. I could not run a live Chrome session (per brief, no Playwright), so all user-facing behaviours below are read from code, not observed.",
+  "severity": "high",
+  "findings": [
+    {
+      "id": "S5-1",
+      "title": "Permission mode stored as ai.mode but engine reads operation_mode — manual mode not enforced for non-browser actions",
+      "severity": "high",
+      "category": "contract",
+      "evidence": "popup.js:518 PATCHes `body: JSON.stringify({ ai: { mode } })`; agent_mode.js:1472 builds `const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute }` with NO permission_mode field; server/overlord_agent.py:198 resolves `mode = (session_mode_override or user_settings.get(\"operation_mode\") or \"auto\").lower()`; server/routes_extension.py:1730-1734 calls `permission_engine.evaluate_action_permission(..., session_mode_override=None)` for non-browser intents; user_settings_service.py:425 declares the default `ai.mode: \"manual\"` with NO top-level `operation_mode` in the defaults schema (grep of user_settings_service.py returns zero top-level operation_mode).",
+      "impact": "The popup UI promises manual = 'the agent asks you before EVERY action it wants to take' (popup.js:342). For a user who only uses the extension, the server never sees that mode: the non-browser permission gate defaults to 'auto', so routine actions (create_assignment, message_assignment_team, browser_search, generate_flashcards, humanize_text — all in ROUTINE_ACTION_TYPES, none in CRITICAL_ACTION_TYPES) execute with no prompt. Screen-driving is unaffected (popup.js:3282 sends permission_mode; agent_mode.html gates client-side via actionApproved), and destructive actions remain gated because they sit in CRITICAL_ACTION_TYPES, which auto mode still asks for. So a 'manual' user gets non-destructive work performed without the confirmation they believe they set.",
+      "confidence": "high",
+      "verified_how": "Read popup.js:501-531 (setAgentMode PATCH body), agent_mode.js:1472 (no permission_mode), overlord_agent.py:198 (operation_mode read), routes_extension.py:1667 vs 1730 (override only on browser_action path), user_settings_service.py:413-425 (ai.mode default, no top-level operation_mode); grep 'operation_mode' across server/*.py shows no code bridging ai.mode -> operation_mode."
+    },
+    {
+      "id": "S5-2",
+      "title": "Chrome's 'Chrome is debugging this browser' infobar is never explained in any UI, onboarding, or consent text",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "grep -rni 'debugging this browser\\|debugger banner\\|infobar' extension/*.js extension/*.html returns hits ONLY in code comments (element_registry.js:252, agent_mode.js:408, background.js:345, content.js:1614). The consent modal (agent_mode.html:282-295) explains mouse/keyboard control and Stop/Esc but never mentions the persistent yellow Chrome infobar that appears on the user's tab the moment chrome.debugger.attach fires (agent_mode.js:697, popup.js:2823).",
+      "impact": "A user who consents to 'Enable remote control' is then confronted with a Chrome system banner 'Chrome is debugging this browser' that looks alarming and is never explained — a trust hit and a likely CWS-review comment. The banner also persists visibly during the whole drive, and no copy links it to the control toggle the user just enabled.",
+      "confidence": "high",
+      "verified_how": "grep across all extension/*.js and *.html for the banner wording and for 'debugger'/'infobar'; read the full consent modal markup at agent_mode.html:282-295."
+    },
+    {
+      "id": "S5-3",
+      "title": "Onboarding (on install) teaches only scraping; the screen-driving agent, permission modes, and consent model are undiscoverable",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "onboarding.html:224-272 shows exactly three cards: 'Step 1 · Connect' (sign in), 'Step 2 · Try it' (Scrape), and 'Done'. There is no mention of the agent/screen-driving feature, the manual/auto/yolo modes, the See screen/Execute toggles, or the debugger banner. onboarding.js:15-32 has only two exits: open the website or close the tab. background.js:25-28 opens it once, on install only. The popup sign-in path requires leaving the extension: popup.js:573-575 notes the MV3 popup cannot render the Turnstile captcha, and content.js:2098-2102 hands the session back only after a web login.",
+      "impact": "A brand-new user's 'first value' path for the flagship 2.7.0 feature is: install -> sign in on the website (captcha forces leaving the extension) -> return -> navigate to a normal page -> discover the Study Buddy/agent surface on their own -> flip See screen + Execute -> enable Control (consent modal) -> then approve every action in manual mode. Onboarding steers them to the passive Scrape flow and never explains the agent exists, so the most complex/risky part of the product is self-discovery. Steps-to-first-agent-value is effectively unbounded for a user who only follows onboarding.",
+      "confidence": "high",
+      "verified_how": "Read onboarding.html:213-278 and onboarding.js in full; read popup.js:572-575 and content.js:2097-2111 for the captcha/session-handoff constraint."
+    },
+    {
+      "id": "S5-4",
+      "title": "Consent checkbox promises 'only per action it explains to me', but YOLO mode runs actions with no per-action explanation",
+      "severity": "low",
+      "category": "contract",
+      "evidence": "agent_mode.html:288 consent checkbox text: 'I know the agent controls my mouse only inside the selected tab while this is ON, and only per action it explains to me.' agent_mode.js:1264-1265: in yolo mode actionApproved returns true with no prompt; agent_mode.js:1139-1141 documents yolo as 'never ask'. The mode hint (popup.js:344) does say YOLO 'never asks', so the user is informed when they choose YOLO.",
+      "impact": "The per-enable consent text is unconditional while the actual per-action-explanation behaviour depends on a separate persistent mode. A user who consented under 'only per action it explains to me' and later flips to YOLO gets no per-action explanation, contradicting the checkbox they signed. Minor because YOLO is an explicit, warned choice, but the consent copy over-promises.",
+      "confidence": "high",
+      "verified_how": "Read agent_mode.html:285-288 and agent_mode.js:1249-1266 (actionApproved) plus popup.js:341-345 (MODE_HINTS)."
+    },
+    {
+      "id": "S5-5",
+      "title": "file:// URLs pass the drivability check but cannot actually be captured or driven (PDF viewer)",
+      "severity": "low",
+      "category": "correctness",
+      "evidence": "popup.js:2594-2599 isDriveableUrl returns true for `file:` via `/^(https?|file):\\/\\//` while blocking chrome://, chrome-extension://, about:, etc. A PDF opened in Chrome reports a file:// or chrome-extension:// URL; the file:// case passes isDriveableTab and the tab is offered as driveable, then either chrome.debugger.attach fails or the element registry returns an empty list (element_registry.js:308 returns [] for unreachable tabs).",
+      "impact": "The user picks a PDF/file tab believing it is driveable; the burst then surfaces a generic 'no targets found' or 'could not attach' message rather than telling them up front the page cannot be driven. Not silent (the existing failure paths name it), so impact is a misleading pick, not a silent no-op.",
+      "confidence": "medium",
+      "verified_how": "Read popup.js:2594-2604 (isDriveableUrl/isDriveableTab) and element_registry.js:307-333 (empty-list fallback); did not run a live Chrome to confirm which URL form Chrome reports for a local PDF."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S5-F1",
+      "finding_id": "S5-1",
+      "files": ["server/overlord_agent.py", "extension/agent_mode.js"],
+      "lines": "overlord_agent.py:198; agent_mode.js:1472",
+      "change": "Make the engine read the extension's key: in PermissionEngine.evaluate_action_permission, resolve `mode = (session_mode_override or (user_settings.get('ai') or {}).get('mode') or user_settings.get('operation_mode') or 'auto').lower()`. Also send the mode from agent_mode.html so the server gate matches the client gate: in agent_mode.js sendChatMessage add `permission_mode: state.agentMode` to the body (mirror popup.js:3282).",
+      "verify": ".venv/bin/python -m pytest server/tests/ -q still ~503 passed, plus a unit asserting evaluate_action_permission({'ai':{'mode':'manual'}}, 'create_assignment', session_mode_override=None) returns (False, ...) and yolo returns True.",
+      "effort": "S",
+      "risk": "Web app writes operation_mode via /agent/mode (routes_overlord.py:677) and the web chat passes session_mode_override; adding an ai.mode fallback changes behaviour only for accounts that set mode through the extension, which is the intended fix. Confirm the web client's MyAgentView ai.mode writes still map to the same semantics."
+    },
+    {
+      "id": "S5-F2",
+      "finding_id": "S5-2",
+      "files": ["extension/agent_mode.html"],
+      "lines": "285-288",
+      "change": "Add one sentence to the consent modal body: 'Chrome will show a \"Chrome is debugging this browser\" bar on the selected tab while Control is ON — that bar is Helpotron's control channel; closing DevTools or clicking Stop removes it.'",
+      "verify": "Open agent_mode.html, toggle Control on, confirm the consent text mentions the banner before Enable is clickable.",
+      "effort": "S",
+      "risk": "None (copy only)."
+    },
+    {
+      "id": "S5-F3",
+      "finding_id": "S5-3",
+      "files": ["extension/onboarding.html"],
+      "lines": "243-272",
+      "change": "Add a 'Step 3 · Control' card describing the agent: it can move the mouse/click/type in a selected tab with per-action approval (manual), and mention the See screen/Execute toggles and that the debugger banner is expected. Point the user to the Study Buddy/agent surface.",
+      "verify": "Load onboarding.html from a fresh profile and confirm the agent/consent flow is described in the 3-step sequence.",
+      "effort": "S",
+      "risk": "Copy only; ensure wording matches the real consent modal so no promise drifts from agent_mode.html:285."
+    }
+  ],
+  "verification_plan": [
+    "grep -n 'operation_mode\\|ai.mode\\|\\\"mode\\\":' server/user_settings_service.py server/overlord_agent.py — confirm the engine key and the defaults key differ as described.",
+    "curl the running API with a RoniDev session: POST /api/extension/agent_chat with permission_mode omitted and a request that resolves to a routine action; observe control_requires_approval / permission_required behaviour to confirm the defaulted 'auto' gate.",
+    "Open the extension in a fresh Chrome profile, enable Control on a normal page, and confirm Chrome's 'debugging this browser' banner appears with no in-UI explanation (matches S5-2).",
+    "Confirm the popup drive path surfaces unresolved targets: ask the agent to click a control that is not on the page and verify the 'Could not locate N target(s)' status (popup.js:2883) instead of silence."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Is the extension's ai.mode -> operation_mode gap also present for the web app's MyAgentView mode writes, or does the web client write operation_mode directly (routes_overlord.py:677 suggests it does)?",
+    "Does Chrome report a local PDF tab as file:// or chrome-extension://<pdf-viewer>/... on the current stable build? The S5-5 severity depends on which branch is reached.",
+    "Is the consent checkbox wording (agent_mode.html:288) intended to be scoped per-mode, or should YOLO show a different consent line?"
+  ],
+  "could_not_check": [
+    "No live Chrome session (brief forbids Playwright): all user-visible behaviours are inferred from code, not observed in a real browser.",
+    "Did not run the API to observe a live permission_required vs auto-approved response for a non-browser intent.",
+    "Did not audit the web-app side of identity/persona beyond confirming commit 1703ef2 lands persona_name/persona_instructions to the server (that is S4/S6 territory)."
+  ]
+}

@@ -1,12 +1,10 @@
 """Plan catalogue — the one place tier names, prices and allowances are defined.
 
-Audit 08-29. Before this module the same facts lived in five places that did
-not agree with each other:
+Audit 08-29, reconciled 09-14 under the token/credit split. Before this module
+the same facts lived in five places that did not agree with each other:
 
   * ``credits.TIER_MONTHLY_CREDITS``  free 500 · basic 2000 · pro 6000 · elite 25000
-      — what ``/api/dashboard`` shows the user as their monthly allowance.
   * ``payments.TIER_CREDITS``                     basic  500 · pro 2000 · elite  6000
-      — what a successful payment actually deposits.
   * ``payments.TIER_PRICE_CENTS``              basic $10 · pro  $20 · elite    $40
   * ``web/src/components/CreditsPricingDashboard.jsx`` — hardcoded 500/2000/6000,
       i.e. the checkout page sold each tier the allowance of the tier below it.
@@ -18,11 +16,12 @@ The presentation layer now reads this module (and only this module) through
 ``GET /api/plans``, so the marketing page, the checkout page and the in-app
 balance warning can no longer drift apart.
 
-NOTE — an unresolved *business* discrepancy is deliberately preserved rather
-than silently picked: ``ALLOWANCE`` (what the dashboard promises monthly) is
-larger than ``PURCHASE_GRANT`` (what a payment deposits) on every paid tier.
-Both values are re-exported from their existing owners so this module changes
-no behaviour; reconciling them is an owner decision, not a refactor.
+The former ALLOWANCE-vs-PURCHASE_GRANT divergence is GONE: ``TIER_TOKENS`` in
+``payments.py`` is the single source (trial 150 · basic 300 · pro 1000 ·
+elite 2700) and ``credits.TIER_MONTHLY_TASK_TOKENS`` re-exports it, so what a
+plan promises monthly is what a payment deposits. ``TIER_MONTHLY_CREDITS``
+survives only as a backwards-compatible alias and its name is now misleading —
+these were never credits.
 """
 from __future__ import annotations
 

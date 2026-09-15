@@ -1,0 +1,166 @@
+{
+  "track": "S3",
+  "agent": "Economics & unit costs",
+  "summary": "The product runs TWO disconnected currencies: paid plans (Stripe/manual) deposit into user.credits, but the usage gate that unlocks My Agent chat, the extension and the dump reads settings.token_balance — which is funded ONLY by the free trial (+150) or a manual owner grant. A paying subscriber's money lands in credits and leaves token_balance at 0, so they are blocked with 'token balance is 0' (prod DB confirms: 'max' has 30 credits and no token_balance). There is NO enforced spend cap anywhere — cost_control's daily-budget guardrail and model_tiering's monthly guardrail are dead code (zero call sites), and the Elite tier is hard-coded 'unlimited' (every charge path skips it), so the $40/mo Elite plan has unbounded operator cost. Model prices are hardcoded in THREE tables that disagree with each other and with OpenRouter's real rates (Gemini 3.8 Flash: code $0.25-$2.50 input vs real ~$0.75; DeepSeek peak-hours 2x surcharge unmodeled). The primary model (deepseek-v4.1-flash) is called with no max_tokens in the general path, so a looping/runaway model can emit tens of thousands of output tokens per call. Paid detectors (Pangram+Sapling, both API keys set) fire on ambiguous text unmetered and unbilled to the user. Cost-per-plan vs price: Basic $10 -> 300 tokens = $3.00 nominal (70% margin), Pro $20 -> 1000 = $10.00 (50%), Elite $40 -> 2700 = $27.00 nominal but actually unlimited (unbounded). I could not verify the exact metered cost of Pangram/Sapling third-party calls, nor the real Gemini 3.1 flash-lite market price.",
+  "severity": "critical",
+  "findings": [
+    {
+      "id": "S3-1",
+      "title": "Paid plans fund credits, but the usage gate reads token_balance — paying users are blocked from My Agent",
+      "severity": "critical",
+      "category": "correctness",
+      "evidence": "payments.py:162 `user.credits += TIER_CREDITS.get(plan, 0)` (webhook checkout.session.completed), payments.py:192 (renewal), payments.py:261 `user.credits += credits_added` (process_payment) — all deposit into user.credits. The gate reads token_balance: routes_overlord.py:2117-2119 `token_bal = float((user.settings or {}).get('token_balance', 0) or 0); if token_bal <= 0: ... 'Insufficient tokens — your token balance is 0'`; same at routes_extension.py:1418 and the credit gate routes_overlord.py:2193. token_balance is ONLY written by trial_service.py:69-70 (+150) and admin.py:241 (owner manual grant). No self-serve path funds token_balance. Prod DB: 'max' plan=none credits=30 token_balance=None; 'Brwdraftrider' credits=300 token_balance=None.",
+      "impact": "A customer who pays $10-$40/mo gets credits but token_balance stays 0, so My Agent chat/extension/dump reject them with 'token balance is 0' — they paid for a product they cannot use, or the operator must manually grant tokens to every paying signup. Broken at the money path.",
+      "confidence": "high",
+      "verified_how": "Read payments.py, routes_overlord.py, routes_extension.py, trial_service.py, admin.py; grep of token_balance write sites (only trial + admin); sqlite3 read-only of data/db/helpotron.db showing max (credits=30, token_balance=None)."
+    },
+    {
+      "id": "S3-2",
+      "title": "No spend cap is enforced on any model path; budget guardrails are dead code",
+      "severity": "high",
+      "category": "cost",
+      "evidence": "cost_control.py:47 `check_user_daily_budget`, cost_control.py:92 `enforce_user_daily_budget`, cost_control.py:24 `ABSOLUTE_DAILY_CAP_USD = 25.0` — grep shows ZERO call sites in server/*.py outside their own definitions and admin CRUD (routes_admin_advanced.py:415 only reads/writes monthly_budget_usd). model_tiering.py:229 `check_budget_guardrail` also has zero call sites. database.py:92 defaults monthly_budget_usd=50.0 but nothing reads it to block a call.",
+      "impact": "The operator's only protection against a runaway user (or a retry/fan-out loop multiplying model calls) is not wired to anything. An Elite 'unlimited' user, or any bug causing repeated calls, accrues unbounded OpenRouter spend with no per-call, per-day or per-month ceiling.",
+      "confidence": "high",
+      "verified_how": "grep -rn 'check_user_daily_budget|enforce_user_daily_budget|check_budget_guardrail|daily_limit_usd' server/ --include='*.py' returned no call sites outside the definitions and admin CRUD."
+    },
+    {
+      "id": "S3-3",
+      "title": "Elite plan is hard-coded 'unlimited' — $40/mo buys uncapped multi-agent + vision + detector spend",
+      "severity": "high",
+      "category": "cost",
+      "evidence": "credits.py:79 `is_usage_unlimited` returns True for plan=='elite'; charge_with_rollback (credits.py:91-92) and charge (credits.py:132-133) return early without debiting; routes_overlord.py:2117 `if not is_admin and user.plan != 'elite'` skips the gate, routes_overlord.py:2192 `privileged = ... plan == 'elite'`, routes_overlord.py:2257 skips _charge_tokens. Elite is billed $40 for a nominal 2700 tokens (payments.py:25-27) but pays no per-use charge.",
+      "impact": "Elite is the leak: the $40 price assumes 2700 tokens (~$27 nominal operator budget) but the account can consume arbitrarily more. Prod has 2 elite accounts (RoniDev, lh5mockagent with credits=100000). One heavy Elite user doing multi-agent browser work + vision per frame + detection rewrites can burn many multiples of $40/month.",
+      "confidence": "high",
+      "verified_how": "Read credits.py:79-92,132-133 and routes_overlord.py:2117,2192,2257; confirmed elite bypass on gate and charge paths."
+    },
+    {
+      "id": "S3-4",
+      "title": "Primary model calls ship with no max_tokens — unbounded output per call",
+      "severity": "medium",
+      "category": "cost",
+      "evidence": "llm.py:379-384: `if max_tokens: payload['max_tokens']=int(max_tokens) elif model_id in ModelPolicy.GRUNT_CANDIDATES: payload['max_tokens']=4096`. deepseek-v4.1-flash (levels 4-10, the default) and both Gemini tiers get NO cap unless the caller passes one. humanizer.py:554 `rewritten_text, _ = await call_llm(system_instruction, user_instruction)` passes none. DeepSeek V4.1 Flash allows 384k max completion tokens.",
+      "impact": "A hallucinating/looping model or a verbose task can emit tens of thousands of output tokens in one call at $0.60/1M (up to $1.20/1M peak), far exceeding the 1-10 token (1-10 cent) fixed charge the user pays. The grunt-only cap shows the risk is known but only applied to the cheapest models.",
+      "confidence": "high",
+      "verified_how": "Read llm.py:379-384 and humanizer.py:554; grep of max_tokens call sites shows only 300/400/500/1100/2400 at a handful of routes, the rest uncapped."
+    },
+    {
+      "id": "S3-5",
+      "title": "Three inconsistent hardcoded model-price tables, none matching OpenRouter for Gemini",
+      "severity": "medium",
+      "category": "correctness",
+      "evidence": "Gemini 3.8 Flash input/output per 1M: llm.py:55 `$0.25 / $1.00`; cost_tracking.py:22 `$1.00 / $4.00` (0.001/0.004 per 1K); model_tiering.py:31 `$2.50 / $7.50`. Gemini 3.1 flash-lite: llm.py:50 `$0.075 / $0.30` vs cost_tracking.py:21 and model_tiering.py:22 `$0.50 / $1.50`. DeepSeek V4.1 Flash agrees at $0.15/$0.60 (llm.py:54, cost_tracking.py:20). The ApiUsageLog ledger is computed from cost_tracking.MODEL_RATES (cost_tracking.py:52-53), so Gemini calls are booked at $1.00/$4.00 and $0.50/$1.50 regardless of the real bill.",
+      "impact": "The operator's own cost/profit dashboard (cost_tracking.get_cost_summary) is wrong for Gemini traffic by 2-6x. cost_engine.log_cost and model_tiering.estimate_task_cost report different dollar figures for the same call, so pre-flight 'estimated cost' shown to users disagrees with the ledger.",
+      "confidence": "high",
+      "verified_how": "Read llm.py ModelPolicy.PRICING, cost_tracking.py MODEL_RATES, model_tiering.py MODEL_TIERS and diffed per-model values."
+    },
+    {
+      "id": "S3-6",
+      "title": "Paid detectors (Pangram + Sapling) fire unmetered on ambiguous text, unbilled to the user",
+      "severity": "medium",
+      "category": "cost",
+      "evidence": "PANGRAM_API_KEY and SAPLING_API_KEY are both SET in server/.env (presence-checked, values not read), so PangramDetector and SaplingDetector are registered (detectors.py:510-513) and hit https://text.external-api.pangram.com/task and https://api.sapling.ai/api/v1/aidetect. The funnel (detectors.py:569-597) escalates to the paid tier only when ZipPy's local verdict is ambiguous (15-90 band), but the chat detection standard can score up to 3 times per turn (humanize_skill.py:384 `for _ in range(3)`). model_tiering.py:39-42 hardcodes $0.0020/$0.0015 per call as an estimate but nothing meters or bills it.",
+      "impact": "Every detection pass in the ambiguous band costs the operator a Pangram call (task create + up to 5 polls) plus a Sapling call, none recovered from the user. Detection runs on prose replies every chat turn (routes_overlord.py:2180, 2290), so detector spend scales with chat volume and is entirely operator-borne.",
+      "confidence": "medium",
+      "verified_how": "Read detectors.py PangramDetector/SaplingDetector and score_text funnel; confirmed keys present via python os.environ check (values not printed); read humanize_skill.py:384 loop."
+    },
+    {
+      "id": "S3-7",
+      "title": "DeepSeek peak-hours price surcharge (2x) is not modeled; cost ledger understates peak spend",
+      "severity": "low",
+      "category": "cost",
+      "evidence": "llm.py:54 and cost_tracking.py:20 hardcode deepseek-v4.1-flash at $0.15/$0.60. OpenRouter lists $0.30/$1.20 during DeepSeek peak hours (Mon-Fri 01:00-04:00 and 06:00-10:00 UTC) with $0.15/$0.60 off-peak. No peak/off-peak logic exists anywhere in server/*.py.",
+      "impact": "During peak windows the actual bill is 2x what the ledger records, so total_cost_usd and estimated_profit_usd in the admin dashboard are optimistic by up to 100% for DeepSeek traffic (the dominant model).",
+      "confidence": "medium",
+      "verified_how": "Read llm.py/cost_tracking.py constants; web search of OpenRouter listing confirmed $0.15/$0.60 off-peak vs $0.30/$1.20 peak (source: openrouter.ai/deepseek/deepseek-v4.1-flash-20260910)."
+    },
+    {
+      "id": "S3-8",
+      "title": "Trial is well-gated but a loss-leader; 1-cent verification costs more than it captures",
+      "severity": "low",
+      "category": "cost",
+      "evidence": "trial_service.py:25 TRIAL_CREDITS_GRANT=150, trial_service.py:39-51 check_eligibility requires trial_claimed==False AND 2FA AND payment_verified; payments.py:76-122 creates a 1-cent verification. One trial per account (trial_claimed flag, routes_trial.py:106-107). Stripe keys are ABSENT in .env, so _stripe_enabled() is False and the verification is manual (payments.py:84-100, provider='cashapp', amount_cents=1). 150 tokens = $1.50 nominal (credits.py:44, 1 token = 1 cent), consumed in 1-10 token increments.",
+      "impact": "Abuse requires a new account + 2FA + a fresh 1-cent payment each time, so mass trial farming is effectively blocked — good. But each verification, if/when Stripe is turned on, would incur ~$0.30 in Stripe fixed fees against $0.01 gross, a net loss per verification; today it is manual labour instead. The 150-token grant is unrecoverable by design.",
+      "confidence": "medium",
+      "verified_how": "Read trial_service.py, payments.py, routes_trial.py; confirmed STRIPE_* absent and PANGRAM/SAPLING present via os.environ presence check."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S3-F1",
+      "finding_id": "S3-1",
+      "files": ["server/payments.py"],
+      "lines": "158-167",
+      "change": "In handle_stripe_webhook (checkout.session.completed and invoice.payment_succeeded) and process_payment, credit the usage budget instead of (or in addition to) the discount currency: set settings['token_balance'] += TIER_CREDITS[plan] rather than user.credits += TIER_CREDITS[plan]. Keep user.credits for the legacy draft/study_tools/agent_session flows if they must remain, but the plans page sells 'task tokens' which must land in token_balance.",
+      "verify": "Activate a Basic subscription and assert GET /api/me returns token_balance >= 300; POST a chat message and confirm the gate at routes_overlord.py:2117 no longer returns insufficient_tokens.",
+      "effort": "S",
+      "risk": "Users who already have credits (legacy flows) could see a double-funded state; migrate existing users' credits to token_balance once, idempotently."
+    },
+    {
+      "id": "S3-F2",
+      "finding_id": "S3-2",
+      "files": ["server/llm.py", "server/routes_overlord.py"],
+      "lines": "324-456",
+      "change": "Call cost_control.check_user_daily_budget(user, db, projected) at the top of call_llm and abort when disallowed, passing projected_cost_usd = calculate_effective_task_cost(...) for the model about to run. Wire the same check into analyze_screen_image and the detector score_text paid tier.",
+      "verify": "Set a user's monthly_budget_usd low, fire a chat turn, confirm the request is refused before the OpenRouter POST (log line or a unit test asserting no API call when over budget).",
+      "effort": "M",
+      "risk": "Legitimate heavy users may hit the $25/day absolute cap; make the cap configurable per plan and surface a clear 'daily limit reached' message instead of a silent failure."
+    },
+    {
+      "id": "S3-F3",
+      "finding_id": "S3-3",
+      "files": ["server/credits.py", "server/routes_overlord.py"],
+      "lines": "79-92, 132-133",
+      "change": "Remove the Elite hard-unlimited bypass (is_usage_unlimited and the `plan == 'elite'` early-returns) and instead give Elite a large but finite allowance plus the same daily-budget guardrail. If unlimited is a deliberate selling point, enforce a hard daily USD ceiling (e.g. cost_control.ABSOLUTE_DAILY_CAP_USD) on Elite rather than none.",
+      "verify": "Run an Elite account against the chat gate and confirm _charge_tokens debits token_balance and that spend past the daily cap is refused.",
+      "effort": "M",
+      "risk": "Changes the Elite value proposition; confirm with owner whether 'unlimited' is a feature or a bug before removing it."
+    },
+    {
+      "id": "S3-F4",
+      "finding_id": "S3-4",
+      "files": ["server/llm.py"],
+      "lines": "379-384",
+      "change": "Apply a default output cap to ALL models, not just grunt candidates: payload['max_tokens'] = int(max_tokens or DEFAULT_MAX_TOKENS) with DEFAULT_MAX_TOKENS ~4096 (or a per-model map), so callers can still override upward for legitimate long-form generation but the default is bounded.",
+      "verify": "Assert a call_llm request body includes max_tokens when the caller passes none (unit test capturing the payload).",
+      "effort": "S",
+      "risk": "Long-form tasks (drafts) that rely on >4096 output tokens must pass an explicit max_tokens; audit call sites like humanizer/draft that already do."
+    },
+    {
+      "id": "S3-F5",
+      "finding_id": "S3-5",
+      "files": ["server/cost_tracking.py", "server/model_tiering.py"],
+      "lines": "18-27, 17-37",
+      "change": "Collapse the three price tables to one. Point MODEL_RATES and MODEL_TIERS at ModelPolicy.PRICING (llm.py) as the single source, and correct the Gemini entries to the real OpenRouter rates (gemini-3.8-flash ~$0.75/$3.75; gemini-3.1-flash-lite to its actual listing).",
+      "verify": "get_cost_summary and model_tiering.estimate_task_cost return identical dollar figures for a fixed (model, tokens) tuple; add a unit test pinning the three tables to equality.",
+      "effort": "M",
+      "risk": "Correcting gemini rates changes the cost ledger and profit dashboard numbers; confirm which rate is actually being billed before picking the number."
+    }
+  ],
+  "verification_plan": [
+    "1. sqlite3 read-only data/db/helpotron.db: compare users.credits vs settings.token_balance per user — any user with credits>0 and token_balance null/0 demonstrates S3-1 live.",
+    "2. grep -rn 'check_user_daily_budget|enforce_user_daily_budget|check_budget_guardrail' server/ --include='*.py' to confirm zero enforcement call sites (S3-2).",
+    "3. Read llm.py:379-384 and humanizer.py:554 to confirm primary-model calls ship no max_tokens (S3-4).",
+    "4. Diff llm.py ModelPolicy.PRICING vs cost_tracking.py MODEL_RATES vs model_tiering.py MODEL_TIERS per model (S3-5).",
+    "5. python os.environ presence check on server/.env to confirm PANGRAM_API_KEY and SAPLING_API_KEY are set while STRIPE_* are absent (S3-6, S3-8).",
+    "6. GET /api/plans and read web/src/components/BillingView.jsx to confirm surface pricing ($10/300, $20/1000, $40/2700) matches payments.py TIER_CREDITS/TIER_PRICE_CENTS."
+  ],
+  "external_research": [
+    {
+      "what": "OpenRouter model pricing for deepseek/deepseek-v4.1-flash and google/gemini-3.8-flash",
+      "where": "openrouter.ai model pages (deepseek-v4.1-flash-20260910, gemini-3.8-flash-20260902) via web search 2026-09-14",
+      "why": "To check whether the code's hardcoded prices match the real bill; found DeepSeek $0.15/$0.60 off-peak (code correct) vs $0.30/$1.20 peak (unmodeled), and Gemini 3.8 Flash ~$0.75/$3.75 (all three code tables wrong)."
+    }
+  ],
+  "open_questions": [
+    "Is the Elite 'unlimited' bypass (credits.py:79,92,132-133) a deliberate selling point or an accident? It makes Elite's operator cost unbounded.",
+    "Which price does OpenRouter actually bill for google/gemini-3.1-flash-lite? (not in search results; the code tables disagree $0.075 vs $0.50 input).",
+    "Should 'task tokens' fund token_balance (usage) or credits (discount)? The plans page and trial say token_balance, but Stripe deposits credits — which side is intended to change?",
+    "Is the manual 1-cent trial verification (Stripe not configured) acceptable at scale, or is auto-Stripe needed so trials don't queue on the operator?"
+  ],
+  "could_not_check": [
+    "Real metered per-call cost of Pangram and Sapling (vendor billing is external; code only has a hardcoded $0.0020/$0.0015 estimate in model_tiering.py).",
+    "Real OpenRouter price for google/gemini-3.1-flash-lite (not returned by search; cannot confirm which internal value is correct).",
+    "Whether api_usage_logs.base_cost_usd rows were computed with older rates (ledger shows historical slugs like deepseek-v4-pro that are no longer in the routing tables)."
+  ]
+}

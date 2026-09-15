@@ -1,0 +1,205 @@
+{
+  "track": "S9",
+  "agent": "Ops, deployment & resilience",
+  "summary": "The stack is genuinely self-healing at the crash level (Restart=always, RestartSec=5, linger=yes, enabled) and secrets are handled well in the live path (not in systemd; 600-perm .env via pydantic-settings). But the operational layer around it is rotted: the repo's deploy/ describes a /var/www spark + port-8000 + postgres deployment that has never run here, while the real config (user units on port 5000 + vite preview + cloudflared) lives only in uncommitted ~/.config/systemd/user files. The DB has no working backup — scripts/backup_db.sh silently picks the stale 323KB root helpotron.db instead of the live 13.8MB data/db/helpotron.db, and nothing schedules it (last backup Sep 1, 13 days stale, restore never tested). There is no rate limit, request-size cap, or CPU quota in front of the live origin (nginx is dead config; cloudflared tunnels raw to :5173 and :5000). The only human-alert path is a 30-minute timer; the 2-min/5-min monitors only append a wake log nobody tails. I could not test an actual restore or observe a live crash; findings are from systemctl show, file reads, and read-only sqlite queries.",
+  "severity": "high",
+  "findings": [
+    {
+      "id": "S9-1",
+      "title": "DB backup script targets the WRONG database and is never scheduled",
+      "severity": "critical",
+      "category": "ops",
+      "evidence": "scripts/backup_db.sh:11-18 CANDIDATE_PATHS lists \"$PROJECT_DIR/helpotron.db\" then \"$PROJECT_DIR/data/helpotron.db\" but never data/db/helpotron.db. First match wins (line 20-26), so it backs up root helpotron.db = 323,584 bytes, 22 tables, 18 users, mtime Aug 26 15:48 (stale). The live DB data/db/helpotron.db = 13,893,632 bytes, 33 tables, 15 users (measured read-only). crontab -l has only two T2B lines (t2b_backup.sh, t2b_alert.sh) — zero helpotron backup cron/timer. Latest manual backup in backups/ is helpotron.db.bak.20260901_creditsfix (Sep 1); today is Sep 14.",
+      "impact": "If the live DB corrupts, the newest restorable copy is a 13-day-stale snapshot OR a 323KB wrong DB with an older schema/18 users — roughly two weeks of user, credit and session data are lost. Running the existing backup script as-is silently produces a useless backup of the wrong file.",
+      "confidence": "high",
+      "verified_how": "read scripts/backup_db.sh; ls -la backups/ data/db/; crontab -l; .venv/bin/python sqlite3 read-only count of tables/users + journal_mode for all three .db files"
+    },
+    {
+      "id": "S9-2",
+      "title": "No rate limit, request-size cap, or CPU quota in front of the live origin — nginx.conf is dead config",
+      "severity": "high",
+      "category": "ops",
+      "evidence": "deploy/nginx.conf:4,11 server_name helpotron.com (real host is helpotron.dpdns.org); :38,47 proxy_pass http://127.0.0.1:8000 (real API is :5000); :31 root /var/www/helpotron/web/dist. 'systemctl status nginx' → 'Unit nginx.service could not be found'. Real ingress ~/.cloudflared/helpotron.yml maps helpotron.dpdns.org→localhost:5173 and t2b.helpotron.dpdns.org→localhost:5000 (raw API, no limits). systemctl --user show → CPUQuotaPerSecUSec=infinity for api/web/tunnel; MemoryMax=infinity for web+tunnel.",
+      "impact": "One user or one runaway request (CPU-bound detector/LLM loop, or an unauthenticated endpoint) can pin the laptop with no per-IP throttle, no body-size cap, and no CPU share. The t2b subdomain exposes the API directly with no proxy in between.",
+      "confidence": "high",
+      "verified_how": "cat deploy/nginx.conf; which nginx / systemctl status nginx (not found); cat ~/.cloudflared/helpotron.yml; systemctl --user show -p CPUQuotaPerSecUSec -p MemoryMax helpotron-{api,web,tunnel}"
+    },
+    {
+      "id": "S9-3",
+      "title": "World-readable .env backup leaks every production credential",
+      "severity": "high",
+      "category": "security",
+      "evidence": "stat -c '%a %n' → .env = 600 (correct), but .env.bak.20260827 = 664 (rw-rw-r--). The file holds the same 28 keys as .env (grep of key names only): OPENROUTER_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, TWILIO_SECRET, JWT_SECRET, SECRET_KEY, SESSION_SECRET, TELEGRAM_BOT_TOKEN, etc.",
+      "impact": "Any local user (or any process running as another account) can read all API keys, Stripe/Twilio secrets, JWT/session signing keys and the Telegram bot token from the world-readable backup — full credential compromise of a live public product.",
+      "confidence": "high",
+      "verified_how": "stat -c '%a %U %G %n' .env .env.bak.20260827 .env.bak-20260914-122632; grep -oE '^[A-Za-z_]+=' .env (names only, values never printed)"
+    },
+    {
+      "id": "S9-4",
+      "title": "Repo deployment descriptors are stale — production config lives only in uncommitted user-unit files",
+      "severity": "high",
+      "category": "ops",
+      "evidence": "deploy/helpotron-api.service:6-11 (User=spark, Group=spark, WorkingDirectory=/var/www/helpotron, EnvironmentFile=/var/www/helpotron/.env, ExecStart ... --port 8000 --workers 4) vs the running ~/.config/systemd/user/helpotron-api.service:7-8 (WorkingDirectory=/home/roni/Roni_workspace/helpotron, --port 5000). Dockerfile CMD + docker-compose.yml use port 8000 and postgres. deploy/run_native.sh uses port 8000 and 'npm run dev'. Eight helpotron-* units on the box are absent from the repo (helpotron-web, helpotron-tunnel, helpotron-health + timer, helpotron-datalake-wake + timer, helpotron-audio-watchdog, helpotron-lid-blocksleep, helpotron-screenshot); repo helpotron.service/helpotron-bot.service/helpotron-benchmark.service are not installed.",
+      "impact": "The deployment is not reproducible from the repo: a fresh clone + the checked-in deploy/ files would stand up the wrong app (port 8000, spark user, postgres) and would NOT know about the web/tunnel/health units that actually keep the site up. Disaster recovery depends on ~/.config/systemd/user files that are gitignored-by-omission and never committed.",
+      "confidence": "high",
+      "verified_how": "cat deploy/*.service ~/.config/systemd/user/helpotron-*.service; systemctl --user list-unit-files | grep helpotron; git grep -l 'helpotron-web.service' HEAD (only docs/research/start_stack.sh, no unit file)"
+    },
+    {
+      "id": "S9-5",
+      "title": "Outage is invisible for up to 30 minutes — only the 30-min timer alerts a human",
+      "severity": "medium",
+      "category": "ops",
+      "evidence": "~/.config/systemd/user/helpotron-health.timer OnUnitActiveSec=30min (the only path that calls tg_send.sh). envy-health.timer runs mon_health.sh every 2min and envy-site-mon.timer runs mon_site.sh every 5min, but both scripts only append to /tmp/envy_wake.log (no Telegram). helpotron_healthcheck.sh alerts only on problem-set CHANGE (dedup via /tmp/helpotron_health_state.json); current state is 'claude-client-down,' latched since 2026-09-13T02:40Z (~1.5 days, journal confirms 'health OK (unchanged: claude-client-down,)').",
+      "impact": "Worst case the site is down ~30 minutes before the owner's phone buzzes — and that assumes the healthcheck timer + user manager + tg_send.sh are themselves healthy. The faster 2-min/5-min monitors write to a log no human reads automatically, so they provide no human alerting. A persistently-failing probe (claude-client-down) has been in the baseline for 1.5 days, desensitizing the owner to the alert channel.",
+      "confidence": "high",
+      "verified_how": "cat helpotron-health.timer envy-health.timer envy-site-mon.timer mon_health.sh mon_site.sh; cat /tmp/helpotron_health_state.json + /tmp/helpotron_wake.log; journalctl --user -u helpotron-health -n 3"
+    },
+    {
+      "id": "S9-6",
+      "title": "No CPU quota; api MemoryMax=10G is effectively unlimited on a laptop; crash-loop trips start-limit and stays down",
+      "severity": "medium",
+      "category": "ops",
+      "evidence": "systemctl --user show → CPUQuotaPerSecUSec=infinity for all three units; helpotron-api MemoryMax=10G/MemoryHigh=10G on a box the envy-mem-watchdog caps at 75%/11.5GiB; web+tunnel MemoryMax=infinity. StartLimitBurst=5, StartLimitIntervalUSec=10s → more than 5 restarts in 10s = 'start request repeated too quickly' and the unit is left DOWN permanently. OOMPolicy=stop (then Restart=always restarts).",
+      "impact": "A runaway request can pin all cores (no CPU share). The API can balloon to 10G — essentially the whole laptop — before systemd stops it. A bad deploy that crashes on startup will crash-loop and be silently left down (Restart=always does not rescue a crash loop), with only the 30-min healthcheck to notice.",
+      "confidence": "high",
+      "verified_how": "systemctl --user show -p CPUQuotaPerSecUSec -p MemoryMax -p StartLimitBurst -p StartLimitIntervalUSec -p OOMPolicy helpotron-{api,web,tunnel}; cat envy-mem-watchdog.service"
+    },
+    {
+      "id": "S9-7",
+      "title": "App logs go to /tmp (wiped on reboot) and nothing rotates them",
+      "severity": "medium",
+      "category": "ops",
+      "evidence": "~/.config/systemd/user/helpotron-api.service:14 StandardOutput=append:/tmp/helpotron_api.log (same pattern in web+tunnel units). /tmp is a tmpfs — wiped on reboot. Because output is redirected, journalctl --user -u helpotron-api shows only systemd lifecycle lines, no app output. deploy/logrotate.d/helpotron targets /var/log/helpotron/*.log with 'create 0640 spark spark' + 'systemctl reload helpotron-api' — it is NOT installed (/etc/logrotate.d/helpotron* absent) and points at a path/user that don't exist. data/logs/access.log/app.log/error.log are persistent but have no matching rotation config (access.log.1 is a single manual rotation from Sep 4).",
+      "impact": "On reboot, all API/web/tunnel stdout+stderr is gone — the exact 3am-crash forensics are unrecoverable. The persistent data/logs files grow unbounded (access.log.1 already 10MB) with no rotation. Debugging an outage relies on whatever /tmp still held at the moment of failure.",
+      "confidence": "high",
+      "verified_how": "cat the three running unit files; ls -la /tmp/helpotron_*.log data/logs/; journalctl --user -u helpotron-api -n 5; ls /etc/logrotate.d/helpotron* (absent)"
+    },
+    {
+      "id": "S9-8",
+      "title": "No reproducible deploy path — dist/ is gitignored and nothing rebuilds it",
+      "severity": "medium",
+      "category": "ops",
+      "evidence": ".gitignore:30 web/dist/; git ls-files web/dist/ → empty (untracked). start_stack.sh only runs 'systemctl --user start helpotron-{api,web,tunnel}' (no git pull, no 'npm run build'). The web unit runs 'vite preview' against web/dist. dist/index.html mtime 2026-09-14 20:10 — currently ~20s newer than the newest src file (api.js), so it is fresh now, but only because someone built it manually.",
+      "impact": "A fresh clone cannot serve the web app at all (no dist, no build step in the deploy scripts). Nothing prevents web/dist going stale relative to web/src — the owner was just burned by exactly this, and the current freshness is manual discipline, not a mechanism.",
+      "confidence": "high",
+      "verified_how": "grep dist .gitignore; git ls-files web/dist/; cat start_stack.sh; stat -c '%Y %y' web/dist/index.html vs find web/src -printf '%T@' | sort -rn | head"
+    },
+    {
+      "id": "S9-9",
+      "title": "Insecure dev defaults and hardcoded fallback secrets in committed config",
+      "severity": "low",
+      "category": "security",
+      "evidence": "server/config.py:19 environment defaults 'development'; :20 debug defaults True; :88 production_mode defaults false; :25 secret_key fallback 'dev-insecure-secret-key-change-in-prod-32bytesmin'; :84 session_secret 'helpotron_session_secret_dev_key_32chars'; :89 jwt_secret 'helpotron_jwt_secret_dev_key_32chars'; :90 totp_secret 'JBSWY3DPEHPK3PXP' — all committed to git. .env currently sets PRODUCTION_MODE, ENVIRONMENT and DEBUG (key present), so this is latent, not active.",
+      "impact": "If .env is ever missing or unreadable at boot, the API silently comes up in development mode with publicly-known signing keys and debug on — JWT/session forgery and disabled protections. Latent only because .env happens to exist.",
+      "confidence": "medium",
+      "verified_how": "sed -n '19,90p' server/config.py; grep -c '^PRODUCTION_MODE=\\|^ENVIRONMENT=\\|^DEBUG=' .env (presence only, values not read)"
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S9-F1",
+      "finding_id": "S9-1",
+      "files": ["scripts/backup_db.sh"],
+      "lines": "11-18",
+      "change": "Put data/db/helpotron.db FIRST in CANDIDATE_PATHS (or replace the list with the single correct path derived from the running DATABASE_URL). Then schedule it: add a systemd user timer (OnCalendar=daily) running scripts/backup_db.sh, or a crontab line. Also run one restore into a throwaway file to prove the backup is usable.",
+      "verify": "bash scripts/backup_db.sh; ls -la /opt/helpotron/backups/ | tail; then .venv/bin/python -c \"import sqlite3; sqlite3.connect('file:<new-backup>?mode=ro',uri=True)\" and confirm table count = 33 and users = 15",
+      "effort": "S",
+      "risk": "None for the path fix; scheduling writes to /opt/helpotron/backups (ensure dir writable). Test restore must never overwrite the live data/db/helpotron.db."
+    },
+    {
+      "id": "S9-F2",
+      "finding_id": "S9-2",
+      "files": ["~/.cloudflared/helpotron.yml", "deploy/nginx.conf"],
+      "lines": "ingress block",
+      "change": "Add application-level rate limiting in front of the API (e.g. slowapi or a Cloudflare rate-limit rule on t2b.helpotron.dpdns.org), cap request body size, and set a per-unit CPUQuota (e.g. CPUQuota=200%) and a sane MemoryMax (e.g. 1-2G) on all three units. Either delete deploy/nginx.conf or rewrite it to match reality (dpdns.org, :5000) so it stops misrepresenting the deployment.",
+      "verify": "systemctl --user show -p CPUQuota -p MemoryMax helpotron-api.service; and hit t2b.helpotron.dpdns.org rapidly to observe 429s",
+      "effort": "M",
+      "risk": "A rate limit that is too tight can block legitimately bursty study traffic; CPU quota too low could throttle LLM/vision work. Tune thresholds before enforcing."
+    },
+    {
+      "id": "S9-F3",
+      "finding_id": "S9-3",
+      "files": [".env.bak.20260827"],
+      "lines": "-",
+      "change": "chmod 600 .env.bak.20260827 (and any other .env.bak* at 664), and add a pre-commit/hook or convention that every .env copy is created 600.",
+      "verify": "stat -c '%a' .env.bak.20260827 → 600",
+      "effort": "S",
+      "risk": "None. Do not delete until confirmed it is not needed for rollback; simply fix the mode."
+    },
+    {
+      "id": "S9-F4",
+      "finding_id": "S9-4",
+      "files": ["deploy/"],
+      "lines": "-",
+      "change": "Commit the real running units: copy ~/.config/systemd/user/helpotron-{api,web,tunnel,health,timer,datalake-wake,timer}.service into deploy/ (renamed/cleaned), and delete or clearly mark the stale helpotron.service/helpotron-bot.service/helpotron-benchmark.service/helpotron-api.service (/var/www/spark) and Dockerfile/docker-compose.yml postgres setup so the repo has exactly one deployment story.",
+      "verify": "git ls-files deploy/ shows the running unit files; a fresh-clone bring-up with start_stack.sh serves :5000/:5173",
+      "effort": "M",
+      "risk": "Committing unit files can leak host-specific absolute paths (/home/roni/Roni_workspace) — template them or accept they are this-box-specific. Do not commit any file containing secret values."
+    },
+    {
+      "id": "S9-F5",
+      "finding_id": "S9-5",
+      "files": ["helpotron_healthcheck.sh", "mon_health.sh", "mon_site.sh"],
+      "lines": "-",
+      "change": "Lower the healthcheck timer to ~5min, and make mon_health.sh/mon_site.sh call tg_send.sh on state change instead of only appending to /tmp/envy_wake.log. Fix or remove the always-failing 'claude-client-down' probe so the baseline is clean and a real transition is not lost in noise.",
+      "verify": "systemctl --user list-timers shows helpotron-health every 5min; tail the wake log and confirm a Telegram send fires on a simulated outage",
+      "effort": "S",
+      "risk": "A broken tg_send.sh (missing bot.env) would silently disable alerting — add a fallback that still writes the wake log and exit non-zero so the timer shows failed."
+    },
+    {
+      "id": "S9-F6",
+      "finding_id": "S9-6",
+      "files": ["~/.config/systemd/user/helpotron-{api,web,tunnel}.service"],
+      "lines": "Service section",
+      "change": "Add CPUQuota (e.g. api 300%, web 100%, tunnel 50%), lower api MemoryMax from 10G to 2G, add MemoryMax to web+tunnel, and raise StartLimitBurst/Interval (e.g. 20/120s) so a transient crash loop still auto-recovers instead of latching dead.",
+      "verify": "systemctl --user show -p CPUQuota -p MemoryMax -p StartLimitBurst -p StartLimitIntervalUSec for each unit",
+      "effort": "S",
+      "risk": "CPU/memory limits too tight will throttle real workloads; measure peak usage (systemctl show -p MemoryPeak) before setting floors."
+    },
+    {
+      "id": "S9-F7",
+      "finding_id": "S9-7",
+      "files": ["~/.config/systemd/user/helpotron-{api,web,tunnel}.service"],
+      "lines": "Service section",
+      "change": "Point StandardOutput/StandardError at data/logs/ (persistent, inside repo) instead of /tmp, and install a real logrotate config for data/logs/*.log (daily, rotate 30, compress) — or rely on journald (remove the redirects) and rotate journal. Fix deploy/logrotate.d/helpotron to reference the actual path and drop 'spark'.",
+      "verify": "ls -la data/logs/ after a reboot still contains prior logs; logrotate -d /etc/logrotate.d/helpotron reports no errors",
+      "effort": "S",
+      "risk": "Logging to the repo tree grows the checkout and the git status (data/logs is gitignored, so no commit noise)."
+    },
+    {
+      "id": "S9-F8",
+      "finding_id": "S9-8",
+      "files": ["start_stack.sh", "web/package.json"],
+      "lines": "-",
+      "change": "Add a build step to the deploy path: start_stack.sh (or a dedicated deploy script) does 'git pull', 'cd web && npm run build', then restarts the units. Commit web/dist/ (un-ignore it) OR make the build a mandatory pre-req so a fresh clone always has a served app.",
+      "verify": "rm -rf web/dist; bash start_stack.sh; curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/ → 200",
+      "effort": "M",
+      "risk": "Committing dist/ adds generated churn to git; a build step on deploy adds latency. Pick one and make it the single source of truth."
+    }
+  ],
+  "verification_plan": [
+    "systemctl --user status helpotron-{api,web,tunnel} → all active (running); confirm Restart=always via show",
+    "systemctl --user show -p CPUQuotaPerSecUSec -p MemoryMax -p StartLimitBurst -p Environment helpotron-{api,web,tunnel} → note infinity/empty",
+    "diff deploy/*.service against ~/.config/systemd/user/helpotron-*.service → confirm the port/user/path drift",
+    "stat -c '%a %n' .env .env.bak.20260827 → confirm 600 vs 664",
+    "bash -x scripts/backup_db.sh (dry) and watch which CANDIDATE_PATHS entry it resolves → confirm it selects the stale root db",
+    "ls -la backups/ data/db/ → confirm latest backup date (Sep 1) and the 13.8MB live db",
+    "cat ~/.cloudflared/helpotron.yml → confirm raw ingress to :5173 and :5000, no limits",
+    "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5000/api/health http://127.0.0.1:5173/ https://helpotron.dpdns.org/api/health → all 200",
+    "cat helpotron-health.timer → OnUnitActiveSec=30min; confirm mon_health.sh/mon_site.sh only write /tmp/envy_wake.log"
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Has a DB restore ever actually been exercised (the rollback_/turnin_ dirs in backups/ suggest one around Aug 27) — and if so, from which file?",
+    "Does the t2b.helpotron.dpdns.org subdomain need to be public, or is exposing the raw API there an oversight?",
+    "Is PRODUCTION_MODE=true and DEBUG=false actually set in .env (presence confirmed, value not read)?",
+    "What is the correct single source of truth for the deployment — the box units, or should the repo be corrected and re-provisioned?"
+  ],
+  "could_not_check": [
+    "Actual restore test (not performed — would need to write to disk and is out of scope for read-only audit)",
+    "Live crash/OOM behaviour (observed only via systemd config, not by triggering a failure)",
+    "Whether tg_send.sh currently succeeds end-to-end (would send a real Telegram message to the owner — not performed)",
+    "Whether Cloudflare has rate-limit rules configured at the edge (Zero Trust dashboard is not accessible from here)",
+    "The value of .env keys (PRODUCTION_MODE/DEBUG/ENVIRONMENT) — only key presence verified, values intentionally not read"
+  ]
+}

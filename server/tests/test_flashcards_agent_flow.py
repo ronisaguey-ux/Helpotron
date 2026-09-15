@@ -37,8 +37,10 @@ def _elite_auth(public_id: str) -> dict:
             user = User(
                 public_id=public_id,
                 plan="elite",
-                credits=100.0,
-                settings={"operation_mode": "auto",
+                credits=0.0,
+                settings={"2fa_enabled": True,
+                          "token_balance": 100.0,
+                          "operation_mode": "auto",
                           "auto_approved_actions": ["generate_flashcards"]},
             )
             db.add(user)

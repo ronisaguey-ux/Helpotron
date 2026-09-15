@@ -2185,11 +2185,12 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         return {"status": "success", "message": agent_reply, "execution": None, "reply": reply_text,
                 "token_balance": _tk_balance(user)}
 
-    # 2.5 CREDIT GATE (operator 08-26): actions that do work must be affordable
-    # BEFORE execution. Elite accounts are exempt (same rule charge_with_rollback
-    # uses); the permission flow above/below is untouched and separate.
+    # 2.5 TOKEN GATE (operator 08-26): actions that do work must be affordable
+    # BEFORE execution. Only the operator account is exempt — every paid plan
+    # runs on its monthly token allowance. The permission flow is separate.
     cost = _AGENT_ACTION_COSTS.get(intent["action"], 0)  # 0 = no work / no cost
-    privileged = bool(getattr(user, "plan", "") == "elite" or is_admin)
+    from .credits import is_unmetered as _is_unmetered
+    privileged = _is_unmetered(user)
     tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
     if cost > 0 and not privileged and tok_bal < cost:
         return _insufficient_tokens_response(thread_key, user, cost, db)

@@ -1,0 +1,219 @@
+{
+  "track": "S4",
+  "agent": "Web app design & UX",
+  "summary": "The web app has a real M3/Luminous-Glass design system and its two heaviest views (AssignmentCardDashboard, InsightsView) are model citizens: skeleton loading, error+retry, honest empty states. But the core Agent chat surface has three dead-ends a student hits immediately: the error bubble's 'Retry Message' button is a no-op, and the composer's Attach and Mic buttons have no onClick. Two more broken flows: LibraryView's 'Upload to Assignment Dump' CTA is dead because App.jsx passes the wrong props (onGoTo/onSelectAssignment never wired), and SettingsApp reports 'Saved' even when the API save fails. IA has duplicate/orphaned routes (/inbox and /message_admin both render MessageAdminView, neither in nav; /automation is URL-only). Accessibility is above-average (skip-link, aria-live, 44px targets, 0 unnamed buttons at scale) but 2 icon-only buttons have no accessible name and the mandatory consent modal has no focus trap. Hardcoded hex is nearly clean (0 bg-[#, 0 text-[#) but two token vocabularies coexist (legacy var(--accent)/clean-* in 11 files, 136 occurrences). Nothing rendered in a live browser — all findings are source-read; mobile-overlap concerns are left out or marked low-confidence.",
+  "severity": "medium",
+  "findings": [
+    {
+      "id": "S4-1",
+      "title": "Agent chat 'Retry Message' button is a no-op after an error",
+      "severity": "high",
+      "category": "ux",
+      "evidence": "MyAgentView.jsx:731-734 wires onRetry as `() => { setInputQuery(msg.text); handleSendMessage(); }`; handleSendMessage (line 380-383) starts with `const query = inputQuery.trim(); if (!query || isStreaming) return;`. setInputQuery is async state so inputQuery is still '' (cleared at line 392) when handleSendMessage runs, so it returns immediately. Even if it proceeded, it would resend the error text (msg.text = 'Agent execution interrupted: ...'), not the original prompt.",
+      "impact": "A student whose agent call fails clicks 'Retry Message' and nothing happens — a dead-end with no other action available. This is exactly the 'state with no action' failure mode this track hunts.",
+      "confidence": "high",
+      "verified_how": "Read MyAgentView.jsx handleSendMessage/onRetry and ChatBubble.jsx:70-78 (Retry button); traced the stale-closure path by hand."
+    },
+    {
+      "id": "S4-2",
+      "title": "LibraryView 'Upload to Assignment Dump' CTA is dead — props never wired",
+      "severity": "high",
+      "category": "ux",
+      "evidence": "App.jsx:872 renders <LibraryView user={{public_id:userId}} onOpenAssignmentBubble={...} onOpenWorkspace={...} />, but LibraryView.jsx:47 destructures { userId='', onGoTo, onSelectAssignment }. onGoTo is therefore undefined; the header button at LibraryView.jsx:183 and the empty-state button at :252 both call onGoTo?.('dump') -> no-op. AcademicCalendar is passed onSelectAssignment={undefined} (LibraryView.jsx:502) and calls onSelectAssignment?.(e) (study/AcademicCalendar.jsx:161), so clicking a calendar assignment does nothing.",
+      "impact": "The Library's most prominent CTAs (upload to dump, empty-state upload, open calendar assignment) silently do nothing. A student cannot reach the Assignment Dump from the Library or open a due assignment.",
+      "confidence": "high",
+      "verified_how": "Read App.jsx:872 vs LibraryView.jsx:47 signature and all onGoTo/onSelectAssignment call sites; confirmed prop names do not match."
+    },
+    {
+      "id": "S4-3",
+      "title": "4 of 6 main views render a misleading empty/zero state instead of an error state",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "No-error views: LibraryView.jsx:69-71 (fetchLibrary catch only console.warn, then shows 'No synthesized materials yet' at :239); CreditsView.jsx:36-39 (catch sets credits/tokens to 0 while the 'LEDGER SYNCED' badge at :59-62 always renders); MyAgentView.jsx:106-174 (every load is .catch(() => {}), then the 'No messages yet' empty state at :714 shows); SettingsApp.jsx:105 and :128-131 (load/auto-save catch swallowed). Views WITH error states (the good ones): AssignmentCardDashboard.jsx:399-444 (retry card) and AnalyticsDashboard.jsx:95 / IntelligenceView.jsx:87-103 (loading/error/retry).",
+      "impact": "When the API is down or a fetch 401s, Library shows 'No synthesized materials yet', Credits shows '0 tokens / Depleted' under a 'LEDGER SYNCED' badge, and the Agent chat shows an empty chat — all falsely read as 'you have no data' rather than 'something failed'.",
+      "confidence": "high",
+      "verified_how": "Read each view's fetch/catch and render branches; counted 4/6 main views with no error branch."
+    },
+    {
+      "id": "S4-4",
+      "title": "Agent chat displays the wrong model name: 'Gemini Flash · effort-routed'",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "MyAgentView.jsx:630 passes modelBadge='Gemini Flash · effort-routed' into ThreadsRail -> EffortDial, which renders it as a visible label (EffortDial.jsx:126). The product's only model is deepseek/deepseek-v4.1-flash; EffortDial's own default prop is 'DeepSeek V4.1 Flash · effort-routed' (EffortDial.jsx:65), so the override is a stale leftover.",
+      "impact": "The user is told the agent runs on Gemini Flash when it does not — misleading model attribution on the primary chat surface.",
+      "confidence": "high",
+      "verified_how": "Read MyAgentView.jsx:630, ThreadsRail.jsx:18/230, EffortDial.jsx:65/126; model ladder per CONTEXT.md settled rule."
+    },
+    {
+      "id": "S4-5",
+      "title": "Settings auto-save reports 'Saved' even when the API write fails",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "SettingsApp.jsx:124-132: on api.updateSettings(delta) rejection, the catch sets setSaveStatus('saved') with the comment '// Optimistic'. The header then renders the green 'Saved' tick (SettingsApp.jsx:151-156).",
+      "impact": "A student changes a setting, sees the green 'Saved' tick, but the server never persisted it — on reload the change is silently gone. Fail-loudly principle violated.",
+      "confidence": "high",
+      "verified_how": "Read SettingsApp.jsx updateSettings catch block and the saveStatus render branch."
+    },
+    {
+      "id": "S4-6",
+      "title": "Chat composer Attach and Mic buttons are dead controls (no onClick)",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "MyAgentView.jsx:849-855 (Paperclip 'Attach' button) and :873-879 (Mic 'voice' button) have a title but no onClick handler. File upload actually lives only inside the Configs drawer (AgentConfigsSidebar handleUploadFile), and there is no voice path anywhere in the web app.",
+      "impact": "A student clicks the attach-paperclip or mic in the composer and nothing happens — two visible, tappable controls that are inert, with no discoverable alternative for attaching from the chat.",
+      "confidence": "high",
+      "verified_how": "Read the composer JSX; grepped for any onClick on those two buttons (none)."
+    },
+    {
+      "id": "S4-7",
+      "title": "Duplicate and orphaned routes: /inbox and /message_admin render the same view, neither in nav",
+      "severity": "low",
+      "category": "ux",
+      "evidence": "App.jsx:873 (activeView==='inbox' -> MessageAdminView) and :901 (activeView==='message_admin' -> MessageAdminView) are two URL names for one destination (VIEW_PATH_MAP :278/:280). Neither 'inbox' nor 'message_admin' appears in the sidebar nav (AppShell.jsx:55-71 getNavItems); they are reachable only via deep link or GuideView's contact buttons (GuideView.jsx:444,794). 'automation' (AutomationCenter, App.jsx:876) is likewise URL-only — in VIEW_PATH_MAP (:279) but absent from nav and from any in-app link.",
+      "impact": "A new user cannot discover the contact-admin or automation surfaces from navigation; the URL bar and the nav describe different destinations for the same thing.",
+      "confidence": "high",
+      "verified_how": "Cross-referenced App.jsx VIEW_PATH_MAP and view branches against AppShell getNavItems and grep of all navigate call sites."
+    },
+    {
+      "id": "S4-8",
+      "title": "2 icon-only buttons with no accessible name; 11 named only by title; composer input unlabelled",
+      "severity": "low",
+      "category": "ux",
+      "evidence": "ThreadsRail.jsx:166 (rename-confirm Check) and :171 (rename-cancel X) are icon-only with no aria-label/title/text (also p-1, ~20px target vs the 44px standard used elsewhere). 11 further icon-only buttons carry title but no aria-label — including all four composer controls: MyAgentView.jsx:849, 873, 883, 892 (Paperclip/Mic/Stop/Send). The composer text input (MyAgentView.jsx:859) has placeholder but no label/aria-label. Counted by parsing all 473 <button> elements in web/src.",
+      "impact": "Screen-reader and touch users get no reliable name on the rename buttons, and title-only naming is inconsistently announced; the chat input has no programmatic label.",
+      "confidence": "high",
+      "verified_how": "Python parse of all components/**/*.jsx button elements (473 total) for aria-label/title/text presence."
+    },
+    {
+      "id": "S4-9",
+      "title": "Two parallel design-token vocabularies coexist (legacy var(--accent)/clean-* vs M3)",
+      "severity": "low",
+      "category": "design",
+      "evidence": "11 files, 136 occurrences of legacy var(--accent), var(--bg-base), var(--bg-surface-elevated), clean-card, clean-input, data-table, panel-body, hover:text-white — e.g. PrivacyPolicyModal.jsx:105/211, ActivityView.jsx:75, App.jsx ErrorBoundary :114-141, ScopedSetting.jsx:192-206. These aliases are defined (index.css:143-158) so colours resolve, but they sit beside the M3 utilities (bg-surface-container-lowest, text-on-surface). Hardcoded hex is nearly clean: 0 bg-[#, 0 text-[#, 1 border-[#090d16] (ui/AgentAvatar.jsx:69); remaining hex is SVG gradient stops and mock/accent-palette data.",
+      "impact": "Two naming systems to maintain in the same screens (the consent modal and activity feed look coded in the pre-rewrite system). Drift risk; not a user-visible defect today. A real student would NOT notice this.",
+      "confidence": "high",
+      "verified_how": "grep counts across web/src for bg-[#/text-[#/border-[# and legacy var(--/clean-*/data-table; read index.css token blocks."
+    },
+    {
+      "id": "S4-10",
+      "title": "Mandatory consent modal (PrivacyPolicyModal) has no focus trap or focus management",
+      "severity": "low",
+      "category": "ux",
+      "evidence": "PrivacyPolicyModal.jsx:56-60 sets role='dialog' aria-modal='true' aria-label, and the close button has aria-label='Close' (:97), but the only useEffects (:24-53) handle a peReady animation timer and consent carry-over — there is no initial-focus, no focus trap, no Escape handler, and no focus restore on close.",
+      "impact": "A keyboard user tabbing through the mandatory legal gate can move focus behind the modal into the (unreachable) shell; focus is not returned to the trigger on close. WCAG 2.4.3 / 2.1.2.",
+      "confidence": "high",
+      "verified_how": "Read PrivacyPolicyModal.jsx in full; grep for focus/escape/trap returned none."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S4-F1",
+      "finding_id": "S4-1",
+      "files": ["web/src/components/MyAgentView.jsx"],
+      "lines": "731-734",
+      "change": "Make onRetry resend the ORIGINAL prompt, not the error text, and bypass the stale-input path: store the last sent query in a ref. Change onRetry to `onRetry={() => { setInputQuery(lastQueryRef.current); setMessages(prev => prev.filter(m => !m.isError)); handleSendMessage(lastQueryRef.current); }}` and refactor handleSendMessage to accept an optional queryOverride argument used instead of inputQuery. Set lastQueryRef.current = query inside handleSendMessage after the user message is added.",
+      "verify": "Grep that onRetry no longer calls the stale-input path; trigger an agent error (network off) and confirm Retry resends the original text.",
+      "effort": "S",
+      "risk": "Low — additive ref; ensure handleSendMessage's optional arg is threaded through both streaming and fallback lanes."
+    },
+    {
+      "id": "S4-F2",
+      "finding_id": "S4-2",
+      "files": ["web/src/App.jsx"],
+      "lines": "872",
+      "change": "Pass the props LibraryView actually reads: <LibraryView userId={userId} onGoTo={handleSelectView} onSelectAssignment={(a) => { recordNav(); setOpenAssignment(a); setActiveView('overview'); }} /> (remove the unused user/onOpenAssignmentBubble/onOpenWorkspace).",
+      "verify": "Grep LibraryView props match its destructure; click 'Upload to Assignment Dump' in the Library and confirm it navigates to the dump view.",
+      "effort": "S",
+      "risk": "Low — wires the existing handler; calendar now opens assignment bubbles, which is the intended behavior."
+    },
+    {
+      "id": "S4-F3",
+      "finding_id": "S4-3",
+      "files": ["web/src/components/LibraryView.jsx", "web/src/components/CreditsView.jsx", "web/src/components/MyAgentView.jsx"],
+      "lines": "LibraryView.jsx:69-74, CreditsView.jsx:36-41, MyAgentView.jsx:106-174",
+      "change": "Add an error state to each: LibraryView sets it in catch and renders a retry card mirroring AssignmentCardDashboard's (AssignmentCardDashboard.jsx:399-444); CreditsView sets an error flag and shows 'Could not sync balance — Retry' instead of 'LEDGER SYNCED' + 0; MyAgentView sets a load-error flag and shows an inline error banner with retry above the empty state.",
+      "verify": "Block /api/library/materials and /api/dashboard via devtools and confirm each view shows an explicit error, not an empty/zero state.",
+      "effort": "M",
+      "risk": "Low — additive UI branches; do not change the happy-path render."
+    },
+    {
+      "id": "S4-F4",
+      "finding_id": "S4-4",
+      "files": ["web/src/components/MyAgentView.jsx"],
+      "lines": "630",
+      "change": "Change modelBadge='Gemini Flash · effort-routed' to modelBadge='DeepSeek V4.1 Flash · effort-routed' (matches EffortDial.jsx:65 default and the actual ladder).",
+      "verify": "grep MyAgentView.jsx for 'Gemini' returns 0; render the agent view and confirm the effort-dial badge reads DeepSeek.",
+      "effort": "S",
+      "risk": "None."
+    },
+    {
+      "id": "S4-F5",
+      "finding_id": "S4-5",
+      "files": ["web/src/components/SettingsApp.jsx"],
+      "lines": "124-132",
+      "change": "On save failure set a distinct saveStatus value (e.g. 'error') and render a red 'Save failed — Retry' chip; only set 'saved' on success. Remove the '// Optimistic' swallow.",
+      "verify": "Force api.updateSettings to reject (offline) and confirm the header shows the error state, not the green tick.",
+      "effort": "S",
+      "risk": "Low — adds one enum value and a render branch."
+    },
+    {
+      "id": "S4-F6",
+      "finding_id": "S4-6",
+      "files": ["web/src/components/MyAgentView.jsx"],
+      "lines": "849-855, 873-879",
+      "change": "Wire the Attach button to open the Configs drawer's file-upload (setShowConfigsSidebar(true) and pre-select the Files tab) or add a hidden file input. Either remove the Mic button or implement it; do not leave an inert control.",
+      "verify": "Click Attach and confirm a file picker or the Files tab opens; confirm Mic is removed or wired.",
+      "effort": "S",
+      "risk": "Low — reuse the existing AgentConfigsSidebar upload path."
+    },
+    {
+      "id": "S4-F7",
+      "finding_id": "S4-7",
+      "files": ["web/src/App.jsx", "web/src/components/AppShell.jsx"],
+      "lines": "App.jsx:873,901; AppShell.jsx:55-71",
+      "change": "Collapse 'inbox' and 'message_admin' to a single 'inbox' key (drop the message_admin branch and alias), and add an 'Inbox' nav item plus an 'Automation' nav item to getNavItems, or remove the orphaned routes if they are not shipped.",
+      "verify": "grep App.jsx for 'message_admin' returns 0; nav shows Inbox/Automation and they resolve to the same views.",
+      "effort": "S",
+      "risk": "Low — pure routing/nav consolidation; ensure GuideView's go('message_admin') callers are updated to the new key."
+    },
+    {
+      "id": "S4-F8",
+      "finding_id": "S4-8",
+      "files": ["web/src/components/ThreadsRail.jsx", "web/src/components/MyAgentView.jsx"],
+      "lines": "ThreadsRail.jsx:166,171; MyAgentView.jsx:849,859,873,883,892",
+      "change": "Add aria-label to the rename confirm/cancel buttons ('Save thread name'/'Cancel rename') and enlarge to min-h/min-w 44px; add aria-label to the four composer buttons and a label/aria-label on the composer input.",
+      "verify": "Re-run the button parse and confirm 0 unnamed icon-only buttons; axe/lighthouse scan of the agent view returns no 'button-name' violations.",
+      "effort": "S",
+      "risk": "None."
+    },
+    {
+      "id": "S4-F9",
+      "finding_id": "S4-10",
+      "files": ["web/src/components/PrivacyPolicyModal.jsx"],
+      "lines": "56-97",
+      "change": "Add a focus trap: focus the Accept button (or close button) on open, trap Tab within the dialog, handle Escape to close, and restore focus to the previously focused element on close. Reuse the pattern from any existing trapped modal in the codebase if present.",
+      "verify": "Open the consent gate, Tab repeatedly, and confirm focus never leaves the dialog; Escape closes and returns focus.",
+      "effort": "M",
+      "risk": "Medium — focus management must account for the mandatory-agreement path (decline -> logout)."
+    }
+  ],
+  "verification_plan": [
+    "Log in as the RoniDev dev account (POST /api/login per CONTEXT.md, never printing the password) and open each main view.",
+    "S4-1/S4-6: In My Agent, trigger a failed turn (stop the API or deny the sandbox), then click 'Retry Message' and the Attach/Mic buttons — confirm the no-ops.",
+    "S4-2: Open Library, click 'Upload to Assignment Dump' in the header and the empty-state 'Upload First Material' — confirm navigation fails (currently dead).",
+    "S4-3: Block /api/library/materials and /api/dashboard via devtools and confirm each view shows an explicit error, not an empty/zero state.",
+    "S4-4: Render the Agent view and read the effort-dial model badge; confirm it says Gemini Flash (wrong) vs DeepSeek.",
+    "S4-7: Visit /inbox and /message_admin and confirm both render the identical MessageAdminView; confirm neither is in the sidebar."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Is the 'message_admin' contact surface actually used by any student-facing flow, or is it legacy dead code that should be removed entirely?",
+    "Should Attach/Mic be removed from the composer, or is voice/attachment a planned feature that is half-shipped?",
+    "Does the mobile composer (sticky bottom-0, z-30) overlap the MobileBottomBar (fixed bottom-0, z-40) below the lg breakpoint? Needs a live render to confirm."
+  ],
+  "could_not_check": [
+    "No live browser render (Playwright) — every finding is source-read; colour-contrast ratios and mobile overlap are not measured.",
+    "Whether the raw fetch() calls in LibraryView (save/unsave/review/grade bypass api.js) actually fail CSRF was not verified against the backend — out of scope for this design track.",
+    "Focus trap presence in other modals (AuthModal, PermissionModal, etc.) was not audited; only PrivacyPolicyModal was read in full."
+  ]
+}

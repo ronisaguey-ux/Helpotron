@@ -44,26 +44,68 @@ def calculate_task_token_cost(cost_usd: float) -> int:
     return max(1, int(math.ceil(cost_usd * 100.0)))
 
 
-def get_balance(user: User) -> int:
-    """Retrieve available credit balance for user."""
-    return getattr(user, 'credits', 0)
+def get_token_balance(user: User) -> float:
+    """The user's spendable TASK TOKEN balance — the usage currency.
+
+    Tokens are what tasks are paid for and what a plan grants monthly. They live
+    in `settings.token_balance` (not in the `users.credits` column, which is the
+    earn-only DISCOUNT currency — see the module docstring).
+    """
+    settings = getattr(user, "settings", None) or {}
+    try:
+        return float(settings.get("token_balance", 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def set_token_balance(user: User, value: float) -> None:
+    """Write the token balance back into the settings blob.
+
+    The settings column is JSON, so the containing dict must be REPLACED (a
+    mutated-in-place dict is the same object and SQLAlchemy skips the flush —
+    the same trap documented in user_settings_service).
+    """
+    settings = dict(getattr(user, "settings", None) or {})
+    settings["token_balance"] = max(0.0, float(value))
+    user.settings = settings
+
+
+def is_unmetered(user: User) -> bool:
+    """True when usage should not be metered.
+
+    Admins/operators only. A paid plan — INCLUDING Elite — is metered: every plan
+    is a monthly token allowance, so Elite buys 2,700 tokens/month, not unlimited
+    spend. Before this, `plan == "elite"` short-circuited every charge, so a $40
+    subscription could consume unbounded upstream model spend.
+    """
+    try:
+        from .security import is_admin_user
+        return bool(is_admin_user(user))
+    except Exception:
+        return False
+
+
+# Kept as the legacy public name; it now means "the operator account", not "elite".
+is_usage_unlimited = is_unmetered
+
+
+# ── Legacy display helper ────────────────────────────────────────────────────
+# Kept so existing callers do not break, but see spend_credits()/earn_credits()
+# below for what credits now mean.
+def get_balance(user: User) -> float:
+    """Earned DISCOUNT credits (percent). Usage balance is get_token_balance()."""
+    return float(getattr(user, "discount_balance", 0.0) or 0.0)
+
 
 def effective_credits_balance(db: Session, user: User) -> float:
-    """Reconciled credit balance for DISPLAY (and audits), never below either
-    source of truth.
+    """Reconciled discount-credit balance for display, never below either source.
 
-    credit_transactions is the durable ledger every grant/charge path records
-    into, but it has historically diverged from the users.credits column in
-    BOTH directions:
-      - column lost: 08-26 grants to `max` / `MasonLohse16` (+30 each) were
-        committed into the ledger while users.credits sits at 0.0 (displaying
-        the raw column showed "0 cr" for users who were genuinely granted);
-      - ledger gap: the datalake micro-credit redemption and the overlord
-        agent's admin_adjust_credits action write users.credits WITHOUT a
-        ledger row.
-    So the displayed balance is max(ledger_sum, column): when the two agree
-    (normal state) it equals both; when they diverge it shows the side that
-    proves the larger balance — never a phantom 0.
+    Credits are earned (data-lake entries, referral codes) and spent as a percent
+    discount, so both sources are discount-denominated:
+      - `user.discount_balance` + `user.discount_spillover` — the live fields;
+      - the `credit_transactions` ledger — the audit trail.
+    Historic `users.credits` rows predate the split and are read only as a
+    fallback so a legacy account does not render as 0.
     """
     ledger = float(
         db.query(func.coalesce(func.sum(CreditTransaction.delta), 0.0))
@@ -71,12 +113,27 @@ def effective_credits_balance(db: Session, user: User) -> float:
         .scalar() or 0.0
     )
     column = float(getattr(user, "credits", 0.0) or 0.0)
-    return max(ledger, column)
+    live = float(getattr(user, "discount_balance", 0.0) or 0.0) + float(
+        getattr(user, "discount_spillover", 0.0) or 0.0
+    )
+    return max(ledger, column, live)
 
 
-def is_usage_unlimited(user: User) -> bool:
-    """elite plan = metered usage disabled (token gate skipped, charges no-op)."""
-    return bool(getattr(user, "plan", "") == "elite")
+def earn_credits(db: Session, user: User, amount: float, reason: str) -> float:
+    """Grant EARNED discount credits. The only way credits are created.
+
+    Not purchasable and never granted by a plan subscription — that is the whole
+    point of the currency: it rewards contributing (data-lake entries, referral
+    codes) and only ever reduces a bill.
+    """
+    if not user or amount <= 0:
+        return 0.0
+    user.discount_balance = float(getattr(user, "discount_balance", 0.0) or 0.0) + amount
+    db.add(CreditTransaction(user_id=user.id, delta=amount, reason=reason))
+    db.commit()
+    logger.info("Earned credits: user=%s +%s (%s)", user.id, amount, reason)
+    return amount
+
 
 def charge_with_rollback(
     user: User,
@@ -85,35 +142,35 @@ def charge_with_rollback(
     description: str = "",
 ) -> tuple[bool, Optional[Callable[[], None]]]:
     cost = TASK_COSTS.get(task_name, 1)
-    locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
-    if locked_user is None:
-        return False, None
-    if getattr(locked_user, "plan", "") == "elite":
+    if is_unmetered(user):
         return True, None
-    if locked_user.credits < cost:
+    ledger_user = db.query(User).filter(User.id == user.id).with_for_update().first() or user
+    balance = get_token_balance(ledger_user)
+    if balance < cost:
+        logger.warning(
+            "Insufficient tokens (%.2f) for %s (cost %s)", balance, task_name, cost
+        )
+        # Release the FOR UPDATE lock the select above took on this row; without
+        # it the lock is held until the request's session closes, and a second
+        # concurrent task on the same account blocks behind it.
         db.rollback()
-        logger.warning(f'User {user.id} has insufficient credits ({locked_user.credits}) for {task_name} (cost {cost})')
         return False, None
 
-    locked_user.credits -= cost
+    set_token_balance(ledger_user, balance - cost)
     db.add(CreditTransaction(
         user_id=user.id,
         delta=-cost,
         reason=description or f"charge:{task_name}",
     ))
     db.commit()
-    db.refresh(locked_user)
-    logger.info(f'Charged user {user.id} {cost} credits for {task_name}. New balance: {locked_user.credits}')
+    logger.info("Charged %s tokens for %s. New balance: %s", cost, task_name, balance - cost)
 
     def rollback() -> None:
-        locked_user.credits += cost
-        db.add(CreditTransaction(
-            user_id=user.id,
-            delta=cost,
-            reason=f"refund:{task_name}",
-        ))
+        fresh = db.query(User).filter(User.id == user.id).first() or user
+        set_token_balance(fresh, get_token_balance(fresh) + cost)
+        db.add(CreditTransaction(user_id=user.id, delta=cost, reason=f"refund:{task_name}"))
         db.commit()
-        logger.info(f'Refunded user {user.id} {cost} credits for failed {task_name}')
+        logger.info("Refunded %s tokens for failed %s", cost, task_name)
 
     return True, rollback
 
@@ -121,52 +178,55 @@ class InsufficientCreditsError(Exception):
     pass
 
 def charge(user: Any, task_name: str, db: Session, cost_override: Optional[int] = None, reason: str = "", idempotency_key: Optional[str] = None) -> bool:
-    """Deduct credits atomically using database row locking."""
+    """Deduct TASK TOKENS for a task. Returns False when the balance is short.
+
+    Tokens are read from `settings.token_balance`; this used to decrement the
+    `users.credits` column, which is the earn-only discount currency, so a plan
+    purchase funded one field while the agent gate read the other.
+    """
     user_id = user.id if hasattr(user, 'id') else user
     cost = cost_override if cost_override is not None else TASK_COSTS.get(task_name, 1)
     if cost <= 0:
         return True
-    
-    # Just to handle plan checks if we have the user object
-    user_obj = user if hasattr(user, 'id') else db.query(User).filter(User.id == user_id).first()
-    if getattr(user_obj, "plan", "") == "elite":
-        return True
-        
-    result = db.execute(
-        text("UPDATE users SET credits = credits - :cost WHERE id = :uid AND credits >= :cost"),
-        {"cost": cost, "uid": user_id}
-    )
-    if result.rowcount == 0:
+
+    # FOR UPDATE, not a plain read: tokens live in a JSON blob that cannot be
+    # decremented by a single atomic `UPDATE ... WHERE balance >= cost` the way
+    # the old credits column could, so the read-modify-write is serialised on the
+    # row instead. Without it two concurrent tasks both read the same balance and
+    # both succeed, overdrawing the account.
+    row = db.query(User).filter(User.id == user_id).with_for_update().first()
+    if row is None:
         return False
-        
-    tx = CreditTransaction(
+    if is_unmetered(row):
+        return True
+
+    balance = get_token_balance(row)
+    if balance < cost:
+        # Release the lock taken above (see charge_with_rollback).
+        db.rollback()
+        return False
+
+    set_token_balance(row, balance - cost)
+    db.add(CreditTransaction(
         user_id=user_id,
         delta=-cost,
         reason=reason or f"charge:{task_name}",
-    )
-    db.add(tx)
+    ))
     db.commit()
-
-    if user_obj:
-        try:
-            if user_obj in db:
-                db.refresh(user_obj)
-        except Exception:
-            pass
-        logger.info(f'Charged user {user_id} {cost} credits for {task_name}.')
+    logger.info("Charged %s %s tokens for %s.", user_id, cost, task_name)
     return True
 
 charge_user = charge
 
 def refund(user: Any, task_name: str, db: Session) -> None:
-    """Refund credits if an upstream workflow fails after deduction."""
+    """Refund tokens if an upstream workflow fails after deduction."""
     user_id = user.id if hasattr(user, 'id') else user
     cost = TASK_COSTS.get(task_name, 1)
-    locked_user = db.query(User).filter(User.id == user_id).with_for_update().first()
-    if locked_user:
-        locked_user.credits += cost
+    row = db.query(User).filter(User.id == user_id).first()
+    if row:
+        set_token_balance(row, get_token_balance(row) + cost)
         db.commit()
-        logger.info(f'Refunded user {user_id} {cost} credits for failed {task_name}')
+        logger.info("Refunded %s %s tokens for failed %s", user_id, cost, task_name)
 
 MAX_DISCOUNT_PCT = 20.0
 
@@ -210,33 +270,42 @@ def safe_deduct_with_rollback(
     amount: float,
     operation_desc: str = "operation"
 ) -> Tuple[bool, Optional[Callable[[], None]]]:
-    if getattr(user, "plan", "") == "elite":
+    """Deduct TASK TOKENS with a rollback handle. Used by the agent session."""
+    if is_unmetered(user):
         return True, None
-    if user.credits < amount:
+    row = db.query(User).filter(User.id == user.id).first() or user
+    balance = get_token_balance(row)
+    if balance < amount:
         return False, None
-    user.credits -= amount
-    tx = CreditTransaction(
-        user_id=user.id,
-        delta=-amount,
-        reason=f"safe_deduct:{operation_desc}"
-    )
-    db.add(tx)
+    set_token_balance(row, balance - amount)
+    db.add(CreditTransaction(user_id=user.id, delta=-amount, reason=f"safe_deduct:{operation_desc}"))
     db.commit()
 
     def rollback():
-        user.credits += amount
-        rb_tx = CreditTransaction(
-            user_id=user.id,
-            delta=amount,
-            reason=f"refund:{operation_desc}"
-        )
-        db.add(rb_tx)
+        fresh = db.query(User).filter(User.id == user.id).first() or user
+        set_token_balance(fresh, get_token_balance(fresh) + amount)
+        db.add(CreditTransaction(user_id=user.id, delta=amount, reason=f"refund:{operation_desc}"))
         db.commit()
-        logger.info("Rolled back %s credits for user %s (%s)", amount, user.id, operation_desc)
+        logger.info("Rolled back %s tokens for user %s (%s)", amount, user.id, operation_desc)
 
     return True, rollback
 
+def add_tokens(db: Session, user: User, amount: float, reason: str = "grant") -> float:
+    """Grant TASK TOKENS. Used by plan purchases/renewals and refunds."""
+    if user is None or amount == 0:
+        return 0.0
+    fresh = db.query(User).filter(User.id == user.id).first() or user
+    new_balance = get_token_balance(fresh) + float(amount)
+    set_token_balance(fresh, new_balance)
+    db.add(CreditTransaction(user_id=user.id, delta=float(amount), reason=reason))
+    db.commit()
+    logger.info("Granted tokens: user=%s %+s (%s) -> %s", user.id, amount, reason, new_balance)
+    return new_balance
+
+
 def top_up(db_or_user_id: Any, user_or_amount: Any, amount_or_reason: Any = "topup", reason: str = "topup") -> None:
+    """Grant tokens or refund them. Historically credited the discount column;
+    usage is token-denominated, so this now writes tokens (see add_tokens)."""
     if isinstance(db_or_user_id, Session):
         db = db_or_user_id
         user = user_or_amount
@@ -250,11 +319,7 @@ def top_up(db_or_user_id: Any, user_or_amount: Any, amount_or_reason: Any = "top
         user = db.query(User).filter(User.id == user_id).first()
 
     if user:
-        locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
-        if locked_user:
-            locked_user.credits += amount
-            db.commit()
-            logger.info('Topped up user %s +%s credits (%s)', user.id, amount, reason)
+        add_tokens(db, user, amount, reason=reason)
 
 def record_data_submission(db: Session, user: User, payload: dict) -> dict:
     submission = DataSubmission(user_id=user.id, payload=payload, discount_earned=1.0)
@@ -267,14 +332,15 @@ def record_data_submission(db: Session, user: User, payload: dict) -> dict:
 def deduct_credits_atomic(user_id: str, amount: int, description: str, db: Session, idempotency_key: str = None) -> bool:
     return charge(user_id, "assignment_solve", db, cost_override=amount, reason=description, idempotency_key=idempotency_key)
 
-def get_user_credits(db: Session, user_id: str) -> int:
+def get_user_credits(db: Session, user_id: str) -> float:
+    """Earned discount credits (display). Token balance: get_token_balance()."""
     user = db.query(User).filter(User.id == user_id).first()
-    return user.credits if user else 0
+    return effective_credits_balance(db, user) if user else 0.0
 
-def add_credits_to_user(db: Session, user_id: str, amount: int, description: str = "Credit addition") -> bool:
+def add_credits_to_user(db: Session, user_id: str, amount: float, description: str = "Credit addition") -> bool:
+    """Grant EARNED discount credits (referral/datalake/admin). Never usage."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return False
-    user.credits += amount
-    db.commit()
+    earn_credits(db, user, float(amount), description)
     return True

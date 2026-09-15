@@ -240,9 +240,9 @@ def test_material_requires_credits_then_succeeds(client, unique_user, auth_heade
 
     body = {"public_id": unique_user, "transcript_text": "Hamlet delays. The ghost speaks."}
     r = client.post("/api/study-guide", json=body, headers=auth_headers)
-    assert r.status_code == 402  # no credits on a fresh basic user
+    assert r.status_code == 402  # no tokens on a fresh basic user
 
-    # top up via a stripe provider (only stripe gets instant credits now)
+    # top up via a stripe provider (a payment buys task tokens)
     pay = client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 500}, headers=auth_headers)
     assert pay.status_code == 200
     assert pay.json()["status"] == "captured"
@@ -252,8 +252,8 @@ def test_material_requires_credits_then_succeeds(client, unique_user, auth_heade
     assert "Hamlet" in r.json()["content"]
     assert r.json()["model_used"] is None  # call_llm returns str (BATCH-02)
 
-    # cost ledger: study_guide costs 2 credits (TASK_COSTS)
-    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["credits"] == 3.0
+    # cost ledger: study_guide costs 2 tokens (TASK_COSTS)
+    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 3.0
 
 
 def test_flashcards_json_retry_then_parse(client, unique_user, auth_headers, monkeypatch):
@@ -332,7 +332,7 @@ def test_generation_failure_credits_back(client, unique_user, auth_headers, monk
 
     r = client.post("/api/summary", json={"public_id": unique_user, "transcript_text": "some lecture"}, headers=auth_headers)
     assert r.status_code == 500
-    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["credits"] == 3.0  # unchanged
+    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 3.0  # unchanged
 
 
 def test_discount_program(client, unique_user, auth_headers):
@@ -343,7 +343,7 @@ def test_discount_program(client, unique_user, auth_headers):
 
     pay = client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 1000}, headers=auth_headers)
     assert pay.status_code == 200
-    assert pay.json()["credits"] == 9.9  # $10 - 1% discount = 9.9 credits
+    assert pay.json()["tokens_added"] == 10  # $10 buys 10 task tokens ($1 = 1 token)
 
 
 def test_transcribe_without_backend_returns_clear_error(client, unique_user, auth_headers):
