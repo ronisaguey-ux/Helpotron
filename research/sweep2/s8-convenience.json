@@ -1,0 +1,254 @@
+{
+  "track": "S8",
+  "agent": "Convenience, friction & documentation accuracy",
+  "summary": "The biggest wall is a lie at the front door: every CTA promises an instant free trial (AnonymousLanding 'Start Free Trial', AuthModal 'Start with a free 7-day trial - 150 task tokens'), but /api/signup grants 0 tokens and plan 'none', and the real trial is a three-gate gauntlet (enable 2FA, pass a $0.01 card payment, wait for the owner to manually approve). A new user lands on the dashboard with zero tokens and nothing to do. On top of that the README is ~5 releases and 2 pricing models stale (wrong prices/tokens, lists the banned deepseek-r1 model), every setup command points at port 8000 while the stack runs on 5000, the Firefox 'Download Gecko Zip' button serves a Chrome-only MV3 build, and referral invites + support emails point at helpotron.com which does not resolve. The in-app Guide, Message Admin channel, and API error decoding are accurate and working - the problem is concentrated in the public docs and the onboarding path, not the app itself.",
+  "severity": "critical",
+  "findings": [
+    {
+      "id": "S8-1",
+      "title": "Signup grants 0 tokens while every CTA promises an instant free trial",
+      "severity": "critical",
+      "category": "ux",
+      "evidence": "server/main.py:1048-1062 comment: 'New accounts start at 0 tokens ... no auto-grant, the owner approves each signup's 300 tokens individually'; server/main.py:1080-1084 returns \"plan\":\"none\", \"token_balance\":0. Contradicted by web/src/components/AuthModal.jsx:474 'Start with a free 7-day trial - 150 task tokens.', AnonymousLanding.jsx:552 'Start Free Trial', :609 'Start free', :560 'No credit card'. Real trial path server/routes_trial.py:1-6 requires 2FA + a $0.01 Stripe payment + manual operator approval; server/routes_trial.py:110-119 enforces both gates (403 otherwise).",
+      "impact": "A brand-new user follows the marketing, creates an account, lands with 0 tokens and plan 'none', and any agent/study-tool action returns 'insufficient_tokens' (server/routes_overlord.py:2195). To get the promised 'free trial' they must enable 2FA, enter a credit card for a 1c charge (contradicting 'No credit card'), and wait for a human. An abandonment cliff at the exact moment of first value.",
+      "confidence": "high",
+      "verified_how": "Read server/main.py signup body (0-token grant, plan none), server/routes_trial.py gates, and the marketing strings in AnonymousLanding.jsx/AuthModal.jsx."
+    },
+    {
+      "id": "S8-2",
+      "title": "README pricing, model ladder, and referral numbers are all wrong vs code",
+      "severity": "high",
+      "category": "contract",
+      "evidence": "README.md:250-255 pricing table: trial $0/100 tokens, Basic $5/500, Pro $15/1500, Elite $30/3000. Actual: server/credits.py:30-32 basic 300/pro 1000/elite 2700; server/payments.py:27 TIER_PRICE_CENTS {basic 1000, pro 2000, elite 4000} = $10/$20/$40; trial grant 150 (server/trial_service.py:25 TRIAL_CREDITS_GRANT=150.0). README.md:244 lists 'deepseek/deepseek-r1' as flagship - server/llm.py:29-34 PRIMARY_MODELS are deepseek-v4.1-flash, gemini-3.1-flash-lite, gemini-3.8-flash, qwen-2.5-72b; deepseek-r1 is explicitly BANNED (helpotron_SoT.md:39). README.md:259-263 referral '50 credits inviter / 25 invitee' vs server/referral.py:26 REFERRAL_PLAN_REWARD_CREDITS = {basic 2, pro 5, elite 10}, and server/routes_referral.py:25 returns '40 compute credits' - three different numbers, all false.",
+      "impact": "The most-read doc in the repo gives systematically wrong price/plan/referral numbers, misleads by 2-3x on price and ~5x on token counts, and recommends a model the owner's own SoT bans. A student or operator acting on the README is misinformed on every economic and routing fact.",
+      "confidence": "high",
+      "verified_how": "Compared README tables against server/credits.py, server/payments.py, server/trial_service.py, server/referral.py, server/llm.py PRIMARY_MODELS."
+    },
+    {
+      "id": "S8-3",
+      "title": "Every setup command and the extension guide point at port 8000; the stack runs on 5000",
+      "severity": "high",
+      "category": "ops",
+      "evidence": "README.md:78 'uvicorn main:app --host 127.0.0.1 --port 8000'; README.md:339 same in prod launch; docs/EXTENSION_SETUP_GUIDE.md:25 'use http://localhost:8000 for a local dev server'; EXTENSION_SETUP_GUIDE.md:57 '.venv/bin/uvicorn server.main:app ... --port 8000'. Actual: start_stack.sh:9 'API (uvicorn :5000)' and start_stack.sh:26 health-check at http://127.0.0.1:5000; helpotron-api.service listens on 5000. README.md:61-66 also says create the venv inside server/ ('cd server' then 'python3 -m venv .venv'), but the real venv is repo-root .venv; README.md:375 runs bare 'pytest' instead of '.venv/bin/python -m pytest'.",
+      "impact": "A new operator follows the README verbatim: starts uvicorn on 8000, points the extension Server field at localhost:8000 per the guide, and nothing connects - the extension default and web app talk to 5000. At least an hour of 'why won't it connect'. The venv-location and bare-pytest instructions fail outright on this box.",
+      "confidence": "high",
+      "verified_how": "Read README/EXTENSION_SETUP_GUIDE commands vs start_stack.sh:9,26 and the running helpotron-api.service port."
+    },
+    {
+      "id": "S8-4",
+      "title": "Firefox 'Download Gecko Zip' button downloads the Chrome-only MV3 build",
+      "severity": "high",
+      "category": "ux",
+      "evidence": "web/src/components/ExtensionInstallView.jsx:389-417 'Mozilla Firefox' card ('Download Gecko Zip') button onClick={handleDownloadZip} downloads ${serverUrl}/api/extension/download - the same Chrome zip as every other button. extension/manifest.json has \"background\": { \"service_worker\": \"background.js\" } with NO background.scripts key; Firefox MV3 does not support background.service_worker. extension/background.js:6-7 claims 'the dual-key manifest (service_worker + scripts) Firefox loads' but no scripts key exists; extension/CWS_APPROVAL_REVIEW.md:28 cites 'background.scripts ... at manifest.json:59-62' - a key not in the file.",
+      "impact": "A Firefox user downloads the 'Gecko Zip', loads it, and the background never starts (unsupported background key) - popup/login/agent all fail. The 'supported browsers' card sells a Firefox build that does not exist. Exactly the 'step 4 fails on Firefox' abandonment the brief asked for.",
+      "confidence": "high",
+      "verified_how": "Read ExtensionInstallView.jsx Firefox card + handleDownloadZip (65-79), and extension/manifest.json (service_worker only, no scripts key)."
+    },
+    {
+      "id": "S8-5",
+      "title": "Referral invite links and support/legal/privacy emails point at helpotron.com, which does not resolve",
+      "severity": "high",
+      "category": "ux",
+      "evidence": "server/routes_referral.py:22,38 build \"url\": \"https://helpotron.com/invite/{code}\". web/src/components/PrivacyPolicyView.jsx:526,529 'privacy@helpotron.com'; TermsOfServiceView.jsx:234 'legal@helpotron.com', :546 and :556 mailto links. Measured: 'getent hosts helpotron.com' -> NO DNS RESOLUTION, while 'getent hosts helpotron.dpdns.org' -> 2606:4700:3030::ac43:d912 (resolves).",
+      "impact": "Every referral invite link the API hands out is a dead URL (no domain). Every support/legal/privacy email in the shipped privacy policy and ToS bounces - a user who emails about their data gets nothing, and the owner gets no signal. The 'how does the user tell you' path is silently severed.",
+      "confidence": "high",
+      "verified_how": "getent hosts for both domains; grep for the email/URL strings in routes_referral.py, PrivacyPolicyView.jsx, TermsOfServiceView.jsx."
+    },
+    {
+      "id": "S8-6",
+      "title": "Command palette (Cmd/Ctrl+K) topic search is empty in production (demo-gated index)",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "web/src/components/CommandPalette.jsx:44 'const index = useMemo(() => (demoEnabled() ? searchIndex() : []), []);' and web/src/demoData.js:399 'if (!demoEnabled()) return items;' - searchIndex returns [] unless localStorage helpotron_demo_mode is on. Placeholder at CommandPalette.jsx:136 still says 'Search commands, navigation, topics'. The demo index view targets reference dead keys: 'study', 'automation', 'activity' (demoData.js:411-415) are not among AppShell nav keys (AppShell.jsx:56-69).",
+      "impact": "A real user who knows a feature exists (e.g. 'flashcards', 'billing', 'referral', 'message admin') presses Cmd/Ctrl+K and gets 'No results' - the full-text topic index is never built outside demo mode. The palette only works for slash commands and recents in production.",
+      "confidence": "high",
+      "verified_how": "Read CommandPalette.jsx:44 and demoData.js:399 (demo gate), cross-checked view targets against AppShell.jsx:56-69."
+    },
+    {
+      "id": "S8-7",
+      "title": "'Message Admin' support channel is not in the sidebar nav, contradicting the guide",
+      "severity": "medium",
+      "category": "ux",
+      "evidence": "web/src/components/GuideView.jsx:326 instructs 'Open Message Admin from the navigation menu', but the sidebar nav (AppShell.jsx:56-69) lists only overview/agent/dump/datalake/insights/history/library/settings/credits/extension/guide (+admin/monitors) - no message_admin or inbox entry. The view is reachable only via the Guide's own buttons or the /message_admin route (web/src/App.jsx:280,901).",
+      "impact": "The primary in-app support channel - the thing every error and FAQ funnels the user to - is absent from navigation. A user looking for 'how do I tell someone it's broken' in the nav finds nothing; the guide's instruction to look there is false.",
+      "confidence": "high",
+      "verified_how": "Read AppShell.jsx nav item list vs GuideView.jsx:326 instruction and App.jsx route registration."
+    },
+    {
+      "id": "S8-8",
+      "title": "Extension download button falls back to a hardcoded 'v4.2.0' (ships 2.7.0)",
+      "severity": "low",
+      "category": "correctness",
+      "evidence": "web/src/components/ExtensionInstallView.jsx:53 'const liveVersion = versionData?.latest_version || (versionLoading ? 'Loading...' : 'v4.2.0');' - used to label the download (lines 69,320). extension/manifest.json:4 \"version\": \"2.7.0\". GuideView.jsx:431 renders a 'v4.2' badge. No 'v4.2.0'/'v4.2' exists server-side.",
+      "impact": "If /api/extension/version is slow or errors, the download button tells a user they're getting 'v4.2.0' - a version that does not exist. Cosmetic, but a fabricated version string shown at the exact moment of install.",
+      "confidence": "high",
+      "verified_how": "Read ExtensionInstallView.jsx:53 fallback vs extension/manifest.json version 2.7.0."
+    },
+    {
+      "id": "S8-9",
+      "title": "Public guide shows a hardcoded '99.98%' SLA, violating the SoT Zero-Fake-Data rule",
+      "severity": "low",
+      "category": "ux",
+      "evidence": "web/src/components/GuideView.jsx:585 'Status & SLA ... 99.98%' static string. helpotron_SoT.md:223-228 (Zero Fake Data Invariant): 'Absolute Ban on Fabricated Data ... Never fabricate healthy status or fake metrics.' Also GuideView.jsx:592 advertises a Telegram bot '@HelpoRelay' - not verified as a live, reachable bot.",
+      "impact": "The public guide claims a 99.98% uptime SLA with no measurement behind it, contradicting the owner's own no-fake-data invariant, and advertises an unverified Telegram handle. Undermines the 'honest presentation' the README claims.",
+      "confidence": "medium",
+      "verified_how": "Read GuideView.jsx:585,592 vs helpotron_SoT.md:223-228; could not confirm whether @HelpoRelay is a real reachable bot."
+    },
+    {
+      "id": "S8-10",
+      "title": "CHANGELOG.md tops out at v2.4.0 while the extension ships 2.7.0 (5 releases behind)",
+      "severity": "low",
+      "category": "contract",
+      "evidence": "CHANGELOG.md:5 newest entry '## [v2.4.0] - 2026-08-17'. extension/manifest.json:4 \"version\": \"2.7.0\". dist/ contains v2.5.1.zip, v2.5.2.zip, v2.6.0.zip, v2.6.1.zip, v2.7.0.zip - five shipped releases with no CHANGELOG entries. Release notes actually ship from PRESET_RELEASE_NOTES in the server, not CHANGELOG.md.",
+      "impact": "The changelog is a dead document five versions stale; anyone auditing 'what changed between 2.4.0 and 2.7.0' finds nothing. The exact 'is the version listed the version that ships?' doc-accuracy failure.",
+      "confidence": "high",
+      "verified_how": "Read CHANGELOG.md:5 vs extension/manifest.json version and dist/ zip inventory."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S8-F1",
+      "finding_id": "S8-1",
+      "files": [
+        "server/main.py",
+        "web/src/components/AuthModal.jsx",
+        "web/src/components/AnonymousLanding.jsx"
+      ],
+      "lines": "main.py:1007,1048-1084; AuthModal.jsx:474; AnonymousLanding.jsx:552,560,609",
+      "change": "Make the signup promise match reality (copy-only, safest): AuthModal.jsx:474 -> 'Create an account - a free 7-day trial (150 tokens) unlocks after you enable 2FA and verify a 1c payment'; AnonymousLanding.jsx:560 'No credit card' -> 'No card to browse; 1c verification to start the trial'; soften/remove 'Start Free Trial' at 552 and 609. Correct the false docstring 'Create a new user account with a 7-day free trial' at main.py:1007. (Owner decision if instead the trial should auto-grant.)",
+      "verify": "grep 'Start with a free 7-day trial' AuthModal.jsx and 'No credit card' AnonymousLanding.jsx return corrected copy; signup still returns token_balance 0 + plan none.",
+      "effort": "S",
+      "risk": "Copy-only; no backend change unless the owner opts to auto-grant."
+    },
+    {
+      "id": "S8-F2",
+      "finding_id": "S8-2",
+      "files": [
+        "README.md"
+      ],
+      "lines": "242-263",
+      "change": "Rewrite section 7 to read the real tables: models deepseek-v4.1-flash / gemini-3.1-flash-lite / gemini-3.8-flash / qwen-2.5-72b (drop deepseek-r1); tiers trial 150 (2FA + 1c verify), Basic $10/300, Pro $20/1000, Elite $40/2700; referral 2/5/10 tier-based (drop '50/25'). Or point at GET /api/plans.",
+      "verify": "grep README.md for 'deepseek-r1' returns nothing; tier rows equal {150,300,1000,2700} and {$10,$20,$40}.",
+      "effort": "S",
+      "risk": "None - documentation only."
+    },
+    {
+      "id": "S8-F3",
+      "finding_id": "S8-3",
+      "files": [
+        "README.md",
+        "docs/EXTENSION_SETUP_GUIDE.md"
+      ],
+      "lines": "README.md:61-66,78,339,375; EXTENSION_SETUP_GUIDE.md:25,57",
+      "change": "Replace every '--port 8000' with '--port 5000' (or '--port ${API_PORT:-5000}'). Change 'cd server' + 'python3 -m venv .venv' to repo-root 'python3 -m venv .venv'. Change bare 'pytest server/tests/' to '.venv/bin/python -m pytest server/tests/'. Change 'http://localhost:8000' to 'http://localhost:5000' in the extension guide.",
+      "verify": "grep -n '8000' README.md docs/EXTENSION_SETUP_GUIDE.md returns nothing; the commands match start_stack.sh:9,26 (port 5000).",
+      "effort": "S",
+      "risk": "None - documentation only."
+    },
+    {
+      "id": "S8-F4",
+      "finding_id": "S8-4",
+      "files": [
+        "web/src/components/ExtensionInstallView.jsx",
+        "extension/manifest.json",
+        "extension/CWS_APPROVAL_REVIEW.md"
+      ],
+      "lines": "ExtensionInstallView.jsx:389-417; manifest.json:56-62",
+      "change": "Either ship a real Firefox build (add 'background.scripts': [\"background.js\"] to manifest.json for Gecko) or relabel the Firefox card as 'Not yet supported' and disable the button. Remove the stale CWS_APPROVAL_REVIEW.md:28 claim and the false background.js:6-7 'dual-key manifest' comment. Do not serve the Chrome zip under a 'Download Gecko Zip' label.",
+      "verify": "manifest.json contains a background.scripts key (or the Firefox card is disabled); grep 'Download Gecko Zip' is gone or the button no longer calls handleDownloadZip.",
+      "effort": "S",
+      "risk": "Adding background.scripts may trip Chrome packaging if not scoped under browser_specific_settings; test load in Chromium first."
+    },
+    {
+      "id": "S8-F5",
+      "finding_id": "S8-5",
+      "files": [
+        "server/routes_referral.py",
+        "web/src/components/PrivacyPolicyView.jsx",
+        "web/src/components/TermsOfServiceView.jsx"
+      ],
+      "lines": "routes_referral.py:22,38; PrivacyPolicyView.jsx:526,529; TermsOfServiceView.jsx:234,546,556",
+      "change": "Replace https://helpotron.com with https://helpotron.dpdns.org everywhere (invite URL + mailto domain), or point the contact emails at a mailbox the owner actually monitors. Add the real support address to the referral payload.",
+      "verify": "grep -rn 'helpotron.com' server/ web/src/ returns no remaining user-facing occurrence; getent hosts <domain> resolves.",
+      "effort": "S",
+      "risk": "None - string swap; confirm the owner owns the dpdns host for email if mailto is kept."
+    },
+    {
+      "id": "S8-F6",
+      "finding_id": "S8-6",
+      "files": [
+        "web/src/components/CommandPalette.jsx",
+        "web/src/demoData.js"
+      ],
+      "lines": "CommandPalette.jsx:44; demoData.js:396-425",
+      "change": "Build a static navigation/feature index unconditionally (the push('view', ...) entries at demoData.js:408-423) instead of gating the whole searchIndex() behind demoEnabled(). Fix the dead view targets ('study'->'library', 'automation'->'extension' or remove, 'activity'->'insights') to match AppShell nav keys.",
+      "verify": "With helpotron_demo_mode unset, pressing Cmd+K and typing 'billing' or 'settings' returns the view; typing 'study' no longer navigates to a dead target.",
+      "effort": "S",
+      "risk": "Ensure the non-demo index only includes real navigation targets, not demo fixture rows."
+    },
+    {
+      "id": "S8-F7",
+      "finding_id": "S8-7",
+      "files": [
+        "web/src/components/AppShell.jsx"
+      ],
+      "lines": "56-69",
+      "change": "Add a nav item { key: 'message_admin', label: 'Message Admin', Icon: MessageSquare, group: 'Platform System' } (or a support/mail icon entry) so the support channel is one click from the sidebar, matching GuideView.jsx:326.",
+      "verify": "The sidebar renders 'Message Admin'; clicking it opens MessageAdminView (App.jsx:901).",
+      "effort": "S",
+      "risk": "None - additive nav entry."
+    },
+    {
+      "id": "S8-F8",
+      "finding_id": "S8-8",
+      "files": [
+        "web/src/components/ExtensionInstallView.jsx"
+      ],
+      "lines": "53",
+      "change": "Remove the hardcoded 'v4.2.0' fallback: 'const liveVersion = versionData?.latest_version || null' and render 'Download latest (.zip)' when null instead of a fabricated version.",
+      "verify": "grep '4.2.0' ExtensionInstallView.jsx returns nothing; with the version endpoint down the button reads 'Download latest (.zip)'.",
+      "effort": "S",
+      "risk": "None."
+    },
+    {
+      "id": "S8-F9",
+      "finding_id": "S8-9",
+      "files": [
+        "web/src/components/GuideView.jsx"
+      ],
+      "lines": "585,592",
+      "change": "Replace the hardcoded '99.98%' with either a live status fetch or remove it; replace '@HelpoRelay' with the real bot handle or remove it until verified.",
+      "verify": "grep '99.98' and '@HelpoRelay' GuideView.jsx return nothing (or the values are wired to a real status endpoint).",
+      "effort": "S",
+      "risk": "None."
+    }
+  ],
+  "verification_plan": [
+    "Sign up flow: POST /api/signup with a throwaway public_id on a test env; confirm response plan=none, token_balance=0, then compare against AuthModal.jsx:474 copy.",
+    "Docs vs code: grep README.md for '8000', 'deepseek-r1', '$5', '$15', '$30', '50 credits'; compare each to server/credits.py, payments.py, llm.py, referral.py.",
+    "Firefox: download /api/extension/download, unzip, confirm manifest.json has background.service_worker and no background.scripts; attempt to load in Firefox -> background does not register.",
+    "Domain: getent hosts helpotron.com vs helpotron.dpdns.org; grep helpotron.com across server/ and web/src/.",
+    "Command palette: open web app (demo mode off), press Cmd/Ctrl+K, type 'billing' and 'settings', observe 'No results'.",
+    "Support path: click through the sidebar nav and confirm no 'Message Admin' entry; reach it only via Guide buttons / /message_admin."
+  ],
+  "external_research": [
+    {
+      "what": "DNS resolution of helpotron.com vs helpotron.dpdns.org",
+      "where": "getent hosts (local resolver)",
+      "why": "proves the referral/support domain does not resolve",
+      "date": "2026-09-14"
+    }
+  ],
+  "open_questions": [
+    "Does the owner actually own helpotron.com (parked) or is it unregistered? This decides whether the fix is a DNS record or a full string swap to helpotron.dpdns.org.",
+    "Is @HelpoRelay the real Telegram bot handle, and is it reachable?",
+    "Is the 1c-payment + manual-approval trial gate intended long-term, or is auto-granting 150 tokens on signup the desired end state?",
+    "Is the background.scripts omission intentional (Firefox deliberately unsupported) or a packaging regression?"
+  ],
+  "could_not_check": [
+    "Could not exercise the full signup->trial->payment flow against the live server (would mutate prod data); verified statically from server/main.py and server/routes_trial.py.",
+    "Could not load the extension in a real Firefox instance to confirm the background failure at runtime (no Firefox installed); inferred from manifest.json lacking background.scripts, which Firefox MV3 requires.",
+    "Could not confirm whether privacy@helpotron.com / legal@helpotron.com mailboxes exist behind the non-resolving domain.",
+    "Did not drive the browser end-to-end for the command palette or Message Admin (read code instead), per the brief's 'prefer reading code over driving a browser'."
+  ]
+}

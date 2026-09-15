@@ -1,0 +1,138 @@
+{
+  "track": "S10",
+  "agent": "API contract & client/server consistency",
+  "summary": "Found 6 verified drift bugs, all in the exact class the owner keeps fixing: two or three surfaces disagreeing about one concept. The worst is the extension effort slider — it writes a 1-10 LEVEL into settings.ai.effortScore, but the server's vision lane reads it as a 1-1000 SCORE, so every slider position 1-10 resolves to the LOW vision tier (Gemini 3.1 Flash Lite) while the popup shows DeepSeek/Gemini 3.8. Effort and permission-mode are each stored under multiple different keys, so the web dial, the extension slider, and the text-agent router each read a key no other surface writes. The full-tab agent_mode page omits permission_mode and educational_mode from its agent_chat body, so its mode selection is silently ignored and the server defaults to 'auto' while the client shows 'manual'. Two docs reference endpoints that do not exist. Could not obtain the real 2.6.0 store zip to byte-diff its payload, and did not POST agent_chat live (mutating) — those are marked low confidence where relevant.",
+  "severity": "high",
+  "findings": [
+    {
+      "id": "S10-1",
+      "title": "Extension effort slider writes a 1-10 LEVEL into ai.effortScore, but the vision lane reads it as a 1-1000 SCORE, so the model always resolves to the LOW tier",
+      "severity": "high",
+      "category": "contract",
+      "evidence": "extension/popup.html:363 declares the slider `min=\"1\" max=\"10\" step=\"1\"`; extension/popup.js:782 writes `body: JSON.stringify({ ai: { effortScore: val } })` where `val = clampEffortScore(slider)` is the 1-10 level. Server reads it as a score: server/routes_extension.py:678 `parse_effort_score(_user_ai_cfg(user).get(\"effortScore\"))` (parse clamps to 1..1000, no level->score scale), then server/screen_vision.py:227-231 maps `<=333 -> low, <=666 -> med, >666 -> high`. Measured: .venv/bin/python importing resolve_vision_model shows levels 1,2,3,4,5,6,7,8,9,10 ALL -> tier=low, model=google/gemini-3.1-flash-lite. Meanwhile the popup DISPLAYS effortModelInfo (extension/popup.js:304-306): s<=3 low, s<=6 med (DeepSeek), else high (Gemini 3.8). So slider 5 shows 'DeepSeek V4.1 Flash' but the server actually calls the cheapest vision model.",
+      "impact": "Any user who touches the extension effort slider silently downgrades screen-vision to the cheapest model (Gemini 3.1 Flash Lite) for every position 1-10; the UI keeps showing DeepSeek/Gemini 3.8. The agent-mode screen-reading quality collapses and the user is misled about which model is running. The response does return the true tier (model/model_tier/effort_score) but neither popup.js nor agent_mode.js ever reads those fields, so nothing reconciles the lie.",
+      "confidence": "high",
+      "verified_how": "`.venv/bin/python -c \"from server.screen_vision import resolve_vision_model; [print(n, resolve_vision_model(n)) for n in range(1,11)]\"` -> all 10 print tier=low. grep of popup.js/agent_mode.js for data.model_tier/data.effort_score returned no matches (no client reconciliation)."
+    },
+    {
+      "id": "S10-2",
+      "title": "'effort' is stored/read under three different keys, so each surface's effort control is invisible to the others",
+      "severity": "high",
+      "category": "contract",
+      "evidence": "Web writes top-level snake `effort_score`: web/src/components/MyAgentView.jsx:295 `api.updateSettings?.({ effort_score: score })`. Extension writes nested camel `ai.effortScore`: extension/popup.js:782 `{ ai: { effortScore: val } }`. Text-agent router reads only top-level snake: server/overlord_agent.py:163 `int((user.settings or {}).get(\"effort_score\", 500))` and server/main.py:708 `.get(\"effort_score\", 500)`. Vision lane and humanizer read only nested camel: server/routes_extension.py:678 `_user_ai_cfg(user).get(\"effortScore\")`, server/humanize_skill.py:395 `ai_settings[\"ai\"].get(\"effortScore\")`. The settings schema declares BOTH independently: server/user_settings_service.py:334 `\"effort_score\": 500` and :417 `\"effortScore\": 500`.",
+      "impact": "A user who maxes effort in the web app changes the TEXT agent model but the extension screen-vision lane (and the humanizer skill) keep their default 500 — and vice versa: moving the extension slider does not change the web chat/assignment model at all. The same 'effort' concept silently diverges across surfaces; the user believes one knob controls one thing.",
+      "confidence": "high",
+      "verified_how": "grep -rn 'effortScore|effort_score' server/*.py web/src extension/popup.js shows no single key read by both the text-agent path and the vision path; each reader cluster uses a disjoint key."
+    },
+    {
+      "id": "S10-3",
+      "title": "Permission mode drift: popup writes ai.mode (never read), the engine reads operation_mode (default 'auto'), and agent_mode.js never sends permission_mode",
+      "severity": "high",
+      "category": "contract",
+      "evidence": "Popup writes nested `ai.mode`: extension/popup.js:518 `body: JSON.stringify({ ai: { mode } })`. The permission engine reads TOP-LEVEL `operation_mode` and defaults to auto: server/overlord_agent.py:198 `mode = (session_mode_override or user_settings.get(\"operation_mode\") or \"auto\").lower()`. Nothing copies ai.mode -> operation_mode (grep of server/*.py for operation_mode writes shows only the chat command, scoped settings, and /api/agent/mode). The full-tab agent_mode page omits the field entirely: extension/agent_mode.js:1472 `const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute };` (no permission_mode, no educational_mode). Client default is manual (extension/popup.js:34 `const MODE_DEFAULT = 'manual'`) but engine fallback is auto.",
+      "impact": "In full-tab Agent Mode the user's selected mode (manual/auto/yolo) is never transmitted; the server falls back to top-level operation_mode, which the popup never writes, so it resolves to 'auto' — routine screen-control actions are auto-approved while the client UI shows 'manual'. The popup itself only works because it redundantly sends permission_mode per-message. The server also returns control_requires_approval / control_permission_reason (server/routes_extension.py:1676-1677) but agent_mode.js never reads them (it re-implements the gate client-side from state.agentMode at agent_mode.js:1548), so the server's and client's approval decisions can disagree.",
+      "confidence": "high",
+      "verified_how": "Read extension/agent_mode.js:1472 body construction and :1536-1552 response handling (reads control_actions, never control_requires_approval); read server/overlord_agent.py:198 and :189-227; grep 'operation_mode' server/*.py confirmed ai.mode is not translated anywhere."
+    },
+    {
+      "id": "S10-4",
+      "title": "Four divergent effort->level/tier mappings; resolve_effort_tier has only 5 bands and disagrees with resolve_model_routing and the popup mirror",
+      "severity": "medium",
+      "category": "contract",
+      "evidence": "server/llm.py:121-136 resolve_model_routing maps bands 150/250/350/450/550/650/750/850/950 -> levels 1..10. server/user_settings_service.py:200-207 resolve_effort_tier maps only 150/250/350/750 -> levels 1,2,3,5,9 (no levels 4,6,7,8,10): `elif score <= 750: lvl = 5 ... else: lvl = 9`. So effort 400 -> level 4 (llm) vs level 5 (resolve_effort_tier); effort 800 -> level 8 (llm) vs 9 (tier). server/screen_vision.py:227-231 uses a third, 333/666 band. extension/popup.js:304-306 effortModelInfo uses a fourth (level <=3/<=6) that does NOT match the server's 333/666 split (e.g. score 340 -> server med, popup low; score 660 -> server med, popup high).",
+      "impact": "The number/level shown for a given effort differs by surface and by endpoint (/api/user/effort-score/resolve returns a level that the text router would not use). The popup's own comment (extension/popup.js:279-281) claims it is a 'mirror of resolve_vision_model (same bands)' but the bands are measurably different.",
+      "confidence": "high",
+      "verified_how": "Hand-computed the band tables from the four files and confirmed numeric disagreements (400->4 vs 5; 340->low vs med; 660->med vs high)."
+    },
+    {
+      "id": "S10-5",
+      "title": "Docs reference endpoints that do not exist",
+      "severity": "low",
+      "category": "contract",
+      "evidence": "README.md:391 documents `The /api/privacy/erase endpoint performs complete, cascading erasure...` — no such route exists; the real one is DELETE /api/user/account (server/privacy.py:98-99). Measured `curl -s -o /dev/null -w '%{http_code}' -X DELETE http://127.0.0.1:5000/api/privacy/erase` -> 405. docs/OVERLORD_SANDBOX.md:38 documents `POST /api/agent/permissions/respond` (plural) — the real route is /api/agent/permission/respond (singular, server/routes_overlord.py:837); measured POST to the plural path -> 405 vs singular -> 422 (route exists, body validation).",
+      "impact": "The GDPR section of the README and the sandbox doc point operators/auditors at URLs that do not work, undermining the compliance and ops documentation.",
+      "confidence": "high",
+      "verified_how": "curl -X DELETE /api/privacy/erase -> 405; curl -X POST /api/agent/permissions/respond -> 405; curl -X POST /api/agent/permission/respond -> 422; grep confirmed no /api/privacy/erase and no permissions/respond route."
+    },
+    {
+      "id": "S10-6",
+      "title": "The server-side /api/extension/ui-config 'source of truth' (model ladder + UI copy) is never fetched by any client",
+      "severity": "low",
+      "category": "contract",
+      "evidence": "server/routes_extension.py:161-183 builds a versioned ui-config with mode_hints, op_labels, and a correctly-computed model_ladder (scores 200/500/800 -> resolve_vision_model). grep -rn 'ui-config|uiConfig' extension/ web/src/ returns no matches — no client calls it. The extension instead hard-codes the same copy and ladder (extension/popup.js:341-345 MODE_HINTS, :302-307 effortModelInfo), which is exactly the duplication the endpoint was built to remove.",
+      "impact": "The thin-wrapper migration (server-side UI copy) is only half-done: the endpoint exists and is correct but is dead, so any wording or ladder change still requires an extension rebuild + CWS review — the drift risk the endpoint exists to prevent remains.",
+      "confidence": "high",
+      "verified_how": "grep -rn 'ui-config|uiConfig|ui_config' extension/ web/src/ (no node_modules) -> zero hits; curl /api/extension/ui-config -> 200."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S10-F1",
+      "finding_id": "S10-1",
+      "files": ["extension/popup.js", "server/screen_vision.py"],
+      "lines": "782-783 (and 816-817)",
+      "change": "Make the write use the canonical 1-1000 scale the server expects: in both PATCH handlers change `body: JSON.stringify({ ai: { effortScore: val } })` to `body: JSON.stringify({ ai: { effortScore: val * 100 } })` (val is the 1-10 level). As a belt-and-suspenders fix, also harden resolve_vision_model to interpret a 1-10 value as a level by scaling it (score = score*100 when score <= 10), matching how resolve_model_routing treats <=10 as a level.",
+      "verify": "After the change: `.venv/bin/python -c \"from server.screen_vision import resolve_vision_model; print(resolve_vision_model(500))\"` -> med, and `resolve_vision_model(7)` (a raw level, if the hardening is added) -> high. Then grep popup.js to confirm effortScore is written as `val * 100`.",
+      "effort": "S",
+      "risk": "Existing users who already wrote a raw 1-10 value into ai.effortScore will have a stale 'low' tier until they touch the slider again; acceptable since it only ever downgraded them."
+    },
+    {
+      "id": "S10-F2",
+      "finding_id": "S10-2",
+      "files": ["web/src/components/MyAgentView.jsx", "extension/popup.js"],
+      "lines": "292-295 (web), 782-783 (popup)",
+      "change": "Unify on ONE key. Easiest: have the web dial ALSO write `ai.effortScore` (camel, 1-1000): change MyAgentView handleEffortChange to `api.updateSettings?.({ ai: { ...(settings.ai||{}), effortScore: score } })` (score here is the 1-1000 value the dial holds), or move the text-agent readers (overlord_agent.py:163, main.py:708) to read `ai.effortScore` with a top-level fallback. Pick one canonical key and make both clients write it and both server readers read it.",
+      "verify": "Set effort in web app to 200, then GET /api/user/settings and confirm ai.effortScore == 200 AND (after the reader change) the text-agent path uses 200; set slider in popup and confirm the text-agent path changes.",
+      "effort": "M",
+      "risk": "Two storage keys exist in production; must keep a read fallback (try new key, else old key) or existing users' saved effort resets to default once."
+    },
+    {
+      "id": "S10-F3",
+      "finding_id": "S10-3",
+      "files": ["extension/agent_mode.js", "server/overlord_agent.py"],
+      "lines": "1472 (agent_mode), 198 (overlord_agent)",
+      "change": "Add permission_mode and educational_mode to the agent_mode body: `const body = { text, agent_mode: true, seescreen: state.seescreen, execute: state.execute, permission_mode: state.agentMode, educational_mode: state.educationalMode };` (read both from loadAgentState, which already loads MODE_KEY). Also have the permission engine read `ai.mode` as a fallback: overlord_agent.py:198 -> `user_settings.get(\"operation_mode\") or (user_settings.get(\"ai\") or {}).get(\"mode\") or \"auto\"` so the popup's ai.mode write stops being dead.",
+      "verify": "From agent_mode with mode=yolo, POST /api/extension/agent_chat and confirm the response's control_requires_approval is false; with mode=manual confirm it is true. grep agent_mode.js to confirm permission_mode is now in the body.",
+      "effort": "S",
+      "risk": "Reading ai.mode as a fallback changes approval behavior for existing popup users who set mode there but never had it honored — that is the intended correction, but double-check the yolo->auto-approve interaction."
+    },
+    {
+      "id": "S10-F4",
+      "finding_id": "S10-4",
+      "files": ["server/user_settings_service.py", "extension/popup.js"],
+      "lines": "200-207 (service), 302-307 (popup)",
+      "change": "Collapse resolve_effort_tier to reuse resolve_model_routing's bands (import from server.llm and map level->tier_label), and change popup.js effortModelInfo to compute the tier from the same 333/666 split as resolve_vision_model (or better, fetch /api/extension/ui-config's model_ladder at load instead of hard-coding). One band table, shared.",
+      "verify": "Unit check: resolve_effort_tier(400)['level'] == resolve_model_routing(effort_score=400)['level'] == 4; effortModelInfo(340).tier == resolve_vision_model(340)[1] == 'med'.",
+      "effort": "M",
+      "risk": "The /api/user/effort-score/resolve response shape changes for any consumer; it appears unused by the live web app (only mock.js/api.js definition) so risk is low."
+    },
+    {
+      "id": "S10-F5",
+      "finding_id": "S10-5",
+      "files": ["README.md", "docs/OVERLORD_SANDBOX.md"],
+      "lines": "391 (README), 38 (sandbox)",
+      "change": "README.md:391: replace `/api/privacy/erase` with `DELETE /api/user/account` (or add the alias route). docs/OVERLORD_SANDBOX.md:38: change `/api/agent/permissions/respond` to `/api/agent/permission/respond`.",
+      "verify": "curl -X DELETE /api/user/account (authed) returns 200/401 not 404; curl -X POST /api/agent/permission/respond returns 422 (route found).",
+      "effort": "S",
+      "risk": "None (docs only)."
+    }
+  ],
+  "verification_plan": [
+    ".venv/bin/python -c \"from server.screen_vision import resolve_vision_model; print([(n, resolve_vision_model(n)) for n in range(1,11)])\" — expect all 'low' today (proves S10-1).",
+    "grep -n 'effortScore: val' extension/popup.js and grep -n 'effort_score' server/overlord_agent.py server/main.py server/routes_extension.py server/humanize_skill.py — confirm the two disjoint key clusters (S10-2).",
+    "grep -n 'const body = { text, agent_mode' extension/agent_mode.js and read server/overlord_agent.py:198 — confirm permission_mode omission + auto default (S10-3).",
+    "curl -s -o /dev/null -w '%{http_code}' -X DELETE http://127.0.0.1:5000/api/privacy/erase  and curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:5000/api/agent/permissions/respond (S10-5).",
+    "curl -s http://127.0.0.1:5000/api/extension/ui-config | python3 -m json.tool — confirm model_ladder is present/correct, then grep the extension for ui-config to confirm it is never fetched (S10-6)."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Does the production settings blob for real users already contain raw 1-10 values in ai.effortScore (from a touched slider), i.e. how many accounts are currently stuck on the low vision tier?",
+    "Should 'effort' be canonicalized as the 1-10 level or the 1-1000 score? The schema default is 500 (1-1000) but the slider UI is 1-10."
+  ],
+  "could_not_check": [
+    "Did not obtain the real Chrome Web Store 2.6.0 zip to byte-diff its agent_chat payload/response reads against the current server; backward-compat of the old build is assessed from the pydantic model (only `text` is required, all else additive/optional) but not from the actual shipped 2.6.0 JS.",
+    "Did not POST /api/extension/agent_chat live (mutating; would consume tokens) — response-shape checks are from reading the code, not an observed body.",
+    "Did not run the full test suite (503 tests, ~2min, shared box).",
+    "Did not audit the web-app agent chat (routes_overlord.send_chat_message) response fields against web/src ChatBubble reads in depth — the web chat path is large and I focused the extension/vision/settings contract surface as instructed."
+  ]
+}

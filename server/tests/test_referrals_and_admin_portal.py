@@ -54,7 +54,8 @@ def test_referral_subscription_gating_and_attribution():
             public_id=f"ProScholar_{suffix}",
             plan="pro",
             subscription_status="active",
-            credits=50.0,
+            credits=0.0,
+            discount_balance=50.0,
         )
         db_session.add(pro_user)
         db_session.commit()
@@ -69,7 +70,8 @@ def test_referral_subscription_gating_and_attribution():
         new_student = User(
             public_id=f"NewStudent_{suffix}",
             plan="basic",
-            credits=5.0,
+            credits=0.0,
+            discount_balance=5.0,
         )
         db_session.add(new_student)
         db_session.commit()
@@ -84,8 +86,10 @@ def test_referral_subscription_gating_and_attribution():
         # pro referrer earns 2 credits (was a flat 40 before 08-31).
         db_session.refresh(pro_user)
         db_session.refresh(new_student)
-        assert pro_user.credits == 52.0  # 50 + 2 (basic plan purchase reward)
-        assert new_student.credits == 15.0  # 5 + 10
+        # Referral rewards are EARNED DISCOUNT CREDITS (bill reduction only),
+        # so they land in discount_balance, never in the usage currency.
+        assert pro_user.discount_balance == 52.0  # 50 + 2 (basic plan reward)
+        assert new_student.discount_balance == 15.0  # 5 + 10
 
         # 4. Attempt to reuse the same code -> Blocked (cannot be reused)
         third_student = User(
@@ -144,16 +148,25 @@ def test_referral_discount_granted_to_new_user():
         db_session.refresh(fresh)
         assert fresh.referral_discount_pct == 30.0
 
-        # The discount applies at payment time: $10 order charged $7, full
-        # 10 credits delivered, entitlement consumed.
+        # The discount reduces the CHARGE, not the value delivered: a $10 ($7
+        # after 30% off) order still buys 10 task tokens, and the entitlement is
+        # consumed. The welcome bonus is an earned discount credit.
         pay = process_payment(db_session, fresh, "stripe", 1000)
-        assert pay["amount_charged_cents"] == 700
-        assert pay["credits_added"] == 10.0
+        # Both discounts reduce the bill and they stack: the 30% referral
+        # entitlement plus the 10% the 10 earned welcome credits are worth, so
+        # $10 -> $6.00. Tokens are still granted on the nominal $10.
+        assert pay["discount_pct_applied"] == 10.0
+        assert pay["amount_charged_cents"] == 600
+        assert pay["tokens_added"] == 10
         assert pay["referral_discount_pct"] == 30.0
 
         db_session.refresh(fresh)
-        assert fresh.credits == 20.0  # +10 welcome bonus + 10 purchase
+        # The 10 earned credits were REDEEMED as this order's discount, so the
+        # balance is consumed to 0 — that is the currency working, not a loss.
+        assert fresh.discount_balance == 0.0
         assert fresh.referral_discount_pct == 0.0  # one-time, consumed
+        from server.credits import get_token_balance
+        assert get_token_balance(fresh) == 10.0    # +10 purchased task tokens
 
         # Second order is charged full price.
         pay2 = process_payment(db_session, fresh, "stripe", 1000)
@@ -294,7 +307,7 @@ def test_referrer_plan_tier_rewards():
         res = redeem_referral(db_session, ref.referral_code, fresh)
         assert res["status"] == "success"
         db_session.refresh(referrer)
-        assert referrer.credits == 0.0  # nothing yet — paid at checkout
+        assert referrer.discount_balance == 0.0  # nothing yet — paid at checkout
 
         # 2. Checkout path: elite purchase pays the referrer 10 credits (the
         #    same grant the webhook performs), exactly once.
@@ -302,12 +315,12 @@ def test_referrer_plan_tier_rewards():
         assert paid == 10.0
         db_session.commit()
         db_session.refresh(referrer)
-        assert referrer.credits == 10.0
+        assert referrer.discount_balance == 10.0
         again = grant_referrer_plan_reward(db_session, referrer, "elite", ref.referral_code)
         assert again == 0.0  # idempotent
         db_session.commit()
         db_session.refresh(referrer)
-        assert referrer.credits == 10.0
+        assert referrer.discount_balance == 10.0
 
         # 3. Already-subscribed referee: redemption pays by CURRENT plan.
         ref2 = create_new_referral_code(db_session, referrer)
@@ -318,7 +331,8 @@ def test_referrer_plan_tier_rewards():
         res2 = redeem_referral(db_session, ref2.referral_code, subscriber)
         assert res2["status"] == "success"
         db_session.refresh(referrer)
-        assert referrer.credits == 15.0  # 10 (elite) + 5 (pro subscriber)
+        # Referral rewards are earned discount credits, not usage balance.
+        assert referrer.discount_balance == 15.0  # 10 (elite) + 5 (pro subscriber)
         assert REFERRAL_PLAN_REWARD_CREDITS == {"basic": 2.0, "pro": 5.0, "elite": 10.0}
     finally:
         db_session.close()

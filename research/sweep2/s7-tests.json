@@ -1,0 +1,119 @@
+{
+  "track": "S7",
+  "agent": "Tests & verification honesty",
+  "summary": "The 503 number is real and mostly honest: I ran the full suite once (503 passed, 136.94s) and sampled ~12 files across auth, 2FA, extension, llm, study tools, payments/trial, library and security. The suite asserts on real behaviour (status+body, numeric token/credit balances, actual wire-model slugs, clamped coordinates), not string-grep proxies. But the number falsely reassures in three places: (1) the trash restore/purge lifecycle in server/trash.py — the only safety net on every delete button — has ZERO test; (2) CSRF enforcement's rejection branch is never exercised because every test authenticates with a Bearer header, which csrf.py exempts at line 84-85; (3) the extension's CDP/debugger element collection (the load-bearing 'live DOM registry' path) is client-side MV3 JS and untestable by pytest. The 'known red' test is now green at HEAD (verified 3x isolated + full file + full suite). The prior production-safety finding (suite booting the prod lifespan janitor) is FIXED in conftest.py. I could not check whether GitHub Actions actually runs/passes (no GH access from this box).",
+  "severity": "medium",
+  "findings": [
+    {
+      "id": "S7-1",
+      "title": "Trash restore/purge lifecycle has zero test coverage",
+      "severity": "high",
+      "category": "tests",
+      "evidence": "server/trash.py is 148 lines (move_to_trash, restore, purge_expired, RETENTION_DAYS=10, RESTORE_HANDLERS) and is imported by exactly 0 test files. `grep -rln 'server.trash|move_to_trash' server/tests/ tests/` returns nothing. routes_library.py:139-140 calls move_to_trash() on every DELETE, yet test_library_v3.py:70-72 only asserts `del_res.json()['status'] == 'ok'` — it never asserts a TrashItem row was created, that restore() re-inserts the StudyMaterial, or that purge_expired() removes items past expires_at.",
+      "impact": "The only thing standing between a user's delete and permanent data loss is an untested module. If restore() or purge_expired() silently broke (e.g. a schema mismatch, a bad handler lookup at trash.py:136), all 503 tests would still pass and users would lose work with no way back.",
+      "confidence": "high",
+      "verified_how": "grep for 'trash' across server/tests/ + tests/ = 0 source-file matches (only .pyc noise); read server/trash.py and test_library_v3.py in full."
+    },
+    {
+      "id": "S7-2",
+      "title": "CSRF rejection branch is never exercised — every test bypasses it via Bearer",
+      "severity": "high",
+      "category": "tests",
+      "evidence": "server/csrf.py:84-85 `if request.headers.get('Authorization', '').startswith('Bearer '): return` exempts all Bearer requests. conftest.py:130-150 issues a JWT Bearer for every authenticated test. The 403 rejection (`raise HTTPException(403, 'CSRF token missing/invalid')` at csrf.py:94-99) only fires for cookie-authenticated (helpotron_session) mutations, and no test posts such a request WITHOUT a valid X-CSRF-Token and asserts 403. The 2FA purchase tests (test_auth_2fa.py:151-203) do use cookie auth but always send a valid token.",
+      "impact": "A security control that is not tested is unenforced by default. If validate_csrf() silently stopped raising (e.g. a typo'd constant, a bad path-exempt condition), the entire suite would still pass green and cookie-authenticated state-changing requests would be CSRF-unprotected in production.",
+      "confidence": "high",
+      "verified_how": "Read server/csrf.py; grep 'X-CSRF|cookies|helpotron_session' across tests — the only cookie-auth tests are the 2FA purchase flow, which always attach a valid token."
+    },
+    {
+      "id": "S7-3",
+      "title": "Extension CDP/debugger element collection is untestable by the pytest suite",
+      "severity": "medium",
+      "category": "tests",
+      "evidence": "The 'live DOM element registry' collection lives entirely in extension/agent_mode.js (chrome.debugger.attach at :697, Runtime.evaluate element-geometry extraction at :723 and :767). server/tests/test_extension_live_elements.py only tests the server-side string formatter _render_live_elements (routes_extension.py), never the collection itself. 0 Python tests touch chrome.debugger/CDP.",
+      "impact": "The load-bearing path that tells the model what it can click/see on a live page has no automated verification anywhere in the 503. A coordinate-space or shadow-DOM regression in the collection would ship undetected (several such bugs are already in git log: fd31f75, 6d3ff1b, 94c9e2d).",
+      "confidence": "high",
+      "verified_how": "Read agent_mode.js CDP section and test_extension_live_elements.py; grep 'chrome.debugger|Runtime.evaluate|cdp' in server/tests/ = 0 meaningful matches."
+    },
+    {
+      "id": "S7-4",
+      "title": "The 'known red' test now passes at HEAD — CONTEXT claim is stale",
+      "severity": "low",
+      "category": "tests",
+      "evidence": "server/tests/test_extension_agent_chat.py::test_browser_search_with_math_query_never_intercepted_by_shell passed 3/3 isolated runs and 10/10 in its file; full suite = 503 passed at HEAD 304542e. The test asserts _extract_shell_query(t1)=='' (lines 183-184) and the route returns real control_actions, and routes_overlord.py:1358 `if _BROWSER_INTENT_PAT.search(text): return ''` is the code that satisfies it.",
+      "impact": "Both TEST and CODE are correct at HEAD — the regression is genuinely fixed and the test is a valid guard, not a proxy. The finding is informational: the sweep brief's 'fails at HEAD' is no longer true, so no red-test remediation is needed.",
+      "confidence": "high",
+      "verified_how": "pytest -q on the single test (3x), the whole file, and one full-suite run (503 passed, 2:16)."
+    },
+    {
+      "id": "S7-5",
+      "title": "Shared persistent test DB + fixed-name users = order/state-dependent risk",
+      "severity": "medium",
+      "category": "tests",
+      "evidence": "conftest.py:6 pins DATABASE_URL to `sqlite:///./test_helpotron.db` (a persistent file, not a tempfile); init_db() (server/database.py:659-660) uses create_all, never drop_all. Tests use both uuid users AND fixed public_ids ('nuclear_student', 'sec_pw_user', 'test_purchase_user_2fa', 'test_lib_user'). test_extension_releases.py:42 comment admits 'Shared session-scoped test DB persists between runs' and relies on manual self-purge.",
+      "impact": "A test is only a test if it passes from any prior state. A leftover row from a failed/interrupted run (or a fixed-name user seeded by a different test) can flip an assertion's outcome — exactly the misdiagnosed-flake class the sweep is hunting. The suite is green today only because it happens to self-clean the rows it depends on.",
+      "confidence": "medium",
+      "verified_how": "Read conftest.py, database.py init_db, and test_extension_releases.py; grep for fixed-name public_ids in tests."
+    },
+    {
+      "id": "S7-6",
+      "title": "The streak timezone fix is not locked by a test",
+      "severity": "low",
+      "category": "tests",
+      "evidence": "routes_study_tools.py:268-273 documents the UTC/local bug (now fixed to `datetime.now(timezone.utc).date()`), but the only streak assertion is test_study_tools_v3.py:99 `assert s_data['streak_days'] >= 1` against a freshly-created session. No test forces a UTC-midnight boundary (e.g. created_at=23:30Z, local=next-day) to pin the fix.",
+      "impact": "The bug that 'cost days to diagnose' will return un-noticed the next time someone swaps the date source, because the loose >=1 assertion passes on the happy path either way. (Good news: grep found no OTHER naive date.today()/datetime.now() in server/*.py — only utcnow/timezone.utc plus one intentional date-query string at routes_overlord.py:1336.)",
+      "confidence": "medium",
+      "verified_how": "Read routes_study_tools.py:244-296 and test_study_tools_v3.py:90-100; grep for naive datetime usage across server/*.py."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S7-F1",
+      "finding_id": "S7-1",
+      "files": ["server/tests/test_library_v3.py"],
+      "lines": "70-72 (extend)",
+      "change": "Add assertions after the DELETE: query TrashItem for the user, assert one row exists with item_type='study_material' and correct payload.id; then call server.trash.restore() and assert the StudyMaterial row is re-inserted; then set expires_at in the past, call purge_expired(), and assert the row is gone. Cover the 'no restore handler' negative (trash.py:136-138).",
+      "verify": ".venv/bin/python -m pytest server/tests/test_library_v3.py -q  (expect new tests green and 503+2 collected)",
+      "effort": "M",
+      "risk": "None — additive assertions on the isolated test DB."
+    },
+    {
+      "id": "S7-F2",
+      "finding_id": "S7-2",
+      "files": ["server/tests/test_security.py"],
+      "lines": "add after line 58",
+      "change": "Add a test: sign up+login to obtain the helpotron_session + csrf_token cookies, then POST a state-changing route (e.g. /api/assignments) with cookies but NO X-CSRF-Token header and assert 403; then repeat WITH the matching token and assert it succeeds. This exercises csrf.py:94-99.",
+      "verify": ".venv/bin/python -m pytest server/tests/test_security.py -q -k csrf",
+      "effort": "S",
+      "risk": "None — additive; must use a route not in csrf.py EXEMPT_PATHS."
+    },
+    {
+      "id": "S7-F3",
+      "finding_id": "S7-5",
+      "files": ["server/tests/conftest.py"],
+      "lines": "6",
+      "change": "Point DATABASE_URL at a per-run temp SQLite file (tempfile.mkdtemp) instead of ./test_helpotron.db, and drop_all/create_all in the session fixture before init_db(), so every run starts from an empty schema.",
+      "verify": "Run the suite twice back-to-back with no cleanup; assert identical pass count.",
+      "effort": "M",
+      "risk": "Tests relying on cross-test seeded rows (fixed-name users) would need to seed their own fixtures — a one-time refactor of ~5 files."
+    }
+  ],
+  "verification_plan": [
+    "1. .venv/bin/python -m pytest server/tests/ -q  -> expect 503 passed (reconfirms the headline number).",
+    "2. grep -rn 'trash' server/tests/ tests/  -> expect 0 source-file matches (confirms S7-1).",
+    "3. grep -rn 'helpotron_session' server/tests/ and grep -rn 'X-CSRF' server/tests/  -> confirm no negative CSRF assertion exists (confirms S7-2).",
+    "4. .venv/bin/python -m pytest server/tests/test_extension_agent_chat.py::test_browser_search_with_math_query_never_intercepted_by_shell -q  -> expect 1 passed (confirms S7-4).",
+    "5. Read server/csrf.py:84-85 and conftest.py:130-150 to confirm every authenticated test uses Bearer.",
+    "6. Read server/trash.py and test_library_v3.py:70-72 to confirm the delete test never touches trash."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Does GitHub Actions actually run ci.yml on push/PR to main, and is the latest run green? (No GH/network access from this box to check.)",
+    "Is the 3.11 vs 3.14 Python version drift in ci.yml intentional, and has a 3.11-only failure ever diverged from local?"
+  ],
+  "could_not_check": [
+    "GitHub Actions run history/status (no gh token or authenticated network path).",
+    "Whether the full suite is truly order-independent — I ran it once green but did not run it N times shuffled.",
+    "Whether any of the 4 pytest.skip() sites (test_sandbox_file_permissions.py:56, test_security_hardened.py:286/304, test_detector_ensemble.py:216) actually skip in the standard run — they are conditional (missing sandbox_run.sh / no user / model not fetched), so they likely never fire in the green suite.",
+    "Real-browser behaviour of the extension's CDP collection (would need a headed Chrome + extension load, outside pytest)."
+  ]
+}

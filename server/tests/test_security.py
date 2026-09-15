@@ -76,7 +76,12 @@ def test_per_ip_rate_limit(client):
 # ─── API-level: pagination ────────────────────────────────────────────────
 
 def _make_elite(public_id: str) -> None:
-    """Seed the user as elite so credit charges can't block the test."""
+    """Fund the user with task tokens so charges cannot block the test.
+
+    Elite is no longer an unlimited-spend bypass — it is a plan with a monthly
+    token allowance — so a test that needs an unmetered account must fund the
+    usage balance explicitly.
+    """
     from server.database import SessionLocal
     from server.main import get_or_create_user
 
@@ -85,7 +90,9 @@ def _make_elite(public_id: str) -> None:
     db = SessionLocal()
     try:
         get_or_create_user(db, public_id)
-        db.query(User).filter(User.public_id == public_id).update({"plan": "elite"})
+        user = db.query(User).filter(User.public_id == public_id).first()
+        user.plan = "elite"
+        user.settings = {**(user.settings or {}), "token_balance": 100000.0}
         db.commit()
     finally:
         db.close()

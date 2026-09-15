@@ -158,11 +158,13 @@ async def create_draft_task(
     user = db.get(User, user_id)
     if not user:
         raise ValueError("User not found")
-    # Charge credits upfront (refund on failure)
-    if user.credits < DRAFT_COST:
-        raise ValueError("Insufficient credits")
-    user.credits -= DRAFT_COST
-    db.commit()
+    # Charge task tokens upfront (refunded on failure)
+    from .credits import get_token_balance, set_token_balance, is_unmetered
+    if not is_unmetered(user):
+        if get_token_balance(user) < DRAFT_COST:
+            raise ValueError("Insufficient tokens")
+        set_token_balance(user, get_token_balance(user) - DRAFT_COST)
+        db.commit()
 
     draft = Draft(
         user_id=user_id,
@@ -296,10 +298,11 @@ async def _draft_workflow_async(draft_id: int) -> None:
         draft.status = "failed"
         draft.last_error = str(e)
         db.commit()
-        # Refund credits on failure
+        # Refund tokens on failure
         user = db.get(User, draft.user_id)
         if user:
-            user.credits += DRAFT_COST
+            from .credits import get_token_balance, set_token_balance
+            set_token_balance(user, get_token_balance(user) + DRAFT_COST)
             db.commit()
     finally:
         db.close()

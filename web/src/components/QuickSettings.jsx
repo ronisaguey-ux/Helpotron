@@ -112,7 +112,7 @@ export default function QuickSettings({
           <div>
             <span className="text-[10px] text-on-surface-variant block">CREDITS</span>
             <span className="text-sm font-semibold text-primary tabular-nums">
-              {Number(user?.credits ?? 0).toLocaleString()} cr
+              {Number(user?.token_balance ?? 0).toLocaleString()} tok
             </span>
           </div>
           <div className="text-right">

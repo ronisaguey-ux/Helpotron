@@ -12,7 +12,7 @@ Key pillars of the platform:
 - **My Agent Instructional Co-Pilot**: A personal, persistent AI companion operating under strict academic guardrails. It coaches students step-by-step through Socratic inquiry rather than giving away homework answers or offering unvetted life advice.
 - **Assignment Tracking & Active Subjects**: Real-time status tracking, due dates, priority buckets, FSRS-based spaced repetition study material generation, and an immutable submission ledger.
 - **Universal Material Ingestion (Assignment Dump)**: Multimodal drag-and-drop ingestion of lecture audio, handwritten notes, whiteboard photos, worksheets, and documents with automatic classification and assignment linking.
-- **Predictable Compute & Credits Economy**: Transparent, bounded tool execution budgets ($5 Basic, $15 Pro, $30 Elite, and a verified $0 Free Trial) backed by a double-entry credit ledger and single-use referral engine.
+- **Predictable Compute & Task Token Economy**: Transparent, bounded tool execution budgets ($10 Basic, $20 Pro, $40 Elite, and a verified $0 Free Trial) backed by a double-entry ledger and a single-use referral engine. Credits are earned-only discounts; tokens are the usage currency.
 - **Browser Extension & URL Scraping**: Chrome Manifest V3 extension and standalone scraping sidecar enabling students to capture assignments directly from school LMS portals (Canvas, Google Classroom) into their workspace.
 
 ---
@@ -34,7 +34,7 @@ helpotron/
 │   ├── main.py            # FastAPI entry point, middleware & lifespan setup
 │   ├── agent_prompt.py    # Strict educational system prompt builder
 │   ├── llm.py             # OpenRouter LLM router, streaming & model policy
-│   ├── payments.py        # Payment tiers ($5 / $15 / $30) & billing
+│   ├── payments.py        # Payment tiers ($10 / $20 / $40) & billing
 │   └── math_executor.py   # Deterministic Python math evaluation sandbox
 ├── extension/             # Chrome Manifest V3 Browser Extension
 │   ├── manifest.json      # MV3 extension configuration
@@ -171,7 +171,7 @@ The backend is structured as a modular **FastAPI** application with clear bounda
 | `monitors.py` | Persistent platform health monitors tracking latency, error rates, and queue depths. |
 | `orchestrator.py` | Master assignment orchestrator delegating research and structuring tasks to subagents. |
 | `overlord_agent.py` | Overlord agent managing active tool permissions, sandboxes, and student execution modes. |
-| `payments.py` | Subscription tier definitions ($5/$15/$30), billing endpoints, and checkout sessions. |
+| `payments.py` | Subscription tier definitions ($10/$20/$40), billing endpoints, and checkout sessions. |
 | `plans.py` | Canonical single-source-of-truth plan catalogue, monthly allowances, and pricing specs. |
 | `privacy.py` | Privacy policies and GDPR Article 17 automated data erasure routines. |
 | `ratelimit.py` | Token-bucket sliding-window rate limiter keyed by client IP and authenticated identity. |
@@ -249,15 +249,24 @@ Computed and verified deterministically via sandbox execution:
 
 | Tier | Monthly Price | Monthly Task Tokens | Tool/API Value | Unit Token Cost | Features & Capabilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Free Trial** | **$0.00** | **100 tokens** | $1.00 compute | $0.0100 / token | 7-day starter access; SMS phone verification required (1 per number). |
-| **Basic** | **$5.00** | **500 tokens** | $5.00 compute | $0.0100 / token | Core study tools, assignment tracking, flashcard decks, standard tutoring. |
-| **Pro** *(Popular)* | **$15.00** | **1,500 tokens** | $15.00 compute | $0.0100 / token | Deep reasoning passes, audio lecture transcription, multi-agent solver. |
-| **Elite** | **$30.00** | **3,000 tokens** | $30.00 compute | $0.0100 / token | High-capacity research, unlimited study packages, priority sidecar scraping. |
+| **Free Trial** | **$0.00** | **150 tokens** | $1.50 compute | $0.0100 / token | 7-day starter access; 2FA + $0.01 payment verification required. |
+| **Basic** | **$10.00** | **300 tokens** | $3.00 compute | $0.0300 / token | Core study tools, assignment tracking, flashcard decks, standard tutoring. |
+| **Pro** *(Popular)* | **$20.00** | **1,000 tokens** | $10.00 compute | $0.0200 / token | Deep reasoning passes, audio lecture transcription, multi-agent solver. |
+| **Elite** | **$40.00** | **2,700 tokens** | $27.00 compute | $0.0148 / token | High-capacity research, multi-agent browser work, screen vision, detectors. |
 
+- **Two currencies, and they are not interchangeable** (this is the whole economy):
+  - **Task tokens** are the USAGE currency. A task spends tokens; a plan grants a monthly
+    token allowance. All gates, charges and refunds are token-denominated.
+  - **Credits** are EARNED, never purchasable, and never granted by a subscription. They
+    exist only as a **percent discount** on an order, and are earned by contributing:
+    data-lake entries and referral codes.
 - **Task Token Equivalence**: 1 Task Token = 1 cent ($0.01) of tool or API compute cost.
-- **Referral Rewards**: Active subscribers can generate unique 40-digit referral codes:
-  - Inviter Reward: **50 credits** ($0.50 value)
-  - Invitee Reward: **25 credits** ($0.25 value)
+- **Elite is not "unlimited"**: it is a plan with a 2,700 token/month allowance. Only the
+  operator account is unmetered; every paying tier is metered.
+- **Referral Rewards**: Active subscribers can generate unique 40-digit referral codes.
+  Rewards are EARNED DISCOUNT CREDITS (bill reduction only): the referrer earns
+  2 (basic) / 5 (pro) / 10 (elite) when the referee buys a plan, and the redeemer gets a
+  one-time 30% (new user) / 15% (existing) order discount plus 10 earned credits.
 - **Data Lake Microcredits**: Students can anonymously share rubrics and study notes:
   - 1,000 Microcredits = 1 Standard Credit = $0.01
   - Maximum single-submission appraisal: **25 microcredits** ($0.00025)

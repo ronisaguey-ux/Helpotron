@@ -1,0 +1,229 @@
+{
+  "track": "S6",
+  "agent": "Correctness & data integrity",
+  "summary": "Two high-severity money-integrity defects stand out. (1) Credits have two sources of truth that already diverge in prod: top_up/refund/add_credits_to_user mutate users.credits with no credit_transactions row, and effective_credits_balance papers over it with max(ledger,column) — measured live: RoniDev (id=1) column=2.0 vs ledger=0.0, lh5mockagent (id=62) column=100000.0 vs ledger=0.0. (2) with_for_update() is a no-op on SQLite (SQLAlchemy 2.0.52), so charge_with_rollback/refund/top_up/safe_deduct_with_rollback are non-atomic read-modify-write against a live concurrent API; only the newer charge() uses a real atomic UPDATE. A second class: token_balance lives in the settings JSON column and is debited by read-modify-write of the whole dict (lost update + cross-key clobber). Time bugs: the streak endpoint is now fixed (verified), but thread.updated_at is still written with local datetime.now() (America/New_York, UTC-4) against a UTC default, and the model is told a server-local 'today'. Owner scoping on the newer tables (trash, chat messages, study cards) is consistently filtered by user_id — that subsystem is solid. Could not fully trace every web localStorage-only settings write to a server prompt key (skills/identities), and did not drive the live API with concurrent requests to reproduce a lost update.",
+  "severity": "high",
+  "findings": [
+    {
+      "id": "S6-1",
+      "title": "users.credits and credit_transactions are two sources of truth that already diverge in prod",
+      "severity": "high",
+      "category": "correctness",
+      "evidence": "server/credits.py:253-256 (top_up), :165-169 (refund), :274-280 (add_credits_to_user) all do `locked_user.credits += amount; db.commit()` with NO CreditTransaction row; reconcile hack at server/credits.py:51-74 `return max(ledger, column)`. Measured read-only against data/db/helpotron.db: 2 of 15 users diverge — id=1 (RoniDev) users.credits=2.0 vs ledger SUM(delta)=0.0; id=62 (lh5mockagent) users.credits=100000.0 vs ledger=0.0.",
+      "impact": "The durable ledger and the spendable column disagree. charge() (credits.py:135-138) decrements the COLUMN, so ledger-only grants render as a balance the user cannot spend (phantom credit), while column-only grants (100000 for the mock agent) have no audit trail. The docstring at credits.py:55-67 openly admits the divergence in both directions — it is a known but un-fixed data-integrity defect, not a theory.",
+      "confidence": "high",
+      "verified_how": "python sqlite3 'file:data/db/helpotron.db?mode=ro' — SELECT u.id,u.public_id,u.credits, SUM(ct.delta) GROUP BY with ABS diff > 0.001 → 2 rows; read credits.py top_up/refund/add_credits_to_user bodies."
+    },
+    {
+      "id": "S6-2",
+      "title": "with_for_update() is a no-op on SQLite, so credit read-modify-write paths are not atomic",
+      "severity": "high",
+      "category": "correctness",
+      "evidence": "server/credits.py:88 (`charge_with_rollback` .with_for_update()), :165 (refund), :253 (top_up); safe_deduct_with_rollback at :207-224 does not even attempt a lock (`if user.credits < amount: return False; user.credits -= amount; commit`). SQLAlchemy 2.0.52's SQLite dialect silently drops `FOR UPDATE`. Live call site: server/agent_session.py:296-297 calls safe_deduct_with_rollback per agent session. WAL+busy_timeout=30000 are set (database.py:34-36) but do NOT serialize a read-then-write across two connections.",
+      "impact": "Two concurrent agent-session starts (FastAPI handlers run against SQLite in parallel) can both read the same balance, both pass the >= check, and both deduct — a double-debit, or two deductions lost to one write. Refund/top_up under concurrency can lose the increment. Only the primary charge() path (credits.py:135-138 `UPDATE ... WHERE credits >= :cost`) is genuinely atomic.",
+      "confidence": "high",
+      "verified_how": "Read credits.py bodies; confirmed sqlalchemy 2.0.52 via venv import; SQLite FOR UPDATE is dropped by the dialect (no row-level locks). Did NOT reproduce a live race (read-only audit, per brief)."
+    },
+    {
+      "id": "S6-3",
+      "title": "token_balance is debited by non-atomic read-modify-write of the whole settings JSON dict",
+      "severity": "high",
+      "category": "correctness",
+      "evidence": "server/routes_overlord.py:1386-1393 _charge_tokens: `settings = dict(user.settings or {}); bal = float(settings.get('token_balance',0) or 0); settings['token_balance'] = max(0.0, bal - cost); user.settings = settings; db.commit()`. Same pattern server/routes_dump.py:540-545 and server/admin.py:241,509. token_balance is stored as a key in User.settings JSON (database.py:65), not a numeric column, so no atomic UPDATE is possible.",
+      "impact": "Concurrent requests each load a copy of the dict, subtract, and write the whole dict back — the last writer wins. This both loses token deductions (free usage) and clobbers any OTHER settings key (identity, effort, mode) changed in the same window, since the entire JSON blob is replaced. token_balance is the usage budget the owner meters money against.",
+      "confidence": "high",
+      "verified_how": "Read _charge_tokens and all token_balance write sites (grep 'token_balance' server/*.py → 8+ sites, 5 mutating); confirmed storage is JSON in User.settings."
+    },
+    {
+      "id": "S6-4",
+      "title": "thread.updated_at written with local datetime.now() against a UTC default, 4-5h off",
+      "severity": "medium",
+      "category": "correctness",
+      "evidence": "server/routes_overlord.py:600, :1940, :2144 set `t.updated_at = datetime.now()`; AgentChatThread.updated_at defaults to utcnow() (database.py:411). Host TZ is America/New_York (verified `timedatectl`: EDT, -0400). A message at 20:00 UTC writes updated_at = 16:00 (naive) — 4 hours in the past. Offsets to 5h when DST ends (EST).",
+      "impact": "The just-touched thread's updated_at jumps backwards, so it can sort below threads touched earlier the same day; the column also ends up holding a mix of naive-UTC and naive-local values, which will mis-compare if it is ever diffed against created_at. Constant year-round, magnitude 4h (EDT) / 5h (EST).",
+      "confidence": "high",
+      "verified_how": "Read the three write sites; `timedatectl` → America/New_York EDT; database.py:411 default=utcnow."
+    },
+    {
+      "id": "S6-5",
+      "title": "POST /api/agent/mode ignores is_session_override and persists the mode permanently",
+      "severity": "medium",
+      "category": "correctness",
+      "evidence": "server/routes_overlord.py:676-688 set_operation_mode unconditionally writes `settings['operation_mode'] = payload.mode.lower()`; the only use of payload.is_session_override is echoing it back at :687. The web client always sends is_session_override:true (web/src/api.js:455). The codebase already has a session-scoped concept (server/overlord_agent.py:198 `session_mode_override or user_settings.get('operation_mode')`) that this endpoint never wires up.",
+      "impact": "The user flips the mode in one chat expecting a session-scoped change; it silently becomes their permanent account-wide mode, and every other surface (extension, other chats) reads the changed value.",
+      "confidence": "high",
+      "verified_how": "Read set_operation_mode body + ModeUpdateRequest (routes_overlord.py:93-95); read api.js:455; read overlord_agent.py:198."
+    },
+    {
+      "id": "S6-6",
+      "title": "Boot migration block wrapped in one try/except pass — a single failed ALTER silently aborts every later migration",
+      "severity": "medium",
+      "category": "ops",
+      "evidence": "server/database.py:662-738: the entire ALTER-TABLE sequence and conn.commit() (:736) sit inside one `except Exception: pass` (:737-738). A duplicate-column error from a concurrent boot (two workers / a second init_db) aborts the block with no log and no commit, leaving all remaining columns absent. Also: prod users table has 32 columns but the User model defines 29 — two_factor_secret, is_two_factor_enabled, backup_codes_json exist in the DB and are referenced by no server/*.py code (grep returned zero hits), orphaned dead columns that create_all will not reproduce on a fresh clone.",
+      "impact": "Silent boot-time schema failure: the app starts, then 500s on any query touching a column whose migration was skipped. Nothing logs the swallowed exception, so the failure is invisible until a user hits it. The orphaned 2FA columns mean fresh DBs and prod DBs already disagree on schema.",
+      "confidence": "high",
+      "verified_how": "Read database.py:662-738; read-only PRAGMA table_info(users) → 32 cols vs 29 model fields; grep two_factor_secret|is_two_factor_enabled|backup_codes across server/*.py → no matches."
+    },
+    {
+      "id": "S6-7",
+      "title": "trash restore re-inserts the original row id and silently drops content when that id was reused",
+      "severity": "low",
+      "category": "correctness",
+      "evidence": "server/trash.py:116-118 `row.id = raw_id`; :102-106 returns ('already present') when a same-id same-user row exists; :146-148 deletes the trash entry and commits REGARDLESS of the 'already present' path. StudyMaterial.id is Integer primary_key WITHOUT autoincrement (database.py:255), so SQLite reuses max(id)+1 after the max row is deleted. routes_library.py:147-156 snapshots no created_at, so a restored row also gets a fresh created_at.",
+      "impact": "If a user deletes the newest material, creates a new one that reuses the id, then restores the trash, the trashed content is permanently lost and the trash entry is silently deleted with a misleading 'already present' message.",
+      "confidence": "medium",
+      "verified_how": "Read trash.py restore path and routes_library.py:140-159 payload; confirmed id has no autoincrement flag. Id-reuse scenario not reproduced against prod (read-only)."
+    },
+    {
+      "id": "S6-8",
+      "title": "charge() accepts idempotency_key but never uses it — no double-charge protection",
+      "severity": "low",
+      "category": "correctness",
+      "evidence": "server/credits.py:123 signature takes idempotency_key; the body :135-157 never references it. deduct_credits_atomic (:267-268) forwards it through. No unique constraint or dedup table exists on credit_transactions.",
+      "impact": "Any caller or retry path that re-issues a charge (client timeout + retry, proxy replay) double-debits the user with nothing to stop it, and the idempotency_key the API surface implies exists is silently discarded.",
+      "confidence": "high",
+      "verified_how": "Read credits.py:123-157; grep idempotency_key across server/*.py → only the two signatures, no read."
+    },
+    {
+      "id": "S6-9",
+      "title": "token charge floors at 0 and only gates on <=0, silently forgiving overspend",
+      "severity": "low",
+      "category": "cost",
+      "evidence": "server/routes_overlord.py:1391 `max(0.0, bal - cost)`; the gate in server/routes_extension.py:1417-1419 rejects only `if token_bal <= 0`. No `bal < cost` pre-check exists before work runs (_charge_tokens is called AFTER execution, e.g. routes_overlord.py:2258).",
+      "impact": "A user with 1 token runs a 2-token action, is floored to 0, and the excess cost is written off rather than rejected or deferred — work is delivered without full payment, and the floor masks the debt instead of surfacing it.",
+      "confidence": "high",
+      "verified_how": "Read _charge_tokens and the gate sites; confirmed floor max(0.0,...) and <=0 (not <cost) threshold."
+    },
+    {
+      "id": "S6-10",
+      "title": "Agent prompt tells the model a server-local 'today' (EDT), wrong for users west of EDT",
+      "severity": "low",
+      "category": "correctness",
+      "evidence": "server/agent_prompt.py:397 `today_label = datetime.now().strftime(...)` and :423 `Today is {today_label} ({datetime.now().strftime('%Y-%m-%d')})`. datetime.now() is naive server-local (America/New_York, UTC-4), while all stored timestamps are UTC. The prompt says 'TODAY'S REAL DATE (computed server-side, NEVER guess another one)'.",
+      "impact": "The model is instructed to treat the server's local date as truth. For a user west of EDT (e.g. Pacific, UTC-7), from 21:00 PT to 23:59 PT the server date is already tomorrow, so the model reasons about due dates and 'today' one day off. Same class as the fixed streak bug, on the prompt side.",
+      "confidence": "high",
+      "verified_how": "Read agent_prompt.py:388-432; timedatectl confirms EDT host."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S6-F1",
+      "finding_id": "S6-1",
+      "files": ["server/credits.py"],
+      "lines": "253-256, 165-169, 274-280",
+      "change": "Make every mutation of users.credits write a CreditTransaction in the SAME commit. top_up: after `locked_user.credits += amount` add `db.add(CreditTransaction(user_id=user.id, delta=+amount, reason=reason))`. refund: add `db.add(CreditTransaction(user_id=user_id, delta=+cost, reason=f'refund:{task_name}'))`. add_credits_to_user: add the matching ledger row. Then backfill the two divergent prod users from the winning side.",
+      "verify": "Re-run the read-only divergence query (ABS(users.credits - SUM(delta)) > 0.001) → expect 0 rows; grep credits.py for `credits +=` and confirm each is paired with a CreditTransaction add before commit.",
+      "effort": "S",
+      "risk": "Backfill must not double-count: reconcile each divergent user to the max(ledger,column) side, not both."
+    },
+    {
+      "id": "S6-F2",
+      "finding_id": "S6-2",
+      "files": ["server/credits.py"],
+      "lines": "81-118, 161-169, 207-237, 239-257",
+      "change": "Replace the with_for_update read-modify-write with the same atomic UPDATE pattern charge() uses: `UPDATE users SET credits = credits - :cost WHERE id=:uid AND credits >= :cost` (rowcount 0 => fail), and for increments `UPDATE users SET credits = credits + :amt WHERE id=:uid`. Write the CreditTransaction row in the same commit. Drop with_for_update entirely (no-op on SQLite).",
+      "verify": ".venv/bin/python -m pytest server/tests/ -q (503 passed at HEAD); add a concurrency test firing two parallel safe_deduct calls and assert the balance dropped by exactly the sum.",
+      "effort": "M",
+      "risk": "Rollback callbacks currently mutate an ORM object; after switching to raw UPDATE, refund must issue its own compensating UPDATE, not mutate a possibly-stale object."
+    },
+    {
+      "id": "S6-F3",
+      "finding_id": "S6-3",
+      "files": ["server/routes_overlord.py", "server/routes_dump.py", "server/admin.py"],
+      "lines": "1386-1393, 540-545, 241, 509",
+      "change": "Move token_balance out of the settings JSON into a real numeric column on users (e.g. token_balance FLOAT DEFAULT 0.0, with an init_db ALTER guard), and debit it with an atomic `UPDATE users SET token_balance = token_balance - :cost WHERE id=:uid` (or `CASE WHEN token_balance >= :cost THEN token_balance - :cost ELSE token_balance END`). Stop replacing the whole settings dict on every charge.",
+      "verify": "grep 'token_balance' server/*.py → zero remaining read-modify-write of settings; run the study/chat flow and confirm concurrent requests no longer clobber each other's settings.",
+      "effort": "M",
+      "risk": "Migration + two call sites (web/extension) read token_balance from settings; they must read the new column or a compat accessor, or the UI shows 0."
+    },
+    {
+      "id": "S6-F4",
+      "finding_id": "S6-4",
+      "files": ["server/routes_overlord.py"],
+      "lines": "600, 1940, 2144",
+      "change": "Replace `t.updated_at = datetime.now()` / `th.updated_at = datetime.now()` with `utcnow()` (imported from .database), matching the column default.",
+      "verify": "grep routes_overlord.py for `updated_at = datetime.now()` → 0 matches; after sending a chat message, the thread's updated_at is >= its created_at and monotonic.",
+      "effort": "S",
+      "risk": "Existing rows with local-time updated_at will briefly sort oddly once until they are re-touched; optionally NULL-and-rewrite them in a one-off backfill."
+    },
+    {
+      "id": "S6-F5",
+      "finding_id": "S6-5",
+      "files": ["server/routes_overlord.py"],
+      "lines": "676-688",
+      "change": "Honor the flag: when payload.is_session_override is True, store the mode on the request/session scope (e.g. a session-scoped key) instead of user.settings, and pass it as the session_mode_override that overlord_agent.py:198 already reads; only persist to user.settings when the flag is False.",
+      "verify": "POST /api/agent/mode {mode:'yolo', is_session_override:true} then GET /api/agent/mode → operation_mode unchanged; the current session behaves as yolo.",
+      "effort": "M",
+      "risk": "Session-scoped storage must be keyed to the auth session, not global, or overrides bleed across users."
+    },
+    {
+      "id": "S6-F6",
+      "finding_id": "S6-6",
+      "files": ["server/database.py"],
+      "lines": "662-738",
+      "change": "Split the migration into per-column guarded ALTERs each in its own try/except that LOGS the exception (logger.exception) and continues, instead of one all-or-nothing block. Remove the orphaned two_factor_secret / is_two_factor_enabled / backup_codes_json from the prod schema (or add them to the model) so create_all reproduces the same schema on a fresh clone.",
+      "verify": "Bootstrap a fresh DATABASE_URL, run init_db, then PRAGMA table_info(users) — column set matches prod; introduce one failing ALTER and confirm the remaining migrations still apply and an error is logged.",
+      "effort": "M",
+      "risk": "Dropping orphaned columns is destructive to that prod column data — confirm they are truly unreferenced (grep already shows zero code hits) before removing."
+    },
+    {
+      "id": "S6-F7",
+      "finding_id": "S6-7",
+      "files": ["server/trash.py"],
+      "lines": "102-126, 146-148",
+      "change": "In _restore_study_material, when the original id is occupied by a DIFFERENT row, insert with a NEW id (omit row.id) rather than returning 'already present'; and in restore(), only delete the trash entry when the content was actually re-inserted. Preserve created_at by carrying it in the payload (routes_library.py:147) and restoring it.",
+      "verify": "Unit test: delete material N, create a new material that reuses id N, restore → the old content reappears under a new id and the trash entry is consumed.",
+      "effort": "M",
+      "risk": "Omitting row.id breaks links that referenced the old id; accept the new id or add an explicit 'restored_as' field to the response."
+    },
+    {
+      "id": "S6-F8",
+      "finding_id": "S6-8",
+      "files": ["server/credits.py"],
+      "lines": "123-157",
+      "change": "Add a unique index/column on CreditTransaction (e.g. idempotency_key VARCHAR(64) NULL, UNIQUE(user_id, idempotency_key)) and write it when charge() receives one; on a duplicate, treat the charge as already-applied and return True without a second debit.",
+      "verify": "Call charge() twice with the same idempotency_key → second call returns True and credits dropped by exactly one cost (assert via SUM(delta)).",
+      "effort": "S",
+      "risk": "Requires a schema addition (idempotency_key column) with an init_db guard; NULLs must not collide."
+    },
+    {
+      "id": "S6-F9",
+      "finding_id": "S6-9",
+      "files": ["server/routes_overlord.py", "server/routes_extension.py"],
+      "lines": "1386-1393, 1417-1419",
+      "change": "Pre-authorize: before executing work, check `bal >= cost` (not just `bal > 0`) and reject with an insufficient-balance response; in _charge_tokens, subtract without the max(0.0,...) floor once the pre-check guarantees sufficiency.",
+      "verify": "Give a test user 1 token, run a 2-token action → request is rejected before execution and token_balance remains 1.",
+      "effort": "S",
+      "risk": "Pre-check must use the same cost the action actually charges, or the floor still masks drift; elite/admin exemptions must be preserved."
+    },
+    {
+      "id": "S6-F10",
+      "finding_id": "S6-10",
+      "files": ["server/agent_prompt.py"],
+      "lines": "397, 423",
+      "change": "Use `datetime.now(timezone.utc)` (or accept a client-supplied tz offset) to compute today_label, so the date the model is told matches the UTC clock the rest of the system uses.",
+      "verify": "Read the emitted system prompt for a western user after 21:00 PT and confirm 'Today is' matches their local date.",
+      "effort": "S",
+      "risk": "If the owner prefers user-local dates, the correct fix is to pass the user's tz offset from the client and convert, not to assume server time."
+    }
+  ],
+  "verification_plan": [
+    "1. Run the read-only divergence query against data/db/helpotron.db (ABS(users.credits - SUM(credit_transactions.delta)) > 0.001) and confirm it returns 0 after S6-F1.",
+    "2. .venv/bin/python -m pytest server/tests/ -q → expect 503 passed (HEAD), and any new concurrency test for credits/token balance added by S6-F2/F3.",
+    "3. Send two chat/agent messages and confirm the thread's updated_at stays >= created_at and is UTC (S6-F4).",
+    "4. POST /api/agent/mode with is_session_override:true and GET it back — operation_mode must be unchanged after the request ends (S6-F5).",
+    "5. Bootstrap a fresh DATABASE_URL, run init_db, PRAGMA table_info(users) — column set matches prod exactly (S6-F6).",
+    "6. Delete a material, force id reuse, restore — old content reappears and the trash entry is consumed (S6-F7)."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "Are the orphaned 2FA columns (two_factor_secret, is_two_factor_enabled, backup_codes_json) safe to drop, or does an external service/older binary read them by name?",
+    "Which web localStorage-only writes (ai.skills, ai.identities) are supposed to reach the server prompt, and which are intentionally client-only?",
+    "Does any caller of charge()/deduct_credits_atomic actually rely on idempotency, or is idempotency_key purely aspirational?"
+  ],
+  "could_not_check": [
+    "Did not reproduce a live concurrent lost-update (read-only audit; no mutating requests against the live API per brief).",
+    "Did not trace every web/src saveSettings call site to a server settings key — skills/identities mapping remains only partially verified.",
+    "Did not confirm whether a second process actually calls init_db concurrently in production (the migration-failure trigger is a plausible but unobserved scenario)."
+  ]
+}

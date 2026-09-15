@@ -95,7 +95,9 @@ def grant_referrer_plan_reward(db: Session, referrer: User, plan: str, code: str
     )
     if already is not None:
         return 0.0
-    referrer.credits = (referrer.credits or 0.0) + reward
+    # Referral rewards are EARNED DISCOUNT CREDITS: they only ever reduce a bill
+    # and cannot be bought. They must not land in the usage currency.
+    referrer.discount_balance = (referrer.discount_balance or 0.0) + reward
     db.add(CreditTransaction(user_id=referrer.id, delta=reward, reason=tx_reason))
     return reward
 
@@ -169,8 +171,8 @@ def redeem_referral(db: Session, code: str, new_user: User) -> Dict[str, Any]:
     if referrer and check_user_subscription(new_user):
         grant_referrer_plan_reward(db, referrer, str(new_user.plan or ""), clean_code)
 
-    # Reward new user with 10 compute credits
-    new_user.credits = (new_user.credits or 0.0) + 10.0
+    # Reward the new user with 10 earned discount credits (bill reduction only).
+    new_user.discount_balance = (new_user.discount_balance or 0.0) + 10.0
     db.add(CreditTransaction(
         user_id=new_user.id,
         delta=10.0,

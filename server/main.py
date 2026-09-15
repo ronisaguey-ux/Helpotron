@@ -1095,11 +1095,10 @@ async def me(request: Request, db: Session = Depends(get_db)):
         "token_balance": float((user.settings or {}).get("token_balance", 0) or 0),
         "authenticated": True,
         "is_admin": is_admin_user(user),
-        # Operator 09-01: elite/admin users bypass the token gate
-        # entirely (routes_overlord) — "0 tokens" was shown to the
-        # elite owner, which reads as a zero balance. Frontend
-        # renders "Unlimited" usage instead of the number.
-        "unlimited": bool(user.plan == "elite" or is_admin_user(user)),
+        # Only the OPERATOR account is unmetered. A paid plan — Elite included —
+        # is a monthly token allowance, not unlimited spend: treating `elite` as
+        # unlimited let a $40 subscription consume unbounded upstream model cost.
+        "unlimited": bool(is_admin_user(user)),
     }
 
 
@@ -1276,10 +1275,19 @@ def health():
 
 @app.get('/api/credits/balance')
 async def get_user_credits(request: Request, db: Session = Depends(get_db)):
+    """Both balances: spendable task TOKENS and earned discount CREDITS.
+
+    `credits` used to be the usage balance; it is now the earn-only discount
+    currency, so `tokens` is the number a caller should spend against.
+    """
     from .routes_features import get_current_authenticated_user
-    from .credits import TASK_COSTS, get_balance
+    from .credits import TASK_COSTS, get_token_balance, effective_credits_balance
     user = get_current_authenticated_user(request, db)
-    return {'credits': get_balance(user), 'costs': TASK_COSTS}
+    return {
+        'tokens': get_token_balance(user),
+        'credits': effective_credits_balance(db, user),  # earned discounts
+        'costs': TASK_COSTS,
+    }
 
 
 # ─── users ─────────────────────────────────────────────────────────────────
@@ -1292,7 +1300,8 @@ def create_user(body: UserIn, db: Session = Depends(get_db), current_user: User 
     if body.telegram_id:
         user.telegram_id = body.telegram_id
     db.commit()
-    return {"public_id": user.public_id, "plan": user.plan, "credits": user.credits}
+    from .credits import get_token_balance
+    return {"public_id": user.public_id, "plan": user.plan, "tokens": get_token_balance(user)}
 
 
 @app.patch("/api/users/{public_id}")
@@ -1554,10 +1563,11 @@ async def transcribe(file: UploadFile = File(...),
 
     # charge: 1 credit per started hour of audio
     hours = max(1.0, math.ceil((duration or 3600.0) / 3600.0))
-    if not (current_user.plan == "elite" or current_user.credits >= hours):
-        raise HTTPException(402, "insufficient credits for transcription")
-    if current_user.plan != "elite":
-        current_user.credits -= hours
+    from .credits import get_token_balance, set_token_balance, is_unmetered
+    if not is_unmetered(current_user):
+        if get_token_balance(current_user) < hours:
+            raise HTTPException(402, "insufficient task tokens for transcription")
+        set_token_balance(current_user, get_token_balance(current_user) - hours)
         db.add(credits.CreditTransaction(user_id=current_user.id, delta=-hours, reason=f"spend:transcription:{hours}h"))
 
     t = Transcript(user_id=current_user.id, assignment_id=assignment_id, source="upload",
@@ -1804,7 +1814,11 @@ def credits_balance(public_id: str, db: Session = Depends(get_db), current_user:
     if current_user.public_id != public_id:
         raise HTTPException(403, "Forbidden")
     user = current_user
-    return {"plan": user.plan, "credits": credits.get_balance(user)}
+    return {
+        "plan": user.plan,
+        "tokens": credits.get_token_balance(user),          # spendable usage
+        "credits": credits.effective_credits_balance(db, user),  # earned discounts
+    }
 
 
 # ─── payments / discounts ──────────────────────────────────────────────────
@@ -1837,7 +1851,11 @@ def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Dep
     return {
         "payment_id": payment["id"],
         "status": payment["status"],
-        "credits": credits.get_balance(user),
+        # A payment buys TASK TOKENS (the usage currency). `credits` is the
+        # earn-only discount balance and is reported separately.
+        "tokens_added": payment.get("tokens_added", 0),
+        "tokens": credits.get_token_balance(user),
+        "credits": credits.effective_credits_balance(db, user),
         # Operator 08-31 referral discount (0 when none/no longer active)
         "amount_charged_cents": payment.get("amount_charged_cents", body.amount_cents),
         "referral_discount_pct": payment.get("referral_discount_pct", 0.0),
@@ -2063,7 +2081,11 @@ def retry_draft(draft_id: int, db: Session = Depends(get_db), current_user: User
     if current_user.credits < DRAFT_COST:
         raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
     
-    current_user.credits -= DRAFT_COST
+    from .credits import get_token_balance, set_token_balance, is_unmetered
+    if not is_unmetered(current_user):
+        if get_token_balance(current_user) < DRAFT_COST:
+            raise HTTPException(402, "insufficient task tokens for draft")
+        set_token_balance(current_user, get_token_balance(current_user) - DRAFT_COST)
     # Reset status and retries
     draft.status = "pending"
     draft.retries_left = MAX_RETRIES

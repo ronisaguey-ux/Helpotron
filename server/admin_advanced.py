@@ -48,8 +48,10 @@ class AdminAdvancedService:
             if plan and plan in ("basic", "pro", "elite"):
                 u.plan = plan
             if delta_credits is not None and delta_credits != 0:
-                u.credits += delta_credits
-                db.add(CreditTransaction(user_id=u.id, delta=delta_credits, reason="bulk admin operation"))
+                # Admin grant = TASK TOKENS (usage allowance), the same unit a
+                # plan buys. Credits are earn-only and not admin-mintable.
+                from .credits import add_tokens as _add_tokens
+                _add_tokens(db, u, delta_credits, reason="bulk admin token grant")
             if ban_status is not None:
                 settings["banned"] = ban_status
             if tags_to_add:

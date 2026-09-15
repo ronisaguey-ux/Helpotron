@@ -136,7 +136,8 @@ async def cmd_summary(db, telegram_id: str, assignment_id: str | None) -> str:
 
 async def cmd_credits(db, telegram_id: str) -> str:
     user = _find_or_link(db, telegram_id)
-    balance = "unlimited" if user.plan == "elite" else f"{user.credits:.1f} credits"
+    from .credits import is_unmetered as _is_unmetered, get_token_balance as _tokens
+    balance = "unlimited" if _is_unmetered(user) else f"{_tokens(user):.0f} tokens"
     return f"Plan: *{user.plan}*  |  Balance: *{balance}*"
 
 

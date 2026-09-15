@@ -1,0 +1,177 @@
+{
+  "track": "S2",
+  "agent": "Latency & performance",
+  "summary": "API endpoints are genuinely fast (health ~16ms p50, /api/me ~45ms, library ~70ms, decks ~75ms, trash ~43ms — all sub-160ms on the sparse RoniDev account). The real latency risk is the LLM path: every model call cascades across 3-4 models with a 60s timeout EACH and no overall budget, so a provider outage can hang a request 180-240s before surfacing an error. The streaming chat delivers tokens live, but its 'done' frame (which carries the final reply + token balance the UI waits on) is delayed by a sequential post-processing chain of detector calls + up to 3 rewrite LLM calls, plus an optional compaction LLM call. Secondary: /api/study/decks has a textbook N+1 and ships full card payloads; the extension capture loop is serial per-tab with a fixed 60ms sleep; the web bundle is ~1.16MB upfront with CSS not code-split (route JS splitting is real and verified). Missing indexes and JSON-containment scans exist but are harmless at the current DB size (15 users, 194 chat rows, 17 materials). Cold-start import time could not be measured without restarting the service (forbidden).",
+  "severity": "high",
+  "findings": [
+    {
+      "id": "S2-1",
+      "title": "LLM calls cascade 3-4 models sequentially at 60s each with no overall timeout — 180-240s worst-case hang on provider outage",
+      "severity": "high",
+      "category": "latency",
+      "evidence": "server/llm.py:401 `async with httpx.AsyncClient(timeout=60.0) as client:` and :402 `for cand_id in attempt_models:` (non-streaming) + :587/:588 same pattern in stream_llm. `_effort_cascade` (server/llm.py:204-218) builds the candidate list: measured 3 models for default effort 500 (deepseek_v4_1_flash -> gemini_31_flash_lite -> qwen_72b), 4 models at effort<=300 (nemotron + deepseek + gemini_lite + qwen). Worst case = len(cascade) x 60s = 180s (default) / 240s (low effort). No retry cap, no backoff, no aggregate deadline.",
+      "impact": "When OpenRouter is slow or down, a single user chat turn blocks for up to 3-4 minutes before the caller sees RuntimeError('all LLM backends failed'). The extension/agent UI and any non-streaming caller sit on an open connection the whole time; sync FastAPI routes holding the request also hold a DB session.",
+      "confidence": "high",
+      "verified_how": "Read llm.py:324-456 (call_llm) and :529-645 (stream_llm); ran `.venv/bin/python -c \"from server.llm import _effort_cascade; ...\"` which printed cascade length 3 (effort 500) and 4 (effort 100/200/300)."
+    },
+    {
+      "id": "S2-2",
+      "title": "Streaming chat 'done' frame delayed by sequential detector + rewrite LLM chain after tokens finish",
+      "severity": "medium",
+      "category": "latency",
+      "evidence": "server/routes_overlord.py:2076 `full_reply = await _apply_detection_standard(settings, user, full_reply, ...)` runs AFTER the stream loop (2041-2056) and BEFORE the `done` frame is yielded at :2086 (`yield ... {'type':'done','reply':full_reply,'token_balance':...}`). _apply_detection_standard -> humanize_skill.ensure_human_standard: humanize_skill.py:384 `for _ in range(3):` (up to 2 rewrites) each doing :398 `raw = await call_llm(` (itself cascading per S2-1); plus a detector `score_text` pass. Then :2081 `await overlord_agent.compact_chat_history(...)` fires ANOTHER call_llm (overlord_agent.py:571) once history >40 msgs / 12k chars.",
+      "impact": "User sees tokens stream in real-time (good TTFB), but the turn does not finalize — token balance widget, reply persistence, and UI 'message complete' — until this serial post-chain resolves. When the AI-detection standard is enabled and the reply is >60 chars, that is detector latency + up to 2 rewrite generations, each a 3-model cascade.",
+      "confidence": "high",
+      "verified_how": "Read routes_overlord.py:1996-2096, humanize_skill.py:296-415 (ensure_human_standard), overlord_agent.py:531-600 (compact_chat_history). Note the chain is conditional: ensure_human_standard returns early for len(text)<60 (humanize_skill.py:312) and only when the standard is enabled."
+    },
+    {
+      "id": "S2-3",
+      "title": "No max_tokens on the main chat stream — unbounded generation on deepseek/gemini",
+      "severity": "medium",
+      "category": "cost",
+      "evidence": "server/routes_overlord.py:2041-2048 calls stream_llm(...) with NO max_tokens argument. server/llm.py:578-581 only sets max_tokens when explicitly passed OR `elif model_id in ModelPolicy.GRUNT_CANDIDATES: payload['max_tokens'] = 4096`. deepseek_v4_1_flash and gemini_31_flash_lite (the default chat models) get NO cap. Contrast with the explicitly-capped callers: max_tokens=300 (routes_overlord.py:1436), =2400 (:1879), =400 (overlord_agent.py:581).",
+      "impact": "A looping or over-eager model on the primary chat path can generate an arbitrarily long response — longer latency AND unbounded token spend on the paid DeepSeek/Gemini models (input $0.15 / output $0.60 per 1M tokens).",
+      "confidence": "high",
+      "verified_how": "Read llm.py:375-384 (payload construction) and routes_overlord.py:2034-2048 (call site passes no max_tokens)."
+    },
+    {
+      "id": "S2-4",
+      "title": "/api/study/decks is an N+1 query and ships every card of every deck",
+      "severity": "medium",
+      "category": "latency",
+      "evidence": "server/routes_study_tools.py:56-74 loops over materials and issues one `db.query(StudyCardState)...all()` per deck (lines 67-74). Line 88 `\"cards\": parsed if isinstance(parsed, list) else []` returns the FULL parsed card content for every deck in the list response. Measured now: 58-155ms (5 curls) because DB is tiny (17 materials, 0 study_card_states), but latency is linear in deck count (N+1) and payload is linear in total card count.",
+      "impact": "For a power user with many decks the list endpoint issues 1 query per deck and downloads every flashcard body just to render a deck list showing counts + mastery%. Grows quadratically bad (N queries + full payload) as library grows.",
+      "confidence": "high",
+      "verified_how": "Read routes_study_tools.py:37-91; measured `for i in 1 2 3 4 5; curl -w '%{time_total}' -b <cookies> http://127.0.0.1:5000/api/study/decks` -> 0.058-0.155s. DB row counts via sqlite3 ro: study_materials=17, study_card_states=0."
+    },
+    {
+      "id": "S2-5",
+      "title": "Extension capture loop is serial per-tab with a fixed 60ms sleep and per-tab screenshot",
+      "severity": "medium",
+      "category": "latency",
+      "evidence": "extension/popup.js:2066 `for (const t of targets) {` iterates jurisdiction tabs sequentially; per tab: :2072 collectInteractiveElements (CDP eval), :2074 injectSetOfMarks, :2075 `await new Promise((r) => setTimeout(r, 60));`, :2081-2082 captureActiveTabFrame (chrome.tabs.captureVisibleTab) OR captureBackgroundTabFrame (chrome.debugger Page.captureScreenshot), :2086 removeSetOfMarks, :2100 getTabViewport, :2104 normalizeFrame (canvas resize). MAX_JURISDICTION_FRAMES=4 (:47) caps the number of photographs but NOT the loop's per-tab work (element collect + viewport + normalize still run for each target).",
+      "impact": "The capture -> element-collect -> dispatch path serializes a full CDP screenshot + a hard 60ms sleep + canvas normalize per tab. Screenshots are the dominant cost (hundreds of ms each); a user with several open tabs waits seconds before any dispatch. The sleeps and CDP round-trips are all sequential where several could be Promise.all'd.",
+      "confidence": "high",
+      "verified_how": "Read extension/popup.js:2061-2121 (captureJurisdictionFrames) and :2014-2055 (capture functions); grep confirmed MAX_JURISDICTION_FRAMES=4 at popup.js:47."
+    },
+    {
+      "id": "S2-6",
+      "title": "Initial web load is ~1.16MB with CSS not code-split (single 180KB stylesheet); markdown(265KB) + motion(137KB) preloaded upfront",
+      "severity": "low",
+      "category": "latency",
+      "evidence": "web/dist/index.html `<link rel=\"modulepreload\" .../markdown-TFpHTtqd.js>` and `.../motion-CalCwoUP.js` + `<link rel=\"stylesheet\" .../index-BUvYOMTm.css>`. Measured with ls -l: initial JS (entry + 5 modulepreloads) = 994,405 bytes = 971 KiB; CSS (3 files, all loaded via <link>) = 220,023 bytes = 215 KiB; total 1,214,428 bytes = 1.19 MB. index-BUvYOMTm.css alone = 180,533 bytes. Route JS splitting IS real and verified (App.jsx:49-75 uses lazyWithRetry(() => import(...)) for ~25 views), but CSS is one global file loaded for every visitor including unauthenticated.",
+      "impact": "Every visitor (including the marketing/landing path) downloads ~1.2MB before first paint on a cold cache; the single 180KB CSS file grows monotonically with every new view and cannot be trimmed per route.",
+      "confidence": "high",
+      "verified_how": "ls -l web/dist/assets | sort -k5 -n -r; computed byte sums in python; read web/dist/index.html; read web/src/App.jsx:18-75 (lazy import list)."
+    },
+    {
+      "id": "S2-7",
+      "title": "Missing indexes on FK/order columns + JSON-containment full scans (harmless at current DB size)",
+      "severity": "low",
+      "category": "design",
+      "evidence": "server/database.py: StudyMaterial.assignment_id (:257) and .transcript_id (:258) are ForeignKeys with NO index=True; Assignment.created_at/status/turned_in unindexed (:150,:148,:154); AgentChatMessage.created_at unindexed (:426); AgentAction.assignment_id unindexed (:169). routes_library.py:48 and routes_study_tools.py:48 filter `StudyMaterial.shared_with.contains([user.id])` — SQLAlchemy on SQLite emits a LIKE/% pattern that cannot use any index (full table scan). Sizing via sqlite3 ro on data/db/helpotron.db: users=15, agent_chat_messages=194, study_materials=17, assignments=33, api_usage_logs=236, trash_items=0.",
+      "impact": "No current user-visible latency (tables are tiny). These become scan-bound if the product grows: shared-material lookups and any created_at-ordered history listing degrade linearly with table size.",
+      "confidence": "high",
+      "verified_how": "Read database.py:252-269 (StudyMaterial), :138-160 (Assignment), :414-427 (AgentChatMessage); grep 'index=True' (62 hits, none on the columns named); sqlite3 ro row counts printed above."
+    },
+    {
+      "id": "S2-8",
+      "title": "/api/admin/users issues one credits query per user (N+1)",
+      "severity": "low",
+      "category": "latency",
+      "evidence": "server/main.py:1121 `users = db.query(User).all()` then :1127 `\"credits\": credits.effective_credits_balance(db, u)` inside the list comprehension over every user — one extra query per row. 15 users today, so ~16 queries and negligible latency.",
+      "impact": "Admin-only dashboard; cost is linear in user count. Fine now, becomes a slow admin page at hundreds of users.",
+      "confidence": "high",
+      "verified_how": "Read main.py:1117-1130; sqlite3 ro count users=15."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "S2-F1",
+      "finding_id": "S2-1",
+      "files": ["server/llm.py"],
+      "lines": "401-402, 583-588",
+      "change": "Give the whole cascade one aggregate deadline instead of a per-attempt 60s: wrap the `for cand_id in attempt_models` loop in `async with httpx.AsyncClient(timeout=httpx.Timeout(total=60.0, connect=10.0, read=45.0))` (single total across all candidates) or use `asyncio.wait_for(..., timeout=60)` around the entire cascade. Fail with the last error after the aggregate deadline instead of 3-4 x 60s.",
+      "verify": "Force a slow model (monkeypatch client.post to sleep 61s) in a unit test; assert call_llm raises within ~65s, not 180s+. `time .venv/bin/python -c 'import asyncio; from server import llm; ...'`",
+      "effort": "S",
+      "risk": "Legitimate slow completions (>60s total) would now fail earlier; if some heavy generations legitimately need >60s, raise total to ~120s but keep it a hard ceiling."
+    },
+    {
+      "id": "S2-F2",
+      "finding_id": "S2-2",
+      "files": ["server/routes_overlord.py"],
+      "lines": "2061-2086",
+      "change": "Yield the `done` frame (or a lightweight `finished` frame with token_balance) as soon as the stream ends, then run _apply_detection_standard + compact_chat_history in the background and emit a separate `finalized` event with the cleaned reply when ready. Do not block the UI's completion signal on the detection/humanize chain.",
+      "verify": "Enable the AI-detection standard, stream a >60-char reply, and confirm the token_balance update arrives at stream end (not after detector+rewrite).",
+      "effort": "M",
+      "risk": "The persisted durable reply would briefly differ from the live-rendered one until the background pass rewrites it; frontend must reconcile on the `finalized` event."
+    },
+    {
+      "id": "S2-F3",
+      "finding_id": "S2-3",
+      "files": ["server/routes_overlord.py"],
+      "lines": "2041-2048",
+      "change": "Pass an explicit max_tokens to stream_llm in stream_chat_message (e.g. max_tokens=2048, matching the effort tier) so the default chat path can never generate unbounded output.",
+      "verify": "Instrument or read the outbound payload; assert a max_tokens key is present for the deepseek/gemini chat models.",
+      "effort": "S",
+      "risk": "A legitimately very long answer gets truncated; pick a cap above the 99th percentile of current reply lengths."
+    },
+    {
+      "id": "S2-F4",
+      "finding_id": "S2-4",
+      "files": ["server/routes_study_tools.py"],
+      "lines": "56-89",
+      "change": "Replace the per-material StudyCardState loop with a single bulk query: `db.query(StudyCardState).filter(StudyCardState.user_id==user.id, StudyCardState.material_id.in_(material_ids)).all()` grouped into a dict, then compute mastered_count per deck from the dict. Drop `cards` from the list response (add a separate /decks/{id} fetch if a view needs card bodies).",
+      "verify": "Enable SQLAlchemy echo on a test user with 10 decks; assert /api/study/decks issues a constant number of queries regardless of deck count (no per-row SELECT).",
+      "effort": "S",
+      "risk": "Frontend that currently renders deck cards from the list response must switch to the per-deck fetch endpoint."
+    },
+    {
+      "id": "S2-F5",
+      "finding_id": "S2-5",
+      "files": ["extension/popup.js"],
+      "lines": "2066-2119",
+      "change": "Parallelise the per-tab work with `await Promise.all(targets.slice(0, MAX_JURISDICTION_FRAMES).map(async (t) => {...}))`, and remove the fixed 60ms sleep (or make it conditional on mark injection actually being needed). CDP screenshots for distinct tabs can run concurrently; the 60ms `setTimeout` is dead time on every capture.",
+      "verify": "Capture with 3 open tabs and time it via console/performance.now(); confirm total capture time is ~max(per-tab), not sum(per-tab).",
+      "effort": "M",
+      "risk": "Concurrent CDP attach/screenshot to multiple tabs may hit Chrome's single-debugger-per-tab limits; guard with try/catch per tab and fall back to sequential on attach failure."
+    },
+    {
+      "id": "S2-F6",
+      "finding_id": "S2-6",
+      "files": ["web/vite.config.*", "web/src/main.jsx"],
+      "lines": "1-200 (config)",
+      "change": "Enable CSS code-splitting per route (import view CSS inside the lazy component instead of a global stylesheet) and stop modulepreload-ing markdown + motion so they load only when the chat/agent route renders. Optionally lazy-load KaTeX/markdown until a message actually contains math.",
+      "verify": "`ls -l web/dist/assets | grep css` shows multiple small per-view CSS chunks; audit the network waterfall for the landing route shows no markdown/motion fetch.",
+      "effort": "M",
+      "risk": "Moving shared CSS out of the global file can cause FOUC or specificity regressions; must re-verify the dashboard and chat visually."
+    },
+    {
+      "id": "S2-F7",
+      "finding_id": "S2-7",
+      "files": ["server/database.py"],
+      "lines": "257-262, 148-155, 426, 169",
+      "change": "Add `index=True` to StudyMaterial.assignment_id, StudyMaterial.transcript_id, Assignment.created_at, Assignment.status, Assignment.turned_in, AgentChatMessage.created_at, AgentAction.assignment_id. For shared_with, replace the JSON-containment filter with an indexed child table (shared_materials already exists for groups) or accept the scan at current scale.",
+      "verify": "`PRAGMA index_list(study_materials)` etc. shows the new indexes; run the existing 503-test suite to confirm no schema regressions.",
+      "effort": "S",
+      "risk": "Low — additive indexes; minor write-amplification on inserts."
+    }
+  ],
+  "verification_plan": [
+    "Latency: `for i in $(seq 1 10); do curl -s -o /dev/null -w '%{time_total}\\n' -b <cookies> http://127.0.0.1:5000/api/health; done` (expect ~15ms); repeat for /api/me, /api/library/materials, /api/study/decks, /api/trash.",
+    "Cascade proof: `.venv/bin/python -c \"from server.llm import _effort_cascade; print(len(_effort_cascade('deepseek/deepseek-v4.1-flash', effort=500)))\"` -> 3; assert no code path multiplies 60s x 4 without a total deadline.",
+    "N+1 proof: point a scratch DB at a test user with N decks, enable SQLAlchemy echo, hit /api/study/decks, count SELECTs (currently 1 + N).",
+    "Bundle proof: `ls -l web/dist/assets | sort -k5 -n -r`; confirm index CSS is one file and markdown/motion are modulepreload'd in web/dist/index.html.",
+    "Extension proof: instrument console timestamps around captureJurisdictionFrames with 3 open tabs and confirm serial 60ms sleeps + sequential screenshots."
+  ],
+  "external_research": [],
+  "open_questions": [
+    "What is the intended worst-case ceiling for one LLM turn (does the owner accept 180s, or should there be a hard ~60s total)?",
+    "Is the AI-detection standard enabled by default for chat, or opt-in per user/subject/assignment (determines how often the S2-2 post-chain runs)?"
+  ],
+  "could_not_check": [
+    "Time-to-first-byte of a real streaming LLM reply (POST /api/agent/chat/stream writes a chat row to the production DB and spends OpenRouter credits — forbidden by the brief; verified structure from code instead).",
+    "Cold-start import time: measuring it requires restarting helpotron-api.service, which the brief forbids. Observed: service active since 20:22:30 EDT, RSS 102.7MB, cumulative CPU 15.9s; init_db() runs synchronously at boot (main.py:197) and the datalake background loop fires analyze_lake() immediately (main.py:201, datalake.py:624) reading up to 1000 telemetry + 500 feedback JSONL rows — a background task, does not block first answer.",
+    "p50/p95 under real user data volume: measurements are on the sparse RoniDev dev account (elite/admin); a heavy account's library/decks/chat history would stress the N+1 and missing-index paths that are invisible today."
+  ]
+}
