@@ -4,7 +4,6 @@ import {
   Copy,
   Globe,
   Cpu,
-  RefreshCw,
   ExternalLink,
   Sparkles,
   ShieldCheck,
@@ -386,36 +385,13 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
             </div>
           </div>
 
-          {/* Card 2: Mozilla Firefox (Experimental) */}
-          <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-2xl bg-sem-amber/10 border border-sem-amber/20 flex items-center justify-center text-sem-amber">
-                  <RefreshCw className="w-5 h-5" />
-                </div>
-                <span className="font-chip-status text-[10px] text-sem-amber bg-sem-amber/15 px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-semibold">
-                  <span className="w-1 h-1 rounded-full bg-sem-amber"></span>
-                  Experimental Dev Build
-                </span>
-              </div>
-              <div>
-                <h3 className="font-title-md text-base text-on-surface font-semibold">Mozilla Firefox</h3>
-                <p className="font-body-sm text-xs text-on-surface-variant mt-1 leading-relaxed">
-                  Gecko runtime loader truth. Requires loading unpacked add-on or direct developer debugging runner.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleDownloadZip}
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-caps text-xs uppercase tracking-wider transition"
-              >
-                Download Gecko Zip
-              </button>
-            </div>
-          </div>
+          {/* The "Mozilla Firefox / Download Gecko Zip" card was removed: there is
+              no Firefox build. Its button called handleDownloadZip, the same
+              handler as the Chrome card, so it silently handed out the Chrome
+              MV3 build while the copy implied a Gecko add-on. Shipping a wrong
+              artifact under a wrong label is worse than not offering it.
+              Re-add a real card only when a genuine Gecko build exists, served by
+              its own endpoint. */}
 
           {/* Card 3: Apple Safari (Developer Preview) */}
           <div className="p-6 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/20 flex flex-col justify-between space-y-4">
@@ -505,8 +481,9 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
 
       {/* SECTION 3: DEV-MODE ZIP BUILD — collapsed by default. The Chrome Web
           Store listing (one-click "Add to Chrome") is the primary install path;
-          the zip + load-unpacked flow is for Firefox builds and orgs that block
-          store installs, so it must never front-load the UX. The early-access
+          the zip + load-unpacked flow is for orgs that block store installs and
+          for anyone who wants today's build before review completes, so it must
+          never front-load the UX. The early-access
           block above deep-links here with #manual-setup. */}
       <section
         id="manual-setup"
@@ -523,7 +500,7 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
 
           <div className="mt-4 space-y-4">
             <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
-              The store listing lags its newest build by review time. If you need today's build right away — or you're on Firefox — grab the zip below: same code, no waiting.
+              The store listing lags its newest build by review time. If you need today's build right away, grab the zip below: same code, no waiting.
             </p>
 
             <button
