@@ -198,6 +198,22 @@ def parse_effort_score(value: Any) -> int:
 
     Non-numeric / None / absent -> DEFAULT_EFFORT_SCORE (500). Out-of-range
     numbers are clamped (never a 500 error from a hand-edited settings doc).
+
+    **A 1..10 value is a LEVEL and is scaled up to this 1..1000 scale.** The UI
+    exposes ten effort levels (the web dial and the extension sliders all write
+    1..10), but the vision tiering and the humanizer were written against the
+    original 1..1000 score with bands at 333/666. Without this mapping a level of
+    1..10 clamps to itself, lands under the first band, and silently pins every
+    user to the CHEAPEST vision tier no matter where they drag the slider —
+    measured before the fix: levels 1,3,5,7,10 all resolved to
+    'gemini-3.1-flash-lite'/'low', while the old scores 300/500/1000 correctly
+    resolved low/med/high.
+
+    Scaling by 100 keeps the two scales aligned to the same bands (levels 1-3 ->
+    low, 4-6 -> med, 7-10 -> high), which is exactly what the extension already
+    advertises in its model label, so the displayed model and the model actually
+    used cannot disagree. Values above 10 are a real score and pass through
+    untouched. Mirrors the dual-scale handling in llm.py.
     """
     if isinstance(value, bool):
         return DEFAULT_EFFORT_SCORE
@@ -210,6 +226,8 @@ def parse_effort_score(value: Any) -> int:
             return DEFAULT_EFFORT_SCORE
     else:
         return DEFAULT_EFFORT_SCORE
+    if 0 < score <= 10:
+        score *= 100  # 1..10 level -> 100..1000 score, same tier bands
     return max(_MIN_EFFORT_SCORE, min(_MAX_EFFORT_SCORE, score))
 
 

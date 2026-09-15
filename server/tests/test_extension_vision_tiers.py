@@ -160,3 +160,40 @@ def test_control_block_over_cap_dropped_whole():
     clean, actions = extract_control_actions(reply, _viewport())
     assert actions is None, "over-cap list must be dropped entirely (never partial)"
     assert "x" in clean
+
+
+# ── dual-scale: the 1..10 UI LEVEL must not pin everyone to the cheap tier ────
+#
+# The web dial and the extension sliders write ten effort LEVELS (1..10), but
+# this resolver was written against the original 1..1000 score with bands at
+# 333/666. A level of 1..10 clamped to itself, landed under the first band, and
+# silently pinned every user to the cheapest vision tier no matter where the
+# slider was dragged. Measured before the fix: levels 1/3/5/7/10 all resolved to
+# 'low'. parse_effort_score scales a level up to the same bands instead.
+
+@pytest.mark.parametrize("level,expected_tier", [
+    (1, "low"), (2, "low"), (3, "low"),
+    (4, "med"), (5, "med"), (6, "med"),
+    (7, "high"), (8, "high"), (9, "high"), (10, "high"),
+])
+def test_ui_levels_map_to_the_same_bands_the_ui_advertises(level, expected_tier):
+    _, tier, score = resolve_vision_model(level)
+    assert tier == expected_tier, f"level {level} resolved to {tier}"
+    # and the level is scaled onto the 1..1000 scale, not used raw
+    assert score == level * 100
+
+
+def test_ui_levels_are_not_all_stuck_on_the_cheapest_tier():
+    """The regression itself: before the fix every level was 'low'."""
+    tiers = {resolve_vision_model(n)[1] for n in range(1, 11)}
+    assert tiers == {"low", "med", "high"}
+
+
+@pytest.mark.parametrize("score,expected_tier", [
+    (300, "low"), (333, "low"), (334, "med"),
+    (500, "med"), (666, "med"), (667, "high"), (1000, "high"),
+])
+def test_legacy_1_1000_scores_are_unchanged_by_the_dual_scale(score, expected_tier):
+    """Existing stored scores must behave exactly as before the change."""
+    _, tier, out = resolve_vision_model(score)
+    assert (tier, out) == (expected_tier, score)
