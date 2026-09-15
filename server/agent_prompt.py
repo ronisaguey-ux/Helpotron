@@ -231,8 +231,53 @@ def agent_persona_block(user, settings: Optional[Dict[str, Any]] = None, node: s
     if node != "my_agent":
         return _node_persona_block(settings, node)
     ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
+
+    # ── Identity resolution: the SELECTION wins ──────────────────────────────
+    #
+    # There are two generations of the same concept in settings.ai:
+    #   personality / instructions   — the older free-text fields, editable by a
+    #                                  chat command, still present on accounts
+    #                                  that used the old UI.
+    #   persona_id / persona_name / persona_instructions
+    #                                — what the Configs sidebar writes.
+    #
+    # The sidebar shows the SELECTED persona, but this function used to inject the
+    # legacy fields unconditionally. On any account where the two disagreed the
+    # agent ran on a persona the user could not see selected — and could not
+    # clear, because nothing in the UI wrote those old fields. That mismatch is
+    # the bug: what is applied must be what is selected.
+    #
+    # So resolve identity from the selection FIRST, and only fall back to the
+    # legacy fields when no selection has ever been made. Selecting "No Identity"
+    # is an explicit choice and suppresses both.
     persona = str(ai.get("personality") or "Professional").strip()
     instructions = str(ai.get("instructions") or "").strip()
+
+    persona_id = str(ai.get("persona_id") or "").strip()
+    persona_clause = (
+        f"Personality/identity: {persona}. This is how you speak and act as the user's agent — "
+        f"it is authoritative and overrides any default 'professional assistant' tone."
+    )
+    if persona_id:
+        if persona_id == "none":
+            # Explicit no-persona: strip persona shaping entirely, legacy
+            # fields included — otherwise a stale identity stays in effect
+            # through the one control that is supposed to turn it off.
+            persona_clause = (
+                "Personality/identity: NO PERSONA SELECTED. Adopt no character, tone or "
+                "writing style beyond a neutral, professional default."
+            )
+            instructions = "(none — persona shaping is off)"
+        else:
+            picked_name = str(ai.get("persona_name") or "").strip()
+            picked_instr = str(ai.get("persona_instructions") or "").strip()
+            if picked_name or picked_instr:
+                persona_clause = (
+                    f"Personality/identity: {picked_name or 'Selected persona'}. This is the "
+                    f"persona the user selected — adopt it; it is authoritative and overrides "
+                    f"any default 'professional assistant' tone."
+                )
+                instructions = picked_instr or "(none)"
 
     from .agent_memory import memory_summary
     memory_block = memory_summary(user.public_id) or "(none yet — nothing remembered)"
@@ -240,8 +285,7 @@ def agent_persona_block(user, settings: Optional[Dict[str, Any]] = None, node: s
     files_block = agent_files_block(user.id)
 
     return (
-        f"Personality/identity: {persona}. This is how you speak and act as the user's agent — "
-        f"it is authoritative and overrides any default 'professional assistant' tone.\n"
+        f"{persona_clause}\n"
         f"User instructions: {instructions or '(none)'}\n\n"
         f"PERMANENT MEMORY (always true, respect it, never contradict it):\n{memory_block}\n\n"
         f"FILES LOADED INTO YOU (the user explicitly loaded these; personality and rule files are binding):\n"

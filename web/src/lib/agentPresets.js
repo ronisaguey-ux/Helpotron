@@ -5,6 +5,27 @@
 
 export const PRESET_PERSONAS = [
   {
+    // The explicit "no persona" state. Selecting it clears the identity that is
+    // injected into the agent's prompt, so the agent answers as a plain
+    // assistant instead of in a character. It is a real, selectable preset
+    // rather than the absence of a choice: before this, every surface fell back
+    // to Scholar/Coach, so "no identity" was not reachable at all.
+    id: 'none',
+    name: 'No Identity',
+    title: 'No Identity (Plain Assistant)',
+    tagline: 'No persona injected — the agent answers as itself',
+    description: 'Turns persona shaping off. The agent keeps its normal capabilities and memory but adopts no character, tone or writing style beyond a neutral, professional default.',
+    badge: 'Off',
+    badgeVariant: 'gray',
+    reasoningDepth: 'Model default',
+    writingStyle: 'Neutral',
+    detectorStealth: 'Not applied',
+    iconType: 'none',
+    accentColor: 'var(--outline)',
+    defaultEffort: 500,
+    instructions: '',
+  },
+  {
     id: 'scholar',
     name: 'The Scholar',
     title: 'The Scholar (Rigorous Proofs)',
