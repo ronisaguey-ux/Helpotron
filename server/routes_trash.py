@@ -17,7 +17,12 @@ from .trash import RETENTION_DAYS, purge_expired, restore, serialize
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/trash", tags=["trash"])
+# Prefix only "/trash": this router is mounted by routes_overlord (which carries
+# "/api"), so the final path is /api/trash. It is deliberately NOT registered in
+# server/main.py — that file is skip-worktree'd with a local dev-login bypass and
+# git refuses to stage changes to it, so anything registered there would never
+# reach the repository. Routes belong in tracked modules.
+router = APIRouter(prefix="/trash", tags=["trash"])
 
 
 def _get_current_user(request: Request, db: Session):

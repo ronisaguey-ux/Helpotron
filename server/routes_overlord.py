@@ -30,6 +30,20 @@ from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_
 
 router = APIRouter(prefix="/api", tags=["overlord_and_cards"])
 
+# Sub-routers for endpoints that used to be registered in server/main.py.
+#
+# main.py is skip-worktree'd — it carries a local dev-login bypass the owner
+# keeps out of the repository — and git refuses to stage ANY change to that file,
+# so a route registered there exists only on this machine and is missing from a
+# fresh clone. Registering from this tracked router fixes that: prefixes compose,
+# so "/trash" here resolves to /api/trash.
+from .routes_billing import router as _billing_router  # noqa: E402
+from .routes_trash import router as _trash_router      # noqa: E402
+
+router.include_router(_billing_router)
+router.include_router(_trash_router)
+
+
 
 # ─── Pydantic Schemas ─────────────────────────────────────────────────────────
 

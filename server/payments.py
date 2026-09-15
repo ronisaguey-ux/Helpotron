@@ -354,3 +354,39 @@ def process_successful_payment(transaction_id: str, public_id: str, amount_cents
         return False
     finally:
         db.close()
+
+
+def create_billing_portal_session(db: Session, user: User) -> dict:
+    """Open Stripe's hosted billing portal so a subscriber can manage or cancel.
+
+    "Manage Billing" previously only navigated to the in-app plans tab, which
+    cannot cancel or change a subscription — the one thing the label promises.
+    The portal is Stripe-hosted, so the user manages payment methods, invoices
+    and cancellation without this app touching card data.
+
+    Degrades honestly: an account with no Stripe customer (never subscribed, or
+    Stripe not configured in this environment) gets a clear reason rather than
+    a dead button or an exception.
+    """
+    if not _stripe_enabled():
+        return {
+            "status": "stripe_not_configured",
+            "message": "Billing portal is unavailable — payments are not configured on this server.",
+        }
+    customer_id = getattr(user, "stripe_customer_id", None)
+    if not customer_id:
+        return {
+            "status": "no_customer",
+            "message": "No subscription is attached to this account yet.",
+        }
+
+    import stripe
+    stripe.api_key = config.stripe_secret_key
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?billing=return",
+        )
+    except Exception as exc:  # noqa: BLE001 - surface the reason, never 500
+        return {"status": "error", "message": f"Could not open the billing portal: {exc}"}
+    return {"status": "portal_created", "portal_url": session.url}
