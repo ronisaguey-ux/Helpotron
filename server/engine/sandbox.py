@@ -17,10 +17,31 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .sandbox_isolation import harden_child_process, isolation_report
+
 logger = logging.getLogger("helpotron.engine.sandbox")
 
 BASE_SANDBOX_DIR = Path("./exports/sandboxes").resolve()
 BASE_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+# One line at startup so the isolation posture is never assumed. On this box
+# namespace isolation is False (AppArmor blocks unprivileged user namespaces —
+# see sandbox_isolation.py), which means a sandboxed script runs as the server
+# UID. Logging it means the operator learns that from the log, not from an
+# incident.
+_si_report = isolation_report()
+logger.info(
+    "sandbox isolation: namespace=%s seccomp=%s rlimits=%s arch=%s",
+    _si_report["namespace_isolation"], _si_report["seccomp"],
+    _si_report["resource_limits"], _si_report["arch"],
+)
+if not _si_report["namespace_isolation"]:
+    logger.warning(
+        "sandbox isolation: NO NAMESPACE BOUNDARY — sandboxed code runs as the "
+        "server UID and can read files the server can read (.env, the production "
+        "database). Blocked by %s. seccomp+rlimits are active.",
+        _si_report.get("namespace_blocked_by", "unknown"),
+    )
 
 
 def validate_safe_path(base_dir: str | Path, rel_path: str | Path) -> Path:
@@ -183,7 +204,21 @@ class VirtualSubagentSandbox:
                     "SANDBOX_ID": self.sandbox_id,
                     "USER_ID": self.user_id,
                     "TEMP": str(self.workspace_dir),
-                }
+                    # Point HOME at the workspace so tools that read ~/.config,
+                    # ~/.ssh or ~/.gitconfig find the sandbox, not the server
+                    # user's real home. Without this they inherit nothing (HOME
+                    # is absent from the allowlist) and may fall back to reading
+                    # a real home directory anyway.
+                    "HOME": str(self.workspace_dir),
+                    "TMPDIR": str(self.workspace_dir),
+                },
+                # Hardening applied in the child between fork and exec: seccomp
+                # (blocks ptrace/process_vm_readv, so the script cannot read the
+                # SERVER's memory) plus rlimits (no fork bomb, no unbounded
+                # allocation, no disk-filling writes). See sandbox_isolation.py
+                # for why this is not a namespace sandbox — unprivileged user
+                # namespaces are blocked by AppArmor on this box.
+                preexec_fn=harden_child_process,
             )
 
             try:
