@@ -39,7 +39,7 @@ const FALLBACK_PLANS = [
   {
     id: 'trial',
     name: 'Free Trial',
-    tagline: '7-day starter trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.',
+    tagline: '7-day starter trial with 150 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.',
     price_cents: 0,
     price_monthly: 0,
     monthly_task_tokens: 150,
