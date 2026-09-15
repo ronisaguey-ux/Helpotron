@@ -354,15 +354,14 @@ def process_successful_payment(transaction_id: str, public_id: str, amount_cents
         )
         db.add(payment)
 
+        # `add_tokens` writes its own credit_transactions row and commits, so
+        # there must be no second ledger write here — that would double-count
+        # the grant in every audit query that sums the ledger.
         from .credits import add_tokens as _add_tokens
-        _add_tokens(db, user, credits_amount, reason="stripe webhook: payment succeeded")
-        tx = CreditTransaction(
-            user_id=user.id,
-            delta=credits_amount,
-            reason=f"payment:stripe:tx_{transaction_id}"
+        _add_tokens(
+            db, user, credits_amount,
+            reason=f"payment:stripe:tx_{transaction_id}",
         )
-        db.add(tx)
-        db.commit()
         return True
     except Exception:
         db.rollback()
