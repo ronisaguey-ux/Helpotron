@@ -54,7 +54,13 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
   // Safe label for the early-access CTAs: `liveVersion` can legitimately read
   // "Loading..." or the stale fallback above, and "Download Loading… (.zip)" is
   // worse than admitting we don't know the number yet.
-  const displayVersion = versionData?.latest_version || 'the newest build';
+  const latestVersion = versionData?.latest_version || null;
+  const displayVersion = latestVersion || 'the newest build';
+  // What the Chrome Web Store actually installs right now. The server reads this
+  // from Chrome's own update endpoint, so it is the real published number rather
+  // than a value someone has to remember to bump when a submission is approved.
+  const storeVersion = versionData?.store_version || null;
+  const updatePending = versionData?.update_pending === true;
 
   const handleDownloadZip = () => {
     setIsDownloading(true);
@@ -156,18 +162,44 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
             </p>
           </div>
 
-          {/* Live Version Indicator (§3.14 Honesty Rule: ONE live value) */}
-          <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-surface-container-high/60 border border-outline-variant/15 text-xs">
-            <span className={`w-2 h-2 rounded-full ${versionError ? 'bg-sem-amber' : 'bg-primary animate-pulse'}`} />
-            <span className="font-code-sm text-on-surface">
-              {versionLoading ? (
-                'Fetching live release...'
-              ) : versionError ? (
-                'Live release server unreachable · Local fallback'
-              ) : (
-                `Live Release ${liveVersion} · Manifest V3`
-              )}
-            </span>
+          {/* Version indicator. The store installs whatever CWS has approved,
+              which lags the build we serve directly whenever a submission is in
+              review — so these are TWO different numbers and showing only one of
+              them told users the store was on a version it did not have. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-surface-container-high/60 border border-outline-variant/15 text-xs">
+              <Globe className="w-3.5 h-3.5 text-on-surface-variant" />
+              <span className="font-code-sm text-on-surface">
+                {versionLoading ? (
+                  'Checking versions…'
+                ) : versionError ? (
+                  'Version server unreachable'
+                ) : storeVersion ? (
+                  <>Chrome Web Store: <strong className="text-on-surface">{storeVersion}</strong></>
+                ) : (
+                  'Chrome Web Store version unknown'
+                )}
+              </span>
+            </div>
+
+            {!versionLoading && !versionError && (
+              <div className={`inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-xs ${
+                updatePending
+                  ? 'bg-sem-amber/15 border-sem-amber/30'
+                  : 'bg-primary/15 border-primary/30'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${updatePending ? 'bg-sem-amber' : 'bg-primary'}`} />
+                <span className="font-code-sm text-on-surface">
+                  {updatePending ? (
+                    <>
+                      Available now: <strong>{latestVersion}</strong> — in Chrome review
+                    </>
+                  ) : (
+                    <>Latest: <strong>{latestVersion}</strong> · up to date</>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Primary Action Row (Hidden or simplified in publicMode if requested) */}
@@ -185,6 +217,7 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
 
               <p className="w-full sm:w-auto font-body-sm text-xs text-on-surface-variant">
                 One-click from the Chrome Web Store — no zip, no extraction, no developer mode.
+                {storeVersion && <> Installs <strong className="text-on-surface">v{storeVersion}</strong> today.</>}
               </p>
             </div>
           )}
@@ -211,7 +244,7 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/15 text-primary font-chip-status text-[10px] uppercase tracking-wider font-semibold">
               <Zap className="w-3.5 h-3.5" />
-              {displayVersion} available now
+              {updatePending ? `${displayVersion} — early access` : `${displayVersion} — latest`}
             </span>
           </div>
 
@@ -220,10 +253,18 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
               What&apos;s new in <span className="text-primary">{displayVersion}</span>
             </h2>
             <p className="font-body-sm text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-              The Chrome Web Store reviews every build before it reaches you, which can take days.
-              The zip below is the <strong className="text-on-surface">same signed build</strong> the
-              store will serve once it clears review — so you can have today&apos;s fixes right now,
-              without waiting for the rollout.
+              Chrome reviews every build before it reaches the store, which can take days. Right now
+              the store installs <strong className="text-on-surface">v{storeVersion || '2.6.0'}</strong>
+              {updatePending && (
+                <>
+                  {' '}— <strong className="text-on-surface">v{latestVersion}</strong> is submitted and
+                  waiting on that review
+                </>
+              )}
+              . The zip below is that newer build: the{' '}
+              <strong className="text-on-surface">same code</strong>{' '}
+              {updatePending ? 'the store will serve once it clears review' : 'the store is serving'},
+              so you can have today&apos;s fixes now, without waiting for the rollout.
             </p>
           </div>
 
@@ -295,7 +336,9 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
               className="w-full sm:w-auto font-body-sm text-xs text-on-surface-variant hover:text-primary transition inline-flex items-center gap-1.5 justify-center sm:justify-start"
             >
               <Globe className="w-3.5 h-3.5" />
-              Or wait for the store version
+              {updatePending && storeVersion
+                ? `Or wait — store has v${storeVersion} until review clears`
+                : 'Or install from the Chrome Web Store'}
               <ExternalLink className="w-3 h-3" />
             </a>
           </div>
@@ -319,7 +362,7 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
                 </div>
                 <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/15 px-2 py-0.5 rounded-full uppercase flex items-center gap-1 font-semibold">
                   <span className="w-1 h-1 rounded-full bg-sem-green"></span>
-                  Official Store Release
+                  {storeVersion ? `Store v${storeVersion}` : 'Official Store Release'}
                 </span>
               </div>
               <div>
@@ -338,7 +381,7 @@ export default function ExtensionInstallView({ publicMode = false, onBack = null
                 className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider font-semibold flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.98] transition shadow-sm"
               >
                 <Download className="w-4 h-4" />
-                <span>Install from Store</span>
+                <span>Install from Store{storeVersion ? ` (v${storeVersion})` : ''}</span>
               </a>
             </div>
           </div>

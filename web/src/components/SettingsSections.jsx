@@ -24,6 +24,33 @@ export function SettingsSections({
   onGoTo = () => {},
 }) {
   const [copiedId, setCopiedId] = useState(false);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingMsg, setBillingMsg] = useState('');
+
+  /* "Manage Billing" means managing the SUBSCRIPTION — payment method, invoices,
+   * cancellation. The in-app plans tab can do none of those, so it opens the
+   * Stripe-hosted portal. When there is nothing to manage (no Stripe customer,
+   * or payments not configured in this environment) it says so and falls back to
+   * the plans tab, instead of a button that silently does something else. */
+  const handleManageBilling = async () => {
+    setBillingBusy(true);
+    setBillingMsg('');
+    try {
+      const res = await api.billingPortal();
+      if (res?.portal_url) {
+        window.open(res.portal_url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      setBillingMsg(res?.message || 'No subscription to manage yet.');
+      onGoTo?.('billing');
+    } catch (e) {
+      setBillingMsg(e?.message || 'Could not open the billing portal.');
+      onGoTo?.('billing');
+    } finally {
+      setBillingBusy(false);
+      setTimeout(() => setBillingMsg(''), 6000);
+    }
+  };
   const [clearedCache, setClearedCache] = useState(false);
 
   // Appearance settings are nested (settings.appearance.*); fontScale is
@@ -346,12 +373,16 @@ export function SettingsSections({
               </div>
             </div>
 
+            {billingMsg && (
+              <p className="font-code-sm text-[10px] text-sem-amber max-w-[240px] text-right">{billingMsg}</p>
+            )}
             <button
               type="button"
-              onClick={() => onGoTo?.('billing')}
-              className="h-9 px-unit-3 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
+              onClick={handleManageBilling}
+              disabled={billingBusy}
+              className="h-9 px-unit-3 rounded-xl bg-primary text-on-primary font-label-caps text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
             >
-              <span>Manage Billing</span>
+              <span>{billingBusy ? 'Opening…' : 'Manage Billing'}</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
