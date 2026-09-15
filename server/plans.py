@@ -36,7 +36,7 @@ PLAN_ORDER: List[str] = ["trial", "basic", "pro", "elite"]
 PLAN_COPY: Dict[str, Dict[str, str]] = {
     "trial": {
         "name": "Free Trial",
-        "tagline": "7-day starter trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.",
+        "tagline": "7-day starter trial with 150 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.",
     },
     "basic": {
         "name": "Basic",

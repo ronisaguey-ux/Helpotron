@@ -471,9 +471,15 @@ export default function AuthModal({
                     {requires2FA
                       ? 'Verify your secondary security factor to continue'
                       : tab === 'signup'
-                      ? 'Start with a free 7-day trial — 150 task tokens.'
+                      ? 'Create your account — the 7-day trial (150 task tokens) unlocks after verification.'
                       : 'Welcome back to your workspace'}
                   </p>
+                  {tab === 'signup' && (
+                    <p className="font-body-sm text-[11px] text-on-surface-variant/80 mt-1">
+                      New accounts start at 0 tokens. The trial grants 150 once you enable 2FA,
+                      pass a $0.01 verification, and it is approved.
+                    </p>
+                  )}
                 </div>
 
                 {!requires2FA && (
