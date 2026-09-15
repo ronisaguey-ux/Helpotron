@@ -16,7 +16,7 @@ from starlette.responses import PlainTextResponse, Response
 from .config import config
 from .database import User, Payment, get_db
 from .security import verify_password, hash_password, get_current_user
-from .auth_2fa import code_store, email_service, sms_service, totp_service
+from .auth_2fa import code_store, email_service, sms_service, totp_service, SMSVerification
 from .routes_features import get_current_authenticated_user
 from .ratelimit import limiter
 import asyncio
@@ -155,7 +155,7 @@ async def verify_email_code(payload: EmailVerificationConfirm, db: Session = Dep
 
 @router.post("/2fa/setup")
 async def setup_two_factor(
-    payload: TwoFactorSetupRequest, 
+    payload: TwoFactorSetupRequest,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db)
 ):
@@ -193,8 +193,10 @@ async def setup_two_factor(
             e164 = _e164(payload.phone_number)
         except ValueError as e:
             raise HTTPException(400, str(e))
-        code = code_store.generate_code(current_user.public_id, purpose="2fa_setup")
-        await sms_service.send_sms_code(e164, code)
+        # Twilio Verify owns the code when it is configured (no A2P campaign
+        # needed); otherwise a local code is generated and stored by phone.
+        if not await SMSVerification.send(e164):
+            raise HTTPException(500, "Failed to send the 2FA setup SMS.")
         return {
             "status": "success",
             "method": "sms",
@@ -207,7 +209,7 @@ async def setup_two_factor(
 
 @router.post("/2fa/verify-setup")
 async def verify_two_factor_setup(
-    payload: TwoFactorVerifySetupRequest, 
+    payload: TwoFactorVerifySetupRequest,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db)
 ):
@@ -220,6 +222,17 @@ async def verify_two_factor_setup(
         valid = totp_service.verify_code(payload.secret, payload.code)
         if not valid:
             raise HTTPException(400, "Invalid TOTP verification code.")
+    elif method == "sms":
+        # Resolved BEFORE the check: Twilio Verify (and the local fallback) are
+        # keyed on the phone number, not the public_id.
+        raw_phone = payload.phone_number or (current_user.settings or {}).get("phone_number") or ""
+        try:
+            e164 = _e164(raw_phone)
+        except ValueError as e:
+            raise HTTPException(400, f"SMS 2FA needs a valid phone number: {e}")
+        valid, msg = await SMSVerification.check(e164, payload.code)
+        if not valid:
+            raise HTTPException(400, msg)
     else:
         valid, msg = code_store.verify_code(current_user.public_id, payload.code, purpose="2fa_setup")
         if not valid:
@@ -286,11 +299,10 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
                 "SMS messages are disabled for this number (you replied STOP). "
                 "Reply START from that phone to re-enable, or use email/authenticator 2FA.",
             )
-        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
-        sent = await sms_service.send_sms_code(phone, code)
+        sent = await SMSVerification.send(phone)
         if not sent:
             raise HTTPException(500, "Failed to send the 2FA SMS — Twilio rejected the message.")
-        return {"status": "success", "message": f"12-digit 2FA code sent via SMS to {phone}."}
+        return {"status": "success", "message": f"2FA code sent via SMS to {phone}."}
 
     elif method == "totp":
         return {"status": "ready", "message": "Please enter the 6-digit code from your authenticator app."}
@@ -314,6 +326,15 @@ async def verify_two_factor_challenge(payload: TwoFactorVerifyChallengeRequest, 
         valid = totp_service.verify_code_with_replay(user.id, secret, payload.code)
         if not valid:
             raise HTTPException(400, "Invalid 6-digit authenticator code.")
+    elif method == "sms":
+        user = db.query(User).filter(User.public_id == payload.user_id).first()
+        if not user:
+            raise HTTPException(404, "User not found.")
+        settings = user.settings or {}
+        phone = _e164(settings.get("phone_number") or (settings.get("profile") or {}).get("phone") or "")
+        valid, msg = await SMSVerification.check(phone, payload.code)
+        if not valid:
+            raise HTTPException(400, msg)
     else:
         valid, msg = code_store.verify_code(payload.user_id, payload.code, purpose="2fa_challenge")
         if not valid:
@@ -338,7 +359,7 @@ async def disable_two_factor(
         raise HTTPException(400, "2FA is not enabled.")
 
     method = current_settings.get("2fa_method", "").lower()
-    
+
     if method == "totp":
         secret = current_settings.get("2fa_totp_secret")
         if not secret:
@@ -354,7 +375,7 @@ async def disable_two_factor(
         target = current_settings.get("phone_number")
         if not target:
             raise HTTPException(400, "Phone number missing.")
-        valid, msg = code_store.verify_code(user.public_id, payload.code, purpose="2fa_challenge")
+        valid, _msg = await SMSVerification.check(_e164(target), payload.code)
         if not valid:
             raise HTTPException(400, "Invalid 2FA code.")
     else:
@@ -399,8 +420,7 @@ async def send_purchase_challenge(
             raise HTTPException(400, "No phone number found on account for SMS verification.")
         if (current_user.settings or {}).get("sms_opt_out"):
             raise HTTPException(400, "SMS messages are disabled for this number (you replied STOP). Reply START to re-enable.")
-        code = code_store.generate_code(target, purpose="purchase_verification")
-        sent = await sms_service.send_sms_code(target, code)
+        sent = await SMSVerification.send(target)
         if not sent:
             raise HTTPException(500, "Failed to send purchase verification SMS.")
         return {
@@ -450,7 +470,12 @@ async def verify_purchase_challenge(
     else:
         raise HTTPException(400, "Unsupported purchase 2FA method.")
 
-    valid, msg = code_store.verify_code(target, payload.code, purpose="purchase_verification")
+    if method == "sms":
+        # SMS goes through the provider pair (Verify owns the code when
+        # configured); email keeps the local code store.
+        valid, msg = await SMSVerification.check(target, payload.code)
+    else:
+        valid, msg = code_store.verify_code(target, payload.code, purpose="purchase_verification")
     if not valid:
         raise HTTPException(400, msg)
 

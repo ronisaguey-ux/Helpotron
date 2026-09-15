@@ -76,6 +76,27 @@ def client():
 
 
 @pytest.fixture(autouse=True)
+def disable_twilio_verify(monkeypatch):
+    """Tests must never call the real Twilio Verify API.
+
+    Verify is switched on by the presence of a Verify service SID. With it live,
+    a test exercising SMS 2FA would spend real money, depend on the network, and
+    fail on the +1555 numbers the suite uses. Clearing it routes SMS back to the
+    local code store, where +1555 is mocked and the code is readable from
+    code_store._store.
+
+    Both are patched because auth_2fa reads `config.<attr>` first and then
+    `os.getenv(...)`: patching only the env var does nothing (the settings object
+    was already built from .env at import), and patching only the object still
+    lets the env fallback through. server/llm.py's load_dotenv(override=True)
+    would also stomp a plain os.environ write, which is why this is a fixture.
+    """
+    from server.config import config as _settings
+    monkeypatch.setattr(_settings, "twilio_verify_service_sid", "", raising=False)
+    monkeypatch.delenv("TWILIO_VERIFY_SERVICE_SID", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def clear_ratelimiter(client):
     """The in-memory rate limiter is module-global and the IP key is
     'testclient' for every request — reset between tests so a busy suite

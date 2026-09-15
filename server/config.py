@@ -138,6 +138,8 @@ class Settings(BaseSettings):
     # the owned From number. Empty default = fall back to From.
     twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
     twilio_phone_number: str = os.getenv("TWILIO_PHONE_NUMBER", "+13187688667")
+    # Twilio Verify service — SMS OTP with no A2P 10DLC campaign needed.
+    twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
     # Owner directive: purchases require 2FA enabled by default
     purchases_require_2fa: bool = os.getenv("PURCHASES_REQUIRE_2FA", "true").lower() == "true"
 

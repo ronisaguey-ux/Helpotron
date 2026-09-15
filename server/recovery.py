@@ -244,7 +244,11 @@ async def request_recovery(db, public_id: str, method: str) -> dict[str, Any]:
                 purpose_label="Password Recovery",
             )
         else:
-            delivered = await sms_service.send_sms_code(contact, code)
+            # Route the SMS through the provider. When Twilio Verify is active it
+            # owns the code, so the verify step below checks with Verify instead
+            # of the locally stored hash (see verify_and_reset).
+            from .auth_2fa import SMSVerification
+            delivered = await SMSVerification.send(contact)
         return {
             "status": "ok",
             "request_id": row.id,
@@ -311,6 +315,24 @@ def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] 
         raise ValueError("Recovery code has expired. Request a new one.")
 
     code_ok = bool(code) and secrets.compare_digest(hash_code(code), row.code_hash)
+    if not code_ok and (row.method == "phone") and code:
+        # The code a phone recovery receives is Verify's, not ours, so the local
+        # hash cannot match it. Ask Verify. This runs only for phone rows and
+        # only after the hash check fails, so an email/dev row is unaffected.
+        try:
+            from .auth_2fa import SMSVerification
+            from .routes_auth_2fa import _e164
+            if SMSVerification.is_verify_enabled():
+                _st = user.settings or {}
+                _phone = _st.get("phone_number") or (_st.get("profile") or {}).get("phone") or ""
+                try:
+                    _phone = _e164(_phone) if _phone else ""
+                except ValueError:
+                    _phone = ""
+                if _phone:
+                    code_ok, _why = SMSVerification.check_sync(_phone, code)
+        except Exception:
+            code_ok = False
     token_ok = bool(token) and secrets.compare_digest(token.strip(), row.token)
     if not (code_ok or token_ok):
         row.attempts = (row.attempts or 0) + 1

@@ -318,3 +318,146 @@ def send_sms_sync(to_phone: str, message: str) -> bool:
     """Blocking Twilio send for sync routes (main.login runs in a threadpool —
     no running loop there, so asyncio.run is safe)."""
     return asyncio.run(sms_service.send_sms_async(to_phone, message))
+
+
+class TwilioVerifyService:
+    """Twilio Verify — SMS OTP that needs NO A2P 10DLC campaign.
+
+    Why this exists (measured 2026-09-14). Programmable Messaging on a US 10DLC
+    number is blocked by the carriers unless the number's Messaging Service is
+    attached to an approved A2P Campaign. Ours is not:
+
+        GET messaging.twilio.com/v1/Services/MG9757…/Compliance/Usa2p  -> []
+        us_app_to_person_registered: False
+
+    so every SMS came back HTTP 201 from Twilio and `undelivered` / error 30034
+    from the carrier — including all four messages ever sent to the owner's
+    number, back to 2026-09-01.
+
+    Twilio Verify procures and manages the senders itself, so it needs no
+    campaign and no toll-free verification. The trade-off: **Verify owns the
+    code**, so this service both starts AND checks it — nothing is stored in
+    `code_store` on this path. Cost is $0 up front, billed per successful
+    verification, so it needs no purchase to enable.
+
+    Verified live: a verification to +1 954 451 4472 was received, where the
+    Programmable-Messaging path had been silently dropped.
+    """
+
+    @staticmethod
+    def service_sid() -> str:
+        return (
+            getattr(config, "twilio_verify_service_sid", "")
+            or os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
+        ).strip()
+
+    @staticmethod
+    def _auth() -> Optional[Tuple[str, str]]:
+        sid = getattr(config, "twilio_api_key_sid", "") or os.getenv("TWILIO_API_KEY_SID", "") or os.getenv("TWILIO_SID", "")
+        secret = getattr(config, "twilio_api_key_secret", "") or os.getenv("TWILIO_API_KEY_SECRET", "") or os.getenv("TWILIO_SECRET", "")
+        account = getattr(config, "twilio_account_sid", "") or os.getenv("TWILIO_ACCOUNT_SID", "")
+        if sid and secret:
+            return (sid, secret)
+        token = getattr(config, "twilio_auth_token", "") or os.getenv("TWILIO_AUTH_TOKEN", "")
+        if account and token:
+            return (account, token)
+        return None
+
+    @classmethod
+    async def start(cls, to_phone: str) -> bool:
+        """Send a verification code. Twilio generates it."""
+        svc = cls.service_sid()
+        auth = cls._auth()
+        if not svc or not auth:
+            logger.error("Twilio Verify not configured (service sid or credentials missing).")
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"https://verify.twilio.com/v2/Services/{svc}/Verifications",
+                    data={"To": to_phone, "Channel": "sms"},
+                    auth=auth,
+                )
+                if resp.status_code in (200, 201):
+                    logger.info("Twilio Verify sent an SMS code to %s", to_phone)
+                    return True
+                logger.error("Twilio Verify send failed HTTP %d: %s", resp.status_code, resp.text[:300])
+                return False
+        except Exception as exc:
+            logger.error("Twilio Verify send error: %s", exc)
+            return False
+
+    @classmethod
+    async def check(cls, to_phone: str, code: str) -> Tuple[bool, str]:
+        """Check a code. Returns (valid, human-readable reason)."""
+        svc = cls.service_sid()
+        auth = cls._auth()
+        if not svc or not auth:
+            return False, "Twilio Verify is not configured."
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"https://verify.twilio.com/v2/Services/{svc}/VerificationCheck",
+                    data={"To": to_phone, "Code": (code or "").strip()},
+                    auth=auth,
+                )
+                if resp.status_code == 200:
+                    body = resp.json()
+                    if str(body.get("status", "")).lower() == "approved":
+                        return True, "Verification successful."
+                    return False, "Invalid or expired verification code."
+                # 404 = no pending verification for this number (expired / never sent)
+                if resp.status_code == 404:
+                    return False, "No active verification code found or code already used."
+                logger.error("Twilio Verify check failed HTTP %d: %s", resp.status_code, resp.text[:300])
+                return False, "Could not verify the code right now. Please request a new one."
+        except Exception as exc:
+            logger.error("Twilio Verify check error: %s", exc)
+            return False, "Could not verify the code right now. Please request a new one."
+
+
+class SMSVerification:
+    """Provider-agnostic SMS OTP: Twilio Verify when configured, else local codes.
+
+    The two providers differ in who owns the code, which is the whole reason this
+    wrapper exists:
+
+      * Verify generates AND checks the code, so nothing is stored locally.
+      * The local fallback generates a code, stores it in `code_store` keyed by
+        the PHONE NUMBER, and checks against that.
+
+    Callers must therefore use `send`/`check` as a PAIR — sending with Verify and
+    checking with code_store would always fail. Keying the local path on the
+    phone number rather than the public_id means an SMS code follows the handset,
+    not the account.
+    """
+
+    LOCAL_PURPOSE = "sms_otp"
+
+    @staticmethod
+    def is_verify_enabled() -> bool:
+        return bool(TwilioVerifyService.service_sid())
+
+    @staticmethod
+    async def send(to_phone: str) -> bool:
+        if SMSVerification.is_verify_enabled():
+            return await TwilioVerifyService.start(to_phone)
+        code = code_store.generate_code(to_phone, purpose=SMSVerification.LOCAL_PURPOSE)
+        return await sms_service.send_sms_code(to_phone, code)
+
+    @staticmethod
+    async def check(to_phone: str, code: str) -> Tuple[bool, str]:
+        if SMSVerification.is_verify_enabled():
+            return await TwilioVerifyService.check(to_phone, code)
+        return code_store.verify_code(to_phone, code, purpose=SMSVerification.LOCAL_PURPOSE)
+
+    # The login route is a sync `def` (FastAPI runs it in a threadpool), so it
+    # has no running loop — asyncio.run is safe there and keeps the async API
+    # available to the async routes.
+    @staticmethod
+    def send_sync(to_phone: str) -> bool:
+        return asyncio.run(SMSVerification.send(to_phone))
+
+    @staticmethod
+    def check_sync(to_phone: str, code: str) -> Tuple[bool, str]:
+        return asyncio.run(SMSVerification.check(to_phone, code))
