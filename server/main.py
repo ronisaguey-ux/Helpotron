@@ -881,6 +881,13 @@ def _dev_login_allowed(request: Request, body: "LoginIn") -> bool:
     To remove the mechanism entirely, unset both env vars (or delete this
     function and its single call site).
     """
+    # Explicit opt-in. This is deliberately its own switch rather than something
+    # inferred from ENVIRONMENT: the dev and production copies of this app are
+    # the SAME working directory, so ENVIRONMENT=development describes both and
+    # cannot distinguish them. DEV_LOGIN_ENABLED is therefore left UNSET in .env
+    # and must be exported by the owner for a shell that actually wants it.
+    if (os.getenv("DEV_LOGIN_ENABLED", "") or "").strip() not in ("1", "true", "yes", "on"):
+        return False
     user_id = (getattr(config, "dev_login_public_id", "") or "").strip()
     password = getattr(config, "dev_login_password", "") or ""
     if not user_id or not password:
@@ -907,6 +914,10 @@ def _dev_login_allowed(request: Request, body: "LoginIn") -> bool:
                 "dev-login bypass refused: request arrived on non-local host %r", host
             )
             return False
+    logger.info(
+        "dev-login bypass evaluating: host=%r xfh=%r hosts=%r",
+        request.headers.get("host"), request.headers.get("x-forwarded-host"), hosts,
+    )
     return (
         secrets.compare_digest(body.public_id or "", user_id)
         and secrets.compare_digest(body.password or "", password)
