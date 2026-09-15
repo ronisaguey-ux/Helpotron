@@ -33,7 +33,7 @@ logger = logging.getLogger("helpotron.telegram_agent")
 
 API = "https://api.telegram.org/bot{token}/{method}"
 
-# Bot tokens look like <REDACTED-TELEGRAM-TOKEN>... (digits, colon, ~35+ base64url chars).
+# Bot tokens look like 1234567890:AAAA... (digits, colon, ~35+ base64url chars).
 TOKEN_RE = re.compile(r"^\d+:[A-Za-z0-9_-]{35,}$")
 
 MAX_INSTRUCTION_CHARS = 3000  # TG text cap is 4096; agent takes up to 5000 anyway

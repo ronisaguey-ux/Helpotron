@@ -18,7 +18,7 @@ client = TestClient(app)
 from server import telegram_agent_link as tal
 from server.telegram_agent_link import normalize_token, _process_updates
 
-TOKEN_OK = "<REDACTED-TELEGRAM-TOKEN>"
+TOKEN_OK = "1234567890:AAFakeTokenForTests0123456789AbCdEfGh"
 
 
 def _user_headers():
@@ -105,7 +105,7 @@ def test_unauthenticated_status_is_401():
 # ── normalize │ poller binding rules ────────────────────────────────────────
 
 def test_normalize_token_validation():
-    assert normalize_token("  <REDACTED-TELEGRAM-TOKEN>  ") == "<REDACTED-TELEGRAM-TOKEN>"
+    assert normalize_token("  1234567890:AAFakeToken0123456789AbCdEfGhIjKlMn  ") == "1234567890:AAFakeToken0123456789AbCdEfGhIjKlMn"
     with pytest.raises(ValueError):
         normalize_token("")
     with pytest.raises(ValueError):

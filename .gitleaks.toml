@@ -1,0 +1,26 @@
+# Gitleaks configuration (v8.18 syntax).
+#
+# One narrow allowlist, and nothing else — the default rule set stays fully
+# active. This file exists because the scanner cannot distinguish a FAKE,
+# well-formed credential used as a test fixture from a real one, and the false
+# positive was blocking a legitimate commit.
+#
+# Why not just weaken the fixture: `normalize_token()` validates token SHAPE, so
+# the test needs a well-formed string to exercise the accept path. Replacing it
+# with "not-a-token" would delete the assertion's meaning — which is exactly the
+# failure a previous redaction pass introduced (the test compared a placeholder
+# to itself, asserted nothing, and still reported pass).
+#
+# The allowlist matches only the obvious placeholder prefix `AAFakeToken`. A real
+# Telegram bot token pasted into this repo still fails the scan.
+title = "helpotron gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Obvious fake Telegram-bot-token test fixtures (AAFakeToken prefix) and the token-shape example in a comment"
+regexes = [
+    '''1234567890:AAFakeToken[A-Za-z0-9]*''',
+    '''1234567890:AAAA\.\.\.''',
+]
