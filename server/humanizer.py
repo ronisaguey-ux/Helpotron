@@ -304,7 +304,7 @@ class KimhonsHumanizeEngine:
             return {"has_parataxis": False, "has_consecutive_uniformity": False, "parataxis_count": 0}
 
         lens = [len(s.split()) for s in sentences]
-        
+
         # 1. Parataxis check (3+ short sentences in a row under 8 words)
         parataxis_count = 0
         for i in range(len(lens) - 2):
@@ -329,11 +329,11 @@ class KimhonsHumanizeEngine:
         """Calculates burstiness CV, lexical diversity (TTR), function word ratio, parataxis, and paragraph variation."""
         sentences = KimhonsHumanizeEngine.split_sentences(text)
         paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 10]
-        
+
         words = re.findall(r"\b[a-zA-Z'-]+\b", text.lower())
         total_words = max(1, len(words))
         unique_words = len(set(words))
-        
+
         # 1. Sentence length variation (CV = std / mean)
         if len(sentences) >= 2:
             sentence_lens = [len(s.split()) for s in sentences]
@@ -342,7 +342,7 @@ class KimhonsHumanizeEngine:
             sentence_cv = round(s_stdev / max(1.0, s_mean), 3)
         else:
             sentence_cv = 0.35
-            
+
         # 2. Paragraph length variation
         if len(paragraphs) >= 2:
             p_lens = [len(p.split()) for p in paragraphs]
@@ -351,24 +351,24 @@ class KimhonsHumanizeEngine:
             paragraph_cv = round(p_stdev / max(1.0, p_mean), 3)
         else:
             paragraph_cv = 0.30
-            
+
         # 3. Lexical Diversity (Type-Token Ratio)
         ttr = round(unique_words / total_words, 3)
-        
+
         # 4. Function Word Ratio
         func_count = sum(1 for w in words if w in FUNCTION_WORDS)
         function_word_ratio = round(func_count / total_words, 3)
-        
+
         # 5. Subordinate clause proxy (commas, semicolons per 100 words)
         subordinate_count = len(re.findall(r"[,;:]", text))
         subordinate_density = round(subordinate_count / max(1, total_words), 3)
-        
+
         # 6. Anti-parataxis & uniformity check
         para_meta = KimhonsHumanizeEngine.check_parataxis_and_uniformity(sentences)
 
         # Human burstiness signature check
         is_bursty = sentence_cv >= 0.50 and (0.35 <= ttr <= 0.70) and not para_meta["has_consecutive_uniformity"]
-        
+
         return {
             "sentence_cv": sentence_cv,
             "paragraph_cv": paragraph_cv,
@@ -423,26 +423,26 @@ class KimhonsHumanizeEngine:
         # Replace em-dashes with natural commas or periods
         cleaned = re.sub(r"\s*—\s*", ", ", text)
         cleaned = re.sub(r"\s*--\s*", ", ", cleaned)
-        
+
         # Remove decorative emojis & thread markers
         cleaned = re.sub(r"[🚀💡✅🔥✨🎯📌🧠⚡🎉🧵]", "", cleaned)
-        
+
         # Remove bolding on non-header text
         cleaned = re.sub(r"(?<!^#)\*\*([a-zA-Z0-9\s]{2,30})\*\*", r"\1", cleaned)
-        
+
         # Strip banned starter clichés
         for b_re in BANNED_OPENERS:
             cleaned = b_re.sub("", cleaned)
 
         # Clean conversational AI artifacts
         cleaned = re.sub(r"(?i)\b(in this essay,?\s+i will\s+explore|certainly!|as an ai language model|without further ado,?|i hope this finds you well)\b", "", cleaned)
-        
+
         # Replace copula avoidance
         cleaned = re.sub(r"(?i)\bstands as an? testament to\b", "shows", cleaned)
         cleaned = re.sub(r"(?i)\bserves as an?\b", "is an", cleaned)
         cleaned = re.sub(r"(?i)\bserves to demonstrate\b", "demonstrates", cleaned)
         cleaned = re.sub(r"(?i)\bfunctions as\b", "is", cleaned)
-        
+
         # Normalize double commas and spaces
         cleaned = re.sub(r",\s*,", ",", cleaned)
         cleaned = re.sub(r"\s{2,}", " ", cleaned)
@@ -534,9 +534,26 @@ class AIHumanizerPipeline:
 
         # Pass 2: If effort >= 500 or patterns detected, perform LLM voice calibration pass
         if pattern_audit["cliche_score"] > 20.0 or not burstiness_meta["is_human_bursty"]:
+            # HIP FIRST (2026-09-17). This pass used to rewrite with call_llm, an
+            # instruction-tuned model — measured at 100% AI on GPTZero no matter
+            # how well it hits the anti-slop directives, because a detector reads
+            # the RLHF fingerprint in the model's weights and that is fixed at
+            # generation. HIP de-paraphrases with a BASE model (no instruction
+            # layer) and measured 1% AI. HIP is a de-paraphraser, so it cannot
+            # honour the style reference the way the directives below do: when a
+            # style sample is in play the instruct pass stays in charge.
+            rewritten_text = ""
             try:
-                from .llm import call_llm
-                system_instruction = f"""You are the Helpotron Master Humanizer Engine.
+                from .hip_humanizer import hip_humanize, hip_configured
+                if hip_configured() and not (style_sample or book_style_id):
+                    rewritten_text = (await hip_humanize(current_text) or "").strip()
+            except Exception as e:
+                logger.warning("HIP pass unavailable: %s", type(e).__name__)
+
+            if not rewritten_text:
+                try:
+                    from .llm import call_llm
+                    system_instruction = f"""You are the Helpotron Master Humanizer Engine.
 Transform the student's assignment draft to eliminate all statistical AI markers, robotic cadence, uniform sentence lengths, and banned slop.
 
 Target Voice Reference:
@@ -550,13 +567,19 @@ Strict Anti-AI-Slop Directives:
 5. Deterministic Precision: If mathematical calculations occur, preserve exact computed values without altering the numerical logic.
 6. Output ONLY the rewritten assignment prose. No conversational preamble or meta-commentary."""
 
-                user_instruction = f"Rewrite and humanize this draft now:\n\n{current_text}"
-                rewritten_text, _ = await call_llm(system_instruction, user_instruction)
-                if rewritten_text and len(rewritten_text.split()) >= len(current_text.split()) * 0.7:
-                    current_text = KimhonsHumanizeEngine.sanitize_obvious_slop(rewritten_text)
-                    current_text = sanitize_math_hallucinations_in_text(current_text)
-            except Exception as e:
-                logger.warning("Humanizer LLM rewrite pass failed, using heuristic cleaned text: %s", e)
+                    user_instruction = f"Rewrite and humanize this draft now:\n\n{current_text}"
+                    # call_llm's contract is (user_prompt, system_prompt) and it returns a
+                    # plain str. The positional order here was reversed — the directives
+                    # landed in the user role and the draft in the system role — and the
+                    # 2-tuple unpack then raised on every run, so this whole pass was dead
+                    # and the caller silently fell back to the heuristic scrub.
+                    rewritten_text = await call_llm(user_instruction, system_prompt=system_instruction)
+                except Exception as e:
+                    logger.warning("Humanizer LLM rewrite pass failed, using heuristic cleaned text: %s", e)
+
+            if rewritten_text and len(rewritten_text.split()) >= len(current_text.split()) * 0.7:
+                current_text = KimhonsHumanizeEngine.sanitize_obvious_slop(rewritten_text)
+                current_text = sanitize_math_hallucinations_in_text(current_text)
 
         # Final Step: Multi-Detector Verification Suite (Pangram, Sapling)
         avg_ai_score, results, passed = await score_text(current_text, threshold=100.0 - self.threshold)
