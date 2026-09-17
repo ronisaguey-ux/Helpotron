@@ -1453,32 +1453,29 @@ def _charge_tokens(user, db, cost: float) -> None:
 def _charge_usage(user, db, action: str, since_id: Optional[int] = None) -> float:
     """Charge an agent action for what it ACTUALLY cost (owner 2026-09-17).
 
-    Owner: "its supposed to charge 1 token for every 1 cent of service ... every
-    single process, from humanizing, ai detection, EVERYTHING costs tokens".
+    Owner: "Convert everything, no flat prices, and change it to 100 tokens=cent".
 
-    So the price of an action is its measured cost, converted at 1 token per cent
-    — with the action's flat price kept as a FLOOR. The floor matters for two
-    reasons: some real work (browser automation, sandbox runs) consumes platform
-    resources that never reach the LLM ledger, and the owner explicitly wants
-    processes like humanizing and detection to cost tokens even when they run
-    locally for free. Cost drives the price upwards whenever it exceeds the floor;
-    the floor stops anything from being free that costs the platform something.
+    The flat per-action table is gone as a PRICE. An action is charged its
+    measured cost converted at 100 tokens per cent, so expensive work (a browser
+    run, a vision frame) costs what it really consumed and cheap work costs
+    proportionally little. The only floor is the 1-token minimum every metered
+    process carries (1/100 cent) — that is a rounding floor, not a price list.
 
-    Returns the number of tokens charged.
+    `_AGENT_ACTION_COSTS` is retained purely as an ELIGIBILITY hint for the
+    pre-flight gate (0 = the action does no billable work, so it needs no
+    balance); it is never charged.
     """
-    floor = _action_cost(action)
-    measured_tokens = 0
+    measured_tokens = 1
     if since_id is not None:
         try:
-            from .credits import ledger_watermark, usage_cents_since, calculate_task_token_cost
+            from .credits import usage_cents_since, calculate_task_token_cost
             user_id = user.id if hasattr(user, "id") else user
             cents = usage_cents_since(db, user_id, since_id)
-            if cents > 0:
-                measured_tokens = calculate_task_token_cost(cents / 100.0)
+            measured_tokens = calculate_task_token_cost(cents / 100.0)
         except Exception as e:
             logger.warning("usage measurement failed for %s: %s", action, e)
 
-    cost = float(max(floor, measured_tokens))
+    cost = float(measured_tokens)
     if cost > 0:
         _charge_tokens(user, db, cost)
     return cost
@@ -2288,12 +2285,14 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     # 2.5 TOKEN GATE (operator 08-26): actions that do work must be affordable
     # BEFORE execution. Only the operator account is exempt — every paid plan
     # runs on its monthly token allowance. The permission flow is separate.
-    cost = _AGENT_ACTION_COSTS.get(intent["action"], 0)  # 0 = no work / no cost
-    from .credits import is_unmetered as _is_unmetered
-    privileged = _is_unmetered(user)
-    tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
-    if cost > 0 and not privileged and tok_bal < cost:
-        return _insufficient_tokens_response(thread_key, user, cost, db)
+    # ELIGIBILITY, not a price (owner 2026-09-17: "no flat prices"). The flat
+    # table survives only as a hint at whether an action does billable work at
+    # all (0 = read-only, needs no balance). There is no up-front deduction —
+    # the measured cost is charged after execution.
+    from .credits import has_usage_balance as _has_usage_balance
+    does_work = _AGENT_ACTION_COSTS.get(intent["action"], 0) > 0
+    if does_work and not _has_usage_balance(user):
+        return _insufficient_tokens_response(thread_key, user, 1, db)
 
     # 3. Permission gate (manual mode asks; auto approves routine; yolo never
     # asks). 09-01 (Bob): a bare `_ask_permissions` call forces the approval

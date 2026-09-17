@@ -7,7 +7,7 @@ Rules:
 3. Payment verification: a 1-cent payment must be verified for the account
    (Stripe checkout when configured, else a manual record the operator
    approves) — see payments.create_trial_verification.
-4. Upon activation the user receives 150 task tokens, plan becomes 'trial'
+4. Upon activation the user receives the trial token allowance, plan becomes 'trial'
    and subscription_status becomes 'trialing' for 7 days.
 """
 from __future__ import annotations
@@ -22,7 +22,11 @@ from .database import User, utcnow
 
 logger = logging.getLogger("helpotron.trial")
 
-TRIAL_CREDITS_GRANT = 150.0  # 150 task tokens (owner 09-06)
+# 15,000 task tokens (owner 09-06 value of 150, rescaled 100x on 2026-09-17
+# when the rate became 100 tokens = 1 cent; same value, finer unit).
+# Sourced from TIER_TOKENS so the grant and the catalogue cannot drift.
+from .payments import TIER_TOKENS as _TIER_TOKENS
+TRIAL_CREDITS_GRANT = float(_TIER_TOKENS["trial"])
 TRIAL_DURATION_DAYS = 7
 
 
@@ -52,7 +56,7 @@ class TrialVerificationService:
 
     @classmethod
     def activate_trial(cls, user: User, db: Session) -> Dict[str, Any]:
-        """Activates the 1-time Free Trial (150 task tokens)."""
+        """Activates the 1-time Free Trial (trial token allowance)."""
         eligible, reason = cls.check_eligibility(user, db)
         if not eligible:
             raise ValueError(reason)

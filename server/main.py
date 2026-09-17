@@ -699,9 +699,14 @@ async def _generate(db: Session, user: User, kind: str, transcript_text: str,
                     assignment_id: int | None, transcript_id: int | None,
                     on_progress: study_tools.ProgressCB | None = None,
                     count: int | None = None) -> StudyMaterial:
-    # charge on success only — pre-charge then credit back on failure
-    if not credits.charge(user, kind, db):
+    # No up-front flat price (owner 2026-09-17: "Convert everything, no flat
+    # prices"). The gate only refuses to START for an account with nothing left;
+    # the measured cost of the generation is charged on completion below.
+    if not credits.has_usage_balance(user):
         raise HTTPException(402, "insufficient credits — top up at /api/payments")
+
+    from .credits import ledger_watermark
+    _usage_mark = ledger_watermark(db, user.id)
 
     try:
         # route by the user's effort score (1-1000): low effort favors the
@@ -723,7 +728,8 @@ async def _generate(db: Session, user: User, kind: str, transcript_text: str,
             content, model = await gen(transcript_text, on_progress=on_progress,
                                        effort_score=effort_score)
     except Exception:
-        credits.top_up(db, user, credits.TASK_COSTS[kind], reason=f"refund:{kind}:failed")
+        # Nothing was charged up front, so a failure simply bills nothing. The
+        # old branch refunded a flat fee that, under charge-after, was never taken.
         raise
 
     material = StudyMaterial(
@@ -732,6 +738,17 @@ async def _generate(db: Session, user: User, kind: str, transcript_text: str,
     )
     db.add(material)
     db.flush()
+
+    # Charge the measured cost of the generation (100 tokens = 1 cent). One
+    # ledger window covers the whole call, so a multi-step generation bills once.
+    # Keyed on the material row so a retry cannot bill the same window twice.
+    try:
+        credits.charge_actual_usage(
+            user, kind, db, since_id=_usage_mark, pre_charged=0,
+            idempotency_key=f"usage:{kind}:material:{material.id}",
+        )
+    except Exception as e:
+        logger.warning("study material usage charge failed: %s", e)
 
     if assignment_id is not None:
         assignment = db.get(Assignment, assignment_id)

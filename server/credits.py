@@ -25,23 +25,45 @@ BASE_TASK_COSTS = TASK_COSTS
 
 import math
 
+# Owner (2026-09-17): "have the 10/mo be 30k tokens, 20/mo be 100k tokens, and
+# 40/mo be 270k tokens". These are the SAME plan economics as before, scaled by
+# the 100x unit change — $10 -> 30k tokens = $3.00 of service at 10k tokens/$1
+# (3.33x markup, 70% margin), $20 -> 100k = $10.00 (2.0x, 50%), $40 -> 270k =
+# $27.00 (1.48x, 32.5%). The old 300/1000/2700 were those exact values at the
+# coarse rate; nothing about pricing changed, only the resolution.
 TIER_MONTHLY_TASK_TOKENS: Dict[str, int] = {
-    'trial': 150,  # owner 09-06
-    'basic': 300,
-    'pro': 1000,
-    'elite': 2700,
-    'free': 150,
+    'trial': 15000,  # owner 09-06 (half a basic allowance); scaled 100x
+    'basic': 30000,
+    'pro': 100000,
+    'elite': 270000,
+    'free': 15000,
 }
 TIER_MONTHLY_CREDITS: Dict[str, int] = TIER_MONTHLY_TASK_TOKENS
 
 
+TOKENS_PER_USD = 10_000       # 100 tokens = 1 cent, so 10,000 tokens = $1.00
+TOKENS_PER_CENT = 100         # the owner's unit: 1 token = 1/100 of a cent
+
+
 def calculate_task_token_cost(cost_usd: float) -> int:
-    """Calculate task tokens from dollar cost of tools/APIs.
-    1 Task Token = 1 cent ($0.01) of tool/API expenditure.
+    """Convert a measured dollar cost into task tokens.
+
+    Owner (2026-09-17): "change it to 1 token equals 1/100 of a cent ... reason
+    for this is cuz a lot of tasks are under a cent, we need to do that for more
+    accurate calculation".
+
+    So the rate is 100 tokens per cent (10,000 per dollar). At the coarse rate a
+    half-cent task and a hundredth-of-a-cent task both rounded to 1 token; now
+    they are 50 and 1. The plan economics are unchanged — the allowances were
+    scaled by the same factor — but sub-cent work can finally be priced honestly.
+
+    The `max(1, ...)` is the rounding floor, not a flat price: every process the
+    owner asked to be metered costs at least one token (1/100 cent) even when it
+    runs locally and its measured upstream cost is zero.
     """
     if cost_usd <= 0:
-        return 0
-    return max(1, int(math.ceil(cost_usd * 100.0)))
+        return 1
+    return max(1, int(math.ceil(cost_usd * TOKENS_PER_USD)))
 
 
 # ── Usage metering: charge for what a task ACTUALLY cost (owner 2026-09-17) ──
@@ -114,8 +136,9 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
                         idempotency_key: Optional[str] = None) -> int:
     """Charge a finished task for what it ACTUALLY cost.
 
-    Converts measured cents to tokens at the owner's rate (1 token = 1 cent).
-    Returns the number of tokens charged (signed: negative if it adjusted down).
+    Converts the measured cost to tokens at the owner's rate (100 tokens = 1
+    cent). Returns the number of tokens charged (signed: negative if it adjusted
+    down).
 
     The owner's model, verbatim: *"just charge the token costs after its
     calculated, dont guess before"*. So there is no up-front estimate — the work
@@ -156,7 +179,11 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
             return 0
 
     cents = usage_cents_since(db, user_id, since_id)
-    actual = calculate_task_token_cost(cents / 100.0) if cents > 0 else 0
+    # Always at least one token. The owner wants EVERY process metered, including
+    # ones that spend nothing upstream (HIP humanizing runs locally), so a task
+    # that ran and recorded no cost still bills the 1-token minimum rather than
+    # being free.
+    actual = calculate_task_token_cost(cents / 100.0)
     delta = actual - max(0, int(pre_charged or 0))
     if delta == 0:
         return 0
@@ -227,7 +254,7 @@ def is_unmetered(user: User) -> bool:
     """True when usage should not be metered.
 
     Admins/operators only. A paid plan — INCLUDING Elite — is metered: every plan
-    is a monthly token allowance, so Elite buys 2,700 tokens/month, not unlimited
+    is a monthly token allowance, so Elite buys 270,000 tokens/month, not unlimited
     spend. Before this, `plan == "elite"` short-circuited every charge, so a $40
     subscription could consume unbounded upstream model spend.
     """

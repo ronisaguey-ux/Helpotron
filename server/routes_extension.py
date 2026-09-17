@@ -1442,24 +1442,21 @@ def _screen_control_allowed_for_burst(
 
 
 def _measured_vision_cost(db, user, since_id) -> float:
-    """Real model cost of one analysed frame, with the flat price as a floor.
+    """Real model cost of one analysed frame (owner 2026-09-17: no flat prices).
 
-    Owner 2026-09-17: "every single process ... costs tokens" and "1 token for
-    every 1 cent of service". A vision frame costs actual upstream money and that
-    was previously invisible; now the ledger records it and this charges it. The
-    old flat charge stays as the minimum so a frame is never free.
+    A frame costs actual upstream money; that is now recorded in the ledger and
+    charged at 100 tokens per cent. The former flat 1-token price is gone — what
+    remains is the universal 1-token minimum every metered process carries.
     """
-    floor = SCREEN_VISION_CHARGE
     if since_id is None:
-        return floor
+        return 1.0
     try:
         from .credits import usage_cents_since, calculate_task_token_cost
         user_id = user.id if hasattr(user, "id") else user
         cents = usage_cents_since(db, user_id, since_id)
-        measured = calculate_task_token_cost(cents / 100.0) if cents > 0 else 0
-        return float(max(floor, measured))
+        return float(calculate_task_token_cost(cents / 100.0))
     except Exception:
-        return floor
+        return 1.0
 
 
 def _charge_tokens(user, db, cost: float) -> None:  # pragma: no cover - thin wrapper
@@ -1881,12 +1878,14 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
 
     # Token gate for work actions (same as the web chat). Only the operator
     # account is unmetered; paid plans spend their monthly token allowance.
-    cost = _AGENT_ACTION_COSTS.get(intent["action"], 0)
-    from .credits import is_unmetered as _is_unmetered
-    privileged = _is_unmetered(user)
-    tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
-    if cost > 0 and not privileged and tok_bal < cost:
-        return _insufficient_tokens_response(thread_key, user, cost, db)
+    # ELIGIBILITY, not a price (owner 2026-09-17: "no flat prices"). The flat
+    # table survives only as a hint at whether an action does billable work at
+    # all (0 = read-only, needs no balance). There is no up-front deduction —
+    # the measured cost is charged after execution.
+    from .credits import has_usage_balance as _has_usage_balance
+    does_work = _AGENT_ACTION_COSTS.get(intent["action"], 0) > 0
+    if does_work and not _has_usage_balance(user):
+        return _insufficient_tokens_response(thread_key, user, 1, db)
 
     # Permission gate (manual mode asks; auto approves routine; yolo never asks).
     is_approved, _reason = permission_engine.evaluate_action_permission(
