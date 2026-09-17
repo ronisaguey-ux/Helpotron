@@ -413,6 +413,29 @@ def _enforce_not_banned(user):
     """Raises 403 immediately after a successful user lookup."""
     if user is not None and is_user_banned(user):
         raise HTTPException(403, "Account suspended by the operator")
+    return _bind_metering(user)
+
+
+def _bind_metering(user):
+    """Bind the paying account for usage metering (owner 2026-09-17).
+
+    Every authenticated request funnels through here, so this is the one place
+    that can guarantee "every process costs tokens": anything deep in the call
+    tree that spends money calls metering.record_service_cost() and the cost is
+    attributed to this account without threading a user id through every
+    signature. The AI detectors are the motivating case — they are several frames
+    below the handler and previously billed for nothing.
+
+    Safe by construction: set in the request's own asyncio task, so the binding
+    is discarded when that task ends and can never leak into a concurrent
+    request. A failure here must never block authentication.
+    """
+    try:
+        from .metering import set_meter_user
+        if user is not None:
+            set_meter_user(getattr(user, "public_id", None))
+    except Exception:
+        pass
     return user
 
 

@@ -841,6 +841,14 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
     effort_score = _user_effort_score(user)
     model_id, model_tier, _clamped = resolve_vision_model(effort_score)
 
+    # Metering watermark (owner 2026-09-17): the frame's real model cost is
+    # measured and charged, not the flat 1-token price.
+    try:
+        from .credits import ledger_watermark
+        _vision_mark = ledger_watermark(db, user.id)
+    except Exception:
+        _vision_mark = None
+
     if not is_admin and user.plan != "elite":
         tok_bal = float((user.settings or {}).get("token_balance", 0) or 0)
         if tok_bal <= 0:
@@ -897,7 +905,7 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
         }
 
     if not is_admin and user.plan != "elite":
-        _charge_tokens(user, db, SCREEN_VISION_CHARGE)
+        _charge_tokens(user, db, _measured_vision_cost(db, user, _vision_mark))
     return {
         "status": "success",
         "analysis": analysis,
@@ -1433,6 +1441,27 @@ def _screen_control_allowed_for_burst(
     )
 
 
+def _measured_vision_cost(db, user, since_id) -> float:
+    """Real model cost of one analysed frame, with the flat price as a floor.
+
+    Owner 2026-09-17: "every single process ... costs tokens" and "1 token for
+    every 1 cent of service". A vision frame costs actual upstream money and that
+    was previously invisible; now the ledger records it and this charges it. The
+    old flat charge stays as the minimum so a frame is never free.
+    """
+    floor = SCREEN_VISION_CHARGE
+    if since_id is None:
+        return floor
+    try:
+        from .credits import usage_cents_since, calculate_task_token_cost
+        user_id = user.id if hasattr(user, "id") else user
+        cents = usage_cents_since(db, user_id, since_id)
+        measured = calculate_task_token_cost(cents / 100.0) if cents > 0 else 0
+        return float(max(floor, measured))
+    except Exception:
+        return floor
+
+
 def _charge_tokens(user, db, cost: float) -> None:  # pragma: no cover - thin wrapper
     from .routes_overlord import _charge_tokens as _impl
     _impl(user, db, cost)
@@ -1454,9 +1483,19 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     user = await _extension_current_user(request, db)
     settings = dict(user.settings or {})
 
+    # Metering watermark (owner 2026-09-17): sum everything this request consumes
+    # — intent LLM, action calls, detectors, humanizer — and charge the measured
+    # cost, not the flat action price.
+    try:
+        from .credits import ledger_watermark
+        _usage_mark = ledger_watermark(db, user.id)
+    except Exception:
+        _usage_mark = None
+
     from .routes_overlord import (  # lazy: keeps import order / load cost identical
         _AGENT_ACTION_COSTS,
         _action_cost,
+        _charge_usage,
         _assignment_request_grounded,
         _charge_tokens,
         _chat_reply,
@@ -1898,7 +1937,7 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         node="extensions",
     )
     if not is_admin and user.plan != "elite":
-        _charge_tokens(user, db, _action_cost(intent["action"]))
+        _charge_usage(user, db, intent["action"], since_id=_usage_mark)
     if exec_res.get("status") == "failed":
         reply_text = f"⚠️ {strip_thinking_tokens(exec_res.get('message', 'Could not do that.'))}"
     else:

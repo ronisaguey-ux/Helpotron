@@ -196,3 +196,101 @@ def test_settlement_records_a_ledger_row(db):
                       CreditTransaction.reason == ledger_key).all())
     assert len(rows) == 1
     assert rows[0].delta == -5
+
+
+# ─── EVERY process costs tokens (owner 2026-09-17) ───────────────────────────
+# "every single process, from humanizing, ai detection, EVERYTHING costs tokens".
+# The foundation is the ledger: anything that records its real cost there becomes
+# billable, because charging sums what the ledger accumulated during a task. The
+# AI detectors cost real money and recorded NOTHING before this — nothing could
+# ever bill for them.
+
+def test_detector_cost_formulas_match_published_rates():
+    from server.detectors import estimate_detector_cost, SAPLING_USD_PER_CHAR, PANGRAM_USD_PER_WORD
+
+    # Sapling: $0.005 per 1,000 characters
+    assert SAPLING_USD_PER_CHAR == 0.000005
+    assert abs(estimate_detector_cost("sapling", "x" * 1000) - 0.005) < 1e-9
+
+    # Pangram: $0.05 per 1,000 words, billed one unit per STARTED 1,000-word
+    # block with a minimum of one unit — so the cheapest scan is 5 cents.
+    assert PANGRAM_USD_PER_WORD == 0.00005
+    assert abs(estimate_detector_cost("pangram", "word " * 1000) - 0.05) < 1e-9
+    assert abs(estimate_detector_cost("pangram", "word") - 0.05) < 1e-9        # min unit
+    assert abs(estimate_detector_cost("pangram", "word " * 1500) - 0.10) < 1e-9  # ceil to 2 units
+
+    # a local/unknown detector costs nothing
+    assert estimate_detector_cost("zippy", "x" * 5000) == 0.0
+
+
+def test_detector_cost_reaches_the_ledger(db):
+    """The regression that matters: a paid detector call must leave a ledger row
+    in the ACTUAL calling user's name, so the charge path can see it."""
+    from server.metering import meter_user
+    from server.detectors import _record_detector_cost
+
+    # unique per run: the test DB is a persistent file, so a fixed public_id
+    # accumulates rows across runs and the exact-count assertion below fails.
+    u = _user(db, f"meter_detector_{uuid.uuid4().hex[:10]}", tokens=100)
+    essay = "word " * 500
+
+    with meter_user(u.public_id):
+        _record_detector_cost("pangram", essay)
+
+    db.expire_all()
+    rows = (db.query(ApiUsageLog)
+              .filter(ApiUsageLog.user_id == u.id,
+                      ApiUsageLog.tool_or_model == "detector:pangram").all())
+    assert len(rows) == 1, "the detector call must be recorded against the paying user"
+    assert rows[0].base_cost_usd == 0.05
+    assert rows[0].category == "detector"
+
+
+def test_detector_cost_is_unattributed_without_a_meter_context(db):
+    """No paying user in context = no mis-billing. The cost is dropped, not
+    charged to whoever happens to be nearby."""
+    from server.detectors import _record_detector_cost
+    before = db.query(ApiUsageLog).count()
+    _record_detector_cost("pangram", "word " * 500)
+    assert db.query(ApiUsageLog).count() == before
+
+
+def test_meter_context_is_task_isolated():
+    """The contextvar must not leak between concurrent requests — two users'
+    costs can never cross."""
+    import asyncio
+    from server.metering import meter_user, current_meter_user
+
+    async def worker(pid):
+        with meter_user(pid):
+            await asyncio.sleep(0.01)
+            return current_meter_user()
+
+    async def main():
+        return await asyncio.gather(worker("userA"), worker("userB"))
+
+    assert asyncio.run(main()) == ["userA", "userB"]
+    assert current_meter_user() is None
+
+
+def test_agent_action_charges_measured_cost_above_the_floor(db, monkeypatch):
+    """An action's price is its measured cost, with the flat price as a floor —
+    so costly work is not undercharged and nothing that does real work is free."""
+    from server import routes_overlord as ov
+
+    u = _user(db, "meter_action", tokens=500)
+    charged = {}
+
+    monkeypatch.setattr(ov, "_charge_tokens", lambda user, d, cost: charged.update(cost=cost))
+
+    # cost well below the floor -> floor applies
+    w = credits.ledger_watermark(db, u.id)
+    _spend(db, u, 0.001)               # 0.1 cents
+    ov._charge_usage(u, db, "create_assignment", since_id=w)   # floor = 5
+    assert charged["cost"] == 5.0, charged
+
+    # cost above the floor -> the measured cost wins
+    w2 = credits.ledger_watermark(db, u.id)
+    _spend(db, u, 0.42)                # 42 cents -> 42 tokens
+    ov._charge_usage(u, db, "create_assignment", since_id=w2)
+    assert charged["cost"] == 42.0, charged
