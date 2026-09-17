@@ -2213,7 +2213,10 @@ humanizer_pipeline = AIHumanizerPipeline()
 @app.post("/api/assignment/humanize")
 async def humanize_assignment_route(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = payload.get("content", "")
-    sanitized_text, metrics = await humanizer_pipeline.humanize_loop(text)
+    # settings ride through so HIP follows the humanizer toggle (owner 2026-09-17).
+    sanitized_text, metrics = await humanizer_pipeline.humanize_loop(
+        text, settings=(current_user.settings if current_user and current_user.settings else None),
+    )
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
 

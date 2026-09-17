@@ -905,7 +905,7 @@ class OverlordAgent:
         # e.g., "run python script in sandbox", "process audio file in sandbox"
         if "sandbox" in text.lower() or "script" in text.lower() or files:
             subagent_logs.append(f"{display_name}: Initializing Virtual Sub-Agent Sandbox...")
-            
+
             if "audio" in text.lower() or (files and any(f.get("name", "").endswith((".mp3", ".wav", ".webm")) for f in files)):
                 script_code = """
 import sys, json
@@ -1259,7 +1259,11 @@ print(f"Active files: {os.listdir('.')}")
         elif action_type == "humanize_text":
             pipeline = AIHumanizerPipeline()
             text = payload.get("text", "")
-            humanized, iterations = await pipeline.humanize_loop(text)
+            # settings ride through so HIP follows the humanizer toggle: it is
+            # the rewrite engine only when the user turned that setting ON.
+            humanized, iterations = await pipeline.humanize_loop(
+                text, settings=(user.settings if user and user.settings else None),
+            )
             eval_res = await pipeline.evaluate_multi_checkers(humanized)
             return {
                 "action": action_type,
