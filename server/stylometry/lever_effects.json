@@ -1,0 +1,261 @@
+{
+ "genre": "technical",
+ "texts": [
+  "essay_draft.txt",
+  "essay500.txt",
+  "essay300.txt"
+ ],
+ "results": {
+  "0.50": {
+   "de_nominalize": {
+    "intent": "nominalization_ratio down",
+    "moved": {
+     "nominalization_ratio": -0.08695652173913043,
+     "latinate_vs_germanic_ratio": -0.05707931801334317
+    },
+    "n_texts": 3
+   },
+   "add_nominalizations": {
+    "intent": "nominalization_ratio up",
+    "moved": {},
+    "n_texts": 3
+   },
+   "strip_discourse_markers": {
+    "intent": "discourse markers down",
+    "moved": {},
+    "n_texts": 3
+   },
+   "add_discourse_markers": {
+    "intent": "discourse markers up",
+    "moved": {
+     "register_formality_score": 1.6806722689075635,
+     "discourse_marker_frequency": 0.6666666666666666,
+     "argumentative_structuring_index": 0.2083333333333335,
+     "punctuation_comma_density": 0.1851851851851851,
+     "punctuation_to_word_ratio": 0.07749637251022291,
+     "lexical_repetition_tolerance": 0.05737947352854168,
+     "lexical_chaining_persistence": -0.04578904333605889,
+     "model_perplexity_baseline": 0.034175987668794705,
+     "word_length_variance": 0.024264988914548553
+    },
+    "n_texts": 3
+   },
+   "vary_sentence_length": {
+    "intent": "sentence variance up",
+    "moved": {
+     "paragraph_length_variance": 0.35714285714285754,
+     "punctuation_comma_density": -0.18518518518518512,
+     "conversational_filler_frequency": -0.15000000000000008,
+     "pos_ngram_transition_smooth": -0.1254923472519632,
+     "coordination_vs_subordination": -0.12499999999999997,
+     "hedge_and_intensifier_density": -0.12156862745098033,
+     "entity_transition_density": -0.11764705882352941,
+     "discourse_marker_frequency": -0.11111111111111116,
+     "parenthetical_injection_density": -0.11111111111111116,
+     "argumentative_structuring_index": -0.1111111111111111,
+     "temporal_marker_density": -0.11111111111111108,
+     "cognitive_load_correlation_target": -0.07398482820169565,
+     "clause_to_sentence_ratio": -0.06878306878306871,
+     "fragment_injection_rate": -0.06666666666666662,
+     "punctuation_semicolon_rate": -0.06666666666666662,
+     "syntactic_dependency_depth": -0.06604938271604933,
+     "yngve_frazier_tree_depth": -0.058801091710236494,
+     "working_memory_chunk_size": -0.041702172397383844,
+     "syntactic_burstiness_factor": 0.04072036651389997,
+     "rhythmic_cadence_variance": 0.02894054192682453,
+     "mean_dependency_distance": -0.02596978612431448,
+     "sentence_length_variance": -0.02373482229903388,
+     "model_perplexity_baseline": 0.021661618373400332
+    },
+    "n_texts": 3
+   },
+   "flatten_sentences": {
+    "intent": "sentence variance down",
+    "moved": {
+     "fragment_injection_rate": -1.0,
+     "paragraph_length_variance": -0.3720930232558139,
+     "lexical_chaining_persistence": 0.34798534798534797,
+     "semantic_coherence_gradient": 0.33965450858885926,
+     "sentence_length_variance": -0.17888711953086697,
+     "punctuation_comma_density": 0.1566951566951567,
+     "pos_ngram_transition_smooth": 0.11763210332710321,
+     "syntactic_burstiness_factor": -0.11349566489150117,
+     "coordination_vs_subordination": 0.11111111111111126,
+     "rhythmic_cadence_variance": -0.10649879734666448,
+     "entity_transition_density": 0.08000000000000008,
+     "punctuation_semicolon_rate": 0.07692307692307704,
+     "argumentative_structuring_index": 0.07692307692307704,
+     "conversational_filler_frequency": 0.07692307692307704,
+     "syntactic_dependency_depth": 0.07692307692307702,
+     "hedge_and_intensifier_density": 0.07692307692307702,
+     "temporal_marker_density": 0.07692307692307694,
+     "discourse_marker_frequency": 0.07692307692307693,
+     "cognitive_load_correlation_target": 0.06837182668448172,
+     "clause_to_sentence_ratio": 0.05538461538461531,
+     "working_memory_chunk_size": 0.023886664204768444
+    },
+    "n_texts": 3
+   },
+   "add_hedges": {
+    "intent": "hedging up",
+    "moved": {
+     "hedge_and_intensifier_density": 0.2941176470588236,
+     "punctuation_comma_density": 0.1851851851851851,
+     "subtext_ambiguity_index": 0.15125854963330146,
+     "punctuation_to_word_ratio": 0.07749637251022291,
+     "lexical_repetition_tolerance": 0.05737947352854168,
+     "lexical_chaining_persistence": -0.04578904333605889,
+     "alliteration_clustering_rate": -0.02608695652173913,
+     "model_perplexity_baseline": 0.02170735356878002,
+     "register_formality_score": 0.020813278871920308
+    },
+    "n_texts": 3
+   },
+   "strip_hedges": {
+    "intent": "hedging down",
+    "moved": {
+     "discourse_marker_frequency": -0.16666666666666669,
+     "hedge_and_intensifier_density": -0.16666666666666669,
+     "phrasal_compression_vs_clausal_elaboration": 0.025000000000000105
+    },
+    "n_texts": 3
+   },
+   "add_first_person": {
+    "intent": "first person up",
+    "moved": {
+     "pronoun_bias_first_person": 1.6,
+     "coordination_vs_subordination": -0.11764705882352941,
+     "phrasal_compression_vs_clausal_elaboration": -0.11764705882352935,
+     "clause_to_sentence_ratio": 0.0999999999999999,
+     "passive_voice_ratio": -0.0869565217391304,
+     "alliteration_clustering_rate": 0.055837563451776706,
+     "cognitive_load_correlation_target": 0.05310173697270471,
+     "register_formality_score": 0.051084263492631315,
+     "model_perplexity_baseline": -0.04952673630060358,
+     "lexical_repetition_tolerance": 0.04365428621721502,
+     "sentence_length_variance": -0.03761597559439681,
+     "topic_drift_allowance": 0.03405010850266321,
+     "syntactic_burstiness_factor": -0.025032229579154606,
+     "syntactic_dependency_depth": 0.022222222222222327,
+     "honore_statistic": -0.021184879099185844,
+     "latinate_vs_germanic_ratio": -0.020785219399538066
+    },
+    "n_texts": 3
+   },
+   "add_em_dashes": {
+    "intent": "em dashes up",
+    "moved": {},
+    "n_texts": 3
+   },
+   "add_semicolons": {
+    "intent": "semicolons up",
+    "moved": {
+     "punctuation_semicolon_rate": 2.9999999999999996,
+     "coordination_vs_subordination": -0.46153846153846145,
+     "punctuation_comma_density": -0.39999999999999997,
+     "phrasal_compression_vs_clausal_elaboration": -0.11764705882352935,
+     "model_perplexity_baseline": 0.05905283489322129,
+     "working_memory_chunk_size": -0.03474852693602703,
+     "sentence_length_variance": -0.034187436152199185,
+     "register_formality_score": -0.03221735978736522,
+     "latinate_vs_germanic_ratio": 0.02419354838709663,
+     "mean_dependency_distance": -0.02217294900221719
+    },
+    "n_texts": 3
+   },
+   "add_parentheticals": {
+    "intent": "parentheticals up",
+    "moved": {},
+    "n_texts": 3
+   },
+   "add_citations": {
+    "intent": "citations up",
+    "moved": {
+     "parenthetical_injection_density": 3.0,
+     "citation_density_marker": 0.5555555555555556,
+     "punctuation_to_word_ratio": 0.3134912928076649,
+     "lexical_repetition_tolerance": 0.2449385994025883,
+     "punctuation_comma_density": 0.2290809327846364,
+     "human_imperfection_noise_seed": 0.18518518518518517,
+     "lexical_chaining_persistence": -0.11098182275614833,
+     "model_perplexity_baseline": 0.07028437913748563,
+     "function_word_profile_weight": -0.06410256410256414,
+     "nominalization_ratio": -0.06410256410256403,
+     "syntactic_dependency_depth": 0.061728395061728364,
+     "register_formality_score": 0.0609307166975554,
+     "working_memory_chunk_size": 0.05794094046752368,
+     "semantic_coherence_gradient": -0.05666777385404899,
+     "yngve_frazier_tree_depth": 0.054714590383622655,
+     "honore_statistic": -0.04100901508855528,
+     "pos_ngram_transition_smooth": -0.037309254760075496,
+     "mean_dependency_distance": 0.034863567014768844,
+     "cognitive_load_correlation_target": 0.0344827586206897,
+     "latinate_vs_germanic_ratio": -0.03416856492027332,
+     "subtext_ambiguity_index": -0.02312478122918139,
+     "sentence_length_variance": 0.0203034949505632,
+     "topic_drift_allowance": 0.020255063765941408
+    },
+    "n_texts": 3
+   },
+   "fragmentize": {
+    "intent": "fragments up",
+    "moved": {
+     "model_perplexity_baseline": 0.0473511189714745,
+     "pos_ngram_transition_smooth": -0.028374542735896194,
+     "register_formality_score": -0.024088767106788807,
+     "topic_drift_allowance": 0.020255063765941408
+    },
+    "n_texts": 3
+   },
+   "lengthen_words": {
+    "intent": "latinate ratio up",
+    "moved": {
+     "register_formality_score": 1.6806722689075635,
+     "hedge_and_intensifier_density": -0.33333333333333337,
+     "conversational_filler_frequency": -0.33333333333333337,
+     "model_perplexity_baseline": 0.1745039502060684,
+     "latinate_vs_germanic_ratio": 0.06774112314278526,
+     "phrasal_compression_vs_clausal_elaboration": 0.05000000000000002,
+     "word_length_variance": 0.049761588929122066,
+     "lexical_repetition_tolerance": 0.02203692674210838,
+     "bigram_conditional_surprisal_entropy": 0.022003619312730267,
+     "lexical_density_ratio": 0.020979020979020938
+    },
+    "n_texts": 3
+   },
+   "shorten_words": {
+    "intent": "latinate ratio down",
+    "moved": {},
+    "n_texts": 3
+   },
+   "add_temporal": {
+    "intent": "temporal markers up",
+    "moved": {
+     "temporal_marker_density": 0.3333333333333332,
+     "entity_transition_density": -0.25,
+     "argumentative_structuring_index": 0.18750000000000006,
+     "punctuation_comma_density": 0.1851851851851851,
+     "phrasal_compression_vs_clausal_elaboration": 0.15624999999999997,
+     "lexical_repetition_tolerance": 0.11913043478260904,
+     "lexical_chaining_persistence": -0.079684828662752,
+     "register_formality_score": 0.07065889418830608,
+     "alliteration_clustering_rate": -0.05882352941176463,
+     "punctuation_to_word_ratio": 0.047948939991661076,
+     "latinate_vs_germanic_ratio": -0.04504504504504498,
+     "sentence_length_variance": 0.04272193729180985,
+     "nominalization_ratio": -0.041050903119868525,
+     "pos_ngram_transition_smooth": 0.03679699179555673,
+     "semantic_coherence_gradient": -0.035424494792385706,
+     "topic_drift_allowance": 0.023164084911072885,
+     "model_perplexity_baseline": -0.02212173105119186
+    },
+    "n_texts": 3
+   },
+   "add_idioms": {
+    "intent": "idiom rate up, formality down",
+    "moved": {},
+    "n_texts": 3
+   }
+  }
+ }
+}

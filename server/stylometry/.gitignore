@@ -1,0 +1,5 @@
+# Generated caches — rebuilt from the corpus, never committed.
+# refmodel.pkl is a pickled NLTK/Brown-derived reference model and zipf_freq.json
+# is its frequency table; both are outputs, not sources. Measured at 25 MB.
+cache/
+__pycache__/
