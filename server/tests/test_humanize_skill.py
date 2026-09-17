@@ -22,6 +22,26 @@ from server.humanize_skill import (
 from server.agent_prompt import agent_system_prompt
 
 
+@pytest.fixture(autouse=True)
+def _hip_off_by_default(monkeypatch):
+    """Keep HIP out of the unit tests.
+
+    hip_configured() reads HIP_ENDPOINT from the repo .env, which is set in
+    normal development. Without this, any test that reaches
+    ensure_human_standard() calls the LIVE HIP server on :8099 instead of the
+    faked LLM — measured: two existing tests started returning real model
+    output ("original version (first round of revision) in draft prose form")
+    and failed. A unit test must never depend on a background service being up.
+    Tests that exercise HIP re-patch these two names themselves.
+    """
+    async def _no_hip(text, rounds=None):
+        return None
+
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: False)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", _no_hip)
+    yield
+
+
 def _settings(scoped=None, **ai_overrides):
     ai = {"humanizer": "off",
           "hierarchy": {n: {} for n in
@@ -355,3 +375,96 @@ async def test_ensure_human_standard_skips_short_text():
     final, attempts = await ensure_human_standard("ok", s)
     assert final == "ok"
     assert attempts is None
+
+
+# ─── HIP: the base-model humanizer (2026-09-17) ──────────────────────────────
+# Every instruction-tuned rewrite scores 100% AI on the real grader (GPTZero)
+# regardless of surface style, because a detector reads the RLHF /
+# instruction-tuning fingerprint in the model's weights and that is fixed at
+# generation. HIP de-paraphrases with a BASE model (no instruction layer) and
+# measured 1% AI. These tests pin the wiring, not the model.
+
+@pytest.mark.asyncio
+async def test_hip_runs_even_when_local_detector_false_passes(monkeypatch):
+    """REGRESSION (2026-09-17). The local detectors cannot see modern AI prose:
+    measured on blatant AI text, zipPy labels it Human/Human (5.0) and
+    roberta-base-openai-detector returns an AI probability of 0.004, so the
+    gate scores that draft ~95% human — above the 70 threshold. Before this
+    fix the pre-score returned the draft untouched, so HIP was wired in but
+    never reached: the humanizer was silently inert on exactly the input it
+    exists to fix. A blind pre-score must not gate the rewrite."""
+
+    async def blind_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+        # what the real stack returns: "clearly human"
+        return (5.0, [SimpleNamespace(name="zippy", score=5.0)], True)
+
+    async def fake_hip(text, rounds=None):
+        return "hip humanized prose " * 10
+
+    monkeypatch.setattr("server.detectors.score_text", blind_score_text)
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: True)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", fake_hip)
+
+    s = _settings(humanizer="on", detection={"enabled": "on", "min_human": 70})
+    text = "Social media platforms have fundamentally transformed the manner. " * 6
+    final, attempts = await ensure_human_standard(text, s, db=None, user_id="t")
+
+    assert final.strip() == ("hip humanized prose " * 10).strip()
+    assert final.strip() != text.strip(), "HIP output must replace the draft"
+    assert len(attempts) == 2, "original + HIP output should both be logged"
+    assert attempts[1]["human"] == 95.0, "blind score still recorded for observability"
+
+
+@pytest.mark.asyncio
+async def test_hip_unconfigured_keeps_the_instruct_path(monkeypatch):
+    """With no HIP endpoint the old gate is untouched: a draft already above
+    the standard is returned as-is and no LLM call is made."""
+    calls = []
+
+    async def blind_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+        return (5.0, [SimpleNamespace(name="zippy", score=5.0)], True)
+
+    async def fake_call_llm(**kwargs):
+        calls.append(1)
+        return "rewritten v2 draft " * 12
+
+    monkeypatch.setattr("server.detectors.score_text", blind_score_text)
+    monkeypatch.setattr("server.llm.call_llm", fake_call_llm)
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: False)
+
+    s = _settings(humanizer="on", detection={"enabled": "on", "min_human": 70})
+    text = "already above standard prose. " * 8
+    final, attempts = await ensure_human_standard(text, s, db=None, user_id="t")
+
+    assert final.strip() == text.strip()
+    assert calls == [], "the instruct LLM must not run when nothing needs rewriting"
+
+
+@pytest.mark.asyncio
+async def test_hip_failure_falls_back_to_the_instruct_path(monkeypatch):
+    """A dead HIP endpoint must degrade to the previous behaviour, never break
+    chat: hip_humanize returns None, and the LLM redo loop takes over."""
+    calls = []
+
+    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+        human = 80.0 if "v2" in text else 40.0
+        return (100.0 - human, [SimpleNamespace(name="sapling", score=100.0 - human)], True)
+
+    async def dead_hip(text, rounds=None):
+        return None
+
+    async def fake_call_llm(**kwargs):
+        calls.append(1)
+        return "rewritten v2 draft " * 12
+
+    monkeypatch.setattr("server.detectors.score_text", fake_score_text)
+    monkeypatch.setattr("server.llm.call_llm", fake_call_llm)
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: True)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", dead_hip)
+
+    s = _settings(humanizer="on", detection={"enabled": "on", "min_human": 70})
+    text = "original v1 draft prose. " * 8
+    final, attempts = await ensure_human_standard(text, s, db=None, user_id="t")
+
+    assert final.startswith("rewritten v2 draft")
+    assert len(calls) == 1, "the fallback rewrite must still happen"

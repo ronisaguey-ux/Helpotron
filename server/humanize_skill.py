@@ -27,7 +27,10 @@ both; the main chat has neither, so only the global setting applies there).
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional, Tuple
+
+logger = logging.getLogger("helpotron.humanize_skill")
 
 # ─── The unified rulebook (static — no external calls, no detectors) ─────────
 HUMANIZER_RULEBOOK = """\
@@ -378,6 +381,46 @@ async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
         return sys
 
     try:
+        # ── HIP: the humanization engine (2026-09-17) ────────────────────────
+        # HIP runs BEFORE the pass-check, not inside it. The local detectors
+        # cannot see modern AI prose — measured on blatant AI text: zipPy labels
+        # it Human/Human (5.0), roberta-base-openai-detector returns an AI
+        # probability of 0.004 (0.41), and the two heuristics vote 5 and 35. The
+        # gate therefore scores that draft ~95% human and would return it
+        # untouched, leaving HIP wired in but never reached. Since the pre-score
+        # is uninformative on exactly the input HIP exists to fix, it must not
+        # gate the rewrite. The rewrite is applied and its result returned; the
+        # detectors still run so the attempt log carries a score.
+        #
+        # Why HIP and not call_llm: every instruction-tuned rewrite scores 100%
+        # AI on GPTZero — measured across a prompt-only rulebook (10/11 surface
+        # targets hit), style-matching against 32 real human essays, and the
+        # 56-parameter engine. A detector reads the RLHF / instruction-tuning
+        # fingerprint in the model's weights, and that is fixed at generation, so
+        # no rewrite by an instruct model can remove it. HIP de-paraphrases with
+        # a BASE model (no instruction layer) and measured 1% AI.
+        #
+        # Gated on hip_configured(): an unset HIP_ENDPOINT keeps the old path.
+        try:
+            from .hip_humanizer import hip_humanize, hip_configured
+            hip_on = hip_configured()
+        except Exception as e:
+            logger.warning("HIP import failed: %s", type(e).__name__)
+            hip_humanize, hip_on = None, False
+
+        if hip_on:
+            attempts: list = [{"human": await _human_of(text), "text": text}]
+            out = ""
+            try:
+                out = (await hip_humanize(text) or "").strip()
+            except Exception as e:
+                logger.warning("HIP humanize failed: %s", type(e).__name__)
+            if out and out != text:
+                attempts.append({"human": await _human_of(out), "text": out})
+                return out, attempts
+            logger.info("HIP returned no usable rewrite; falling back to the LLM path")
+            # fall through to the LLM redo loop below
+
         current = text
         attempts: list = []
         best = (text, None)
@@ -395,6 +438,9 @@ async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
                     effort = int(ai_settings["ai"].get("effortScore") or 500)
                 except (TypeError, ValueError):
                     effort = 500
+
+            # HIP-first is handled above; this loop is the instruct-model
+            # fallback reached only when HIP is unconfigured or returns nothing.
             raw = await call_llm(
                 system_prompt=_rewrite_system(human),
                 user_prompt=(
