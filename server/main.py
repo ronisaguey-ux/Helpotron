@@ -2003,17 +2003,16 @@ class AgentStartIn(BaseModel):
 
 @app.post("/api/agent/start")
 async def agent_start(body: AgentStartIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not credits.charge(current_user, "agent_session", db):
-        raise HTTPException(402, "insufficient credits — agent sessions cost 1 credit")
+    # No up-front charge (owner 2026-09-17: "just charge the token costs after
+    # its calculated, dont guess before"). The gate only refuses to START work
+    # for an account with nothing left; the real cost is charged on completion
+    # from the measured ledger.
+    if not credits.has_usage_balance(current_user):
+        raise HTTPException(402, "insufficient credits — top up to start an agent session")
     db.commit()
     session = agent_manager.create(current_user.public_id, body.assignment_id, body.instruction)
-    # Metering (owner 2026-09-17): an agent session makes many LLM calls but the
-    # entry gate can only hold a flat estimate before the work starts. Record the
-    # ledger position here so _run_agent_and_persist can settle the REAL cost
-    # (1 token = 1 cent of service) once the session finishes.
     try:
         session.usage_watermark = credits.ledger_watermark(db, current_user.id)
-        session.pre_charged_tokens = credits.TASK_COSTS.get("agent_session", 1)
     except Exception as e:
         logger.warning("could not set usage watermark for agent session: %s", e)
         session.usage_watermark = None
@@ -2047,41 +2046,37 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
                 db.commit()
                 logger.info("agent %s collected %d chars -> transcript %d",
                             session.session_id, len(session.result_text), t.id)
-            elif (session.status == "failed" or
-                  (session.status == "disconnected" and session.steps < 3)) \
-                    and not session.result_text and user:
-                # Refund only when nothing was collected AND the session barely
-                # started (crash, never-connected, or an immediate disconnect) —
-                # a session that ran steps and then disconnected pays the credit.
-                credits.top_up(db, user, credits.TASK_COSTS["agent_session"],
-                               reason="refund:agent:failed")
-                db.commit()
-                logger.info("agent %s failed with nothing collected; credit refunded", session.session_id)
 
-            # Metering (owner 2026-09-17): settle the session against what it
-            # actually cost, at 1 token per cent of service. The flat charge at
-            # the gate only held an estimate — an agent session makes many LLM
-            # calls, so 1 token for the whole session was absorbing the rest.
-            # Skipped on the refund path above (nothing was consumed that we are
-            # still billing for after the refund).
+            # Metering (owner 2026-09-17): charge the session for what it
+            # ACTUALLY cost, at 1 token per cent of service. Nothing was charged
+            # at the gate, so this is the full charge, not a delta. This is what
+            # closes the leak: the session used to cost a flat 1 token however
+            # many LLM calls it made (breakeven ~2 calls; real sessions make
+            # dozens).
+            #
+            # A session that failed outright, or disconnected before doing any
+            # real work and collected nothing, produced no product — the old code
+            # protected the user from paying for that by refunding the flat fee.
+            # Nothing is taken up front now, so the equivalent protection is to
+            # skip the charge entirely. A session that ran steps and then
+            # disconnected still pays for what it used.
             watermark = getattr(session, "usage_watermark", None)
-            refunded = (session.status == "failed" or
-                        (session.status == "disconnected" and session.steps < 3))
-            if user and watermark is not None and not refunded:
+            no_product = ((session.status == "failed" or
+                           (session.status == "disconnected" and session.steps < 3))
+                          and not session.result_text)
+            if user and watermark is not None and not no_product:
                 try:
                     credits.charge_actual_usage(
                         user, "agent_session", db, since_id=watermark,
-                        # The gate already took this much, so only the DIFFERENCE
-                        # is settled — passing 0 here would bill the estimate twice.
-                        pre_charged=getattr(session, "pre_charged_tokens", 0),
+                        pre_charged=0,  # nothing was guessed up front
                         reason=f"usage:agent_session:{session.session_id}",
-                        # the session id makes the settlement idempotent: a
+                        # the session id makes the charge idempotent: a
                         # re-entered completion path must not bill the window twice
                         idempotency_key=f"usage:agent_session:{session.session_id}",
                     )
                 except Exception as usage_error:
                     db.rollback()
-                    logger.error("agent %s usage settlement failed: %s",
+                    logger.error("agent %s usage charge failed: %s",
                                  session.session_id, usage_error)
         except Exception as error:
             db.rollback()

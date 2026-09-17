@@ -162,10 +162,15 @@ def test_config_validate_clean():
 # ─── agent refund policy ──────────────────────────────────────────────────
 
 def _persist(session, monkeypatch, refunds):
-    """Run _run_agent_and_persist against a fake db; record refunds.
+    """Run _run_agent_and_persist against a fake db; record whether a CHARGE ran.
 
     The agent loop itself is stubbed out — its 60s attach wait would hang
-    the test, and the refund policy lives in _run_agent_and_persist."""
+    the test, and the billing policy lives in _run_agent_and_persist.
+
+    The policy moved from refund to no-charge (owner 2026-09-17: charge the real
+    cost after it is calculated, nothing up front). A session that produced
+    nothing is simply never charged, so these record charge calls rather than
+    top-ups. The user-protection intent is unchanged."""
     from server import main as mainmod
 
     async def _noop_run(_s):
@@ -206,36 +211,37 @@ def _persist(session, monkeypatch, refunds):
             return None
 
     monkeypatch.setattr("server.database.SessionLocal", lambda: FakeDB())
-    monkeypatch.setattr("server.main.credits.top_up",
-                        lambda db, user, amt, reason: refunds.append((amt, reason)))
+    monkeypatch.setattr("server.main.credits.charge_actual_usage",
+                        lambda *a, **kw: refunds.append(kw))
     asyncio.run(mainmod._run_agent_and_persist(session))
 
 
-def test_agent_immediate_disconnect_refunds(monkeypatch):
+def test_agent_immediate_disconnect_is_not_charged(monkeypatch):
     refunds = []
     s = AgentSession("sid1", "refund-user", None, "")
     s.status = "disconnected"
     s.steps = 0
     s.result_text = ""
     _persist(s, monkeypatch, refunds)
-    assert refunds, "barely-started disconnected session should refund"
+    assert not refunds, "barely-started disconnected session produced nothing — no charge"
 
 
-def test_agent_long_run_disconnect_no_refund(monkeypatch):
+def test_agent_long_run_disconnect_is_charged(monkeypatch):
     refunds = []
     s = AgentSession("sid2", "refund-user2", None, "")
     s.status = "disconnected"
     s.steps = 10  # did real work (10 tool commands) then disconnected
     s.result_text = ""
+    s.usage_watermark = 0  # set by the gate in production
     _persist(s, monkeypatch, refunds)
-    assert not refunds, "session that ran steps before disconnecting should pay"
+    assert refunds, "a session that ran steps before disconnecting pays for what it used"
 
 
-def test_agent_crash_still_refunds(monkeypatch):
+def test_agent_crash_is_not_charged(monkeypatch):
     refunds = []
     s = AgentSession("sid3", "refund-user3", None, "")
     s.status = "failed"
     s.steps = 25  # crashed, but nothing collected
     s.result_text = ""
     _persist(s, monkeypatch, refunds)
-    assert refunds, "a genuine crash with nothing collected should refund"
+    assert not refunds, "a genuine crash with nothing collected — no charge"

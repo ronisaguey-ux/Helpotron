@@ -82,17 +82,33 @@ def test_usage_since_watermark_measures_real_cost(db):
     assert credits.calculate_task_token_cost(cents / 100.0) == 10
 
 
-def test_settlement_charges_the_difference_not_the_whole_window(db):
-    """The gate pre-charges an estimate; completion settles only the delta."""
+def test_charge_after_uses_the_real_cost_with_no_precharge(db):
+    """Owner: "just charge the token costs after its calculated, dont guess
+    before". Nothing is held up front, so the full measured cost is charged."""
     u = _user(db, "meter_delta", tokens=100)
     w = credits.ledger_watermark(db, u.id)
     for _ in range(20):
         _spend(db, u, 0.0047)          # 10 tokens of real cost
 
-    delta = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
-                                        pre_charged=1, idempotency_key=_key("delta"))
+    charged = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
+                                          pre_charged=0, idempotency_key=_key("delta"))
     db.refresh(u)
-    assert delta == 9, delta           # 10 actual - 1 already held
+    assert charged == 10, charged
+    assert credits.get_token_balance(u) == 90.0
+
+
+def test_pre_charged_still_subtracts_for_unconverted_callers(db):
+    """Callers still holding an up-front flat fee pass it as pre_charged so only
+    the difference bills — otherwise the estimate is charged twice."""
+    u = _user(db, "meter_pre", tokens=100)
+    w = credits.ledger_watermark(db, u.id)
+    for _ in range(20):
+        _spend(db, u, 0.0047)          # 10 tokens of real cost
+
+    charged = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
+                                          pre_charged=1, idempotency_key=_key("pre"))
+    db.refresh(u)
+    assert charged == 9, charged       # 10 actual - 1 already held
     assert credits.get_token_balance(u) == 91.0
 
 
@@ -109,18 +125,19 @@ def test_settlement_is_idempotent(db):
 
     same = _key("idem")
     first = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
-                                        pre_charged=1, idempotency_key=same)
+                                        pre_charged=0, idempotency_key=same)
     second = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
-                                         pre_charged=1, idempotency_key=same)
+                                         pre_charged=0, idempotency_key=same)
     db.refresh(u)
-    assert first == 9
-    assert second == 0, "the same settlement must not be charged twice"
-    assert credits.get_token_balance(u) == 91.0
+    assert first == 10
+    assert second == 0, "the same charge must not be applied twice"
+    assert credits.get_token_balance(u) == 90.0
 
 
-def test_shortfall_floors_at_zero_and_does_not_go_negative(db):
-    """Insufficient balance: the balance floors at 0 rather than going negative,
-    and the shortfall is logged rather than silently absorbed."""
+def test_shortfall_overdrafts_and_blocks_the_account(db):
+    """The work was already done, so the real cost is charged even when it exceeds
+    the balance. The balance goes negative — honest accounting, and it self-blocks
+    the account until a top-up — rather than the platform silently eating it."""
     u = _user(db, "meter_short", tokens=5.0)
     w = credits.ledger_watermark(db, u.id)
     _spend(db, u, 0.90)                # 90 tokens of cost
@@ -128,8 +145,26 @@ def test_shortfall_floors_at_zero_and_does_not_go_negative(db):
     credits.charge_actual_usage(u, "agent_session", db, since_id=w,
                                 pre_charged=0, idempotency_key=_key("short"))
     db.refresh(u)
+    assert credits.get_token_balance(u) == -85.0
+    assert credits.has_usage_balance(u) is False, "an overdrawn account must not start new work"
+
+    credits.add_tokens(db, u, 100.0, reason="topup")
+    db.refresh(u)
+    assert credits.get_token_balance(u) == 15.0
+    assert credits.has_usage_balance(u) is True, "a top-up must clear the block"
+
+
+def test_charge_actual_usage_can_still_floor_when_asked(db):
+    """allow_overdraft=False keeps the old floor-at-zero behaviour for any caller
+    that needs it."""
+    u = _user(db, "meter_floor", tokens=5.0)
+    w = credits.ledger_watermark(db, u.id)
+    _spend(db, u, 0.90)
+
+    credits.charge_actual_usage(u, "agent_session", db, since_id=w, pre_charged=0,
+                                allow_overdraft=False, idempotency_key=_key("floor"))
+    db.refresh(u)
     assert credits.get_token_balance(u) == 0.0
-    assert credits.get_token_balance(u) >= 0.0, "balance must never go negative by default"
 
 
 def test_unmetered_user_is_never_settled(db):
@@ -140,10 +175,10 @@ def test_unmetered_user_is_never_settled(db):
     w = credits.ledger_watermark(db, u.id)
     _spend(db, u, 0.50)
 
-    delta = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
-                                        pre_charged=1, idempotency_key=_key("admin"))
+    charged = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
+                                          pre_charged=0, idempotency_key=_key("admin"))
     db.refresh(u)
-    assert delta == 0
+    assert charged == 0
     assert credits.get_token_balance(u) == 5.0
 
 
