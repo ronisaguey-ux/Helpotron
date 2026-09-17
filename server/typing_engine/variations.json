@@ -1,0 +1,755 @@
+{
+ "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+ "variations": [
+  {
+   "id": "r5_median_110_rep1",
+   "marker": "M01",
+   "typing": {
+    "gap_base_median": 110.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 110ms rep1 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_110_rep2",
+   "marker": "M02",
+   "typing": {
+    "gap_base_median": 110.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 110ms rep2 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_130_rep1",
+   "marker": "M03",
+   "typing": {
+    "gap_base_median": 130.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 130ms rep1 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_130_rep2",
+   "marker": "M04",
+   "typing": {
+    "gap_base_median": 130.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 130ms rep2 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_151_rep1",
+   "marker": "M05",
+   "typing": {
+    "gap_base_median": 151.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 151ms rep1 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_151_rep2",
+   "marker": "M06",
+   "typing": {
+    "gap_base_median": 151.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 151ms rep2 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_200_rep1",
+   "marker": "M07",
+   "typing": {
+    "gap_base_median": 200.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 200ms rep1 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_200_rep2",
+   "marker": "M08",
+   "typing": {
+    "gap_base_median": 200.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 200ms rep2 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_240_rep1",
+   "marker": "M09",
+   "typing": {
+    "gap_base_median": 240.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 240ms rep1 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  },
+  {
+   "id": "r5_median_240_rep2",
+   "marker": "M10",
+   "typing": {
+    "gap_base_median": 240.0,
+    "gap_base_lo": 103.0,
+    "gap_base_hi": 196.0,
+    "log_sigma": 1.05,
+    "space_ratio": 1.22,
+    "comma_ratio": 1.05,
+    "sentence_ratio": 3.18,
+    "burst_gap_ms": 73.0,
+    "burst_max": 2,
+    "burst_dist": [
+     [
+      0,
+      0.911
+     ],
+     [
+      1,
+      0.064
+     ],
+     [
+      2,
+      0.014
+     ],
+     [
+      3,
+      0.008
+     ],
+     [
+      5,
+      0.002
+     ],
+     [
+      12,
+      0.001
+     ]
+    ],
+    "typo_rate": 0.028,
+    "think_gap_median": 4700.0,
+    "think_gap_prob": 0.01,
+    "lull_after_sentence": 20.0,
+    "lull_after_newline": 26.0,
+    "lull_after_comma": 0.0,
+    "lull_after_space": 1.0,
+    "lull_midword": 0.5,
+    "backspace_runs": {
+     "1": 0.324,
+     "2": 0.284,
+     "3": 0.161,
+     "4": 0.066,
+     "5": 0.06,
+     "6": 0.042,
+     "long": 0.063
+    },
+    "dwell_median": 65.0,
+    "dwell_sigma": 0.25,
+    "notice_beat_ms": [
+     250.0,
+     900.0
+    ],
+    "backspace_gap_ms": [
+     90.0,
+     220.0
+    ],
+    "backward_prob": 0.022,
+    "backward_min_chars": 60,
+    "backward_max_words": 2,
+    "backward_del_max": 9
+   },
+   "cfg": {},
+   "essay": "is it a problem that the news arrives faster than anyone can weigh it. The information is selected for its capacity to alarm rather than its capacity to matter, and a person who reads a headline before breakfast has not learned what happened. They have been handed a feeling about what happened, and they carry that feeling into everything else they do that day.\n\nThe trouble is not that journalism is dishonest. Most of it is not. The trouble is that a daily cycle rewards the wrong things. A story has to be new, so it has to be urgent, so it has to threaten something. And because nothing can be resolved within a single day, every serious problem gets reported as a permanent crisis, which is how a person ends up anxious about eleven disasters at once and equipped to act on none of them.\n\nThere is a better arrangement, and it is not ignorance. Read once a week instead. A week is long enough for the noise to fall away from the signal, for the initial account to be corrected, and for the thing that genuinely mattered to still be there. What survives a week of scrutiny was worth knowing on Monday. What does not survive it was never information in the first place; it was a mood, sold by the minute.\n\nThe counter-argument deserves a fair hearing. A citizen who reads nothing cannot vote well, cannot spot a lie when a politician tells one, and cannot hold anyone accountable for anything. That objection is correct as far as it goes, and it is why this is an argument about cadence rather than abstinence. Knowing things and refreshing a feed are different activities that have been quietly merged, and the merge has served the feed rather than the knowing.\n\nConsider what a weekly reader holds. They know the shape of the debate, the names of the people involved, and which claims have already been tested and found wanting. They can be wrong about details, but they are rarely surprised by structure. A daily reader, by contrast, holds an enormous quantity of detail and almost no structure, because structure only becomes visible when you stop looking at the frames and watch the film.\n\nEvery alarming item also consumes a little of the capacity to care, and that capacity does not refill on demand. Someone frightened about eleven things has less attention left for the one in front of them they could actually change. This is the ordinary arithmetic of a finite attention span, and the modern news product is engineered to spend it as fast as possible, because a spent reader is a returning reader.\n\nSo the weekly habit is not withdrawal. It is the same information, taken at the interval where it can still be turned into understanding. Read the week on a Sunday, when the noise has had time to settle and the corrections have had time to land. And notice, after a month of it, how much more you can say about the world than you could when you were reading it every morning and remembering none of it.",
+   "note": "gap_base_median 240ms rep2 - walks the pace band toward the 340ms+ region where pace begins to gate"
+  }
+ ]
+}

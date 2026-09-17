@@ -1,0 +1,4 @@
+# Recorded runs and probes are measurement output, not code.
+runs/
+probes/
+__pycache__/

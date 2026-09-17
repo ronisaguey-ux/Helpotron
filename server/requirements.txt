@@ -37,3 +37,9 @@ pypdfium2>=5.13.0
 # Server-side markdown + LaTeX rendering (thin-wrapper migration 2026-09-14)
 markdown-it-py>=4.0,<5.0
 latex2mathml>=3.80,<4.0
+
+# Stylometry + typing engines moved in from text-improver (owner 2026-09-17).
+# spacy also needs the model: python -m spacy download en_core_web_sm
+nltk>=3.9
+spacy>=3.8
+pyphen>=0.15

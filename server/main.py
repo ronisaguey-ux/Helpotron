@@ -85,6 +85,7 @@ try:
     from .routes_import_url import router as import_url_router
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
+    from .routes_engines import router as engines_router
     from .routes_extension_api import router as extension_api_router
     from .routes_extension import public_router as extension_public_router
     from .assignments import router as assignments_router
@@ -119,6 +120,7 @@ except (ImportError, ValueError):
     from server.routes_import_url import router as import_url_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
+    from server.routes_engines import router as engines_router
     from server.routes_extension_api import router as extension_api_router
     from server.routes_extension import public_router as extension_public_router
     from server.assignments import router as assignments_router
@@ -395,6 +397,7 @@ app.include_router(import_url_router)
 app.include_router(math_router)
 app.include_router(extension_router)
 app.include_router(extension_api_router)
+app.include_router(engines_router)
 app.include_router(extension_public_router)
 app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
 app.include_router(assignment_direction_router)
