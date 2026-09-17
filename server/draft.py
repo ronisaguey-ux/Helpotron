@@ -252,6 +252,7 @@ async def _draft_workflow_async(draft_id: int) -> None:
                     book_style_id=book_style_id,
                     reading_level=reading_level,
                     effort_level=effort_level,
+                    settings=(user.settings if user and user.settings else None),
                 )
                 draft.draft_text = humanized_text
                 draft.model_used = model_used

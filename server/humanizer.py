@@ -512,6 +512,7 @@ class AIHumanizerPipeline:
         book_style_id: Optional[str] = None,
         reading_level: Optional[str] = None,
         effort_level: int = 500,
+        settings: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, Dict[str, Any]]:
         """Executes full humanization loop with deterministic math verification, slop scrubbing, burstiness injection, and multi-detector scoring."""
         target_ref_text, target_ref_source = self.resolve_style_reference(
@@ -542,10 +543,22 @@ class AIHumanizerPipeline:
             # layer) and measured 1% AI. HIP is a de-paraphraser, so it cannot
             # honour the style reference the way the directives below do: when a
             # style sample is in play the instruct pass stays in charge.
+            # TOGGLE GATE (owner 2026-09-17): HIP runs ONLY when the user turned
+            # the humanizer setting ON. It must never fire automatically on every
+            # LLM output. No settings passed = the caller cannot prove the toggle
+            # is on, so HIP stays out and the previous behaviour applies.
+            hip_allowed = False
+            if settings is not None:
+                try:
+                    from .humanize_skill import humanizer_enabled
+                    hip_allowed = humanizer_enabled(settings)
+                except Exception as e:
+                    logger.warning("humanizer toggle check failed: %s", type(e).__name__)
+
             rewritten_text = ""
             try:
                 from .hip_humanizer import hip_humanize, hip_configured
-                if hip_configured() and not (style_sample or book_style_id):
+                if hip_allowed and hip_configured() and not (style_sample or book_style_id):
                     rewritten_text = (await hip_humanize(current_text) or "").strip()
             except Exception as e:
                 logger.warning("HIP pass unavailable: %s", type(e).__name__)

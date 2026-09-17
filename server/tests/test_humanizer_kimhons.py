@@ -121,7 +121,7 @@ async def test_humanizer_pipeline_execution():
     """Verify full end-to-end humanizer loop executes and yields detector breakdown."""
     pipeline = AIHumanizerPipeline(human_score_threshold=80.0, max_passes=2)
     draft = "The Industrial Revolution transformed manufacturing processes in Great Britain during the late eighteenth century."
-    
+
     humanized, eval_meta = await pipeline.humanize_loop(
         draft_text=draft,
         book_style_id="book_pride_and_prejudice",
@@ -134,3 +134,71 @@ async def test_humanizer_pipeline_execution():
     assert "detector_details" in eval_meta
     assert "cliche_score" in eval_meta
     assert "target_style_source" in eval_meta
+
+
+# ─── HIP toggle gate (owner 2026-09-17) ──────────────────────────────────────
+# HIP is the base-model humanizer. It must run ONLY when the user turned the
+# humanizer setting ON — never automatically on every LLM output.
+
+@pytest.mark.anyio
+async def test_hip_does_not_run_without_settings(monkeypatch):
+    """No settings passed = the caller cannot prove the toggle is on, so HIP
+    must stay out and the previous behaviour applies."""
+    called = []
+
+    async def fake_hip(text, rounds=None):
+        called.append(text)
+        return "hip output " * 10
+
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: True)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", fake_hip)
+
+    pipeline = AIHumanizerPipeline(human_score_threshold=80.0, max_passes=2)
+    await pipeline.humanize_loop(
+        draft_text="The Industrial Revolution transformed manufacturing processes in Great Britain.",
+        effort_level=500,
+    )
+    assert called == [], "HIP ran with no settings — it must not"
+
+
+@pytest.mark.anyio
+async def test_hip_does_not_run_when_humanizer_off(monkeypatch):
+    """The toggle is OFF: HIP stays out even though the endpoint is configured."""
+    called = []
+
+    async def fake_hip(text, rounds=None):
+        called.append(text)
+        return "hip output " * 10
+
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: True)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", fake_hip)
+
+    pipeline = AIHumanizerPipeline(human_score_threshold=80.0, max_passes=2)
+    await pipeline.humanize_loop(
+        draft_text="The Industrial Revolution transformed manufacturing processes in Great Britain.",
+        effort_level=500,
+        settings={"ai": {"humanizer": "off"}},
+    )
+    assert called == [], "HIP ran while the humanizer toggle was off"
+
+
+@pytest.mark.anyio
+async def test_hip_runs_when_humanizer_on(monkeypatch):
+    """The toggle is ON: HIP is the engine that does the rewrite."""
+    called = []
+
+    async def fake_hip(text, rounds=None):
+        called.append(text)
+        return "hip rewrote this completely " * 8
+
+    monkeypatch.setattr("server.hip_humanizer.hip_configured", lambda: True)
+    monkeypatch.setattr("server.hip_humanizer.hip_humanize", fake_hip)
+
+    pipeline = AIHumanizerPipeline(human_score_threshold=80.0, max_passes=2)
+    humanized, _meta = await pipeline.humanize_loop(
+        draft_text="The Industrial Revolution transformed manufacturing processes in Great Britain during the late eighteenth century. Furthermore, it reshaped society.",
+        effort_level=500,
+        settings={"ai": {"humanizer": "on"}},
+    )
+    assert called, "HIP did not run while the humanizer toggle was on"
+    assert humanized.startswith("hip rewrote this")
