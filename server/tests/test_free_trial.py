@@ -1,4 +1,4 @@
-"""Free Trial tests — owner 09-06 rework: 150 trial tokens, mandatory 2FA,
+"""Free Trial tests — owner 09-06 rework: 15,000 trial tokens, mandatory 2FA,
 1-cent payment verification (SMS lane retired)."""
 import pytest
 
@@ -49,7 +49,7 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     assert trial_plan["requires_2fa"] is True
     assert trial_plan["requires_1c_payment"] is True
     assert trial_plan["price_cents"] == 0
-    assert trial_plan["monthly_credits"] == 150
+    assert trial_plan["monthly_credits"] == 15000
     assert "usage_value_usd" not in trial_plan
 
     prices = {p["id"]: p["price_cents"] for p in catalogue}
@@ -57,11 +57,14 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     assert prices["pro"] == 2000
     assert prices["elite"] == 4000
 
+    # Owner 2026-09-17: allowances rescaled 100x to match the rate change to
+    # 100 tokens = 1 cent. Same plan economics, finer unit:
+    #   $10 -> 30,000 = $3.00 of service · $20 -> 100,000 = $10.00 · $40 -> 270,000 = $27.00
     allowances = {p["id"]: p["monthly_credits"] for p in catalogue}
-    assert allowances["trial"] == 150
-    assert allowances["basic"] == 300
-    assert allowances["pro"] == 1000
-    assert allowances["elite"] == 2700
+    assert allowances["trial"] == 15000
+    assert allowances["basic"] == 30000
+    assert allowances["pro"] == 100000
+    assert allowances["elite"] == 270000
 
     # No USD-equivalence disclosures anywhere in the public catalogue.
     joined = " ".join(
@@ -78,7 +81,7 @@ def test_status_shape(client, auth_headers, unique_user):
     assert data["status"] == "success"
     assert data["requires_2fa"] is True
     assert data["requires_1c_payment"] is True
-    assert data["credits_grant"] == 150
+    assert data["credits_grant"] == 15000
     assert data["trial_claimed"] is False
     assert data["payment_verified"] is False
     assert data["two_fa_enabled"] is True  # conftest seeds 2FA for tests
@@ -134,7 +137,7 @@ def test_full_activation_flow(client, auth_headers, unique_user):
     assert data["user"]["plan"] == "trial"
     # 09-06 (owner rework): the grant is task tokens in token_balance —
     # user.credits is discount currency and stays 0.0.
-    assert data["user"]["token_balance"] == 150.0
+    assert data["user"]["token_balance"] == 15000.0
     assert data["user"]["credits"] == 0.0
     assert data["user"]["trial_claimed"] is True
 

@@ -60,15 +60,28 @@ def _spend(db, user, usd: float):
     db.commit()
 
 
-def test_token_cost_is_one_token_per_cent():
-    assert credits.calculate_task_token_cost(0.0) == 0
-    assert credits.calculate_task_token_cost(-1.0) == 0
-    assert credits.calculate_task_token_cost(0.01) == 1
-    assert credits.calculate_task_token_cost(0.011) == 2   # ceil
-    assert credits.calculate_task_token_cost(0.10) == 10
-    assert credits.calculate_task_token_cost(1.00) == 100
-    # sub-cent work still bills one token: a task is never free
-    assert credits.calculate_task_token_cost(0.0001) == 1
+def test_token_cost_is_one_hundred_tokens_per_cent():
+    """Owner 2026-09-17: "change it to 1 token equals 1/100 of a cent ... cuz a
+    lot of tasks are under a cent, we need to do that for more accurate
+    calculation". So 100 tokens = 1 cent, 10,000 = $1."""
+    assert credits.TOKENS_PER_CENT == 100
+    assert credits.TOKENS_PER_USD == 10_000
+
+    assert credits.calculate_task_token_cost(0.0001) == 1      # 1/100 cent
+    assert credits.calculate_task_token_cost(0.01) == 100      # 1 cent
+    assert credits.calculate_task_token_cost(0.011) == 110     # ceil
+    assert credits.calculate_task_token_cost(0.05) == 500      # Pangram's minimum scan
+    assert credits.calculate_task_token_cost(1.00) == 10_000
+
+    # the whole point of the change: sub-cent work is priced honestly instead of
+    # every task rounding up to a full cent
+    assert credits.calculate_task_token_cost(0.002) == 20
+    assert credits.calculate_task_token_cost(0.0002) == 2
+
+    # the 1-token minimum is the rounding floor, not a flat price: a local
+    # process with no measurable upstream cost still costs something
+    assert credits.calculate_task_token_cost(0.0) == 1
+    assert credits.calculate_task_token_cost(-1.0) == 1
 
 
 def test_usage_since_watermark_measures_real_cost(db):
@@ -79,7 +92,7 @@ def test_usage_since_watermark_measures_real_cost(db):
 
     cents = credits.usage_cents_since(db, u.id, w)
     assert abs(cents - 9.4) < 0.01, cents
-    assert credits.calculate_task_token_cost(cents / 100.0) == 10
+    assert credits.calculate_task_token_cost(cents / 100.0) == 940
 
 
 def test_charge_after_uses_the_real_cost_with_no_precharge(db):
@@ -93,8 +106,8 @@ def test_charge_after_uses_the_real_cost_with_no_precharge(db):
     charged = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
                                           pre_charged=0, idempotency_key=_key("delta"))
     db.refresh(u)
-    assert charged == 10, charged
-    assert credits.get_token_balance(u) == 90.0
+    assert charged == 940, charged            # 9.4 cents at 100 tokens/cent
+    assert credits.get_token_balance(u) == 100 - 940.0
 
 
 def test_pre_charged_still_subtracts_for_unconverted_callers(db):
@@ -106,10 +119,10 @@ def test_pre_charged_still_subtracts_for_unconverted_callers(db):
         _spend(db, u, 0.0047)          # 10 tokens of real cost
 
     charged = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
-                                          pre_charged=1, idempotency_key=_key("pre"))
+                                          pre_charged=100, idempotency_key=_key("pre"))
     db.refresh(u)
-    assert charged == 9, charged       # 10 actual - 1 already held
-    assert credits.get_token_balance(u) == 91.0
+    assert charged == 840, charged       # 940 actual - 100 already held
+    assert credits.get_token_balance(u) == 100 + 100 - 940.0
 
 
 def test_settlement_is_idempotent(db):
@@ -129,28 +142,28 @@ def test_settlement_is_idempotent(db):
     second = credits.charge_actual_usage(u, "agent_session", db, since_id=w,
                                          pre_charged=0, idempotency_key=same)
     db.refresh(u)
-    assert first == 10
+    assert first == 940
     assert second == 0, "the same charge must not be applied twice"
-    assert credits.get_token_balance(u) == 90.0
+    assert credits.get_token_balance(u) == 100 - 940.0
 
 
 def test_shortfall_overdrafts_and_blocks_the_account(db):
     """The work was already done, so the real cost is charged even when it exceeds
     the balance. The balance goes negative — honest accounting, and it self-blocks
     the account until a top-up — rather than the platform silently eating it."""
-    u = _user(db, "meter_short", tokens=5.0)
+    u = _user(db, "meter_short", tokens=500.0)
     w = credits.ledger_watermark(db, u.id)
-    _spend(db, u, 0.90)                # 90 tokens of cost
+    _spend(db, u, 0.90)                # 90 cents = 9,000 tokens of cost
 
     credits.charge_actual_usage(u, "agent_session", db, since_id=w,
                                 pre_charged=0, idempotency_key=_key("short"))
     db.refresh(u)
-    assert credits.get_token_balance(u) == -85.0
+    assert credits.get_token_balance(u) == 500 - 9000.0
     assert credits.has_usage_balance(u) is False, "an overdrawn account must not start new work"
 
-    credits.add_tokens(db, u, 100.0, reason="topup")
+    credits.add_tokens(db, u, 10000.0, reason="topup")
     db.refresh(u)
-    assert credits.get_token_balance(u) == 15.0
+    assert credits.get_token_balance(u) == 1500.0
     assert credits.has_usage_balance(u) is True, "a top-up must clear the block"
 
 
@@ -186,7 +199,7 @@ def test_settlement_records_a_ledger_row(db):
     """Every settlement leaves a CreditTransaction so the spend is auditable."""
     u = _user(db, "meter_ledger", tokens=100)
     w = credits.ledger_watermark(db, u.id)
-    _spend(db, u, 0.05)                # 5 tokens
+    _spend(db, u, 0.05)                # 5 cents = 500 tokens
 
     ledger_key = _key("ledger")
     credits.charge_actual_usage(u, "agent_session", db, since_id=w,
@@ -195,7 +208,7 @@ def test_settlement_records_a_ledger_row(db):
               .filter(CreditTransaction.user_id == u.id,
                       CreditTransaction.reason == ledger_key).all())
     assert len(rows) == 1
-    assert rows[0].delta == -5
+    assert rows[0].delta == -500          # 5 cents at 100 tokens/cent
 
 
 # ─── EVERY process costs tokens (owner 2026-09-17) ───────────────────────────
@@ -273,24 +286,100 @@ def test_meter_context_is_task_isolated():
     assert current_meter_user() is None
 
 
-def test_agent_action_charges_measured_cost_above_the_floor(db, monkeypatch):
-    """An action's price is its measured cost, with the flat price as a floor —
-    so costly work is not undercharged and nothing that does real work is free."""
+def test_agent_action_charges_measured_cost_no_flat_price(db, monkeypatch):
+    """Owner 2026-09-17: "Convert everything, no flat prices". An action's price
+    IS its measured cost at 100 tokens/cent — the old flat table is gone. The only
+    floor is the universal 1-token minimum."""
     from server import routes_overlord as ov
 
-    u = _user(db, "meter_action", tokens=500)
+    u = _user(db, "meter_action", tokens=50000)
     charged = {}
 
     monkeypatch.setattr(ov, "_charge_tokens", lambda user, d, cost: charged.update(cost=cost))
 
-    # cost well below the floor -> floor applies
+    # cheap work is cheap: 0.1 cent -> 10 tokens, NOT the old flat 5
     w = credits.ledger_watermark(db, u.id)
-    _spend(db, u, 0.001)               # 0.1 cents
-    ov._charge_usage(u, db, "create_assignment", since_id=w)   # floor = 5
-    assert charged["cost"] == 5.0, charged
+    _spend(db, u, 0.001)
+    ov._charge_usage(u, db, "create_assignment", since_id=w)
+    assert charged["cost"] == 10.0, charged
 
-    # cost above the floor -> the measured cost wins
+    # expensive work costs more: 42 cents -> 4,200 tokens
     w2 = credits.ledger_watermark(db, u.id)
-    _spend(db, u, 0.42)                # 42 cents -> 42 tokens
+    _spend(db, u, 0.42)
     ov._charge_usage(u, db, "create_assignment", since_id=w2)
-    assert charged["cost"] == 42.0, charged
+    assert charged["cost"] == 4200.0, charged
+
+    # no measurable cost still bills the 1-token minimum, never zero
+    w3 = credits.ledger_watermark(db, u.id)
+    ov._charge_usage(u, db, "create_assignment", since_id=w3)
+    assert charged["cost"] == 1.0, charged
+
+
+def test_plan_allowances_match_the_owners_spec_and_keep_the_economics():
+    """Owner 2026-09-17: "have the 10/mo be 30k tokens, 20/mo be 100k tokens, and
+    40/mo be 270k tokens". Paired with 100 tokens = 1 cent these are the SAME
+    economics as the old 300/1000/2700 at 1 token = 1 cent — this pins both the
+    numbers and the margins, so a future unit change cannot silently reprice a
+    plan."""
+    from server.payments import TIER_TOKENS, TIER_PRICE_CENTS
+
+    assert TIER_TOKENS["basic"] == 30000
+    assert TIER_TOKENS["pro"] == 100000
+    assert TIER_TOKENS["elite"] == 270000
+
+    expected_service = {"basic": 3.00, "pro": 10.00, "elite": 27.00}
+    for plan, service_usd in expected_service.items():
+        price = TIER_PRICE_CENTS[plan] / 100.0
+        delivered = TIER_TOKENS[plan] / credits.TOKENS_PER_USD
+        assert abs(delivered - service_usd) < 0.01, (plan, delivered)
+        assert delivered < price, f"{plan} would sell service at a loss"
+
+
+def test_trial_grant_comes_from_the_single_source():
+    """The trial grant and the catalogue must not drift — a 100x unit change once
+    left the trial granting 150 while the plan table said 15,000."""
+    from server.trial_service import TRIAL_CREDITS_GRANT
+    from server.payments import TIER_TOKENS
+    from server.credits import TIER_MONTHLY_TASK_TOKENS
+
+    assert TRIAL_CREDITS_GRANT == float(TIER_TOKENS["trial"]) == 15000
+    assert TIER_MONTHLY_TASK_TOKENS["trial"] == TIER_TOKENS["trial"]
+
+
+def test_hip_energy_cost_is_measured_not_guessed():
+    """Owner: "every single process, from humanizing ... EVERYTHING costs tokens".
+    HIP runs locally so its upstream API cost is zero, but it burns real CPU.
+    Pricing that as electricity makes humanizing a MEASURED cost that scales with
+    model size and round count, instead of an arbitrary minimum."""
+    from server.hip_humanizer import JOULES_PER_CPU_SECOND, USD_PER_KWH
+    from server.metering import record_service_cost
+    from server import metering
+
+    # the calibration is grounded in a real measurement on this box:
+    # a 252-word essay took 363.5 CPU-seconds and ~1.75 kJ
+    cpu_seconds = 363.5
+    joules = cpu_seconds * JOULES_PER_CPU_SECOND
+    assert 1500 < joules < 2100, f"calibration drifted: {joules} J"
+
+    usd = joules / 3_600_000.0 * USD_PER_KWH
+    # electricity is trivially cheap, so this correctly bills the 1-token minimum
+    assert credits.calculate_task_token_cost(usd) == 1
+    # ...but it is NOT zero, which is the point
+    assert usd > 0
+
+
+def test_hip_records_energy_in_the_ledger(db, monkeypatch):
+    """With a paying user in context the energy cost must reach the ledger."""
+    from server import hip_humanizer, metering
+
+    u = _user(db, f"meter_hip_{uuid.uuid4().hex[:8]}", tokens=1000)
+    recorded = {}
+    monkeypatch.setattr(metering, "record_service_cost",
+                        lambda **kw: recorded.update(kw))
+
+    with metering.meter_user(u.public_id):
+        hip_humanizer._record_hip_energy(363.5)
+
+    assert recorded.get("service") == "humanizer:hip"
+    assert recorded.get("cost_usd", 0) > 0
+    assert recorded["metadata"]["cpu_seconds"] == 363.5

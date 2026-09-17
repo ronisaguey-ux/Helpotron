@@ -3,7 +3,7 @@
 Owner 09-06: the SMS-verified trial is retired. A signup must (1) enable
 2FA in Account > Settings and (2) pass a 1-cent payment verification
 (Stripe checkout when configured, else a manual record the operator
-approves) before activating the 7-day, 150-token trial.
+approves) before activating the 7-day free trial.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .database import User, get_db
 from .payments import create_trial_verification
 from .ratelimit import limiter
 from .routes_features import get_current_authenticated_user
-from .trial_service import TrialVerificationService
+from .trial_service import TrialVerificationService, TRIAL_CREDITS_GRANT
 
 logger = logging.getLogger("helpotron.routes_trial")
 
@@ -32,7 +32,7 @@ def _trial_state(user: User) -> dict:
         "requires_2fa": True,
         "requires_1c_payment": True,
         "two_fa_enabled": two_fa,
-        "credits_grant": 150,
+        "credits_grant": int(TRIAL_CREDITS_GRANT),
         "trial_days": 7,
     }
 
@@ -97,7 +97,7 @@ async def activate_free_trial(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Activate the 7-day Free Trial (150 task tokens).
+    """Activate the 7-day Free Trial (trial token allowance).
 
     Enforcement: 2FA enabled AND payment verified — otherwise a 403 with the
     exact missing requirement."""

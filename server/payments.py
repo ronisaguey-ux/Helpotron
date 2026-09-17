@@ -24,7 +24,15 @@ STRIPE_PRICE_IDS = {
 
 # Monthly TASK TOKEN allowances. Tokens are the usage currency; the legacy
 # name is kept as an alias so existing importers keep working.
-TIER_TOKENS = {"trial": 150, "basic": 300, "pro": 1000, "elite": 2700}
+#
+# Owner 2026-09-17: "have the 10/mo be 30k tokens, 20/mo be 100k tokens, and
+# 40/mo be 270k tokens ... cuz a lot of tasks are under a cent". Paired with the
+# rate change to 100 tokens = 1 cent, these are the SAME plan economics as the
+# old 300/1000/2700 at 1 token = 1 cent, just expressed in the finer unit:
+#   $10 -> 30,000 tokens = $3.00 of service (3.33x markup, 70% margin)
+#   $20 -> 100,000       = $10.00                 (2.0x,  50%)
+#   $40 -> 270,000       = $27.00                 (1.48x, 32.5%)
+TIER_TOKENS = {"trial": 15000, "basic": 30000, "pro": 100000, "elite": 270000}
 TIER_CREDITS = TIER_TOKENS  # legacy alias — these values were never credits
 # Owner 09-06: Basic $10 · Pro $20 · Elite $40 (the original 08-29 audit values)
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}

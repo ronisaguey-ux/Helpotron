@@ -226,11 +226,16 @@ async def generate_summary(
 
 
 async def generate_study_pack(content: str, user: Any, db: Any) -> dict:
-    from server.credits import charge, refund
+    # No up-front flat price (owner 2026-09-17: "Convert everything, no flat
+    # prices"). The gate only refuses to START with an empty balance; the
+    # measured generation cost is charged on success below.
+    from server.credits import has_usage_balance, ledger_watermark, charge_actual_usage
     from fastapi import HTTPException
-    if not charge(user, 'study_guide', db):
+    if not has_usage_balance(user):
         raise HTTPException(status_code=402, detail='Insufficient credits for study guide generation')
-    
+
+    _usage_mark = ledger_watermark(db, user.id if hasattr(user, 'id') else user)
+
     try:
         prompt = f'Generate a structured study guide with key terms and summaries from: {content}'
         from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
@@ -242,10 +247,17 @@ async def generate_study_pack(content: str, user: Any, db: Any) -> dict:
         parsed = llm.extract_json(raw_response)
         if not parsed:
             raise ValueError('Failed to parse valid JSON from LLM response')
+        # Charge what it actually cost (100 tokens = 1 cent).
+        try:
+            charge_actual_usage(user, 'study_guide', db, since_id=_usage_mark, pre_charged=0,
+                                idempotency_key=f"usage:study_guide:{_usage_mark}")
+        except Exception as e:
+            logger.warning('study pack usage charge failed: %s', e)
         return parsed
     except Exception as e:
-        refund(user, 'study_guide', db)
-        logger.error(f'Study pack generation failed, credits refunded: {e}')
+        # Nothing was charged up front, so a failure bills nothing — there is no
+        # flat fee to refund any more.
+        logger.error(f'Study pack generation failed: {e}')
         raise HTTPException(status_code=500, detail=f'Study pack generation failed: {str(e)}')
 
 
@@ -257,4 +269,3 @@ GENERATORS: dict[str, Any] = {
     "summary": generate_summary,
     "study_pack": generate_study_pack,
 }
-

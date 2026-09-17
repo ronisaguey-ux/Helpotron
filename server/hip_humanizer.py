@@ -207,6 +207,73 @@ async def _one_round(text: str, session: aiohttp.ClientSession) -> Optional[str]
     return clean_generated_text(raw) or None
 
 
+# ── Local energy metering (owner 2026-09-17) ─────────────────────────────────
+# "every single process, from humanizing ... EVERYTHING costs tokens". HIP runs
+# on this box, so its upstream API cost is zero — but it is not free: it burns
+# real CPU. Measuring that CPU time and pricing it as electricity is what makes
+# humanizing a *measured* cost rather than an arbitrary minimum, and it scales
+# correctly when the model, the round count or the hardware changes.
+#
+# Calibrated on this box (HP ENVY 13, i7-8550U, 4 threads), measured 2026-09-17:
+#   a 252-word essay = 363.5 CPU-seconds, ~1.75 kJ, ~$0.00009 at 18.27 c/kWh
+#   -> 1752 J / 363.5 CPU-s = 4.82 J per CPU-second
+# which matches the CPU's published thin-chassis behaviour (a ~29 W burst for
+# ~25 s, then ~15 W sustained). Electricity is trivially cheap here; the point is
+# that the cost is real, attributed, and proportional to the work done.
+JOULES_PER_CPU_SECOND = 4.82
+USD_PER_KWH = 0.1827          # EIA STEO, Aug 2026 US residential average
+_JOULES_PER_KWH = 3_600_000.0
+
+
+def _hip_server_cpu_seconds() -> Optional[float]:
+    """Total CPU seconds burned by the HIP backend process so far.
+
+    The generation happens in a separate llama-server process, so timing this
+    request would miss it entirely — read the server's own counters instead.
+    Returns None when the pid cannot be determined, so the caller falls back to
+    the minimum charge rather than inventing a number.
+    """
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["pgrep", "-f", "llama-server"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout.split()
+        if not out:
+            return None
+        total = 0.0
+        ticks = os.sysconf("SC_CLK_TCK")
+        for pid in out:
+            try:
+                with open(f"/proc/{pid}/stat", "r") as fh:
+                    parts = fh.read().rsplit(") ", 1)[-1].split()
+                total += (int(parts[11]) + int(parts[12])) / ticks
+            except Exception:
+                continue
+        return total or None
+    except Exception:
+        return None
+
+
+def _record_hip_energy(cpu_seconds: float) -> None:
+    """Put this humanization's electricity cost in the ledger. Never raises."""
+    if cpu_seconds <= 0:
+        return
+    try:
+        joules = cpu_seconds * JOULES_PER_CPU_SECOND
+        usd = joules / _JOULES_PER_KWH * USD_PER_KWH
+        from .metering import record_service_cost
+        record_service_cost(
+            service="humanizer:hip",
+            cost_usd=usd,
+            units=cpu_seconds,
+            metadata={"cpu_seconds": round(cpu_seconds, 2), "joules": round(joules, 1)},
+            category="humanizer",
+        )
+    except Exception:
+        pass
+
+
 async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]:
     """Humanize `text` with HIP.
 
@@ -222,6 +289,7 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
 
     rounds = rounds or hip_rounds()
     current = text
+    cpu_before = _hip_server_cpu_seconds()
     try:
         async with aiohttp.ClientSession() as session:
             for i in range(rounds):
@@ -237,6 +305,13 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
     except Exception as e:
         logger.warning("HIP humanize failed: %s", type(e).__name__)
         return None
+
+    # Bill the electricity this run actually consumed (owner: everything costs
+    # tokens). Recorded only when the rewrite produced something, and only when
+    # the backend's CPU counters could be read.
+    cpu_after = _hip_server_cpu_seconds()
+    if cpu_before is not None and cpu_after is not None and cpu_after >= cpu_before:
+        _record_hip_energy(cpu_after - cpu_before)
 
     return current if current != text else None
 

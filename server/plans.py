@@ -17,9 +17,10 @@ The presentation layer now reads this module (and only this module) through
 balance warning can no longer drift apart.
 
 The former ALLOWANCE-vs-PURCHASE_GRANT divergence is GONE: ``TIER_TOKENS`` in
-``payments.py`` is the single source (trial 150 · basic 300 · pro 1000 ·
-elite 2700) and ``credits.TIER_MONTHLY_TASK_TOKENS`` re-exports it, so what a
-plan promises monthly is what a payment deposits. ``TIER_MONTHLY_CREDITS``
+``payments.py`` is the single source (trial 15,000 · basic 30,000 · pro 100,000 ·
+elite 270,000, at the owner's 2026-09-17 rate of 100 tokens = 1 cent) and
+``credits.TIER_MONTHLY_TASK_TOKENS`` re-exports it, so what a plan promises
+monthly is what a payment deposits. ``TIER_MONTHLY_CREDITS``
 survives only as a backwards-compatible alias and its name is now misleading —
 these were never credits.
 """
@@ -36,19 +37,19 @@ PLAN_ORDER: List[str] = ["trial", "basic", "pro", "elite"]
 PLAN_COPY: Dict[str, Dict[str, str]] = {
     "trial": {
         "name": "Free Trial",
-        "tagline": "7-day starter trial with 150 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.",
+        "tagline": "7-day starter trial with 15,000 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.",
     },
     "basic": {
         "name": "Basic",
-        "tagline": "300 task tokens / month for steady coursework.",
+        "tagline": "30,000 task tokens / month for steady coursework.",
     },
     "pro": {
         "name": "Pro",
-        "tagline": "1,000 task tokens / month for a full semester load.",
+        "tagline": "100,000 task tokens / month for a full semester load.",
     },
     "elite": {
         "name": "Elite",
-        "tagline": "2,700 task tokens / month for heavy research and multi-agent work.",
+        "tagline": "270,000 task tokens / month for heavy research and multi-agent work.",
     },
 }
 
@@ -74,7 +75,7 @@ def get_plan_catalogue() -> List[Dict[str, Any]]:
         copy = PLAN_COPY.get(plan, {})
         cents = _price_cents(plan)
         is_trial = plan == "trial"
-        tokens = TIER_MONTHLY_CREDITS.get(plan, 300)
+        tokens = TIER_MONTHLY_CREDITS.get(plan, 30000)
         catalogue.append(
             {
                 "id": plan,

@@ -252,8 +252,11 @@ def test_material_requires_credits_then_succeeds(client, unique_user, auth_heade
     assert "Hamlet" in r.json()["content"]
     assert r.json()["model_used"] is None  # call_llm returns str (BATCH-02)
 
-    # cost ledger: study_guide costs 2 tokens (TASK_COSTS)
-    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 3.0
+    # Cost is now MEASURED, not a flat price (owner 2026-09-17). The faked
+    # call_llm writes no cost-ledger row, so the generation measures 0 upstream
+    # cost and bills the universal 1-token minimum (1/100 cent) — not the old
+    # flat 2-token study_guide price.
+    assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 4.0
 
 
 def test_flashcards_json_retry_then_parse(client, unique_user, auth_headers, monkeypatch):
