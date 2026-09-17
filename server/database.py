@@ -104,6 +104,7 @@ class User(Base):
     study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
     organization = relationship("Organization", foreign_keys="User.organization_id", back_populates="members")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserSession(Base):
@@ -118,6 +119,47 @@ class UserSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
 
     user = relationship("User", back_populates="sessions")
+
+
+class ApiKey(Base):
+    """A user-issued API key for the browser extension (owner 2026-09-17).
+
+    Replaces logging in inside the extension: the user generates a key here,
+    copies it ONCE (only the hash is stored), pastes it into the extension, and
+    can set limits on it or revoke it at any time.
+
+    Why only the hash. A key that can be read back out of the database is a
+    credential sitting in plaintext in every backup and every query log. The
+    plaintext is shown exactly once, at creation, and is unrecoverable
+    afterwards — if it is lost, the user issues a new one. This is also why the
+    UI must say so plainly rather than pretending the key can be re-displayed.
+    """
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    public_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    # SHA-256 of the full key. Lookups hash the presented key and match on this,
+    # so a database leak does not hand out working credentials.
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # First characters, for the user to tell two keys apart in the list.
+    key_prefix: Mapped[str] = mapped_column(String(24))
+    label: Mapped[str] = mapped_column(String(100), default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_used_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+
+    # ── limits the user sets on their own key ────────────────────────────────
+    # None for any limit = unlimited. Enforced in server.api_keys.check_api_key.
+    usage_limit_tokens: Mapped[float] = mapped_column(Float, nullable=True)   # spend cap
+    usage_used_tokens: Mapped[float] = mapped_column(Float, default=0.0)
+    rate_limit_per_min: Mapped[int] = mapped_column(Integer, nullable=True)
+    allowed_scopes: Mapped[dict] = mapped_column(JSON, default=dict)          # future: endpoint allow-list
+
+    user = relationship("User", back_populates="api_keys")
 
 
 class Organization(Base):
@@ -736,5 +778,3 @@ def init_db() -> None:
                 conn.commit()
             except Exception:
                 pass
-
-

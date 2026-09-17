@@ -865,13 +865,17 @@ async def _apply_approval_decision(
         if (comment or "").strip():
             action_payload["user_instruction"] = comment.strip()
 
-        exec_res = await overlord_agent.execute_task_action(
+        # Admission control (owner 2026-09-17): under load the task QUEUES rather
+        # than failing or fighting for CPU. Budget is 80% RAM / 90% CPU, measured
+        # machine-wide. No timeout — a task must never be dropped for taking long.
+        from .resource_guard import run_with_budget as _budgeted
+        exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
             db,
             user=user,
             action_type=perm_entry["action_type"],
             payload=action_payload,
             assignment_id=assignment_id,
-        )
+        ))
         if assignment_id and (comment or "").strip():
             overlord_agent.add_chat_message(
                 assignment_id,
@@ -2346,14 +2350,18 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             agent_reply = _chat_reply(db, user, thread_key, text=reply_text, suggested_actions=[])
             return {"status": "failed", "message": agent_reply, "reply": reply_text,
                     "token_balance": _tk_balance(user)}
-    exec_res = await overlord_agent.execute_task_action(
+    # Admission control (owner 2026-09-17): under load the task QUEUES rather
+    # than failing or fighting for CPU. Budget is 80% RAM / 90% CPU, measured
+    # machine-wide. No timeout — a task must never be dropped for taking long.
+    from .resource_guard import run_with_budget as _budgeted
+    exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
         db,
         user=user,
         action_type=intent["action"],
         payload=intent["payload"],
         assignment_id=bubble_assignment_id,
         node=agent_node,
-    )
+    ))
     if not is_admin and user.plan != "elite":
         _charge_usage(user, db, intent["action"], since_id=_usage_mark)
     _LLM_EMPTY_HONEST = ("Hmm — I ran into an issue answering that one."

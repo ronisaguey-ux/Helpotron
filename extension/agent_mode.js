@@ -11,7 +11,7 @@
 //   4. Control: ONLY with explicit user consent (toggle default OFF + consent
 //      modal + always-visible Stop + banner). Executes server-validated
 //      control_actions through chrome.debugger (CDP Input domain) with the
-//      humanlike path module (mouse_path.js) — never teleporting.
+//      server-side humanlike path (server_logic.js) — never teleporting.
 //   5. Safety: user move/click/key interrupts via the content script's
 //      {'agent:user-interrupt'} message -> pause, NO auto-resume (Resume
 //      button), Stop/Esc/close -> debugger detach + drive-window disarm.
@@ -29,7 +29,6 @@
 // renders standalone (no chrome.* injection) so failures are visible, not
 // silent.
 
-import { humanMovePoints } from './mouse_path.js';
 
 // ── Environment guards (page stays usable when not running as an extension) ──
 const hasChrome = typeof chrome !== 'undefined' && !!chrome.runtime;
@@ -923,8 +922,14 @@ async function moveCursorAlong(points, buttons = 0) {
   return true;
 }
 
-function pathBetween(fromX, fromY, toX, toY, side) {
-  return humanMovePoints(fromX, fromY, toX, toY, { side });
+// The curve is generated server-side so every client moves the same way and a
+// change to the motion profile does not need an extension release. The server
+// returns the same {x, y, t} samples the local implementation did.
+// server_logic.js is a classic script loaded by agent_mode.html, so it is read
+// off the global scope rather than imported.
+async function pathBetween(fromX, fromY, toX, toY, side) {
+  if (!globalThis.HelpotronSL) return [{ x: fromX, y: fromY, t: 0 }, { x: toX, y: toY, t: 1 }];
+  return await globalThis.HelpotronSL.humanMovePoints(fromX, fromY, toX, toY, { side });
 }
 
 // Execute ONE server-validated control action. All coordinates arrive in
@@ -970,7 +975,7 @@ async function executeAction(op) {
     if (state.lastSide === null) state.lastSide = Math.random() < 0.5 ? 1 : -1;
     const side = state.lastSide;
     state.lastSide = -side;
-    const path = pathBetween(cur.x, cur.y, target.x, target.y, side);
+    const path = await pathBetween(cur.x, cur.y, target.x, target.y, side);
     const ok = await moveCursorAlong(path, dragging ? 1 : 0);
     return ok;
   };

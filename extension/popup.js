@@ -6,7 +6,6 @@
 
 const statusEl = document.getElementById('status');
 const serverInput = document.getElementById('server');
-const publicIdInput = document.getElementById('public_id');
 const unparseableBox = document.getElementById('unparseableBox');
 const unparseableReason = document.getElementById('unparseableReason');
 const btnOpenDataLake = document.getElementById('btnOpenDataLake');
@@ -175,62 +174,12 @@ if (btnClosePopup) {
   });
 }
 
-// ── Natural Mouse Path Generator (humanlike Bezier curve) ────────────────────
-function _bezPoint(p0, p1, p2, p3, t) {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
-  return {
-    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
-  };
-}
-
-function _easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-
-function humanMovePoints(fromX, fromY, toX, toY, opts = {}) {
-  const fx = Number(fromX) || 0;
-  const fy = Number(fromY) || 0;
-  const tx = Number(toX) || 0;
-  const ty = Number(toY) || 0;
-  const dx = tx - fx;
-  const dy = ty - fy;
-  const dist = Math.hypot(dx, dy);
-  if (dist < 0.5) return [{ x: tx, y: ty, t: 0 }];
-
-  const duration = Math.min(950, Math.max(300, 260 + dist * 0.35));
-  const nX = (dist > 0 ? -dy / dist : 0);
-  const nY = (dist > 0 ? dx / dist : 0);
-  const side = opts.side !== undefined ? (opts.side > 0 ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
-
-  const off = dist * (0.08 + Math.random() * 0.10) * side;
-  const u1 = 0.25 + Math.random() * 0.15;
-  const u2 = 0.60 + Math.random() * 0.18;
-  const p0 = { x: fx, y: fy };
-  const p3 = { x: tx, y: ty };
-  const p1 = { x: fx + dx * u1 + nX * off, y: fy + dy * u1 + nY * off };
-  const p2 = { x: fx + dx * u2 + nX * off * (0.7 + Math.random() * 0.6),
-               y: fy + dy * u2 + nY * off * (0.7 + Math.random() * 0.6) };
-
-  let dt = 10 + Math.random() * 6;
-  const tGapCap = Math.max(40, dist / 6);
-  if (dt > tGapCap) dt = tGapCap;
-
-  const points = [{ x: fx, y: fy, t: 0 }];
-  const count = Math.max(6, Math.round(duration / dt));
-  for (let i = 1; i <= count; i++) {
-    const tNorm = i / (count + 1);
-    const tms = tNorm * duration;
-    const eased = _easeInOut(tNorm);
-    const p = _bezPoint(p0, p1, p2, p3, eased);
-    points.push({ x: p.x, y: p.y, t: tms });
-  }
-  points.push({ x: tx, y: ty, t: duration });
-  return points;
+// The pointer curve is generated server-side (owner 2026-09-17) so every
+// client moves identically and a change to the motion profile ships without an
+// extension release. This wrapper keeps the call sites unchanged.
+async function humanMovePoints(fromX, fromY, toX, toY, opts = {}) {
+  if (!globalThis.HelpotronSL) return [{ x: fromX, y: fromY, t: 0 }, { x: toX, y: toY, t: 1 }];
+  return await globalThis.HelpotronSL.humanMovePoints(fromX, fromY, toX, toY, opts);
 }
 
 const statusTextEl = document.getElementById('statusText');
@@ -434,8 +383,10 @@ function syncInChatControls(st) {
 // mode}; PATCH ai.mode when the user changes it in the popup. Offline /
 // unauthenticated -> extension-local fallback (effort 500, mode manual).
 async function authToken() {
-  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
-  return session_token || token || '';
+  // The extension authenticates with a user-issued API key, not a login session
+  // (owner 2026-09-17). Keys are revocable and limitable on their own.
+  const { api_key } = await chrome.storage.local.get('api_key');
+  return api_key || '';
 }
 
 async function syncAgentSettingsFromServer() {
@@ -915,10 +866,10 @@ function answerApproval(reqId, decision, note, opts) {
   // answer straight to /api/extension/approval/respond; broker prompts keep
   // the runtime-message settle path below.
   if (viaServer) {
-    chrome.storage.local.get(['server', 'session_token', 'token'])
+    chrome.storage.local.get(['server', 'api_key'])
       .then(async (st) => {
         const srv = (st.server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-        const t = st.session_token || st.token || '';
+        const t = st.api_key || '';
         try {
           const res = await fetch(`${srv}/api/extension/approval/respond`, {
             method: 'POST',
@@ -1047,8 +998,8 @@ async function loadWhatsNew() {
   const body = document.getElementById('whatsNewBody');
   if (!banner || !body) return;
   const srv = (serverInput.value.trim() || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-  const st = await chrome.storage.local.get(['session_token', 'token', WHATSNEW_SEEN_KEY]);
-  const cred = st.session_token || st.token;
+  const st = await chrome.storage.local.get(['api_key', WHATSNEW_SEEN_KEY]);
+  const cred = st.api_key;
   let releases = [];
   try {
     const res = await fetch(`${srv}/api/extension/releases`, {
@@ -1157,15 +1108,15 @@ async function loadWhatsNew() {
 async function init() {
   // ONE batched storage read — everything paints from these snapshots.
   const st = await chrome.storage.local.get([
-    'server', 'public_id', 'token', 'session_token',
+    'server', 'public_id', 'api_key', 'ui_copy',
     'update_available', 'latest_version', CRAWL_CACHE_KEY,
     SEE_SCREEN_KEY, EXECUTE_KEY, MODE_KEY, EFFORT_KEY, MODEL_KEY, MODEL_TIER_KEY, EDUCATIONAL_MODE_KEY,
     JURISDICTION_KEY,
   ]);
   serverInput.value = st.server || 'https://helpotron.dpdns.org';
-  publicIdInput.value = st.public_id || '';
-  publicIdInput.placeholder = 'your Helpotron username';
-  const loggedIn = !!(st.public_id && (st.token || st.session_token));
+  const keyInput = document.getElementById('api_key');
+  if (keyInput) keyInput.value = st.api_key || '';
+  const loggedIn = !!st.api_key;
 
   const accountChip = document.getElementById('accountChip');
   if (accountChip) {
@@ -1173,7 +1124,7 @@ async function init() {
     if (label) label.textContent = (st.public_id && st.public_id !== 'Guest') ? `@${st.public_id}` : 'Guest';
   }
   if (!loggedIn) {
-    setStatus('⚠️ Sign in to sync — tap the account chip above.');
+    setStatus('⚠️ Not connected — tap the account chip and paste an API key.');
   }
 
   // CHAT options: instant paint from local state, then server sync after paint.
@@ -1406,19 +1357,19 @@ document.getElementById('accountChip')?.addEventListener('click', () => {
   chip.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 
-// Show/hide the password. Typing a long passphrase blind into a 320px popup is
-// how sign-ins fail twice and get abandoned; the field goes back to hidden when
-// the panel closes so a shoulder-surfable password is never left on screen.
+// Show/hide the API key. Pasting a long key blind into a 320px popup is how
+// connections fail twice and get abandoned; the field goes back to hidden when
+// the panel closes so the key is never left on screen.
 (() => {
-  const input = document.getElementById('password');
-  const btn = document.getElementById('togglePassword');
+  const input = document.getElementById('api_key');
+  const btn = document.getElementById('toggleApiKey');
   if (!input || !btn) return;
   const icon = btn.querySelector('use');
 
   const paint = (shown) => {
     input.type = shown ? 'text' : 'password';
     btn.setAttribute('aria-pressed', shown ? 'true' : 'false');
-    const label = shown ? 'Hide password' : 'Show password';
+    const label = shown ? 'Hide API key' : 'Show API key';
     btn.setAttribute('aria-label', label);
     btn.title = label;
     icon?.setAttribute('href', shown ? '#i-eye-off' : '#i-eye');
@@ -1440,86 +1391,66 @@ document.getElementById('accountChip')?.addEventListener('click', () => {
 
 document.getElementById('saveSettings')?.addEventListener('click', async () => {
   const srv = serverInput.value.trim() || 'https://helpotron.dpdns.org';
-  const pid = publicIdInput.value.trim();
-  const pwd = document.getElementById('password')?.value;
+  const key = (document.getElementById('api_key')?.value || '').trim();
 
-  // Captcha-present servers can't be logged into from MV3 (remote scripts
-  // banned) — validate any synced web session, else route to the website.
-  let captchaOn = false;
-  try {
-    const cfgRes = await fetch(`${srv}/api/public-config`);
-    const cfg = await cfgRes.json();
-    captchaOn = !!(cfg && cfg.captcha_enabled);
-  } catch (e) { /* server unreachable; try normal auth below */ }
-
-  if (captchaOn && pid && pwd) {
-    const st = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
-    if (st.public_id && (st.session_token || st.token)) {
-      try {
-        const meRes = await fetch(`${srv}/api/me`, {
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${st.session_token || st.token}` },
-        });
-        const me = await meRes.json();
-        if (meRes.ok && me.public_id) {
-          setStatus(`✅ Signed in as ${me.public_id} — web session synced to the extension`);
-          syncAgentSettingsFromServer();
-          return;
-        }
-      } catch (e) { /* session stale — fall through */ }
-    }
-    await chrome.storage.local.set({ server: srv, public_id: pid });
-    setStatus('🔒 Security check is on — sign in on the Helpotron website (session syncs here automatically). Opening site…');
-    chrome.tabs.create({ url: srv });
+  if (!key) {
+    setStatus('❌ Paste an API key first. Create one at Helpotron → Settings → API Keys.');
+    return;
+  }
+  if (!key.startsWith('htk_')) {
+    // Caught here rather than at the server so the user gets a useful message
+    // instead of a bare 401.
+    setStatus('❌ That does not look like a Helpotron API key (they start with "htk_").');
     return;
   }
 
-  if (pid && pwd) {
-    try {
-      setStatus('🔐 Authenticating with Helpotron…');
-      const res = await fetch(`${srv}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ public_id: pid, password: pwd }),
-      });
-      // A gateway that cannot reach the API answers 5xx with an EMPTY body, so
-      // res.json() throws and the catch below reports "Connection error:
-      // SyntaxError: Unexpected end of JSON input" — which names neither the
-      // status nor the host. Parse defensively and report what really came back.
-      let data = {};
-      try { data = JSON.parse(await res.text()) || {}; } catch { data = {}; }
-      if (!res.ok && !data.detail && !data.message) {
-        setStatus(`❌ Server error ${res.status} from ${srv} — that address answered but is not serving the Helpotron API. Check the SERVER field.`);
-        return;
-      }
-      if (res.ok && data.token) {
-        await chrome.storage.local.set({
-          server: srv,
-          public_id: data.public_id || pid,
-          token: data.token,
-          session_token: data.session_token || '',
-        });
-        setStatus('✅ Logged in & token saved');
-        syncAgentSettingsFromServer();
-        return;
-      } else {
-        setStatus(`❌ Auth failed: ${data.detail || data.message || 'Invalid credentials'}`);
-        return;
-      }
-    } catch (e) {
-      setStatus(`❌ Connection error: ${String(e)}`);
+  // Verify before saving, so a bad key is reported NOW rather than surfacing as
+  // a confusing failure on the next scrape.
+  try {
+    setStatus('🔐 Checking the key…');
+    const res = await fetch(`${srv}/api/extension/bootstrap`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    });
+    let data = {};
+    try { data = JSON.parse(await res.text()) || {}; } catch { data = {}; }
+
+    if (res.status === 401) {
+      setStatus('❌ That key was rejected — it may be revoked, expired, or mistyped.');
       return;
     }
-  }
+    if (res.status === 402) {
+      setStatus(`❌ ${data.detail || 'This key has reached its limit.'}`);
+      return;
+    }
+    if (!res.ok) {
+      setStatus(`❌ Server error ${res.status} from ${srv} — that address answered but is not serving the Helpotron API. Check the SERVER field.`);
+      return;
+    }
 
-  await chrome.storage.local.set({ server: srv, public_id: pid });
-  setStatus('✅ Settings saved');
+    await chrome.storage.local.set({
+      server: srv,
+      api_key: key,
+      public_id: (data.user && data.user.public_id) || '',
+    });
+    const who = (data.user && data.user.public_id) ? ` as ${data.user.public_id}` : '';
+    setStatus(`✅ Connected${who}`);
+
+    // The server owns the UI copy: spinner verbs and the busy notice come from
+    // the bootstrap payload, so changing wording never needs a new build.
+    if (data.ui) {
+      await chrome.storage.local.set({ ui_copy: data.ui });
+    }
+    syncAgentSettingsFromServer();
+  } catch (e) {
+    setStatus(`❌ Connection error: ${String(e)}`);
+  }
 });
 
 // Live-sync: after a website handoff (captcha login) the popup re-reads
 // identity + agent settings without a manual reopen.
 if (chrome && chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && (changes.public_id || changes.session_token || changes.token)) {
+    if (area === 'local' && (changes.public_id || changes.api_key)) {
       init();
     }
   });
@@ -1622,9 +1553,9 @@ if (chrome && chrome.storage && chrome.storage.onChanged) {
 
   // Embedded Settings Controls
   function refreshSettingsView() {
-    chrome.storage.local.get(['public_id', 'session_token', 'token'], (st) => {
+    chrome.storage.local.get(['public_id', 'api_key'], (st) => {
       const pid = (st.public_id || '').trim();
-      const connected = !!(pid && (st.session_token || st.token));
+      const connected = !!(pid && st.api_key);
       const nameEl = document.getElementById('settingsAccountName');
       const statusEl = document.getElementById('settingsAccountStatus');
       const avatarEl = document.getElementById('settingsAvatar');
@@ -1855,7 +1786,7 @@ function renderThreadsDrawer() {
     const div = document.createElement('div');
     const isActive = th.id === currentThreadId;
     div.className = `thread-item ${isActive ? 'active' : ''}`;
-    
+
     const titleSpan = document.createElement('span');
     titleSpan.style.flex = '1';
     titleSpan.style.overflow = 'hidden';
@@ -2555,7 +2486,7 @@ async function glideMouseTo(tabId, targetX, targetY) {
     lastCursorPos = { x: targetX, y: targetY };
     return;
   }
-  const points = humanMovePoints(lastCursorPos.x, lastCursorPos.y, targetX, targetY);
+  const points = await humanMovePoints(lastCursorPos.x, lastCursorPos.y, targetX, targetY);
   for (let i = 1; i < points.length; i++) {
     if (isAgentActionPaused) break;
     const pt = points[i];
@@ -3433,6 +3364,7 @@ const btnHumanizeLtd = document.getElementById('btnHumanizeLtd');
 
 let typingState = {
   active: false,
+  startedAt: 0,
   paused: false,
   // The cadence is chosen by PRESET ID, not by raw wpm/typo numbers: the server
   // owns what each preset means, so this panel and the typing engine can never
@@ -3492,14 +3424,14 @@ if (btnHumanizeLtd) {
 
 // The cadence menu is rendered from the server's config (renderCadencePresets).
 // The click handler is delegated from the container rather than bound per button
-// so a re-render cannot orphan it, and the id falls back to the static markup's
-// wpm attribute when the server is unreachable.
+// so a re-render cannot orphan it.
+//
+// The id is the whole contract — the server resolves the preset from it, so the
+// button only needs to carry it. The old wpm-sniffing fallback is gone with the
+// wpm scale: the three gears are Slow / Balanced / Fast and Balanced is the
+// measured hand, so there is no numeric speed to infer anything from.
 function presetIdFromButton(btn) {
-  if (btn.dataset.preset) return btn.dataset.preset;
-  const wpm = Number(btn.dataset.wpm);
-  if (wpm === 48) return 'careful';
-  if (wpm === 85) return 'fast';
-  return 'academic';
+  return btn.dataset.preset || 'balanced';
 }
 
 function selectCadence(btn) {
@@ -3529,7 +3461,7 @@ function renderCadencePresets(presets) {
     btn.type = 'button';
     btn.className = 'seg-btn ltd-preset' + (p.default ? ' active' : '');
     btn.dataset.preset = p.id || '';
-    btn.dataset.wpm = String(p.wpm != null ? p.wpm : '');
+    btn.dataset.speed = String(p.speed != null ? p.speed : '');
     btn.dataset.typo = String(p.typo_rate != null ? p.typo_rate : '');
     btn.title = p.title || p.label || '';
     btn.textContent = p.label || p.id || '';
@@ -3680,6 +3612,8 @@ if (btnStartLaunchToDoc) {
     if (ltdProgressFill) ltdProgressFill.style.width = '0%';
     if (ltdTypingPct) ltdTypingPct.textContent = '0%';
     if (ltdTypingStatus) ltdTypingStatus.textContent = 'Initializing typing engine…';
+    typingState.startedAt = Date.now();
+    startProgressNarration();
 
     typingState.active = true;
     typingState.paused = false;
@@ -3725,6 +3659,74 @@ if (btnCancelTyping) {
   });
 }
 
+// ── Server-driven progress narration (owner 2026-09-17) ─────────────────────
+// While a task runs the UI shows a rotating verb and, if the machine is loaded
+// for long enough, a "queued" notice. Both the wording and the threshold come
+// from the SERVER (/api/extension/bootstrap, /api/extension/queue) so they can
+// change without shipping a new extension build.
+//
+// There is deliberately NO CLIENT TIMEOUT anywhere in this path: the owner's
+// rule is that a task is never abandoned for taking long. If the server has to
+// wait for the machine to have room, the task waits and the UI explains why.
+const BUSY_POLL_MS = 15000;
+
+let _uiCopy = null;
+let _verbIdx = 0;
+let _verbTimer = null;
+let _busyTimer = null;
+let _busyShown = false;
+
+async function _ensureUiCopy() {
+  if (_uiCopy) return _uiCopy;
+  const st = await chrome.storage.local.get('ui_copy');
+  if (st.ui_copy) { _uiCopy = st.ui_copy; return _uiCopy; }
+  try {
+    const boot = await globalThis.HelpotronSL?.fetchBootstrap();
+    if (boot && boot.ui) {
+      _uiCopy = boot.ui;
+      await chrome.storage.local.set({ ui_copy: _uiCopy });
+    }
+  } catch { /* offline: fall back to a static verb below */ }
+  return _uiCopy;
+}
+
+function _showVerb() {
+  const verbs = (_uiCopy && _uiCopy.spinner_verbs) || ['Working'];
+  const verb = verbs[(_verbIdx++) % verbs.length];
+  if (ltdTypingStatus) ltdTypingStatus.textContent = `${verb}…`;
+}
+
+function startProgressNarration() {
+  stopProgressNarration();
+  _busyShown = false;
+  _ensureUiCopy().then(_showVerb);
+  // Rotate every few seconds so the label reflects that work is progressing
+  // rather than freezing on one word for the whole run.
+  _verbTimer = setInterval(_showVerb, 4000);
+
+  // Once long enough has passed, ask the server whether this is a QUEUE wait so
+  // the user is told their task is safe rather than left guessing.
+  _busyTimer = setInterval(async () => {
+    if (_busyShown) return;
+    const copy = await _ensureUiCopy();
+    if (!copy || !copy.busy_after_seconds) return;
+    const elapsedMs = Date.now() - typingState.startedAt;
+    if (elapsedMs < copy.busy_after_seconds * 1000) return;
+    const q = await globalThis.HelpotronSL?.fetchQueueStatus();
+    // Only claim a queue wait when the server is actually over budget; a task
+    // that is simply slow gets the honest message, not a false excuse.
+    if (!q || !q.over_budget) return;
+    _busyShown = true;
+    if (ltdTypingStatus) ltdTypingStatus.textContent = copy.busy_message;
+  }, BUSY_POLL_MS);
+}
+
+function stopProgressNarration() {
+  if (_verbTimer) { clearInterval(_verbTimer); _verbTimer = null; }
+  if (_busyTimer) { clearInterval(_busyTimer); _busyTimer = null; }
+  _busyShown = false;
+}
+
 // Listen for typing progress broadcasts from background
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && (msg.action === 'BROADCAST_TYPING_PROGRESS' || msg.action === 'TYPING_PROGRESS')) {
@@ -3736,7 +3738,13 @@ chrome.runtime.onMessage.addListener((msg) => {
       const pct = Math.round(Number(p.percentage !== undefined ? p.percentage : p.percent));
       if (ltdProgressFill) ltdProgressFill.style.width = `${pct}%`;
       if (ltdTypingPct) ltdTypingPct.textContent = `${pct}%`;
+      // The rotation must not overwrite a "busy" notice, and it stops the
+      // moment the run ends.
+      if (pct > 0 && pct < 100) {
+        typingState.startedAt = typingState.startedAt || Date.now();
+      }
       if (pct >= 100) {
+        stopProgressNarration();
         if (ltdTypingStatus) ltdTypingStatus.textContent = 'Completed!';
         setTimeout(() => {
           if (ltdActiveCard) ltdActiveCard.style.display = 'none';
@@ -3772,4 +3780,3 @@ function initApprovalInbox() {
 
 initApprovalInbox();
 init();
-

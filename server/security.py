@@ -215,6 +215,10 @@ def validate_password_strength(password: str) -> bool:
 
 SESSION_COOKIE_NAME = "helpotron_session"
 
+# API keys carry this prefix so they are unambiguously distinguishable
+# from a JWT or a DB session token (see server/api_keys.py).
+_API_KEY_PREFIX = "htk_"
+
 
 class SessionStore:
     """Persistent session store backed by the database.
@@ -466,6 +470,24 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
     auth_header = conn.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         bearer = auth_header.split(" ", 1)[1]
+
+        # ── API key (owner 2026-09-17) ──────────────────────────────────────
+        # The extension authenticates with a user-issued key instead of a
+        # login. Checked FIRST because the prefix makes it unambiguous and
+        # cheap — no JWT parse, no session lookup — and because a key must
+        # never be mistaken for a session token by a future format change.
+        #
+        # A key is deliberately limited even though it authenticates as the
+        # user: it cannot mint another key, change the password, or touch
+        # billing. Those routes call require_session_auth().
+        if bearer.startswith(_API_KEY_PREFIX):
+            db = SessionLocal()
+            try:
+                from . import api_keys as _keys
+                return _keys.authenticate(db, bearer, request)
+            finally:
+                db.close()
+
         payload = verify_jwt_token(bearer)
         if payload and 'sub' in payload:
             db = SessionLocal()
@@ -497,6 +519,18 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
         query_params = getattr(conn, "query_params", {})
         query_token = query_params.get("token")
         if query_token:
+            # An API key is the extension's credential on every transport,
+            # including this one — the agent socket sends the same secret it
+            # uses for HTTP, and rejecting it here would authenticate the REST
+            # calls but silently kill the live command channel.
+            if query_token.startswith(_API_KEY_PREFIX):
+                db = SessionLocal()
+                try:
+                    from . import api_keys as _keys
+                    return _keys.authenticate(db, query_token, request)
+                finally:
+                    db.close()
+
             payload = verify_jwt_token(query_token)
             if payload and 'sub' in payload:
                 db = SessionLocal()
@@ -508,6 +542,25 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
                     db.close()
 
     raise HTTPException(401, "Not authenticated: valid session token required")
+
+
+def require_session_auth(request: Request) -> None:
+    """Refuse an API-key-authenticated request on account-critical routes.
+
+    A key authenticates AS the user so the extension can do its job, but it must
+    not be able to escalate: minting another key, changing the password, or
+    touching billing would all defeat the point of a revocable, scoped
+    credential. If a key is leaked the user revokes it and the damage is bounded
+    to whatever the extension can do.
+
+    Call this at the top of those routes. A cookie/JWT request is unaffected.
+    """
+    if getattr(request.state, "auth_via_api_key", False):
+        raise HTTPException(
+            403,
+            "This action requires a signed-in session, not an API key. "
+            "Open Helpotron and sign in to continue.",
+        )
 
 
 async def get_current_user_optional(request: Request = None, websocket: WebSocket = None):

@@ -694,6 +694,11 @@ async def change_password(payload: ChangePasswordPayload, request: Request, db: 
     from .security import hash_password, validate_password_strength, verify_password, SessionStore, SESSION_COOKIE_NAME
     from .database import UserSession
     user = _get_current_user(request, db)
+    # A leaked API key must not be able to take over the account (owner
+    # 2026-09-17). Checked AFTER authentication: the guard reads the auth method
+    # that get_current_user recorded on request.state.
+    from .security import require_session_auth
+    require_session_auth(request)
     if not user.password_hash or not verify_password(payload.current_password, user.password_hash, user.password_salt):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if not validate_password_strength(payload.new_password):

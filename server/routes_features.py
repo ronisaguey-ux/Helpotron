@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 try:
     from .database import User, get_db
-    from .security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token, is_user_banned
+    from .security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned
 except (ImportError, ValueError):
     from server.database import User, get_db
-    from server.security import SessionStore, SESSION_COOKIE_NAME, verify_jwt_token, is_user_banned
+    from server.security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned
 
 from fastapi import status
 
@@ -49,6 +49,15 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith('Bearer '):
         token = auth_header.split(' ', 1)[1]
+
+        # API key (owner 2026-09-17): the extension authenticates with a
+        # user-issued key, not a login session. Routed through the shared
+        # implementation so this function cannot drift from security.py again —
+        # it already had, and every key was 401ing on these routes.
+        if token.startswith(_API_KEY_PREFIX):
+            from . import api_keys as _keys
+            return _keys.authenticate(db, token, request)
+
         payload = verify_jwt_token(token)
         if payload and 'sub' in payload:
             user = db.query(User).filter(User.id == payload['sub']).first()
@@ -355,4 +364,3 @@ async def set_user_theme(req: ThemeModel, request: Request, db: Session = Depend
 async def get_user_theme(request: Request, db: Session = Depends(get_db)):
     user = await _get_feature_user(request, db)
     return {"theme": get_theme(user)}
-
