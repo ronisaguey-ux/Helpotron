@@ -343,8 +343,14 @@ async def analyze_screen_image(
             if resp.status_code != 200:
                 last_err = f"{cid} -> HTTP {resp.status_code}"
             else:
-                content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content")
+                body = resp.json()
+                content = (body.get("choices") or [{}])[0].get("message", {}).get("content")
                 if isinstance(content, str) and content.strip():
+                    # Cost ledger (owner 2026-09-17): this vision call costs real
+                    # money and previously recorded NOTHING, so nothing could ever
+                    # bill for it. Log it the same way llm.call_llm does, so the
+                    # usage-charging path sees it.
+                    _record_vision_cost(body, cid)
                     if attempt:
                         logger.warning(
                             "screen vision tier %s unusable (%s); answered with fallback %s",
@@ -357,6 +363,38 @@ async def analyze_screen_image(
                     return strip_thinking_tokens(content.strip())
                 last_err = f"{cid} -> empty content"
         raise ValueError(f"vision model returned no usable content ({last_err})")
+
+
+def _record_vision_cost(body: dict, model_id: str) -> None:
+    """Put one vision call in the cost ledger using its reported usage. Never raises."""
+    try:
+        usage = body.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        if prompt_tokens == 0 and completion_tokens == 0:
+            return
+        from .llm import MODEL_PRICING
+        from .metering import current_meter_user
+        from .cost_tracking import cost_engine
+        from .database import SessionLocal
+        public_id = current_meter_user()
+        if not public_id:
+            return
+        # Price from the same table llm.py routes by; fall back to a conservative
+        # default so an unknown id still lands a non-zero (visible) cost.
+        pricing = MODEL_PRICING.get(model_id) or MODEL_PRICING.get(model_id.split(":")[0])
+        if pricing:
+            cost = ((prompt_tokens / 1_000_000.0) * pricing.get("input", 0.0)
+                    + (completion_tokens / 1_000_000.0) * pricing.get("output", 0.0))
+        else:
+            cost = (prompt_tokens / 1_000_000.0) * 0.15 + (completion_tokens / 1_000_000.0) * 0.60
+        with SessionLocal() as db:
+            cost_engine.log_api_call(
+                db=db, public_id=public_id, tool_or_model=model_id, category="vision",
+                input_tokens=prompt_tokens, output_tokens=completion_tokens,
+            )
+    except Exception:
+        pass
 
 
 # ── Control-block extraction + hardening ──────────────────────────────────────

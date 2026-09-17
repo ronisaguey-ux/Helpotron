@@ -1450,6 +1450,40 @@ def _charge_tokens(user, db, cost: float) -> None:
     db.commit()
 
 
+def _charge_usage(user, db, action: str, since_id: Optional[int] = None) -> float:
+    """Charge an agent action for what it ACTUALLY cost (owner 2026-09-17).
+
+    Owner: "its supposed to charge 1 token for every 1 cent of service ... every
+    single process, from humanizing, ai detection, EVERYTHING costs tokens".
+
+    So the price of an action is its measured cost, converted at 1 token per cent
+    — with the action's flat price kept as a FLOOR. The floor matters for two
+    reasons: some real work (browser automation, sandbox runs) consumes platform
+    resources that never reach the LLM ledger, and the owner explicitly wants
+    processes like humanizing and detection to cost tokens even when they run
+    locally for free. Cost drives the price upwards whenever it exceeds the floor;
+    the floor stops anything from being free that costs the platform something.
+
+    Returns the number of tokens charged.
+    """
+    floor = _action_cost(action)
+    measured_tokens = 0
+    if since_id is not None:
+        try:
+            from .credits import ledger_watermark, usage_cents_since, calculate_task_token_cost
+            user_id = user.id if hasattr(user, "id") else user
+            cents = usage_cents_since(db, user_id, since_id)
+            if cents > 0:
+                measured_tokens = calculate_task_token_cost(cents / 100.0)
+        except Exception as e:
+            logger.warning("usage measurement failed for %s: %s", action, e)
+
+    cost = float(max(floor, measured_tokens))
+    if cost > 0:
+        _charge_tokens(user, db, cost)
+    return cost
+
+
 def _tk_balance(user) -> float:
     """Current remaining token balance — resend with chat responses so the UI
     can update live without a refresh (operator 08-27)."""
@@ -2160,6 +2194,15 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     from .security import is_admin_user
     is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
 
+    # Metering watermark (owner 2026-09-17): everything this user consumes from
+    # here to the end of the request — the intent LLM, the action's own calls, the
+    # detectors, the humanizer — is summed and charged as one measured cost.
+    try:
+        from .credits import ledger_watermark
+        _usage_mark = ledger_watermark(db, user.id)
+    except Exception:
+        _usage_mark = None
+
     ctx = _build_agent_chat_prompt(user, payload, db)
     settings = ctx["settings"]
     thread_key = ctx["thread_key"]
@@ -2313,7 +2356,7 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         node=agent_node,
     )
     if not is_admin and user.plan != "elite":
-        _charge_tokens(user, db, _action_cost(intent["action"]))
+        _charge_usage(user, db, intent["action"], since_id=_usage_mark)
     _LLM_EMPTY_HONEST = ("Hmm — I ran into an issue answering that one."
                          " Try again in a moment?")
     if exec_res.get("status") == "failed":

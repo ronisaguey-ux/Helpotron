@@ -72,6 +72,58 @@ class CostEngine:
         db.refresh(entry)
         return entry
 
+    def record_service_cost(
+        self,
+        db,
+        public_id: str,
+        service: str,
+        cost_usd: float,
+        units: float = 0.0,
+        metadata: Optional[Dict[str, Any]] = None,
+        category: str = "service",
+    ) -> Optional[ApiUsageLog]:
+        """Record a call to a service priced per unit, not per token.
+
+        `log_api_call` derives cost from per-1K-token model rates, which is
+        meaningless for something billed per character or per word (the AI
+        detectors) or per message (SMS). This writes the measured dollar cost
+        directly into the same ledger, so those calls become visible to
+        analytics AND to usage-based charging — before this they were invisible
+        and nothing could ever bill for them.
+
+        `units` is whatever the provider bills in (characters, words, messages)
+        and is stored in metadata for audit; `cost_usd` is the authoritative
+        figure.
+        """
+        try:
+            user = db.query(User).filter(User.public_id == str(public_id)).first()
+            multiplier = float(getattr(user, 'token_cost_multiplier', 1.0) or 1.0) if user else 1.0
+            meta = dict(metadata or {})
+            meta["units"] = units
+            entry = ApiUsageLog(
+                user_id=user.id if user else None,
+                public_id=str(public_id),
+                tool_or_model=service,
+                category=category,
+                input_tokens=0,
+                output_tokens=0,
+                base_cost_usd=round(float(cost_usd), 8),
+                user_multiplier=multiplier,
+                charged_cost_usd=round(float(cost_usd) * multiplier, 8),
+                metadata_=meta,
+            )
+            db.add(entry)
+            db.commit()
+            db.refresh(entry)
+            return entry
+        except Exception:
+            # A metering failure must never break the feature it is measuring.
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return None
+
     def get_cost_summary(self, db) -> Dict[str, Any]:
         """Admin analytics: totals, per-model breakdown, top users by spend.
 

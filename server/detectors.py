@@ -127,6 +127,60 @@ class DetectorRegistry:
         return final_results
 
 
+# ── Detector cost accounting (owner 2026-09-17) ──────────────────────────────
+# "every single process, from humanizing, ai detection, EVERYTHING costs tokens".
+# These calls cost real money and were completely invisible: nothing recorded
+# them in the cost ledger, so nothing could ever bill for them. Measured rates,
+# from the providers' published pricing (2026-09-17):
+#
+#   Sapling AI-detector : $0.005 per 1,000 characters  (0-10M chars/month tier)
+#                         https://sapling.ai/docs/api/pricing/
+#   Pangram             : $0.05 per 1,000 words, billed as one unit per STARTED
+#                         1,000-word block with a minimum of one unit per
+#                         submission — so the cheapest scan is 5 cents.
+#                         https://www.pangram.com/knowledge-hub/what-is-pangrams-developers-plan
+#
+# NOTE ON PANGRAM PRICING: the request below omits a `model` field, which the
+# provider currently bills at the legacy rate above. Pangram 3 is scheduled for
+# discontinuation on 2026-09-30 and the same call then moves to Pangram 4 rates —
+# $0.05 per 100 words, i.e. TEN TIMES more (a 1,000-word scan goes 5c -> 50c).
+# When that lands, update PANGRAM_USD_PER_WORD and re-check the opt-in default.
+SAPLING_USD_PER_CHAR = 0.000005     # $0.005 / 1,000 chars
+PANGRAM_USD_PER_WORD = 0.00005      # $0.05 / 1,000 words
+PANGRAM_WORDS_PER_UNIT = 1000       # one billable unit = started 1,000-word block
+
+
+def estimate_detector_cost(name: str, text: str) -> float:
+    """Measured cost in USD of running one detector over `text`.
+
+    The single source of truth for detector pricing, so the ledger and any
+    caller agree on the number.
+    """
+    t = text or ""
+    if name == "sapling":
+        return len(t) * SAPLING_USD_PER_CHAR
+    if name == "pangram":
+        words = len(t.split())
+        units = max(1, -(-words // PANGRAM_WORDS_PER_UNIT))  # ceil, min one unit
+        return units * PANGRAM_WORDS_PER_UNIT * PANGRAM_USD_PER_WORD
+    return 0.0
+
+
+def _record_detector_cost(name: str, text: str) -> None:
+    """Put a detector call in the cost ledger. Never raises."""
+    try:
+        from .metering import record_service_cost
+        record_service_cost(
+            service=f"detector:{name}",
+            cost_usd=estimate_detector_cost(name, text),
+            units=len(text or ""),
+            metadata={"detector": name, "chars": len(text or "")},
+            category="detector",
+        )
+    except Exception:
+        pass
+
+
 class PangramDetector(Detector):
     """Pangram AI Detector (text.external-api.pangram.com)."""
 
@@ -150,6 +204,10 @@ class PangramDetector(Detector):
                         task_id = data.get("task_id")
                         if not task_id:
                             return DetectorResult(self.name, 10.0, data)
+                        # Billed on submission, so record it here rather than
+                        # after the poll — a scan costs money even if the poll
+                        # never returns a usable verdict.
+                        _record_detector_cost("pangram", text)
                         # Poll for result
                         for _ in range(5):
                             await asyncio.sleep(1.0)
@@ -191,6 +249,7 @@ class SaplingDetector(Detector):
                     if resp.status == 200:
                         data = await resp.json()
                         score = float(data.get("score", 0.0)) * 100.0
+                        _record_detector_cost("sapling", text)
                         return DetectorResult(self.name, score, data)
                     return DetectorResult(self.name, 20.0, {"error": f"HTTP {resp.status}"})
         except Exception as e:
