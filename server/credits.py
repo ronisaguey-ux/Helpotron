@@ -92,34 +92,51 @@ def usage_cents_since(db: Session, user_id: int, since_id: int) -> float:
         return 0.0
 
 
+def has_usage_balance(user: Any) -> bool:
+    """Eligibility check for starting metered work — no deduction.
+
+    Owner (2026-09-17): "just charge the token costs after its calculated, dont
+    guess before". So the gate no longer holds an estimate; it only refuses to
+    START work for an account that has nothing left. The real cost is charged
+    afterwards by charge_actual_usage().
+    """
+    try:
+        if is_unmetered(user):
+            return True
+        return get_token_balance(user) > 0
+    except Exception:
+        return True
+
+
 def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
                         pre_charged: int = 0, reason: str = "",
-                        allow_overdraft: bool = False,
+                        allow_overdraft: bool = True,
                         idempotency_key: Optional[str] = None) -> int:
-    """Settle a finished task against what it really cost.
+    """Charge a finished task for what it ACTUALLY cost.
 
-    Converts measured cents to tokens at the owner's rate (1 token = 1 cent) and
-    adjusts the balance for the difference against whatever was pre-charged at
-    the gate. Returns the number of tokens settled (the delta, signed).
+    Converts measured cents to tokens at the owner's rate (1 token = 1 cent).
+    Returns the number of tokens charged (signed: negative if it adjusted down).
 
-    Why this shape: the cost is only knowable AFTER the work runs, but a balance
-    has to be held BEFORE it to stop a broke account starting a task. So the
-    entry gate pre-charges an estimate and this reconciles to the truth on
-    completion.
+    The owner's model, verbatim: *"just charge the token costs after its
+    calculated, dont guess before"*. So there is no up-front estimate — the work
+    runs, the cost ledger records what it consumed, and this charges that. The
+    gate only checks eligibility (has_usage_balance), it does not deduct.
 
-    idempotency_key: REQUIRED for correctness when the caller might settle the
-    same window twice — without it, a retried or re-entered completion path bills
-    the whole window again (measured: a second settle over the same watermark
-    charged another 9 tokens). The watermark is not a lock, so a durable record
-    of the settlement is the only safe guard; pass something unique per task run
-    (e.g. the session id). Matching rows are looked up in the ledger the same way
-    a real charge would be.
+    `pre_charged` exists for callers that still hold an up-front charge (the flat
+    TASK_COSTS sites that have not been converted); it is subtracted so only the
+    difference bills. Pass 0 for the pure charge-after path.
 
-    allow_overdraft=False (default): never drive the balance below zero. The
-    shortfall is logged loudly so it is visible as lost revenue rather than
-    silently absorbed. set_token_balance() clamps at 0 by design, and other
-    callers rely on that invariant, so overdraft is opt-in per call site rather
-    than a change to the primitive.
+    idempotency_key: REQUIRED when the caller might settle the same window twice —
+    a watermark is not a lock, so without it a re-entered completion path bills
+    the whole window again (measured: 9 tokens per duplicate settlement). Pass
+    something unique per run (e.g. the session id).
+
+    allow_overdraft=True (default): if the work cost more than the balance, the
+    balance goes NEGATIVE rather than the platform silently eating the difference.
+    The work was already performed, so the cost is real; a negative balance is
+    honest accounting and it self-blocks the account until they top up. Written
+    directly rather than via set_token_balance(), which clamps at 0 by design for
+    every other caller.
     """
     user_id = user.id if hasattr(user, 'id') else user
     row = db.query(User).filter(User.id == user_id).first()
@@ -154,14 +171,28 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
         )
         new_balance = 0.0
 
-    set_token_balance(row, new_balance)
+    if new_balance < 0:
+        # Overdraft is deliberate (owner: charge what it cost, after). Write the
+        # settings blob directly — set_token_balance() clamps at 0 for every other
+        # caller and that invariant must not change underneath them.
+        warn = dict(getattr(row, "settings", None) or {})
+        warn["token_balance"] = float(new_balance)
+        row.settings = warn
+        logger.warning(
+            "usage overdraft: user %s now at %.2f tokens after %s (real cost %.4f cents) "
+            "— the account is blocked from new work until it tops up",
+            user_id, new_balance, task_name, cents,
+        )
+    else:
+        set_token_balance(row, new_balance)
+
     db.add(CreditTransaction(
         user_id=user_id,
         delta=-delta,
         reason=entry_reason,
     ))
     db.commit()
-    logger.info("Settled %s tokens for %s (real cost %.4f cents, pre-charged %s)",
+    logger.info("Charged %s tokens for %s (real cost %.4f cents, pre-charged %s)",
                 delta, task_name, cents, pre_charged)
     return delta
 

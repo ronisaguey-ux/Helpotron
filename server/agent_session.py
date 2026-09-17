@@ -88,6 +88,12 @@ class AgentSession:
         self.command_queue: asyncio.Queue | None = asyncio.Queue()
         self.pending: dict[str, asyncio.Future] = {}
         self.attached = asyncio.Event()  # set when the extension connects
+        # Usage metering (owner 2026-09-17). Set by the entry gate to the cost
+        # ledger position at session start; _run_agent_and_persist charges what
+        # the session consumed after that point. Left None if it could not be
+        # recorded — in that case the session is never charged, because a
+        # metering failure must not invent a charge.
+        self.usage_watermark: int | None = None
 
     def elapsed(self) -> float:
         return time.time() - self.started_at
@@ -304,4 +310,3 @@ async def execute_session_with_preservation(session_id: str, cost: float, db, us
         if callable(rollback_or_err):
             rollback_or_err()
         return {"status": "failed", "error": str(e), "refunded": True}
-

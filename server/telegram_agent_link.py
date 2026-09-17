@@ -139,21 +139,19 @@ async def _run_instruction(user: User, token: str, chat_id: str, text: str) -> N
         fresh = db.query(User).filter(User.public_id == user.public_id).first()
         if fresh is None:
             return
-        if not credits.charge(fresh, "agent_session", db):
+        if not credits.has_usage_balance(fresh):
             await _send_reply(
                 token, chat_id,
-                "I can't start that — not enough credits. Top up in the Helpotron "
-                "app and try again (1 credit per instruction).",
+                "I can't start that — your token balance is empty. Top up in the "
+                "Helpotron app and try again.",
             )
             return
         db.commit()
         session = agent_manager.create(fresh.public_id, None, text[:MAX_INSTRUCTION_CHARS])
-        # Metering (owner 2026-09-17): same exposure as the app path — an agent
-        # instruction makes many LLM calls, so hold the flat estimate at the gate
-        # and settle the real cost (1 token = 1 cent) once it finishes.
+        # Metering (owner 2026-09-17): no up-front charge — the real cost is
+        # charged once the instruction finishes and the ledger shows what it used.
         try:
             session.usage_watermark = credits.ledger_watermark(db, fresh.id)
-            session.pre_charged_tokens = credits.TASK_COSTS.get("agent_session", 1)
         except Exception as e:
             logger.warning("could not set usage watermark for telegram agent: %s", e)
             session.usage_watermark = None
@@ -176,37 +174,32 @@ async def _run_instruction(user: User, token: str, chat_id: str, text: str) -> N
             "I couldn't finish that one (nothing was collected). Try rephrasing, "
             "or make sure the source page opens without a login."
         )
-        if session.status in ("failed", "disconnected", "unparseable") and session.steps < 3:
-            with SessionLocal() as db:
-                ref_user = db.query(User).filter(User.public_id == user.public_id).first()
-                if ref_user is not None:
-                    credits.top_up(db, ref_user, credits.TASK_COSTS["agent_session"],
-                                   reason="refund:telegram_agent:failed")
-                    refunded = True
+        # Nothing is charged up front, so a failed instruction simply bills
+        # nothing — there is no flat fee to refund any more.
+        refunded = False
 
     if not reply:
         reply = "I ran out of something on my side — try again in a minute."
-    if refunded:
-        reply += "\n\n(Your credit was refunded — nothing was produced.)"
     await _send_reply(token, chat_id, reply)
 
     with SessionLocal() as db:
         w = db.query(User).filter(User.public_id == user.public_id).first()
         if w is not None:
-            # Metering (owner 2026-09-17): settle the instruction against what it
-            # actually cost (1 token = 1 cent). Skipped when the flat charge was
-            # already refunded — that path bills nothing.
+            # Metering (owner 2026-09-17): charge the instruction for what it
+            # actually cost (1 token = 1 cent of service). This is the full
+            # charge — nothing was taken at the gate. A run that produced nothing
+            # still consumed LLM calls, so it still bills for what it used.
             watermark = getattr(session, "usage_watermark", None)
-            if watermark is not None and not refunded:
+            if watermark is not None:
                 try:
                     credits.charge_actual_usage(
                         w, "agent_session", db, since_id=watermark,
-                        pre_charged=getattr(session, "pre_charged_tokens", 0),
+                        pre_charged=0,
                         idempotency_key=f"usage:tg_agent:{session.session_id}",
                     )
                 except Exception as e:
                     db.rollback()
-                    logger.error("telegram agent usage settlement failed: %s", e)
+                    logger.error("telegram agent usage charge failed: %s", e)
             st = bot_state(w)
             st["sessions_run"] = int(st.get("sessions_run", 0)) + 1
             st["last_seen"] = int(time.time())
