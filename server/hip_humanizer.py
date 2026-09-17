@@ -1,0 +1,260 @@
+"""HIP humanizer — base-model de-paraphrasing (arXiv 2605.19516).
+
+WHY THIS REPLACES THE OLD REWRITE PATH
+--------------------------------------
+The previous gate rewrote drafts with `call_llm`, i.e. an *instruction-tuned*
+model. Measured here: that scores **100% AI on GPTZero** no matter how well it
+hits the surface metrics. So does every other rewrite approach tried — a
+prompt-only rulebook that hit 10/11 measured targets, style-matching against 32
+real human essays, and the deterministic 56-parameter engine.
+
+The reason is that a detector fires on the **RLHF / instruction-tuning fingerprint
+encoded in a model's weights**, and that fingerprint is fixed at *generation*. No
+rewrite of a finished text can remove it, because the text was already shaped by
+whatever produced it.
+
+HIP takes a **base model** — no instruction tuning, therefore no RLHF layer — and
+gives it one narrow skill by LoRA fine-tuning: turn an AI-style paraphrase back
+into human-style prose. Measured: **1% AI on GPTZero**, against 100% for every
+instruction-tuned arm.
+
+THE FORMAT IS NOT A CHAT TEMPLATE
+---------------------------------
+This is the detail that costs an hour if missed. HIP trains and infers on PLAIN
+TAGGED text, reproduced verbatim from upstream `src/hip/prompts.py`:
+
+    <source_text>
+    {the AI text}
+    </source_text>
+
+    <target_text>
+
+The model continues from there and closes with `</target_text>`. Feeding it a
+chat-formatted prompt produces garbage: measured, it lists websites, emits
+"Rephrased:" scaffolding, or echoes few-shot examples.
+
+So this module speaks **raw completion** (`/v1/completions`) where the backend
+offers it, and falls back to a single-message chat call for backends that only
+expose `/v1/chat/completions`.
+
+DIRECTION IS KNOWN, NOT GUESSED
+-------------------------------
+The released training manifest names the contract:
+
+    "input_column":  "paraphrased_text"   ->  the AI text
+    "target_column": "text"               ->  the human text
+
+so this is a de-paraphraser, not a general writer.
+
+CONFIG (environment, matching the rest of the server)
+-----------------------------------------------------
+    HIP_ENDPOINT   base URL, e.g. http://127.0.0.1:8080/v1
+    HIP_MODEL      model id to request (default: the merged HIP model)
+    HIP_API_KEY    bearer token, if the backend needs one
+    HIP_ROUNDS     iterative rounds (default 1 — see note below)
+    HIP_TIMEOUT    per-request seconds (default 180)
+
+ROUNDS. Upstream defaults to 10. Measured at 1.7B, round 1 is already the
+strongest on surface metrics and later rounds drift the meaning further without
+gaining detector headroom, so the default here is 1 and rounds are opt-in.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+from pathlib import Path
+from typing import Optional
+
+import aiohttp
+
+logger = logging.getLogger("helpotron.hip")
+
+# Load the repo .env ourselves rather than relying on server.llm having been
+# imported first: "someone else already called load_dotenv" is an invisible
+# ordering dependency, and getting it wrong makes hip_configured() silently
+# return False (measured) — which turns HIP off with no error anywhere.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
+except Exception:  # dotenv is optional; real env vars still work
+    pass
+
+# ── config ────────────────────────────────────────────────────────────────
+# 8099, not 8080: a node process already owns 8080 on this box.
+DEFAULT_ENDPOINT = "http://127.0.0.1:8099/v1"
+DEFAULT_MODEL = "rs3ystems/hip-humanizer-qwen3-1.7b"
+
+
+def _cfg(name: str, default: str) -> str:
+    return (os.getenv(name) or default).strip()
+
+
+def hip_configured() -> bool:
+    """True when a HIP backend is configured. The gate degrades to the old path
+    when this is False, so a missing endpoint can never break a chat."""
+    return bool(_cfg("HIP_ENDPOINT", ""))
+
+
+def hip_endpoint() -> str:
+    return _cfg("HIP_ENDPOINT", DEFAULT_ENDPOINT).rstrip("/")
+
+
+def hip_model() -> str:
+    return _cfg("HIP_MODEL", DEFAULT_MODEL)
+
+
+def hip_rounds() -> int:
+    try:
+        return max(1, int(_cfg("HIP_ROUNDS", "1")))
+    except ValueError:
+        return 1
+
+
+def hip_timeout() -> float:
+    try:
+        return max(10.0, float(_cfg("HIP_TIMEOUT", "180")))
+    except ValueError:
+        return 180.0
+
+
+# ── the prompt format, verbatim from upstream src/hip/prompts.py ──────────
+
+def build_source_target_prompt(source_text: str) -> str:
+    """The exact format HIP was trained on. Do not 'improve' this."""
+    return (
+        "<source_text>\n"
+        f"{str(source_text or '').strip()}\n"
+        "</source_text>\n\n"
+        "<target_text>\n"
+    )
+
+
+def clean_generated_text(text: str) -> str:
+    """Strip the tags HIP wraps its answer in. Verbatim upstream."""
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("<target_text>"):
+        cleaned = cleaned[len("<target_text>"):].lstrip()
+    if "</target_text>" in cleaned:
+        cleaned = cleaned.split("</target_text>", 1)[0].rstrip()
+    return cleaned.strip()
+
+
+# ── the call ──────────────────────────────────────────────────────────────
+
+async def _post(session: aiohttp.ClientSession, url: str, payload: dict,
+                headers: dict, timeout: float) -> Optional[dict]:
+    try:
+        async with session.post(url, json=payload, headers=headers,
+                                timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+            if r.status != 200:
+                body = await r.text()
+                logger.warning("HIP %s -> HTTP %s: %s", url, r.status, body[:200])
+                return None
+            return await r.json()
+    except Exception as e:
+        logger.warning("HIP request failed (%s): %s", url, type(e).__name__)
+        return None
+
+
+async def _one_round(text: str, session: aiohttp.ClientSession) -> Optional[str]:
+    """One de-paraphrase pass. Returns None on any failure — never raises."""
+    prompt = build_source_target_prompt(text)
+    headers = {"Content-Type": "application/json"}
+    key = _cfg("HIP_API_KEY", "")
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+
+    base = hip_endpoint()
+    model = hip_model()
+    to = hip_timeout()
+
+    # Raw completion first: this is what HIP was trained on. A chat template is
+    # applied by every /chat/completions backend and measurably degrades the
+    # output, so it is only the fallback.
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "max_tokens": 1024,
+        "temperature": 1.0,
+        "top_p": 0.95,
+    }
+    data = await _post(session, f"{base}/completions", payload, headers, to)
+    if data:
+        try:
+            raw = data["choices"][0]["text"]
+        except (KeyError, IndexError, TypeError):
+            raw = ""
+        out = clean_generated_text(raw)
+        if out:
+            return out
+        logger.info("HIP raw completion returned nothing usable; trying chat form")
+
+    payload = {
+        "model": model,
+        "max_tokens": 1024,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    data = await _post(session, f"{base}/chat/completions", payload, headers, to)
+    if not data:
+        return None
+    try:
+        raw = data["choices"][0]["message"].get("content") or ""
+    except (KeyError, IndexError, TypeError):
+        return None
+    return clean_generated_text(raw) or None
+
+
+async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]:
+    """Humanize `text` with HIP.
+
+    Returns the rewritten text, or None if HIP is unconfigured or every round
+    failed. A None return means "leave the draft alone" — this function is on the
+    critical path of a live chat and must never raise or return an empty string.
+    """
+    if not hip_configured():
+        return None
+    text = (text or "").strip()
+    if len(text) < 40:
+        return None
+
+    rounds = rounds or hip_rounds()
+    current = text
+    try:
+        async with aiohttp.ClientSession() as session:
+            for i in range(rounds):
+                out = await _one_round(current, session)
+                if not out:
+                    break
+                # A round that collapses is discarded rather than fed forward.
+                if len(out.split()) < 0.5 * len(current.split()):
+                    logger.info("HIP round %s shrank %sw -> %sw; discarding",
+                                i + 1, len(current.split()), len(out.split()))
+                    break
+                current = out
+    except Exception as e:
+        logger.warning("HIP humanize failed: %s", type(e).__name__)
+        return None
+
+    return current if current != text else None
+
+
+async def hip_health() -> dict:
+    """Cheap liveness probe for the settings UI / diagnostics."""
+    if not hip_configured():
+        return {"configured": False}
+    headers = {"Content-Type": "application/json"}
+    key = _cfg("HIP_API_KEY", "")
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(f"{hip_endpoint()}/models", headers=headers,
+                             timeout=aiohttp.ClientTimeout(total=10)) as r:
+                return {"configured": True, "status": r.status,
+                        "endpoint": hip_endpoint(), "model": hip_model()}
+    except Exception as e:
+        return {"configured": True, "status": None,
+                "endpoint": hip_endpoint(), "error": type(e).__name__}
