@@ -1,21 +1,26 @@
 // Helpotron Universal Extension Service Worker
 // Multi-Platform Scraping, Subagent Automation, and Data Lake Integration
 
-// Pure crawl logic (scope/robots/index parsing/payload builder) lives in a
-// shared module so the node test harness can unit-test the real code.
+// All decision logic is server-side (owner 2026-09-17). This worker captures,
+// dispatches input, and renders; it asks the Helpotron API what is allowed.
+// server_logic.js is a CLASSIC script — this worker is classic too (no
+// "type":"module"), so `import()` is not available here.
+const _SL = async () => globalThis.HelpotronSL;
+
+// Decision logic (crawl scope/robots/payload, motion, UI copy) now lives on the
+// SERVER — see server_logic.js, which is the thin client for it.
 // MV3 classic worker: importScripts. Firefox MV3 has NO background.service_worker
 // support — with the dual-key manifest (service_worker + scripts) Firefox loads
 // background.js as an EVENT PAGE (Window context), where importScripts is
 // undefined and would crash the whole background at load ("Uncaught
-// ReferenceError: importScripts is not defined"). Load crawl-core.js as a
-// regular script there instead; the script's function declarations become
-// globals before any message event is dispatched (all uses of the exports are
-// inside listeners/async handlers, never at top level).
+// ReferenceError: importScripts is not defined"). Load it as a regular script
+// there instead; it publishes to globalThis before any message event is
+// dispatched (all uses are inside listeners/async handlers, never top level).
 if (typeof importScripts === 'function') {
-  importScripts('crawl-core.js');
+  importScripts('server_logic.js');
 } else if (typeof document !== 'undefined' && document.documentElement) {
   const s = document.createElement('script');
-  s.src = chrome.runtime.getURL('crawl-core.js');
+  s.src = chrome.runtime.getURL('server_logic.js');
   s.async = false;
   document.documentElement.appendChild(s);
 }
@@ -54,10 +59,12 @@ async function getPublicId() {
 }
 
 async function getAuthToken() {
-  // session_token (server-issued, DB-backed, 7-day sliding) is the primary
-  // credential; the 24h JWT `token` remains as fallback for pre-update saves.
-  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
-  return session_token || token || '';
+  // The extension authenticates with a user-issued API key (owner 2026-09-17),
+  // not a login session. The key is revocable and limitable on its own, so a
+  // copy leaked from a browser profile can be killed without touching the
+  // account's password.
+  const { api_key } = await chrome.storage.local.get('api_key');
+  return api_key || '';
 }
 
 async function authHeaders() {
@@ -70,11 +77,11 @@ async function authHeaders() {
 // land on the right account. Returns an {ok:false,error} refusal when the
 // popup hasn't been logged in; null = proceed.
 async function requireLoggedIn() {
-  const { public_id, session_token, token } = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
-  if (!public_id || (!session_token && !token)) {
+  const { api_key } = await chrome.storage.local.get('api_key');
+  if (!api_key) {
     return {
       ok: false,
-      error: 'Not logged in — open the Helpotron extension popup, enter your Helpotron username & password in Settings, then save. Scraping is disabled until then.',
+      error: 'Not connected — open the Helpotron extension popup, tap the account chip and paste your API key. Scraping is disabled until then.',
     };
   }
   return null;
@@ -165,7 +172,10 @@ async function scrapeAndSaveTab(tabId, opts) {
     uploaded: false,
     upload_error: f.error || '',
   }));
-  const payload = buildAssignmentPayload({ ...data, files_meta: metaForServer }, public_id);
+  // Built server-side: the dedupe key and bubble routing must match what the
+  // server expects, and that cannot drift if only one side owns it.
+  const payload = await (await _SL()).buildAssignmentPayload({ ...data, files_meta: metaForServer }) || {};
+  payload.public_id = public_id;
   // 08-28 fix: an instruction-scrape run must land on the SAME bubble the
   // chatbox pinned (assignment_id) and carry its instruction, so the FIRST
   // upsert already targets the right assignment instead of only the second one.
@@ -294,14 +304,13 @@ async function scrapeTabContext(chosenTabId) {
   }
 }
 
-// Push one scraped file into the assignment dump/upload flow. Auth caveat
-// (08-28): routes_dump /api/dump/upload authenticates with the cookie or the
-// signed JWT only — the extension's opaque session_token Bearer is rejected —
-// so prefer the 24h JWT saved at login and fall back to the session token.
+// Push one scraped file into the assignment dump/upload flow. The API key is
+// accepted by every authenticated route now — the old caveat (08-28) that
+// routes_dump took only a cookie or signed JWT is gone, because the feature
+// routes share one auth implementation instead of each keeping a private copy.
 async function dumpAuthHeaders() {
-  const { token, session_token } = await chrome.storage.local.get(['token', 'session_token']);
-  const auth = token || session_token || '';
-  return auth ? { Authorization: `Bearer ${auth}` } : {};
+  const { api_key } = await chrome.storage.local.get('api_key');
+  return api_key ? { Authorization: `Bearer ${api_key}` } : {};
 }
 
 async function uploadScrapedFile(assignmentId, filename, b64) {
@@ -377,6 +386,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) {
     sendResponse({ ok: false, error: 'untrusted sender' });
     return;
+  }
+  // Generic CDP passthrough for the typing engine's human-motion layer.
+  // Deliberately restricted to the INPUT domain and to real input methods:
+  // mouse movement and trusted text insertion. Nothing here can read a page,
+  // evaluate script or touch storage, so the extension stays within the same
+  // permission it already needed for trusted keystrokes.
+  const _INPUT_CDP_ALLOW = /^(Input\.(dispatchMouseEvent|insertText))$/;
+  if (message.type === 'helpotron-cdp-input') {
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId === undefined || tabId !== cdpTypingTabId) {
+      sendResponse({ ok: false, error: 'no trusted-key session on this tab' });
+      return;
+    }
+    const method = message.method || '';
+    if (!_INPUT_CDP_ALLOW.test(method)) {
+      sendResponse({ ok: false, error: 'method not allowed' });
+      return;
+    }
+    chrome.debugger.sendCommand({ tabId }, method, message.params || {})
+      .then(() => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
+    return true;
   }
   if (message.type === 'helpotron-cdp-key') {
     const tabId = sender.tab && sender.tab.id;
@@ -577,17 +608,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const p = message.payload || {};
     const patch = {};
     if (p.public_id) patch.public_id = p.public_id;
-    if (p.session_token) patch.session_token = p.session_token;
-    if (p.token) patch.token = p.token;
     if (p.server) patch.server = p.server;
-    if (patch.public_id && patch.session_token) {
+    // The web handoff still carries public_id/server. A key is what the
+    // extension actually authenticates with, so an api_key in the payload takes
+    // effect immediately; a session_token is no longer a credential here.
+    if (p.api_key) patch.api_key = p.api_key;
+    if (patch.public_id || patch.api_key) {
       chrome.storage.local.set(patch).then(() => {
         sendResponse({ ok: true });
       }).catch((err) => {
         sendResponse({ ok: false, error: String(err) });
       });
     } else {
-      sendResponse({ ok: false, error: 'Missing public_id or session_token' });
+      sendResponse({ ok: false, error: 'Missing public_id or api_key' });
     }
     return true;
   }
@@ -833,7 +866,7 @@ async function launchToDoc(payload) {
       action: 'START_ASSISTIVE_TYPING',
       payload: {
         text: plan.text,
-        wpm: typing.wpm,
+        speed: typing.speed,
         naturalPauses: typing.natural_pauses !== false,
         jitter: typing.jitter !== false,
         typoRate: typing.typo_rate,
@@ -932,8 +965,8 @@ async function activateAgent(chosenTabId, instruction, assignmentId) {
 }
 
 async function connectAgentSocket(server, sessionId) {
-  const { token } = await chrome.storage.local.get('token');
-  const wsUrl = server.replace(/^http/, 'ws') + `/ws/agent/${sessionId}?token=${encodeURIComponent(token || '')}`;
+  const { api_key } = await chrome.storage.local.get('api_key');
+  const wsUrl = server.replace(/^http/, 'ws') + `/ws/agent/${sessionId}?token=${encodeURIComponent(api_key || '')}`;
   const ws = new WebSocket(wsUrl);
   agentSocket = ws;
   ws.onopen = () => console.log(`[helpotron] Universal agent ${sessionId} connected on tab ${targetTabId}`);
@@ -1191,7 +1224,7 @@ async function ingestScrapedAssignment(assignment, instruction, assignmentId) {
     const blocked = await requireLoggedIn();
     if (blocked) return blocked;  // never upload under a missing/unverified account
     const public_id = await getPublicId();
-    const payload = buildAssignmentPayload(
+    const payload = await (await _SL()).buildAssignmentPayload(
       {
         title: assignment.title || 'Scraped Coursework',
         dueDate: assignment.due_date || '',
@@ -1200,9 +1233,9 @@ async function ingestScrapedAssignment(assignment, instruction, assignmentId) {
         rubric: assignment.rubric || '',
         url: assignment.source_url || '',
         meta: assignment.meta || {},
-      },
-      public_id
-    );
+      }
+    ) || {};
+    payload.public_id = public_id;
     if (instruction) payload.instruction = String(instruction).slice(0, 4000);
     if (assignmentId || assignment.assignment_id) {
       payload.assignment_id = Number(assignmentId || assignment.assignment_id);
@@ -1281,7 +1314,10 @@ async function buildCrawlQueue(tabId, scope, triggerUrl) {
   const queueSet = new Set();
   const pushQueue = (url, kind) => {
     const canon = (url || '').split('#')[0];
-    if (canon && isScopedContentUrl(canon, scope) && !queueSet.has(canon)) {
+    // Defence in depth on a server-supplied scope: a prefix test against the
+    // course URL can only ever be MORE restrictive than the server's rule, so
+    // it is safe for the client to apply.
+    if (canon && scope && canon.startsWith(scope.courseUrl) && !queueSet.has(canon)) {
       queueSet.add(canon);
       queue.push({ url: canon, kind });
     }
@@ -1318,14 +1354,26 @@ async function buildCrawlQueue(tabId, scope, triggerUrl) {
   return queue;
 }
 
-// Enqueue new content links discovered on an index page (dedupe + scope +
-// queue cap). Pushed onto state.queue as {url, kind:'content'}.
-function enqueueDiscoveredLinks(state, urlList) {
+// Enqueue new content links discovered on an index page (dedupe + queue cap).
+// The SCOPE FILTER IS THE SERVER'S: the whole candidate list goes up in one
+// request and only the URLs the server accepts come back. Doing the check here
+// would be both a per-link round trip waiting to happen and a policy the client
+// could be made to answer wrongly.
+async function enqueueDiscoveredLinks(state, urlList) {
+  const candidates = (urlList || []).map((u) => (u || '').split('#')[0]).filter(Boolean);
+  if (!candidates.length) return;
+
+  const plan = await (await _SL()).crawlPlan({
+    url: (state.scope && state.scope.courseUrl) || '',
+    candidate_links: candidates,
+  });
+  // A server that cannot be reached must not cause the crawl to scrape
+  // unchecked — skipping discovery is the safe failure.
+  const accepted = (plan && plan.ok && plan.accepted_links) || [];
+
   const queued = new Set((state.queue || []).map((it) => it.url));
-  for (const raw of urlList || []) {
+  for (const canon of accepted) {
     if (state.queue.length >= CRAWL_MAX_QUEUE) break;
-    const canon = (raw || '').split('#')[0];
-    if (!canon || !isScopedContentUrl(canon, state.scope)) continue;
     if (state.scraped_urls.includes(canon)) continue;
     if (queued.has(canon)) continue;
     queued.add(canon);
@@ -1450,7 +1498,7 @@ async function processCrawlIndex(state, indexUrl) {
       func: () => (window.collectCourseLinks ? window.collectCourseLinks() : null),
     });
     const got = res?.[0]?.result;
-    if (got && got.ok && got.links) enqueueDiscoveredLinks(state, got.links);
+    if (got && got.ok && got.links) await enqueueDiscoveredLinks(state, got.links);
     if (got && got.ok && got.indexLinks) enqueueDiscoveredIndexes(state, got.indexLinks);
     return { ok: true };
   } catch (e) {
@@ -1494,7 +1542,8 @@ async function crawlTick() {
         state.total = state.done + state.failed + state.queue.length;
       } else {
         if (state.scraped_urls.includes(url)) continue;
-        if (!isScopedContentUrl(url, state.scope)) continue;
+        // Narrowing guard only (see buildCrawlQueue): cannot widen the scope.
+        if (!url || !state.scope || !url.startsWith(state.scope.courseUrl)) continue;
         state.scraped_urls.push(url);
         await writeCrawlState(state);
         await processCrawlPage(state, url);
@@ -1536,18 +1585,31 @@ async function startCrawl(chosenTabId) {
 
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (!tab || !tab.url) return { ok: false, error: 'Cannot read the selected tab URL.' };
-  const scope = courseScopeOf(tab.url);
-  if (!scope) {
+  // Scope and robots policy are decided by the server, not here. The extension
+  // must not be the thing that decides how far a crawl may wander — that is a
+  // security boundary, and it belongs where it can be changed without a store
+  // review and cannot be edited by whoever holds the browser profile.
+  const provisional = await (await _SL()).crawlPlan({ url: tab.url });
+  if (!provisional.ok) {
+    return { ok: false, error: 'Could not reach Helpotron to plan the crawl — check your connection and try again.' };
+  }
+  if (!provisional.in_scope) {
     return { ok: false, error: 'Not a Canvas course page — open any /courses/<id>/ page in the course you want scraped.' };
   }
+  const scope = provisional.scope;
 
   // Respect robots.txt for the course path before crawling anything.
   const robots = await fetchTextSafe(`${scope.origin}/robots.txt`, 5000);
-  if (robots && !isRobotsAllowed(robots, `/courses/${scope.courseId}/`)) {
-    return {
-      ok: false,
-      error: "robots.txt disallows crawling this course's pages (Disallow: /courses/<id>) — respectful crawl refused.",
-    };
+  if (robots) {
+    const check = await (await _SL()).crawlPlan({
+      url: tab.url, robots_text: robots, crawl_path: `/courses/${scope.courseId}/`,
+    });
+    if (check.ok && check.robots_allowed === false) {
+      return {
+        ok: false,
+        error: "robots.txt disallows crawling this course's pages (Disallow: /courses/<id>) — respectful crawl refused.",
+      };
+    }
   }
 
   const queue = await buildCrawlQueue(tabId, scope, tab.url);
@@ -1635,7 +1697,7 @@ async function checkForExtensionUpdate() {
 
     if (latestVersion && latestVersion !== CURRENT_VERSION) {
       console.log(`[Helpotron] Update available: v${CURRENT_VERSION} -> v${latestVersion}`);
-      
+
       // Set update badge on extension icon
       if (chrome.action && chrome.action.setBadgeText) {
         chrome.action.setBadgeText({ text: 'NEW' });

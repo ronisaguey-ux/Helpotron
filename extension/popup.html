@@ -179,32 +179,30 @@
 
   <!-- ============ Login panel (opened from the account chip) ============ -->
   <section class="card option-panel" id="loginPanel" hidden aria-labelledby="loginTitle">
-    <span class="field-label" id="loginTitle">Sign in to Helpotron</span>
+    <span class="field-label" id="loginTitle">Connect with an API key</span>
     <div class="field">
       <label class="field-label" for="server">Server</label>
       <input class="input" id="server" type="url" placeholder="https://helpotron.dpdns.org" spellcheck="false" />
     </div>
     <div class="field">
-      <label class="field-label" for="public_id">Public ID</label>
-      <input class="input" id="public_id" type="text" placeholder="your Helpotron username" autocomplete="username" />
-    </div>
-    <div class="field">
-      <label class="field-label" for="password">Password</label>
+      <label class="field-label" for="api_key">API key</label>
       <div class="pw-wrap">
-        <input class="input" id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
-        <button class="pw-toggle" id="togglePassword" type="button"
-                aria-label="Show password" aria-pressed="false" title="Show password">
+        <input class="input" id="api_key" type="password" placeholder="htk_…" autocomplete="off" spellcheck="false" />
+        <button class="pw-toggle" id="toggleApiKey" type="button"
+                aria-label="Show API key" aria-pressed="false" title="Show API key">
           <svg class="ic ic--sm"><use href="#i-eye" /></svg>
         </button>
       </div>
     </div>
     <button class="btn btn--primary" id="saveSettings" type="button">
       <svg class="ic"><use href="#i-key" /></svg>
-      Save &amp; Connect
+      Connect
     </button>
     <p class="field-hint">
-      Security-check accounts: sign in on the Helpotron website once — the session syncs here automatically.
+      No password needed. Create a key at <strong>helpotron.dpdns.org → Settings → API Keys</strong>,
+      then paste it here. You can limit or revoke it any time without changing your password.
     </p>
+    <p class="field-hint" id="keyStatusHint" hidden></p>
   </section>
 
   <!-- ============ Navigation Tabs (Launcher / Chat / Type / Settings) ============ -->
@@ -575,9 +573,9 @@
             <!-- Static fallback: the server's /api/launch-to-doc/config replaces
                  this menu at runtime, so cadences can change without a rebuild.
                  data-preset carries the id the server resolves the cadence from. -->
-            <button type="button" class="seg-btn ltd-preset active" data-preset="academic" data-wpm="65" data-typo="0.018" title="Academic — 65 words per minute">Academic<span class="seg-sub">65 wpm</span></button>
-            <button type="button" class="seg-btn ltd-preset" data-preset="careful" data-wpm="48" data-typo="0.025" title="Careful — 48 words per minute">Careful<span class="seg-sub">48 wpm</span></button>
-            <button type="button" class="seg-btn ltd-preset" data-preset="fast" data-wpm="85" data-typo="0.012" title="Fast — 85 words per minute">Fast<span class="seg-sub">85 wpm</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-preset="slow" data-speed="1.28" data-typo="0.101" title="Slow — deliberate, longer gaps between keys">Slow<span class="seg-sub">unhurried</span></button>
+            <button type="button" class="seg-btn ltd-preset active" data-preset="balanced" data-speed="1.0" data-typo="0.101" title="Balanced — the measured natural rhythm for this account">Balanced<span class="seg-sub">natural</span></button>
+            <button type="button" class="seg-btn ltd-preset" data-preset="fast" data-speed="0.82" data-typo="0.101" title="Fast — quicker than natural, for a short draft">Fast<span class="seg-sub">quick</span></button>
           </div>
         </div>
 
@@ -710,6 +708,7 @@
   </div>
 
   <script src="theme.js"></script>
+  <script src="server_logic.js"></script>
   <script src="element_registry.js"></script>
   <script src="popup.js"></script>
 </body>

@@ -6,7 +6,7 @@ dev-login bypass) and git will not stage changes to it.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from .database import User, get_db
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 @router.post("/portal")
-def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(get_current_authenticated_user)):
+def billing_portal(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_authenticated_user)):
     """Open the Stripe-hosted billing portal for the signed-in subscriber.
 
     The Settings "Manage Billing" control implies you can actually manage the
@@ -25,5 +25,8 @@ def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(g
     destination. Returns a status rather than raising when there is nothing to
     manage, so the UI can say why instead of appearing broken.
     """
+    # Billing needs a real session, not an API key (owner 2026-09-17).
+    from .security import require_session_auth
+    require_session_auth(request)
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     return create_billing_portal_session(db, user)

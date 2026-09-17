@@ -11,6 +11,7 @@ import {
 import AppearancePreview from './AppearancePreview.jsx';
 import TelegramIntegration from './TelegramIntegration.jsx';
 import TwoFactorSetup from './TwoFactorSetup.jsx';
+import ApiKeysPanel from './ApiKeysPanel.jsx';
 
 /**
  * Build a settings delta for the nested AI block.
@@ -330,6 +331,9 @@ export function SettingsSections({
           </div>
         </section>
       )}
+
+      {/* ================= SECTION: API KEYS ================= */}
+      {(section === 'all' || section === 'apikeys') && <ApiKeysPanel />}
 
       {/* ================= SECTION: AI DETECTION & HUMANIZER ================= */}
       {(section === 'all' || section === 'humanizer') && (

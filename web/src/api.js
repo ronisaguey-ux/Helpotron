@@ -333,7 +333,7 @@ export const api = {
   put: (endpoint, data, opts = {}) => request(endpoint, { method: 'PUT', body: JSON.stringify(data), ...opts }),
   delete: (endpoint, opts = {}) => request(endpoint, { method: 'DELETE', ...opts }),
   request,
-  
+
   // Auth endpoints
   login: (public_id, password, code = null, turnstile_token = null) => request('/api/login', { method: 'POST', body: JSON.stringify({ public_id, password, code, two_factor_code: code, turnstile_token }) }),
   publicConfig: () => request('/api/public-config', { method: 'GET' }),
@@ -352,7 +352,7 @@ export const api = {
   // Owner 09-06: a redeemable referral code = one-time order discount (30% new
   // user / 15% existing). Never awards tokens.
   referralRedeem: (code) => request('/api/referrals/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
-  
+
   // Health and data
   health: () => request('/api/health', { method: 'GET' }),
   dashboard: (userId, limit = 50, offset = 0) => request(`/api/dashboard?public_id=${userId}&limit=${limit}&offset=${offset}`, { method: 'GET' }),
@@ -441,6 +441,14 @@ export const api = {
   emptyTrash: () => request('/api/trash', { method: 'DELETE' }),
   deleteLibraryMaterial: (id) => request(`/api/library/materials/${id}`, { method: 'DELETE' }),
   billingPortal: () => request('/api/billing/portal', { method: 'POST' }),
+
+  /* ── API keys (extension credential) ─────────────────────────────────────
+   * The extension no longer logs in: the user generates a key here and pastes
+   * it in. create() returns the plaintext ONCE — it is not recoverable. */
+  listApiKeys: () => request('/api/keys', { method: 'GET' }),
+  createApiKey: (body) => request('/api/keys', { method: 'POST', body: JSON.stringify(body || {}) }),
+  updateApiKey: (id, body) => request(`/api/keys/${id}`, { method: 'PATCH', body: JSON.stringify(body || {}) }),
+  revokeApiKey: (id) => request(`/api/keys/${id}`, { method: 'DELETE' }),
   getAgentActions: () => request('/api/agent/actions'),
   undoAgentAction: (actionId) => request(`/api/agent/actions/${actionId}/undo`, { method: 'POST' }),
   pay: (body) => request('/api/payments', { method: 'POST', body: JSON.stringify(body) }),
@@ -836,4 +844,3 @@ export const api = {
 };
 
 export default api;
-

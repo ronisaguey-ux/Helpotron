@@ -81,9 +81,11 @@ try:
     from .routes_voice import router as voice_router
     from .routes_simulation import router as simulation_router
     from .routes_dump import router as dump_router
+    from .routes_api_keys import router as api_keys_router
     from .routes_import_url import router as import_url_router
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
+    from .routes_extension_api import router as extension_api_router
     from .routes_extension import public_router as extension_public_router
     from .assignments import router as assignments_router
     from .assignment_turnin import router as assignment_turnin_router
@@ -113,9 +115,11 @@ except (ImportError, ValueError):
     from server.routes_overlord import router as overlord_router
     from server.routes_simulation import router as simulation_router
     from server.routes_dump import router as dump_router
+    from server.routes_api_keys import router as api_keys_router
     from server.routes_import_url import router as import_url_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
+    from server.routes_extension_api import router as extension_api_router
     from server.routes_extension import public_router as extension_public_router
     from server.assignments import router as assignments_router
     from server.assignment_turnin import router as assignment_turnin_router
@@ -386,9 +390,11 @@ app.include_router(recovery_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)
+app.include_router(api_keys_router)
 app.include_router(import_url_router)
 app.include_router(math_router)
 app.include_router(extension_router)
+app.include_router(extension_api_router)
 app.include_router(extension_public_router)
 app.include_router(assignment_turnin_router)  # before assignments_router: literal /assignments/turned-in must win
 app.include_router(assignment_direction_router)
@@ -1979,8 +1985,12 @@ class CheckoutIn(BaseModel):
 
 
 @app.post("/api/checkout")
-def checkout(body: CheckoutIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def checkout(body: CheckoutIn, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a Stripe Checkout session for a subscription."""
+    # Billing needs a real session, not an API key (owner 2026-09-17): the
+    # extension's key is a scoped credential and must not be able to spend money.
+    from .security import require_session_auth
+    require_session_auth(request)
     _purchase_2fa_required(current_user)
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:
