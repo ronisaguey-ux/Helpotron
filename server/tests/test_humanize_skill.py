@@ -158,10 +158,18 @@ def test_detection_min_human_clamped():
 
 
 def test_detection_detectors_default_and_toggles():
-    # 09-04 A8: default set is Sapling + Pangram — Winston purged.
+    # 09-04 A8: default set was Sapling + Pangram — Winston purged.
     # 09-06 (owner): + the free self-hosted tier (ZipPy, RoBERTa-ONNX).
-    assert detection_detectors(_settings()) == ["sapling", "pangram", "zippy", "roberta_onnx"]
-    s = _settings(detection={"enabled": "on", "min_human": 70,
+    # 09-17 (owner): LOCAL BY DEFAULT — the paid tier is opt-in, so the default
+    # set is the free in-process tier only.
+    assert detection_detectors(_settings()) == ["zippy", "roberta_onnx"]
+
+    # explicit opt-in brings the paid detectors back into the run
+    paid = _settings(detection={"enabled": "on", "paid_verification": "on"})
+    assert detection_detectors(paid) == ["sapling", "pangram", "zippy", "roberta_onnx"]
+
+    # per-detector toggles still apply within whichever tier is enabled
+    s = _settings(detection={"enabled": "on", "paid_verification": "on",
                              "detectors": {"sapling": False, "pangram": True,
                                            "roberta_onnx": False}})
     assert detection_detectors(s) == ["pangram", "zippy"]
@@ -173,7 +181,8 @@ async def test_ensure_human_standard_rewrites_until_pass(monkeypatch):
     a 2-entry attempt log. Both the detector and the LLM are faked."""
     seen_rewrites = []
 
-    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None,
+                             force_paid=False):
         human = 80.0 if "v2" in text else 40.0
         return (100.0 - human, [SimpleNamespace(name="sapling", score=100.0 - human)], True)
 
@@ -206,7 +215,8 @@ async def test_ensure_human_standard_excludes_error_votes(monkeypatch):
         return SimpleNamespace(name=name, score=score,
                                details={"error": err} if err else {})
 
-    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None,
+                             force_paid=False):
         if "v2" in text:
             return (0.0, [_res("sapling", 0.0), _res("pangram", 0.0)], True)
         return (40.0, [_res("sapling", 100.0), _res("pangram", 0.0), _res("sapling", 20.0, "HTTP 400")], False)
@@ -229,7 +239,8 @@ async def test_ensure_human_standard_keeps_best_when_never_passes(monkeypatch):
     """Always under the bar: keeps the best-scored attempt (here the
     original — a rewrite that scores WORSE must never replace it)."""
 
-    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None):
+    async def fake_score_text(text, threshold=80.0, max_retries=5, detectors=None,
+                             force_paid=False):
         human = 30.0 if "v2" in text or "v3" in text else 35.0
         return (100.0 - human, [SimpleNamespace(name="sapling", score=100.0 - human)], True)
 
@@ -355,3 +366,95 @@ async def test_ensure_human_standard_skips_short_text():
     final, attempts = await ensure_human_standard("ok", s)
     assert final == "ok"
     assert attempts is None
+
+
+# ─── Paid detection verification: LOCAL BY DEFAULT (owner 2026-09-17) ─────────
+# "keep everything local, but add an explicit toggle ... so if users want extra
+# detection, they can use it". The paid detectors must never be CALLED unless a
+# user opted in — being excluded from the results list is not enough, because the
+# call itself is what gets billed.
+
+def test_paid_verification_off_by_default():
+    """No setting, empty settings, and an explicit "off" all mean local-only."""
+    from server.humanize_skill import detection_detectors, paid_verification_enabled
+
+    for label, s in (("none", None),
+                     ("empty", {}),
+                     ("explicit off", {"ai": {"detection": {"paid_verification": "off"}}})):
+        assert paid_verification_enabled(s) is False, label
+        names = detection_detectors(s)
+        assert "sapling" not in names and "pangram" not in names, label
+        # the free in-process tier is always available
+        assert "zippy" in names and "roberta_onnx" in names, label
+
+
+def test_paid_verification_on_includes_paid_detectors():
+    from server.humanize_skill import detection_detectors, paid_verification_enabled
+
+    s = {"ai": {"detection": {"paid_verification": "on"}}}
+    assert paid_verification_enabled(s) is True
+    names = detection_detectors(s)
+    assert "sapling" in names and "pangram" in names
+    assert "zippy" in names and "roberta_onnx" in names
+
+
+def test_paid_verification_honours_subject_scope():
+    """A subject-scoped opt-in must reach detection_detectors too — it takes
+    node/ctx for exactly this reason. Omitting them silently reported the paid
+    tier as off."""
+    from server.humanize_skill import detection_detectors, paid_verification_enabled
+
+    s = {"ai": {"detection": {}},
+         "scoped": {"ai.detection.paid_verification": [
+             {"scope": {"level": "subject", "ref": "bio"}, "value": True}]}}
+
+    assert paid_verification_enabled(s, ctx={"subject": "bio"}) is True
+    assert "pangram" in detection_detectors(s, ctx={"subject": "bio"})
+    # outside that subject the local-only default still holds
+    assert paid_verification_enabled(s, ctx={"subject": "math"}) is False
+    assert "pangram" not in detection_detectors(s, ctx={"subject": "math"})
+
+
+@pytest.mark.asyncio
+async def test_paid_detectors_not_called_without_optin(monkeypatch):
+    """The regression that matters: with the toggle off the paid detectors are
+    never INVOKED, not merely filtered from the results. The funnel used to build
+    its api list straight from the registry and call it whenever the local
+    verdict was ambiguous, so an excluded detector was still billed."""
+    import server.detectors as D
+
+    called = []
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+
+        async def detect(self, text):
+            called.append(self.name)
+            return D.DetectorResult(self.name, 50.0, {})
+
+    monkeypatch.setattr(D.registry, "_detectors", [
+        Fake(n) for n in ("perplexity_cadence", "burstiness_analyzer",
+                          "zippy", "roberta_onnx", "pangram", "sapling")])
+    monkeypatch.setattr(D, "LOCAL_DETECTOR_NAMES", {"zippy", "roberta_onnx"})
+
+    from server.humanize_skill import detection_detectors
+
+    text = ("Social media has changed how people talk to each other in fundamental "
+            "ways and this matters a great deal to everyone in the discussion today.")
+
+    # OFF (the default): only free detectors may run
+    called.clear()
+    await D.score_text(text, threshold=0.0,
+                       detectors=detection_detectors({}) or None, force_paid=False)
+    assert [c for c in called if c in ("pangram", "sapling")] == [], \
+        f"paid detectors were called with the toggle off: {called}"
+    assert "zippy" in called, "the free local tier should still run"
+
+    # ON: the user asked for verification, so the paid tier must actually run
+    called.clear()
+    s_on = {"ai": {"detection": {"paid_verification": "on"}}}
+    await D.score_text(text, threshold=0.0,
+                       detectors=detection_detectors(s_on) or None, force_paid=True)
+    assert "pangram" in called and "sapling" in called, \
+        f"paid detectors did not run with the toggle on: {called}"

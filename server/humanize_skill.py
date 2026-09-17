@@ -243,6 +243,11 @@ DETECTOR_DISPLAY = {
     "roberta_onnx": "RoBERTa-ONNX (local)",
 }
 
+# The detectors that cost money per call. Local by default — a user has to turn
+# on "paid detection verification" before these are ever invoked (owner
+# 2026-09-17: "keep everything local").
+PAID_DETECTOR_NAMES = {"sapling", "pangram"}
+
 # 09-04 (owner A8 purge): Sapling + Pangram only — Winston purged from system.
 # 09-06 (owner): + the free self-hosted tier, on by default.
 DETECTOR_DEFAULTS = {"sapling": True, "pangram": True, "zippy": True, "roberta_onnx": True}
@@ -281,16 +286,59 @@ def detection_min_human(settings: Optional[Dict[str, Any]], node: str = "my_agen
         return default
 
 
-def detection_detectors(settings: Optional[Dict[str, Any]]) -> list:
-    """Enabled API detector names (registry keys). Toggle entries win; missing
-    entries fall back to DETECTOR_DEFAULTS (sapling+pangram — Winston is off
-    until the account is topped up). An empty list still enforces with the two
-    in-process heuristic scorers only."""
+def detection_detectors(settings: Optional[Dict[str, Any]],
+                        node: str = "my_agent",
+                        ctx: Optional[Dict[str, Any]] = None) -> list:
+    """Enabled detector names (registry keys).
+
+    LOCAL BY DEFAULT (owner 2026-09-17): only the in-process tier (ZipPy,
+    RoBERTa-ONNX) plus the always-on heuristics run unless the user explicitly
+    turns on "paid detection verification". The humanizer is the thing doing the
+    work, so the extra paid detectors are a verification nicety, not a
+    requirement — and paying per call by default is not what "stay local" means.
+
+    node/ctx are threaded through to the paid-verification check so a SUBJECT-
+    or ASSIGNMENT-scoped opt-in is honoured here too. Omitting them silently
+    ignored the scoped variant and reported the paid tier as off.
+
+    Toggle entries win over DETECTOR_DEFAULTS; an empty list still enforces with
+    the in-process heuristic scorers only."""
     settings = dict(settings or {})
     ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
     det = ai.get("detection") if isinstance(ai.get("detection"), dict) else {}
     cfg = det.get("detectors") if isinstance(det.get("detectors"), dict) else {}
-    return [name for name in DETECTOR_DISPLAY if cfg.get(name, DETECTOR_DEFAULTS.get(name, True))]
+
+    paid_on = paid_verification_enabled(settings, node, ctx)
+    names = []
+    for name in DETECTOR_DISPLAY:
+        if name in PAID_DETECTOR_NAMES and not paid_on:
+            continue
+        if cfg.get(name, DETECTOR_DEFAULTS.get(name, True)):
+            names.append(name)
+    return names
+
+
+def paid_verification_enabled(settings: Optional[Dict[str, Any]],
+                              node: str = "my_agent",
+                              ctx: Optional[Dict[str, Any]] = None) -> bool:
+    """Explicit opt-in for the PAID detector tier (owner 2026-09-17).
+
+    Off by default: the free local tier decides. When a user turns this on, the
+    paid APIs (Pangram, Sapling) are actually called for extra verification —
+    including forcing them past the local short-circuit, since opting in is
+    precisely a request to hear from them. Same global/subject/assignment scope
+    chain as every other detection setting.
+
+        settings["ai"]["detection"]["paid_verification"]  "on" | "off"
+    """
+    settings = dict(settings or {})
+    scoped_hit = _scoped_on_off(settings, "ai.detection.paid_verification", ctx)
+    if scoped_hit is not None:
+        return scoped_hit
+    ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
+    det = ai.get("detection") if isinstance(ai.get("detection"), dict) else {}
+    raw = str(det.get("paid_verification") or "off").strip().lower()
+    return raw in ("on", "true", "1", "yes")
 
 
 async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
@@ -312,7 +360,7 @@ async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
     if len(text) < 60:  # tiny replies cost detectors but never fail them
         return text, None
     min_human = detection_min_human(settings, node, ctx)
-    names = [n for n in detection_detectors(settings) if n in DETECTOR_DISPLAY]
+    names = [n for n in detection_detectors(settings, node, ctx) if n in DETECTOR_DISPLAY]
     try:
         from .detectors import score_text
         from .llm import call_llm
@@ -331,7 +379,10 @@ async def ensure_human_standard(text: str, settings: Optional[Dict[str, Any]],
         used when the user disabled every paid detector.
         """
         try:
-            _avg, results, _passed = await score_text(draft, threshold=0.0, detectors=names or None)
+            _avg, results, _passed = await score_text(
+                draft, threshold=0.0, detectors=names or None,
+                force_paid=paid_verification_enabled(settings, node, ctx),
+            )
             if not results:
                 return None
             # ERROR VOTES EXCLUDED (08-31 retest): a detector that HTTP-400s

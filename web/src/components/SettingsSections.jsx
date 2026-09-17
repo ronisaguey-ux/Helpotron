@@ -6,11 +6,31 @@
 import React, { useState } from 'react';
 import {
   User, Moon, Sun, Laptop, Bell, Shield, CreditCard, Send,
-  Key, Copy, Check, CheckCircle2, AlertCircle, Trash2, ExternalLink
+  Key, Copy, Check, CheckCircle2, AlertCircle, Trash2, ExternalLink, ScanSearch
 } from 'lucide-react';
 import AppearancePreview from './AppearancePreview.jsx';
 import TelegramIntegration from './TelegramIntegration.jsx';
 import TwoFactorSetup from './TwoFactorSetup.jsx';
+
+/**
+ * Build a settings delta for the nested AI block.
+ *
+ * SettingsApp's mergeSettings only merges ONE level deep, so sending
+ * `{ ai: { detection: {...} } }` would replace the whole `ai` object and wipe
+ * the user's effort, style and humanizer choices with it. This spreads every
+ * level from the current settings so only the intended leaf changes.
+ */
+export function setHumanizerSettings(settings, patch) {
+  const ai = settings?.ai && typeof settings.ai === 'object' ? settings.ai : {};
+  const detection = ai.detection && typeof ai.detection === 'object' ? ai.detection : {};
+  return {
+    ai: {
+      ...ai,
+      ...(patch.humanizer !== undefined ? { humanizer: patch.humanizer } : {}),
+      ...(patch.detection ? { detection: { ...detection, ...patch.detection } } : {}),
+    },
+  };
+}
 
 export function SettingsSections({
   section = 'all',
@@ -307,6 +327,98 @@ export function SettingsSections({
                 />
               </label>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* ================= SECTION: AI DETECTION & HUMANIZER ================= */}
+      {(section === 'all' || section === 'humanizer') && (
+        <section id="section-humanizer" className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 p-unit-6 shadow-sm flex flex-col gap-unit-5">
+          <div className="flex items-center gap-unit-3 border-b border-outline-variant/15 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-primary-container/20 text-primary flex items-center justify-center shrink-0">
+              <ScanSearch className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-title-md text-title-md font-semibold text-on-surface">
+                AI Detection &amp; Humanizer
+              </h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">
+                Humanization runs on your own machine. Detection is local by default; paid
+                verification is opt-in.
+              </p>
+            </div>
+          </div>
+
+          {/* Humanizer toggle — the rewrite engine runs only when this is on. */}
+          <label className="flex items-center justify-between p-unit-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-low transition-colors">
+            <div className="flex flex-col pr-2">
+              <span className="font-body-sm text-xs font-semibold text-on-surface">
+                Humanizer
+              </span>
+              <span className="font-code-sm text-[11px] text-outline">
+                Rewrites drafts to read as human-written. Runs locally — no data leaves this machine.
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.ai?.humanizer !== 'off'}
+              onChange={(e) => set(setHumanizerSettings(settings, { humanizer: e.target.checked ? 'on' : 'off' }))}
+              className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+            />
+          </label>
+
+          {/* Local tier — always on, free, in-process. */}
+          <div className="flex flex-col gap-2">
+            <span className="font-label-caps text-[11px] text-outline uppercase tracking-wider">
+              Included detectors
+            </span>
+            {[
+              { label: 'ZipPy', desc: 'Local compression heuristic' },
+              { label: 'RoBERTa-ONNX', desc: 'Local classifier running on this machine' },
+              { label: 'Cadence & burstiness', desc: 'Statistical rhythm analysis' },
+            ].map((d) => (
+              <div
+                key={d.label}
+                className="flex items-center justify-between p-unit-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10"
+              >
+                <div className="flex flex-col pr-2">
+                  <span className="font-body-sm text-xs font-semibold text-on-surface">{d.label}</span>
+                  <span className="font-code-sm text-[11px] text-outline">{d.desc}</span>
+                </div>
+                <span className="font-code-sm text-[11px] px-2 py-0.5 rounded-full bg-sem-green/10 text-sem-green border border-sem-green/20">
+                  Free
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Paid tier — explicit opt-in. */}
+          <label className="flex items-center justify-between p-unit-3 rounded-xl bg-surface-container-low/60 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-low transition-colors">
+            <div className="flex flex-col pr-2">
+              <span className="font-body-sm text-xs font-semibold text-on-surface">
+                Paid detection verification
+              </span>
+              <span className="font-code-sm text-[11px] text-outline">
+                Runs the external detectors (Pangram, Sapling) for extra verification. Each scan
+                costs credits, so this is off unless you turn it on.
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.ai?.detection?.paid_verification === 'on'}
+              onChange={(e) => set(setHumanizerSettings(settings, {
+                detection: { paid_verification: e.target.checked ? 'on' : 'off' },
+              }))}
+              className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+            />
+          </label>
+
+          <div className="flex items-center gap-2 p-unit-3 rounded-xl bg-primary-container/10 border border-primary/20">
+            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+            <span className="font-code-sm text-[11px] text-on-surface-variant">
+              Humanization itself is already accurate without external checks. Turn this on only if
+              you want a second opinion from the paid detectors.
+            </span>
           </div>
         </section>
       )}

@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sliders, User, Moon, Bell, Shield, CreditCard, Send, Trash2,
-  Check, CheckCircle2, Loader2, Search, Sparkles, ExternalLink
+  Check, CheckCircle2, Loader2, Search, Sparkles, ExternalLink, ScanSearch
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings } from '../demoData.js';
@@ -17,6 +17,7 @@ export const SETTINGS_NAV_ITEMS = [
   { id: 'all', label: 'All Settings', icon: Sliders },
   { id: 'account', label: 'Account', icon: User },
   { id: 'appearance', label: 'Appearance', icon: Moon },
+  { id: 'humanizer', label: 'AI Detection', icon: ScanSearch },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'privacy', label: 'Privacy & Security', icon: Shield },
   { id: 'credits', label: 'Credits & Billing', icon: CreditCard },
