@@ -44,6 +44,128 @@ def calculate_task_token_cost(cost_usd: float) -> int:
     return max(1, int(math.ceil(cost_usd * 100.0)))
 
 
+# ── Usage metering: charge for what a task ACTUALLY cost (owner 2026-09-17) ──
+# `calculate_task_token_cost` is the owner's rule — 1 token per cent of service —
+# and for a long time it had ZERO call sites: charging used the flat TASK_COSTS
+# table instead, so the price of a task never depended on what it cost to serve.
+# Measured at the time: 236 logged calls averaged ~0.47 cents each, while an
+# agent_session was charged a flat 1 token no matter how many calls it made.
+#
+# The helpers below close that loop by reading the real cost ledger. A task is
+# metered by taking a WATERMARK before it runs and summing the ledger rows
+# recorded after it — that is what makes "any process that fulfils a request is
+# calculated in cents" literally true, with no per-callsite bookkeeping.
+
+
+def ledger_watermark(db: Session, user_id: int) -> int:
+    """Marker for 'start measuring here': the newest ApiUsageLog id for a user.
+
+    Take this BEFORE the work starts, then pass it to charge_actual_usage().
+    """
+    from server.database import ApiUsageLog
+    try:
+        row = (db.query(func.max(ApiUsageLog.id))
+                 .filter(ApiUsageLog.user_id == user_id).scalar())
+        return int(row) if row else 0
+    except Exception as e:
+        logger.warning("ledger_watermark failed for user %s: %s", user_id, e)
+        return 0
+
+
+def usage_cents_since(db: Session, user_id: int, since_id: int) -> float:
+    """Real cost, in CENTS, of everything this user consumed since a watermark.
+
+    Sums `base_cost_usd` (the true upstream cost) rather than
+    `charged_cost_usd`, so a per-user analytics multiplier cannot inflate what
+    they are billed for. Returns 0.0 on any failure — a metering outage must
+    never invent a charge.
+    """
+    from server.database import ApiUsageLog
+    try:
+        total = (db.query(func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0))
+                   .filter(ApiUsageLog.user_id == user_id,
+                           ApiUsageLog.id > int(since_id))
+                   .scalar())
+        return float(total or 0.0) * 100.0
+    except Exception as e:
+        logger.warning("usage_cents_since failed for user %s: %s", user_id, e)
+        return 0.0
+
+
+def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
+                        pre_charged: int = 0, reason: str = "",
+                        allow_overdraft: bool = False,
+                        idempotency_key: Optional[str] = None) -> int:
+    """Settle a finished task against what it really cost.
+
+    Converts measured cents to tokens at the owner's rate (1 token = 1 cent) and
+    adjusts the balance for the difference against whatever was pre-charged at
+    the gate. Returns the number of tokens settled (the delta, signed).
+
+    Why this shape: the cost is only knowable AFTER the work runs, but a balance
+    has to be held BEFORE it to stop a broke account starting a task. So the
+    entry gate pre-charges an estimate and this reconciles to the truth on
+    completion.
+
+    idempotency_key: REQUIRED for correctness when the caller might settle the
+    same window twice — without it, a retried or re-entered completion path bills
+    the whole window again (measured: a second settle over the same watermark
+    charged another 9 tokens). The watermark is not a lock, so a durable record
+    of the settlement is the only safe guard; pass something unique per task run
+    (e.g. the session id). Matching rows are looked up in the ledger the same way
+    a real charge would be.
+
+    allow_overdraft=False (default): never drive the balance below zero. The
+    shortfall is logged loudly so it is visible as lost revenue rather than
+    silently absorbed. set_token_balance() clamps at 0 by design, and other
+    callers rely on that invariant, so overdraft is opt-in per call site rather
+    than a change to the primitive.
+    """
+    user_id = user.id if hasattr(user, 'id') else user
+    row = db.query(User).filter(User.id == user_id).first()
+    if row is None:
+        return 0
+    if is_unmetered(row):
+        return 0
+
+    entry_reason = idempotency_key or reason or f"usage:{task_name}"
+    if idempotency_key:
+        already = db.query(CreditTransaction).filter(
+            CreditTransaction.user_id == user_id,
+            CreditTransaction.reason == entry_reason,
+        ).first()
+        if already is not None:
+            logger.info("usage settlement for %s already recorded — skipping", entry_reason)
+            return 0
+
+    cents = usage_cents_since(db, user_id, since_id)
+    actual = calculate_task_token_cost(cents / 100.0) if cents > 0 else 0
+    delta = actual - max(0, int(pre_charged or 0))
+    if delta == 0:
+        return 0
+
+    balance = get_token_balance(row)
+    new_balance = balance - delta
+    if new_balance < 0 and not allow_overdraft:
+        logger.warning(
+            "usage settlement short by %s tokens for user %s on %s "
+            "(real cost %.4f cents, charged %s, balance %s) — flooring at 0",
+            -new_balance, user_id, task_name, cents, actual, balance,
+        )
+        new_balance = 0.0
+
+    set_token_balance(row, new_balance)
+    db.add(CreditTransaction(
+        user_id=user_id,
+        delta=-delta,
+        reason=entry_reason,
+    ))
+    db.commit()
+    logger.info("Settled %s tokens for %s (real cost %.4f cents, pre-charged %s)",
+                delta, task_name, cents, pre_charged)
+    return delta
+
+
 def get_token_balance(user: User) -> float:
     """The user's spendable TASK TOKEN balance — the usage currency.
 

@@ -148,6 +148,15 @@ async def _run_instruction(user: User, token: str, chat_id: str, text: str) -> N
             return
         db.commit()
         session = agent_manager.create(fresh.public_id, None, text[:MAX_INSTRUCTION_CHARS])
+        # Metering (owner 2026-09-17): same exposure as the app path — an agent
+        # instruction makes many LLM calls, so hold the flat estimate at the gate
+        # and settle the real cost (1 token = 1 cent) once it finishes.
+        try:
+            session.usage_watermark = credits.ledger_watermark(db, fresh.id)
+            session.pre_charged_tokens = credits.TASK_COSTS.get("agent_session", 1)
+        except Exception as e:
+            logger.warning("could not set usage watermark for telegram agent: %s", e)
+            session.usage_watermark = None
         db_state = bot_state(fresh)
 
     try:
@@ -184,6 +193,20 @@ async def _run_instruction(user: User, token: str, chat_id: str, text: str) -> N
     with SessionLocal() as db:
         w = db.query(User).filter(User.public_id == user.public_id).first()
         if w is not None:
+            # Metering (owner 2026-09-17): settle the instruction against what it
+            # actually cost (1 token = 1 cent). Skipped when the flat charge was
+            # already refunded — that path bills nothing.
+            watermark = getattr(session, "usage_watermark", None)
+            if watermark is not None and not refunded:
+                try:
+                    credits.charge_actual_usage(
+                        w, "agent_session", db, since_id=watermark,
+                        pre_charged=getattr(session, "pre_charged_tokens", 0),
+                        idempotency_key=f"usage:tg_agent:{session.session_id}",
+                    )
+                except Exception as e:
+                    db.rollback()
+                    logger.error("telegram agent usage settlement failed: %s", e)
             st = bot_state(w)
             st["sessions_run"] = int(st.get("sessions_run", 0)) + 1
             st["last_seen"] = int(time.time())
