@@ -526,14 +526,22 @@ CACHE_TTL_SECONDS = 86400  # 24 hours
 
 
 async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5,
-                     detectors: Optional[List[str]] = None) -> Tuple[float, List[DetectorResult], bool]:
+                     detectors: Optional[List[str]] = None,
+                     force_paid: bool = False) -> Tuple[float, List[DetectorResult], bool]:
     """Score text using all detectors. Return average score, detailed results, and pass/fail.
 
     detectors: optional allow-list of registry names (operator 08-31, the AI
     Detection Standard setting). The two in-process heuristic scorers always
-    run; API detectors outside the allow-list are skipped. None = all
+    run; API detectors outside the allow-list are never CALLED. None = all
     registered detectors (existing behavior). The score cache keys on the
     selection too, so toggling a detector never reuses a stale average.
+
+    force_paid: the caller has explicitly opted into the paid tier ("paid
+    detection verification", owner 2026-09-17). The local short-circuit below is
+    a cost optimisation for the DEFAULT local-only path; when someone has asked
+    for paid verification, skipping the paid calls would ignore the request, so
+    the funnel is bypassed and the allowed paid detectors run regardless of what
+    the free tier thinks.
 
     Self-hosted funnel (owner 09-06): when paid API detectors are registered
     AND detector_funnel_enabled, the free local tier (ZipPy → RoBERTa-ONNX
@@ -564,9 +572,19 @@ async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5,
     all_dets = list(getattr(registry, "_detectors", []))
     always_dets = [d for d in all_dets if d.name in HEURISTIC_NAMES]
     local_dets = [d for d in all_dets if d.name in LOCAL_DETECTOR_NAMES]
+    # The allow-list gates CALLS, not just results. It previously filtered the
+    # returned list only, so a caller who explicitly excluded the paid detectors
+    # still had them invoked (and billed) whenever the local verdict was
+    # ambiguous — the exact cost the caller was trying to avoid. Owner
+    # 2026-09-17: paid detection is opt-in, so "not allowed" must mean "not
+    # called".
     api_dets = [d for d in all_dets
-                if d.name not in LOCAL_DETECTOR_NAMES and d.name not in HEURISTIC_NAMES]
-    if api_dets and getattr(_cfg, "detector_funnel_enabled", True):
+                if d.name not in LOCAL_DETECTOR_NAMES and d.name not in HEURISTIC_NAMES
+                and (allowed is None or d.name in allowed)]
+    # force_paid: the caller has explicitly opted into the paid tier, so the
+    # local short-circuit must NOT swallow the detectors they asked for.
+    run_funnel = getattr(_cfg, "detector_funnel_enabled", True) and not force_paid
+    if api_dets and run_funnel:
         # Tier 1: ZipPy alone decides when unequivocal (skips tier 2 + paid).
         tier1 = ([d for d in local_dets if d.name == "zippy"]
                  or local_dets[:1])
@@ -595,6 +613,16 @@ async def score_text(text: str, threshold: float = 80.0, max_retries: int = 5,
             else:
                 api_results = await _run_detector_group(api_dets, text)
                 results = all_local + api_results
+    elif allowed is not None:
+        # No permitted paid detector to run (the local-only default). Run the
+        # permitted local + heuristic tier only — do NOT fall through to
+        # registry.detect_all(), which would invoke every registered detector
+        # including the ones the caller excluded.
+        permitted = [d for d in all_dets
+                     if d.name in allowed
+                     or d.name in HEURISTIC_NAMES
+                     or d.name in LOCAL_DETECTOR_NAMES]
+        results = await _run_detector_group(permitted, text) if permitted else []
     else:
         results = await registry.detect_all(text)
     if allowed is not None:
