@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
-    
+
     PRIMARY_MODELS = {
         "nemotron_nano": "nvidia/nemotron-3-nano-30b-a3b",
         "qwen_72b": "qwen/qwen-2.5-72b-instruct",
@@ -33,16 +33,16 @@ class ModelPolicy:
         "deepseek_v4_1_flash": "deepseek/deepseek-v4.1-flash",
         "gemini_38_flash": "google/gemini-3.8-flash",
     }
-    
+
     GRUNT_CANDIDATES = [
         "nvidia/nemotron-3-nano-30b-a3b",
         "qwen/qwen-2.5-72b-instruct",
     ]
-    
+
     PROHIBITED_PREFIXES = [
         "anthropic/", "claude", "openai/", "gpt"
     ]
-    
+
     PRICING = {
         # live OpenRouter pricing per 1M tokens
         "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
@@ -64,7 +64,7 @@ def calculate_effective_task_cost(model_id: str, modality: str = "text", input_t
     pricing = ModelPolicy.PRICING.get(model_id)
     if not pricing:
         return float("inf")
-    
+
     token_cost = ((input_tokens / 1_000_000.0) * pricing.get("input", 0.0)) + ((output_tokens / 1_000_000.0) * pricing.get("output", 0.0))
     image_cost = num_images * pricing.get("image_input", 0.0) if modality in ["vision", "multimodal"] else 0.0
     audio_cost = audio_minutes * pricing.get("audio_input", 0.0) if modality == "audio" else 0.0
@@ -115,7 +115,7 @@ def resolve_model_routing(
       (audio, image/video generation/analysis, google slides, fake google doc history).
     """
     required_capabilities = required_capabilities or []
-    
+
     # 1. Resolve effort level (1 to 10)
     level = 5
     if effort_score is not None:
@@ -201,6 +201,41 @@ def resolve_model_routing(
         "is_gemini_exclusive": is_gemini_exclusive
     }
 
+def apply_model_constraints(model_id: str, *, images: bool = False,
+                            json_mode: bool = False) -> str:
+    """Model rewrites that depend on the REQUEST, not on the effort level.
+
+    These two rules change which model actually executes, which is why they live
+    in one named function: anything that REPORTS the model — the extension's
+    model badge, routing telemetry — has to apply the same rules or it will name
+    a model that never runs. That is not hypothetical. The agent's intent call
+    always sends response_format="json_object", so at effort level 1 the router
+    picks nemotron and this rewrites it to gemini-3.1-flash-lite; a ladder
+    published without this step advertised "Nemotron 3 Nano" while
+    gemini-3.1-flash-lite was doing the work (measured 2026-09-18, and visible in
+    api_usage_logs: model=gemini-3.1-flash-lite with tier=level_1_nemotron_nano).
+
+    grunts return empty 200 bodies without an explicit token cap, and are not
+    vision-capable, so an image request must not stay on one.
+    """
+    if images and model_id in ModelPolicy.GRUNT_CANDIDATES:
+        return ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
+    if json_mode and model_id == ModelPolicy.PRIMARY_MODELS["nemotron_nano"]:
+        return ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
+    return model_id
+
+
+def effective_chat_model(effort_score: int, *, images: bool = False) -> str:
+    """The model a chat turn at `effort_score` will actually run.
+
+    Resolves the effort ladder and then applies the request-dependent rewrites
+    above. Used by ui-config so the badge matches reality; the agent chat's
+    intent call is JSON mode, which is the case this models.
+    """
+    model_id = resolve_model_routing(effort_score=effort_score)["model"]
+    return apply_model_constraints(model_id, images=images, json_mode=True)
+
+
 def _effort_cascade(primary_model: str, effort: int = 500) -> List[str]:
     """Helper to build fallback cascade list starting with primary model."""
     routing = resolve_model_routing(effort_score=effort)
@@ -255,7 +290,7 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
 
 def strip_thinking_tokens(text: Optional[str]) -> str:
     """Robustly strips internal thinking, reasoning tags, and internal monologues.
-    
+
     Prevents thinking tokens (<think>...</think>, <thought>...</thought>,
     <reasoning>...</reasoning>) and internal rule-deliberation leaks from reaching users.
     """
@@ -350,11 +385,8 @@ async def call_llm(
         effort_score=effort_score,
     )
     model_id = MODELS.get(model, model) if model else route["model"]  # short names (flash/pro/...) → real slug 08-28
-    if images and model_id in ModelPolicy.GRUNT_CANDIDATES:
-        model_id = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-    elif json_mode and model_id == ModelPolicy.PRIMARY_MODELS["nemotron_nano"]:
-        model_id = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-    
+    model_id = apply_model_constraints(model_id, images=bool(images), json_mode=bool(json_mode))
+
     for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
         if prohibited in model_id:
             raise ValueError(f"CRITICAL: Attempted to route to prohibited model {model_id}. Execution halted.")
@@ -405,7 +437,7 @@ async def call_llm(
             # canonical id is already the wire id — the old "-exp" slug rewrite is retired.
             openrouter_model = cand_id
             cand_payload["model"] = openrouter_model
-            
+
             # Explicit runtime model identity injected into system prompt
             ident_notice = format_model_identity_prompt(cand_id)
             cand_messages = []
@@ -643,4 +675,3 @@ async def stream_llm(
 
     if not streamed_any:
         yield {"type": "fallback"}
-

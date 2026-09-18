@@ -185,8 +185,7 @@ async def extension_ui_config():
     "Gemini 3.1 Flash Lite" while the agent was answering on deepseek-v4.1-flash
     (owner report 2026-09-18). Each band now comes from the real router.
     """
-    from .llm import resolve_model_routing
-    from .llm import ModelPolicy
+    from .llm import effective_chat_model
 
     labels = {
         "nvidia/nemotron-3-nano-30b-a3b": "Nemotron 3 Nano",
@@ -203,7 +202,11 @@ async def extension_ui_config():
     # the exact level the slider is on.
     ladder = []
     for level in range(1, 11):
-        model_id = resolve_model_routing(effort_score=level)["model"]
+        # `effective_chat_model`, not the raw router: the agent's intent call is
+        # JSON mode, which rewrites the level-1 pick (nemotron) to
+        # gemini-3.1-flash-lite. Publishing the raw ladder advertised a model
+        # that never ran while the badge pointed at the wrong one.
+        model_id = effective_chat_model(level)
         ladder.append({
             # Tier is for STYLING and matches the popup's own banding (1-3 low,
             # 4-6 med, 7-10 high) so the existing badge colours stay meaningful.

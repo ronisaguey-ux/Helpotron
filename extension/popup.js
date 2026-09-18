@@ -289,10 +289,9 @@ function clampEffortScore(value) {
         return { tier: hit.tier || 'med', label: hit.label || hit.model, model: hit.model };
       }
     }
-    if (s === 1) return { tier: 'low', label: 'Nemotron 3 Nano', model: 'nvidia/nemotron-3-nano-30b-a3b' };
     if (s === 2) return { tier: 'low', label: 'Qwen 2.5 72B', model: 'qwen/qwen-2.5-72b-instruct' };
-    if (s <= 4) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-    return { tier: 'high', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
+    if (s <= 3) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
+    return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
   }
 
 // ONE place that writes the model name to every model surface.

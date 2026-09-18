@@ -41,19 +41,27 @@ def test_ui_config_model_ladder_matches_the_real_router():
     One entry per LEVEL, not per band: levels 1, 2 and 3 select three different
     models, so a band-level label can only be right for one of them.
     """
-    from server.llm import resolve_model_routing
+    from server.llm import effective_chat_model
 
     body = client.get("/api/extension/ui-config").json()
     ladder = body["model_ladder"]
     assert [t["level"] for t in ladder] == list(range(1, 11))
 
-    # Every entry must equal what the router genuinely returns for that level.
+    # Every entry must equal what a chat turn at that level will ACTUALLY run —
+    # which is the router plus the request-dependent rewrites (the agent's intent
+    # call is JSON mode, which turns a level-1 nemotron pick into gemini-lite).
+    # Asserting against the raw router instead is what let the badge name a model
+    # that never executed.
     for entry in ladder:
-        expected = resolve_model_routing(effort_score=entry["level"])["model"]
+        expected = effective_chat_model(entry["level"])
         assert entry["model"] == expected, (
             f"level {entry['level']}: ui-config advertises {entry['model']} "
-            f"but the router returns {expected}"
+            f"but a chat turn runs {expected}"
         )
+
+    # The specific case the owner reported: slider at level 1 must advertise
+    # Gemini 3.1 Flash Lite, because that is what runs there.
+    assert ladder[0]["model"] == "google/gemini-3.1-flash-lite"
 
     # Tier matches the popup's own banding, which drives the badge styling.
     for entry in ladder:
