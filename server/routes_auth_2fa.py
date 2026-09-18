@@ -94,7 +94,12 @@ class TwoFactorVerifyChallengeRequest(BaseModel):
 
 class TwoFactorDisableRequest(BaseModel):
     user_id: Optional[str] = None  # legacy — route uses the authenticated user
-    code: str = Field(..., min_length=6, max_length=12)
+    # 2026-09-18: optional at the schema level so the broken-enrollment escape
+    # hatch below is reachable. A required field meant FastAPI rejected the
+    # request with 422 BEFORE the handler ran, so an account whose 2FA has no
+    # usable factor could never repair itself. The handler still requires a code
+    # whenever there IS a factor to verify.
+    code: Optional[str] = Field(None, min_length=6, max_length=12)
 
 
 class PurchaseChallengeRequest(BaseModel):
@@ -221,6 +226,15 @@ async def verify_two_factor_setup(
     require_session_auth(request)
     method = payload.method.lower()
 
+    # 2026-09-18: an unrecognised method used to fall through to the final `else`
+    # branch, which verified a generic code_store code and then activated 2FA
+    # WITHOUT storing any factor. `method: str` has no enum, so `""` (or any
+    # typo) reached it. The account was left with 2fa_enabled=True and nothing to
+    # verify against — a permanent lockout, since login and this file's disable
+    # route both require a valid code. Reject unknown methods up front.
+    if method not in ("totp", "email", "sms"):
+        raise HTTPException(400, f"Unsupported 2FA method: {method or '(empty)'}. Choose totp, email, or sms.")
+
     if method == "totp":
         if not payload.secret:
             raise HTTPException(400, "TOTP secret is required for setup verification.")
@@ -247,6 +261,16 @@ async def verify_two_factor_setup(
     user = db.query(User).filter(User.public_id == current_user.public_id).first()
     if user:
         current_settings = dict(user.settings or {})
+        # 2026-09-18: never set the flag without a verifiable factor. The old code
+        # set `2fa_enabled = True` unconditionally and only stored the TOTP secret
+        # `if method == "totp" and payload.secret`, so any path that reached here
+        # without a secret produced an account that could never log in again.
+        if method == "totp" and not payload.secret:
+            raise HTTPException(400, "TOTP secret is required for setup verification.")
+        if method == "sms" and not (
+            payload.phone_number or current_settings.get("phone_number")
+        ):
+            raise HTTPException(400, "A phone number is required for SMS 2FA.")
         current_settings["2fa_enabled"] = True
         current_settings["2fa_method"] = method
         if method == "totp" and payload.secret:
@@ -393,6 +417,33 @@ async def disable_two_factor(
         raise HTTPException(400, "2FA is not enabled.")
 
     method = current_settings.get("2fa_method", "").lower()
+
+    # 2026-09-18: escape hatch for an account already stuck by the enrollment bug
+    # below — `2fa_enabled` set with no usable factor. Requiring a valid code from
+    # such an account is a dead end: no value can verify, so the user could neither
+    # log in nor turn 2FA off, and only a DB edit could free them. Disabling an
+    # unusable second factor removes no protection, because there is none.
+    _factor_available = (
+        (method == "totp" and bool(current_settings.get("2fa_totp_secret")))
+        or (method == "sms" and bool(current_settings.get("phone_number")))
+        or method == "email"
+    )
+    if not _factor_available:
+        logger_2fa.warning(
+            "2FA disable without a usable factor for %s (method=%r) — repairing a broken enrollment",
+            user.public_id, method,
+        )
+        current_settings["2fa_enabled"] = False
+        current_settings.pop("2fa_method", None)
+        current_settings.pop("2fa_totp_secret", None)
+        user.settings = current_settings
+        db.commit()
+        return {"status": "success", "message": "Two-Factor Authentication disabled (no usable factor was configured)."}
+
+    # A factor exists, so a real code is required (the schema now makes it optional
+    # only to keep the repair branch above reachable).
+    if not payload.code:
+        raise HTTPException(400, "A 2FA code is required to disable two-factor authentication.")
 
     if method == "totp":
         secret = current_settings.get("2fa_totp_secret")

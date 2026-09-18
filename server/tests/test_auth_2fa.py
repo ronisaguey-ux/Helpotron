@@ -297,3 +297,91 @@ def test_sms_2fa_setup_persists_phone_and_login_sends_code():
         db.delete(user)
         db.commit()
     db.close()
+
+
+def test_2fa_setup_rejects_unknown_method_and_never_bricks_the_account():
+    """Regression: the enrollment path that locked the operator account out.
+
+    `TwoFactorVerifySetupRequest.method` is a plain `str`, so `""`/`"bogus"` fell
+    through to the final `else`, which verified a generic code and then set
+    `2fa_enabled = True` WITHOUT storing any factor. The account was left
+    demanding a code nothing could ever satisfy — unrecoverable, because both
+    login and the disable route required a valid code.
+
+    Verified live on 2026-09-18 (user `RoniDev` + `dbg-6ddcf8`): `2fa_enabled`
+    was True with `2fa_method=None` and no `2fa_totp_secret`.
+    """
+    import uuid
+    uid = f"user_{uuid.uuid4().hex[:8]}"
+    pwd = "Password123!"
+    client.post("/api/signup", json={"public_id": uid, "password": pwd})
+    login = client.post("/api/login", json={"public_id": uid, "password": pwd}).json()
+    headers = {"Authorization": f"Bearer {login.get('token') or ''}",
+               "X-CSRF-Token": login.get("csrf_token", "")}
+
+    for method in ("", "bogus", "totp-without-secret"):
+        resp = client.post(
+            "/api/auth/2fa/verify-setup",
+            json={"method": method, "code": "123456"},
+            headers=headers,
+        )
+        assert resp.status_code == 400, (
+            f"method={method!r} was accepted — it must be refused before it can "
+            f"set 2fa_enabled with no factor (got {resp.status_code})"
+        )
+
+    # The account must still be able to log in — that is the whole point.
+    again = client.post("/api/login", json={"public_id": uid, "password": pwd})
+    assert again.status_code == 200
+    assert again.json().get("status") != "2fa_required", (
+        "a failed 2FA enrollment left the account demanding an unverifiable code"
+    )
+
+    from server.database import SessionLocal, User
+    db = SessionLocal()
+    u = db.query(User).filter(User.public_id == uid).first()
+    if u:
+        assert not (u.settings or {}).get("2fa_enabled") or (u.settings or {}).get("2fa_totp_secret"), (
+            "2fa_enabled is set with no stored factor — this is the lockout state"
+        )
+        db.delete(u)
+        db.commit()
+    db.close()
+
+
+def test_2fa_disable_repairs_a_broken_enrollment():
+    """An account already stuck must be able to turn the unusable factor off.
+
+    Before the fix, `TwoFactorDisableRequest.code` was REQUIRED, so FastAPI
+    rejected the request with 422 before the handler ran and the repair branch
+    was unreachable — a DB edit was the only way out.
+    """
+    import uuid
+    from server.database import SessionLocal, User
+    uid = f"user_{uuid.uuid4().hex[:8]}"
+    pwd = "Password123!"
+    client.post("/api/signup", json={"public_id": uid, "password": pwd})
+
+    # Reproduce the historical broken state directly.
+    db = SessionLocal()
+    u = db.query(User).filter(User.public_id == uid).first()
+    s = dict(u.settings or {})
+    s["2fa_enabled"] = True
+    s["2fa_method"] = "totp"
+    s.pop("2fa_totp_secret", None)
+    u.settings = s
+    db.commit()
+    db.close()
+
+    login = client.post("/api/login", json={"public_id": uid, "password": pwd}).json()
+    headers = {"Authorization": f"Bearer {login.get('token') or ''}",
+               "X-CSRF-Token": login.get("csrf_token", "")}
+    resp = client.post("/api/auth/2fa/disable", json={}, headers=headers)
+    assert resp.status_code == 200, f"repair path unreachable: {resp.status_code} {resp.text[:200]}"
+
+    db = SessionLocal()
+    u = db.query(User).filter(User.public_id == uid).first()
+    assert (u.settings or {}).get("2fa_enabled") is False
+    db.delete(u)
+    db.commit()
+    db.close()
