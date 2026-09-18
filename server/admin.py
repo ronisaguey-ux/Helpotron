@@ -296,6 +296,68 @@ async def grant_welcome_tokens(
     return {"new_token_balance": settings["token_balance"], "public_id": public_id, "granted": amount}
 
 
+@router.post("/user/{public_id}/testing-access")
+async def grant_testing_access(
+    public_id: str,
+    note: str = Query("owner-approved testing access", max_length=500),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Grant the free Testing tier (owner 2026-09-18).
+
+    Testing access is not bought — it is granted by hand after the applicant
+    messages the developer explaining who they are. The agent triages the
+    application and forwards an assessment; the owner decides. This endpoint is
+    that decision, and it is admin-only because the whole point is that a human
+    approves it.
+
+    Idempotent by design: a double-click (or a retried request) must not stack
+    two 15,000-token grants on one account, so an account that already holds a
+    testing grant is refused unless the operator explicitly resets it first.
+    """
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    from .payments import TIER_TOKENS
+    from .credits import add_tokens, get_token_balance
+
+    grant = float(TIER_TOKENS["testing"])
+
+    already = (
+        db.query(CreditTransaction)
+        .filter(
+            CreditTransaction.user_id == user.id,
+            CreditTransaction.reason == "testing_access_grant",
+        )
+        .first()
+    )
+    if already:
+        raise HTTPException(
+            409,
+            f"{public_id} already received a testing grant "
+            f"(balance {get_token_balance(user):,.0f} tokens). Nothing granted.",
+        )
+
+    # add_tokens writes its own ledger row AND commits — never pair it with a
+    # second manual ledger write, which would double-count the grant in every
+    # audit sum. It takes `reason`, so the idempotency marker is that same row.
+    add_tokens(db, user, grant, reason="testing_access_grant")
+
+    user.plan = "testing"
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "public_id": public_id,
+        "plan": user.plan,
+        "granted": grant,
+        "new_token_balance": get_token_balance(user),
+        "note": note,
+    }
+
+
 class ConfirmPaymentIn(BaseModel):
     payment_id: int
     # Operator must state what was actually received. This is the evidence the

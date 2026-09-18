@@ -42,7 +42,9 @@ def _set_payment_verified(public_id: str, value: bool = True) -> None:
 def test_plan_catalogue_reprice_and_no_usd_disclosures():
     catalogue = get_plan_catalogue()
     plan_ids = [p["id"] for p in catalogue]
-    assert plan_ids == ["trial", "basic", "pro", "elite"]
+    # Owner 2026-09-18: the free "testing" tier sits second, right after the
+    # trial — both are free entry points, and the paid tiers follow.
+    assert plan_ids == ["trial", "testing", "basic", "pro", "elite"]
 
     trial_plan = next(p for p in catalogue if p["id"] == "trial")
     assert trial_plan["is_trial"] is True
@@ -51,6 +53,15 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     assert trial_plan["price_cents"] == 0
     assert trial_plan["monthly_credits"] == 15000
     assert "usage_value_usd" not in trial_plan
+
+    # The testing tier: free, no card, granted by hand on application.
+    testing_plan = next(p for p in catalogue if p["id"] == "testing")
+    assert testing_plan["is_testing"] is True
+    assert testing_plan["requires_approval"] is True
+    assert testing_plan["price_cents"] == 0
+    assert testing_plan["monthly_credits"] == 15000
+    assert testing_plan["requires_1c_payment"] is False
+    assert "usage_value_usd" not in testing_plan
 
     prices = {p["id"]: p["price_cents"] for p in catalogue}
     assert prices["basic"] == 1000
@@ -62,6 +73,7 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     #   $10 -> 30,000 = $3.00 of service · $20 -> 100,000 = $10.00 · $40 -> 270,000 = $27.00
     allowances = {p["id"]: p["monthly_credits"] for p in catalogue}
     assert allowances["trial"] == 15000
+    assert allowances["testing"] == 15000
     assert allowances["basic"] == 30000
     assert allowances["pro"] == 100000
     assert allowances["elite"] == 270000
@@ -72,6 +84,39 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     )
     for leak in ("tool budget", "1 token =", "$1.00", "token = $0.01"):
         assert leak not in joined, f"USD disclosure leaked: {leak}"
+
+
+def test_only_testing_tier_is_available_without_a_payment_gateway(monkeypatch):
+    """Owner 2026-09-18: with Stripe unconfigured, every tier stays VISIBLE but
+    only `testing` can be started. The flags must come from the gateway, not from
+    a hand-set literal, so they open by themselves at launch.
+    """
+    import server.payments as payments
+    import server.plans as plans
+
+    monkeypatch.setattr(payments, "_stripe_enabled", lambda: False)
+    monkeypatch.setattr(plans, "_stripe_enabled", lambda: False)
+    availability = plans.tier_availability()
+    assert availability["testing"] is True
+    for paid in ("trial", "basic", "pro", "elite"):
+        assert availability[paid] is False, f"{paid} must not be startable with no gateway"
+
+    # Every tier is still present and priced — visible, just not startable.
+    catalogue = {p["id"]: p for p in plans.get_plan_catalogue()}
+    assert set(catalogue) == {"trial", "testing", "basic", "pro", "elite"}
+    assert catalogue["basic"]["available"] is False
+    assert catalogue["basic"]["unavailable_reason"]
+    assert catalogue["testing"]["available"] is True
+
+    # With a gateway configured they all open — nothing to remember at launch.
+    monkeypatch.setattr(payments, "_stripe_enabled", lambda: True)
+    monkeypatch.setattr(plans, "_stripe_enabled", lambda: True)
+    availability = plans.tier_availability()
+    assert all(availability.values())
+    paid = {p["id"]: p for p in plans.get_plan_catalogue()}
+    assert paid["basic"]["available"] is True
+    assert paid["basic"]["unavailable_reason"] == ""
+
 
 
 def test_status_shape(client, auth_headers, unique_user):

@@ -1561,10 +1561,13 @@ if (chrome && chrome.storage && chrome.storage.onChanged) {
       const avatarEl = document.getElementById('settingsAvatar');
       const btnAuth = document.getElementById('btnOpenWebAuth');
 
-      if (nameEl) nameEl.textContent = connected ? `@${pid}` : 'Guest';
-      if (statusEl) statusEl.textContent = connected ? 'Active session connected' : 'Sign in to sync your scrapes & chat';
-      if (avatarEl) avatarEl.textContent = (pid ? pid[0] : 'S').toUpperCase();
-      if (btnAuth) btnAuth.textContent = connected ? 'Connected' : 'Sign in';
+        if (nameEl) nameEl.textContent = connected ? `@${pid}` : 'Guest';
+        // The extension authenticates with an API key, never a login. The copy
+        // says "API key" rather than "sign in" so the button matches what it does:
+        // it opens the page that mints a key.
+        if (statusEl) statusEl.textContent = connected ? 'Connected with your API key' : 'Connect with an API key to sync your scrapes & chat';
+        if (avatarEl) avatarEl.textContent = (pid ? pid[0] : 'S').toUpperCase();
+        if (btnAuth) btnAuth.textContent = connected ? 'Connected' : 'Get API key';
     });
 
     const storageArea = (chrome && chrome.storage && chrome.storage.sync) || (chrome && chrome.storage && chrome.storage.local);
@@ -1605,14 +1608,17 @@ if (chrome && chrome.storage && chrome.storage.onChanged) {
     });
   });
 
-  const btnOpenWebAuth = document.getElementById('btnOpenWebAuth');
-  if (btnOpenWebAuth) {
-    btnOpenWebAuth.addEventListener('click', async () => {
-      const { server } = await chrome.storage.local.get('server');
-      const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-      chrome.tabs.create({ url: srv });
-    });
-  }
+    const btnOpenWebAuth = document.getElementById('btnOpenWebAuth');
+    if (btnOpenWebAuth) {
+      btnOpenWebAuth.addEventListener('click', async () => {
+        // The extension never asks for a login. A user-issued API key is the only
+        // credential, so this opens the page that MINTS one rather than the site
+        // root — the settings page reads `#apikeys` and lands on the panel.
+        const { server } = await chrome.storage.local.get('server');
+        const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+        chrome.tabs.create({ url: `${srv}/settings#apikeys` });
+      });
+    }
 
   const btnOpenFullOptionsTab = document.getElementById('btnOpenFullOptionsTab');
   if (btnOpenFullOptionsTab) {
@@ -1864,7 +1870,7 @@ if (btnNewChat) {
     const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
     const t = await authToken();
     if (!t) {
-      setStatus('⚠️ Sign in on Helpotron to create new chat threads.');
+      setStatus('⚠️ Connect Helpotron with an API key to create new chat threads.');
       return;
     }
     try {
@@ -3154,7 +3160,7 @@ if (chatFormEl && chatInputEl) {
     const t = await authToken();
 
     if (!t) {
-      if (typingNode) typingNode.querySelector('span:last-child').textContent = '⚠️ Sign in on Helpotron first to chat with the agent.';
+      if (typingNode) typingNode.querySelector('span:last-child').textContent = '⚠️ Connect Helpotron with an API key first to chat with the agent.';
       chatBusy = false;
       return;
     }

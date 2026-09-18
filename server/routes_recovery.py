@@ -127,3 +127,162 @@ async def save_recovery_contact(payload: ContactSaveIn, request: Request, db: Se
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return result
+
+
+class HelpTicketIn(BaseModel):
+    """A ticket from someone who may not be able to log in at all.
+
+    `public_id` is a LABEL the sender types — it is explicitly NOT an identity,
+    because the whole point of this endpoint is that the sender cannot prove who
+    they are. It is never used as a credential and never grants access.
+    """
+    public_id: str = Field("", max_length=100)
+    subject: str = Field("Account Recovery Assistance", max_length=256)
+    message: str = Field(..., min_length=3, max_length=10000)
+    contact: str = Field("", max_length=200)
+    turnstile_token: str = Field("", max_length=4096)
+
+
+@router.post("/help-ticket")
+async def submit_help_ticket(payload: HelpTicketIn, request: Request,
+                             db: Session = Depends(get_db)):
+    """Reach the developer WITHOUT being logged in.
+
+    The "Ask the Developer" option in the recovery flow is for users who cannot
+    sign in — a locked-out account, a forgotten password, a broken credential.
+    Requiring authentication for it defeats its purpose: the people who need it
+    most are exactly the ones who cannot authenticate. It was gated behind
+    `_get_current_user`, so the ticket form returned
+    "Authentication required to access feature" to every locked-out user.
+
+    Public by necessity, so it is defended by what a public endpoint CAN use:
+    a per-IP rate limit and the Turnstile gate when it is configured. The ticket
+    is stored with an `unverified:` sender marker so the admin knows it did not
+    come from an authenticated session and must not be acted on as if it had.
+    """
+    from .database import AdminMessage
+    from . import ratelimit
+
+    client = request.client.host if request.client else "unknown"
+    # Tighter than the global budget: a human sends one ticket, not twenty.
+    if not ratelimit.limiter.allow(f"helpticket:{client}", 5, window=3600.0):
+        retry_after = ratelimit.limiter.retry_after(f"helpticket:{client}", 5, window=3600.0)
+        raise HTTPException(
+            429,
+            f"Too many tickets from this address. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Same CAPTCHA gate as signup/login, when it is configured.
+    from .captcha import captcha_required, has_valid_bypass, verify_turnstile_token
+    token = request.headers.get("X-Turnstile-Token", "") or (payload.turnstile_token or "")
+    if captcha_required() and not has_valid_bypass(request):
+        if not verify_turnstile_token(token, client):
+            raise HTTPException(403, "Security check required — complete the captcha and try again.")
+
+    sender = (payload.public_id or "").strip() or "unknown"
+    contact = (payload.contact or "").strip()
+    body = payload.message.strip()
+    if contact:
+        body += f"\n\nReply-to (self-reported): {contact}"
+
+    msg = AdminMessage(
+        # NOT a verified identity: this marks the row as coming from an
+        # unauthenticated sender so the admin never mistakes it for a session.
+        user_id=f"unverified:{sender}",
+        subject=payload.subject or "Account Recovery Assistance",
+        category="recovery",
+        message=body,
+        status="sent",
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    # NO direct Telegram forward to the owner on purpose (owner directive
+    # 2026-09-18): a ticket is an unverified claim from someone who could not
+    # prove who they are, so the owner gets the agent's ASSESSMENT, not the raw
+    # text. The row above is durable and the wake monitor
+    # (~/.local/bin/oc_helpticket_wake.py) starts an agent run to triage it;
+    # the agent investigates and forwards its own findings for the decision.
+
+    return {
+        "status": "success",
+        "message": "Your message reached the developer. If you left a contact address, expect a reply there.",
+        "message_id": msg.id,
+    }
+
+
+class TestingAccessIn(BaseModel):
+    """Application for the free Testing tier (owner 2026-09-18).
+
+    `public_id` is the account the grant should land on. It is NOT a credential
+    and this endpoint does not authenticate it — an applicant who cannot log in
+    must still be able to apply, and the agent verifies the account exists
+    during triage rather than leaking "does this account exist?" to any caller.
+    """
+    public_id: str = Field(..., min_length=1, max_length=100)
+    message: str = Field(..., min_length=10, max_length=10000)
+    contact: str = Field("", max_length=200)
+    turnstile_token: str = Field("", max_length=4096)
+
+
+@router.post("/testing-access")
+async def apply_for_testing_access(payload: TestingAccessIn, request: Request,
+                                  db: Session = Depends(get_db)):
+    """Apply for free Testing-tier access. Public by design.
+
+    Owner: *"add a Testing tier, for users who use it to test the platform and
+    report issues, they get 15k tokens for free, but need to send the dev a
+    message explaining who they are, when that happens, make it wake u up, and
+    then u send me the info for my approval."*
+
+    So this endpoint does exactly two things: record the application durably,
+    and let the wake monitor start an agent run. Approval is a human decision on
+    Telegram — this handler grants nothing.
+    """
+    from .database import AdminMessage
+    from . import ratelimit
+
+    client = request.client.host if request.client else "unknown"
+    if not ratelimit.limiter.allow(f"testapply:{client}", 3, window=3600.0):
+        retry_after = ratelimit.limiter.retry_after(f"testapply:{client}", 3, window=3600.0)
+        raise HTTPException(
+            429,
+            f"Too many applications from this address. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    from .captcha import captcha_required, has_valid_bypass, verify_turnstile_token
+    token = request.headers.get("X-Turnstile-Token", "") or (payload.turnstile_token or "")
+    if captcha_required() and not has_valid_bypass(request):
+        if not verify_turnstile_token(token, client):
+            raise HTTPException(403, "Security check required — complete the captcha and try again.")
+
+    applicant = payload.public_id.strip()
+    contact = payload.contact.strip()
+    body = payload.message.strip()
+    if contact:
+        body += f"\n\nReply-to (self-reported): {contact}"
+
+    msg = AdminMessage(
+        # Category is fixed server-side, never client-supplied: a caller must not
+        # be able to file a testing application under a label that skips triage.
+        user_id=f"unverified:{applicant}",
+        subject=f"Testing access application — {applicant}",
+        category="testing_access",
+        message=body,
+        status="sent",
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    return {
+        "status": "success",
+        "message": (
+            "Application received. Testing access is granted by hand — you will be "
+            "notified on this account if it is approved."
+        ),
+        "application_id": msg.id,
+    }

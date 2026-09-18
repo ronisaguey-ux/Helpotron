@@ -31,8 +31,18 @@ import math
 # (3.33x markup, 70% margin), $20 -> 100k = $10.00 (2.0x, 50%), $40 -> 270k =
 # $27.00 (1.48x, 32.5%). The old 300/1000/2700 were those exact values at the
 # coarse rate; nothing about pricing changed, only the resolution.
+# THE canonical monthly allowance table. payments.TIER_TOKENS re-exports this
+# name, so there is exactly one place these numbers live.
+#
+# It used to exist twice — once here and once as a literal in payments.py — and
+# the two drifted the moment a tier was added to only one of them (measured
+# 2026-09-18: the new 'testing' tier displayed 30,000 tokens because the lookup
+# missed this dict and fell through to the caller's default). The table lives
+# here because payments.py already imports this module, so this is the one
+# direction that creates no import cycle; the reverse does not resolve.
 TIER_MONTHLY_TASK_TOKENS: Dict[str, int] = {
     'trial': 15000,  # owner 09-06 (half a basic allowance); scaled 100x
+    'testing': 15000,  # owner 2026-09-18: free tier, granted by hand on approval
     'basic': 30000,
     'pro': 100000,
     'elite': 270000,

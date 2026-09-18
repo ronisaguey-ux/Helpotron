@@ -191,17 +191,19 @@ function setChip(text) {
   els.captureChip.appendChild(document.createTextNode(text));
 }
 
-// ── Auth (same storage credentials as popup.js) ──────────────────────────────
-async function authHeaders() {
-  const { session_token, token } = await chrome.storage.local.get(['session_token', 'token']);
-  const auth = session_token || token || '';
-  return auth ? { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}` }
-              : { 'Content-Type': 'application/json' };
-}
-async function isLoggedIn() {
-  const { public_id, session_token, token } = await chrome.storage.local.get(['public_id', 'session_token', 'token']);
-  return !!(public_id && (session_token || token));
-}
+  // ── Auth (same storage credential as popup.js: a user-issued API key) ────────
+  // The `session_token`/`token` pair is legacy from the web-login handoff, which
+  // no longer exists — a key is the only credential the extension holds.
+  async function authHeaders() {
+    const { api_key } = await chrome.storage.local.get('api_key');
+    return api_key
+      ? { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` }
+      : { 'Content-Type': 'application/json' };
+  }
+  async function isLoggedIn() {
+    const { api_key } = await chrome.storage.local.get('api_key');
+    return !!api_key;
+  }
 async function serverUrl() {
   const { server } = await chrome.storage.local.get('server');
   const srv = typeof server === 'string' && server.trim() ? server.trim() : DEFAULT_SERVER;
@@ -1708,10 +1710,10 @@ function answerAgentApproval(reqId, decision, note, opts) {
     if (statusLine) { statusLine.innerText = msg; statusLine.hidden = false; }
     renderAgentApproval();
   };
-  chrome.storage.local.get(['server', 'session_token', 'token'])
-    .then(async (st) => {
-      const srv = (st.server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-      const t = st.session_token || st.token || '';
+    chrome.storage.local.get(['server', 'api_key'])
+      .then(async (st) => {
+        const srv = (st.server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+        const t = st.api_key || '';
       try {
         const res = await fetch(`${srv}/api/extension/approval/respond`, {
           method: 'POST',

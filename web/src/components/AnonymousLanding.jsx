@@ -27,6 +27,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Layers, Brain, History as HistoryIcon, ArrowRight, ShieldCheck,
   Puzzle, Sparkles, Check, FileText, BookOpen, X, Menu, PlayCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
 const CookieBanner = React.lazy(() => import('./CookieBanner.jsx'));
@@ -34,85 +35,84 @@ const GuideView = React.lazy(() => import('./GuideView.jsx'));
 const PrivacyPolicyView = React.lazy(() => import('./PrivacyPolicyView.jsx'));
 const TermsOfServiceView = React.lazy(() => import('./TermsOfServiceView.jsx'));
 const ExtensionInstallView = React.lazy(() => import('./ExtensionInstallView.jsx'));
+const TestingAccessModal = React.lazy(() => import('./TestingAccessModal.jsx'));
 
 const FALLBACK_PLANS = [
   {
     id: 'trial',
     name: 'Free Trial',
-    tagline: '7-day starter trial with 150 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.',
+    tagline: '7-day starter trial with 15,000 task tokens — unlocked after 2FA and a $0.01 payment verification. New accounts start at 0 tokens.',
     price_cents: 0,
     price_monthly: 0,
-    monthly_task_tokens: 150,
+    monthly_task_tokens: 15000,
     is_trial: true,
+    is_testing: false,
+    available: false,
+    unavailable_reason: 'Not available yet — the 1¢ verification opens at launch.',
     requires_2fa: true,
     requires_1c_payment: true,
     popular: false,
-    capabilities: [
-      '150 task tokens',
-      'Assignment bubbles with per-assignment agent',
-      'Browser extension + paste-in coursework capture',
-      'Turn-in ledger with timestamps and undo',
-      'Two-factor authentication and session security',
-    ],
+  },
+  {
+    id: 'testing',
+    name: 'Testing',
+    tagline: 'Free 15,000 task tokens for people evaluating the platform and reporting issues. Tell the developer who you are — approval is manual.',
+    price_cents: 0,
+    price_monthly: 0,
+    monthly_task_tokens: 15000,
+    is_trial: false,
+    is_testing: true,
+    available: true,
+    unavailable_reason: '',
+    requires_2fa: false,
+    requires_1c_payment: false,
+    requires_approval: true,
+    popular: false,
   },
   {
     id: 'basic',
     name: 'Basic',
-    tagline: '300 task tokens / month for steady coursework.',
+    tagline: '30,000 task tokens / month for steady coursework.',
     price_cents: 1000,
     price_monthly: 10,
-    monthly_task_tokens: 300,
+    monthly_task_tokens: 30000,
     is_trial: false,
+    is_testing: false,
+    available: false,
+    unavailable_reason: 'Not available yet — paid plans open at launch.',
     requires_2fa: false,
     requires_1c_payment: false,
     popular: false,
-    capabilities: [
-      '300 task tokens / month',
-      'Assignment bubbles with per-assignment agent',
-      'Study tools, library and exports (Docs, Markdown, PDF)',
-      'Two-factor authentication and session security',
-    ],
   },
   {
     id: 'pro',
     name: 'Pro',
-    tagline: '1,000 task tokens / month for a full semester load.',
+    tagline: '100,000 task tokens / month for a full semester load.',
     price_cents: 2000,
     price_monthly: 20,
-    monthly_task_tokens: 1000,
+    monthly_task_tokens: 100000,
     is_trial: false,
+    is_testing: false,
+    available: false,
+    unavailable_reason: 'Not available yet — paid plans open at launch.',
     requires_2fa: false,
     requires_1c_payment: false,
-    popular: true,
-    capabilities: [
-      '1,000 task tokens / month',
-      'Assignment bubbles with per-assignment agent',
-      'Browser extension + paste-in coursework capture',
-      'Turn-in ledger with timestamps and undo',
-      'Study tools, library and exports (Docs, Markdown, PDF)',
-      'Two-factor authentication and session security',
-    ],
+    popular: false,
   },
   {
     id: 'elite',
     name: 'Elite',
-    tagline: '2,700 task tokens / month for heavy research and multi-agent work.',
+    tagline: '270,000 task tokens / month for heavy research and multi-agent work.',
     price_cents: 4000,
     price_monthly: 40,
-    monthly_task_tokens: 2700,
+    monthly_task_tokens: 270000,
     is_trial: false,
+    is_testing: false,
+    available: false,
+    unavailable_reason: 'Not available yet — paid plans open at launch.',
     requires_2fa: false,
     requires_1c_payment: false,
     popular: false,
-    capabilities: [
-      '2,700 task tokens / month',
-      'High-priority compute and multi-agent pipelines',
-      'Assignment bubbles with per-assignment agent',
-      'Browser extension + paste-in coursework capture',
-      'Turn-in ledger with timestamps and undo',
-      'Study tools, library and exports (Docs, Markdown, PDF)',
-      'Two-factor authentication and session security',
-    ],
   },
 ];
 
@@ -247,9 +247,14 @@ function ProductPreview() {
 /* ── Pricing (never-die honest failure line, Spec 3.3.1) ──────────────────────
  * Reads GET /api/plans. If offline or network blips, falls back to standard
  * catalogue ($0, $10, $20, $40) with an honest muted status indicator. */
-function Pricing({ onOpenAuth }) {
+function Pricing({ onOpenAuth, onApplyTesting }) {
   const [plans, setPlans] = useState(FALLBACK_PLANS);
   const [isLive, setIsLive] = useState(false);
+  // Which tier an unavailable click referred to. Owner 2026-09-18: paid tiers
+  // stay visible, but pressing one must say why nothing happened instead of
+  // opening a checkout that cannot complete. The button stays ENABLED on
+  // purpose — a disabled button explains nothing.
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -266,6 +271,22 @@ function Pricing({ onOpenAuth }) {
       });
     return () => { alive = false; };
   }, []);
+
+  const handleTierClick = (p) => {
+    // `available` is authoritative and comes from the server, which derives it
+    // from whether the payment gateway is configured — so these open by
+    // themselves at launch with no client change.
+    if (p.available === false) {
+      setNotice(`${p.name} — ${p.unavailable_reason || 'Not available yet.'}`);
+      return;
+    }
+    setNotice('');
+    if (p.is_testing) {
+      onApplyTesting();
+      return;
+    }
+    onOpenAuth('signup');
+  };
 
   const fmt = (n) => n.toLocaleString();
 
@@ -291,45 +312,68 @@ function Pricing({ onOpenAuth }) {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {plans.map((p) => (
+        {/* "Not available yet" — shown in the page, not a transient toast, so a
+            user who pressed a paid tier can read why at their own pace. */}
+        {notice && (
           <div
-            key={p.id}
-            className={`card-lift p-5 flex flex-col gap-4 rounded-2xl bg-surface-container-lowest relative ${
-              p.popular ? 'border-primary/50 ring-1 ring-primary/30' : 'border border-outline-variant/30'
-            }`}
+            role="status"
+            className="flex items-center justify-center gap-2 mb-6 max-w-[640px] mx-auto px-4 py-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 text-amber-200 text-xs"
           >
-            <div className="flex items-start justify-between gap-2 min-h-[1.5rem]">
-              <div className="text-sm font-semibold text-on-surface">{p.name}</div>
-              {p.popular && (
-                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0 font-semibold">Most popular</span>
-              )}
-              {p.is_trial && (
-                <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">2FA + 1¢ verify</span>
-              )}
-            </div>
-
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-extrabold tracking-tight text-on-surface">
-                ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
-              </span>
-              <span className="text-xs text-on-surface-variant">/{p.is_trial ? '7 days' : 'mo'}</span>
-            </div>
-            <div className="text-xs text-on-surface-variant leading-relaxed">{p.tagline}</div>
-
-            <div className="text-xs text-on-surface-variant border-t border-outline-variant/30 pt-3 mt-auto">
-              <div className="font-semibold text-on-surface font-tabular-stat">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenAuth('signup')}
-              className={`${p.popular ? BTN_PRIMARY : (p.is_trial ? 'inline-flex items-center justify-center rounded-xl bg-sem-deepgreen hover:bg-sem-green text-on-sem-deepgreen hover:text-on-sem-deepgreen font-title-md text-body-md font-semibold transition-all active:scale-95 cursor-pointer shadow-sm' : BTN_SECONDARY)} w-full px-4 py-2.5`}
-            >
-              {p.is_trial ? 'Start free trial' : p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
-            </button>
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>{notice}</span>
           </div>
-        ))}
-      </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {plans.map((p) => (
+            <div
+              key={p.id}
+              className={`card-lift p-5 flex flex-col gap-4 rounded-2xl bg-surface-container-lowest relative ${
+                p.popular ? 'border-primary/50 ring-1 ring-primary/30' : 'border border-outline-variant/30'
+              } ${p.available === false ? 'opacity-70' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-2 min-h-[1.5rem]">
+                <div className="text-sm font-semibold text-on-surface">{p.name}</div>
+                {p.popular && (
+                  <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0 font-semibold">Most popular</span>
+                )}
+                {p.is_trial && p.available !== false && (
+                  <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">2FA + 1¢ verify</span>
+                )}
+                {p.is_testing && (
+                  <span className="font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full bg-sem-green/15 text-sem-green shrink-0 font-semibold">Free access</span>
+                )}
+              </div>
+
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold tracking-tight text-on-surface">
+                  ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
+                </span>
+                <span className="text-xs text-on-surface-variant">/{p.is_trial ? '7 days' : 'mo'}</span>
+              </div>
+              <div className="text-xs text-on-surface-variant leading-relaxed">{p.tagline}</div>
+
+              <div className="text-xs text-on-surface-variant border-t border-outline-variant/30 pt-3 mt-auto">
+                <div className="font-semibold text-on-surface font-tabular-stat">{fmt(p.monthly_task_tokens || p.monthly_credits)} task tokens</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTierClick(p)}
+                title={p.available === false ? p.unavailable_reason : undefined}
+                className={`${p.popular ? BTN_PRIMARY : (p.is_testing ? 'inline-flex items-center justify-center rounded-xl bg-sem-deepgreen hover:bg-sem-green text-on-sem-deepgreen hover:text-on-sem-deepgreen font-title-md text-body-md font-semibold transition-all active:scale-95 cursor-pointer shadow-sm' : BTN_SECONDARY)} w-full px-4 py-2.5`}
+              >
+                {p.available === false
+                  ? 'Not available yet'
+                  : p.is_testing
+                    ? 'Apply for free access'
+                    : p.is_trial
+                      ? 'Start free trial'
+                      : p.price_cents === 0 ? 'Start free' : `Choose ${p.name}`}
+              </button>
+            </div>
+          ))}
+        </div>
+
 
       <p className="mt-6 flex items-start justify-center gap-2 text-xs text-on-surface-variant max-w-[62ch] mx-auto">
         <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-secondary" aria-hidden="true" />
@@ -364,6 +408,10 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
   const [termsOpen, setTermsOpen] = useState(false);
   const [extensionOpen, setExtensionOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Free Testing-tier application (owner 2026-09-18). Public on purpose: it is
+  // the only tier a visitor can start before launch, and requiring a session
+  // would exclude the people evaluating the platform.
+  const [testingOpen, setTestingOpen] = useState(false);
 
   // Deep-link navigation handler with pushState
   const navigatePath = (path) => {
@@ -399,6 +447,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
     setPrivacyOpen(false);
     setTermsOpen(false);
     setExtensionOpen(false);
+    setTestingOpen(false);
     if (window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
     }
@@ -430,7 +479,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const anyModalOpen = guideOpen || privacyOpen || termsOpen || extensionOpen || menuOpen;
+  const anyModalOpen = guideOpen || privacyOpen || termsOpen || extensionOpen || menuOpen || testingOpen;
   useEffect(() => {
     if (!anyModalOpen) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') closeModal(); };
@@ -589,7 +638,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
       </section>
 
       {/* ── Pricing (real numbers, from the billing table) ──────────────────── */}
-      <Pricing onOpenAuth={openAuth} />
+      <Pricing onOpenAuth={openAuth} onApplyTesting={() => setTestingOpen(true)} />
 
       {/* ── How it works + closing CTA ──────────────────────────────────────── */}
       <section className="max-w-[900px] mx-auto px-container-padding pb-20 sm:pb-24">
@@ -786,10 +835,13 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         </div>
       )}
 
-      {/* ── Student Privacy & Cookie Choice Banner ────────────────────────── */}
-      <React.Suspense fallback={null}>
-        <CookieBanner />
-      </React.Suspense>
-    </div>
-  );
-}
+        {/* ── Free Testing-tier application (only tier open before launch) ─── */}
+        <TestingAccessModal open={testingOpen} onClose={closeModal} />
+
+        {/* ── Student Privacy & Cookie Choice Banner ────────────────────────── */}
+        <React.Suspense fallback={null}>
+          <CookieBanner />
+        </React.Suspense>
+      </div>
+    );
+  }

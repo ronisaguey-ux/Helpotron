@@ -14,20 +14,23 @@
     });
   }
 
-  chrome.storage.local.get(['public_id', 'session_token', 'token'], (st) => {
+  // Connection state is the presence of an API key — the only credential the
+  // extension holds. The legacy public_id/session_token pair is gone.
+  chrome.storage.local.get(['public_id', 'api_key'], (st) => {
     const pid = (st.public_id || '').trim();
-    const connected = !!(pid && (st.session_token || st.token));
+    const connected = !!st.api_key;
     if (statusEl) {
-      statusEl.textContent = connected ? `Connected: @${pid}` : 'Not connected';
+      statusEl.textContent = connected ? (pid ? `Connected: @${pid}` : 'Connected') : 'Not connected';
     }
     if (signInBtn) {
-      signInBtn.querySelector('span').textContent = connected ? 'Open Helpotron' : 'Sign in to Helpotron';
+      signInBtn.querySelector('span').textContent = connected ? 'Open Helpotron' : 'Get an API key';
     }
   });
 
   if (signInBtn) {
     signInBtn.addEventListener('click', async () => {
-      chrome.tabs.create({ url: await getServer() });
+      // Straight to the panel that mints a key — there is no login flow.
+      chrome.tabs.create({ url: `${await getServer()}/settings#apikeys` });
     });
   }
   if (doneBtn) {
