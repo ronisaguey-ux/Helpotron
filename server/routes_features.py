@@ -56,7 +56,13 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
         # it already had, and every key was 401ing on these routes.
         if token.startswith(_API_KEY_PREFIX):
             from . import api_keys as _keys
-            return _keys.authenticate(db, token, request)
+            user = _keys.authenticate(db, token, request)
+            if is_user_banned(user):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail='Account suspended'
+                )
+            return user
 
         payload = verify_jwt_token(token)
         if payload and 'sub' in payload:

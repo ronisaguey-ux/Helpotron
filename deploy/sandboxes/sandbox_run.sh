@@ -30,7 +30,12 @@ echo "{\"run_id\":\"${RUN_ID}\",\"kind\":\"${KIND}\",\"started\":\"$(date +%Y-%m
 echo "[sandbox] ${RUN_ID} work=${RUN_DIR}/work"
 (
   cd "${RUN_DIR}/work"
-  timeout "${TIMEOUT}" "${ARGS[@]}"
+  env -i PATH="${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}" \
+         HOME="${RUN_DIR}/work" \
+         TMPDIR="${RUN_DIR}/work" \
+         SANDBOX_RUN_ID="${RUN_ID}" \
+         SANDBOX_KIND="${KIND}" \
+         timeout "${TIMEOUT}" "${ARGS[@]}"
 ) > "${RUN_DIR}/logs/run.log" 2>&1
 RC=$?
 echo "{\"run_id\":\"${RUN_ID}\",\"kind\":\"${KIND}\",\"started\":\"$(date +%Y-%m-%dT%H:%M:%S)\",\"finished\":\"$(date +%Y-%m-%dT%H:%M:%S)\",\"rc\":${RC},\"timeout\":${TIMEOUT}}" \

@@ -2,7 +2,9 @@
 """
 from __future__ import annotations
 
+import logging
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -15,16 +17,31 @@ try:
     from .config import config
     from .database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
     from .security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
-    from .credits import effective_credits_balance
+    from .credits import effective_credits_balance, get_token_balance
 except (ImportError, ValueError):
     from server.config import config
     from server.database import AgentAction, ApiUsageLog, Assignment, CreditTransaction, DataSubmission, Organization, Payment, StudyMaterial, Transcript, UniversalDumpItem, User, SessionLocal, get_db
     from server.security import ADMIN_PUBLIC_ID, hash_password, is_admin_user, verify_jwt_token, SessionStore
-    from server.credits import effective_credits_balance
+    from server.credits import effective_credits_balance, get_token_balance
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 ADMIN_IDS = [ADMIN_PUBLIC_ID]
+
+logger = logging.getLogger(__name__)
+
+# Invite-token redemption is a read-modify-write on a JSON blob, and the blob
+# cannot be updated with a single atomic `UPDATE ... WHERE uses < max_uses` the
+# way a scalar column can. `with_for_update()` covers Postgres, but SQLite
+# IGNORES it (it has no row locks), and SQLite is what this deployment runs — so
+# the lock alone left the race open. Measured before this was added: one token
+# with max_uses=1, five concurrent redemptions, FOUR grants.
+#
+# A process lock closes it for the single-process uvicorn this box runs. It is
+# deliberately module-level and reentrant. The durable fix, if this ever runs
+# with multiple workers, is a `token_redemptions` table with a UNIQUE constraint
+# on (token, user_id) — a database guarantee rather than a code convention.
+_REDEEM_LOCK = threading.RLock()
 
 def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
     if not request:
@@ -101,7 +118,25 @@ class TokenManager:
 
     @staticmethod
     def redeem_token(db: Session, user: User, token: str) -> str:
-        admin = db.query(User).filter(User.public_id.in_(ADMIN_IDS)).first()
+        # SEC-2026-007 (second site): this is a read-modify-write on a JSON blob
+        # and needs the same row lock credits.py uses. Without it, one invite
+        # token with max_uses=1 fired concurrently passes the uses/used_by checks
+        # N times and grants N times, while the ledger records a single use.
+        #
+        # The lock must be on the row that OWNS the token list — the admin's —
+        # and the settings must be read AFTER the lock is taken, so a second
+        # request re-reads the incremented counter instead of its stale copy.
+        # The whole read-check-grant sequence runs under the process lock. It
+        # must wrap the RE-READ of the settings, not just the write: the bug was
+        # concurrent readers each holding `uses: 0`, so serialising only the
+        # final write would still grant N times.
+        with _REDEEM_LOCK:
+            return TokenManager._redeem_locked(db, user, token)
+
+    @staticmethod
+    def _redeem_locked(db: Session, user: User, token: str) -> str:
+        admin = (db.query(User).filter(User.public_id.in_(ADMIN_IDS))
+                 .with_for_update().first())
         if not admin:
             return "Token system unavailable"
         new_settings = dict(admin.settings or {})
@@ -128,12 +163,20 @@ class TokenManager:
             credits = 75
         else:
             credits = 10
-        from .credits import add_tokens as _add_tokens
-        _add_tokens(db, user, credits, reason="admin invite token redeemed")
-        tokens[idx] = {**token_data, "uses": token_data["uses"] + 1, "used_by": [*token_data["used_by"], user.public_id]}
+
+        # Record the use BEFORE granting. The previous order granted first and
+        # recorded second, so any failure between the two minted tokens against
+        # a token the ledger still called unused. add_tokens() commits the whole
+        # session, so flushing here makes the use and the grant land in one
+        # transaction: either both happen or neither does.
+        tokens[idx] = {**token_data, "uses": token_data["uses"] + 1,
+                       "used_by": [*token_data["used_by"], user.public_id]}
         new_settings["tokens"] = tokens
         admin.settings = new_settings  # fresh dict — see generate_token
-        db.commit()
+        db.flush()
+
+        from .credits import add_tokens as _add_tokens
+        _add_tokens(db, user, credits, reason="admin invite token redeemed")
         return f"Token redeemed! You received {credits} credits."
 
     @staticmethod
@@ -247,6 +290,82 @@ async def grant_welcome_tokens(
     db.refresh(user)
     print(f"[helpotron] owner-approved welcome grant: {amount} tokens -> {public_id} ({reason})")
     return {"new_token_balance": settings["token_balance"], "public_id": public_id, "granted": amount}
+
+
+class ConfirmPaymentIn(BaseModel):
+    payment_id: int
+    # Operator must state what was actually received. This is the evidence the
+    # grant rests on, and it is recorded so the decision is auditable.
+    note: str = Field("", max_length=500)
+
+
+@router.get("/user/{public_id}/payments")
+async def list_user_payments(public_id: str, request: Request = None,
+                             db: Session = Depends(get_db)):
+    """Pending and settled manual payments for one user, so the operator can see
+    what is awaiting confirmation and how much was claimed."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    rows = (db.query(Payment).filter(Payment.user_id == user.id)
+            .order_by(Payment.created_at.desc()).limit(50).all())
+    return {"public_id": public_id, "payments": [
+        {"id": r.id, "provider": r.provider, "amount_cents": r.amount_cents,
+         "status": r.status, "provider_ref": r.provider_ref,
+         "created_at": r.created_at.isoformat() if r.created_at else None}
+        for r in rows
+    ]}
+
+
+@router.post("/user/{public_id}/confirm-payment")
+async def confirm_manual_payment(public_id: str, body: ConfirmPaymentIn,
+                                 request: Request = None,
+                                 db: Session = Depends(get_db)):
+    """Confirm a manual payment (cashapp/zelle/venmo/paypal) and grant its tokens.
+
+    SEC-2026-001 fallout: granting had to move out of process_payment(), because
+    that function was trusting the CALLER's word that a payment had settled.
+    Tokens may now only be granted on evidence of settlement, and for the manual
+    providers that evidence is an operator confirming the transfer arrived.
+
+    Idempotent by construction: the status transition is the lock. A payment that
+    is already 'captured' returns without granting again, so a double-click or a
+    retried request cannot double-pay.
+    """
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == public_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    payment = (db.query(Payment)
+               .filter(Payment.id == body.payment_id, Payment.user_id == user.id)
+               .with_for_update().first())
+    if not payment:
+        raise HTTPException(404, "Payment not found for that user")
+    if payment.status == "captured":
+        # Already settled — return the current balance, do not grant again.
+        return {"status": "already_captured", "payment_id": payment.id,
+                "token_balance": get_token_balance(user), "granted": 0}
+    if payment.status not in ("pending",):
+        raise HTTPException(400, f"Payment is '{payment.status}' and cannot be confirmed")
+
+    # Tokens are bought on the NOMINAL order value ($1 = 1 token), matching the
+    # documented pricing rule. The charge was already computed and stored.
+    tokens = max(1, int(round(payment.amount_cents / 100.0)))
+    payment.status = "captured"
+    db.flush()
+
+    from .credits import add_tokens as _add_tokens
+    _add_tokens(db, user, tokens,
+                reason=f"confirmed:{payment.provider}:${payment.amount_cents/100:.2f}"
+                       + (f" ({body.note})" if body.note else ""))
+
+    logger.warning("operator confirmed payment %s for %s: %s tokens ($%.2f %s)",
+                   payment.id, public_id, tokens, payment.amount_cents / 100.0,
+                   payment.provider)
+    return {"status": "captured", "payment_id": payment.id,
+            "granted": tokens, "token_balance": get_token_balance(user)}
 
 
 @router.post("/user/{public_id}/plan")
@@ -598,4 +717,3 @@ async def change_user_password(public_id: str, req: ChangeUserPasswordRequest, r
     # SessionStore uses its OWN connection — commit above first.
     SessionStore.revoke_all_sessions(user.id)
     return {"message": f"Password changed for {public_id}. User sessions revoked."}
-

@@ -18,7 +18,7 @@ import logging
 import time
 import uuid
 
-from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
 
 from fastapi import WebSocket
 
@@ -51,6 +51,8 @@ AGENT_SYSTEM = (
     "If the page is heavily obfuscated, DRM-protected, or does not contain readable assignment data, honestly call 'report_unparseable' and suggest submitting feedback to the Data Lake. "
     "Never submit anything, never take destructive actions.\n\n"
     + sandbox_math_rule()
+    + "\n\n"
+    + prompt_injection_defense_rule()
 )
 
 TOOL_DOC = """Tools (call EXACTLY one per turn, as JSON):
@@ -173,7 +175,19 @@ class AgentManager:
                     session.log.append({"step": session.steps, "event": "extension disconnected"})
                     return
                 try:
-                    content = await llm.call_llm(AGENT_SYSTEM + "\n\n" + TOOL_DOC, _agent_prompt(messages))
+                    content = await llm.call_llm(user_prompt=_agent_prompt(messages), system_prompt=AGENT_SYSTEM + "\n\n" + TOOL_DOC)
+                except TypeError as _te:
+                    # Positional (system, user) is INVERTED for this signature —
+                    # call_llm(user_prompt, system_prompt, ...) — and it is what
+                    # put AGENT_SYSTEM into the user slot and the rendered
+                    # conversation into the system slot. Worse, it fired on ANY
+                    # TypeError from the call above, including one raised INSIDE
+                    # call_llm, silently retrying a different request shape.
+                    # The signature is now known and fixed, so this fallback is
+                    # gone; a TypeError here is a real bug and must surface.
+                    session.log.append({"step": session.steps,
+                                        "event": f"llm call failed: {type(_te).__name__}: {_te}"})
+                    return
                 except Exception as e:
                     session.log.append({"step": session.steps, "event": f"llm error: {e}"})
                     return

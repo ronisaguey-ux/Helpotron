@@ -170,7 +170,7 @@ class VirtualSubagentSandbox:
 
         lang = language.lower().strip()
         script_name = f"subagent_task_{int(time.time()*1000)}"
-        
+
         if lang in ("python", "py", "python3"):
             script_file = f"{script_name}.py"
             self.write_file(script_file, script_code)
@@ -349,7 +349,7 @@ class SandboxManager:
                     sbx.write_file(fname, content)
 
             result = await sbx.execute_script(script_code, language=language, timeout=timeout)
-            
+
             output_data = result.to_dict()
             output_data["files"] = sbx.list_files()
             return output_data
@@ -395,6 +395,28 @@ def write_sandbox_file(sandbox_id: str, filename: str, content: str) -> str:
     return str(path)
 
 
+def write_user_content_file(sandbox_id: str, filename: str, content: bytes | str) -> str:
+    """Store user-supplied content into a non-executable isolated sandbox workspace.
+
+    Guarantees:
+    - Path traversal is strictly forbidden.
+    - Executable extensions (.sh, .bash, .py, .exe, .bat, .cmd, .ps1, etc.) are rejected.
+    - Permissions are set to 0o600 (owner read/write only, no execution bits).
+    """
+    path = get_sanitized_sandbox_path(sandbox_id, filename)
+    forbidden_extensions = {
+        '.sh', '.bash', '.exe', '.bat', '.py', '.cmd', '.ps1', '.vbs',
+        '.bin', '.elf', '.so', '.dll', '.dylib', '.cgi', '.jar',
+    }
+    if path.suffix.lower() in forbidden_extensions:
+        raise ValueError(f"Executable extension '{path.suffix}' forbidden for user content")
+    content_bytes = content.encode('utf-8') if isinstance(content, str) else content
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'wb') as f:
+        f.write(content_bytes)
+    return str(path)
+
+
 # ── Remediation BATCH-03 additions (2026-08-21) ───────────────────────────
 # Path-traversal-safe sandbox path resolution + shell-free command runner,
 # per the plan spec. The existing SandboxManager / VirtualSubagentSandbox
@@ -421,12 +443,20 @@ def run_isolated_command(sandbox_id: str, command_args: list[str], timeout: int 
     sandbox_dir = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
     sandbox_dir.mkdir(parents=True, exist_ok=True)
 
+    safe_env = {
+        "PATH": os.environ.get("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
+        "HOME": str(sandbox_dir),
+        "TMPDIR": str(sandbox_dir),
+        "SANDBOX_ID": sandbox_id,
+    }
     res = subprocess.run(
         command_args,
         cwd=str(sandbox_dir),
         capture_output=True,
         text=True,
         timeout=timeout,
-        shell=False
+        shell=False,
+        env=safe_env,
+        preexec_fn=harden_child_process,
     )
     return res.returncode, res.stdout, res.stderr

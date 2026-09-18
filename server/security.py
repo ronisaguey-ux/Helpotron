@@ -484,7 +484,8 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
             db = SessionLocal()
             try:
                 from . import api_keys as _keys
-                return _keys.authenticate(db, bearer, request)
+                user = _keys.authenticate(db, bearer, request)
+                return _enforce_not_banned(user)
             finally:
                 db.close()
 

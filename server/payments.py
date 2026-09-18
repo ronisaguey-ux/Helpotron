@@ -270,7 +270,19 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
         if effective_pct > 0 else amount_cents
     )
 
-    status = "captured" if provider == "stripe" else "pending"
+    # SEC-2026-001: a Payment row created here is ALWAYS pending. This
+    # previously read `status = "captured" if provider == "stripe" else "pending"`,
+    # so merely naming "stripe" as the provider produced an already-settled
+    # payment and the block below granted tokens — with no processor involved
+    # and no money moved. Combined with `amount_cents` coming from the client,
+    # any authenticated user could mint tokens at will.
+    #
+    # Only a verified Stripe webhook (handle_stripe_webhook, driven by a signed
+    # `checkout.session.completed`) may grant tokens, and it does so through its
+    # own path — it never calls this function. Manual providers
+    # (cashapp/zelle/venmo/paypal) stay pending until an operator confirms the
+    # transfer, which is what "pending" already meant for them.
+    status = "pending"
     payment = Payment(
         user_id=user.id,
         provider=provider,
@@ -281,14 +293,9 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     db.add(payment)
     db.flush()
 
-    if status == "captured":
-        from .credits import add_tokens as _add_tokens
-        reason = f"payment:{provider}:${charged_cents/100:.2f}"
-        if referral_pct > 0:
-            reason += f" (referral discount: {referral_pct:g}%)"
-        if discount_pct > 0:
-            reason += f" (discount: {discount_pct}%)"
-        _add_tokens(db, user, tokens_added, reason=reason)
+    # No grant lives here any more, deliberately. If you are tempted to add one
+    # back: it must be gated on evidence of settlement (a webhook signature, an
+    # operator action), never on the caller's own say-so.
 
     # Referral entitlement is one-time: consumed by this order.
     if referral_pct > 0:

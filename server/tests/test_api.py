@@ -233,8 +233,8 @@ def test_upsert_assignment_and_status(client, unique_user, auth_headers):
     assert status["assignments"][0]["status"] == "pending_approval"
 
 
-def test_material_requires_credits_then_succeeds(client, unique_user, auth_headers, monkeypatch):
-    async def fake_llm(system, user, **kwargs):
+def test_material_requires_credits_then_succeeds(client, unique_user, auth_headers, top_up_tokens, monkeypatch):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         return "A study guide about Hamlet."
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
 
@@ -242,10 +242,8 @@ def test_material_requires_credits_then_succeeds(client, unique_user, auth_heade
     r = client.post("/api/study-guide", json=body, headers=auth_headers)
     assert r.status_code == 402  # no tokens on a fresh basic user
 
-    # top up via a stripe provider (a payment buys task tokens)
-    pay = client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 500}, headers=auth_headers)
-    assert pay.status_code == 200
-    assert pay.json()["status"] == "captured"
+    # top up (a payment buys task tokens; an operator confirms it)
+    top_up_tokens(unique_user, 500, auth_headers)
 
     r = client.post("/api/study-guide", json=body, headers=auth_headers)
     assert r.status_code == 200
@@ -259,17 +257,17 @@ def test_material_requires_credits_then_succeeds(client, unique_user, auth_heade
     assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 4.0
 
 
-def test_flashcards_json_retry_then_parse(client, unique_user, auth_headers, monkeypatch):
+def test_flashcards_json_retry_then_parse(client, unique_user, auth_headers, top_up_tokens, monkeypatch):
     calls = {"n": 0}
 
-    async def flaky_llm(system, user, **kwargs):
+    async def flaky_llm(user_prompt, system_prompt="", **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return 'Sure! ```json\nnot valid json\n```'
         return '[{"q": "Who delays?", "a": "Hamlet"}]'
 
     monkeypatch.setattr(study_tools.llm, "call_llm", flaky_llm)
-    client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 200}, headers=auth_headers)
+    top_up_tokens(unique_user, 200, auth_headers)
 
     r = client.post("/api/flashcards", json={"public_id": unique_user, "transcript_text": "Hamlet delays."}, headers=auth_headers)
     assert r.status_code == 200
@@ -278,12 +276,12 @@ def test_flashcards_json_retry_then_parse(client, unique_user, auth_headers, mon
     assert calls["n"] == 2
 
 
-def test_generate_stream_sse_progress_events(client, unique_user, auth_headers, monkeypatch):
+def test_generate_stream_sse_progress_events(client, unique_user, auth_headers, top_up_tokens, monkeypatch):
     """FIX B3: /api/generate/stream/{kind} emits 4 real-time progress events
     (Parsing syllabus -> Extracting key concepts -> Generating -> Verifying
     accuracy) then a done event; failures surface as in-band error events
     on a 200 SSE response instead of an HTTP error body."""
-    async def fake_llm(system, user, **kwargs):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         return '[{"q": "Q1?", "a": "A1."}, {"q": "Q2?", "a": "A2."}]'
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
 
@@ -297,8 +295,7 @@ def test_generate_stream_sse_progress_events(client, unique_user, auth_headers, 
     assert "insufficient credits" in r.text
 
     # top up (stripe: 500 cents = 5 credits) and re-run
-    pay = client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 500}, headers=auth_headers)
-    assert pay.status_code == 200
+    top_up_tokens(unique_user, 500, auth_headers)
 
     r = client.post("/api/generate/stream/flashcards", json=body, headers=auth_headers)
     assert r.status_code == 200
@@ -326,27 +323,25 @@ def test_generate_stream_sse_progress_events(client, unique_user, auth_headers, 
     assert bad.status_code == 404
 
 
-def test_generation_failure_credits_back(client, unique_user, auth_headers, monkeypatch):
-    async def broken_llm(system, user, **kwargs):
+def test_generation_failure_credits_back(client, unique_user, auth_headers, top_up_tokens, monkeypatch):
+    async def broken_llm(user_prompt, system_prompt="", **kwargs):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(study_tools.llm, "call_llm", broken_llm)
-    client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 300}, headers=auth_headers)
+    top_up_tokens(unique_user, 300, auth_headers)
 
     r = client.post("/api/summary", json={"public_id": unique_user, "transcript_text": "some lecture"}, headers=auth_headers)
     assert r.status_code == 500
     assert client.get(f"/api/credits/{unique_user}", headers=auth_headers).json()["tokens"] == 3.0  # unchanged
 
 
-def test_discount_program(client, unique_user, auth_headers):
+def test_discount_program(client, unique_user, auth_headers, top_up_tokens):
     d1 = client.post("/api/discount", json={"public_id": unique_user, "payload": {"grades": "anonymized"}}, headers=auth_headers)
     assert d1.status_code == 200
     assert d1.json()["discount_balance"] == 1.0
     assert d1.json()["next_purchase_discount"] == 1.0
 
-    pay = client.post("/api/payments", json={"public_id": unique_user, "provider": "stripe", "amount_cents": 1000}, headers=auth_headers)
-    assert pay.status_code == 200
-    assert pay.json()["tokens_added"] == 10  # $10 buys 10 task tokens ($1 = 1 token)
+    top_up_tokens(unique_user, 1000, auth_headers)
 
 
 def test_transcribe_without_backend_returns_clear_error(client, unique_user, auth_headers):

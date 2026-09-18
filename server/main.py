@@ -358,12 +358,24 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
-    # NOTE: "chrome-extension://*" is NOT a CORS wildcard — CORS only has one
-    # wildcard ("*"), so real extension origins must be matched by regex
-    # (Chrome extension IDs: 32 chars [a-p]; Firefox UUIDs: 8-4-4-4-12 hex).
+    # CORS with allow_credentials=True is an authorization decision, not a
+    # formatting one. The previous regex accepted `chrome-extension://[a-pA-P0-9]{6,64}`
+    # — a RANGE, not a wildcard, but functionally equivalent to one: it matched
+    # any Chrome extension ID, so every extension a user happened to install
+    # could make credentialed cross-origin requests and read the responses
+    # (assignments, settings, balances). An extension is the cheapest way for an
+    # attacker to get code running in a victim's authenticated browser, so this
+    # was the widest hole in the app.
+    #
+    # Pinned to the published ID. A wildcard here cannot be scoped by trust:
+    # CORS has no notion of "our extension", only of an origin string.
+    #
+    # Localhost stays for development. NOTE: "chrome-extension://*" is not valid
+    # CORS syntax — CORS has exactly one wildcard ("*") and it cannot carry
+    # credentials — so specific origins are the only mechanism available.
     allow_origin_regex=(
         r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?"
-        r"|chrome-extension://[a-pA-P0-9]{6,64}"
+        r"|chrome-extension://nlbbjhgmdmjmlgojeiblkhfmmnlmfmjk"
         r"|moz-extension://[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
     ),
     allow_credentials=True,
@@ -934,6 +946,9 @@ def _dev_login_allowed(request: Request, body: "LoginIn") -> bool:
             part = part.split(":")[0].strip().lower()
             if part:
                 hosts.append(part)
+    if not hosts:
+        logger.warning("dev-login bypass refused: no Host or X-Forwarded-Host header present")
+        return False
     for host in hosts:
         if host not in _LOCAL_HOSTS:
             logger.warning(
@@ -1414,7 +1429,7 @@ async def get_user_credits(request: Request, db: Session = Depends(get_db)):
 @app.post("/api/users")
 def create_user(body: UserIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
-    if body.public_id != user.public_id and not getattr(user, "is_admin", False):
+    if body.public_id != user.public_id and not is_admin_user(user):
         raise HTTPException(403, "Cannot modify another user's profile")
     if body.telegram_id:
         user.telegram_id = body.telegram_id
@@ -1425,9 +1440,25 @@ def create_user(body: UserIn, db: Session = Depends(get_db), current_user: User 
 
 @app.patch("/api/users/{public_id}")
 def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # SEC-2026-008, resolved the SAFE way. The bug: the authorization check read
+    # the path param, but the write went to `user` (always the caller) — so an
+    # admin editing another user silently edited themselves, and the endpoint
+    # returned the wrong row. The audit's proposed patch "fixed" that by making
+    # an admin able to write ANY user's settings. That is a privilege expansion
+    # nobody asked for, and cross-user writes already have an owner in
+    # server/admin.py. This endpoint is self-service, and only self-service.
+    #
+    # TODO(owner): confirm whether /api/users/{public_id} should ever write
+    # another user's settings. Until that is decided it refuses, which is the
+    # reversible direction — a privilege NOT granted can be added later; one
+    # granted and shipped cannot be taken back from anyone who already used it.
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
-    if user.public_id != public_id and not getattr(user, "is_admin", False):
-        raise HTTPException(403, "Cannot modify another user's settings")
+    if user.public_id != public_id:
+        raise HTTPException(
+            403,
+            "This endpoint modifies only your own settings. Operator actions on "
+            "another account go through the admin API.",
+        )
     accepted, rejected = filter_user_settings_payload(body.settings)
     if rejected:
         logger.warning(
@@ -1955,11 +1986,20 @@ def _purchase_2fa_required(user: User) -> None:
 
 
 @app.post("/api/payments")
-def pay(body: PaymentIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def pay(body: PaymentIn, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from .security import require_session_auth
+    require_session_auth(request)
     _purchase_2fa_required(current_user)
     if body.amount_cents <= 0:
         raise HTTPException(400, "Payment amount must be greater than zero")
-    if _stripe_enabled() and body.provider.lower() == "stripe":
+    # SEC-2026-001: reject Stripe UNCONDITIONALLY. This previously read
+    # `if _stripe_enabled() and body.provider.lower() == "stripe"`, so on a box
+    # where Stripe was NOT configured the guard did not fire — and
+    # process_payment() treated provider="stripe" as an already-settled payment,
+    # granting tokens with no charge. A client could mint tokens at will.
+    # Stripe purchases must go through /api/checkout and be settled by the
+    # signed webhook, which is the only thing that can prove a payment happened.
+    if body.provider.lower() == "stripe":
         raise HTTPException(400, "Stripe payments must be initiated via /api/checkout")
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     try:

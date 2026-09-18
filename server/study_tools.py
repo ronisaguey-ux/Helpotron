@@ -79,10 +79,9 @@ async def _invoke_llm(system: str, user: str, effort_score: int = 500) -> str:
     try:
         return await llm.call_llm(user_prompt=user, system_prompt=system, effort_score=effort_score)
     except TypeError:
-        try:
-            return await llm.call_llm(user_prompt=user, system_prompt=system)
-        except TypeError:
-            return await llm.call_llm(system, user)
+        # A legacy fake that does not accept effort_score. Keywords still name
+        # the roles explicitly, so this retry cannot invert them.
+        return await llm.call_llm(user_prompt=user, system_prompt=system)
 
 
 

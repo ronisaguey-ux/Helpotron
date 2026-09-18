@@ -162,7 +162,7 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
     every other caller.
     """
     user_id = user.id if hasattr(user, 'id') else user
-    row = db.query(User).filter(User.id == user_id).first()
+    row = db.query(User).filter(User.id == user_id).with_for_update().first()
     if row is None:
         return 0
     if is_unmetered(row):
