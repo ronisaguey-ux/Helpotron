@@ -101,7 +101,6 @@ ROUTINE_ACTION_TYPES = {
     "check_originality",
     "generate_flashcards",
     "summarize_lecture",
-    "run_sandbox_script",
     "update_preferences",
     "change_settings",
     "create_assignment",
@@ -229,6 +228,11 @@ class PermissionEngine:
         # 0. Read-only actions never ask, in any mode (operator 08-31).
         if action_type.lower() in READONLY_ACTION_TYPES:
             return True, "Read-only action — never requires approval."
+
+        # INJ-02 & INJ-04: Arbitrary code execution (run_sandbox_script) must NEVER
+        # be silently auto-approved via YOLO mode or client overrides. Explicit confirmation is required.
+        if action_type.lower() == "run_sandbox_script":
+            return False, "Sandbox script execution requires explicit user approval."
 
         # 1. Check persistent auto-approved rules list (exact match or substring rule)
         for rule in auto_approved_rules:
