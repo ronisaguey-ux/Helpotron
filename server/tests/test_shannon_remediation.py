@@ -73,3 +73,26 @@ def test_misc_13_banned_user_blocked_on_org_route(client):
     )
     assert resp.status_code == 403
     assert "suspended" in resp.text.lower()
+
+
+def test_inj_01_sympify_command_injection_blocked():
+    """INJ-01: sympy.sympify and eval-capable code in run_shell must be rejected."""
+    from server.overlord_agent import _is_safe_compute_code, _validated_argv
+
+    # Shannon exploit payload 1
+    p1 = "from sympy import sympify; sympify('__import__(+chr(39)+os+chr(39)+).system(+chr(39)+id+chr(39)+)')"
+    assert _is_safe_compute_code(p1) is False
+    assert _validated_argv(f"python3 -c '{p1}'") is None
+
+    # Shannon exploit payload 2 (base64 exec)
+    p2 = "from sympy import sympify; sympify('exec(__import__(+chr(39)+base64+chr(39)+).b64decode(+chr(39)+aWQ=+chr(39)+).decode())')"
+    assert _is_safe_compute_code(p2) is False
+    assert _validated_argv(f"python3 -c '{p2}'") is None
+
+    # Direct import of sympify or dangerous methods
+    assert _is_safe_compute_code("import sympy; sympy.sympify('1+1')") is False
+    assert _is_safe_compute_code("import sympy; sympy.parse_expr('1+1')") is False
+
+    # Safe math expressions must still be allowed
+    assert _is_safe_compute_code("import math; print(2+2)") is True
+    assert _is_safe_compute_code("import sympy; print(sympy.simplify('1/2+1/3'))") is True
