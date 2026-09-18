@@ -113,6 +113,28 @@ Look out: `TWILIO_SECRET` is duplicated in `.env` and `server/.env` — rotate b
 `TWILIO_SID`, `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_VERIFY_SERVICE_SID` are
 **identifiers, not secrets** — no rotation needed, but they were disclosed, so treat them as public.
 
+## C2. T2B — ROTATED (same blast radius, different repo)
+
+T2B's `.env` (`/home/roni/Roni_workspace/t2b/.env`, mode 600) sits in the same filesystem as the
+compromised process, and the helpotron RCE ran **as the same user** (`roni-saguey`) — so it was
+readable by the exploit whether or not the pentest pointed at it. T2B has no running service
+(the public `t2b.helpotron.dpdns.org` routes to the helpotron API on :5000, not to T2B), so
+Rotating was safe with no downtime and no client to break.
+
+| secret | status |
+|---|---|
+| `SESSION_SECRET` | **✅ ROTATED** |
+| `CSRF_SECRET` | **✅ ROTATED** |
+
+Verified: both load as 64 chars with no `dev-` prefix (the production enforcement rejects that
+prefix at `security/sessions.py:25` and `security/csrf.py:29`), both differ from the backup, and
+the suite is **289 passed** after rotation. Backup `.env.bak-pre-rotation-*` at 600.
+
+**⏳ Still owner-dashboard for T2B:** `STRIPE_WEBHOOK_SECRET`, `TWILIO_AUTH_TOKEN`,
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`.
+**`roofing-lead-bot/.env.example` is mode 555** — that is the repo's deliberate read-only shape,
+not a secret file; leave it.
+
 ## D. ALSO CONSIDER — outside the repo, root-equivalent read
 
 The account is in the `docker` and `sudo` groups, so assume any credential readable by it on
