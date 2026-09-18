@@ -10,6 +10,7 @@ Endpoints (authenticated via get_current_user session/Bearer):
   POST /api/hygiene/inspect — multipart file -> findings report JSON
   POST /api/hygiene/clean   — multipart file -> cleaned file bytes (+ X-Hygiene-Report)
 """
+import asyncio
 import base64
 import json
 import os
@@ -45,7 +46,14 @@ async def _forward(file: UploadFile, endpoint: str) -> dict:
         raise HTTPException(status_code=400, detail="empty file")
     payload = {"file": base64.b64encode(data).decode(), "name": file.filename or "file"}
     try:
-        r = httpx.post(f"{SERVICE_URL}{endpoint}", json=payload, timeout=240.0)
+        # 2026-09-18: this was a sync call with a 240 s timeout inside an
+        # `async def` handler. It blocked the whole event loop, so ONE request
+        # to /api/hygiene with an unresponsive sidecar froze every other client
+        # (including /api/health) for up to four minutes — a single-request DoS.
+        # Run it in a worker thread so the loop stays free.
+        r = await asyncio.to_thread(
+            lambda: httpx.post(f"{SERVICE_URL}{endpoint}", json=payload, timeout=240.0)
+        )
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"hygiene service unreachable: {e}") from e
     if r.status_code != 200:
