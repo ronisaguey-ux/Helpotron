@@ -502,6 +502,16 @@ def top_up(db_or_user_id: Any, user_or_amount: Any, amount_or_reason: Any = "top
         add_tokens(db, user, amount, reason=reason)
 
 def record_data_submission(db: Session, user: User, payload: dict) -> dict:
+    from datetime import datetime, timedelta
+    since = datetime.utcnow() - timedelta(hours=24)
+    recent = db.query(DataSubmission).filter(
+        DataSubmission.user_id == user.id,
+        DataSubmission.created_at >= since
+    ).first()
+    if recent:
+        bal = float(user.discount_balance or 0.0)
+        return {"discount_balance": bal, "next_purchase_discount": bal, "status": "deduplicated", "message": "Data submission already recorded for this period."}
+
     submission = DataSubmission(user_id=user.id, payload=payload, discount_earned=1.0)
     db.add(submission)
     user.discount_balance = 1.0

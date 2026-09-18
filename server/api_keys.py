@@ -26,6 +26,7 @@ import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -33,6 +34,22 @@ from sqlalchemy.orm import Session
 from .database import ApiKey
 
 logger = logging.getLogger("helpotron.api_keys")
+
+_KEY_RATE_TRACKER: dict[int, list[float]] = {}
+
+
+def check_api_key_rate_limit(key_id: int, limit_per_min: Optional[int]) -> bool:
+    if not limit_per_min or limit_per_min <= 0:
+        return True
+    now = time.time()
+    timestamps = _KEY_RATE_TRACKER.get(key_id, [])
+    timestamps = [t for t in timestamps if now - t < 60.0]
+    if len(timestamps) >= limit_per_min:
+        _KEY_RATE_TRACKER[key_id] = timestamps
+        return False
+    timestamps.append(now)
+    _KEY_RATE_TRACKER[key_id] = timestamps
+    return True
 
 PREFIX = "htk_"            # helpotron key — greppable in logs/scanners
 KEY_BYTES = 32             # 256 bits of entropy
@@ -46,6 +63,7 @@ def _hash(key: str) -> str:
 def generate_key(db: Session, user, label: str = "",
                  usage_limit_tokens: Optional[float] = None,
                  rate_limit_per_min: Optional[int] = None,
+                 allowed_scopes: Optional[Any] = None,
                  expires_in_days: Optional[int] = None) -> Tuple[ApiKey, str]:
     """Create a key. Returns (row, plaintext) — plaintext is shown ONCE."""
     raw = f"{PREFIX}{secrets.token_urlsafe(KEY_BYTES)}"
@@ -57,6 +75,7 @@ def generate_key(db: Session, user, label: str = "",
         label=(label or "").strip()[:100],
         usage_limit_tokens=(float(usage_limit_tokens) if usage_limit_tokens else None),
         rate_limit_per_min=(int(rate_limit_per_min) if rate_limit_per_min else None),
+        allowed_scopes=allowed_scopes if allowed_scopes is not None else {},
         expires_at=(datetime.utcnow() + timedelta(days=int(expires_in_days))
                     if expires_in_days else None),
     )
@@ -206,6 +225,20 @@ def authenticate(db: Session, bearer: str, request: Any = None):
     blocked = limit_exceeded(key_row)
     if blocked:
         raise HTTPException(402, f"API key limit reached: {blocked}")
+    if not check_api_key_rate_limit(key_row.id, key_row.rate_limit_per_min):
+        raise HTTPException(429, f"API key rate limit exceeded ({key_row.rate_limit_per_min} req/min)")
+    if key_row.allowed_scopes and request is not None:
+        path = getattr(request, "url", None) and getattr(request.url, "path", None)
+        if path:
+            scopes = key_row.allowed_scopes
+            allowed_prefixes = []
+            if isinstance(scopes, list):
+                allowed_prefixes = scopes
+            elif isinstance(scopes, dict):
+                allowed_prefixes = scopes.get("endpoints") or scopes.get("scopes") or list(scopes.keys())
+            if allowed_prefixes and not any(path.startswith(p) for p in allowed_prefixes):
+                logger.warning("API key %s rejected for path %s outside scopes %s", key_row.key_prefix, path, allowed_prefixes)
+                raise HTTPException(403, "API key not authorized for this endpoint scope")
     user = db.query(User).filter(User.id == key_row.user_id).first()
     if user is None:
         raise HTTPException(401, "Invalid API key")

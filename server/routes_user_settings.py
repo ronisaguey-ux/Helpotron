@@ -175,8 +175,13 @@ def _require_admin_request(request: Request) -> User:
 @router.get("/settings")
 async def get_settings_route(request: Request, db: Session = Depends(get_db)):
     """Returns full user settings including academic level, grade scheduling, personas, detectors, and TRIO rules."""
+    from .security import require_session_auth
+    require_session_auth(request)
     user = _get_current_user(request, db)
-    return {"status": "success", "settings": user_settings_service.get_user_settings(user)}
+    settings = user_settings_service.get_user_settings(user)
+    if isinstance(settings, dict):
+        settings.pop("2fa_totp_secret", None)
+    return {"status": "success", "settings": settings}
 
 
 @router.patch("/settings")
@@ -469,6 +474,8 @@ async def update_goal_target_route(payload: GoalTargetRequest, request: Request,
 @router.get("/data/export-all")
 async def export_all_user_data_route(request: Request, db: Session = Depends(get_db)):
     """Comprehensive export of EVERYTHING associated with or contributed by user (materials, datalake, messages, styles, bubbles, settings)."""
+    from .security import require_session_auth
+    require_session_auth(request)
     user = _get_current_user(request, db)
     settings = user_settings_service.get_user_settings(user)
     materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user.id).all()
@@ -706,7 +713,9 @@ async def change_password(payload: ChangePasswordPayload, request: Request, db: 
     h, s = hash_password(payload.new_password)
     user.password_hash, user.password_salt = h, s
 
-    # Invalidate all other active sessions for this account
+    # Invalidate all other active sessions and JWTs for this account
+    from .security import revoke_user_jwts
+    revoke_user_jwts(user.id)
     current_token = request.cookies.get(SESSION_COOKIE_NAME)
     if current_token:
         db.query(UserSession).filter(UserSession.user_id == user.id, UserSession.token != current_token).delete()
@@ -1009,8 +1018,11 @@ logger = logging.getLogger("helpotron.user_settings")
 async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     """GDPR Article 17 right-to-erasure: fully deletes the user's account,
     cascades cleanup across all scoped data, and anonymizes the data lake."""
+    from .security import require_session_auth, revoke_user_jwts
+    require_session_auth(request)
     user = _get_current_user(request, db)
     user_id = user.id
+    revoke_user_jwts(user_id)
 
     # ORM-cascade-safe: groups created by the user (cascade removes
     # memberships + shared materials), then remaining FK rows, user last.
@@ -1022,17 +1034,28 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
         or_(Referral.referrer_id == user_id, Referral.referee_id == user_id)
     ).delete(synchronize_session=False)
 
-    # Note: UniversalDumpItem is currently not imported here but if it exists, it should be deleted.
-    # We will use the list of known user_id tables.
+    from .database import (
+        ApiKey, AgentAction, AgentFile, UserSettingsScope, StudyCardState,
+        AgentChatThread, AgentChatMessage, PasswordReset, ApiUsageLog,
+        UniversalDumpItem, ClaimedTrialPhone, TrashItem, Organization
+    )
+    db.query(Organization).filter(Organization.admin_id == user_id).delete(synchronize_session=False)
+    db.query(ClaimedTrialPhone).filter(ClaimedTrialPhone.user_id == user_id).delete(synchronize_session=False)
+
     for model in (
-        UserSession, Assignment, Transcript, StudyMaterial, CreditTransaction,
-        Payment, DataSubmission, Draft, StudySession
+        UserSession, ApiKey, Assignment, AgentAction, AgentFile, Transcript,
+        UserSettingsScope, StudyMaterial, StudyCardState, CreditTransaction,
+        Payment, DataSubmission, Draft, StudySession, AgentChatThread,
+        AgentChatMessage, PasswordReset, ApiUsageLog, UniversalDumpItem, TrashItem
     ):
-        db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+        try:
+            db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+        except Exception as e:
+            logger.warning("Could not clean up %s for user %s: %s", getattr(model, '__name__', str(model)), user_id, e)
 
     db.flush()
     # Anonymize the data lake (telemetry / feedback / corpus / microcredits).
-    gdpr_tag = f"ANONYMIZED_GDPR_DELETED-{user.public_id}"
+    gdpr_tag = "ANONYMIZED_GDPR_DELETED"
     rewritten = datalake_manager.anonymize_user(user.public_id, gdpr_tag) + datalake_manager.anonymize_user(str(user_id), gdpr_tag)
     db.delete(user)
     db.commit()

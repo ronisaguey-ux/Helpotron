@@ -196,7 +196,7 @@ def resolve_effort_tier(effort_score: int | float | None) -> Dict[str, Any]:
         score = 500
     else:
         score = int(effort_score)
-    
+
     if score <= 10:
         lvl = max(1, min(10, score))
         score = lvl * 100
@@ -534,6 +534,9 @@ class UserSettingsService:
         # Ensure letter / numeric consistency
         if "target_score_numeric" in settings and "target_score_letter" not in settings:
             settings["target_score_letter"] = score_to_letter(settings["target_score_numeric"])
+
+        # AUTH-01: Ensure 2fa_totp_secret is never exposed via settings read
+        settings.pop("2fa_totp_secret", None)
 
         return settings
 
@@ -1152,18 +1155,18 @@ def resolve_effective_setting(
         "assignment": assignment_id,
         "task": task_id
     }
-    
+
     records = db.query(UserSetting).filter(
         UserSetting.user_id == str(user_id),
         UserSetting.setting_key == setting_key
     ).all() if hasattr(db, "query") else []
-    
+
     record_map = {(r.scope_type.lower(), r.scope_id): r.setting_value for r in records}
-    
+
     effective_value = DEFAULT_SETTINGS.get(setting_key, "medium")
     source_scope = "default"
     inheritance_chain = [{"scope": "default", "value": effective_value}]
-    
+
     for scope in SCOPE_HIERARCHY:
         sid = scope_values.get(scope)
         if sid:
@@ -1172,7 +1175,7 @@ def resolve_effective_setting(
                 effective_value = val
                 source_scope = f"{scope}:{sid}"
                 inheritance_chain.append({"scope": scope, "scope_id": sid, "value": val})
-                
+
     return {
         "key": setting_key,
         "effective_value": effective_value,

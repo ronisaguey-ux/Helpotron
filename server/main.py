@@ -1173,7 +1173,7 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(400, "Password must be at least 8 characters, include a letter and a number")
     existing = db.query(User).filter(User.public_id == body.public_id).first()
     if existing:
-        raise HTTPException(400, "Public ID already taken")
+        raise HTTPException(400, "Invalid registration request or identifier unavailable")
     hash_hex, salt = hash_password(body.password)
     # New accounts start at 0 tokens (08-31 owner directive, late evening —
     # supersedes both the named-only and the universal grants: no auto-grant,
@@ -1201,9 +1201,26 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/logout")
 def logout(request: Request, response: Response):
+    from .security import revoke_user_jwts, revoke_jwt_jti, verify_jwt_token
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
+        sess = SessionStore.get_session(token)
+        if sess and "user_id" in sess:
+            revoke_user_jwts(sess["user_id"])
         SessionStore.delete_session(token)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        bearer = auth_header.split(" ", 1)[1]
+        sess = SessionStore.get_session(bearer)
+        if sess and "user_id" in sess:
+            revoke_user_jwts(sess["user_id"])
+            SessionStore.delete_session(bearer)
+        payload = verify_jwt_token(bearer)
+        if payload:
+            if "jti" in payload:
+                revoke_jwt_jti(payload["jti"])
+            if "sub" in payload:
+                revoke_user_jwts(payload["sub"])
     response.delete_cookie(SESSION_COOKIE_NAME)
     response.delete_cookie("csrf_token")
     return {"message": "Logged out"}
@@ -2061,7 +2078,9 @@ async def stripe_webhook(request: Request):
 
 
 @app.post("/api/discount")
-def discount(body: DiscountIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def discount(request: Request, body: DiscountIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from .security import require_session_auth
+    require_session_auth(request)
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     result = credits.record_data_submission(db, user, body.payload)
     db.commit()
