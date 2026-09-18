@@ -276,12 +276,34 @@ def test_auth_01_and_authz_12_api_key_guards(client):
     key_row, raw_key = generate_key(db, u, label="test_scope_key", rate_limit_per_min=60, allowed_scopes=["/api/user/settings"])
     key_headers = {"Authorization": f"Bearer {raw_key}"}
 
-    # API key rejected on account-critical routes
-    assert client.get("/api/user/settings", headers=key_headers).status_code == 403
+    # AUTH-01/AUTHZ-12: API keys are rejected on ACCOUNT-CRITICAL routes. This is
+    # the boundary that matters — a leaked key must not let someone take over the
+    # account, exfiltrate the account's data wholesale, or move money.
+    #
+    # GET /api/user/settings is deliberately NOT in this list any more (owner
+    # 2026-09-18). It is the read the browser extension needs to sync
+    # effort/mode/model, and the extension authenticates ONLY by API key — so
+    # gating it broke the popup with "Could not sync agent settings from the
+    # server (HTTP 403)". It was also incoherent as a guard: `PATCH
+    # /api/user/settings` never required a session, so a key could already WRITE
+    # these settings while being refused permission to read them, and
+    # /api/extension/bootstrap already returns the same `token_balance` to a key.
+    # What it discloses is the caller's own preferences plus a 2fa_enabled flag —
+    # no secret (2fa_totp_secret is stripped) and no escalation.
+    assert client.get("/api/user/settings", headers=key_headers).status_code == 200
+
     assert client.get("/api/user/data-export", headers=key_headers).status_code == 403
     assert client.delete("/api/user/account", headers=key_headers).status_code == 403
     assert client.post("/api/auth/2fa/verify-setup", headers=key_headers, json={"method": "totp", "secret": "SEC", "code": "123456"}).status_code == 403
     assert client.post("/api/discount", headers=key_headers, json={"payload": {"test": 1}}).status_code == 403
+    # Minting a further key would let a leaked key outlive its own deletion, and
+    # changing the password is a straight takeover.
+    assert client.post("/api/keys", headers=key_headers, json={"label": "via-key"}).status_code == 403
+    assert client.post(
+        "/api/user/change-password",
+        headers=key_headers,
+        json={"current_password": "x", "new_password": "newpass12345"},
+    ).status_code == 403
 
     # Normal session can access settings and 2fa_totp_secret is redacted
     sess_token = SessionStore.create_session(u.id, u.public_id)

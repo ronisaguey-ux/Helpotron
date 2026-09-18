@@ -160,3 +160,63 @@ def test_one_users_key_cannot_be_touched_by_another():
         assert db.query(ApiKey).filter(ApiKey.id == row.id).first() is not None
     finally:
         db.close()
+
+
+def test_api_key_can_read_the_settings_the_extension_syncs(client):
+    """The extension authenticates ONLY by API key, so every endpoint it needs
+    must accept one.
+
+    Regression guard for a real 403 (owner 2026-09-18): the popup showed
+    "Could not sync agent settings from the server (HTTP 403)". `GET
+    /api/user/settings` carried a require_session_auth() guard, so the read the
+    extension depends on was refused — while `PATCH /api/user/settings`, the
+    strictly more dangerous WRITE, had no such guard. The guard protected
+    nothing and broke a required read.
+
+    Asserts the read works with a key AND that the one genuinely secret field is
+    still withheld.
+    """
+    uid, public_id, headers = _user_with_session("ext_sync")
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == uid).first()
+        _, api_key = K.generate_key(db, u, label="ext")
+    finally:
+        db.close()
+
+    res = client.get("/api/user/settings", headers={"Authorization": f"Bearer {api_key}"})
+    assert res.status_code == 200, f"an API key must be able to read settings: {res.text[:200]}"
+    settings = res.json()["settings"]
+    assert isinstance(settings, dict) and settings, "settings payload came back empty"
+    assert "2fa_totp_secret" not in settings, "the TOTP secret must never be returned"
+
+
+def test_api_key_still_cannot_reach_account_takeover_routes(client):
+    """Define the boundary by contrast: a leaked key must not take over the
+    account. These routes stay session-only, and this test exists so that
+    relaxing the settings read (above) can never be read as relaxing these."""
+    uid, public_id, headers = _user_with_session("ext_boundary")
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == uid).first()
+        _, api_key = K.generate_key(db, u, label="ext-boundary")
+    finally:
+        db.close()
+    key_headers = {"Authorization": f"Bearer {api_key}"}
+
+    # Minting another key with a key: a leaked key must not be able to outlive
+    # its own deletion.
+    res = client.post("/api/keys", json={"label": "from-a-key"}, headers=key_headers)
+    assert res.status_code == 403, "an API key must not be able to mint another key"
+
+    # Password change.
+    res = client.post(
+        "/api/user/change-password",
+        json={"current_password": "whatever", "new_password": "newpass12345"},
+        headers=key_headers,
+    )
+    assert res.status_code == 403, "an API key must not be able to change the password"
+
+    # Account deletion.
+    res = client.delete("/api/user/account", headers=key_headers)
+    assert res.status_code == 403, "an API key must not be able to delete the account"

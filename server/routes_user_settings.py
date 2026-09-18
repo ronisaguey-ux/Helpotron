@@ -174,10 +174,25 @@ def _require_admin_request(request: Request) -> User:
 
 @router.get("/settings")
 async def get_settings_route(request: Request, db: Session = Depends(get_db)):
-    """Returns full user settings including academic level, grade scheduling, personas, detectors, and TRIO rules."""
+    """Returns full user settings including academic level, grade scheduling, personas, detectors, and TRIO rules.
+
+    Readable with an API key (owner 2026-09-18). The extension authenticates ONLY
+    by API key, and this read is how it syncs effort/mode/model — so a
+    session-only guard here made the popup fail with
+    "Could not sync agent settings from the server (HTTP 403)".
+
+    The guard was also incoherent: `PATCH /settings` below has never required a
+    session, so an API key could already WRITE these settings while being refused
+    permission to read them. Blocking the read protected nothing.
+
+    What a leaked key must not do is take over the account, and none of that is
+    reachable here: minting keys, changing the password, enrolling/disabling 2FA,
+    deleting the account, checkout and the bulk data export all still call
+    require_session_auth. This endpoint returns the caller's OWN settings (it is
+    scoped by `_get_current_user`, never a path parameter) with `2fa_totp_secret`
+    removed — the one genuinely secret field.
+    """
     user = _get_current_user(request, db)
-    from .security import require_session_auth
-    require_session_auth(request)
     settings = user_settings_service.get_user_settings(user)
     if isinstance(settings, dict):
         settings.pop("2fa_totp_secret", None)
