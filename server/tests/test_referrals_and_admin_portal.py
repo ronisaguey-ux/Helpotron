@@ -168,25 +168,28 @@ def test_referral_discount_granted_to_new_user():
         assert pay["tokens_added"] == 0, "no payment, no tokens"
 
         db_session.refresh(fresh)
-        # The 10 earned credits were REDEEMED as this order's discount, so the
-        # balance is consumed to 0 — that is the currency working, not a loss.
-        assert fresh.discount_balance == 0.0
-        assert fresh.referral_discount_pct == 0.0  # one-time, consumed
+        # MISC-14: Entitlements are reserved and NOT burned while payment is pending
+        assert fresh.discount_balance == 10.0
+        assert fresh.referral_discount_pct == 30.0
 
         from server.credits import get_token_balance
         assert get_token_balance(fresh) == 0.0, "nothing granted before confirmation"
 
-        # Operator confirms the transfer: NOW the 10 tokens land.
+        # Operator confirms the transfer: NOW entitlements are consumed and tokens land.
         from server.admin import TokenManager  # noqa: F401 — keep admin import path warm
         from server.database import Payment
-        from server.credits import add_tokens as _add_tokens
+        from server.credits import add_tokens as _add_tokens, apply_discount
         pend = (db_session.query(Payment)
                 .filter(Payment.id == pay["id"], Payment.status == "pending").first())
         assert pend is not None, "the pending payment must be recorded"
         pend.status = "captured"
+        fresh.referral_discount_pct = 0.0
+        apply_discount(fresh, db_session)
         db_session.flush()
         _add_tokens(db_session, fresh, 10, reason="confirmed:zelle:test")
         db_session.refresh(fresh)
+        assert fresh.discount_balance == 0.0
+        assert fresh.referral_discount_pct == 0.0
         assert get_token_balance(fresh) == 10.0    # +10 purchased task tokens
 
         # Second order is charged full price.
