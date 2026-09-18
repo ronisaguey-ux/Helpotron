@@ -633,3 +633,243 @@ def test_ssrf_05_canvas_sync_pagination_origin_and_ssrf_guard():
     # Accepts safe, same-origin link
     safe_header = '<https://school.instructure.com/api/v1/courses?page=2>; rel="next"'
     assert engine.get_safe_next_link(safe_header) == "https://school.instructure.com/api/v1/courses?page=2"
+
+
+def test_authz_05_submit_assignment_requires_ownership():
+    """AUTHZ-05: submit_assignment refuses to modify assignments owned by another user."""
+    import asyncio
+    from server.database import Assignment, User, SessionLocal
+    from server.overlord_agent import overlord_agent
+
+    db = SessionLocal()
+    try:
+        # Create victim user and assignment
+        victim = db.query(User).filter(User.public_id == "victim_assign_user").first()
+        if not victim:
+            victim = User(public_id="victim_assign_user", plan="basic", role="member", settings={})
+            db.add(victim)
+            db.commit()
+            db.refresh(victim)
+
+        assign = Assignment(user_id=victim.id, title="Victim Assignment", status="pending_approval", prompt="test")
+        db.add(assign)
+        db.commit()
+        db.refresh(assign)
+
+        # Attacker tries to submit victim's assignment
+        attacker = db.query(User).filter(User.public_id == "attacker_assign_user").first()
+        if not attacker:
+            attacker = User(public_id="attacker_assign_user", plan="basic", role="member", settings={})
+            db.add(attacker)
+            db.commit()
+            db.refresh(attacker)
+
+        res = asyncio.run(
+            overlord_agent.execute_task_action(
+                db=db,
+                user=attacker,
+                action_type="submit_assignment",
+                payload={},
+                assignment_id=assign.id,
+            )
+        )
+        assert res.get("status") == "failed"
+        assert "not found or access denied" in res.get("message", "").lower()
+
+        # Check that assignment was NOT modified
+        db.refresh(assign)
+        assert assign.status == "pending_approval"
+    finally:
+        db.close()
+
+
+def test_authz_06_delete_chat_thread_requires_ownership(client):
+    """AUTHZ-06: DELETE /api/agent/threads/{thread_id} requires ownership and refuses foreign deletions."""
+    from server.database import AgentChatThread, User, SessionLocal
+
+    db = SessionLocal()
+    try:
+        victim = db.query(User).filter(User.public_id == "victim_thread_user").first()
+        if not victim:
+            victim = User(public_id="victim_thread_user", plan="basic", role="member", settings={})
+            db.add(victim)
+            db.commit()
+            db.refresh(victim)
+
+        thread = AgentChatThread(user_id=victim.id, title="Victim Private Chat")
+        db.add(thread)
+        db.commit()
+        db.refresh(thread)
+        thread_id = thread.id
+    finally:
+        db.close()
+
+    # Attacker tries to delete victim's thread
+    attacker_headers = _get_user_headers(client, "attacker_thread_user")
+    resp = client.delete(f"/api/agent/threads/{thread_id}", headers=attacker_headers)
+    assert resp.status_code == 403
+    assert "only delete your own chats" in resp.text
+
+    # Verify thread still exists
+    db = SessionLocal()
+    try:
+        assert db.query(AgentChatThread).filter(AgentChatThread.id == thread_id).first() is not None
+    finally:
+        db.close()
+
+
+def test_authz_08_and_misc_05_and_misc_07_recovery_hardening(client):
+    """AUTHZ-08, MISC-05, MISC-07: Recovery flow hardens attempt budgets, hides plaintext secrets, and requires 2FA."""
+    import asyncio
+    from server.database import AdminMessage, PasswordReset, User, SessionLocal
+    from server.recovery import request_recovery, verify_and_reset, _FAILED_RECOVERY_ATTEMPTS
+    from server.routes_auth_2fa import totp_service
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "test_recovery_audit_user").first()
+        dummy_h = "dummy"
+        if not u:
+            u = User(public_id="test_recovery_audit_user", plan="basic", role="member", password_hash=dummy_h, settings={})
+            db.add(u)
+            db.commit()
+            db.refresh(u)
+        else:
+            u.password_hash = dummy_h
+            db.commit()
+
+        # Clear any previous attempts
+        _FAILED_RECOVERY_ATTEMPTS.pop(u.id, None)
+
+        # 1. MISC-05: Dev recovery request does NOT store plaintext code in AdminMessage
+        res = asyncio.run(request_recovery(db, u.public_id, "dev"))
+        assert res["status"] == "ok"
+        msg = db.query(AdminMessage).filter(AdminMessage.user_id == u.public_id).order_by(AdminMessage.id.desc()).first()
+        assert msg is not None
+        assert "Recovery code:" not in msg.message
+
+        # 2. AUTHZ-08: 5 wrong attempts lock out the account; requesting a new code does NOT reset the budget
+        for i in range(5):
+            try:
+                verify_and_reset(db, u.public_id, "NewPassword123!", code="wrong1")
+            except ValueError:
+                pass
+
+        # 6th attempt is locked
+        try:
+            verify_and_reset(db, u.public_id, "NewPassword123!", code="wrong1")
+            assert False, "Should have locked out"
+        except ValueError as exc:
+            assert "too many failed recovery attempts" in str(exc).lower()
+
+        # Re-requesting recovery does NOT bypass lockout
+        try:
+            asyncio.run(request_recovery(db, u.public_id, "dev"))
+            assert False, "Re-requesting while locked out should fail"
+        except ValueError as exc:
+            assert "too many failed recovery attempts" in str(exc).lower()
+
+        # Clear lockout for 2FA test
+        _FAILED_RECOVERY_ATTEMPTS.pop(u.id, None)
+
+        # 3. MISC-07: Enable 2FA on account
+        secret = totp_service.generate_secret()
+        st = dict(u.settings or {})
+        st["2fa_enabled"] = True
+        st["2fa_totp_secret"] = secret
+        st["2fa_method"] = "totp"
+        u.settings = st
+        db.commit()
+
+        # Mint new active row with known code
+        asyncio.run(request_recovery(db, u.public_id, "dev"))
+        from server.recovery import hash_code
+        active_row = db.query(PasswordReset).filter(PasswordReset.user_id == u.id, PasswordReset.status == "active").order_by(PasswordReset.id.desc()).first()
+        active_row.code_hash = hash_code("123456")
+        db.commit()
+
+        # Calling verify without 2FA code returns 2fa_required
+        verify_resp = verify_and_reset(db, u.public_id, "NewValidPass999!", code="123456", two_factor_code=None)
+        assert verify_resp.get("status") == "2fa_required"
+
+        # Calling verify with wrong 2FA code raises ValueError
+        try:
+            verify_and_reset(db, u.public_id, "NewValidPass999!", code="123456", two_factor_code="000000")
+            assert False, "Should have failed on invalid 2FA code"
+        except ValueError as exc:
+            assert "invalid two-factor" in str(exc).lower()
+    finally:
+        db.close()
+
+
+def test_authz_09_sandbox_active_and_cleanup_scoped_to_owner(client):
+    """AUTHZ-09: Sandbox active list and cleanup are scoped strictly to the sandbox owner."""
+    from server.engine.sandbox import sandbox_manager
+
+    # User A creates a sandbox
+    sbx_a = sandbox_manager.create_sandbox("custom_runner", user_id="sandbox_owner_a")
+    sbx_id = sbx_a.sandbox_id
+
+    # User B lists sandboxes
+    headers_b = _get_user_headers(client, "sandbox_other_user_b")
+    resp_list = client.get("/api/agent/sandbox/active", headers=headers_b)
+    assert resp_list.status_code == 200
+    listed_ids = [s["sandbox_id"] for s in resp_list.json().get("sandboxes", [])]
+    assert sbx_id not in listed_ids
+
+    # User B attempts to cleanup User A's sandbox
+    resp_cleanup = client.post("/api/agent/sandbox/cleanup", headers=headers_b, json={"sandbox_id": sbx_id})
+    assert resp_cleanup.status_code == 403
+    assert "only clean up your own sandboxes" in resp_cleanup.text
+
+    # User A can clean up their own sandbox
+    headers_a = _get_user_headers(client, "sandbox_owner_a")
+    resp_cleanup_a = client.post("/api/agent/sandbox/cleanup", headers=headers_a, json={"sandbox_id": sbx_id})
+    assert resp_cleanup_a.status_code == 200
+    assert resp_cleanup_a.json().get("status") == "success"
+
+
+def test_authz_10_simulation_toggle_requires_authentication(client):
+    """AUTHZ-10: POST /api/simulation/toggle requires authentication."""
+    # Unauthenticated request is rejected
+    resp_unauth = client.post("/api/simulation/toggle", json={"enabled": True})
+    assert resp_unauth.status_code == 401
+
+    # Authenticated request succeeds
+    headers = _get_user_headers(client, "sim_test_user")
+    resp_auth = client.post("/api/simulation/toggle", headers=headers, json={"enabled": False})
+    assert resp_auth.status_code == 200
+    assert resp_auth.json().get("status") == "success"
+
+
+def test_authz_11_notifications_read_does_not_echo_foreign_notices(client):
+    """AUTHZ-11: POST /api/notifications/read does not echo existence of foreign private notices."""
+    from server.database import AdminNotice, User, SessionLocal
+
+    db = SessionLocal()
+    try:
+        user_a = db.query(User).filter(User.public_id == "notice_user_a").first()
+        if not user_a:
+            user_a = User(public_id="notice_user_a", plan="basic", role="member", settings={})
+            db.add(user_a)
+            db.commit()
+            db.refresh(user_a)
+
+        # Private notice for User A
+        notice_a = AdminNotice(user_id=user_a.public_id, subject="Private Notice A", message="Secret", broadcast=False)
+        db.add(notice_a)
+        db.commit()
+        db.refresh(notice_a)
+        notice_a_id = notice_a.id
+    finally:
+        db.close()
+
+    # User B marks notifications read including notice_a_id and nonexistent notice
+    headers_b = _get_user_headers(client, "notice_user_b")
+    resp = client.post("/api/notifications/read", headers=headers_b, json={"ids": [f"notice_{notice_a_id}", "notice_9999999"]})
+    assert resp.status_code == 200
+    read_ids = resp.json().get("read_ids", [])
+
+    # Neither foreign notice nor nonexistent notice should appear in read_ids
+    assert f"notice_{notice_a_id}" not in read_ids
+    assert "notice_9999999" not in read_ids

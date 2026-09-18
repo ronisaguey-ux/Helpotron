@@ -182,10 +182,11 @@ async def mark_notifications_read(
                         )
                         if not existing:
                             db.add(AdminNoticeRead(notice_id=raw_id, user_id=user.public_id, read_at=now))
-                    else:
-                        if notice.user_id == user.public_id and not notice.read_at:
+                        read_ids.append(nid)
+                    elif notice.user_id == user.public_id:
+                        if not notice.read_at:
                             notice.read_at = now
-                    read_ids.append(nid)
+                        read_ids.append(nid)
             except Exception:
                 pass
         else:

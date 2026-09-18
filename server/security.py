@@ -597,8 +597,19 @@ async def get_current_user_optional(request: Request = None, websocket: WebSocke
 
 def is_admin_user(user) -> bool:
     """Admin = the owner account, or any account explicitly flagged admin
-    (role='admin' or is_admin=True). Mirrors require_admin's triple check so
-    the UI gate and the API gate can never disagree (operator 08-28)."""
+    (role='admin' or is_admin=True). Banned accounts are never admins."""
+    if not user:
+        return False
+    if getattr(user, 'is_banned', False):
+        return False
+    banned_until = getattr(user, 'banned_until', None)
+    if banned_until:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        bu = banned_until.replace(tzinfo=timezone.utc) if banned_until.tzinfo is None else banned_until
+        if bu > now:
+            return False
+
     return (
         getattr(user, 'public_id', '') == ADMIN_PUBLIC_ID
         or getattr(user, 'role', '') == 'admin'

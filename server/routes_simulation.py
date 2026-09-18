@@ -42,6 +42,7 @@ async def toggle_simulation(payload: ToggleRequest, request: Request, db: Sessio
     sample data into the user's real assignment tables — mock rows must be
     explicitly created via /api/simulation/seed, which is a dev/test action.
     """
+    _get_current_user(request, db)
     new_state = mock_simulator.toggle(payload.enabled)
     return {
         "status": "success",

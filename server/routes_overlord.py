@@ -691,7 +691,7 @@ async def delete_chat_thread(thread_id: int, request: Request, db: Session = Dep
     t = db.query(AgentChatThread).filter(AgentChatThread.id == thread_id).first()
     if not t:
         raise HTTPException(404, "Thread not found")
-    if t.user_id != user.id and not is_admin:
+    if t.user_id != user.id:
         raise HTTPException(403, "You can only delete your own chats")
 
     # In-memory conversation history (keyed u{user_id}:{thread_id}) — remove
@@ -2648,16 +2648,26 @@ async def execute_sandbox_script_endpoint(
 @router.get("/agent/sandbox/active")
 def list_active_sandboxes_endpoint(request: Request, db: Session = Depends(get_db)):
     """Lists currently active virtual sub-agent sandboxes."""
-    _get_current_user(request, db)
+    user = _get_current_user(request, db)
     from .engine.sandbox import sandbox_manager
-    return {"sandboxes": sandbox_manager.list_active()}
+    from .security import is_admin_user
+    sandboxes = sandbox_manager.list_active()
+    if not is_admin_user(user):
+        sandboxes = [s for s in sandboxes if s.get("user_id") == user.public_id]
+    return {"sandboxes": sandboxes}
 
 
 @router.post("/agent/sandbox/cleanup")
 def cleanup_sandbox_endpoint(payload: Dict[str, str], request: Request, db: Session = Depends(get_db)):
     """Manually cleans up a virtual sandbox."""
-    _get_current_user(request, db)
+    user = _get_current_user(request, db)
     sandbox_id = payload.get("sandbox_id", "")
     from .engine.sandbox import sandbox_manager
+    from .security import is_admin_user
+    sbx = sandbox_manager.get_sandbox(sandbox_id)
+    if not sbx:
+        return {"status": "not_found", "sandbox_id": sandbox_id}
+    if sbx.user_id != user.public_id and not is_admin_user(user):
+        raise HTTPException(403, "You can only clean up your own sandboxes")
     success = sandbox_manager.cleanup_sandbox(sandbox_id)
     return {"status": "success" if success else "not_found", "sandbox_id": sandbox_id}

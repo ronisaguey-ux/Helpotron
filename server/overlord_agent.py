@@ -1338,11 +1338,21 @@ print(f"Active files: {os.listdir('.')}")
             }
 
         elif action_type == "submit_assignment":
-            if assignment_id:
-                assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
-                if assignment:
-                    assignment.status = "completed"
-                    db.commit()
+            if not assignment_id:
+                return {"action": action_type, "status": "failed", "message": "No assignment_id specified."}
+            assignment = (
+                db.query(Assignment)
+                .filter(Assignment.id == assignment_id, Assignment.user_id == user.id)
+                .first()
+            )
+            if not assignment:
+                return {
+                    "action": action_type,
+                    "status": "failed",
+                    "message": f"Assignment #{assignment_id} not found or access denied.",
+                }
+            assignment.status = "completed"
+            db.commit()
             return {
                 "action": action_type,
                 "status": "completed",
