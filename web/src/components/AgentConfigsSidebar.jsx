@@ -70,11 +70,18 @@ export default function AgentConfigsSidebar({
   const fileInputRef = useRef(null);
   const [uploadKind, setUploadKind] = useState('skill');
 
-  // Merged persona list: Canonical PRESET_PERSONAS + custom user identities
+  // Merged persona list: Canonical PRESET_PERSONAS + custom user identities.
+  //
+  // `hidden_identities` is why a deleted preset STAYS deleted. Presets live in
+  // the bundle, not in the user's settings, so filtering the merged list once
+  // would bring the card straight back on the next render — which is exactly the
+  // "I deleted it and it didn't last" report. The removal is a durable list of
+  // ids, and every render honours it.
+  const hiddenIdentities = Array.isArray(ai?.hidden_identities) ? ai.hidden_identities : [];
   const allIdentities = [
     ...PRESET_PERSONAS,
     ...identities.filter((idItem) => !PRESET_PERSONAS.some((p) => p.id === idItem.id)),
-  ];
+  ].filter((p) => !hiddenIdentities.includes(p.id));
 
   const handleCreateIdentity = (e) => {
     e?.preventDefault();
@@ -235,21 +242,39 @@ export default function AgentConfigsSidebar({
                           </div>
                         </div>
 
-                        {/* Status button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectIdentity(persona.id);
-                          }}
-                          className={`px-unit-3 py-1 rounded-xl font-label-caps text-label-caps shrink-0 transition-all cursor-pointer ${
-                            isActive
-                              ? 'bg-primary text-on-primary font-semibold shadow-sm'
-                              : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface border border-outline-variant/30'
-                          }`}
-                        >
-                          {isActive ? 'Active' : 'Switch'}
-                        </button>
+                        {/* Status + delete. The delete control was wired here
+                            once, then removed with its handler during the
+                            09-06 workspace redesign — leaving no way to remove
+                            an identity at all. Restored, and this time the
+                            handler is actually passed by the parent. */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteIdentity(persona.id);
+                            }}
+                            className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
+                            title={`Delete ${persona.title || persona.name}`}
+                            aria-label={`Delete ${persona.title || persona.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectIdentity(persona.id);
+                            }}
+                            className={`px-unit-3 py-1 rounded-xl font-label-caps text-label-caps shrink-0 transition-all cursor-pointer ${
+                              isActive
+                                ? 'bg-primary text-on-primary font-semibold shadow-sm'
+                                : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface border border-outline-variant/30'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Switch'}
+                          </button>
+                        </div>
                       </div>
 
                       <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
@@ -337,21 +362,32 @@ export default function AgentConfigsSidebar({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isEnabled}
-                      onClick={() => onToggleSkill(skill.id)}
-                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ml-3 shrink-0 ${
-                        isEnabled ? 'bg-primary' : 'bg-surface-container-highest'
-                      }`}
-                    >
-                      <span
-                        className={`block w-4 h-4 rounded-full bg-surface-container-lowest shadow-sm transition-transform ${
-                          isEnabled ? 'translate-x-6' : 'translate-x-1'
+                    <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                      <button
+                        type="button"
+                        onClick={() => onDeleteSkill(skill.id)}
+                        className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
+                        title={`Delete ${skill.name}`}
+                        aria-label={`Delete ${skill.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isEnabled}
+                        onClick={() => onToggleSkill(skill.id)}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                          isEnabled ? 'bg-primary' : 'bg-surface-container-highest'
                         }`}
-                      />
-                    </button>
+                      >
+                        <span
+                          className={`block w-4 h-4 rounded-full bg-surface-container-lowest shadow-sm transition-transform ${
+                            isEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
