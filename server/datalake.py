@@ -567,26 +567,50 @@ class DataLakeManager:
 
     def anonymize_user(self, user_id: Any, gdpr_tag: str) -> int:
         """GDPR Article 17: rewrites every lake file, replacing the user's id
-        (top-level or nested under 'data') with the supplied anonymization tag.
+        and user_hash with the supplied anonymization tag, and redacting free text (MISC-06).
 
         Returns the number of records rewritten.
         """
         target = str(user_id)
+        target_hash = _anonymize_id(user_id) if user_id else None
         rewritten = 0
 
-        def _replace(obj: Any) -> Any:
-            nonlocal rewritten
+        def _record_matches(obj: Any) -> bool:
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k in ("user_id", "public_id", "raw_user_id") and v is not None and str(v) == target:
+                        return True
+                    if k == "user_hash" and v is not None and (str(v) == target or (target_hash and str(v) == target_hash)):
+                        return True
+                    if _record_matches(v):
+                        return True
+            elif isinstance(obj, list):
+                for item in obj:
+                    if _record_matches(item):
+                        return True
+            return False
+
+        def _scrub_record(obj: Any) -> Any:
             if isinstance(obj, dict):
                 out = {}
                 for k, v in obj.items():
-                    if k in ("user_id", "public_id", "raw_user_id") and v is not None and str(v) == target:
-                        out[k] = gdpr_tag
-                        rewritten += 1
+                    if k in ("user_id", "public_id", "raw_user_id"):
+                        if v is not None and str(v) == target:
+                            out[k] = gdpr_tag
+                        else:
+                            out[k] = _scrub_record(v)
+                    elif k == "user_hash":
+                        if v is not None and (str(v) == target or (target_hash and str(v) == target_hash)):
+                            out[k] = gdpr_tag
+                        else:
+                            out[k] = _scrub_record(v)
+                    elif k in ("message", "title", "snippet", "prompt", "content", "query", "text", "admin_reply"):
+                        out[k] = "[REDACTED_GDPR_DELETED]"
                     else:
-                        out[k] = _replace(v)
+                        out[k] = _scrub_record(v)
                 return out
             if isinstance(obj, list):
-                return [_replace(v) for v in obj]
+                return [_scrub_record(v) for v in obj]
             return obj
 
         for path in (self.telemetry_file, self.feedback_file, self.corpus_file, self.microcredits_file):
@@ -599,9 +623,16 @@ class DataLakeManager:
                     continue
                 out_lines = []
                 for ln in lines:
-                    rec = json.loads(ln)
-                    new_rec = _replace(rec)
-                    out_lines.append(json.dumps(new_rec, ensure_ascii=False))
+                    try:
+                        rec = json.loads(ln)
+                        if _record_matches(rec):
+                            new_rec = _scrub_record(rec)
+                            rewritten += 1
+                            out_lines.append(json.dumps(new_rec, ensure_ascii=False))
+                        else:
+                            out_lines.append(ln.strip())
+                    except Exception:
+                        out_lines.append(ln.strip())
                 tmp = path.with_suffix(path.suffix + ".anonymizing")
                 with open(tmp, "w", encoding="utf-8") as f:
                     f.write("\n".join(out_lines) + "\n")

@@ -56,12 +56,26 @@ async def recovery_options(public_id: str = Query(..., max_length=100), db: Sess
         return {
             "status": "success",
             "has_email": False,
+            "email_set": False,
             "email_masked": None,
             "has_phone": False,
+            "phone_set": False,
             "phone_masked": None,
             "dev": True,
         }
-    return {"status": "success", **contact_status(user)}
+    status = contact_status(user)
+    has_email = bool(status.get("email_set"))
+    has_phone = bool(status.get("phone_set"))
+    return {
+        "status": "success",
+        "has_email": has_email,
+        "email_set": has_email,
+        "email_masked": status.get("email_masked") or None,
+        "has_phone": has_phone,
+        "phone_set": has_phone,
+        "phone_masked": status.get("phone_masked") or None,
+        "dev": True,
+    }
 
 
 @router.post("/request")

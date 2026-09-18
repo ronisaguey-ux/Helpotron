@@ -51,6 +51,23 @@ KNOWN_INSECURE_SECRETS = {
     'changeme',
 }
 
+import uuid
+
+_REVOKED_JWT_JTIS: set[str] = set()
+_USER_JWT_REVOKED_BEFORE: dict[Any, float] = {}
+
+
+def revoke_jwt_jti(jti: str) -> None:
+    if jti:
+        _REVOKED_JWT_JTIS.add(str(jti))
+
+
+def revoke_user_jwts(user_id: Any) -> None:
+    now_ts = time.time()
+    _USER_JWT_REVOKED_BEFORE[user_id] = now_ts
+    _USER_JWT_REVOKED_BEFORE[str(user_id)] = now_ts
+
+
 if getattr(config, 'production_mode', False):
     if not JWT_SECRET or JWT_SECRET in KNOWN_INSECURE_SECRETS or len(JWT_SECRET) < 32 or JWT_SECRET.startswith('dev-') or 'change_me' in JWT_SECRET:
         raise RuntimeError("Production mode requires secure non-default JWT_SECRET in environment")
@@ -62,12 +79,14 @@ def create_jwt_token(user_id: Any, role: str = 'user', expires_delta: Optional[t
         user_id = user_id.get('sub', 1)
     # Ensure user_id sub is int if digit or string
     sub_val = int(user_id) if str(user_id).isdigit() else str(user_id)
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
+    iat_ts = time.time()
+    expire_ts = iat_ts + (expires_delta.total_seconds() if expires_delta else JWT_EXPIRATION_HOURS * 3600)
     payload = {
         'sub': sub_val,
         'role': role,
-        'exp': expire,
-        'iat': datetime.now(timezone.utc)
+        'exp': expire_ts,
+        'iat': iat_ts,
+        'jti': uuid.uuid4().hex,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -88,6 +107,19 @@ def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
             # the remediation plan's verification) uses `sub` as the int user
             # id — `User.id == payload['sub']` queries need the int form.
         )
+        jti = payload.get('jti')
+        if jti and str(jti) in _REVOKED_JWT_JTIS:
+            logger.warning('Revoked JWT token presented (jti %s)', jti)
+            return None
+        sub = payload.get('sub')
+        iat = payload.get('iat')
+        if sub is not None:
+            rev_ts = _USER_JWT_REVOKED_BEFORE.get(sub) or _USER_JWT_REVOKED_BEFORE.get(str(sub))
+            if rev_ts is not None:
+                iat_ts = iat.timestamp() if isinstance(iat, datetime) else float(iat or 0.0)
+                if iat_ts <= rev_ts:
+                    logger.warning('Revoked JWT presented for user %s (issued before revocation)', sub)
+                    return None
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning('Expired JWT token signature presented')
@@ -201,9 +233,18 @@ def validate_public_id(public_id: str) -> bool:
     return low not in RESERVED_PUBLIC_IDS and low != ADMIN_PUBLIC_ID.lower()
 
 
+COMMON_BREACHED_PASSWORDS = {
+    "password", "12345678", "password123", "password1", "admin123", "qwerty123",
+    "passw0rd123", "passw0rd", "helpotron123", "welcome123", "letmein123",
+    "changeme123", "123456789", "1234567890", "iloveyou1", "sunshine1", "princess1"
+}
+
+
 def validate_password_strength(password: str) -> bool:
-    """Validate password: minimum 8 chars, at least one letter and one number."""
-    if len(password) < 8:
+    """Validate password: minimum 8 chars, at least one letter and one number, not common breached."""
+    if not password or len(password) < 8:
+        return False
+    if password.lower() in COMMON_BREACHED_PASSWORDS:
         return False
     if not re.search(r'[A-Za-z]', password):
         return False
@@ -319,6 +360,7 @@ class SessionStore:
 
     @classmethod
     def revoke_all_sessions(cls, user_id: int) -> int:
+        revoke_user_jwts(user_id)
         from .database import SessionLocal, UserSession
         db = SessionLocal()
         try:
@@ -514,34 +556,14 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
             finally:
                 db.close()
 
-    # Query-string tokens are a websocket-transport convenience (headers are
-    # awkward on upgrades); for HTTP routes a secret in the URL lands in the
-    # access log — so the param path is websocket-only. 09-02.
+    # Query-string tokens on WebSockets are disallowed (AUTH-07) to prevent
+    # credential leakage into access logs, browser history, and Referer headers.
     if websocket is not None:
         query_params = getattr(conn, "query_params", {})
         query_token = query_params.get("token")
         if query_token:
-            # An API key is the extension's credential on every transport,
-            # including this one — the agent socket sends the same secret it
-            # uses for HTTP, and rejecting it here would authenticate the REST
-            # calls but silently kill the live command channel.
-            if query_token.startswith(_API_KEY_PREFIX):
-                db = SessionLocal()
-                try:
-                    from . import api_keys as _keys
-                    return _keys.authenticate(db, query_token, request)
-                finally:
-                    db.close()
-
-            payload = verify_jwt_token(query_token)
-            if payload and 'sub' in payload:
-                db = SessionLocal()
-                try:
-                    user = db.query(User).filter(User.id == payload['sub']).first()
-                    if user:
-                        return _enforce_not_banned(user)
-                finally:
-                    db.close()
+            logger.warning("Rejected query string token on WebSocket handshake (AUTH-07)")
+            raise HTTPException(401, "Query string tokens are not permitted on WebSockets; use headers or cookies")
 
     raise HTTPException(401, "Not authenticated: valid session token required")
 
@@ -557,7 +579,8 @@ def require_session_auth(request: Request) -> None:
 
     Call this at the top of those routes. A cookie/JWT request is unaffected.
     """
-    if getattr(request.state, "auth_via_api_key", False):
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith(f"Bearer {_API_KEY_PREFIX}") or getattr(request.state, "auth_via_api_key", False):
         raise HTTPException(
             403,
             "This action requires a signed-in session, not an API key. "

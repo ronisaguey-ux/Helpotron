@@ -13,9 +13,10 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from starlette.responses import PlainTextResponse, Response
 
+import time
 from .config import config
 from .database import User, Payment, get_db
-from .security import verify_password, hash_password, get_current_user
+from .security import verify_password, hash_password, get_current_user, require_session_auth
 from .auth_2fa import code_store, email_service, sms_service, totp_service, SMSVerification
 from .routes_features import get_current_authenticated_user
 from .ratelimit import limiter
@@ -156,10 +157,12 @@ async def verify_email_code(payload: EmailVerificationConfirm, db: Session = Dep
 @router.post("/2fa/setup")
 async def setup_two_factor(
     payload: TwoFactorSetupRequest,
+    request: Request,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """Initiates 2FA setup for TOTP, Email, or SMS."""
+    require_session_auth(request)
     if not config.enable_2fa:
         raise HTTPException(400, "2FA is currently disabled globally by administrator.")
 
@@ -210,10 +213,12 @@ async def setup_two_factor(
 @router.post("/2fa/verify-setup")
 async def verify_two_factor_setup(
     payload: TwoFactorVerifySetupRequest,
+    request: Request,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """Verifies the initial code to confirm and activate 2FA on the user account."""
+    require_session_auth(request)
     method = payload.method.lower()
 
     if method == "totp":
@@ -262,43 +267,59 @@ async def verify_two_factor_setup(
 
 # ─── 2FA Challenge & Verification Routes (Login Flow) ─────────────────────────
 
+_VERIFY_CHALLENGE_ATTEMPTS: dict[str, list[float]] = {}
+
+
+def _check_verify_challenge_rate_limit(user_id: str) -> None:
+    now = time.time()
+    attempts = _VERIFY_CHALLENGE_ATTEMPTS.get(user_id, [])
+    attempts = [t for t in attempts if now - t < 300.0]
+    if len(attempts) >= 5:
+        _VERIFY_CHALLENGE_ATTEMPTS[user_id] = attempts
+        raise HTTPException(429, "Too many failed 2FA verification attempts. Try again later.")
+    _VERIFY_CHALLENGE_ATTEMPTS[user_id] = attempts
+
+
+def _record_verify_challenge_failure(user_id: str) -> None:
+    now = time.time()
+    attempts = _VERIFY_CHALLENGE_ATTEMPTS.get(user_id, [])
+    attempts = [t for t in attempts if now - t < 300.0]
+    attempts.append(now)
+    _VERIFY_CHALLENGE_ATTEMPTS[user_id] = attempts
+
+
 @router.post("/2fa/send-challenge")
 async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Session = Depends(get_db)):
     """Sends a 2FA challenge code to the user via their configured method.
-
-    08-31 (owner): login codes are 12-digit (not 6).
+    Mitigates user enumeration and message generator abuse (AUTH-02).
     """
     method = payload.method.lower()
+    user = db.query(User).filter(User.public_id == payload.user_id).first()
 
     if method == "email":
-        code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
-        sent = await asyncio.to_thread(
-            email_service.send_verification_code, payload.user_id, code, purpose_label="2FA Login"
-        )
-        if not sent:
-            raise HTTPException(500, "Failed to send the 2FA email.")
+        # Always return uniform generic response without leaking existence
+        if not user:
+            return {"status": "success", "message": "12-digit 2FA verification code sent to your email."}
+        settings = user.settings or {}
+        target_email = settings.get("email") or getattr(user, "email", None) or (settings.get("profile") or {}).get("email")
+        if target_email and "@" in str(target_email):
+            code = code_store.generate_code(payload.user_id, purpose="2fa_challenge", length=12)
+            await asyncio.to_thread(
+                email_service.send_verification_code, str(target_email), code, purpose_label="2FA Login"
+            )
         return {"status": "success", "message": "12-digit 2FA verification code sent to your email."}
 
     elif method == "sms":
-        user = db.query(User).filter(User.public_id == payload.user_id).first()
         if not user:
-            raise HTTPException(404, "User not found.")
+            return {"status": "success", "message": "If a mobile phone is linked to this account, a 2FA code has been sent via SMS."}
         settings = user.settings or {}
         phone = settings.get("phone_number") or (settings.get("profile") or {}).get("phone")
         try:
             phone = _e164(phone) if phone else ""
         except ValueError:
             phone = ""
-        if not phone:
-            raise HTTPException(400, "No phone number found on account for SMS 2FA.")
-        # SMS opt-out (08-31, owner): numbers that replied STOP are never
-        # texted again — the user must reply START to re-subscribe.
-        if (user.settings or {}).get("sms_opt_out"):
-            raise HTTPException(
-                400,
-                "SMS messages are disabled for this number (you replied STOP). "
-                "Reply START from that phone to re-enable, or use email/authenticator 2FA.",
-            )
+        if not phone or settings.get("sms_opt_out"):
+            return {"status": "success", "message": "If a mobile phone is linked to this account, a 2FA code has been sent via SMS."}
         sent = await SMSVerification.send(phone)
         if not sent:
             raise HTTPException(500, "Failed to send the 2FA SMS — Twilio rejected the message.")
@@ -314,32 +335,45 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
 @router.post("/2fa/verify-challenge")
 async def verify_two_factor_challenge(payload: TwoFactorVerifyChallengeRequest, db: Session = Depends(get_db)):
     """Verifies a 2FA login challenge code."""
+    _check_verify_challenge_rate_limit(payload.user_id)
     method = payload.method.lower()
 
     if method == "totp":
         user = db.query(User).filter(User.public_id == payload.user_id).first()
         if not user:
-            # never fall back to a server-wide secret (config default was a
-            # well-known public example value) — a missing account is a 404
-            raise HTTPException(404, "User not found.")
+            _record_verify_challenge_failure(payload.user_id)
+            raise HTTPException(400, "Invalid 6-digit authenticator code.")
         secret = (user.settings or {}).get("2fa_totp_secret")
-        valid = totp_service.verify_code_with_replay(user.id, secret, payload.code)
+        if not secret:
+            _record_verify_challenge_failure(payload.user_id)
+            raise HTTPException(400, "Invalid 6-digit authenticator code.")
+        # AUTH-06: Use verify_code instead of verify_code_with_replay so valid step is not burned away from login
+        valid = totp_service.verify_code(secret, payload.code)
         if not valid:
+            _record_verify_challenge_failure(payload.user_id)
             raise HTTPException(400, "Invalid 6-digit authenticator code.")
     elif method == "sms":
         user = db.query(User).filter(User.public_id == payload.user_id).first()
         if not user:
-            raise HTTPException(404, "User not found.")
+            _record_verify_challenge_failure(payload.user_id)
+            raise HTTPException(400, "Invalid 2FA verification code.")
         settings = user.settings or {}
-        phone = _e164(settings.get("phone_number") or (settings.get("profile") or {}).get("phone") or "")
+        raw_phone = settings.get("phone_number") or (settings.get("profile") or {}).get("phone") or ""
+        try:
+            phone = _e164(raw_phone)
+        except ValueError:
+            phone = ""
         valid, msg = await SMSVerification.check(phone, payload.code)
         if not valid:
+            _record_verify_challenge_failure(payload.user_id)
             raise HTTPException(400, msg)
     else:
         valid, msg = code_store.verify_code(payload.user_id, payload.code, purpose="2fa_challenge")
         if not valid:
+            _record_verify_challenge_failure(payload.user_id)
             raise HTTPException(400, msg)
 
+    _VERIFY_CHALLENGE_ATTEMPTS.pop(payload.user_id, None)
     return {"status": "success", "message": "2FA authentication verified successfully."}
 
 
