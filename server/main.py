@@ -1379,12 +1379,17 @@ async def admin_user_act(public_id: str, request: Request, db: Session = Depends
     they log in again."""
     from .admin import require_admin
     from .database import User
-    require_admin(request)
+    from .security import is_admin_user, ADMIN_PUBLIC_ID
+    admin = require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    token = SessionStore.create_session(user.id, user.public_id)
-    response = JSONResponse({"ok": True, "acting_as": user.public_id})
+    if is_admin_user(user) or user.public_id == ADMIN_PUBLIC_ID or getattr(user, 'role', '') == 'admin':
+        raise HTTPException(403, "Cannot impersonate administrative or operator accounts")
+    # Impersonation sessions have a strict 1-hour maximum TTL
+    impersonation_ttl = 3600
+    token = SessionStore.create_session(user.id, user.public_id, expiry_seconds=impersonation_ttl)
+    response = JSONResponse({"ok": True, "acting_as": user.public_id, "impersonated": True})
     # Same transport-derived Secure rule as the login cookie (audit 08-28).
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -1393,7 +1398,7 @@ async def admin_user_act(public_id: str, request: Request, db: Session = Depends
         secure=request.url.is_secure,
         samesite="lax",
         path="/",
-        max_age=SessionStore._session_expiry,
+        max_age=impersonation_ttl,
     )
     return response
 

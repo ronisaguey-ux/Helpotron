@@ -228,16 +228,17 @@ class SessionStore:
     _session_expiry: int = 7 * 24 * 60 * 60
 
     @classmethod
-    def create_session(cls, user_id: int, public_id: str) -> str:
+    def create_session(cls, user_id: int, public_id: str, expiry_seconds: Optional[int] = None) -> str:
         from .database import SessionLocal, UserSession
         token = secrets.token_urlsafe(48)
         db = SessionLocal()
+        duration = expiry_seconds if expiry_seconds is not None else cls._session_expiry
         try:
             session = UserSession(
                 token=token,
                 user_id=user_id,
                 public_id=public_id,
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=duration),
             )
             db.add(session)
             db.commit()

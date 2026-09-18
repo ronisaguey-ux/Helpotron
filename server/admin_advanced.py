@@ -62,6 +62,10 @@ class AdminAdvancedService:
             modified_count += 1
 
         db.commit()
+        if ban_status:
+            from .security import SessionStore
+            for u in users:
+                SessionStore.revoke_all_sessions(u.id)
         return {
             "status": "success",
             "affected_users": modified_count,
@@ -308,15 +312,15 @@ def get_ai_economics_data() -> Dict[str, Any]:
             "downgrade_opportunities": [],
             "low_effort_savings_simulation": {"estimated_cost_reduction_pct": 72.5}
         }
-    
+
     grunt_calls = sum(1 for t in ROUTING_TELEMETRY if t.get("is_grunt_work", False) or t.get("selected_model") in [MODELS.get("nemotron"), MODELS.get("qwen_cheap"), MODELS.get("mistral_cheap")])
     grunt_pct = round((grunt_calls / total_calls) * 100, 1)
-    
+
     model_dist = {}
     for t in ROUTING_TELEMETRY:
         m = t.get("selected_model", "unknown")
         model_dist[m] = model_dist.get(m, 0) + 1
-        
+
     downgrades = []
     for t in ROUTING_TELEMETRY[-100:]:
         if t.get("task_category") in ["CLASSIFICATION", "EXTRACTION", "TAGGING", "METADATA"] and t.get("selected_model") not in [MODELS.get("nemotron"), MODELS.get("qwen_cheap"), MODELS.get("mistral_cheap")]:
@@ -327,7 +331,7 @@ def get_ai_economics_data() -> Dict[str, Any]:
                 "recommended_model": MODELS.get("nemotron"),
                 "reason": "Deterministic/extraction task can safely run on cheap grunt tier."
             })
-            
+
     return {
         "total_calls": total_calls,
         "grunt_model_percentage": grunt_pct,
