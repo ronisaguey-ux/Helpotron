@@ -282,14 +282,18 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
-    "2.7.3": [
-        # A bug fix. Grouped, jargon-free, rendered verbatim by What's New.
-        "FIXED",
-        "\U0001f4ac Chat no longer freezes on \u201cThinking\u2026\u201d. If you sent a message before connecting an API key, the chat could get stuck on \u201cThinking\u2026\u201d and then quietly ignore everything else you typed until you closed and reopened the extension. It now tells you to connect a key and immediately keeps working.",
-    ],
     "2.7.2": [
         # Grouped, in rough order of how much they change for the user. Rendered
         # verbatim by the popup's What's New, so keep each line self-contained.
+        #
+        # This is ONE release, not two. The chat-freeze fix was briefly prepared
+        # as 2.7.3 and renumbered back to 2.7.2 (owner 2026-09-18: "keep it 2.7.2
+        # cuz my latest published version is 2.7.1") — nothing between 2.7.1 and
+        # this build was ever published, so 2.7.2 covers the whole delta and the
+        # separate version number was bookkeeping nobody could act on.
+        "FIXED",
+        "\U0001f4ac Chat no longer freezes on \u201cThinking\u2026\u201d. If you sent a message before connecting an API key, the chat could get stuck on \u201cThinking\u2026\u201d and then quietly ignore everything else you typed until you closed and reopened the extension. It now tells you to connect a key and immediately keeps working.",
+        "",
         "CONNECTING",
         "🔑 No more sign-in. The extension used to need a Helpotron login it could barely complete. It now connects with a personal API key you create once at Settings \u2192 API Keys \u2014 paste it in and you're connected. Revoke a key any time and that extension stops working immediately.",
         "🚪 Locked out? The Ask-the-Developer form now works without signing in, so a lost password or a stuck 2FA no longer leaves you with no way to reach us.",
