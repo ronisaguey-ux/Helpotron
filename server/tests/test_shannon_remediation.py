@@ -873,3 +873,240 @@ def test_authz_11_notifications_read_does_not_echo_foreign_notices(client):
     # Neither foreign notice nor nonexistent notice should appear in read_ids
     assert f"notice_{notice_a_id}" not in read_ids
     assert "notice_9999999" not in read_ids
+
+
+def _get_admin_headers(client, public_id: str = None):
+    from server.admin import ADMIN_IDS
+    from server.security import SessionStore
+    admin_pid = public_id or ADMIN_IDS[0]
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == admin_pid).first()
+        dummy_h = "dummy"
+        if not u:
+            u = User(public_id=admin_pid, plan="elite", role="admin", password_hash=dummy_h, settings={})
+            db.add(u)
+            db.commit()
+            db.refresh(u)
+        else:
+            u.role = "admin"
+            db.commit()
+        sess_token = SessionStore.create_session(u.id, u.public_id)
+        return {"Authorization": f"Bearer {sess_token}"}
+    finally:
+        db.close()
+
+
+def test_misc_01_commit_classifier_ref_coordinates_crossturn():
+    """MISC-01: Commit classifier catches ref, coordinate, and cross-turn type+Enter bypasses."""
+    from server.routes_extension import burst_is_committing, _RECENT_THREAD_TYPED
+
+    elements = [
+        {"ref": 1, "name": "Submit Form", "role": "button", "x": 100, "y": 200, "width": 50, "height": 30},
+        {"ref": 2, "name": "Cancel", "role": "button", "x": 200, "y": 200, "width": 50, "height": 30},
+        {"ref": 3, "name": "Delete account permanently", "role": "button", "x": 300, "y": 200, "width": 80, "height": 30},
+    ]
+
+    # 1. Click by ref on destructive/committing element
+    assert burst_is_committing([{"op": "click", "ref": 1}], elements=elements) is True
+    assert burst_is_committing([{"op": "click", "ref": 3}], elements=elements) is True
+
+    # 2. Click by coordinates on destructive element
+    assert burst_is_committing([{"op": "click", "x": 310, "y": 210}], elements=elements) is True
+
+    # 3. Routine click on non-committing element
+    assert burst_is_committing([{"op": "click", "ref": 2}], elements=elements) is False
+    assert burst_is_committing([{"op": "click", "x": 50, "y": 50}], elements=elements) is False
+
+    # 4. Cross-turn type + Enter
+    thread_key = "test_thread_crossturn"
+    _RECENT_THREAD_TYPED.pop(thread_key, None)
+
+    # Turn 1: type
+    assert burst_is_committing([{"op": "type", "text": "rm -rf"}], thread_key=thread_key) is False
+    assert thread_key in _RECENT_THREAD_TYPED
+
+    # Turn 2: Enter alone across turns is classified as committing
+    assert burst_is_committing([{"op": "key", "key": "enter"}], thread_key=thread_key) is True
+
+
+def test_misc_08_rate_limit_authenticated_identity(client):
+    """MISC-08: RateLimitMiddleware derives key from authenticated user and rejects foreign body public_id."""
+    headers = _get_user_headers(client, "rate_limit_auth_user")
+
+    # Mismatched body public_id must return 403 Forbidden
+    resp = client.post(
+        "/api/agent/start",
+        headers=headers,
+        json={"public_id": "other_attacker_id", "prompt": "test", "assignment_id": 1},
+    )
+    assert resp.status_code == 403
+    assert resp.json().get("detail") == "public_id does not match authenticated user"
+
+
+def test_misc_09_team_orchestrator_token_metering():
+    """MISC-09: Team orchestrator drafts enforce token balance and debit DRAFT_COST."""
+    import asyncio
+    from server.database import User, SessionLocal
+    from server.credits import set_token_balance, get_token_balance
+    from server.orchestrator import generate_draft_for_task
+    from server.draft import DRAFT_COST
+    from unittest.mock import patch
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.public_id == "team_zero_token_user").first()
+        dummy_h = "dummy"
+        if not user:
+            user = User(public_id="team_zero_token_user", plan="basic", role="member", password_hash=dummy_h, settings={})
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        set_token_balance(user, 0.0)
+        db.commit()
+        user_id = user.id
+
+        # 1. Zero-balance account raises ValueError
+        try:
+            asyncio.run(generate_draft_for_task(user_id, 1, "source", "prompt", "style"))
+            assert False, "Should have raised Insufficient tokens"
+        except ValueError as e:
+            assert "Insufficient tokens" in str(e)
+
+        # 2. Account with tokens is debited DRAFT_COST
+        set_token_balance(user, 5.0)
+        db.commit()
+
+        async def mock_gen_draft(*args, **kwargs):
+            return "Generated draft text", "mock-model"
+
+        with patch("server.draft.generate_draft", side_effect=mock_gen_draft):
+            res, model = asyncio.run(generate_draft_for_task(user_id, 1, "source", "prompt", "style"))
+            assert res == "Generated draft text"
+            db.refresh(user)
+            assert get_token_balance(user) == 5.0 - DRAFT_COST
+    finally:
+        db.close()
+
+
+def test_misc_10_and_14_payment_settlement_and_entitlements(client):
+    """MISC-10 & MISC-14: Server-authoritative settlement and deferred entitlement consumption."""
+    from server.database import User, SessionLocal
+
+    headers = _get_user_headers(client, "payment_entitlement_user")
+    admin_headers = _get_admin_headers(client, "payment_admin_user")
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "payment_entitlement_user").first()
+        u.referral_discount_pct = 15.0
+        u.discount_balance = 5.0
+        u.settings = {"2fa_enabled": True}
+        db.commit()
+    finally:
+        db.close()
+
+    # 1. MISC-10: Huge client-declared amounts (> 10,000 cents) are rejected
+    bad_pay = client.post(
+        "/api/payments",
+        headers=headers,
+        json={"public_id": "payment_entitlement_user", "provider": "cashapp", "amount_cents": 5000000},
+    )
+    assert bad_pay.status_code == 422
+
+    # 2. MISC-14: Creating a pending payment does NOT burn referral or discount entitlements
+    pay_resp = client.post(
+        "/api/payments",
+        headers=headers,
+        json={"public_id": "payment_entitlement_user", "provider": "cashapp", "amount_cents": 1000},
+    )
+    assert pay_resp.status_code == 200
+    payment_id = pay_resp.json()["payment_id"]
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "payment_entitlement_user").first()
+        assert u.referral_discount_pct == 15.0
+        assert u.discount_balance == 5.0
+    finally:
+        db.close()
+
+    # 3. MISC-10: Rubber-stamping note is rejected
+    confirm_bad = client.post(
+        f"/api/admin/user/{u.public_id}/confirm-payment",
+        headers=admin_headers,
+        json={"payment_id": payment_id, "note": "rubber-stamp"},
+    )
+    assert confirm_bad.status_code == 400
+
+    # 4. Valid confirmation settles payment and consumes entitlements
+    confirm_ok = client.post(
+        f"/api/admin/user/{u.public_id}/confirm-payment",
+        headers=admin_headers,
+        json={"payment_id": payment_id, "note": "Verified via CashApp receipt #12345", "settled_amount_cents": 1000},
+    )
+    assert confirm_ok.status_code == 200
+    assert confirm_ok.json()["status"] == "captured"
+    assert confirm_ok.json()["granted"] == 10
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "payment_entitlement_user").first()
+        assert u.referral_discount_pct == 0.0
+        assert u.discount_balance == 0.0
+    finally:
+        db.close()
+
+
+def test_misc_11_features_metering_binding(client):
+    """MISC-11: Feature routes bind usage metering for session/JWT users."""
+    from server.database import User, SessionLocal
+    from server.security import SessionStore, SESSION_COOKIE_NAME
+    from server.routes_features import get_current_authenticated_user
+    from server.metering import current_meter_user
+    from unittest.mock import Mock
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == "feature_meter_user").first()
+        dummy_h = "dummy"
+        if not u:
+            u = User(public_id="feature_meter_user", plan="basic", role="member", password_hash=dummy_h, settings={})
+            db.add(u)
+            db.commit()
+            db.refresh(u)
+
+        token = SessionStore.create_session(u.id, u.public_id)
+
+        # Mock request with session cookie
+        req = Mock()
+        req.cookies = {SESSION_COOKIE_NAME: token}
+        req.headers = {}
+
+        resolved = get_current_authenticated_user(req, db)
+        assert resolved.id == u.id
+        assert current_meter_user() == u.public_id
+    finally:
+        db.close()
+
+
+def test_misc_12_monitors_endpoints_require_admin(client):
+    """MISC-12: /api/monitors/overview and /api/monitors/history require admin authentication."""
+    # 1. Unauthenticated request rejected
+    res_anon_ov = client.get("/api/monitors/overview")
+    assert res_anon_ov.status_code in (401, 403)
+
+    res_anon_hist = client.get("/api/monitors/history")
+    assert res_anon_hist.status_code in (401, 403)
+
+    # 2. Non-admin authenticated user rejected
+    user_headers = _get_user_headers(client, "monitors_normal_user")
+    res_user = client.get("/api/monitors/overview", headers=user_headers)
+    assert res_user.status_code == 403
+
+    # 3. Admin user allowed
+    admin_headers = _get_admin_headers(client, "monitors_admin_user")
+    res_admin = client.get("/api/monitors/overview", headers=admin_headers)
+    assert res_admin.status_code == 200
+    assert "ts" in res_admin.json() or "uptime_seconds" in res_admin.json()
