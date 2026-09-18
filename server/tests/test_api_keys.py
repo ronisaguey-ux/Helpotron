@@ -134,8 +134,13 @@ def test_limits_and_revocation():
         db.refresh(row)
         assert row.usage_limit_tokens is None
 
-        assert K.revoke_key(db, u, row.id)
-        assert K.check_api_key(db, plain) == (None, "revoked")
+        # Owner 2026-09-18: the action is a plain DELETE, not a soft revoke. The
+        # row is gone, so the key resolves as not_found — the caller cannot tell
+        # that apart from a key that never existed, which is the point.
+        key_id = row.id
+        assert K.delete_key(db, u, key_id)
+        assert K.check_api_key(db, plain) == (None, "not_found")
+        assert db.query(ApiKey).filter(ApiKey.id == key_id).first() is None
     finally:
         db.close()
 
@@ -149,8 +154,9 @@ def test_one_users_key_cannot_be_touched_by_another():
         u = db.query(User).filter(User.id == owner).first()
         row, _plain = K.generate_key(db, u, label="mine")
         other = db.query(User).filter(User.public_id != u.public_id).first()
-        assert K.revoke_key(db, other, row.id) is False
+        assert K.delete_key(db, other, row.id) is False
         db.refresh(row)
-        assert row.revoked_at is None
+        assert row.revoked_at is None, "another user's key must survive untouched"
+        assert db.query(ApiKey).filter(ApiKey.id == row.id).first() is not None
     finally:
         db.close()

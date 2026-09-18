@@ -58,12 +58,12 @@ export default function ApiKeysPanel() {
     }
   };
 
-  const revoke = async (id) => {
+  const remove = async (id) => {
     try {
-      const res = await api.revokeApiKey(id);
+      const res = await api.deleteApiKey(id);
       setKeys(res?.keys || []);
     } catch (e) {
-      setError(e?.message || 'Could not revoke that key.');
+      setError(e?.message || 'Could not delete that key.');
     }
   };
 
@@ -95,8 +95,8 @@ export default function ApiKeysPanel() {
             API Keys
           </h2>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Connect the browser extension without sharing your password. Limit or revoke
-            any key at any time.
+              Connect the browser extension without sharing your password. Limit or delete
+              any key at any time.
           </p>
         </div>
       </div>
@@ -193,47 +193,41 @@ export default function ApiKeysPanel() {
         </span>
       ) : (
         <div className="flex flex-col gap-2">
-          {keys.map((k) => (
-            <div
-              key={k.id}
-              className={`flex items-center justify-between gap-3 p-unit-3 rounded-xl border ${
-                k.revoked
-                  ? 'bg-surface-container-low/30 border-outline-variant/10 opacity-60'
-                  : 'bg-surface-container-low/60 border-outline-variant/15'
-              }`}
-            >
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-body-sm text-xs font-semibold text-on-surface truncate">
-                    {k.label || 'Untitled key'}
+            {keys.map((k) => (
+                <div key={k.id} className="flex items-center justify-between gap-3 p-unit-3 rounded-xl border bg-surface-container-low/60 border-outline-variant/15">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-body-sm text-xs font-semibold text-on-surface truncate">
+                        {k.label || 'Untitled key'}
+                      </span>
+                      {/* Legacy rows only: keys revoked before 2026-09-18 were soft-flagged.
+                          The action is a real delete now, but an old revoked key must still
+                          look dead rather than indistinguishable from a working one. */}
+                      {k.revoked && (
+                        <span className="font-code-sm text-[10px] px-1.5 py-0.5 rounded bg-error/15 text-error">
+                          revoked
+                        </span>
+                      )}
+                    </div>
+                  <span className="font-mono text-[11px] text-outline truncate">
+                    {k.prefix}…
                   </span>
-                  {k.revoked && (
-                    <span className="font-code-sm text-[10px] px-1.5 py-0.5 rounded bg-error/15 text-error">
-                      revoked
-                    </span>
-                  )}
+                  <span className="font-code-sm text-[10px] text-outline">
+                    {fmtTokens(k.usage_limit_tokens)} · used{' '}
+                    {Number(k.usage_used_tokens || 0).toLocaleString()}
+                    {k.last_used_at ? ` · last used ${new Date(k.last_used_at).toLocaleDateString()}` : ' · never used'}
+                  </span>
                 </div>
-                <span className="font-mono text-[11px] text-outline truncate">
-                  {k.prefix}…
-                </span>
-                <span className="font-code-sm text-[10px] text-outline">
-                  {fmtTokens(k.usage_limit_tokens)} · used{' '}
-                  {Number(k.usage_used_tokens || 0).toLocaleString()}
-                  {k.last_used_at ? ` · last used ${new Date(k.last_used_at).toLocaleDateString()}` : ' · never used'}
-                </span>
-              </div>
-              {!k.revoked && (
                 <button
                   type="button"
-                  onClick={() => revoke(k.id)}
-                  title="Revoke this key"
+                  onClick={() => remove(k.id)}
+                  title="Delete this key permanently"
                   className="h-8 px-3 rounded-lg border border-error/30 text-error font-label-caps text-[11px] flex items-center gap-1.5 shrink-0 cursor-pointer hover:bg-error/10"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Revoke
+                  Delete
                 </button>
-              )}
-            </div>
+              </div>
           ))}
         </div>
       )}
