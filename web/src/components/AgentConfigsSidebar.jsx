@@ -3,7 +3,7 @@
  * 4 Tabs: Identities (Active) | Skills | Memories | Rules & Files.
  * LUMINOUS GLASS M3 design tokens throughout.
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   SlidersHorizontal, User as UserIcon, Database, FileText, Send, Trash2, Plus,
   Upload, ChevronDown, ChevronRight, Check, Cpu, Edit3, X, Sparkles, BookOpen,
@@ -69,6 +69,22 @@ export default function AgentConfigsSidebar({
 
   const fileInputRef = useRef(null);
   const [uploadKind, setUploadKind] = useState('skill');
+
+  // Editable agent-name draft. Kept in local state so typing does not fire a
+  // settings PATCH per keystroke; committed on blur / Enter.
+  const [agentNameDraft, setAgentNameDraft] = useState(ai?.aiName || '');
+  // Re-sync when the value arrives or changes from elsewhere (the panel can mount
+  // before settings have loaded, and the agent may rename itself).
+  useEffect(() => {
+    setAgentNameDraft((prev) => (prev === (ai?.aiName || '') ? prev : (ai?.aiName || '')));
+  }, [ai?.aiName]);
+
+  const commitAgentName = () => {
+    const next = String(agentNameDraft || '').trim().slice(0, 40);
+    if (next === (ai?.aiName || '')) return;   // nothing changed — no write
+    setAgentNameDraft(next);
+    onSaveAgentName(next);
+  };
 
   // Merged persona list: Canonical PRESET_PERSONAS + custom user identities.
   //
@@ -145,7 +161,50 @@ export default function AgentConfigsSidebar({
         </button>
       </div>
 
-      {/* 4 Segmented Tabs */}
+        {/* Agent name. `ai.aiName` is what the greeting reads
+            ("<name> Agent online", overlord_agent.py:544) — and until now there
+            was NO input anywhere in the app that wrote it, so the operator could
+            never change the name of their own agent. onSaveAgentName existed as a
+            declared-but-unrendered prop.
+            Saved on blur and on Enter, not on every keystroke: each save is a
+            settings PATCH, and a per-character write would fire one per letter. */}
+        <div className="px-unit-4 py-unit-3 border-b border-outline-variant/20">
+          <label
+            htmlFor="agentNameInput"
+            className="font-label-caps text-label-caps text-outline uppercase tracking-wider block mb-1.5"
+          >
+            Agent Name
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="agentNameInput"
+              type="text"
+              value={agentNameDraft}
+              maxLength={40}
+              placeholder="Name your agent…"
+              onChange={(e) => setAgentNameDraft(e.target.value)}
+              onBlur={() => commitAgentName()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                } else if (e.key === 'Escape') {
+                  setAgentNameDraft(ai?.aiName || '');
+                  e.currentTarget.blur();
+                }
+              }}
+              className="flex-1 min-w-0 bg-surface-container-lowest border border-outline-variant/25 rounded-xl px-3 py-2 font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <span className="font-code-sm text-[10px] text-outline tabular-nums shrink-0">
+              {agentNameDraft.length}/40
+            </span>
+          </div>
+          <p className="font-code-sm text-[10px] text-outline mt-1">
+            Shown in the chat greeting. Saved when you click away or press Enter.
+          </p>
+        </div>
+
+        {/* 4 Segmented Tabs */}
       <div className="flex items-center p-1.5 mx-unit-3 mt-unit-3 rounded-xl bg-surface-container-low border border-outline-variant/25 gap-1">
         {[
           { key: 'identities', label: 'Identities' },

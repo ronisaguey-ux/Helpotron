@@ -1512,13 +1512,7 @@ async def _conversational_fallback(user, text: str, db: Session = None, node: st
     """
     from .llm import call_llm
     settings = dict(user.settings or {})
-    effort = settings.get("effort_score")
-    if effort is None and isinstance(settings.get("ai"), dict):
-        effort = settings["ai"].get("effortScore") or settings["ai"].get("effort_score")
-    try:
-        effort = int(effort) if effort is not None else 500
-    except (TypeError, ValueError):
-        effort = 500
+    effort = resolve_agent_effort(settings)
 
     try:
         raw = await call_llm(
@@ -1961,13 +1955,7 @@ async def _resolve_agent_intent(
         (f"CONVERSATION SO FAR (most recent last):\n{history_block}\n\n" if history_block else "")
         + f"User said: {text[:3000]}"
     )
-    effort = settings.get("effort_score")
-    if effort is None and isinstance(settings.get("ai"), dict):
-        effort = settings["ai"].get("effortScore") or settings["ai"].get("effort_score")
-    try:
-        effort = int(effort) if effort is not None else 500
-    except (TypeError, ValueError):
-        effort = 500
+    effort = resolve_agent_effort(settings)
 
     raw = ""
     try:
@@ -2041,6 +2029,41 @@ def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:
     except Exception:
         pass
     return msg
+
+
+def resolve_agent_effort(settings: dict) -> int:
+    """The user's effort, on the 1..1000 scale the router bands.
+
+    Precedence matters and was wrong: `settings["ai"]["effortScore"]` is what the
+    UI sliders actually write (both the web dial and the extension sliders), while
+    the top-level `settings["effort_score"]` is a LEGACY key that nothing updates
+    any more. Reading the legacy key first meant a stale number silently beat the
+    live slider — measured 2026-09-18 on the operator account: top-level
+    `effort_score` was 6 (i.e. level 6 -> DeepSeek V4.1 Flash) while the slider sat
+    at level 1 (`ai.effortScore` 100 -> the cheap tier). Dragging the slider
+    changed the badge and nothing else.
+
+    Accepts a bare level (<=10) or a full score; parse_effort_score scales levels
+    up so the router's bands line up with the labels the UI shows.
+
+    `default_effort_level` is a DB COLUMN, not a settings key, and must never be
+    consulted here — it defaults to 5 (a level) and reading it as a score would
+    pin every user to level 1.
+    """
+    from .screen_vision import parse_effort_score
+
+    ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
+    for candidate in (
+        ai.get("effortScore"),
+        ai.get("effort_score"),
+        settings.get("effort_score"),
+    ):
+        if candidate is not None:
+            try:
+                return parse_effort_score(candidate)
+            except Exception:
+                continue
+    return 500
 
 
 def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> Dict[str, Any]:
@@ -2135,7 +2158,10 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
         except Exception:
             pass
 
-    effort_score = int(settings.get("default_effort_level", 5) or 5) * 100
+    # Was `default_effort_level * 100`: that is a DB COLUMN defaulting to 5 (a
+    # LEVEL), so this path ran the whole agent chat at score 500 — level 5 —
+    # regardless of the slider. Same resolver as every other agent path now.
+    effort_score = resolve_agent_effort(settings)
 
     if resuming:
         # Ask for the remainder only. Without the "do not repeat" instruction a
