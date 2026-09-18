@@ -1089,10 +1089,25 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     if is_user_banned(user):
         raise HTTPException(403, "Account suspended by the operator")
 
-    if user.settings and user.settings.get("2fa_enabled"):
+    # 2026-09-18: 2FA is only challenged when the configured method has a factor
+    # that can actually be verified. `2fa_enabled` alone is not enough — a bad
+    # enrollment (see routes_auth_2fa.verify_two_factor_setup) could set the flag
+    # without ever storing a secret, and this gate then demanded a code that no
+    # value could ever satisfy. Verified live: it locked the operator account out
+    # of /api/login permanently, with no way back in (the disable route also
+    # required a valid code). An account with no usable factor is not protected
+    # by 2FA, so it must not be treated as if it were.
+    _2fa = user.settings or {}
+    _2fa_method = (_2fa.get("2fa_method") or "totp").lower()
+    _2fa_factor_ready = (
+        (_2fa_method == "totp" and bool(_2fa.get("2fa_totp_secret")))
+        or (_2fa_method == "sms" and bool(_2fa.get("phone_number")))
+        or _2fa_method == "email"
+    )
+    if _2fa.get("2fa_enabled") and _2fa_factor_ready:
         from .auth_2fa import totp_service, code_store
         code = body.code or body.two_factor_code
-        method = user.settings.get("2fa_method", "totp")
+        method = _2fa_method
         if not code:
             # 09-01 (Logan, live): the route used to return 2fa_required WITHOUT
             # sending the code — the UI asked for a code that never arrived.
