@@ -17,7 +17,16 @@ def test_get_extension_version():
     assert "latest_version" in data
     assert len(data["latest_version"]) >= 3
     assert "release_notes" in data
-    assert len(data["release_notes"]) >= 3
+    # Grouped notes: a section heading plus at least one item. This used to be
+    # `>= 3`, an arbitrary count rather than an invariant — a legitimate
+    # one-item bugfix release (2.7.3) cannot reach three lines while its notes
+    # are still correctly structured, so the old assertion would have failed a
+    # perfectly good release. What actually matters is that the notes are a
+    # structured list and not one blob.
+    notes = data["release_notes"]
+    assert len(notes) >= 2, f"notes must be a heading plus at least one item, got {notes!r}"
+    assert notes[0].strip(), "the first line must be a non-empty section heading"
+    assert any(n.strip() for n in notes[1:]), "there must be at least one note item"
     assert data["download_url"] == "/api/extension/download"
 
 
