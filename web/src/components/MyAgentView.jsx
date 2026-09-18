@@ -1091,13 +1091,52 @@ export default function MyAgentView({
             identities={identities}
             activeIdentityId={activeIdentityId}
             onSelectIdentity={applyIdentity}
-            onAddIdentity={(newId) => {
-              const next = [...identities, newId];
-              setIdentities(next);
-              const updated = { ...settings, ai: { ...(settings.ai || {}), identities: next } };
-              setSettings(updated);
-              saveSettings(updated);
-            }}
+              onAddIdentity={(newId) => {
+                const next = [...identities, newId];
+                setIdentities(next);
+                const updated = { ...settings, ai: { ...(settings.ai || {}), identities: next } };
+                setSettings(updated);
+                saveSettings(updated);
+              }}
+              /* Deletion that actually persists.
+               *
+               * Two separate bugs met here (owner report 2026-09-18: "me clicking
+               * delete old config didnt last"):
+               *   1. The parent never passed these handlers, so the sidebar's
+               *      `() => {}` defaults ran — the card re-rendered unchanged and
+               *      the delete looked like it silently failed.
+               *   2. Presets live in the bundle, not in saved settings, so
+               *      removing one has to be recorded as an explicit "hidden" id
+               *      or the next render resurrects it from PRESET_PERSONAS.
+               * Both are fixed: deletion writes the durable lists below, and the
+               * sidebar filters on them.
+               */
+              onDeleteIdentity={(id) => {
+                const isPreset = PRESET_PERSONAS.some((p) => p.id === id);
+                const nextIdentities = identities.filter((i) => i.id !== id);
+                const ai = { ...(settings.ai || {}), identities: nextIdentities };
+                if (isPreset) {
+                  // A preset must be remembered as hidden — there is nothing to
+                  // remove from `identities`, so without this it comes straight
+                  // back from PRESET_PERSONAS on the next render.
+                  ai.hidden_identities = Array.from(new Set([...(ai.hidden_identities || []), id]));
+                }
+                // Clearing an ACTIVE persona is folded into this same write.
+                // Calling applyIdentity() here would PATCH again from a stale
+                // closure and put the deleted identity straight back on the
+                // server — the bug that made deletes look like they didn't last.
+                if (activeIdentityId === id) {
+                  ai.persona_id = 'none';
+                  ai.persona_name = '';
+                  ai.persona_instructions = '';
+                  setActiveIdentityId('none');
+                }
+                setIdentities(nextIdentities);
+                const updated = { ...settings, ai };
+                setSettings(updated);
+                saveSettings(updated);
+                api.updateSettings?.({ ai }).catch((e) => console.warn('identity delete failed:', e));
+              }}
             skills={skills}
             activeSkillIds={activeSkillIds}
             onToggleSkill={(skillId) => {
@@ -1114,7 +1153,25 @@ export default function MyAgentView({
               setSettings(updated);
               saveSettings(updated);
             }}
-            onAddSkill={(skill) => setSkills((prev) => [...prev, skill])}
+              onAddSkill={(skill) => setSkills((prev) => [...prev, skill])}
+              /* Delete a skill, durably.
+               *
+               * `skills` falls back to the hardcoded DEFAULT_SKILLS when the
+               * account has none saved, so filtering local state alone would
+               * bring the skill back on the next load. Writing the filtered array
+               * to `ai.skills` materialises the user's own list, which is what
+               * makes the removal stick.
+               */
+              onDeleteSkill={(skillId) => {
+                const nextSkills = skills.filter((s) => s.id !== skillId);
+                setSkills(nextSkills);
+                setActiveSkillIds((prev) => prev.filter((id) => id !== skillId));
+                const ai = { ...(settings.ai || {}), skills: nextSkills };
+                const updated = { ...settings, ai };
+                setSettings(updated);
+                saveSettings(updated);
+                api.updateSettings?.({ ai }).catch((e) => console.warn('skill delete failed:', e));
+              }}
             memory={memory}
             memoryText={memoryText}
             setMemoryText={setMemoryText}
