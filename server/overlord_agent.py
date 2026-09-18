@@ -410,8 +410,17 @@ def _is_safe_compute_code(code: str) -> bool:
         "open", "eval", "exec", "__import__", "globals", "locals", "getattr",
         "setattr", "delattr", "compile", "breakpoint", "input", "memoryview",
         "sys", "os", "subprocess", "shutil", "socket", "urllib", "requests",
-        "pathlib", "io", "builtins", "posix", "ctypes", "importlib", "exit", "quit"
+        "pathlib", "io", "builtins", "posix", "ctypes", "importlib", "exit", "quit",
+        "sympify", "parse_expr", "lambdify", "system", "popen", "spawn", "fork",
+        "kill", "chr", "ord", "base64", "codec", "decode", "encode"
     }
+
+    DANGEROUS_STR_PATTERNS = [
+        "__", "import", "eval", "exec", "system", "subprocess",
+        "os.", "sys.", "popen", "shutil", "socket", "base64",
+        "globals", "locals", "builtins", "class", "subclasses",
+        "chr(", "chr ", "lambda", "breakpoint", "compile"
+    ]
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
@@ -423,15 +432,24 @@ def _is_safe_compute_code(code: str) -> bool:
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 root_pkg = alias.name.split(".")[0]
-                if root_pkg not in SAFE_MODULES:
+                if root_pkg not in SAFE_MODULES or alias.name in DISALLOWED_NAMES:
                     return False
         elif isinstance(node, ast.ImportFrom):
             if not node.module or node.module.split(".")[0] not in SAFE_MODULES:
                 return False
+            for alias in node.names:
+                if alias.name.startswith("__") or alias.name in DISALLOWED_NAMES:
+                    return False
         elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id in DISALLOWED_NAMES:
+            if isinstance(node.func, ast.Name) and (node.func.id.startswith("__") or node.func.id in DISALLOWED_NAMES):
                 return False
-            if isinstance(node.func, ast.Attribute) and node.func.attr in DISALLOWED_NAMES:
+            if isinstance(node.func, ast.Attribute) and (node.func.attr.startswith("__") or node.func.attr in DISALLOWED_NAMES):
+                return False
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            val_lower = node.value.lower()
+            if any(p in val_lower for p in DANGEROUS_STR_PATTERNS):
+                return False
+            if re.search(r'[a-zA-Z_]\w*\s*\(', node.value):
                 return False
 
     return True
