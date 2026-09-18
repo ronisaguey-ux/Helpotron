@@ -248,12 +248,52 @@ function clampEffortScore(value) {
   return Math.min(10, Math.max(1, Math.round(num)));
 }
 
-function effortModelInfo(score) {
-  const s = clampEffortScore(score);
-  if (s <= 3) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-  if (s <= 6) return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
-  return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
-}
+  // The server's real ladder, once fetched. `model_ladder` is one entry per
+  // effort LEVEL (1..10) from the actual text router, so the badge names the
+  // model that will really run instead of a hardcoded guess.
+  let _modelLadder = null;
+
+  async function loadModelLadder() {
+    if (_modelLadder) return _modelLadder;
+    // Reuse the cached bootstrap UI copy when it already carries the ladder.
+    const st = await chrome.storage.local.get('ui_copy');
+    if (st.ui_copy && Array.isArray(st.ui_copy.model_ladder) && st.ui_copy.model_ladder.length) {
+      _modelLadder = st.ui_copy.model_ladder;
+      return _modelLadder;
+    }
+    try {
+      const { server } = await chrome.storage.local.get('server');
+      const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      const res = await fetch(`${srv}/api/extension/ui-config`);
+      if (res.ok) {
+        const cfg = await res.json();
+        if (Array.isArray(cfg?.model_ladder) && cfg.model_ladder.length) {
+          _modelLadder = cfg.model_ladder;
+          await chrome.storage.local.set({ ui_copy: cfg }).catch(() => {});
+        }
+      }
+    } catch { /* offline — the static fallback below stays in force */ }
+    return _modelLadder;
+  }
+
+  function effortModelInfo(score) {
+    const s = clampEffortScore(score);
+    // Prefer the server's ladder: it is computed from the same router that picks
+    // the model, so the badge cannot drift from reality. The static bands below
+    // are only an offline fallback, and are kept in step with the text router —
+    // NOT the vision ladder (they differ: the vision top band is gemini-3.8-flash,
+    // which the text path never selects).
+    if (Array.isArray(_modelLadder)) {
+      const hit = _modelLadder.find((e) => Number(e.level) === s);
+      if (hit && hit.model) {
+        return { tier: hit.tier || 'med', label: hit.label || hit.model, model: hit.model };
+      }
+    }
+    if (s === 1) return { tier: 'low', label: 'Nemotron 3 Nano', model: 'nvidia/nemotron-3-nano-30b-a3b' };
+    if (s === 2) return { tier: 'low', label: 'Qwen 2.5 72B', model: 'qwen/qwen-2.5-72b-instruct' };
+    if (s <= 4) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
+    return { tier: 'high', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
+  }
 
 // ONE place that writes the model name to every model surface.
 //
@@ -1151,12 +1191,17 @@ async function init() {
   // Instant paint: last-known crawl progress + results.
   if (st[CRAWL_CACHE_KEY]) renderCrawlStatus(st[CRAWL_CACHE_KEY]);
 
-  // Deferred past first paint: crawl re-poll + backend agent-settings sync + release notifications.
-  requestAnimationFrame(() => {
-    pollCrawlStatus();
-    syncAgentSettingsFromServer();
-    loadWhatsNew();
-  });
+    // Deferred past first paint: the server's model ladder (so the badge names the
+    // real model), then crawl re-poll + backend agent-settings sync + release
+    // notifications. The ladder is awaited FIRST because applyModelLabels()
+    // inside the sync would otherwise render the static fallback and only
+    // correct itself on the next repaint.
+    requestAnimationFrame(async () => {
+      await loadModelLadder().catch(() => {});
+      pollCrawlStatus();
+      syncAgentSettingsFromServer();
+      loadWhatsNew();
+    });
 }
 
 // ── Scrape option 1: current thing only (focused tab) ────────────────────────

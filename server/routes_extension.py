@@ -173,24 +173,61 @@ async def extension_ui_config():
     """Versioned UI copy + policy for the extension to render server-side.
 
     The extension fetches this at load and renders these strings/templates. The
-    model ladder is computed from the server's resolve_vision_model (the single
-    source of truth), not duplicated client-side.
+    model ladder is computed from the server's OWN routing, so the badge and the
+    model that actually runs cannot disagree.
+
+    It used to be computed from `resolve_vision_model`, which is the ladder for
+    SCREEN-FRAME analysis only. Text chat routes through `resolve_model_routing`
+    (llm.py), and the two disagree: vision says band 3 is `gemini-3.8-flash`, but
+    the text ladder routes levels 8-10 to DeepSeek, so `gemini-3.8-flash` is
+    unreachable on the text path. The popup rendered the vision ladder as if it
+    described the chat — which is exactly how the badge came to claim
+    "Gemini 3.1 Flash Lite" while the agent was answering on deepseek-v4.1-flash
+    (owner report 2026-09-18). Each band now comes from the real router.
     """
-    ladder = []
+    from .llm import resolve_model_routing
+    from .llm import ModelPolicy
+
     labels = {
+        "nvidia/nemotron-3-nano-30b-a3b": "Nemotron 3 Nano",
+        "qwen/qwen-2.5-72b-instruct": "Qwen 2.5 72B",
         "google/gemini-3.1-flash-lite": "Gemini 3.1 Flash Lite",
         "deepseek/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
         "google/gemini-3.8-flash": "Gemini 3.8 Flash",
     }
+
+    # One entry per LEVEL, 1..10. A "band" cannot honestly describe the text
+    # ladder: levels 1, 2 and 3 select three DIFFERENT models (nemotron, qwen,
+    # gemini-lite) but would all sit in one band, so a band-level label can only
+    # ever be right for one of them. Publishing per level lets the popup look up
+    # the exact level the slider is on.
+    ladder = []
+    for level in range(1, 11):
+        model_id = resolve_model_routing(effort_score=level)["model"]
+        ladder.append({
+            # Tier is for STYLING and matches the popup's own banding (1-3 low,
+            # 4-6 med, 7-10 high) so the existing badge colours stay meaningful.
+            "tier": ("low" if level <= 3 else "med" if level <= 6 else "high"),
+            "level": level,
+            "model": model_id,
+            "label": labels.get(model_id, model_id),
+            "cost": VISION_MODEL_TIERS.get(model_id, ""),
+        })
+
+    # Also carry the vision ladder explicitly, labelled as such — screen-frame
+    # analysis genuinely IS tiered differently, and a future caller should not
+    # have to guess which of the two it is holding.
+    vision_ladder = []
     for score in (200, 500, 800):
         model_id, tier, _ = resolve_vision_model(score)
-        ladder.append({
+        vision_ladder.append({
             "tier": tier,
             "model": model_id,
             "label": labels.get(model_id, model_id),
             "cost": VISION_MODEL_TIERS.get(model_id, ""),
         })
-    return {**_UI_CONFIG, "model_ladder": ladder}
+
+    return {**_UI_CONFIG, "model_ladder": ladder, "vision_ladder": vision_ladder}
 
 
 @router.get("/version")

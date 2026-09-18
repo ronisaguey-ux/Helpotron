@@ -28,10 +28,42 @@ def test_ui_config_serves_mode_hints():
     assert "version" in body
 
 
-def test_ui_config_model_ladder_is_three_tiers():
+def test_ui_config_model_ladder_matches_the_real_router():
+    """The ladder the popup renders must name the model that actually runs.
+
+    Regression guard for a real mismatch (owner 2026-09-18): the badge said
+    "Gemini 3.1 Flash Lite" while the agent was answering on deepseek-v4.1-flash.
+    The ladder was computed from `resolve_vision_model` — the SCREEN-FRAME ladder
+    — while text chat routes through `resolve_model_routing`, and the two
+    disagree: vision's top band is gemini-3.8-flash, but the text ladder sends
+    levels 8-10 to DeepSeek, so gemini-3.8-flash is unreachable on the text path.
+
+    One entry per LEVEL, not per band: levels 1, 2 and 3 select three different
+    models, so a band-level label can only be right for one of them.
+    """
+    from server.llm import resolve_model_routing
+
     body = client.get("/api/extension/ui-config").json()
-    tiers = [t["tier"] for t in body["model_ladder"]]
-    assert tiers == ["low", "med", "high"]
+    ladder = body["model_ladder"]
+    assert [t["level"] for t in ladder] == list(range(1, 11))
+
+    # Every entry must equal what the router genuinely returns for that level.
+    for entry in ladder:
+        expected = resolve_model_routing(effort_score=entry["level"])["model"]
+        assert entry["model"] == expected, (
+            f"level {entry['level']}: ui-config advertises {entry['model']} "
+            f"but the router returns {expected}"
+        )
+
+    # Tier matches the popup's own banding, which drives the badge styling.
+    for entry in ladder:
+        lvl = entry["level"]
+        expect_tier = "low" if lvl <= 3 else "med" if lvl <= 6 else "high"
+        assert entry["tier"] == expect_tier
+
+    # The vision ladder is still published, and separately labelled, because
+    # screen-frame analysis genuinely is tiered differently.
+    assert len(body["vision_ladder"]) == 3
 
 
 def test_ui_config_carries_action_caps():
