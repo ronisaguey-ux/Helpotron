@@ -21,206 +21,62 @@ function capScrapeText(s) {
 }
 
 // ── Crawl4AI-style DOM-to-Clean-Markdown Engine ──────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Server-owned page identity + conversion (owner 2026-09-18)
+//
+// This file used to carry the real implementations of the four functions below.
+// They are now answered by `POST /api/extension/enrich`:
+//
+//   detectPlatform()        -> server `platform`
+//   classifySubject()       -> server `subject`
+//   parseCourseUrl()        -> server `course`
+//   htmlToCleanMarkdown()   -> server `markdown` / converted fields
+//
+// The extension's remaining job here is to READ THE DOM, which it must do (it is
+// the browser). Every decision about what that DOM MEANS — which LMS it is, what
+// subject it belongs to, which course an item is filed under, what boilerplate to
+// strip and how to render it — lives on the server, so it can be corrected by a
+// deploy instead of a Chrome Web Store review, and a modified client cannot
+// loosen it.
+//
+// `htmlToCleanMarkdown` is kept as a NAME so the scrapers below do not change
+// shape, but it no longer converts anything: it returns the element's raw
+// `innerHTML`, which `enrichWithServer()` sends for conversion. Returning markup
+// instead of Markdown is the whole trick — the conversion policy is gone from
+// this file.
+// ═══════════════════════════════════════════════════════════════════════════
+
 function htmlToCleanMarkdown(root) {
   if (!root) return '';
-  let container = root;
-  if (typeof root === 'string') {
-    const d = document.createElement('div');
-    d.innerHTML = root;
-    container = d;
-  }
-
-  let clone;
+  // Raw markup only. The server decides what is boilerplate and how it renders.
+  if (typeof root === 'string') return root;
   try {
-    clone = container.cloneNode(true);
+    return root.innerHTML || root.textContent || '';
   } catch (e) {
-    return container.innerText || '';
+    return '';
   }
-
-  // Strip non-content / boilerplate elements
-  const dropSelectors = [
-    'script', 'style', 'noscript', 'svg', 'iframe',
-    'header', 'footer', 'nav',
-    '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
-    '[class*="cookie"]', '[id*="cookie"]',
-    '[class*="modal"]', '[id*="modal"]',
-    '[class*="popup"]', '[id*="popup"]',
-    '.ad', '.ads', '[class*="advertisement"]',
-  ];
-  for (const sel of dropSelectors) {
-    try {
-      clone.querySelectorAll(sel).forEach((el) => el.remove());
-    } catch (e) {}
-  }
-
-  function tableToMarkdown(tbl) {
-    const rows = Array.from(tbl.querySelectorAll('tr'));
-    if (!rows.length) return '';
-    const matrix = [];
-    let maxCols = 0;
-
-    for (const r of rows) {
-      const cells = Array.from(r.querySelectorAll('th, td')).map((c) =>
-        (c.innerText || c.textContent || '').replace(/\r?\n|\r/g, ' ').replace(/\|/g, '\\|').trim()
-      );
-      if (cells.length > maxCols) maxCols = cells.length;
-      matrix.push(cells);
-    }
-    if (maxCols === 0) return '';
-
-    const lines = [];
-    const firstRow = matrix[0];
-    const headerPadded = firstRow.concat(Array(Math.max(0, maxCols - firstRow.length)).fill(''));
-    lines.push('| ' + headerPadded.join(' | ') + ' |');
-    lines.push('| ' + Array(maxCols).fill('---').join(' | ') + ' |');
-
-    for (let i = 1; i < matrix.length; i++) {
-      const row = matrix[i];
-      const padded = row.concat(Array(Math.max(0, maxCols - row.length)).fill(''));
-      lines.push('| ' + padded.join(' | ') + ' |');
-    }
-    return '\n\n' + lines.join('\n') + '\n\n';
-  }
-
-  function nodeToMd(node) {
-    if (!node) return '';
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent || '';
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return '';
-
-    const tag = node.tagName.toLowerCase();
-    if (tag === 'table') {
-      return tableToMarkdown(node);
-    }
-
-    let inner = '';
-    for (const child of node.childNodes) {
-      inner += nodeToMd(child);
-    }
-
-    switch (tag) {
-      case 'h1': return `\n\n# ${inner.trim()}\n\n`;
-      case 'h2': return `\n\n## ${inner.trim()}\n\n`;
-      case 'h3': return `\n\n### ${inner.trim()}\n\n`;
-      case 'h4': return `\n\n#### ${inner.trim()}\n\n`;
-      case 'h5': return `\n\n##### ${inner.trim()}\n\n`;
-      case 'h6': return `\n\n###### ${inner.trim()}\n\n`;
-      case 'p': return `\n\n${inner.trim()}\n\n`;
-      case 'br': return '\n';
-      case 'hr': return '\n\n---\n\n';
-      case 'strong':
-      case 'b':
-        return inner.trim() ? ` **${inner.trim()}** ` : '';
-      case 'em':
-      case 'i':
-        return inner.trim() ? ` *${inner.trim()}* ` : '';
-      case 'code':
-        return inner.trim() ? (node.parentNode && node.parentNode.tagName.toLowerCase() === 'pre' ? inner : ` \`${inner.trim()}\` `) : '';
-      case 'pre':
-        return `\n\n\`\`\`\n${inner.trim()}\n\`\`\`\n\n`;
-      case 'blockquote':
-        return `\n\n> ${inner.trim().replace(/\n/g, '\n> ')}\n\n`;
-      case 'li': {
-        const isOrdered = node.parentNode && node.parentNode.tagName.toLowerCase() === 'ol';
-        const prefix = isOrdered ? '1. ' : '- ';
-        return `\n${prefix}${inner.trim()}`;
-      }
-      case 'ul':
-      case 'ol':
-        return `\n${inner}\n`;
-      case 'a': {
-        const href = node.getAttribute('href');
-        const text = inner.trim();
-        if (text && href && !href.startsWith('javascript:') && !href.startsWith('#')) {
-          return `[${text}](${href})`;
-        }
-        return text;
-      }
-      case 'div':
-      case 'section':
-      case 'article':
-        return `\n${inner}\n`;
-      default:
-        return inner;
-    }
-  }
-
-  const rawMd = nodeToMd(clone);
-  return rawMd
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n\s*\n+/g, '\n\n')
-    .trim();
 }
 
-function detectPlatform() {
-  const host = window.location.hostname.toLowerCase();
-  const path = window.location.pathname.toLowerCase();
-  if (host.includes('instructure.com') || host.includes('canvas')) return 'canvas';
-  if (host.includes('classroom.google.com')) return 'google_classroom';
-  if (host.includes('blackboard') || host.includes('bb.') || path.includes('/webapps/blackboard')) return 'blackboard';
-  if (host.includes('brightspace') || host.includes('d2l')) return 'brightspace';
-  if (host.includes('moodle') || path.includes('/mod/assign/')) return 'moodle';
-  if (host.includes('schoology')) return 'schoology';
-  if (host.includes('docs.google.com')) return 'google_docs';
-  if (host.includes('notion.so') || host.includes('notion.site')) return 'notion';
-  return 'generic';
-}
-
-// ── Course context + subject attribution (08-28) ─────────────────────────────
-// The scraped page's LMS identity must reach the server so the material lands
-// in the RIGHT assignment bubble: the Canvas course id is the dedupe scope and
-// the course/subject name is how the bubble gets its topic.
-
-// Client-side mirror of the server's keyword classifier. Course names are the
-// best signal ("Algebra 2 Honors Topic 1 Packet" -> Mathematics).
-var SUBJECT_HINTS = [
-  ['Mathematics', ['algebra', 'geometry', 'calculus', 'trig', 'trigonometr', 'statistic', 'equation', 'theorem', 'linear', 'quadratic', 'function', 'probability', 'arithmetic', 'math', 'integral', 'derivative', 'exponential', 'logarithm']],
-  ['Biology', ['cell', 'dna', 'genetics', 'organism', 'biology', 'evolution', 'crispr', 'photosynthesis', 'ecosystem', 'bacteria', 'mitochondria']],
-  ['Chemistry', ['chemistry', 'chemical', 'molecule', 'atom', 'compound', 'reaction', 'acid', 'periodic']],
-  ['Physics', ['physics', 'motion', 'force', 'kinematics', 'newton', 'velocity', 'acceleration', 'gravity', 'electricity', 'magnet']],
-  ['Computer Science', ['algorithm', 'code', 'programming', 'data structure', 'python', 'machine learning', 'neural', 'ap csp', 'apcsp', 'computer science', 'java']],
-  ['History', ['history', 'reconstruction', 'civil war', 'president', 'ancient', 'revolution', 'empire', 'world war', 'century', 'antebellum', 'columbian']],
-  ['Literature', ['novel', 'literature', 'poem', 'woolf', 'faulkner', 'narrative', 'modernist', 'english literature', 'shakespeare', 'poetry']],
-  ['English', ['english', 'grammar', 'essay', 'vocabulary', 'reading', 'writing', 'rhetoric']],
-  ['Economics', ['economic', 'inflation', 'gdp', 'macroeconomic', 'microeconomic', 'monetary', 'supply', 'demand', 'market']],
-  ['Ethics', ['ethics', 'ethical', 'moral', 'autonomous systems']],
-  ['Psychology', ['cognitive', 'behavior', 'psychology', 'bias', 'decision']],
-  ['Spanish', ['spanish', 'espanol', 'español', 'conjugat', 'vocabulario']],
-  ['French', ['french', 'francais', 'français']],
-  ['Health', ['health', 'nutrition', 'p.e.', 'physical education', 'wellness']],
-];
-
-function classifySubject(text) {
-  const lower = (text || '').toLowerCase();
-  for (const [subj, keys] of SUBJECT_HINTS) {
-    for (const k of keys) {
-      // Word-START boundary so substrings never false-positive:
-      // "miscellaneous" must not match the 'cell' keyword.
-      const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (new RegExp('(?:^|[\\s\\W])' + esc).test(lower)) return subj;
-    }
-  }
-  return '';
-}
-
-// Canvas URL shapes: /courses/123/assignments/456 (/quizzes/…, /pages/x, /discussion_topics/…,
-// /modules/items/…). Returns {courseId, itemId, itemKind} or nulls outside a course page.
-function parseCourseUrl(url) {
+// The extension must not guess these any more; it asks.
+//
+// NOTE: a content script is an isolated world — `background.js` functions like
+// `getServer()` are NOT in scope here. Both values are read from
+// `chrome.storage.local`, which IS shared, exactly as the rest of this file does.
+async function serverPageInfo(body) {
+  const { server, api_key } = await chrome.storage.local.get(['server', 'api_key']);
+  const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+  if (!api_key) return null;
   try {
-    const u = new URL(url);
-    // ORDERING TRAP: 'modules/items' MUST precede 'modules' in the alternation.
-    // The regex engine takes the FIRST alternative whose remainder matches, so
-    // with 'modules' first, /courses/1/modules/items/44 parses as kind='modules',
-    // itemId='items' (regex stops at \/items) — every module item collapsed onto
-    // ONE wrong canvas_id ('c1:modules:items'), breaking subject pairing/dedupe.
-    const m = u.pathname.match(/^\/courses\/(\d+)\/(assignments|quizzes|pages|discussion_topics|modules\/items|modules|files)\/([^/?#]+)/);
-    if (!m) {
-      const c = u.pathname.match(/^\/courses\/(\d+)/);
-      return { courseId: c ? c[1] : '', itemId: '', itemKind: '', courseUrl: c ? u.origin + c[0] : '' };
-    }
-    return { courseId: m[1], itemKind: m[2], itemId: decodeURIComponent(m[3]), courseUrl: new URL(`/courses/${m[1]}`, u.origin).href };
-  } catch { return { courseId: '', itemId: '', itemKind: '', courseUrl: '' }; }
+    const res = await fetch(`${srv}/api/extension/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
 }
 
 function getCourseName() {
@@ -235,24 +91,26 @@ function getCourseName() {
   return (parts.length > 1 ? parts[0] : document.title || '').trim().slice(0, 120);
 }
 
-function scrapeCourseContext() {
-  const { courseId, itemId, itemKind, courseUrl } = parseCourseUrl(window.location.href);
-  const courseName = getCourseName();
-  // Subject from the COURSE name first (most reliable), then the page title.
-  let subject = classifySubject(courseName);
-  if (!subject) subject = classifySubject(document.title || '');
-  let courseCode = subject ? subject.split(' ')[0].slice(0, 4).toUpperCase() + '-101' : '';
-  return {
-    platformOrigin: 'canvas',
-    courseId,
-    itemId,
-    itemKind,
-    courseUrl,
-    courseName,
-    subject,
-    courseCode,
-  };
-}
+  function scrapeCourseContext() {
+    // Identity is server-owned. `primeServerIdentity()` fills this in before any
+    // scrape runs; before that it is empty rather than guessed, so a scrape that
+    // somehow raced the identity request files nothing under a wrong course
+    // instead of filing it under an invented one.
+    const id = __serverIdentity || {};
+    const course = id.course || {};
+    const subject = id.subject || '';
+    let courseCode = subject ? subject.split(' ')[0].slice(0, 4).toUpperCase() + '-101' : '';
+    return {
+      platformOrigin: id.platform || 'generic',
+      courseId: course.courseId || '',
+      itemId: course.itemId || '',
+      itemKind: course.itemKind || '',
+      courseUrl: course.courseUrl || '',
+      courseName: id.name || '',
+      subject,
+      courseCode,
+    };
+  }
 
 // Link discovery for the full-course crawl: same course, content pages only.
 // Never follows navigation chrome (people, grades, settings) or foreign hosts.
@@ -301,11 +159,83 @@ function collectCourseLinks() {
   return { ok: true, courseId: ctx.courseId, courseUrl: ctx.courseUrl, courseName: ctx.courseName, subject: ctx.subject, links: out, indexLinks: indexOut };
 }
 
-function scrapeAssignmentUniversal() {
-  const platform = detectPlatform();
-  let result = null;
+  // ── Server-owned identity ──────────────────────────────────────────────────
+  // Which LMS this is, what subject the material belongs to and which course an
+  // item is filed under are decided by the server. Cached for the page's life so
+  // the sync helpers (`scrapeCourseContext`, `collectCourseLinks`) can read it
+  // without becoming async.
+  let __serverIdentity = null;
+  let __identityPromise = null;
 
-  switch (platform) {
+  function _nameCandidates() {
+    const out = [];
+    try {
+      if (typeof getCourseName === 'function') {
+        const n = getCourseName();
+        if (n) out.push(n);
+      }
+    } catch (e) { /* no course name on this page */ }
+    out.push(document.title || '');
+    return out.filter(Boolean);
+  }
+
+  async function primeServerIdentity() {
+    if (__serverIdentity) return __serverIdentity;
+    if (__identityPromise) return __identityPromise;
+    __identityPromise = (async () => {
+      const info = await serverPageInfo({
+        url: window.location.href,
+        host: window.location.hostname,
+        path: window.location.pathname,
+        title: document.title || '',
+        name_candidates: _nameCandidates(),
+      });
+      if (info) __serverIdentity = info;
+      return __serverIdentity;
+    })();
+    return __identityPromise;
+  }
+
+  // The fields whose values are raw HTML and must be converted server-side.
+  const _HTML_FIELDS = ['title', 'prompt', 'instructions', 'description', 'content',
+    'body', 'text', 'rubric', 'attachments', 'blocks', 'sections', 'questions', 'notes'];
+
+  async function _enrich(result) {
+    const res = await serverPageInfo({
+      url: window.location.href,
+      host: window.location.hostname,
+      path: window.location.pathname,
+      title: document.title || '',
+      name_candidates: _nameCandidates(),
+      payload: result,
+      html_fields: _HTML_FIELDS,
+    });
+    if (!res || !res.payload) return result;
+    const merged = { ...result, ...res.payload };
+    merged.meta = {
+      ...(result.meta || {}),
+      platformOrigin: res.platform || (result.meta || {}).platformOrigin || 'generic',
+      subject: res.subject || '',
+      courseId: (res.course || {}).courseId || '',
+      itemId: (res.course || {}).itemId || '',
+      itemKind: (res.course || {}).itemKind || '',
+      courseUrl: (res.course || {}).courseUrl || '',
+      courseName: res.name || '',
+    };
+    return merged;
+  }
+
+  async function scrapeAssignmentUniversal() {
+    // Identity first: the server tells us which scraper applies. A page we cannot
+    // identify is not scraped at all, so material is never filed under a guessed
+    // platform.
+    const id = await primeServerIdentity();
+    const platform = (id && id.platform) || '';
+    if (!platform) return null;
+
+    let result = null;
+
+    switch (platform) {
     case 'canvas':
       result = scrapeCanvas();
       break;
@@ -326,13 +256,15 @@ function scrapeAssignmentUniversal() {
       break;
   }
 
-  result.platform = platform;
-  result.url = window.location.href;
-  result.scraped_at = new Date().toISOString();
-  // LMS identity + topic (08-28): server-side bubble attribution depends on it.
-  result.meta = scrapeCourseContext();
-  return result;
-}
+    result.platform = platform;
+    result.url = window.location.href;
+    result.scraped_at = new Date().toISOString();
+    // LMS identity + topic (08-28): server-side bubble attribution depends on it.
+    result.meta = scrapeCourseContext();
+    // One round trip converts every HTML field to Markdown and re-states the
+    // identity, so the client never carries conversion rules.
+    return await _enrich(result);
+  }
 
 function scrapeCanvas() {
   const title =
@@ -607,7 +539,7 @@ async function deepScrapeUniversal(options) {
   // 4. Extract through the EXACT same parser the platform scrapers use (so the
   //    structured shape never diverges between quick and deep mode), then
   //    supplement a thin prompt with the main-content text when available.
-  const base = (typeof scrapeAssignmentUniversal === 'function') ? scrapeAssignmentUniversal() : null;
+    const base = (typeof scrapeAssignmentUniversal === 'function') ? await scrapeAssignmentUniversal() : null;
   if (!base) return null;
   if ((base.prompt || '').trim().length < 200) {
     const main = document.querySelector('article, main, #main-content, #content, .assignment, .post-content, .user_content');
@@ -700,12 +632,22 @@ window.__helpotron_extract_rubric = function (selector) {
 if (!window.__helpotron_scrape_channel__) {
   window.__helpotron_scrape_channel__ = true;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request && request.action === 'SCRAPE_CURRENT_ASSIGNMENT') {
-    const data = (typeof scrapeAssignmentUniversal === 'function')
-      ? scrapeAssignmentUniversal()
-      : null;
-    sendResponse({ success: !!data, assignment: data || null });
-  } else if (request && request.action === 'DEEP_SCRAPE_CURRENT_ASSIGNMENT') {
+    if (request && request.action === 'SCRAPE_CURRENT_ASSIGNMENT') {
+      // The scraper is server-driven now: it awaits page identity before it can
+      // choose a platform parser, so this must stay async and return true to
+      // keep the message channel open for sendResponse.
+      (async () => {
+        try {
+          const data = (typeof scrapeAssignmentUniversal === 'function')
+            ? await scrapeAssignmentUniversal()
+            : null;
+          sendResponse({ success: !!data, assignment: data || null });
+        } catch (e) {
+          sendResponse({ success: false, error: String(e) });
+        }
+      })();
+      return true;
+    } else if (request && request.action === 'DEEP_SCRAPE_CURRENT_ASSIGNMENT') {
     deepScrapeUniversal().then((data) => sendResponse({ success: !!data, assignment: data || null }));
     return true;
   } else if (request && request.action === 'COLLECT_COURSE_LINKS') {
@@ -770,13 +712,24 @@ const KEY_FINGER = (() => {
 // the median into that p90 via log-normal (p90 = median * e^(1.2816*sigma));
 // `cap` is the only invented number — the real p99 after a full stop went past
 // two minutes, which is a person leaving the desk, not typing.
-const GAP_SHAPE = {
-  letter:   { min: 150, median:  336, sigma: 0.79, cap:  6000 },   // p90    921ms
-  space:    { min: 180, median:  441, sigma: 1.31, cap:  9000 },   // p90   2354ms
-  clause:   { min: 170, median:  330, sigma: 1.15, cap:  8000 },   // p90   1484ms
-  sentence: { min: 700, median: 2526, sigma: 1.71, cap: 25000 },   // p90  22679ms
-  newline:  { min: 900, median: 3917, sigma: 1.05, cap: 20000 },   // p90  11483ms
-};
+// The gap-shape model that used to live here (`GAP_SHAPE`) moved to the server
+// with the rest of the typing engine — see server/human_profile.py. Nothing in
+// this file computes a delay any more; every timing is a value the server sent.
+// ═══════════════════════════════════════════════════════════════════════════
+// The typing model moved to the server (owner 2026-09-18).
+//
+// A 35-parameter `HumanProfile` used to live here and decide, for every
+// character, the gap, the typo, the false start, the reread and the correction.
+// It now lives in `server/human_profile.py`, reached through
+// `POST /api/extension/action-stream`, which returns one decision per character.
+//
+// `startTyping` fetches that plan before it types and indexes it per character.
+// There is no local engine and no fallback: without a valid Helpotron API key the
+// plan cannot be fetched and typing does not start. Every cadence or
+// humanization tweak is therefore a server deploy, not a Chrome Web Store
+// review, and a modified client cannot substitute its own rhythm.
+// ═══════════════════════════════════════════════════════════════════════════
+
 
 var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   constructor() {
@@ -868,7 +821,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   }
 
   getStatus() {
-    const pct = this.state.totalChars > 0 
+    const pct = this.state.totalChars > 0
       ? Math.min(100, Math.round((this.state.currentIndex / this.state.totalChars) * 100))
       : 0;
     return {
@@ -944,6 +897,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   }
 
   async _trustedInsertChar(char) {
+    const _t = performance.now();
     const down = this._cdpCharDown(char);
     if (!(await this.cdpKey(down))) return false;
     const up = { type: 'keyUp' };
@@ -968,13 +922,13 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       target.dispatchEvent(enterDown);
       const enterPress = new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
       target.dispatchEvent(enterPress);
-      
+
       try {
         document.execCommand('insertParagraph', false);
       } catch (e) {
         try { document.execCommand('insertText', false, '\n'); } catch (err) {}
       }
-      
+
       const enterUp = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true });
       target.dispatchEvent(enterUp);
       return;
@@ -1050,6 +1004,178 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
 
     const keyup = new KeyboardEvent('keyup', { key: 'Backspace', code: 'Backspace', keyCode: 8, which: 8, bubbles: true, cancelable: true });
     target.dispatchEvent(keyup);
+  }
+
+  // ── Action log ───────────────────────────────────────────────────────────
+  //
+  // Every action this engine takes, with a monotonic timestamp, so a run can be
+  // correlated against whatever a detector reports about it. Without this the
+  // only evidence is the finished document, which cannot distinguish "the
+  // correction landed as one revision" from "it landed as three".
+  //
+  // `mech` is the important field: it records the mechanism a character went
+  // through (cdp text, cdp key, dom execCommand, dom event), because a detector
+  // sees a different revision for each and a single word on the wrong one
+  // shows up as a "Large Paste".
+  logAction(kind, data) {
+    if (!this.actionLog) this.actionLog = [];
+    if (this.actionLog.length > 60000) return;   // hard ceiling, never unbounded
+    this.actionLog.push(Object.assign({
+      t: Math.round(performance.now() - (this.runT0 || 0)),
+      kind,
+    }, data || {}));
+  }
+
+  _selStart() {
+    try {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) return sel.anchorOffset;
+    } catch (e) {}
+    return null;
+  }
+
+  getActionLog() {
+    return { t0: this.runT0 || 0, count: (this.actionLog || []).length, log: this.actionLog || [] };
+  }
+
+  // ── Human motion: the hand leaving the keyboard ─────────────────────────
+  //
+  // A person writing an essay moves the mouse. They reposition the caret,
+  // glance at something, click back into the paragraph. The engine's trace had
+  // none of it — every event was a keystroke, which is its own signature.
+  //
+  // Two constraints keep this safe. It is a real pointer move through the
+  // debugger's Input domain, so it is a genuine mouse event, not a synthetic
+  // one. And it NEVER clicks unless the profile says so, because a stray click
+  // in a document moves the caret and a caret in the wrong place corrupts the
+  // essay. Movement alone is always safe.
+  async humanMouseWander(target, decision) {
+    const vp = this.state.viewport || {};
+    const w = vp.w || window.innerWidth || 1200;
+    const h = vp.h || window.innerHeight || 800;
+    // Start from somewhere plausible in the text area, not the current pointer
+    // (which the page cannot read and the debugger will not report here).
+    const x0 = w * (0.15 + Math.random() * 0.5);
+    const y0 = h * (0.25 + Math.random() * 0.4);
+    const reach = decision.reach || 120;
+    const x1 = Math.max(2, Math.min(w - 2, x0 + (Math.random() - 0.5) * 2 * reach));
+    const y1 = Math.max(2, Math.min(h - 2, y0 + (Math.random() - 0.5) * 2 * reach));
+    const steps = Math.max(3, Math.min(30, decision.steps || 10));
+
+    this.updateFloatingHUD('Thinking…');
+    for (let n = 1; n <= steps; n++) {
+      if (!this.state.isTyping) return;
+      const t = n / steps;
+      // Ease-out: fast at the start of the move, settling onto the target the
+      // way a hand does rather than travelling at a constant rate.
+      const e = 1 - Math.pow(1 - t, 2);
+      // A small arc across the path, so it is a curve and not a straight line.
+      const bow = Math.sin(t * Math.PI) * (reach * 0.12);
+      const x = x0 + (x1 - x0) * e + bow;
+      const y = y0 + (y1 - y0) * e;
+      const ok = await this.cdpInput('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+      if (!ok) return;   // no bridge (non-CDP fallback): skip motion entirely
+      await new Promise((r) => setTimeout(r, 8 + Math.random() * 26));
+    }
+    await new Promise((r) => setTimeout(r, decision.hover || 180));
+    // Only click when the profile rolled for it, and only as a single left
+    // click at the resting point — enough to read as a real repositioning.
+    if (decision.click) {
+      const p = { x: x1, y: y1, button: 'left', buttons: 1, clickCount: 1 };
+      await this.cdpInput('Input.dispatchMouseEvent', { ...p, type: 'mousePressed' });
+      await new Promise((r) => setTimeout(r, 40 + Math.random() * 70));
+      await this.cdpInput('Input.dispatchMouseEvent', { ...p, buttons: 0, type: 'mouseReleased' });
+    }
+  }
+
+  // One Input-domain CDP call through the service worker. Returns false when
+  // the bridge is unavailable, so the caller can bow out rather than stall.
+  async cdpInput(method, params) {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: 'helpotron-cdp-input', method, params });
+      return !!(r && r.ok);
+    } catch (e) { return false; }
+  }
+
+  // ── Human motion: re-reading and editing what is already on the page ───────
+  //
+  // GPTZero's typing model reads the SHAPE of the session — pace, rhythm,
+  // burstiness, correction behaviour, pauses — and grades a stream that only
+  // ever appends as one-dimensional. A person writing an essay periodically
+  // stops, moves the caret back into what they already wrote, selects a few
+  // words, deletes them, and rewords. That is the one category the engine had
+  // none of: measured on the 2026-09-15 run, 770 edits and zero deletions.
+  //
+  // Deliberately conservative. Every pass restores the source text exactly, so
+  // the finished document always matches what was asked for, and the pass
+  // aborts if anything about the caret position disagrees with its model of the
+  // text — a wrong guess here corrupts the essay, and a corrupted essay is a
+  // far worse outcome than a detection score.
+  async microEditPass(target, chars, nextIndex, emitted, decision) {
+    // Only act on a settled boundary, only late enough that there is something
+    // to re-read, and only with a couple of characters to spare.
+    if (nextIndex < 80 || nextIndex > chars.length - 40) return emitted;
+    if (this.state.paused || !this.state.isTyping) return emitted;
+
+    // Walk back a short distance the way a reader scrolls up a line. The
+    // profile picks the depth and how long the read lasts; the fallback keeps
+    // this usable if it is ever called without a decision.
+    const depth = (decision && decision.depth) ? decision.depth : (12 + Math.floor(Math.random() * 26));
+    const backTo = nextIndex - depth;
+    if (backTo < 20) return emitted;
+    const backChars = emitted - backTo;
+    if (backChars < 6 || backChars > 40) return emitted;
+
+    this.updateFloatingHUD('Re-reading…');
+    await this.moveCaret(target, false, backChars, false);
+    if (!this.state.isTyping) return emitted;
+    // Reading it back takes as long as the profile says it does.
+    await new Promise((r) => setTimeout(r, (decision && decision.beat) ? decision.beat : (260 + Math.random() * 520)));
+    if (decision && decision.mode >= 2) {
+      // Look only — move the eye back over the text and return. No edit at all,
+      // which is what most re-reads actually are.
+      await this.moveCaret(target, true, backChars, false);
+      this.updateFloatingHUD();
+      return emitted;
+    }
+
+    // Pick a short run inside the window that is safe to retype: letters,
+    // spaces and simple punctuation only. Never a newline, never the very
+    // start, never anything that could be a partial word at the edge.
+    const runLen = 2 + Math.floor(Math.random() * 4);
+    const start = backTo;
+    if (start + runLen > chars.length) return emitted;
+    const slice = chars.slice(start, start + runLen);
+    if (!/^[A-Za-z][A-Za-z \t.,'-]*$/.test(slice)) return emitted;
+    if (start > 0 && /\S/.test(chars[start - 1])) return emitted;   // mid-word
+
+    // Select it, the way a hand does with shift-arrow.
+    await this.moveCaret(target, true, runLen, true);
+    if (!this.state.isTyping) return emitted;
+    await new Promise((r) => setTimeout(r, 140 + Math.random() * 260));
+
+    // Delete the selection, read it once, then retype the SAME text. Nothing
+    // about the document changes — what changes is that the replay now has a
+    // delete, a thinking pause and a retype in the middle of the page, which is
+    // the correction behaviour a real writer produces and an append-only stream
+    // never does.
+    await this.deleteChar(target);
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 620));
+    for (let c = 0; c < runLen; c++) {
+      await this.insertChar(target, slice[c]);
+      if (c < runLen - 1) {
+        await new Promise((r) => setTimeout(r, this._step('fragment_char_ms', 110)));
+      }
+    }
+
+    // Caret is now exactly where the typing had reached: backChars were
+    // consumed by the walk back and runLen retyped, so walk forward by the
+    // difference. emitted is unchanged because the same characters still stand.
+    const forward = backChars - runLen;
+    if (forward > 0) await this.moveCaret(target, true, forward, false);
+    await new Promise((r) => setTimeout(r, 120 + Math.random() * 240));
+    this.updateFloatingHUD();
+    return emitted;
   }
 
   // ── Caret control ───────────────────────────────────────────────────────────
@@ -1135,11 +1261,21 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       await this.moveCaret(target, true, selLen, true);
       await new Promise((r) => setTimeout(r, 60 + Math.random() * 90));
     }
+    // Correct letter-by-letter at a plausible hand speed.
+    // This used to fire each character after only 40-100ms, far below the
+    // ~150ms floor measured on real keystrokes. Inside a selection replacement
+    // Docs' revision coalescer does not merge that stream, so it records the
+    // whole run as ONE insert — and GPTZero labels a multi-character insert
+    // with no intervening keystrokes a "Large Paste". That is exactly how the
+    // one-word corrections "ity" and "ingenuity" got flagged on the 2026-09-15
+    // run while the text itself read as hand-typed.
     for (let i = 0; i < text.length; i++) {
       // Only the first character lands on the selection; after that the
       // selection is gone and the rest are ordinary inserts.
       await this.insertChar(target, text[i]);
-      if (i < text.length - 1) await new Promise((r) => setTimeout(r, 40 + Math.random() * 60));
+      if (i < text.length - 1) {
+        await new Promise((r) => setTimeout(r, this._step('fragment_char_ms', 110)));
+      }
     }
   }
 
@@ -1155,10 +1291,30 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     // The eye lands on it a beat before the hands answer.
     await new Promise((r) => setTimeout(r, 240 + Math.random() * 420));
 
-    await this.moveCaret(target, false, back, false);
-    if (!this.state.isTyping) return emitted;
+    // Correct the way a hand does: backspace the bad characters, then type them
+    // again. This used to walk the caret back, select the mistake with
+    // SHIFT+ARROW and type over the selection, which leaves no
+    // deleteContentBackward anywhere in the playback and reads as one
+    // select-and-replace tic repeated down the page. Backspace is what a person
+    // actually reaches for, and it gives the replay the correction events its
+    // model expects. The caret only walks when the mistake is already behind
+    // the cursor, which is the same thing a hand does.
+    if (back > 0) {
+      await this.moveCaret(target, false, back, false);
+      if (!this.state.isTyping) return emitted;
+    }
 
-    await this.overtype(target, fix.wrongLen, fix.correct);
+    for (let d = 0; d < fix.wrongLen; d++) {
+      await this.deleteChar(target);
+      await new Promise((r) => setTimeout(r, 46 + Math.random() * 58));
+    }
+    await new Promise((r) => setTimeout(r, 70 + Math.random() * 130));
+    for (let c = 0; c < fix.correct.length; c++) {
+      await this.insertChar(target, fix.correct[c]);
+      if (c < fix.correct.length - 1) {
+        await new Promise((r) => setTimeout(r, this._step('repair_ms', 110)));
+      }
+    }
     const after = emitted + (fix.correct.length - fix.wrongLen);
 
     // Back to the end of what had already been typed.
@@ -1256,12 +1412,17 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     // next one; a few run on longer. 0 means the fingers stop dead on it.
     const fixAfter = Math.random() < 0.18 ? 0 : 1 + Math.floor(Math.random() * 13);
 
+    // Mix biased to the MEASURED correction shape: across 213 correction
+    // events in the owner's own session every single one was ONE backspace,
+    // and the longest backspace run in 2,104 characters was 1. A transposition
+    // or a doubled letter repairs with TWO, so both are pushed to the margins
+    // and the substitute — the one-backspace error — carries the mix.
     const roll = Math.random();
     const canTranspose = next && next !== ' ' && next !== '\n' && next !== here;
-    if (roll < 0.40 && canTranspose) {
+    if (roll < 0.06 && canTranspose) {
       return { at, kind: 'transpose', typed: next + here, correct: here + next, fixAfter };
     }
-    if (roll < 0.72) {
+    if (roll < 0.80) {
       const wrong = this.neighborKey(here);
       if (wrong && wrong !== here) {
         return { at, kind: 'substitute', typed: wrong, correct: here, fixAfter };
@@ -1290,56 +1451,10 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   //             finger do not
   // Each returns a multiplier on the base delay, so >1 is slower.
 
-  tickSpeed() {
-    const s = this.speed;
-    s.drift += (Math.random() - 0.5) * 0.06;
-    s.drift = Math.max(0.78, Math.min(1.32, s.drift));
 
-    if (s.runLeft > 0) {
-      s.runLeft -= 1;
-      return;
-    }
-    if (Math.random() < 0.013) {
-      s.runLeft = 10 + Math.floor(Math.random() * 32);
-      s.runFactor = 0.52 + Math.random() * 0.20;   // a burst
-    } else if (Math.random() < 0.009) {
-      s.runLeft = 6 + Math.floor(Math.random() * 18);
-      s.runFactor = 1.28 + Math.random() * 0.50;   // a stall
-    } else {
-      s.runFactor = 1;
-    }
-  }
-
-  digraphFactor(prev, char) {
-    if (!prev || !/[a-z]/i.test(prev) || !/[a-z]/i.test(char)) return 1;
-    const a = prev.toLowerCase();
-    const b = char.toLowerCase();
-    if (FAST_DIGRAPHS.has(a + b)) return 0.70;
-    const fa = KEY_FINGER[a];
-    const fb = KEY_FINGER[b];
-    if (fa === undefined || fb === undefined) return 1;
-    if (fa === fb) return 1.48;                              // same finger, twice
-    if ((fa < 4) === (fb < 4)) return 1.10;                  // same hand
-    return 0.92;                                             // hands alternate
-  }
 
   // Standard normal, Box-Muller. One spare is cached because the transform
   // produces two independent draws per pair of logs and we want the cheap one.
-  gauss() {
-    if (this.gaussSpare !== null) {
-      const spare = this.gaussSpare;
-      this.gaussSpare = null;
-      return spare;
-    }
-    let u = 0;
-    let v = 0;
-    while (u === 0) u = Math.random();
-    while (v === 0) v = Math.random();
-    const r = Math.sqrt(-2 * Math.log(u));
-    const theta = 2 * Math.PI * v;
-    this.gaussSpare = r * Math.sin(theta);
-    return r * Math.cos(theta);
-  }
 
   // 09-08. Rebuilt against a GPTZero writing report for a real 2536-word essay:
   // 10,066 Docs revisions, 112 minutes of active editing, scored 93/100 human.
@@ -1360,77 +1475,46 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
   //
   // The author sustained 26 WPM counting every pause. `scale` maps that onto
   // whatever the slider asks for: the shape holds, the clock compresses.
-  calculateDelay(char, prevChar, wpm, usePauses, useJitter) {
-    const scale = 26 / Math.max(20, wpm);
-    // The measured 26 WPM is the author's real sustained rate, but the slider
-    // is a dial for intent, not just a clock. Fast = more keys merged into one
-    // burst and the thinking-lull at boundaries compressed; slow = more
-    // deliberate, separate keystrokes and a longer lull. `pace` is that dial.
-    const pace = Math.max(0.5, Math.min(2.2, wpm / 26));
 
-    let context = 'letter';
-    if (char === '\n') context = 'newline';
-    else if ('.!?'.includes(char)) context = 'sentence';
-    else if (',;:'.includes(char)) context = 'clause';
-    else if (char === ' ') context = 'space';
-
-    // A held thought ends at a full stop or a line break whatever the burst
-    // counter had left to run.
-    if (context === 'sentence' || context === 'newline') this.burst.left = 0;
-
-    if (this.burst.left > 0) {
-      this.burst.left -= 1;
-      // Deliberately under Docs' ~200ms merge window, and never stretched past
-      // it even when the slider is slow, because staying inside that window is
-      // the whole reason Docs records the burst as one revision like a person's.
-      // Measured floor: under 1% of real gaps were below 150ms, and Docs
-      // merges ~1.7 chars per burst. So the pair inside a burst lands at 150+
-      // ms — fast enough to merge, slow enough to not look machine-gun. That
-      // floor belongs to the measured 26 WPM author; a fast dial shrinks it
-      // with the clock, a slow one stretches it.
-      const intra = Math.max(150 * Math.min(1, scale), (150 + Math.random() * 70)
-        * Math.min(1, scale)
-        * this.digraphFactor(prevChar, char));
-      return Math.max(20, Math.round(intra));
+    // Ask the server for this run's typing plan: one decision per character,
+    // produced by the 35-parameter model in server/human_profile.py. Returns
+    // null when the extension has no server or no API key — the caller treats
+    // that as "cannot type" rather than falling back to a local engine.
+    async fetchServerPlan(text, opts) {
+      const { server, api_key } = await chrome.storage.local.get(['server', 'api_key']);
+      if (!server || !api_key) return null;
+      const srv = String(server).replace(/\/+$/, '');
+      try {
+        const res = await fetch(`${srv}/api/extension/action-stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api_key}` },
+          body: JSON.stringify({
+            text,
+            speed: opts.speed,
+            natural_pauses: opts.naturalPauses,
+            jitter: opts.jitter,
+            typo_rate: opts.typoRate,
+            false_start_rate: opts.falseStartRate,
+          }),
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (e) {
+        return null;
+      }
     }
 
-    // Next burst length, matching the measured 40/52/6/2 split (mean 1.70;
-    // the long tail of the draw carries it the rest of the way to 1.80).
-    // Speed bias on the dial: a fast hand runs more keys together (Docs merges
-    // them into one revision), a slow/deliberate one separates them.
-    const roll = Math.random();
-    const fastBias = Math.min(0.30, (pace - 1) * 0.15);  // high wpm → more merging
-    const slowBias = Math.min(0.30, (1 - pace) * 0.20);  // low wpm → more separate
-    if (roll < 0.40 - fastBias + slowBias) this.burst.left = 0;
-    else if (roll < 0.92) this.burst.left = 1;
-    else if (roll < 0.98) this.burst.left = 2;
-    else this.burst.left = 3;
-
-    // With pauses switched off a full stop is just another character.
-    const shape = usePauses ? GAP_SHAPE[context] : GAP_SHAPE.letter;
-    let delay = shape.median;
-    if (useJitter) {
-      // Fresh draw inside [min, cap] every letter — the range keeps a single
-      // gap from collapsing to near-zero, the log-normal keeps the p90 tail.
-      delay = Math.min(shape.cap, Math.max(shape.min, delay * Math.exp(shape.sigma * this.gauss())));
+    // Sub-step timings for corrections, from the server plan. Falls back to the
+    // fitted midpoints ONLY when a plan was fetched but predates the timing
+    // block — never as a way to run without a server.
+    _step(range, fallback) {
+      const t = (this.serverPlan && this.serverPlan.timing) || null;
+      const r = t && t[range];
+      if (Array.isArray(r) && r.length === 2) return r[0] + Math.random() * (r[1] - r[0]);
+      return fallback;
     }
 
-    delay *= scale * this.speed.drift * this.speed.runFactor;
-    // Boundary thinking-lull is shape, not clock: a fast typist carries
-    // momentum through a full stop, a slow/deliberate one lingers over it.
-    if (context !== 'letter') delay *= Math.pow(pace, -0.4);
-    // Finger mechanics move a keystroke, not a pause for thought.
-    if (context === 'letter') delay *= this.digraphFactor(prevChar, char);
-
-    // Reaching for shift costs a beat.
-    if (/[A-Z]/.test(char) || '~!@#$%^&*()_+{}|:"<>?'.includes(char)) {
-      delay += (18 + Math.random() * 34) * Math.min(1, scale);
-    }
-
-    return Math.max(12, Math.round(delay));
-  }
-
-  async startTyping(payload) {
+    async startTyping(payload) {
     if (this.state.isTyping) {
       this.cancelTyping();
       await new Promise((r) => setTimeout(r, 100));
@@ -1448,7 +1532,11 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
       totalChars: text.length,
       totalWords: words.length,
       wordsTyped: 0,
-      wpm: Math.max(20, Math.min(150, Number(payload.wpm) || 65)),
+      // Broad cadence gear (1.0 = the measured hand). No wpm anywhere in the
+      // model; the nominal figure below exists only so the handful of older
+      // helpers that still compute a delay from it keep producing sane values.
+      gear: Math.max(0.55, Math.min(2.2, Number(payload.speed) || 1.0)),
+      wpm: Math.max(20, Math.min(150, 46.5 / Math.max(0.55, Math.min(2.2, Number(payload.speed) || 1.0)))),
       naturalPauses: payload.naturalPauses !== false,
       jitter: payload.jitter !== false,
       typoRate: Math.max(0, Math.min(0.5, Number(payload.typoRate) || 0)),
@@ -1460,11 +1548,34 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
     // Trusted (CDP) keystrokes are opt-in per launch: the worker only offers
     // them once it has successfully attached the debugger to this tab.
     this.trustedKeys = payload.trustedKeys === true;
-    // Pace wanders per run, so two launches of the same essay do not produce
-    // the same timing trace.
-    this.speed = { drift: 0.9 + Math.random() * 0.25, runLeft: 0, runFactor: 1 };
-    this.burst = { left: 0 };
-    this.gaussSpare = null;
+
+    // The 35-parameter writing model lives on the SERVER now. This asks for a
+    // plan — one decision per character — and the loop below plays it.
+    //
+    // There is deliberately no local fallback. Without a valid Helpotron API key
+    // the extension cannot obtain a plan and typing does not start: the engine,
+    // its cadence and its humanization are server-owned, and a client that cannot
+    // reach the server has no engine to run. That is the intended property, not a
+    // degradation to paper over.
+    this.serverPlan = await this.fetchServerPlan(text, {
+      speed: this.state.gear,
+      naturalPauses: this.state.naturalPauses,
+      jitter: this.state.jitter,
+      typoRate: this.state.typoRate,
+      falseStartRate: this.state.falseStartRate,
+    });
+    if (!this.serverPlan || !this.serverPlan.decisions || !this.serverPlan.decisions.length) {
+      this.state.isTyping = false;
+      throw new Error('Typing engine unavailable — connect Helpotron with a valid API key and try again.');
+    }
+
+      this.actionLog = [];
+      this.runT0 = performance.now();
+      this.logAction('run_start', {
+        gear: this.state.gear, chars: text.length, words: words.length,
+        cfg: { typos: this.config.typosEnabled, falseStarts: this.config.falseStarts,
+               microEdits: this.config.microEdits, mouse: this.config.mouseActivity },
+      });
 
     this.renderFloatingHUD();
     this.broadcastProgress('started');
@@ -1509,9 +1620,18 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
         if (starts.get(i)) {
           const fragLen = 2 + Math.floor(Math.random() * 3);
           const frag = Array.from({ length: fragLen }, () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]).join('');
-          for (const fc of frag) await this.insertChar(target, fc);
+          // Space the fragment's letters like real ones — they used to fire
+          // back-to-back with no gap at all, a zero-latency burst no hand can
+          // produce, which shows up directly in the speed-variance signal.
+          for (const fc of frag) {
+            await this.insertChar(target, fc);
+            await new Promise((r) => setTimeout(r, this._step('fragment_char_ms', 110)));
+          }
           await new Promise((r) => setTimeout(r, 320 + Math.random() * 420));
-          for (let b = 0; b < fragLen; b++) await this.deleteChar(target);
+          for (let b = 0; b < fragLen; b++) {
+            await this.deleteChar(target);
+            await new Promise((r) => setTimeout(r, 44 + Math.random() * 60));
+          }
           await new Promise((r) => setTimeout(r, 450 + Math.random() * 550));
         }
 
@@ -1530,7 +1650,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
           for (const tc of typo.typed) {
             await this.insertChar(target, tc);
             emitted += 1;
-            await new Promise((r) => setTimeout(r, this.calculateDelay(tc, prevChar, this.state.wpm, false, true)));
+            await new Promise((r) => setTimeout(r, this._step('fragment_char_ms', 110)));
             prevChar = tc;
           }
           pending = {
@@ -1577,14 +1697,39 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
           this.broadcastProgress('typing');
         }
 
-        const usePauses = this.state.naturalPauses && this.config.punctuationPauses !== false;
-        const useJitter = this.state.jitter && this.config.jitter !== false;
-        this.tickSpeed();
-        const delay = this.calculateDelay(char, prevChar, this.state.wpm, usePauses, useJitter);
+        // The decision for this character comes from the SERVER plan, indexed
+        // by position. The model that produced it (server/human_profile.py) is
+        // the 35-parameter engine ported out of this file, so the rhythm is
+        // unchanged — but it can now be tuned by a deploy instead of a Chrome
+        // Web Store review, and a modified client cannot run a different one.
+        const atWordEnd = (char === ' ' || char === '\n');
+        const decision = this.serverPlan.decisions[i] || { action: 'type', delay: 80 };
+
+        // Physical drift pre-empts the keystroke: the hand leaves the keys for
+        // a moment. This is the one behaviour category a stream that only ever
+        // appends cannot produce.
+        if (decision.action === 'mouse' && this.config && this.config.mouseActivity !== false) {
+          await this.humanMouseWander(target, decision);
+        } else if (decision.action === 'reread' && !pending
+                   && this.config && this.config.microEdits !== false) {
+          emitted = await this.microEditPass(target, chars, i + 1, emitted, decision);
+        } else if (decision.action === 'nudge') {
+          // A caret nudge with no edit — the writer moves without changing text.
+          for (let n = 0; n < 1 + Math.floor(Math.random() * 3); n++) {
+            await this.dispatchKey(target, 'ArrowLeft', 37, false);
+            await new Promise((r) => setTimeout(r, 60 + Math.random() * 180));
+          }
+          await new Promise((r) => setTimeout(r, 80 + Math.random() * 240));
+          for (let n = 0; n < 1 + Math.floor(Math.random() * 3); n++) {
+            await this.dispatchKey(target, 'ArrowRight', 39, false);
+            await new Promise((r) => setTimeout(r, 60 + Math.random() * 180));
+          }
+        }
+
         prevChar = char;
         // Sleep the REMAINDER of the gap. If Docs already burned more than the
         // whole budget, yield and move on rather than falling further behind.
-        await new Promise((r) => setTimeout(r, Math.max(4, delay - spent)));
+        await new Promise((r) => setTimeout(r, Math.max(4, decision.delay - spent)));
       }
 
       // Nothing is left standing wrong, whatever the text ended on.
@@ -1753,7 +1898,7 @@ var GoogleDocsAssistiveTypingEngine = class GoogleDocsAssistiveTypingEngine {
               <span>Speed:</span> <b id="hud-slider-wpm-val">65 WPM</b>
             </div>
             <input type="range" id="hud-slider-wpm" min="25" max="130" value="65" style="width: 100%; margin-bottom: 8px;">
-            
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
               <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
                 <input type="checkbox" id="hud-chk-pauses" checked> Pauses
