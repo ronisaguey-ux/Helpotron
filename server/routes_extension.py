@@ -282,6 +282,11 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.7.3": [
+        # A bug fix. Grouped, jargon-free, rendered verbatim by What's New.
+        "FIXED",
+        "\U0001f4ac Chat no longer freezes on \u201cThinking\u2026\u201d. If you sent a message before connecting an API key, the chat could get stuck on \u201cThinking\u2026\u201d and then quietly ignore everything else you typed until you closed and reopened the extension. It now tells you to connect a key and immediately keeps working.",
+    ],
     "2.7.2": [
         # Grouped, in rough order of how much they change for the user. Rendered
         # verbatim by the popup's What's New, so keep each line self-contained.
