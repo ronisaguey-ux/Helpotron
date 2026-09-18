@@ -5,22 +5,26 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .database import get_db, User, Organization
-from .security import SessionStore, SESSION_COOKIE_NAME
+from .security import is_user_banned
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(401, "Not authenticated")
-    session = SessionStore.get_session(token)
-    if not session:
-        raise HTTPException(401, "Invalid session")
-    user = db.query(User).filter(User.id == session["user_id"]).first()
+    """Resolve the caller through the SHARED credential pipeline.
+
+    2026-09-18: this module used to carry its own private copy that read the
+    session cookie and nothing else, so a Bearer JWT — and every `htk_` API key —
+    401'd here while working on every other route. The feature-route helper is the
+    single sync resolver for cookies, JWTs, DB session tokens and API keys.
+    (`security.get_current_user` is `async`, so it cannot be called from this sync
+    dependency — it returns a coroutine and every attribute access 500s.)
+    """
+    from .routes_features import get_current_authenticated_user
+
+    user = get_current_authenticated_user(request, db)
     if not user:
-        raise HTTPException(401, "User not found")
-    from .security import is_user_banned
+        raise HTTPException(401, "Invalid session")
     if is_user_banned(user):
         raise HTTPException(403, "Account suspended by the operator")
     return user
