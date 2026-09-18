@@ -417,17 +417,25 @@ async def sync_canvas_lms(
     if not base_url.startswith("http://") and not base_url.startswith("https://"):
         base_url = f"https://{base_url}"
 
+    try:
+        from .ssrf import validate_safe_url, create_ssrf_safe_async_client
+        validate_safe_url(base_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid canvas_url: {exc}")
+
     headers = {
         "Authorization": f"Bearer {body.api_token.strip()}",
         "Accept": "application/json",
         "User-Agent": "Helpotron-CanvasSync/2.7.0",
     }
 
-    async with httpx.AsyncClient(timeout=35.0, headers=headers, follow_redirects=True) as client:
+    async with create_ssrf_safe_async_client(timeout=35.0, headers=headers, follow_redirects=True) as client:
         # 1. Fetch active courses
         courses_url = f"{base_url}/api/v1/courses?enrollment_state=active&per_page=50"
         try:
             resp = await client.get(courses_url)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Failed to connect to Canvas LMS: {exc}")
 
@@ -535,4 +543,3 @@ async def sync_canvas_lms(
             "assignments_synced": len(synced_assignments),
             "assignments": synced_assignments,
         }
-
