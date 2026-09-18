@@ -90,7 +90,17 @@ export default function SettingsApp({
   tokenBalance = 1000,
   isAdmin = false,
 }) {
-  const [activeSection, setActiveSection] = useState('all');
+    // Deep-link support: the browser extension links straight here
+    // (`/settings#apikeys`) so a user who needs a key lands on the panel that
+    // mints one, instead of a general settings page they have to search.
+    const [activeSection, setActiveSection] = useState(() => {
+      try {
+        const h = (window.location.hash || '').replace(/^#/, '').trim();
+        return h || 'all';
+      } catch (e) {
+        return 'all';
+      }
+    });
   const [settings, setSettings] = useState(() => loadSettings());
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty'
   const saveTimeoutRef = useRef(null);
@@ -172,7 +182,11 @@ export default function SettingsApp({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => {
+                  setActiveSection(item.id);
+                  // Keep the hash in step so the section is linkable/shareable.
+                  try { window.history.replaceState(null, '', `#${item.id}`); } catch (e) { /* non-fatal */ }
+                }}
                 className={`h-9 px-unit-3 rounded-xl font-label-caps text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                   isSelected
                     ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm'

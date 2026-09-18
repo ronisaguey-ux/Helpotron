@@ -2239,33 +2239,27 @@ if (
           result: { ok: false, error: String(err) },
         }, '*');
       }
-    } else if (event.data.type === 'HELPOTRON_SESSION_HANDOFF') {
-      // 08-31: login is captcha-gated in the web app; the MV3 popup cannot
-      // load the Turnstile script, so the web session (public_id +
-      // session_token) is handed to the extension after a successful login.
-      // Origin is already restricted: this listener only exists on
-      // helpotron/localhost pages (guard above), and event.source is window.
-      try {
-        const p = event.data;
-        if (!p.public_id || !p.session_token) return;
-        chrome.runtime.sendMessage({
-          action: 'storeSession',
-          payload: { public_id: p.public_id, session_token: p.session_token, token: p.token || '', server: p.server || '' },
-        }, () => {
+      } else if (event.data.type === 'HELPOTRON_SESSION_HANDOFF') {
+        // The web app used to hand its login session to the extension here,
+        // because the MV3 popup cannot load the Turnstile script and so could not
+        // log in itself.
+        //
+        // That is gone: the extension authenticates with a user-issued API key
+        // and holds no session at all. A `session_token` is not a credential for
+        // it any more, so accepting one would be storing something the extension
+        // never uses. Answered for compatibility and deliberately ignored —
+        // remove this branch once no shipped page posts it.
+        try {
           window.postMessage({
             type: 'HELPOTRON_SESSION_HANDOFF_RESULT',
-            requestId: p.requestId,
-            result: { ok: true },
+            requestId: event.data.requestId,
+            result: {
+              ok: false,
+              error: 'The extension connects with an API key now — create one at Settings → API Keys.',
+            },
           }, '*');
-        });
-      } catch (err) {
-        window.postMessage({
-          type: 'HELPOTRON_SESSION_HANDOFF_RESULT',
-          requestId: event.data.requestId,
-          result: { ok: false, error: String(err) },
-        }, '*');
+        } catch (err) { /* nothing to report to */ }
       }
-    }
   });
 
   chrome.runtime.onMessage.addListener((msg) => {

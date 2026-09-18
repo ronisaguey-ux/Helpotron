@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from .database import Payment, User, CreditTransaction
 from .config import config
-from .credits import compute_applicable_discount, apply_discount
+from .credits import compute_applicable_discount, apply_discount, TIER_MONTHLY_TASK_TOKENS
 
 logger = logging.getLogger("helpotron.payments")
 
@@ -32,7 +32,14 @@ STRIPE_PRICE_IDS = {
 #   $10 -> 30,000 tokens = $3.00 of service (3.33x markup, 70% margin)
 #   $20 -> 100,000       = $10.00                 (2.0x,  50%)
 #   $40 -> 270,000       = $27.00                 (1.48x, 32.5%)
-TIER_TOKENS = {"trial": 15000, "basic": 30000, "pro": 100000, "elite": 270000}
+#
+# This is a RE-EXPORT of credits.TIER_MONTHLY_TASK_TOKENS, not a second copy.
+# It was a literal here too until 2026-09-18, when adding the 'testing' tier to
+# only this file made the catalogue report that tier's allowance as the caller's
+# default instead of 15,000 — the exact drift plans.py was written to end. The
+# table lives in credits because payments already imports that module, so this
+# direction introduces no import cycle; the reverse fails to resolve.
+TIER_TOKENS = TIER_MONTHLY_TASK_TOKENS
 TIER_CREDITS = TIER_TOKENS  # legacy alias — these values were never credits
 # Owner 09-06: Basic $10 · Pro $20 · Elite $40 (the original 08-29 audit values)
 TIER_PRICE_CENTS = {"basic": 1000, "pro": 2000, "elite": 4000}

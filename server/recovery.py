@@ -160,14 +160,28 @@ def _telegram_creds() -> tuple[str, str]:
 
 
 async def notify_developer_via_telegram(text: str) -> bool:
-    """Push a dev-facing alert to Telegram.
+    """Push a dev-facing alert to Telegram, when automated alerts are ENABLED.
 
-    Same transport the repo already uses for Telegram delivery (telegram_bot.py
-    / tg_send.sh → bot API sendMessage): POST to api.telegram.org addressed to
-    the operator's chat. Returns False (never raises) when nothing is
-    configured for the dev channel or the channel is unreachable — the caller
-    still persists the AdminMessage row so the event stays dev-actionable.
+    OFF BY DEFAULT (owner directive 2026-09-18): *"i want 0 automated alerts, i
+    want you to personally deliver information when u deem necessary, this is all
+    noise."* Every automated pinger on this box was firing at the owner's
+    Telegram — one per generated assignment, per datalake entry, per admin
+    message — and the signal drowned in it.
+
+    The alert itself was never the valuable part. The caller persists an
+    AdminMessage row regardless (see request_recovery, which writes the row after
+    this call), and that durable row wakes the agent, which triages the event and
+    decides whether it is worth the owner's attention. So suppressing the push
+    loses no information — it moves the judgement from a hardcoded `send()` to a
+    person deciding.
+
+    Set DEV_TELEGRAM_ALERTS=on to restore the old behaviour. Returns False (never
+    raises) so every caller keeps working unchanged either way.
     """
+    if os.getenv("DEV_TELEGRAM_ALERTS", "").strip().lower() not in ("on", "1", "true", "yes"):
+        logger.info("recovery: automated dev alert suppressed (DEV_TELEGRAM_ALERTS off) — row still persisted")
+        return False
+
     token, chat = _telegram_creds()
     if not token or not chat:
         logger.warning("recovery: dev alert NOT delivered (no Telegram credentials for the dev channel on this box)")

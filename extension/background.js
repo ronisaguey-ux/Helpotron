@@ -600,30 +600,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'storeSession') {
-    // 08-31: the web app can now log in with a Turnstile captcha, which the
-    // extension popup cannot render (MV3 bans remote scripts). After a web
-    // login the page posts HELPOTRON_SESSION_HANDOFF through the content
-    // script, landing here so the popup keeps working with the same account.
-    const p = message.payload || {};
-    const patch = {};
-    if (p.public_id) patch.public_id = p.public_id;
-    if (p.server) patch.server = p.server;
-    // The web handoff still carries public_id/server. A key is what the
-    // extension actually authenticates with, so an api_key in the payload takes
-    // effect immediately; a session_token is no longer a credential here.
-    if (p.api_key) patch.api_key = p.api_key;
-    if (patch.public_id || patch.api_key) {
-      chrome.storage.local.set(patch).then(() => {
-        sendResponse({ ok: true });
-      }).catch((err) => {
-        sendResponse({ ok: false, error: String(err) });
-      });
-    } else {
-      sendResponse({ ok: false, error: 'Missing public_id or api_key' });
+    if (message.action === 'storeSession') {
+      // Retired (owner 2026-09-18): the extension no longer takes a web login
+      // session. A user-issued API key is the only credential, minted on the
+      // website and pasted into the popup, so a `session_token` is never a
+      // credential here. Kept as a refusal rather than deleted so a stale page
+      // gets a clear answer instead of silence.
+      const p = message.payload || {};
+      if (p.api_key) {
+        chrome.storage.local.set({
+          ...(p.public_id ? { public_id: p.public_id } : {}),
+          ...(p.server ? { server: p.server } : {}),
+          api_key: p.api_key,
+        }).then(() => sendResponse({ ok: true }))
+          .catch((err) => sendResponse({ ok: false, error: String(err) }));
+      } else {
+        sendResponse({
+          ok: false,
+          error: 'The extension connects with an API key now — create one at Settings → API Keys.',
+        });
+      }
+      return true;
     }
-    return true;
-  }
 
   // ── 09-02 approval broker: the agent page asks, the popup (or a system
   // notification) answers. REQ_APPROVAL resolves asynchronously (allow/deny),

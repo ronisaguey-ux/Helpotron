@@ -211,21 +211,9 @@ export default function AuthModal({
     setTimeout(() => setHasShaked(false), 500);
   };
 
-  const sendSessionHandoff = (res, id) => {
-    try {
-      window.postMessage(
-        {
-          type: 'HELPOTRON_SESSION_HANDOFF',
-          requestId: `handoff-${Date.now()}`,
-          public_id: res?.public_id || id,
-          session_token: res?.session_token,
-          token: res?.token,
-          server: window.location.origin,
-        },
-        '*'
-      );
-    } catch {}
-  };
+  // The browser extension no longer receives a login session from this page.
+  // It authenticates with a user-issued API key (Settings → API Keys), so
+  // handing it a `session_token` would store a credential it never uses.
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -256,10 +244,9 @@ export default function AuthModal({
         setRequires2FA(true);
         setTwoFactorMethod(res.method || 'totp');
         setOtpCooldown(30);
-      } else if (res && (res.message === 'Logged in' || res.status === 'ok')) {
-        sendSessionHandoff(res, id);
-        onLoginSuccess?.(id);
-      } else {
+        } else if (res && (res.message === 'Logged in' || res.status === 'ok')) {
+          onLoginSuccess?.(id);
+        } else {
         triggerError('Invalid credentials. Check your Public ID or password.');
       }
     } catch (err) {
@@ -328,7 +315,6 @@ export default function AuthModal({
               return;
             }
           }
-          sendSessionHandoff(autoLogin, id);
           onLoginSuccess?.(id);
         } else {
           setLoginId(id);

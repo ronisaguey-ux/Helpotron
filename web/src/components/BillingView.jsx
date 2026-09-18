@@ -26,8 +26,10 @@ export default function BillingView({ userId = '' }) {
   const [transactions, setTransactions] = useState([]);
   const [referralPct, setReferralPct] = useState(0);
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
-  const [msg, setMsg] = useState('');
-  const [loading, setLoading] = useState(true);
+    const [msg, setMsg] = useState('');
+    const [loading, setLoading] = useState(true);
+    // Live tier catalogue. Empty until /api/plans answers; TIERS derives from it.
+    const [plans, setPlans] = useState([]);
 
   // 2FA Checkout Dialog State
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -64,6 +66,18 @@ export default function BillingView({ userId = '' }) {
   useEffect(() => {
     loadData();
   }, [userId]);
+
+  // Tier catalogue comes from the server, which is also where `available` is
+  // decided — so when the payment gateway is configured at launch these open
+  // by themselves, with nothing to change here.
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/plans', { credentials: 'omit' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.plans?.length) setPlans(d.plans); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     setAuthUsername(userId || '');
@@ -170,82 +184,35 @@ export default function BillingView({ userId = '' }) {
   // Pricing (owner 09-06): $0 Trial, $10 Basic, $20 Pro, $40 Elite.
   // Token allowances come from the same /api/plans table the landing page
   // bills against; no USD-value disclosure, token counts only.
-  const TIERS = [
-    {
-      id: 'trial',
-      planId: 'trial',
-      name: 'Free Trial',
-      priceMonthly: 0,
-      priceYearly: 0,
-      tokens: 150,
-      desc: '7-day evaluation period for new students (2FA + $0.01 payment verification required).',
-      features: [
-        '150 starter tokens',
-        'Full universal assignment dump',
-        'Spaced repetition flashcard engine',
-        'Academic integrity verification',
-      ],
-      popular: false,
-      cta: 'Current Trial',
-      disabled: plan === 'trial',
-    },
-    {
-      id: 'basic',
-      planId: 'basic',
-      name: 'Basic',
-      priceMonthly: 10,
-      priceYearly: 100,
-      tokens: 300,
-      desc: 'Predictable coursework assistance for regular semesters.',
-      features: [
-        '300 monthly tokens',
-        'Standard LLM speed & precision',
-        'Interactive quizzes & study guides',
-        'Full assignment history ledger',
-      ],
-      popular: false,
-      cta: plan === 'basic' ? 'Current Plan' : 'Choose Basic',
-      disabled: plan === 'basic',
-    },
-    {
-      id: 'pro',
-      planId: 'pro',
-      name: 'Pro',
-      priceMonthly: 20,
-      priceYearly: 200,
-      tokens: 1000,
-      desc: 'High-throughput synthesis for rigorous STEM & humanities.',
-      features: [
-        '1,000 monthly tokens',
-        'Priority high-reasoning pipeline',
-        'Full multi-source assignment synthesis',
-        'LaTeX proof formatting & OCR',
-        'Export to Google Docs & PDF',
-      ],
-      popular: true,
-      cta: plan === 'pro' ? 'Current Plan' : 'Choose Pro',
-      disabled: plan === 'pro',
-    },
-    {
-      id: 'elite',
-      planId: 'elite',
-      name: 'Elite',
-      priceMonthly: 40,
-      priceYearly: 400,
-      tokens: 2700,
-      desc: 'Unlimited priority lane for graduate thesis & heavy workloads.',
-      features: [
-        '2,700 monthly tokens',
-        'Top-tier reasoning without queuing',
-        'Unlimited audio & lecture transcription',
-        'Personalized agent fine-tuning',
-        'Direct priority support',
-      ],
-      popular: false,
-      cta: plan === 'elite' ? 'Current Plan' : 'Choose Elite',
-      disabled: plan === 'elite',
-    },
-  ];
+  // Derived from GET /api/plans so this page can never disagree with the public
+  // pricing table or the server's allowance table. It previously held a second
+  // hardcoded copy (150/300/1000/2700) that had gone stale by 100x after the
+  // token-unit change, so the checkout page was selling balances that did not
+  // match what a payment actually deposits.
+  //
+  // `available` is false for tiers that cannot be started today (no payment
+  // gateway configured). The owner's rule (2026-09-18): keep every tier visible,
+  // and clicking an unavailable one explains why instead of opening a checkout
+  // that cannot complete.
+  const TIERS = React.useMemo(
+    () =>
+      plans.map((p) => ({
+        id: p.id,
+        planId: p.id,
+        name: p.name,
+        priceMonthly: p.price_monthly ?? 0,
+        priceYearly: p.price_monthly ? Math.round(p.price_monthly * 10) : 0,
+        tokens: p.monthly_task_tokens ?? p.monthly_credits ?? 0,
+        desc: p.tagline || '',
+        features: p.capabilities || [],
+        popular: !!p.popular,
+        isTrial: !!p.is_trial,
+        isTesting: !!p.is_testing,
+        available: p.available !== false,
+        unavailableReason: p.unavailable_reason || 'Not available yet.',
+      })),
+    [plans]
+  );
 
 
 
@@ -393,23 +360,36 @@ export default function BillingView({ userId = '' }) {
               <div className="pt-6">
                 <button
                   type="button"
-                  disabled={tier.disabled}
-                  onClick={() => openCheckout({ type: 'plan', planId: tier.planId, name: tier.name, price, tokens: tier.tokens })}
+                  // Deliberately NOT disabled for an unavailable tier: a dead
+                  // button explains nothing, and the owner asked for the warning.
+                  onClick={() => {
+                    if (!tier.available) {
+                      setMsg(`${tier.name} — ${tier.unavailableReason}`);
+                      return;
+                    }
+                    if (tier.isTesting) {
+                      setMsg('Testing access is granted by hand. Apply from the pricing page or message the developer.');
+                      return;
+                    }
+                    openCheckout({ type: 'plan', planId: tier.planId, name: tier.name, price, tokens: tier.tokens });
+                  }}
                   className={`w-full min-h-[44px] px-4 py-2.5 rounded-xl font-label-caps text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
-                    tier.disabled
-                      ? 'bg-surface-container-high text-on-surface-variant cursor-default'
+                    !tier.available
+                      ? 'bg-surface-container text-on-surface-variant/70 cursor-pointer hover:bg-surface-container-high'
                       : tier.popular
                       ? 'bg-primary text-on-primary font-semibold hover:brightness-105 shadow-[0_0_20px_rgba(120,245,229,0.3)] active:scale-[0.98]'
                       : 'bg-surface-container hover:bg-surface-container-high text-on-surface active:scale-[0.98]'
                   }`}
                 >
-                  {isCurrent ? (
+                  {!tier.available ? (
+                    <span>Not available yet</span>
+                  ) : isCurrent ? (
                     <>
                       <Check className="w-4 h-4 text-sem-green" />
                       <span>Active Plan</span>
                     </>
                   ) : (
-                    <span>{tier.cta}</span>
+                    <span>{tier.isTesting ? 'Apply for free access' : `Choose ${tier.name}`}</span>
                   )}
                 </button>
               </div>

@@ -358,9 +358,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             UNAUTHENTICATED_AUTH_PATHS = (
                 "/api/signup",
                 "/api/login",
-                "/api/recovery/options",
-                "/api/recovery/request",
-                "/api/recovery/verify",
+                  "/api/recovery/options",
+                  "/api/recovery/request",
+                  "/api/recovery/verify",
+                  # The help ticket exists FOR people who cannot log in. Gating it
+                  # returned "Authentication required to access feature" to the
+                  # exact users who need it (owner report 2026-09-18).
+                  "/api/recovery/help-ticket",
+                  # Free Testing-tier applications are for people who do not yet
+                  # have usable access, so they cannot require working access.
+                  "/api/recovery/testing-access",
                 "/api/auth/2fa/send-challenge",
                 "/api/auth/2fa/verify-challenge",
                 "/api/trial/payment-verify",

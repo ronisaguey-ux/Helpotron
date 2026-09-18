@@ -30,9 +30,10 @@
   }
 
   function paintAccount() {
-    chrome.storage.local.get(['public_id', 'session_token', 'token'], (st) => {
+    chrome.storage.local.get(['public_id', 'api_key'], (st) => {
       const pid = (st.public_id || '').trim();
-      const connected = !!(pid && (st.session_token || st.token));
+      // An API key is the only credential; the legacy session token is gone.
+      const connected = !!st.api_key;
       if (connected) {
         els.status.textContent = `Connected: @${pid}`;
         els.lastSync.textContent = 'Last synced: just now';
@@ -41,7 +42,7 @@
         els.signIn.hidden = true;
       } else {
         els.status.textContent = 'Not connected';
-        els.lastSync.textContent = 'Sign in to sync your scrapes and chat.';
+        els.lastSync.textContent = 'Connect with an API key to sync your scrapes and chat.';
         els.avatar.textContent = 'S';
         els.disconnect.hidden = true;
         els.signIn.hidden = false;
@@ -89,13 +90,14 @@
 
   // ── Account actions ──
   els.disconnect.addEventListener('click', async () => {
-    await chrome.storage.local.remove(['public_id', 'token', 'session_token']);
+    await chrome.storage.local.remove(['public_id', 'api_key', 'token', 'session_token']);
     paintAccount();
   });
 
   els.signIn.addEventListener('click', async () => {
+    // Straight to the panel that mints a key — there is no login flow.
     const srv = await getServer();
-    chrome.tabs.create({ url: srv });
+    chrome.tabs.create({ url: `${srv}/settings#apikeys` });
   });
 
   els.linkPrivacy.addEventListener('click', async (e) => {
