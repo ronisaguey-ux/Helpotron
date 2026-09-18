@@ -93,5 +93,10 @@ async def invite_to_organization(
     email = data.get("email")
     if not email:
         raise HTTPException(400, "Email required")
-    # Placeholder: send email with invite link
-    return {"status": "invite sent", "email": email}
+    # 2026-09-18: this used to return {"status": "invite sent"} while sending
+    # nothing and checking nothing — the caller was told an invite went out and
+    # no email was ever sent, and no seat or admin check ever ran. An endpoint
+    # that reports success for work it did not do is worse than one that is
+    # missing: it is indistinguishable from a working feature, so nobody looks.
+    # No invite is implemented yet, so say so.
+    raise HTTPException(501, "Organization invitations are not implemented yet.")
