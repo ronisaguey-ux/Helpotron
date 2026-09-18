@@ -20,6 +20,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.query(User).filter(User.id == session["user_id"]).first()
     if not user:
         raise HTTPException(401, "User not found")
+    from .security import is_user_banned
+    if is_user_banned(user):
+        raise HTTPException(403, "Account suspended by the operator")
     return user
 
 
@@ -48,9 +51,8 @@ async def create_organization(
     db.commit()
     db.refresh(org)
 
-    # Set user's organization
+    # Set user's organization without elevating system platform role
     user.organization_id = org.id
-    user.role = "admin"
     db.commit()
 
     return {"id": org.id, "name": org.name, "plan": org.plan, "seat_count": org.seat_count}
