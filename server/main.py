@@ -354,7 +354,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except Exception:
                 auth_user_pid = None
 
-            # Reject if client supplied a foreign public_id in body
+            # Unauthenticated public auth endpoints register/login independent identities
+            UNAUTHENTICATED_AUTH_PATHS = (
+                "/api/signup",
+                "/api/login",
+                "/api/recovery/options",
+                "/api/recovery/request",
+                "/api/recovery/verify",
+                "/api/auth/2fa/send-challenge",
+                "/api/auth/2fa/verify-challenge",
+                "/api/trial/payment-verify",
+            )
+            if request.url.path in UNAUTHENTICATED_AUTH_PATHS:
+                auth_user_pid = None
+
+            # Reject if client supplied a foreign public_id in body on authenticated routes
             if auth_user_pid and body_public_id and body_public_id != auth_user_pid:
                 return JSONResponse({"detail": "public_id does not match authenticated user"}, status_code=403)
 

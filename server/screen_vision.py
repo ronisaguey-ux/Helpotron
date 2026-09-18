@@ -500,23 +500,16 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
         button = op.get("button", "left")
         if button not in CONTROL_BUTTONS:
             return None
-        res = {"op": "click", "button": button}
         ref = _ref_of(op)
         if ref is not None:
-            res["ref"] = ref
+            return {"op": "click", "ref": ref, "button": button}
         target = _target_of(op)
         if target is not None:
-            res["target"] = target
+            return {"op": "click", "target": target, "button": button}
         xy = _clamp_coords(op, viewport)
-        if xy is not None:
-            res["x"] = xy[0]
-            res["y"] = xy[1]
-        for k in ("name", "label", "text", "role"):
-            if op.get(k):
-                res[k] = str(op[k])[:100]
-        if "ref" not in res and "target" not in res and "x" not in res:
+        if xy is None:
             return None
-        return res
+        return {"op": "click", "x": xy[0], "y": xy[1], "button": button}
     if name == "drag":
         if not isinstance(op, dict):
             return None

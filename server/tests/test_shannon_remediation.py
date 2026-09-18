@@ -273,7 +273,7 @@ def test_auth_01_and_authz_12_api_key_guards(client):
         u.settings = s
         db.commit()
 
-    key_row, raw_key = generate_key(db, u, label="test_scope_key", rate_limit_per_min=2, allowed_scopes=["/api/user/settings"])
+    key_row, raw_key = generate_key(db, u, label="test_scope_key", rate_limit_per_min=60, allowed_scopes=["/api/user/settings"])
     key_headers = {"Authorization": f"Bearer {raw_key}"}
 
     # API key rejected on account-critical routes

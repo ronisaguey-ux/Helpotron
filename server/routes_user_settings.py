@@ -175,9 +175,9 @@ def _require_admin_request(request: Request) -> User:
 @router.get("/settings")
 async def get_settings_route(request: Request, db: Session = Depends(get_db)):
     """Returns full user settings including academic level, grade scheduling, personas, detectors, and TRIO rules."""
+    user = _get_current_user(request, db)
     from .security import require_session_auth
     require_session_auth(request)
-    user = _get_current_user(request, db)
     settings = user_settings_service.get_user_settings(user)
     if isinstance(settings, dict):
         settings.pop("2fa_totp_secret", None)
