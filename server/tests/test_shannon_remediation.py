@@ -96,3 +96,57 @@ def test_inj_01_sympify_command_injection_blocked():
     # Safe math expressions must still be allowed
     assert _is_safe_compute_code("import math; print(2+2)") is True
     assert _is_safe_compute_code("import sympy; print(sympy.simplify('1/2+1/3'))") is True
+
+
+def test_inj_02_and_04_sandbox_script_never_auto_approved(client):
+    """INJ-02 & INJ-04: run_sandbox_script must NEVER auto-approve via yolo override."""
+    from server.overlord_agent import PermissionEngine
+
+    # Direct permission engine check
+    settings = {"operation_mode": "auto"}
+    approved, reason = PermissionEngine.evaluate_action_permission(
+        settings, "run_sandbox_script", session_mode_override="yolo"
+    )
+    assert approved is False
+    assert "requires explicit" in reason.lower()
+
+    # Even if operation_mode is yolo, script execution requires approval
+    settings_yolo = {"operation_mode": "yolo"}
+    approved_yolo, _ = PermissionEngine.evaluate_action_permission(
+        settings_yolo, "run_sandbox_script"
+    )
+    assert approved_yolo is False
+
+    # HTTP endpoint check via POST /api/agent/task
+    db = SessionLocal()
+    pid = "test_sandbox_inj_user"
+    u = db.query(User).filter(User.public_id == pid).first()
+    if not u:
+        u = User(public_id=pid, plan="none", role="member", settings={"operation_mode": "auto"})
+        db.add(u)
+        db.commit()
+        db.refresh(u)
+
+    token = SessionStore.create_session(u.id, u.public_id)
+    client.cookies.set(SESSION_COOKIE_NAME, token)
+
+    csrf_resp = client.get("/api/csrf")
+    csrf_token = csrf_resp.json().get("csrf_token") or client.cookies.get("csrf_token")
+    headers = {"X-CSRF-Token": csrf_token}
+
+    resp = client.post(
+        "/api/agent/task",
+        headers=headers,
+        json={
+            "action_type": "run_sandbox_script",
+            "session_mode_override": "yolo",
+            "payload": {
+                "language": "python",
+                "script": "print('exploit')",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("status") == "permission_required"
+    assert "paused awaiting user confirmation" in data.get("message", "")

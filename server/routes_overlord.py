@@ -2302,10 +2302,14 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
     # asks). 09-01 (Bob): a bare `_ask_permissions` call forces the approval
     # path even when the engine would have approved — but pure read-only
     # actions can NEVER be gated, by any mode, ever.
+    mode_override = payload.session_mode_override
+    if mode_override and mode_override.lower() == "yolo" and settings.get("operation_mode") != "yolo":
+        mode_override = None
+
     is_approved, reason = permission_engine.evaluate_action_permission(
         user_settings=settings,
         action_type=intent["action"],
-        session_mode_override=payload.session_mode_override,
+        session_mode_override=mode_override,
     )
     if intent.get("force_permission") and intent["action"] not in READONLY_ACTION_TYPES:
         is_approved = False
@@ -2531,10 +2535,15 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
         force_permission = True
         action_type = action_type[: -len("_ask_permissions")].strip()
 
+    user_settings = user.settings or {}
+    mode_override = payload.session_mode_override
+    if mode_override and mode_override.lower() == "yolo" and user_settings.get("operation_mode") != "yolo":
+        mode_override = None
+
     is_approved, reason = permission_engine.evaluate_action_permission(
-        user_settings=user.settings or {},
+        user_settings=user_settings,
         action_type=action_type,
-        session_mode_override=payload.session_mode_override,
+        session_mode_override=mode_override,
     )
     if force_permission and action_type not in READONLY_ACTION_TYPES:
         is_approved = False
