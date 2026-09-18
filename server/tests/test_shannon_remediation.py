@@ -493,3 +493,143 @@ def test_misc_03_and_06_account_deletion_with_usage_logs_and_lake(client):
     recent_fb = datalake_manager.list_feedback(limit=20)
     for fb in recent_fb:
         assert marker not in fb.get("message", "")
+
+
+def _get_user_headers(client, public_id: str):
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.public_id == public_id).first()
+        if not u:
+            u = User(public_id=public_id, plan="basic", role="member", settings={})
+            db.add(u)
+            db.commit()
+            db.refresh(u)
+        sess_token = SessionStore.create_session(u.id, u.public_id)
+        return {"Authorization": f"Bearer {sess_token}"}
+    finally:
+        db.close()
+
+
+def test_ssrf_01_canvas_sync_route_rejects_private_and_loopback(client):
+    """SSRF-01: POST /api/study/canvas/sync validates canvas_url against SSRF and rejects internal targets."""
+    headers = _get_user_headers(client, "test_ssrf_01_user")
+
+    # Loopback
+    res = client.post(
+        "/api/study/canvas/sync",
+        headers=headers,
+        json={"canvas_url": "http://127.0.0.1:5000", "api_token": "abcdefghijklmnop"}
+    )
+    assert res.status_code == 400
+    assert "blocked by ssrf" in res.text.lower() or "invalid" in res.text.lower()
+
+    # Cloud metadata
+    res = client.post(
+        "/api/study/canvas/sync",
+        headers=headers,
+        json={"canvas_url": "http://169.254.169.254/latest/meta-data", "api_token": "abcdefghijklmnop"}
+    )
+    assert res.status_code == 400
+
+    # IPv6 loopback
+    res = client.post(
+        "/api/study/canvas/sync",
+        headers=headers,
+        json={"canvas_url": "http://[::1]:9778", "api_token": "abcdefghijklmnop"}
+    )
+    assert res.status_code == 400
+
+    # RFC1918 private network
+    res = client.post(
+        "/api/study/canvas/sync",
+        headers=headers,
+        json={"canvas_url": "http://172.18.0.3:8899", "api_token": "abcdefghijklmnop"}
+    )
+    assert res.status_code == 400
+
+
+def test_ssrf_02_and_04_ip_pinning_and_dns_rebinding_defense():
+    """SSRF-02 & SSRF-04: Host resolution pins safe IPs and blocks rebinding TOCTOU."""
+    import pytest
+    from server.ssrf import resolve_and_validate_host, SSRFProtectedAnyIOBackend, SSRFProtectedSyncBackend
+
+    # Loopback and private IPs are blocked directly
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("127.0.0.1")
+
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("169.254.169.254")
+
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("10.0.0.1")
+
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("localhost")
+
+    # Decimal representation of 127.0.0.1
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("2130706433")
+
+    # IPv6 representation
+    with pytest.raises(ValueError, match="blocked by SSRF"):
+        resolve_and_validate_host("::1")
+
+    # Public hosts resolve to safe IPs
+    safe_ip = resolve_and_validate_host("school.instructure.com", 443)
+    assert safe_ip and not safe_ip.startswith("127.") and not safe_ip.startswith("10.")
+
+
+def test_ssrf_03_and_06_scrape_sidecar_validation_and_scrapling_lanes():
+    """SSRF-03 & SSRF-06: Scrape sidecar validates all URLs with full SSRF guard, not literal substrings."""
+    from fastapi.testclient import TestClient
+    from scrape_sidecar.app import app as sidecar_app, _fetch_scrapling, _fetch_page, _fetch_jina
+
+    sidecar_client = TestClient(sidecar_app)
+
+    # SSRF-06: /scrape handler rejects internal IPs that do not start with "http://127"
+    for blocked_url in [
+        "http://[::1]:9778/health",
+        "http://172.18.0.3:8899/bigpage",
+        "http://10.0.0.5/secret",
+        "http://169.254.169.254/latest/meta-data",
+        "http://192.168.1.1/admin",
+    ]:
+        resp = sidecar_client.post("/scrape", json={"url": blocked_url})
+        assert resp.status_code == 400
+        assert "Refusing local/internal URL." in resp.text
+
+    # SSRF-03: _fetch_scrapling refuses internal/private URLs
+    assert _fetch_scrapling("http://127.0.0.1:5000/api/health", "plain") == ""
+    assert _fetch_scrapling("http://172.18.0.3:8899/bigpage", "plain") == ""
+    assert _fetch_scrapling("http://169.254.169.254/meta-data", "stealth") == ""
+
+    # _fetch_jina refuses internal URLs
+    assert _fetch_jina("http://127.0.0.1:5000") == ""
+
+    # _fetch_page refuses internal URLs
+    (content, how), lane_log = _fetch_page("http://172.18.0.3:8899/bigpage")
+    assert content == ""
+    assert lane_log[0]["lane"] == "ssrf_guard"
+
+
+def test_ssrf_05_canvas_sync_pagination_origin_and_ssrf_guard():
+    """SSRF-05: Canvas sync pagination enforces same-origin and SSRF validation on RFC5988 links."""
+    from server.canvas_sync import CanvasSyncEngine
+
+    engine = CanvasSyncEngine("https://school.instructure.com", "test_student_access_token")
+
+    # Rejects loopback link
+    loopback_header = '<http://127.0.0.1:9778/health>; rel="next"'
+    assert engine.get_safe_next_link(loopback_header) is None
+
+    # Rejects cross-origin link to prevent student token theft
+    cross_origin_header = '<https://attacker-domain.org/api/v1/courses?page=2>; rel="next"'
+    assert engine.get_safe_next_link(cross_origin_header) is None
+
+    # Rejects link-local/cloud metadata link
+    metadata_header = '<http://169.254.169.254/latest/meta-data>; rel="next"'
+    assert engine.get_safe_next_link(metadata_header) is None
+
+    # Accepts safe, same-origin link
+    safe_header = '<https://school.instructure.com/api/v1/courses?page=2>; rel="next"'
+    assert engine.get_safe_next_link(safe_header) == "https://school.instructure.com/api/v1/courses?page=2"

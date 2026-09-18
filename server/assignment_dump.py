@@ -26,7 +26,7 @@ from .config import BASE_DIR, config
 from .cost_tracking import cost_engine
 from .database import Assignment, UniversalDumpItem, User, utcnow
 from .transcription import transcribe_audio
-from .ssrf import is_safe_url, check_redirect_ssrf
+from .ssrf import is_safe_url, check_redirect_ssrf, create_ssrf_safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -759,7 +759,7 @@ async def attach_scraped_files(assignment_id: int, user_id: int,
         if user is None or assignment is None or assignment.user_id != user_id:
             return [{"filename": "?", "status": "error", "error": "assignment/user not found"}]
 
-        async with httpx.AsyncClient(timeout=ATTACH_TIMEOUT_SECONDS, follow_redirects=True, event_hooks={"response": [check_redirect_ssrf]}) as client:
+        async with create_ssrf_safe_async_client(timeout=ATTACH_TIMEOUT_SECONDS, follow_redirects=True, event_hooks={"response": [check_redirect_ssrf]}) as client:
             for rec in (files_meta or [])[:ATTACH_MAX_FILES]:
                 url = str((rec or {}).get("url") or "")
                 filename = os.path.basename(url.split("?")[0]) or str((rec or {}).get("filename") or "file")
@@ -813,17 +813,26 @@ async def attach_scraped_files(assignment_id: int, user_id: int,
                     if existing is not None:
                         outcomes.append({"url": url, "filename": filename, "size": len(buf),
                                          "status": "attached", "dump_id": existing.id,
-                                         "already": True})
+                                         "sha256": existing.sha256,
+                                         "dump_status": existing.status,
+                                         "extracted_chars": len(existing.extracted_text or "")})
                         continue
 
-                    item = await assignment_dump_manager.process_dump_upload(
-                        db, user, filename, buf, manual_assignment_id=assignment_id,
+                    item = assignment_dump_manager.process_uploaded_file(
+                        db=db,
+                        user_id=user_id,
+                        file_name=filename,
+                        file_bytes=buf,
+                        matched_assignment_id=assignment_id,
                     )
                     outcomes.append({"url": url, "filename": filename, "size": len(buf),
-                                     "sha256": hashlib.sha256(buf).hexdigest(),
                                      "status": "attached", "dump_id": item.id,
+                                     "sha256": item.sha256,
                                      "dump_status": item.status,
                                      "extracted_chars": len(item.extracted_text or "")})
+                except ValueError as e:
+                    outcomes.append({"url": url, "filename": filename, "status": "skipped",
+                                     "error": f"blocked by SSRF policy: {e}"})
                 except Exception as e:  # noqa: BLE001 — per-file honest record
                     outcomes.append({"url": url, "filename": filename, "status": "unreachable",
                                      "error": str(e)[:200]})

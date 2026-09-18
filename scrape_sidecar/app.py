@@ -183,6 +183,10 @@ def _fetch_youtube(url: str) -> str:
         "extract_flat": False,
         "socket_timeout": _SCRAPE_TIMEOUT,
     }
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
+        return ""
+
     with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
         if not info:
@@ -208,7 +212,7 @@ def _fetch_youtube(url: str) -> str:
             chosen = next(iter(captions.values()))
         if chosen:
             sub_url = chosen[0].get("url") if isinstance(chosen, list) else None
-            if sub_url:
+            if sub_url and is_safe_url(sub_url):
                 try:
                     raw = ydl.urlopen(sub_url).read().decode("utf-8", "replace")
                     text = _strip_vtt(raw)
@@ -221,6 +225,10 @@ def _fetch_youtube(url: str) -> str:
 
 def _fetch_rss(url: str) -> str:
     """feedparser: channel title + latest items (title, date, summary, link)."""
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
+        return ""
+
     import feedparser
 
     parsed = feedparser.parse(url, request_headers={"User-Agent": _UA})
@@ -256,9 +264,29 @@ def _fetch_scrapling(url: str, mode: str) -> str:
     StealthyFetcher/DynamicFetcher `.fetch` forwards `timeout` straight to
     Playwright — MILLISECONDS. Both are honored here.
     """
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
+        return ""
+
     if mode == "plain":
         from scrapling import Fetcher
-        page = Fetcher().get(url, timeout=_SCRAPE_TIMEOUT, impersonate="chrome")
+        curr_url = url
+        page = None
+        for _ in range(5):
+            if not is_safe_url(curr_url):
+                return ""
+            page = Fetcher().get(curr_url, timeout=_SCRAPE_TIMEOUT, impersonate="chrome", follow_redirects=False)
+            status = getattr(page, "status", 200)
+            if status in (301, 302, 303, 307, 308):
+                headers = getattr(page, "headers", {}) or {}
+                loc = headers.get("location") or headers.get("Location")
+                if not loc:
+                    return ""
+                curr_url = urllib.parse.urljoin(curr_url, loc)
+                continue
+            break
+        if page is None:
+            return ""
     elif mode == "stealth":
         from scrapling.fetchers import StealthyFetcher
         page = StealthyFetcher().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000)
@@ -362,6 +390,9 @@ def _fetch_playwright(url: str) -> str:
 # ── Lane 7: Jina reader (Agent-Reach zero-config web lane). ───────────────
 
 def _fetch_jina(url: str) -> str:
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
+        return ""
     try:
         r = requests.get(_JINA_BASE + urllib.parse.quote(url, safe=""),
                          headers={"User-Agent": _UA,
@@ -385,6 +416,10 @@ def logger_silent(what: str, exc: Exception) -> None:
 def _fetch_page(url: str) -> tuple[tuple[str, str], list[dict]]:
     """"Returns ((content, how), lane_log). Lane log records every lane tried
     for operator visibility (what ran, what yielded)."""
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
+        return ("", "none"), [{"lane": "ssrf_guard", "what": "SSRF policy verification", "ok": False, "why": "Refusing local/internal URL"}]
+
     host = (urllib.parse.urlparse(url).hostname or "").lower()
     log: list[dict] = []
     lanes: list[tuple[str, str, callable]] = []
@@ -582,10 +617,9 @@ def scrape(payload: ScrapePayload):
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Only http(s) URLs are supported.")
-    # Defense-in-depth: internal hosts are rejected here too (the main API is
-    # the authoritative SSRF gate; this is the cheap second look).
-    host = parsed.hostname or ""
-    if url.startswith("http://127") or url.startswith("http://localhost") or "127.0.0.1" in host:
+    # Defense-in-depth: strict SSRF validation with DNS resolution and IP checks
+    from server.ssrf import is_safe_url
+    if not is_safe_url(url):
         raise HTTPException(status_code=400, detail="Refusing local/internal URL.")
 
     (content, how), lane_log = _fetch_page(url)

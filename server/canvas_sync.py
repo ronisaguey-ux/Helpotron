@@ -10,9 +10,10 @@ Provides robust synchronization with Canvas instances using:
 """
 
 import re
+from urllib.parse import urlparse
 import httpx
 from typing import List, Dict, Any, Optional
-from .ssrf import validate_safe_url
+from .ssrf import validate_safe_url, create_ssrf_safe_async_client
 
 
 class CanvasSyncEngine:
@@ -44,9 +45,26 @@ class CanvasSyncEngine:
                 return url
         return None
 
+    def get_safe_next_link(self, link_header: Optional[str]) -> Optional[str]:
+        """Validates next pagination link to ensure same-origin and SSRF compliance."""
+        next_url = self.parse_rfc5988_next_link(link_header)
+        if not next_url:
+            return None
+
+        base_parsed = urlparse(self.base_url)
+        next_parsed = urlparse(next_url)
+
+        # Cross-origin protection: never send student Canvas tokens to a different host
+        if next_parsed.netloc and next_parsed.netloc.lower() != base_parsed.netloc.lower():
+            return None
+
+        # SSRF validation on pagination target
+        validate_safe_url(next_url)
+        return next_url
+
     async def validate_token(self) -> Dict[str, Any]:
         """Validates student token and retrieves profile."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with create_ssrf_safe_async_client(timeout=self.timeout) as client:
             res = await client.get(f"{self.base_url}/api/v1/users/self", headers=self.headers)
             if res.status_code != 200:
                 return {"valid": False, "error": f"Canvas responded with HTTP {res.status_code}"}
@@ -62,9 +80,11 @@ class CanvasSyncEngine:
         """Fetches all currently active enrolled courses."""
         url = f"{self.base_url}/api/v1/courses?enrollment_state=active&per_page=50"
         courses = []
-        
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            while url:
+        pages = 0
+
+        async with create_ssrf_safe_async_client(timeout=self.timeout) as client:
+            while url and pages < 50:
+                pages += 1
                 res = await client.get(url, headers=self.headers)
                 if res.status_code != 200:
                     break
@@ -78,7 +98,7 @@ class CanvasSyncEngine:
                                 "course_code": c.get("course_code", c.get("name")),
                                 "term": c.get("term", {}).get("name", "Active Term")
                             })
-                url = self.parse_rfc5988_next_link(res.headers.get("link"))
+                url = self.get_safe_next_link(res.headers.get("link"))
 
         return courses
 
@@ -86,9 +106,11 @@ class CanvasSyncEngine:
         """Fetches all assignments for a specific course."""
         url = f"{self.base_url}/api/v1/courses/{course_id}/assignments?per_page=50"
         assignments = []
+        pages = 0
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            while url:
+        async with create_ssrf_safe_async_client(timeout=self.timeout) as client:
+            while url and pages < 50:
+                pages += 1
                 res = await client.get(url, headers=self.headers)
                 if res.status_code != 200:
                     break
@@ -105,6 +127,6 @@ class CanvasSyncEngine:
                             "submission_types": a.get("submission_types", []),
                             "has_rubric": bool(a.get("rubric"))
                         })
-                url = self.parse_rfc5988_next_link(res.headers.get("link"))
+                url = self.get_safe_next_link(res.headers.get("link"))
 
         return assignments
