@@ -43,3 +43,8 @@ latex2mathml>=3.80,<4.0
 nltk>=3.9
 spacy>=3.8
 pyphen>=0.15
+
+# Stripe (payments). server/payments.py imports this lazily inside each route,
+# so checkout/webhook raised ModuleNotFoundError only once STRIPE_SECRET_KEY was
+# set — the import audit that found this was a runtime one, not an import one.
+stripe>=11.0

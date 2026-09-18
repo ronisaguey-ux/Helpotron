@@ -147,10 +147,26 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
     except stripe.error.SignatureVerificationError as e:
         raise ValueError(f"Invalid signature: {e}")
 
-    from .database import SessionLocal
+    from .database import SessionLocal, StripeEvent
 
     db = SessionLocal()
     try:
+        # Idempotency (2026-09-18). Stripe retries a webhook until it gets a 2xx
+        # and can deliver the same event more than once, but every branch below
+        # granted the plan allowance unconditionally — so one retry handed out the
+        # full 30k/100k/270k again. The UNIQUE constraint on `event_id` makes this
+        # insert the guard: whoever wins the insert processes the event, and a
+        # duplicate raises IntegrityError and is acknowledged without re-granting.
+        event_id = event.get("id") or ""
+        if event_id:
+            try:
+                db.add(StripeEvent(event_id=event_id, event_type=event.get("type") or ""))
+                db.commit()
+            except Exception:  # noqa: BLE001 — already processed (or a duplicate delivery)
+                db.rollback()
+                logger.info("Stripe event %s already processed — ignoring retry", event_id)
+                return {"status": "ok", "duplicate": True}
+
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
             # Owner 09-06: 1-cent trial verification checkout (mode=payment).

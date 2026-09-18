@@ -348,10 +348,32 @@ class Payment(Base):
     provider: Mapped[str] = mapped_column(String(32))
     amount_cents: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32), default="pending")
-    provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Indexed (2026-09-18): the Stripe webhook and the admin payment lookup both
+    # filter on this, and EXPLAIN QUERY PLAN showed `SCAN payments` — a full table
+    # scan on the money path, growing with every payment.
+    provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="payments")
+
+
+class StripeEvent(Base):
+    """Processed Stripe webhook event ids, for idempotency.
+
+    Stripe retries a webhook until it receives a 2xx, and it can legitimately
+    deliver the same event more than once. `handle_stripe_webhook` granted the
+    plan allowance on every `checkout.session.completed` and every
+    `invoice.payment_succeeded` with no dedup, so a retry re-granted the full
+    30k/100k/270k allowance. The unique constraint makes the insert itself the
+    guard, so two concurrent deliveries cannot both win.
+    """
+
+    __tablename__ = "stripe_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class ModerationItem(Base):
@@ -774,6 +796,15 @@ def init_db() -> None:
                 columns_notices = [row[1] for row in conn.execute(text("PRAGMA table_info(admin_notices)")).fetchall()]
                 if columns_notices and "broadcast" not in columns_notices:
                     conn.execute(text("ALTER TABLE admin_notices ADD COLUMN broadcast BOOLEAN DEFAULT 0"))
+
+                # 2026-09-18: create_all does NOT add an index to a table that
+                # already exists, so the payments.provider_ref index has to be
+                # created here for live DBs (a fresh DB gets it from the model).
+                # The Stripe webhook and the admin payment lookup both filter on
+                # this column and were doing a full table scan.
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_payments_provider_ref ON payments (provider_ref)"
+                ))
 
                 conn.commit()
             except Exception:
