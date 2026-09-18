@@ -187,31 +187,48 @@ async def notify_developer_via_telegram(text: str) -> bool:
         return False
 
 
+import time
+
+_FAILED_RECOVERY_ATTEMPTS: dict[int, list[float]] = {}
+_ACCOUNT_LOCKOUT_WINDOW_SECONDS = 900.0  # 15 minutes
+_MAX_ACCOUNT_FAILED_ATTEMPTS = 5
+
+
+def _clean_and_check_account_attempts(user_id: int) -> bool:
+    """Returns True if account is locked out from recovery attempts."""
+    now = time.time()
+    attempts = [t for t in _FAILED_RECOVERY_ATTEMPTS.get(user_id, []) if now - t < _ACCOUNT_LOCKOUT_WINDOW_SECONDS]
+    _FAILED_RECOVERY_ATTEMPTS[user_id] = attempts
+    return len(attempts) >= _MAX_ACCOUNT_FAILED_ATTEMPTS
+
+
+def _record_failed_attempt(user_id: int) -> None:
+    now = time.time()
+    attempts = [t for t in _FAILED_RECOVERY_ATTEMPTS.get(user_id, []) if now - t < _ACCOUNT_LOCKOUT_WINDOW_SECONDS]
+    attempts.append(now)
+    _FAILED_RECOVERY_ATTEMPTS[user_id] = attempts
+
+
 async def deliver_dev_code(db, user: User, row: PasswordReset, code: str) -> bool:
-    """Ping the developer with the recovery request + code + link token."""
+    """Ping the developer with the recovery request."""
     tg_text = (
         f"🔑 *Password recovery request*\n"
         f"User: `{user.public_id}`\n"
-        f"Recovery code: `{code}`\n"
-        f"Link token: `{row.token}`\n"
+        f"Request ID: `{row.id}`\n"
         f"Expires in {CODE_TTL_MINUTES} min. Use the admin Control Center "
-        f"*Users & Credits → Change Pw* (or hand the user the code to redeem "
-        f"themselves from their account settings)."
+        f"*Users & Credits → Change Pw*."
     )
     sent = await notify_developer_via_telegram(tg_text)
-    # Persist in the admin inbox too — the Control Center shows it even when
-    # Telegram is down, and the dev can act / mark it done in-app.
+    # Persist in the admin inbox without exposing the plaintext recovery secrets (MISC-05)
     db.add(AdminMessage(
         user_id=user.public_id,
         subject=f"Password recovery — {user.public_id}",
         category="password_recovery",
         message=(
             f"User {user.public_id} asked for a recovery code via the developer channel.\n"
-            f"Recovery code: {code}\n"
-            f"Link token: {row.token}\n"
             f"Request ID: {row.id}\n"
             f"Expires: {CODE_TTL_MINUTES} minutes. Set a new password for them from "
-            f"the Control Center (Change Pw, optional recovery code) or hand them the code."
+            f"the Control Center (Change Pw)."
         ),
         status="sent",
     ))
@@ -228,7 +245,16 @@ async def request_recovery(db, public_id: str, method: str) -> dict[str, Any]:
         # front-facing "no contact configured" nudge.
         raise ValueError("No account matches that public_id.")
 
+    if _clean_and_check_account_attempts(user.id):
+        raise ValueError("Too many failed recovery attempts for this account. Recovery is locked for 15 minutes.")
+
     method = (method or "").lower().strip()
+
+    # Invalidate all prior active recovery requests for this user (AUTHZ-08)
+    db.query(PasswordReset).filter(
+        PasswordReset.user_id == user.id,
+        PasswordReset.status == "active",
+    ).update({"status": "superseded"}, synchronize_session=False)
 
     # Options (a)/(b): confirm the contact exists BEFORE minting a code.
     if method in ("email", "phone"):
@@ -286,7 +312,8 @@ async def request_recovery(db, public_id: str, method: str) -> dict[str, Any]:
 
 
 def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] = None,
-                     token: Optional[str] = None, by: str = "user") -> dict[str, Any]:
+                     token: Optional[str] = None, two_factor_code: Optional[str] = None,
+                     by: str = "user") -> dict[str, Any]:
     """Verify the recovery code (or link token) and set the new password.
 
     Uses the exact same hash as signup (security.hash_password, PBKDF2-SHA256).
@@ -295,6 +322,9 @@ def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] 
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user or not user.password_hash:
         raise ValueError("No account matches that public_id.")
+
+    if _clean_and_check_account_attempts(user.id):
+        raise ValueError("Too many failed recovery attempts for this account. Recovery is locked for 15 minutes.")
 
     if not validate_password_strength(new_password):
         raise ValueError("New password must be at least 8 characters and include a letter and a number")
@@ -335,13 +365,39 @@ def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] 
             code_ok = False
     token_ok = bool(token) and secrets.compare_digest(token.strip(), row.token)
     if not (code_ok or token_ok):
+        _record_failed_attempt(user.id)
         row.attempts = (row.attempts or 0) + 1
         if row.attempts >= MAX_VERIFY_ATTEMPTS:
             row.status = "invalidated"
         db.commit()
         raise ValueError("Invalid recovery code or link.")
 
-    # Valid: rotate the password with the project's standard PBKDF2 scheme.
+    # MISC-07: Require 2FA if enabled on the account
+    is_2fa_enabled = bool((user.settings or {}).get("2fa_enabled"))
+    if is_2fa_enabled:
+        if not two_factor_code:
+            return {
+                "status": "2fa_required",
+                "method": (user.settings or {}).get("2fa_method", "totp"),
+                "message": "Two-factor authentication code required to complete password reset.",
+            }
+        from .routes_auth_2fa import totp_service
+        secret = (user.settings or {}).get("2fa_totp_secret", "")
+        valid_2fa = totp_service.verify_code(secret, two_factor_code.strip()) if secret else False
+        if not valid_2fa:
+            backup_codes = list((user.settings or {}).get("2fa_backup_codes") or [])
+            if two_factor_code.strip() in backup_codes:
+                backup_codes.remove(two_factor_code.strip())
+                st = dict(user.settings or {})
+                st["2fa_backup_codes"] = backup_codes
+                user.settings = st
+                valid_2fa = True
+        if not valid_2fa:
+            _record_failed_attempt(user.id)
+            raise ValueError("Invalid two-factor authentication code.")
+
+    # Valid: clear failed attempt tracker and rotate the password
+    _FAILED_RECOVERY_ATTEMPTS.pop(user.id, None)
     hashed, salt = hash_password(new_password)
     user.password_hash = hashed
     user.password_salt = salt

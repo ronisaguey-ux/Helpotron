@@ -32,6 +32,7 @@ class RecoveryVerifyIn(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=256)
     code: Optional[str] = Field(None, max_length=12)
     token: Optional[str] = Field(None, max_length=128)
+    two_factor_code: Optional[str] = Field(None, max_length=64)
 
 
 class ContactSaveIn(BaseModel):
@@ -108,6 +109,7 @@ async def recovery_verify(payload: RecoveryVerifyIn, db: Session = Depends(get_d
             new_password=payload.new_password,
             code=payload.code,
             token=payload.token,
+            two_factor_code=payload.two_factor_code,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
