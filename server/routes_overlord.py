@@ -2555,13 +2555,18 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
             "message": f"Action '{action_type}' paused awaiting user confirmation.",
         }
 
-    exec_res = await overlord_agent.execute_task_action(
+    # Admission control, same as the other agent action paths. This endpoint was
+    # the one that got missed — it runs the identical execute_task_action, so
+    # leaving it ungated meant a caller could bypass the 80%/90% caps simply by
+    # posting here instead.
+    from .resource_guard import run_with_budget as _budgeted
+    exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
         db,
         user=user,
         action_type=action_type,
         payload=payload.payload,
         assignment_id=thread_key,
-    )
+    ))
     return {"status": "success", "execution_result": exec_res}
 
 
