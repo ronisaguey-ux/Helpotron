@@ -249,6 +249,26 @@ export default function App() {
     return () => window.removeEventListener('helpotron:session-expired', onSessionExpired);
   }, [authStatus]);
 
+  /* Backend reachability probe (09-18). `connected` was initialised to `true` and
+     `setConnected` was never called anywhere in this file, so the offline banner
+     below was unreachable by construction and a dead backend showed a normal UI
+     with every panel silently empty. Probes /api/health on mount and on an
+     interval, and flips the banner for real. */
+  useEffect(() => {
+    let cancelled = false;
+    const probe = async () => {
+      try {
+        const r = await fetch(`${serverUrl}/api/health`, { method: 'GET' });
+        if (!cancelled) setConnected(r.ok);
+      } catch {
+        if (!cancelled) setConnected(false);
+      }
+    };
+    probe();
+    const id = setInterval(probe, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [serverUrl]);
+
   /* ─── Client-side path guard (09-01, operator QA round) ────────────────
      The SPA serves index.html at every pathname (vite preview history
      fallback), so unknown URLs used to silently render the landing page
@@ -798,7 +818,7 @@ export default function App() {
           {!connected && (
             <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono mb-5 flex items-center justify-center gap-2">
               <WifiOff className="w-3.5 h-3.5 shrink-0" />
-              Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">.venv/bin/uvicorn server.main:app --port 8000</code>
+              Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">systemctl --user start helpotron-api.service</code> (API on :5000)
             </div>
           )}
 
@@ -929,4 +949,3 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-
