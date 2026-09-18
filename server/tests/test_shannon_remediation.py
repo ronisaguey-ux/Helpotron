@@ -150,3 +150,105 @@ def test_inj_02_and_04_sandbox_script_never_auto_approved(client):
     data = resp.json()
     assert data.get("status") == "permission_required"
     assert "paused awaiting user confirmation" in data.get("message", "")
+
+
+def test_authz_02_admin_impersonation_blocks_admin_targets(client):
+    """AUTHZ-02: Admin impersonation must reject targeting other admin accounts."""
+    db = SessionLocal()
+    from server.admin import ADMIN_IDS
+    admin_pid = ADMIN_IDS[0]
+    admin = db.query(User).filter(User.public_id == admin_pid).first()
+    if not admin:
+        admin = User(public_id=admin_pid, plan="elite", role="admin", is_admin=True, settings={})
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+
+    # Another admin target
+    other_admin = db.query(User).filter(User.public_id == "other_admin_target").first()
+    if not other_admin:
+        other_admin = User(public_id="other_admin_target", plan="elite", role="admin", settings={})
+        db.add(other_admin)
+        db.commit()
+
+    admin_token = SessionStore.create_session(admin.id, admin.public_id)
+    client.cookies.set(SESSION_COOKIE_NAME, admin_token)
+
+    csrf_resp = client.get("/api/csrf")
+    csrf_token = csrf_resp.json().get("csrf_token") or client.cookies.get("csrf_token")
+    headers = {"X-CSRF-Token": csrf_token}
+
+    # Attempt to impersonate other admin
+    resp = client.post(f"/api/admin/user/other_admin_target/act", headers=headers)
+    assert resp.status_code == 403
+    assert "cannot impersonate" in resp.text.lower()
+
+
+def test_authz_03_and_misc_04_admin_password_reset(client):
+    """AUTHZ-03 & MISC-04: Admin pw reset blocks admin targets, validates strength, and revokes sessions."""
+    db = SessionLocal()
+    from server.admin import ADMIN_IDS
+    admin = db.query(User).filter(User.public_id == ADMIN_IDS[0]).first()
+    admin_token = SessionStore.create_session(admin.id, admin.public_id)
+    client.cookies.set(SESSION_COOKIE_NAME, admin_token)
+
+    csrf_resp = client.get("/api/csrf")
+    csrf_token = csrf_resp.json().get("csrf_token") or client.cookies.get("csrf_token")
+    headers = {"X-CSRF-Token": csrf_token}
+
+    # Target user
+    target_pid = "test_reset_target_user"
+    target = db.query(User).filter(User.public_id == target_pid).first()
+    if not target:
+        target = User(public_id=target_pid, plan="none", role="member", settings={})
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+
+    victim_session = SessionStore.create_session(target.id, target.public_id)
+
+    # Weak password rejected
+    resp_weak = client.post(
+        f"/api/admin/user/{target_pid}/reset-password",
+        headers=headers,
+        json={"new_password": "123"},
+    )
+    assert resp_weak.status_code == 400
+
+    # Valid reset succeeds
+    resp_ok = client.post(
+        f"/api/admin/user/{target_pid}/reset-password",
+        headers=headers,
+        json={"new_password": "StrongPassword99!"},
+    )
+    assert resp_ok.status_code == 200
+
+    # Old session is now revoked (MISC-04)
+    client2 = type(client)(client.app)
+    client2.cookies.set(SESSION_COOKIE_NAME, victim_session)
+    me_resp = client2.get("/api/me")
+    assert me_resp.status_code == 401
+
+
+def test_misc_02_banned_admin_blocked_by_require_admin(client):
+    """MISC-02: A banned admin account must be rejected by require_admin."""
+    db = SessionLocal()
+    banned_admin_pid = "test_banned_admin_account"
+    b_admin = db.query(User).filter(User.public_id == banned_admin_pid).first()
+    if not b_admin:
+        b_admin = User(public_id=banned_admin_pid, plan="elite", role="admin", settings={"banned": True})
+        db.add(b_admin)
+        db.commit()
+        db.refresh(b_admin)
+    else:
+        s = dict(b_admin.settings or {})
+        s["banned"] = True
+        b_admin.settings = s
+        db.commit()
+
+    token = SessionStore.create_session(b_admin.id, b_admin.public_id)
+    client.cookies.set(SESSION_COOKIE_NAME, token)
+
+    resp = client.get("/api/admin/users")
+    assert resp.status_code == 403
+    assert "suspended" in resp.text.lower()

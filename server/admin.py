@@ -69,6 +69,10 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         if not auth_user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication required')
 
+        from .security import is_user_banned
+        if is_user_banned(auth_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Account suspended by the operator')
+
         if not getattr(auth_user, 'is_admin', False) and getattr(auth_user, 'role', '') != 'admin' and not is_admin_user(auth_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrative privileges required')
 
@@ -410,16 +414,21 @@ async def set_user_plan(public_id: str, plan: str, request: Request, db: Session
 
 @router.post("/user/{public_id}/reset-password")
 async def reset_user_password(public_id: str, req: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
-    if len(req.new_password) < 6:
-        raise HTTPException(400, "Password must be at least 6 characters")
+    admin = require_admin(request)
+    from .security import validate_password_strength, is_admin_user, ADMIN_PUBLIC_ID
+    if not validate_password_strength(req.new_password):
+        raise HTTPException(400, "Password must be at least 8 characters, include a letter and a number")
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    if is_admin_user(user) or user.public_id == ADMIN_PUBLIC_ID or getattr(user, 'role', '') == 'admin':
+        raise HTTPException(403, "Cannot reset password of administrative accounts")
     hashed, salt = hash_password(req.new_password)
     user.password_hash = hashed
     user.password_salt = salt
     db.commit()
+    # Revoke all live sessions so the reset evicts old sessions (MISC-04)
+    SessionStore.revoke_all_sessions(user.id)
     return {"message": "Password reset successfully"}
 
 
