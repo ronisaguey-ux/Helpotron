@@ -31,9 +31,35 @@ The report records the exploit reading all three env files and returning real va
 
 Also `id` (proving code execution, not computation) and `/etc/passwd` in full.
 
-**Verified 2026-09-18: nothing in this list has been rotated.** No `.env` file has an
-mtime after the pentest window — `find . -name ".env*" -newermt "2026-09-18 03:00"` returns
-empty. The values the pentest holds are still the live values.
+**Verified 2026-09-18: nothing had been rotated.** No `.env` file had an mtime after the
+pentest window — `find . -name ".env*" -newermt "2026-09-18 03:00"` returned empty.
+
+## ⚠️ WHERE THE EXPOSURE ACTUALLY CAME FROM — read this before treating it as urgent
+
+**The secrets were never publicly exposed, and they are not on disk in plaintext.**
+
+- The pentest's own report redacts them: `[REDACTED]`. A strict credential sweep across the
+  whole Shannon workspace (`sk-or-v1-{32,}`, `sk-ant-api*`, `ghp_{36}`, `AC[a-f0-9]{32}`,
+  `SK[a-f0-9]{32}`) returns **0 full-length real credentials**. The earlier "raw value on disk"
+  hit was a loose regex matching the literal strings `AC` and the `sk-or-v1` prefix.
+- The only leak vector that is real is **outbound**: the exploit's stdout became *model
+  context*, and the pentest ran on the DeepSeek API — so the values were transmitted to a
+  third party (DeepSeek's inference endpoint) as part of the run. That is a genuine reason to
+  rotate, but it is not a public breach.
+- The trigger for rotating is therefore: *the values were seen by a third party and the
+  exploit proved root-equivalent access* — not *the values are readable by an attacker now*.
+
+**A second, older leak of the same class exists locally and is NOT from the pentest:**
+`data/sandboxes/20260903203639_shell_734077/logs/run.log` (Sep 3) contains a plaintext
+`CAPTCHA_BYPASS_SECRET=` value and a full-format OpenRouter key on one line, from an earlier
+security test that printed what it read. It is **untracked and gitignored** (`data/sandboxes/`
+at `.gitignore:48`), never committed, and its values are **stale** — hash-compared against the
+live `.env`, both differ. Confirmed not ongoing: of 1,853 sandbox `run.log`s newer than 09-05,
+**0** contain a key. Left in place (owner's data, no live value); the systemic lesson is that
+sandbox logs capture whatever the sandbox printed — never let a sandbox echo the environment.
+
+**No tracked file contains a secret** — `git ls-files | grep` for full-format keys returns
+nothing, so nothing has ever been pushed with a credential in it.
 
 ---
 
@@ -42,37 +68,50 @@ empty. The values the pentest holds are still the live values.
 These mint or validate authenticated sessions. Leaked, an attacker forges a session for
 **any** user, including the operator account.
 
-| secret | file | why | verdict |
+| secret | file | why | status 2026-09-18 |
 |---|---|---|---|
-| `JWT_SECRET` | `.env` | signs every JWT | **LIVE — rotate** |
-| `SECRET_KEY` | `.env` | Flask session signing | **LIVE — rotate** |
-| `SESSION_SECRET` | `.env` | session token signing | **LIVE — rotate** |
-| `CAPTCHA_BYPASS_SECRET` | `.env`, `server/.env` | read at `server/config.py:39`; a bypass header that skips CAPTCHA on the public site | **LIVE — rotate** |
-| `HELPOTRON_ADMIN_PASSWORD` | `mcp/.env` | operator account | **LIVE — rotate** |
-| `DEV_LOGIN_PASSWORD` | `.env` | dev-login (now loopback-guarded, but rotate anyway) | **LIVE — rotate** |
+| `JWT_SECRET` | `.env`, `server/.env` | signs every JWT | **✅ ROTATED** |
+| `SECRET_KEY` | `.env`, `server/.env` | Flask session signing | **✅ ROTATED** |
+| `SESSION_SECRET` | `.env`, `server/.env` | session token signing | **✅ ROTATED** |
+| `CAPTCHA_BYPASS_SECRET` | `server/.env` | read at `server/config.py:39`; a bypass header that skips CAPTCHA | **✅ ROTATED** |
+| `HELPOTRON_ADMIN_PASSWORD` | `mcp/.env` | operator account | **✅ ROTATED** (DB hash + `mcp/.env` re-synced) |
+| `DEV_LOGIN_PASSWORD` | `.env` | dev-login, loopback-guarded and behind `DEV_LOGIN_ENABLED` | **✅ ROTATED** |
+
+### Rotation proof (old credential rejected, new credential accepted)
+
+A JWT minted under the **pre-rotation** `JWT_SECRET` for `RoniDev` (id=1) returned
+**HTTP 200** before the rotation and **HTTP 401 after** it. Logging in with the new admin
+password returns **HTTP 200**, and that token works on `/api/me` (**200**). No service was
+broken: `/api/health` 200, HIP `:8099` 200.
+
+Backups of the pre-rotation files: `*.bak-pre-rotation-20260918-131855` (mode 600), alongside
+the script that performs the rotation, which never prints a value.
 
 ## B. MUST ROTATE — money (billable upstream keys)
 
-These spend real money on every call. Leaked, an attacker bills the owner's accounts.
+These spend real money on every call. **Requires the owner's dashboard — cannot be done from
+this box.**
 
-| secret | verdict | evidence |
+| secret | live? | status |
 |---|---|---|
-| `OPENROUTER_API_KEY` | **LIVE — rotate** | `GET /api/v1/key` → **HTTP 200** |
-| `OMNIROUTE_API_KEY` | LIVE — rotate | present and set (not probed; no read-only endpoint) |
-| `PANGRAM_API_KEY` | LIVE — rotate | set; note Pangram 3 ends 2026-09-30 and the same call then costs **10x** (5¢ → 50¢ per 1k words) |
-| `SAPLING_API_KEY` | LIVE — rotate | set |
-| `WINSTON_API_KEY` | LIVE — rotate | set (Winston is not a registered detector — the key may be unused, but rotate or delete) |
+| `OPENROUTER_API_KEY` | **HTTP 200 LIVE** | ⏳ **owner must rotate** — openrouter.ai → Keys |
+| `OMNIROUTE_API_KEY` | set (not probed) | ⏳ **owner must rotate** |
+| `PANGRAM_API_KEY` | set | ⏳ **owner must rotate** — note Pangram 3 ends 2026-09-30, the same call then costs **10x** (5¢ → 50¢ per 1k words) |
+| `SAPLING_API_KEY` | set | ⏳ **owner must rotate** |
+| `WINSTON_API_KEY` | set | ⏳ **owner must rotate or delete** — Winston is not a registered detector, the key may be unused |
 
 ## C. MUST ROTATE — SMS spend / account
 
-| secret | verdict |
-|---|---|
-| `TWILIO_SECRET` | **LIVE — rotate** (identical in `.env` and `server/.env`) |
-| `TWILIO_API_KEY_SECRET` | **LIVE — rotate** |
+**Requires the owner's Twilio console.**
 
+| secret | status |
+|---|---|
+| `TWILIO_SECRET` | ⏳ **owner must rotate** |
+| `TWILIO_API_KEY_SECRET` | ⏳ **owner must rotate** |
+
+Look out: `TWILIO_SECRET` is duplicated in `.env` and `server/.env` — rotate both or they drift.
 `TWILIO_SID`, `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_VERIFY_SERVICE_SID` are
-**identifiers, not secrets** — no rotation needed, but they were disclosed, so treat them as
-public.
+**identifiers, not secrets** — no rotation needed, but they were disclosed, so treat them as public.
 
 ## D. ALSO CONSIDER — outside the repo, root-equivalent read
 
