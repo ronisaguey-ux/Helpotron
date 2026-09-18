@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -1391,31 +1392,98 @@ COMMIT_TARGET_KEYWORDS = (
 COMMIT_KEYS = ("enter", "return", "numpadenter")
 
 
-def burst_is_committing(actions: Optional[List[Dict[str, Any]]]) -> bool:
+# Track recent type actions per thread to detect cross-turn type + Enter sequences
+_RECENT_THREAD_TYPED: Dict[Any, float] = {}
+
+
+def burst_is_committing(
+    actions: Optional[List[Dict[str, Any]]],
+    elements: Optional[List[Dict[str, Any]]] = None,
+    thread_key: Optional[Any] = None,
+) -> bool:
     """True when a control burst transmits or destroys something.
 
     A click is committing when it names a submit/send/delete/buy-style control
-    (a semantic `target`; an unlabelled coordinate click is not knowable and is
-    left routine). A key press is committing when it is Enter AND the same burst
-    typed into a field first — a bare Enter in a search box is ordinary
-    navigation, a `type` + Enter is a form submission.
+    (via semantic target, matching ref, or coordinates matching a destructive element).
+    A key press is committing when it is Enter AND typed occurred in the same burst
+    or recently in the current thread (cross-turn type + Enter).
     """
     if not actions:
         return False
     typed = any(isinstance(a, dict) and a.get("op") == "type" for a in actions)
+    if typed and thread_key is not None:
+        _RECENT_THREAD_TYPED[thread_key] = time.time()
+
+    # Pre-index elements by ref if provided
+    ref_to_el = {}
+    if elements:
+        for el in elements:
+            if isinstance(el, dict):
+                r = el.get("ref")
+                if r is not None:
+                    ref_to_el[str(r)] = el
+
     for action in actions:
         if not isinstance(action, dict):
             continue
-        if action.get("op") in ("click", "dblclick"):
+        op = action.get("op")
+        if op in ("click", "dblclick"):
             target = str(action.get("target") or "").lower()
             if target and any(word in target for word in COMMIT_TARGET_KEYWORDS):
                 return True
-            # A submit control is often unlabelled in the element list; an
-            # explicit button-like role with a known verb is covered above.
-        if action.get("op") == "key":
+
+            # Check ref in action against keywords and DOM element list
+            ref = action.get("ref")
+            if ref is not None:
+                ref_str = str(ref).lower()
+                if any(word in ref_str for word in COMMIT_TARGET_KEYWORDS):
+                    return True
+                matched_el = ref_to_el.get(str(ref))
+                if matched_el:
+                    combined = f"{matched_el.get('name', '')} {matched_el.get('role', '')} {matched_el.get('label', '')} {matched_el.get('text', '')} {matched_el.get('aria_label', '')}".lower()
+                    if any(word in combined for word in COMMIT_TARGET_KEYWORDS):
+                        return True
+
+            # Check coordinates against elements
+            if action.get("x") is not None and action.get("y") is not None and elements:
+                try:
+                    ax = float(action["x"])
+                    ay = float(action["y"])
+                    for el in elements:
+                        if not isinstance(el, dict):
+                            continue
+                        ex = float(el.get("x", 0))
+                        ey = float(el.get("y", 0))
+                        ew = float(el.get("width", 0))
+                        eh = float(el.get("height", 0))
+                        if ew > 0 and eh > 0:
+                            matched = (ex <= ax <= ex + ew) and (ey <= ay <= ey + eh)
+                        else:
+                            matched = (abs(ex - ax) <= 25 and abs(ey - ay) <= 25)
+                        if matched:
+                            combined = f"{el.get('name', '')} {el.get('role', '')} {el.get('label', '')} {el.get('text', '')} {el.get('aria_label', '')}".lower()
+                            if any(word in combined for word in COMMIT_TARGET_KEYWORDS):
+                                return True
+                except Exception:
+                    pass
+
+            # Explicit name / label directly on action
+            for k in ("name", "label", "text", "role"):
+                val = str(action.get(k) or "").lower()
+                if val and any(word in val for word in COMMIT_TARGET_KEYWORDS):
+                    return True
+
+        if op == "key":
             key = str(action.get("key") or "").lower()
-            if key in COMMIT_KEYS and typed:
-                return True
+            if key in COMMIT_KEYS:
+                cross_turn = (
+                    thread_key is not None
+                    and (time.time() - _RECENT_THREAD_TYPED.get(thread_key, 0.0)) < 120.0
+                )
+                if typed or cross_turn:
+                    if thread_key is not None:
+                        _RECENT_THREAD_TYPED.pop(thread_key, None)
+                    return True
     return False
 
 
@@ -1423,13 +1491,15 @@ def _screen_control_allowed_for_burst(
     settings: Dict[str, Any],
     permission_mode: Optional[str],
     actions: Optional[List[Dict[str, Any]]],
+    elements: Optional[List[Dict[str, Any]]] = None,
+    thread_key: Optional[Any] = None,
 ) -> Tuple[bool, str]:
     """`_screen_control_allowed`, but a committing burst is evaluated as critical.
 
     Kept as a separate function so the two call sites stay one line each and the
     classification lives in exactly one place.
     """
-    if not burst_is_committing(actions):
+    if not burst_is_committing(actions, elements=elements, thread_key=thread_key):
         return _screen_control_allowed(settings, permission_mode)
 
     from .overlord_agent import permission_engine  # lazy: import-order parity
@@ -1821,7 +1891,10 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
                     else "invalid_op"
                 )
 
-        needs_ok, perm_reason = _screen_control_allowed_for_burst(settings, payload.permission_mode, control_actions)
+        needs_ok, perm_reason = _screen_control_allowed_for_burst(
+            settings, payload.permission_mode, control_actions,
+            elements=payload.elements, thread_key=thread_key,
+        )
         agent_reply = _chat_reply(db, user, thread_key, text=reply_text)
         await overlord_agent.compact_chat_history(user=user, target_key=str(thread_key))
         return {
@@ -1865,7 +1938,10 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
                                 "reply": reply_text, "token_balance": _tk_balance(user),
                                 "reply_html": _render_reply_html(reply_text)}
         if payload.agent_mode:
-            needs_ok, perm_reason = _screen_control_allowed_for_burst(settings, payload.permission_mode, control_actions)
+            needs_ok, perm_reason = _screen_control_allowed_for_burst(
+                settings, payload.permission_mode, control_actions,
+                elements=payload.elements, thread_key=thread_key,
+            )
             resp["control_actions"] = control_actions
             resp["execution"] = _execution_verdict(control_actions, drop_reason)
             resp["control_requires_approval"] = bool(control_actions) and not needs_ok

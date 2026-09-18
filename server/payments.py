@@ -297,12 +297,13 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     # back: it must be gated on evidence of settlement (a webhook signature, an
     # operator action), never on the caller's own say-so.
 
-    # Referral entitlement is one-time: consumed by this order.
-    if referral_pct > 0:
-        user.referral_discount_pct = 0.0
-
-    if discount_pct > 0:
-        apply_discount(user, db)
+    # MISC-14: Referral and earned discount entitlements must only be consumed
+    # when the payment actually captures/settles, never when an order is merely pending.
+    if status == "captured":
+        if referral_pct > 0:
+            user.referral_discount_pct = 0.0
+        if discount_pct > 0:
+            apply_discount(user, db)
 
     db.commit()
     return {

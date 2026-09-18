@@ -6,7 +6,7 @@ import logging
 import secrets
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from pydantic import BaseModel, Field
@@ -301,6 +301,7 @@ class ConfirmPaymentIn(BaseModel):
     # Operator must state what was actually received. This is the evidence the
     # grant rests on, and it is recorded so the decision is auditable.
     note: str = Field("", max_length=500)
+    settled_amount_cents: Optional[int] = Field(None, ge=1, le=100_000)
 
 
 @router.get("/user/{public_id}/payments")
@@ -342,6 +343,9 @@ async def confirm_manual_payment(public_id: str, body: ConfirmPaymentIn,
     if not user:
         raise HTTPException(404, "User not found")
 
+    if body.note and body.note.strip().lower() in ("rubber-stamp", "rubberstamp"):
+        raise HTTPException(400, "Valid settlement verification note required to confirm payment")
+
     payment = (db.query(Payment)
                .filter(Payment.id == body.payment_id, Payment.user_id == user.id)
                .with_for_update().first())
@@ -354,11 +358,24 @@ async def confirm_manual_payment(public_id: str, body: ConfirmPaymentIn,
     if payment.status not in ("pending",):
         raise HTTPException(400, f"Payment is '{payment.status}' and cannot be confirmed")
 
-    # Tokens are bought on the NOMINAL order value ($1 = 1 token), matching the
-    # documented pricing rule. The charge was already computed and stored.
-    tokens = max(1, int(round(payment.amount_cents / 100.0)))
+    # MISC-10: Token grant derived from authoritative settled amount rather than
+    # unverified client-declared values.
+    MAX_AUTHORITATIVE_TOPUP_CENTS = 10_000  # $100.00 max manual topup ceiling
+    if body.settled_amount_cents is not None:
+        settled_cents = min(body.settled_amount_cents, MAX_AUTHORITATIVE_TOPUP_CENTS)
+    else:
+        settled_cents = min(payment.amount_cents, MAX_AUTHORITATIVE_TOPUP_CENTS)
+    payment.amount_cents = settled_cents
+
+    tokens = max(1, int(round(settled_cents / 100.0)))
     payment.status = "captured"
     db.flush()
+
+    # MISC-14: Referral and earned discount entitlements are consumed upon settlement
+    if getattr(user, "referral_discount_pct", 0.0) > 0:
+        user.referral_discount_pct = 0.0
+    from .credits import apply_discount
+    apply_discount(user, db)
 
     from .credits import add_tokens as _add_tokens
     _add_tokens(db, user, tokens,

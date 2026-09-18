@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 try:
     from .database import User, get_db
-    from .security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned
+    from .security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned, _bind_metering
 except (ImportError, ValueError):
     from server.database import User, get_db
-    from server.security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned
+    from server.security import SessionStore, SESSION_COOKIE_NAME, _API_KEY_PREFIX, verify_jwt_token, is_user_banned, _bind_metering
 
 from fastapi import status
 
@@ -40,7 +40,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail='Account suspended'
                     )
-                return user
+                return _bind_metering(user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired session'
@@ -62,7 +62,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail='Account suspended'
                 )
-            return user
+            return _bind_metering(user)
 
         payload = verify_jwt_token(token)
         if payload and 'sub' in payload:
@@ -73,7 +73,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail='Account suspended'
                     )
-                return user
+                return _bind_metering(user)
         # 09-02 additive fallback (JWT rejected / not a JWT at all): the
         # extension's stored DB session token.
         session = SessionStore.get_session(token)
@@ -86,7 +86,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail='Account suspended'
                     )
-                return user
+                return _bind_metering(user)
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

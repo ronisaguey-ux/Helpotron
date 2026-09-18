@@ -121,6 +121,25 @@ async def _run_workflow_async(assignment_id: int):
         if not workflow:
             return
 
+        user = db.get(User, assignment.user_id)
+        if not user:
+            logger.error("User %d not found for assignment %d", assignment.user_id, assignment_id)
+            workflow.status = "failed"
+            workflow.error = "User not found"
+            return
+
+        from .credits import get_token_balance, is_unmetered
+        from .draft import DRAFT_COST
+        from .metering import set_meter_user
+        set_meter_user(user.public_id)
+
+        # MISC-09: Token-metering gate for team orchestrator workflow
+        if not is_unmetered(user) and get_token_balance(user) < DRAFT_COST:
+            workflow.status = "failed"
+            workflow.error = "Insufficient tokens"
+            workflow.add_message("system", "Error: insufficient tokens for team workflow.")
+            return
+
         workflow.status = "analyzing"
         workflow.add_message("system", "Analyzing assignment...")
         # Step 1: Analyze the assignment prompt and transcript.
@@ -282,7 +301,23 @@ async def plan_tasks(prompt: str, transcript: str) -> List[Dict]:
 
 
 async def generate_draft_for_task(user_id: int, assignment_id: int, transcript_text: str, assignment_prompt: str, style_text: str) -> tuple[str, str]:
-    from .draft import generate_draft as gen_draft
+    from .draft import generate_draft as gen_draft, DRAFT_COST
+    from .credits import get_token_balance, set_token_balance, is_unmetered
+    from .metering import set_meter_user
+    from .database import SessionLocal, User
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        if not user:
+            raise ValueError("User not found")
+        set_meter_user(user.public_id)
+        if not is_unmetered(user):
+            bal = get_token_balance(user)
+            if bal < DRAFT_COST:
+                raise ValueError("Insufficient tokens")
+            set_token_balance(user, bal - DRAFT_COST)
+            db.commit()
+
     return await gen_draft(user_id, assignment_id, transcript_text, assignment_prompt, style_text)
 
 

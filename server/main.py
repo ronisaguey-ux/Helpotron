@@ -308,15 +308,59 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                                 headers={"Retry-After": "60"})
         ctype = request.headers.get("content-type", "")
         if request.method == "POST" and "application/json" in ctype:
+            body_public_id = ""
             try:
                 body = await request.body()
                 request._body = body  # keep form/body parsing working downstream
                 data = json.loads(body or b"{}")
-                public_id = str(data.get("public_id") or "").strip()[:100]
+                body_public_id = str(data.get("public_id") or "").strip()[:100]
             except Exception:
-                public_id = ""
-            if public_id and not ratelimit.limiter.allow(
-                    f"user:{public_id}",
+                body_public_id = ""
+
+            # MISC-08: Derive rate limit key from authenticated identity, never client-supplied body.
+            auth_user_pid = None
+            try:
+                from .security import SESSION_COOKIE_NAME, SessionStore, _API_KEY_PREFIX, verify_jwt_token
+                cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+                if cookie_token:
+                    sess = SessionStore.get_session(cookie_token)
+                    if sess:
+                        auth_user_pid = sess.get("public_id")
+                if not auth_user_pid:
+                    auth_header = request.headers.get("Authorization", "")
+                    if auth_header.startswith("Bearer "):
+                        tok = auth_header[7:].strip()
+                        if tok.startswith(_API_KEY_PREFIX):
+                            from .database import SessionLocal, User as DBUser
+                            from .api_keys import check_api_key
+                            with SessionLocal() as s_db:
+                                krow, _ = check_api_key(s_db, tok)
+                                if krow:
+                                    u = s_db.query(DBUser).filter(DBUser.id == krow.user_id).first()
+                                    if u:
+                                        auth_user_pid = u.public_id
+                        else:
+                            payload = verify_jwt_token(tok)
+                            if payload and "sub" in payload:
+                                from .database import SessionLocal, User as DBUser
+                                with SessionLocal() as s_db:
+                                    u = s_db.query(DBUser).filter(DBUser.id == payload["sub"]).first()
+                                    if u:
+                                        auth_user_pid = u.public_id
+                            if not auth_user_pid:
+                                sess = SessionStore.get_session(tok)
+                                if sess:
+                                    auth_user_pid = sess.get("public_id")
+            except Exception:
+                auth_user_pid = None
+
+            # Reject if client supplied a foreign public_id in body
+            if auth_user_pid and body_public_id and body_public_id != auth_user_pid:
+                return JSONResponse({"detail": "public_id does not match authenticated user"}, status_code=403)
+
+            rate_limit_user = auth_user_pid or body_public_id
+            if rate_limit_user and not ratelimit.limiter.allow(
+                    f"user:{rate_limit_user}",
                     USER_STRICT_LIMIT if request.url.path in STRICT_PATHS else USER_GENERAL_LIMIT):
                 return JSONResponse({"detail": "rate limited"}, status_code=429,
                                     headers={"Retry-After": "60"})
@@ -855,7 +899,7 @@ class SettingsIn(BaseModel):
 class PaymentIn(BaseModel):
     public_id: str = Field(..., max_length=100)
     provider: str = Field(..., max_length=50)
-    amount_cents: int = Field(..., gt=0, le=10_000_000)
+    amount_cents: int = Field(..., gt=0, le=10_000)
 
 
 class DiscountIn(BaseModel):
