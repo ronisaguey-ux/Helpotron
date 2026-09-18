@@ -92,26 +92,50 @@ the script that performs the rotation, which never prints a value.
 These spend real money on every call. **Requires the owner's dashboard — cannot be done from
 this box.**
 
-| secret | live? | status |
+| secret | live/dead verdict (probed at the endpoint the CODE uses) | action |
 |---|---|---|
-| `OPENROUTER_API_KEY` | **HTTP 200 LIVE** | ⏳ **owner must rotate** — openrouter.ai → Keys |
-| `OMNIROUTE_API_KEY` | set (not probed) | ⏳ **owner must rotate** |
-| `PANGRAM_API_KEY` | set | ⏳ **owner must rotate** — note Pangram 3 ends 2026-09-30, the same call then costs **10x** (5¢ → 50¢ per 1k words) |
-| `SAPLING_API_KEY` | set | ⏳ **owner must rotate** |
-| `WINSTON_API_KEY` | set | ⏳ **owner must rotate or delete** — Winston is not a registered detector, the key may be unused |
+| `OPENROUTER_API_KEY` | **LIVE — HTTP 200** at `openrouter.ai/api/v1/key` | ⏳ owner rotate |
+| `SAPLING_API_KEY` | **LIVE — HTTP 200** at `api.sapling.ai/api/v1/aidetect` (`detectors.py:245`) | ⏳ owner rotate |
+| `PANGRAM_API_KEY` | **VALID BUT UNFUNDED — HTTP 402** at `text.external-api.pangram.com/task` (`detectors.py:197`) | ⏳ owner: top up **or** delete — not simply "dead", the key still authenticates |
+| `OMNIROUTE_API_KEY` | **DEAD — HTTP 401** at `openrouter.ai/api/v1/key` | delete (it is an `sk-or-` OpenRouter key; `OMNIROUTE_API_BASE` is openrouter.ai, not a separate host) |
+| `WINSTON_API_KEY` | **DEAD / unused — HTTP 404** | delete (Winston is purged — `capabilities.py:52` lists it under `"purged"`) |
+
+**⚠️ A wrong probe produces a wrong verdict, and a false "dead" is the dangerous one.** Two
+credentials here were initially reported dead by probing a pair/host the code never uses:
+- `TWILIO_SECRET` probed against `TWILIO_ACCOUNT_SID` → 401, which proves nothing. The code
+  (`auth_2fa.py:151-152`) forms `api_key_sid` from `TWILIO_API_KEY_SID` and `api_key_secret`
+  from `TWILIO_API_KEY_SECRET`, and `TWILIO_SECRET` is only a *fallback api-key secret* — never
+  an auth token. There is no `TWILIO_AUTH_TOKEN` in either env file. The real pair returns
+  **HTTP 200**. **Twilio is LIVE.**
+- `PANGRAM_API_KEY` probed against a `pangram.com` host → 403. The code calls
+  `text.external-api.pangram.com`, which returns **402**, not 403 — a different condition.
+
+**Always read the credential pair and the URL out of the source, then probe exactly that.**
 
 ## C. MUST ROTATE — SMS spend / account
 
-**Requires the owner's Twilio console.**
+**Twilio is LIVE — verified with the pair the code actually forms.** This one matters: an
+earlier automated audit probed the wrong pair, got 401, and reported it dead. A live
+SMS-spending credential wrongly marked as needing no action is the worst outcome in this
+section.
 
 | secret | status |
 |---|---|
-| `TWILIO_SECRET` | ⏳ **owner must rotate** |
-| `TWILIO_API_KEY_SECRET` | ⏳ **owner must rotate** |
+| `TWILIO_SECRET` | **✅ LIVE (HTTP 200 via `TWILIO_API_KEY_SID` + `TWILIO_API_KEY_SECRET`)** — ⏳ owner rotate |
+| `TWILIO_API_KEY_SECRET` | **LIVE** — ⏳ owner rotate |
 
 Look out: `TWILIO_SECRET` is duplicated in `.env` and `server/.env` — rotate both or they drift.
 `TWILIO_SID`, `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_VERIFY_SERVICE_SID` are
 **identifiers, not secrets** — no rotation needed, but they were disclosed, so treat them as public.
+
+## C1. An inert control found while probing (not a rotation item, but it belongs here)
+
+**`CAPTCHA_BYPASS_SECRET` was rotated, but the gate it bypasses is not running.** `TURNSTILE_SITEKEY`
+and `TURNSTILE_SECRET` are both **empty**, so `captcha_required()` returns **False**
+(`server/captcha.py:24`) and the captcha branch in `/api/signup` (`main.py:1204`) and the login
+path never execute. The code reads as protected. Until Turnstile keys are set, the only
+protection on signup is the 20/hr/IP rate limit — so configure the keys, or remove the gate so
+nobody trusts a control that is inert.
 
 ## C2. T2B — ROTATED (same blast radius, different repo)
 
@@ -166,6 +190,45 @@ Found while building this inventory; all tightened, and `GET /api/health` still 
 | `data/db/helpotron.db.bak-pre-token-100x-*` (2 files) | `0644` | `0600` |
 
 `.env` was already `0600`. All services run as the same user, so nothing broke.
+
+Also found by a second pass (an automated audit reported it, verified here):
+
+| path | was | now |
+|---|---|---|
+| `.env.bak.20260827` | `0664` (world-readable) | `0600` |
+
+A repo-wide re-sweep after that confirmed **every other** `.env.bak*` is already `0600`. The
+only remaining `0644` `.env*` files are `.env.example` / `.env.example`s in `mcp/` and
+`vendor/watermarks-remover/` — all four carry **placeholders**, hash-verified against the live
+values (`your_pangram_api_key_here`, `sk_test_your_stripe_secret_key`, …). No leak.
+
+**Lesson worth keeping: a `.env` sweep must cover `.env.bak*`, `.env.old`, and `.env.<date>`,
+not just `.env`.** The backups carry identical values and are far more likely to be left at the
+default mode.
+
+## E1. Test rows are landing in the PROD database (open item)
+
+`users` holds three accounts whose names appear nowhere in the codebase — i.e. created by a
+hand-made POST to the public `/api/signup`:
+
+| id | public_id | created (UTC) | plan | credits | tokens | ledger rows |
+|---|---|---|---|---|---|---|
+| 65 | `tg_test_user_1` | 2026-09-18 07:35:26 | none | 0 | none | 0 |
+| 66 | `tg_test_123` | 2026-09-18 07:35:59 | none | 0 | none | 0 |
+| 67 | `test_webhook_replay` | 2026-09-18 17:30:02 | none | 0 | none | 0 |
+
+This is the rule-5 violation ("no throwaway rows in the prod DB") — the same class as the
+4 datalake rows leaked earlier. It fired the signup monitor, which is why it surfaced.
+
+**Assessed for impact, and it is pollution rather than a vulnerability:**
+- `/api/signup` **grants 0 tokens** — there is no trial auto-grant (`main.py:1236`), so farming
+  accounts yields nothing.
+- `/api/signup` **is** rate-limited at **20/hour/IP** (`main.py:1218`), with a `Retry-After`.
+- The three rows have no balance, no tokens and no ledger entries.
+
+Cleanup is pending confirmation of who created them. **Cause to fix regardless:** any test or
+audit run against this box must pin `DATABASE_URL` **and** `DATALAKE_DIR`; the DB alone is not
+enough, which is exactly how the earlier datalake leak happened.
 
 ---
 

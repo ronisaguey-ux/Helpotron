@@ -27,7 +27,7 @@ import math
 import random
 import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlsplit, urlparse
 
 
 # ── Humanlike mouse motion (ported from extension/mouse_path.js) ─────────────
@@ -325,3 +325,144 @@ def spinner_verbs(count: int = 6, seed: Optional[int] = None) -> List[str]:
     pool = list(SPINNER_VERBS)
     rng.shuffle(pool)
     return pool[:max(1, min(count, len(pool)))]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Page identity + attribution — moved off the extension (owner 2026-09-18)
+#
+# These three were pure functions living in `content.js` (`detectPlatform`,
+# `classifySubject`, `parseCourseUrl`). They decide WHICH scraper runs, what
+# subject a page belongs to, and which course an item is filed under — i.e. they
+# decide where a user's material lands. On the server they can be corrected by a
+# deploy instead of a Chrome Web Store review, and a modified client cannot
+# loosen them.
+#
+# All three are pure: input is a host/path/url/text string, output is a plain
+# value. No DOM, so they move cleanly.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# The recognised LMS surfaces, in the SAME precedence order content.js used.
+# Order matters: a host matching two rules must resolve to the first.
+_PLATFORM_RULES: List[Tuple[str, Tuple[str, ...], Tuple[str, ...]]] = [
+    # (platform, host substrings, path substrings)
+    ("canvas", ("instructure.com", "canvas"), ()),
+    ("google_classroom", ("classroom.google.com",), ()),
+    ("blackboard", ("blackboard", "bb."), ("/webapps/blackboard",)),
+    ("brightspace", ("brightspace", "d2l"), ()),
+    ("moodle", ("moodle",), ("/mod/assign/",)),
+    ("schoology", ("schoology",), ()),
+    ("google_docs", ("docs.google.com",), ()),
+    ("notion", ("notion.so", "notion.site"), ()),
+]
+
+
+def detect_platform(host: str = "", path: str = "") -> str:
+    """Which LMS is this page on? `generic` when nothing matches.
+
+    The extension used `window.location`; it now sends the host and path. Keeping
+    the mapping here means a new LMS is a server deploy, not a store review.
+    """
+    h = (host or "").lower()
+    p = (path or "").lower()
+    for platform, host_subs, path_subs in _PLATFORM_RULES:
+        if any(s in h for s in host_subs) or any(s in p for s in path_subs):
+            return platform
+    return "generic"
+
+
+# The subject keyword table, ported verbatim. IN ORDER: the first subject with a
+# matching keyword wins, so more specific subjects precede broader ones.
+SUBJECT_HINTS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("Mathematics", ("algebra", "geometry", "calculus", "trig", "trigonometr", "statistic",
+                     "equation", "theorem", "linear", "quadratic", "function", "probability",
+                     "arithmetic", "math", "integral", "derivative", "exponential", "logarithm")),
+    ("Biology", ("cell", "dna", "genetics", "organism", "biology", "evolution", "crispr",
+                 "photosynthesis", "ecosystem", "bacteria", "mitochondria")),
+    ("Chemistry", ("chemistry", "chemical", "molecule", "atom", "compound", "reaction",
+                   "acid", "periodic")),
+    ("Physics", ("physics", "motion", "force", "kinematics", "newton", "velocity",
+                 "acceleration", "gravity", "electricity", "magnet")),
+    ("Computer Science", ("algorithm", "code", "programming", "data structure", "python",
+                          "machine learning", "neural", "ap csp", "apcsp", "computer science",
+                          "java")),
+    ("History", ("history", "reconstruction", "civil war", "president", "ancient",
+                 "revolution", "empire", "world war", "century", "antebellum", "columbian")),
+    ("Literature", ("novel", "literature", "poem", "woolf", "faulkner", "narrative",
+                    "modernist", "english literature", "shakespeare", "poetry")),
+    ("English", ("english", "grammar", "essay", "vocabulary", "reading", "writing", "rhetoric")),
+    ("Economics", ("economic", "inflation", "gdp", "macroeconomic", "microeconomic",
+                   "monetary", "supply", "demand", "market")),
+    ("Ethics", ("ethics", "ethical", "moral", "autonomous systems")),
+    ("Psychology", ("cognitive", "behavior", "psychology", "bias", "decision")),
+    ("Spanish", ("spanish", "espanol", "español", "conjugat", "vocabulario")),
+    ("French", ("french", "francais", "français")),
+    ("Health", ("health", "nutrition", "p.e.", "physical education", "wellness")),
+]
+
+# Word-START boundary so substrings never false-positive: "miscellaneous" must
+# not match the 'cell' keyword. (?![\w]) is the same guard `(?:^|[\s\W])` gave.
+_SUBJECT_RES = [
+    (subj, re.compile("|".join(r"(?<!\w)" + re.escape(k) for k in keys)))
+    for subj, keys in SUBJECT_HINTS
+]
+
+
+def classify_subject(text: str = "") -> str:
+    """Best-effort subject for a course/page name. Empty string when unsure.
+
+    Deliberately conservative: returning '' lets the caller fall back to the
+    user's own choice rather than mis-filing material under a wrong subject.
+    """
+    low = (text or "").lower()
+    if not low:
+        return ""
+    for subj, rx in _SUBJECT_RES:
+        if rx.search(low):
+            return subj
+    return ""
+
+
+# Canvas URL shapes: /courses/123/assignments/456 (/quizzes/…, /pages/x,
+# /discussion_topics/…, /modules/items/…).
+#
+# ORDERING TRAP, preserved from the JS: 'modules/items' MUST precede 'modules' in
+# the alternation. Python's `re` also takes the FIRST alternative that matches,
+# so with 'modules' first /courses/1/modules/items/44 would parse as
+# kind='modules', itemId='items' — collapsing every module item onto one wrong
+# canvas_id ('c1:modules:items') and breaking subject pairing and dedupe.
+_CANVAS_ITEM_RE = re.compile(
+    r"^/courses/(\d+)/(assignments|quizzes|pages|discussion_topics|modules/items|modules|files)/([^/?#]+)"
+)
+_CANVAS_COURSE_RE = re.compile(r"^/courses/(\d+)")
+
+
+def parse_course_url(url: str = "") -> Dict[str, str]:
+    """Split a Canvas URL into {courseId, itemId, itemKind, courseUrl}.
+
+    All fields are '' when the URL is not a course page, so a caller can test
+    truthiness instead of handling None.
+    """
+    empty = {"courseId": "", "itemId": "", "itemKind": "", "courseUrl": ""}
+    if not url:
+        return dict(empty)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return dict(empty)
+    path = unquote(parts.path or "")
+    m = _CANVAS_ITEM_RE.match(path)
+    base = f"{parts.scheme}://{parts.netloc}" if parts.scheme else ""
+    if not m:
+        c = _CANVAS_COURSE_RE.match(path)
+        return {
+            "courseId": c.group(1) if c else "",
+            "itemId": "",
+            "itemKind": "",
+            "courseUrl": f"{base}/courses/{c.group(1)}" if c else "",
+        }
+    return {
+        "courseId": m.group(1),
+        "itemKind": m.group(2),
+        "itemId": unquote(m.group(3)),
+        "courseUrl": f"{base}/courses/{m.group(1)}",
+    }

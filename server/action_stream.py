@@ -28,6 +28,8 @@ import random
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from .human_profile import HumanProfile
+
 # Bumped when the vocabulary or the wire shape changes, so an older player can
 # refuse a stream it does not understand rather than mis-execute it.
 ACTION_STREAM_VERSION = 1
@@ -87,7 +89,12 @@ def _char_key(ch: str) -> Dict[str, Any]:
 
 
 def _gap(rng: random.Random, speed: float) -> int:
-    """One inter-keystroke gap in milliseconds, shaped like the fitted hand."""
+    """One inter-keystroke gap in milliseconds, shaped like the fitted hand.
+
+    Kept for the fallback path and for callers that only need a number. The
+    authoritative rhythm now comes from `HumanProfile.tick()`, which carries all
+    35 fitted parameters rather than this single log-normal approximation.
+    """
     # lognormal with median MEDIAN_GAP_S (seconds), scaled by the gear.
     median_s = MEDIAN_GAP_S * speed
     mu = math.log(median_s)
@@ -96,6 +103,19 @@ def _gap(rng: random.Random, speed: float) -> int:
         # A rare long hesitation, folded on top of the base gap.
         gap_ms += int(round(rng.lognormvariate(math.log(LULL_MEDIAN_MS), 0.5)))
     return gap_ms
+
+
+def _mouse_target(rng: random.Random, viewport: Tuple[int, int], reach: float) -> Tuple[int, int]:
+    """A plausible pointer destination inside the viewport, near the middle band.
+
+    Quietly clamped so a reach larger than the window can never aim off-canvas.
+    """
+    vw, vh = viewport
+    x0 = int(vw * (0.15 + rng.random() * 0.5))
+    y0 = int(vh * (0.25 + rng.random() * 0.4))
+    x1 = max(2, min(vw - 2, x0 + int((rng.random() - 0.5) * 2 * reach)))
+    y1 = max(2, min(vh - 2, y0 + int((rng.random() - 0.5) * 2 * reach)))
+    return x1, y1
 
 
 def _typo_char(rng: random.Random, ch: str) -> str:
@@ -129,58 +149,75 @@ def build_action_stream(
     false_start_rate = max(0.0, min(0.25, float(false_start_rate)))
     vw, vh = viewport
 
+    # The authoritative rhythm: the full 35-parameter model ported from the
+    # extension's HumanProfile. `speed` maps to `gear` (lower gear = slower), and
+    # the measured bands are absolute, so gear multiplies them directly.
+    profile = HumanProfile(gear=speed, rng=rng)
+    ticks = profile.tick_many(list(text), burst_scale=1.0)
+
     actions: List[Dict[str, Any]] = []
     actions.append({"op": "focus"})
 
-    words = text.split()
     word_idx = 0
     mouse_every = 200  # chars between pointer excursions (deliberately sparse)
 
-    for i, ch in enumerate(text):
-        # The gap precedes the keystroke, so the stream is paced, not bursty.
-        if i > 0:
-            actions.append({"op": "wait", "ms": _gap(rng, speed)})
+    for i, (ch, d) in enumerate(zip(text, ticks)):
+        act = d.get("action")
 
-        # Rare-but-long natural pause at word milestones (thinking break).
-        if natural_pauses and i > 0 and ch == " " and word_idx > 0 and word_idx % NATURAL_PAUSE_EVERY_WORDS == 0:
-            actions.append({"op": "wait", "ms": int(rng.randint(*NATURAL_PAUSE_MS))})
-
-        # Pointer excursion — move only; a click only when the roll says so, and
-        # never at the same moment a correction is mid-flight (kept out by the
-        # sequential shape: the click is an isolated event between words).
-        if ch == " " and i > 0 and i % mouse_every == 0:
-            x0 = int(vw * (0.15 + rng.random() * 0.5))
-            y0 = int(vh * (0.25 + rng.random() * 0.4))
-            reach = 120
-            x1 = max(2, min(vw - 2, x0 + int((rng.random() - 0.5) * 2 * reach)))
-            y1 = max(2, min(vh - 2, y0 + int((rng.random() - 0.5) * 2 * reach)))
+        # ── Physical drift: the model decided to reach for the mouse. ────────
+        # Emitted as move(s) + optional click. This is a detour, NOT a substitute
+        # for the keystroke: the character is still typed afterwards, which is
+        # what keeps `replay_text(actions) == text` true.
+        if act == "mouse":
+            x1, y1 = _mouse_target(rng, viewport, float(d.get("reach") or 120))
+            x0 = max(2, min(vw - 2, int(vw * (0.2 + rng.random() * 0.4))))
+            y0 = max(2, min(vh - 2, int(vh * (0.25 + rng.random() * 0.4))))
             actions.append({"op": "mouse", "x": x0, "y": y0})
             actions.append({"op": "mouse", "x": x1, "y": y1})
-            if rng.random() < 0.25:
+            if d.get("click"):
                 actions.append({"op": "click", "x": x1, "y": y1})
-            actions.append({"op": "wait", "ms": int(rng.randint(180, 500))})
+            actions.append({"op": "wait", "ms": int(max(60, min(1400, float(d.get("hover") or 200))))})
 
-        # False start: a fragment is typed then backspaced away before the word.
-        if false_start_rate and i > 0 and ch not in " \n" and rng.random() < false_start_rate:
+        # ── A nudge of the caret, no text change. ───────────────────────────
+        elif act == "nudge":
+            actions.append({"op": "wait", "ms": int(max(40, min(400, float(d.get("delay") or 80))))})
+
+        # ── False start: type a fragment, delete it, then type the word. ─────
+        if act == "falsestart":
             frag = "".join(rng.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(2 + rng.randint(0, 2)))
             for fc in frag:
                 actions.append({"op": "type", "ch": fc, **_char_key(fc)})
-                actions.append({"op": "wait", "ms": int(round(_gap(rng, speed)))})
+                actions.append({"op": "wait", "ms": int(max(16, float(d.get("delay") or 300)))})
             actions.append({"op": "wait", "ms": int(rng.randint(320, 740))})
             for _ in frag:
                 actions.append({"op": "backspace"})
                 actions.append({"op": "wait", "ms": int(rng.randint(44, 104))})
             actions.append({"op": "wait", "ms": int(rng.randint(450, 1000))})
 
-        # Typo: emit the wrong char, catch it, backspace, retype. One backspace,
-        # max run 1 — the measured correction shape (prompt.md §2.4).
-        if typo_rate and ch not in " \n" and rng.random() < typo_rate:
+        # ── Typo: emit the wrong char, catch it, backspace, then retype. ─────
+        # One backspace, max run 1 — the measured correction shape.
+        elif act == "typo" and ch not in " \n":
             wrong = _typo_char(rng, ch)
             actions.append({"op": "label", "name": "typo"})
             actions.append({"op": "type", "ch": wrong, **_char_key(wrong)})
-            actions.append({"op": "wait", "ms": int(rng.randint(180, 520))})
+            detect_ms = int(max(60, min(900, float(d.get("detectDelay") or 6) * 40)))
+            actions.append({"op": "wait", "ms": detect_ms})
             actions.append({"op": "backspace"})
             actions.append({"op": "wait", "ms": int(rng.randint(60, 160))})
+
+        # ── The paced gap the model chose, before the keystroke. ─────────────
+        if i > 0:
+            actions.append({"op": "wait", "ms": int(max(14, float(d.get("delay") or 100)))})
+
+        # Rare-but-long natural pause at word milestones (thinking break).
+        if natural_pauses and i > 0 and ch == " " and word_idx > 0 and word_idx % NATURAL_PAUSE_EVERY_WORDS == 0:
+            actions.append({"op": "wait", "ms": int(rng.randint(*NATURAL_PAUSE_MS))})
+
+        # Pointer excursion at a sparse cadence, independent of the model's own.
+        if ch == " " and i > 0 and i % mouse_every == 0:
+            x1, y1 = _mouse_target(rng, viewport, 120)
+            actions.append({"op": "mouse", "x": x1, "y": y1})
+            actions.append({"op": "wait", "ms": int(rng.randint(180, 500))})
 
         actions.append({"op": "type", "ch": ch, **_char_key(ch)})
         if jitter:
