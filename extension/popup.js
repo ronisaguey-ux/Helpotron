@@ -1745,6 +1745,25 @@ function addPopupChatMsg(sender, text, html) {
   return div;
 }
 
+/** Replace the text of an existing chat bubble, in place.
+ *
+ * Why this exists: the no-credential path used
+ * `typingNode.querySelector('span:last-child')`, which can never match. A bubble
+ * is built as [span.chat-sender, span.chat-msg-body, button.copy], so the last
+ * child is the copy BUTTON and no span qualifies as :last-child. The lookup
+ * returned null, the `.textContent =` threw, and because that line ran BEFORE
+ * `chatBusy = false` the composer stayed locked — every later send hit
+ * `if (chatBusy) return`, so the chat silently stopped accepting input. The
+ * visible symptom was "Thinking…" forever.
+ *
+ * Guarded so it can never throw: a status message failing to render must not be
+ * able to wedge the composer. */
+function setPopupChatBody(node, text) {
+  if (!node) return;
+  const body = node.querySelector('.chat-msg-body');
+  if (body) body.textContent = text;
+}
+
 function renderPopupChatHistory(msgs) {
   if (!chatMessagesEl) return;
   chatMessagesEl.innerHTML = '';
@@ -3155,12 +3174,26 @@ if (chatFormEl && chatInputEl) {
     if (chatTokenBanner) chatTokenBanner.style.display = 'none';
 
     const typingNode = addPopupChatMsg('agent', 'Thinking…');
-    const { server } = await chrome.storage.local.get('server');
-    const srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-    const t = await authToken();
+
+    // Read the connection settings under a guard. These two awaits used to sit
+    // bare, so any failure here threw straight past `chatBusy = false` and
+    // wedged the composer — the same shape as the selector bug below.
+    let srv = '';
+    let t = null;
+    try {
+      const { server } = await chrome.storage.local.get('server');
+      srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+      t = await authToken();
+    } catch (e) {
+      setPopupChatBody(typingNode, '⚠️ Could not read your connection settings — reopen the panel and try again.');
+      chatBusy = false;
+      return;
+    }
 
     if (!t) {
-      if (typingNode) typingNode.querySelector('span:last-child').textContent = '⚠️ Connect Helpotron with an API key first to chat with the agent.';
+      // setPopupChatBody, never a raw querySelector: see its comment for the
+      // crash + stuck-composer bug this replaced.
+      setPopupChatBody(typingNode, '⚠️ Connect Helpotron with an API key first to chat with the agent.');
       chatBusy = false;
       return;
     }
