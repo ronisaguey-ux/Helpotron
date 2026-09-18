@@ -108,10 +108,20 @@ def clear_ratelimiter(client):
     ratelimit.limiter._hits.clear()
     auth_limiter._failures.clear()  # per-account AND per-IP login throttle
     client.cookies.clear()
+    try:
+        from server.metering import set_meter_user
+        set_meter_user(None)
+    except Exception:
+        pass
     yield
     ratelimit.limiter._hits.clear()
     auth_limiter._failures.clear()
     client.cookies.clear()
+    try:
+        from server.metering import set_meter_user
+        set_meter_user(None)
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -176,6 +186,46 @@ def _get_auth_headers_for_user(public_id: str, plan: str = "none") -> dict:
         return {"Authorization": f"Bearer {token}"}
     finally:
         db.close()
+
+
+@pytest.fixture()
+def top_up_tokens(client):
+    """Fixture form, so tests need no import — `from conftest import ...`
+    resolves to the REPO ROOT conftest, not this one."""
+
+    def _top_up(public_id: str, amount_cents: int, auth_headers: dict) -> int:
+        """Buy tokens the way the product now requires, and return the balance.
+
+        A purchase creates a PENDING payment — process_payment never grants on
+        its own authority any more (SEC-2026-001) — and an operator confirms it.
+        Tests need the end state, so this drives both halves.
+
+        It deliberately does NOT use provider="stripe": that path is reserved
+        for /api/checkout plus a signed webhook, and using it here is exactly
+        what several tests were doing to get free tokens.
+        """
+        r = client.post("/api/payments",
+                        json={"public_id": public_id, "provider": "zelle",
+                              "amount_cents": amount_cents},
+                        headers=auth_headers)
+        assert r.status_code == 200, f"payment create failed: {r.status_code} {r.text[:200]}"
+        # The route returns `payment_id`; process_payment's own dict uses `id`.
+        payment_id = r.json().get("payment_id") or r.json().get("id")
+
+        # Confirm as the operator. The admin gate is exercised by its own tests;
+        # here it is bypassed so the money path can be driven without tokens.
+        import server.admin as _admin
+        orig = _admin.require_admin
+        _admin.require_admin = lambda request=None: None
+        try:
+            c = client.post(f"/api/admin/user/{public_id}/confirm-payment",
+                            json={"payment_id": payment_id, "note": "test fixture"})
+            assert c.status_code == 200, f"confirm failed: {c.status_code} {c.text[:200]}"
+            return c.json()["token_balance"]
+        finally:
+            _admin.require_admin = orig
+
+    return _top_up
 
 
 def _ensure_user_with_session(client, public_id: str, password: str = "TestPass123") -> dict:

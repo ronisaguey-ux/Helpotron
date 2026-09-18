@@ -209,6 +209,9 @@ def authenticate(db: Session, bearer: str, request: Any = None):
     user = db.query(User).filter(User.id == key_row.user_id).first()
     if user is None:
         raise HTTPException(401, "Invalid API key")
+    from .security import is_user_banned
+    if is_user_banned(user):
+        raise HTTPException(403, "Account suspended by the operator")
     touch_last_used(db, key_row)
     if request is not None:
         try:
@@ -216,4 +219,9 @@ def authenticate(db: Session, bearer: str, request: Any = None):
             request.state.auth_via_api_key = True
         except Exception:
             pass
+    try:
+        from .metering import set_meter_user
+        set_meter_user(getattr(user, "public_id", None))
+    except Exception:
+        pass
     return user

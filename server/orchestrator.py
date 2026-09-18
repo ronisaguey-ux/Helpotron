@@ -245,18 +245,27 @@ async def _run_workflow_async(assignment_id: int):
 
 async def plan_tasks(prompt: str, transcript: str) -> List[Dict]:
     """Use LLM to break down assignment into sub-tasks."""
-    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+    from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
     system = (
         "You are a task planner. Break down the given assignment into 3-5 logical sub-tasks. "
         "Return a JSON list of tasks, each with 'name', 'description', and 'estimated_seconds' (int).\n"
         + sandbox_math_rule()
+        + "\n"
+        + prompt_injection_defense_rule()
     )
     # 08-28 fix: 2000 chars meant the planner never saw beyond the intro when
     # the scrape is the source (full content is now up to 1M chars). 50k keeps
     # the planner cheap while covering a real assignment document.
     user = f"Assignment prompt: {prompt}\nTranscript: {transcript[:50000]}"
     try:
-        content = await llm.call_llm(system, user)  # remediation: call_llm returns str now
+        try:
+            content = await llm.call_llm(user_prompt=user, system_prompt=system)
+        except TypeError as e:
+            # Same inversion as draft.py and agent_session.py: (system, user)
+            # into a (user, system) signature, on any TypeError at all. Removed
+            # rather than repaired — call_llm's signature is fixed and known, so
+            # there is no second shape to fall back to.
+            raise RuntimeError(f"orchestrator llm call failed: {type(e).__name__}: {e}") from e
         parsed = llm.extract_json(content)
         if isinstance(parsed, list):
             return parsed

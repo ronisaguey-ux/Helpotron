@@ -574,7 +574,7 @@ class OverlordAgent:
         """
         from .llm import call_llm
 
-        from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+        from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
         k = _history_key(target_key, getattr(user, "id", None) if user is not None else None)
         history = self._chat_histories.get(k, [])
         total_chars = sum(len(m.get("text", "")) for m in history)
@@ -603,6 +603,8 @@ class OverlordAgent:
                         "summary of decisions, facts, deadlines and user preferences. "
                         "Keep it under 250 words.\n"
                         + sandbox_math_rule()
+                        + "\n"
+                        + prompt_injection_defense_rule()
                     ),
                     user_prompt=f"Compress this agent chat transcript:\n\n{transcript[:12000]}",
                     temperature=0.2,
@@ -972,12 +974,12 @@ print(f"Active files: {os.listdir('.')}")
             ans = await call_llm(
                 system_prompt=(
                     agent_system_prompt(user, node="my_agent")  # explicit My Agent surface (operator 08-28)
-                    + "The user sent this directive to their agent:\n\n"
+                    + "\nThe user sent this directive to their agent:\n<untrusted_user_directive>\n"
                     + text[:3000]
-                    + "\n\nIt didn't match a known work command. Do whatever is within your powers "
-                      "to comply (never claim actions you didn't take); if you cannot do it, say what "
-                      "you actually did and what the user should do next. Reply directly to the user "
-                      "in plain text, under 220 words, staying in character per the identity above."
+                    + "\n</untrusted_user_directive>\n\nIt didn't match a known work command. Do whatever is within your powers "
+                    "to comply (never claim actions you didn't take); if you cannot do it, say what "
+                    "you actually did and what the user should do next. Reply directly to the user "
+                    "in plain text, under 220 words, staying in character per the identity above."
                 ),
                 user_prompt="Reply now, as the agent, to the user.",
                 temperature=0.4,

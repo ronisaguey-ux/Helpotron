@@ -38,6 +38,7 @@ Key discipline:
 import json
 import os
 import re
+import sys
 import time
 import urllib.parse
 
@@ -54,6 +55,8 @@ PORT = int(os.getenv("SCRAPE_SIDECAR_PORT", "9778"))
 _MODEL = os.getenv("SCRAPE_MODEL", "deepseek/deepseek-v4.1-flash")
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root (server/../.env)
+if _BASE_DIR not in sys.path:
+    sys.path.insert(0, _BASE_DIR)
 _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 _SCRAPE_TIMEOUT = 30
@@ -286,27 +289,69 @@ def _fetch_scrapling(url: str, mode: str) -> str:
 
 def _fetch_static(url: str) -> str:
     try:
-        r = requests.get(url, headers={"User-Agent": _UA,
-                                       "Accept-Language": "en-US,en;q=0.9"},
-                         timeout=_SCRAPE_TIMEOUT, allow_redirects=True)
-        if r.status_code != 200:
-            return ""
-        if not _looks_like_real_page(r.text):
-            return ""
-        return r.text
+        curr_url = url
+        for _ in range(5):
+            from server.ssrf import is_safe_url
+            if not is_safe_url(curr_url):
+                return ""
+            r = requests.get(curr_url, headers={"User-Agent": _UA,
+                                           "Accept-Language": "en-US,en;q=0.9"},
+                             timeout=_SCRAPE_TIMEOUT, allow_redirects=False)
+            if r.status_code in (301, 302, 303, 307, 308):
+                location = r.headers.get("Location", "")
+                if not location:
+                    return ""
+                curr_url = urllib.parse.urljoin(curr_url, location)
+                continue
+            if r.status_code != 200:
+                return ""
+            if not _looks_like_real_page(r.text):
+                return ""
+            return r.text
+        return ""
     except Exception:
         return ""
 
 
 def _fetch_playwright(url: str) -> str:
-    """On-demand chromium. Only for JS-heavy pages; launched, used, closed."""
+    """On-demand chromium. Only for JS-heavy pages; launched, used, closed.
+
+    SEC-2026-004 (second lane): the upstream route validates the URL the user
+    submitted, but `page.goto()` follows redirects on its own — so a page that
+    answers 302 with `Location: http://169.254.169.254/...` walked straight past
+    that check and the metadata body came back as page content. `_fetch_static`
+    was fixed with a manual redirect loop; this lane has no such loop, so the
+    guard has to move to request interception, where EVERY navigation Chromium
+    attempts is checked rather than just the first one.
+    """
+    from server.ssrf import is_safe_url
     from playwright.sync_api import sync_playwright
+
+    blocked = {"hit": False}
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=[
             "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
         try:
             page = browser.new_page(user_agent=_UA)
+
+            def _guard(route, request):
+                target = request.url if route.request else ""
+                # Sub-resources matter too: an iframe or fetch() to an internal
+                # address is the same read primitive as a top-level navigation.
+                if target and not is_safe_url(target):
+                    blocked["hit"] = True
+                    route.abort()
+                    return
+                route.continue_()
+
+            page.route("**/*", _guard)
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            if blocked["hit"]:
+                # Something in the chain reached for an unsafe address. Returning
+                # a partial page would leak whatever loaded before the block, so
+                # refuse the whole scrape.
+                return ""
             page.wait_for_timeout(3000)  # let JS hydrate
             html = page.content()
         finally:

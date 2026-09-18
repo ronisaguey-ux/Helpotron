@@ -20,7 +20,7 @@ class FakeWS:
 def test_agent_session_collects_then_finishes(monkeypatch):
     calls = {"n": 0}
 
-    async def fake_llm(system, user):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return json.dumps({"tool": "read_page"})
@@ -57,7 +57,7 @@ def test_agent_session_collects_then_finishes(monkeypatch):
 
 
 def test_agent_session_times_out_command(monkeypatch):
-    async def fake_llm(system, user):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         return json.dumps({"tool": "scroll", "args": {"direction": "down"}})
 
     monkeypatch.setattr("server.agent_session.llm.call_llm", fake_llm)
@@ -103,7 +103,7 @@ def test_agent_session_waits_for_extension_attach(monkeypatch):
 def test_agent_session_invalid_json_retries(monkeypatch):
     calls = {"n": 0}
 
-    async def fake_llm(system, user):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             return "I think I'll read the page now."  # not JSON

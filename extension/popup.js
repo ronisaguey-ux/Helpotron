@@ -1669,17 +1669,41 @@ function makeCopyButton(text) {
 // event handlers anyway so injected content can never execute.
 function sanitizeHtml(html) {
   if (!html) return '';
-  const div = document.createElement('div');
-  div.innerHTML = String(html);
-  div.querySelectorAll('script, iframe, object, embed, link, meta, style').forEach((n) => n.remove());
-  div.querySelectorAll('*').forEach((n) => {
-    for (const attr of Array.from(n.attributes || [])) {
-      if (attr.name.toLowerCase().startsWith('on') || (attr.name.toLowerCase() === 'href' && String(attr.value).trim().toLowerCase().startsWith('javascript:'))) {
-        n.removeAttribute(attr.name);
+  const ALLOWED_TAGS = new Set([
+    'P', 'BR', 'B', 'I', 'EM', 'STRONG', 'CODE', 'PRE', 'SPAN', 'DIV',
+    'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'UL', 'OL', 'LI', 'A',
+    'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'SUB', 'SUP',
+    'MATH', 'MROW', 'MI', 'MN', 'MO', 'MSUP', 'MSUB', 'MFRAC', 'MUNDER',
+    'MOVER', 'MUNDEROVER', 'MTEXT', 'MTABLE', 'MTR', 'MTD', 'MSQRT', 'MROOT',
+    'MENCLOSE', 'MSPACE'
+  ]);
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  doc.querySelectorAll('script, iframe, object, embed, link, meta, style, base, form, noscript, mglyph, annotation-xml, svg, foreignObject').forEach(n => n.remove());
+
+  const all = doc.body.querySelectorAll('*');
+  all.forEach(el => {
+    const tag = el.tagName.toUpperCase();
+    if (!ALLOWED_TAGS.has(tag)) {
+      el.remove();
+      return;
+    }
+    for (const attr of Array.from(el.attributes || [])) {
+      const name = attr.name.toLowerCase();
+      const val = String(attr.value || '').trim().toLowerCase();
+      if (name.startsWith('on') || val.startsWith('javascript:') || val.startsWith('data:') || val.startsWith('vbscript:')) {
+        el.removeAttribute(attr.name);
+        continue;
+      }
+      if (name === 'href') {
+        if (!val.startsWith('http://') && !val.startsWith('https://') && !val.startsWith('mailto:') && !val.startsWith('#')) {
+          el.removeAttribute(attr.name);
+        }
+      } else if (name !== 'class' && name !== 'display' && name !== 'target' && name !== 'rel' && name !== 'title') {
+        el.removeAttribute(attr.name);
       }
     }
   });
-  return div.innerHTML;
+  return doc.body.innerHTML;
 }
 
 // Render a chat message body. When the server sent reply_html, inject it

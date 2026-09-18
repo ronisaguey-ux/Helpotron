@@ -72,7 +72,7 @@ def _transcript_chunk(text: str) -> str:
 
 def build_style_prompt(style_text: str, assignment_prompt: str, transcript_text: str) -> str:
     """Build a system prompt that instructs the LLM to mimic the student's style."""
-    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+    from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
     return f"""You are an AI assistant helping a student write an assignment draft.
 
 The student has provided samples of their own writing style. Your task is to generate a draft that mimics their style as closely as possible. Use the same vocabulary, sentence structure, tone, and level of formality.
@@ -88,12 +88,14 @@ Lecture/transcript context:
 
 Write a complete draft that directly addresses the assignment prompt. Do not include any meta-commentary. Just produce the draft text.
 
-{sandbox_math_rule()}"""
+{sandbox_math_rule()}
+
+{prompt_injection_defense_rule()}"""
 
 
 def build_default_style_prompt(reading_level: str, target_grade: str, assignment_prompt: str, transcript_text: str) -> str:
     """Build a system prompt that uses a default writing style based on reading level and target grade."""
-    from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+    from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
     style_text = get_default_style(reading_level, target_grade)
     if not style_text:
         style_text = "Write in a clear, academic style appropriate for the reading level."
@@ -115,7 +117,9 @@ Lecture/transcript context:
 
 Write a complete draft that directly addresses the assignment prompt. Mimic the style of the sample as closely as possible. Do not include any meta-commentary. Just produce the draft text.
 
-{sandbox_math_rule()}"""
+{sandbox_math_rule()}
+
+{prompt_injection_defense_rule()}"""
 
 
 async def generate_draft(
@@ -134,7 +138,15 @@ async def generate_draft(
         system_prompt = build_default_style_prompt(reading_level or "college-freshman", target_grade or "B", assignment_prompt, transcript_text)
     user_prompt = "Generate the assignment draft now."
     # Use the same LLM call as other generators
-    content = await llm.call_llm(system_prompt, user_prompt)  # remediation: call_llm returns str now
+    try:
+        content = await llm.call_llm(user_prompt=user_prompt, system_prompt=system_prompt)
+    except TypeError as e:
+        # The positional fallback that used to be here passed (system, user) into
+        # a (user, system) signature — inverting the roles, and doing it on ANY
+        # TypeError, including one raised inside call_llm. It could inject style
+        # and transcript text into the system slot, which is exactly the
+        # privilege boundary the prompt-injection hardening exists to protect.
+        raise RuntimeError(f"draft generation failed: {type(e).__name__}: {e}") from e
     model = None
     return content, model
 

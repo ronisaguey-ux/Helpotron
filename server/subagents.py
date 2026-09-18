@@ -52,12 +52,14 @@ class SubAgentCoordinator:
         # block) is prepended when this decomposition runs INSIDE the agent's
         # chat path, so the sub-task output reflects the user's agent config.
         head = persona_ctx.strip() + "\n\n" if persona_ctx else ""
-        from .agent_prompt import sandbox_math_rule  # operator 08-31 standing rule
+        from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
         system_prompt = head + (
             "You are an expert academic assignment decomposer, working as the above user's agent. "
             "Break the provided prompt and rubric "
             "into discrete, non-overlapping sub-tasks for execution. Output a JSON list of tasks.\n"
             + sandbox_math_rule()
+            + "\n"
+            + prompt_injection_defense_rule()
         )
         user_msg = f"Assignment Prompt:\n{prompt}\n\nRubric:\n{rubric}"
         try:
@@ -167,4 +169,3 @@ def get_assignment_subagent_team_status(assignment_id: Optional[int] = None,
         "completed_tasks": sum(1 for r in roles if r["status"] == "COMPLETE"),
         "total_tasks": len(roles),
     }
-

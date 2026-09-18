@@ -153,7 +153,9 @@ def test_payments_endpoint_blocks_direct_stripe(monkeypatch):
         token = create_access_token({"sub": user.id})
         headers = {"Authorization": f"Bearer {token}", "X-Public-ID": user.public_id}
 
-        # Attempting direct 'stripe' payment should be rejected
+        # A direct 'stripe' payment must be rejected ON EVERY CONFIGURATION.
+        # The bug was a guard that only fired when Stripe was enabled, so on a
+        # box without Stripe keys this call minted tokens with no charge.
         res = client.post(
             "/api/payments",
             json={"public_id": user.public_id, "provider": "stripe", "amount_cents": 5000},
@@ -359,7 +361,7 @@ def test_deterministic_math_ast_whitelist():
     # Valid equations & math expressions
     assert assert_math_expression_safe("x^2 + 5*x + 6 = 0") == "x^2 + 5*x + 6 = 0"
     assert assert_math_expression_safe("sin(pi / 2) + sqrt(16)") == "sin(pi / 2) + sqrt(16)"
-    
+
     # Dangerous AST injection attempts rejected by AST whitelist
     with pytest.raises(UnsafeMathExpression):
         assert_math_expression_safe("__import__('os').system('id')")

@@ -148,28 +148,49 @@ def test_referral_discount_granted_to_new_user():
         db_session.refresh(fresh)
         assert fresh.referral_discount_pct == 30.0
 
-        # The discount reduces the CHARGE, not the value delivered: a $10 ($7
-        # after 30% off) order still buys 10 task tokens, and the entitlement is
-        # consumed. The welcome bonus is an earned discount credit.
-        pay = process_payment(db_session, fresh, "stripe", 1000)
+        # The discount reduces the CHARGE, not the value delivered: a $10 order
+        # ($6.00 after the stacked discounts) still buys 10 task tokens, and the
+        # entitlement is consumed. The welcome bonus is an earned discount credit.
+        #
+        # A manual provider, because this now creates a PENDING payment and grants
+        # nothing on its own authority (SEC-2026-001). "stripe" is reserved for
+        # /api/checkout plus a signed webhook. The discount math below is this
+        # test's real subject and is unaffected by that.
+        pay = process_payment(db_session, fresh, "zelle", 1000)
         # Both discounts reduce the bill and they stack: the 30% referral
         # entitlement plus the 10% the 10 earned welcome credits are worth, so
-        # $10 -> $6.00. Tokens are still granted on the nominal $10.
+        # $10 -> $6.00. Tokens are bought on the nominal $10, but only once an
+        # operator confirms the transfer arrived.
         assert pay["discount_pct_applied"] == 10.0
         assert pay["amount_charged_cents"] == 600
-        assert pay["tokens_added"] == 10
         assert pay["referral_discount_pct"] == 30.0
+        assert pay["status"] == "pending", "process_payment must not self-settle"
+        assert pay["tokens_added"] == 0, "no payment, no tokens"
 
         db_session.refresh(fresh)
         # The 10 earned credits were REDEEMED as this order's discount, so the
         # balance is consumed to 0 — that is the currency working, not a loss.
         assert fresh.discount_balance == 0.0
         assert fresh.referral_discount_pct == 0.0  # one-time, consumed
+
         from server.credits import get_token_balance
+        assert get_token_balance(fresh) == 0.0, "nothing granted before confirmation"
+
+        # Operator confirms the transfer: NOW the 10 tokens land.
+        from server.admin import TokenManager  # noqa: F401 — keep admin import path warm
+        from server.database import Payment
+        from server.credits import add_tokens as _add_tokens
+        pend = (db_session.query(Payment)
+                .filter(Payment.id == pay["id"], Payment.status == "pending").first())
+        assert pend is not None, "the pending payment must be recorded"
+        pend.status = "captured"
+        db_session.flush()
+        _add_tokens(db_session, fresh, 10, reason="confirmed:zelle:test")
+        db_session.refresh(fresh)
         assert get_token_balance(fresh) == 10.0    # +10 purchased task tokens
 
         # Second order is charged full price.
-        pay2 = process_payment(db_session, fresh, "stripe", 1000)
+        pay2 = process_payment(db_session, fresh, "zelle", 1000)
         assert pay2["amount_charged_cents"] == 1000
         assert pay2["referral_discount_pct"] == 0.0
     finally:

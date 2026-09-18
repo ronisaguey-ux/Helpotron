@@ -117,7 +117,7 @@ def test_materials_pagination(client, monkeypatch):
     from server import study_tools
     from server.tests.conftest import _get_auth_headers_for_user
 
-    async def fake_llm(system, user):
+    async def fake_llm(user_prompt, system_prompt="", **kwargs):
         return "A summary of the lecture transcript."
 
     monkeypatch.setattr(study_tools.llm, "call_llm", fake_llm)
