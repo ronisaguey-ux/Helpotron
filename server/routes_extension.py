@@ -282,6 +282,23 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.7.2": [
+        # Grouped, in rough order of how much they change for the user. Rendered
+        # verbatim by the popup's What's New, so keep each line self-contained.
+        "CONNECTING",
+        "🔑 No more sign-in. The extension used to need a Helpotron login it could barely complete. It now connects with a personal API key you create once at Settings \u2192 API Keys \u2014 paste it in and you're connected. Revoke a key any time and that extension stops working immediately.",
+        "🚪 Locked out? The Ask-the-Developer form now works without signing in, so a lost password or a stuck 2FA no longer leaves you with no way to reach us.",
+        "",
+        "WRITING",
+        "✍️ Smarter typing, without an update. The human-like typing engine now runs on Helpotron's servers, so its timing model improves for you automatically \u2014 no new extension version required.",
+        "⏱️ Same natural cadence you're used to; the extension just no longer carries the machinery for it.",
+        "",
+        "PAGE READING",
+        "📄 Better page understanding. Working out which site you're on, which subject a page belongs to, and turning the page into clean text all happen server-side now \u2014 so accuracy improves on our side, immediately.",
+        "",
+        "TRIAL \u2192 TESTING",
+        "🧪 Free testing access. While paid plans are still being switched on, the way in is the free Testing tier \u2014 15,000 task tokens to try everything and tell us what breaks. Apply from the pricing page; it's approved by hand.",
+    ],
     "2.7.1": [
         # The 2.7.0 build that CWS approved was packed BEFORE the prompt-injection
         # hardening landed, so these are the deltas it does not contain. Grouped
