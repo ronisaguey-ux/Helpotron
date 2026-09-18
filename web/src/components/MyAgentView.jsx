@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Send, Paperclip, Mic, ShieldCheck, Shield, Zap, RefreshCw, Trash2, Plus,
   SlidersHorizontal, ChevronDown, ChevronUp, Bot, Sparkles, StopCircle,
+  Pause, Play, X,
   FileText, ExternalLink, ArrowRight, BookOpen, Clock, AlertCircle
 } from 'lucide-react';
 import api from '../api.js';
@@ -64,8 +65,16 @@ export default function MyAgentView({
   // but it is cleared when the reply commits — which used to throw the chain of
   // thought away the moment the answer arrived. This ref survives the commit so
   // the reasoning can be stored ON the message and stay inspectable afterwards.
-  const reasoningRef = useRef('');
-  const [abortController, setAbortController] = useState(null);
+    const reasoningRef = useRef('');
+    const [abortController, setAbortController] = useState(null);
+    // Pause vs discard (owner 2026-09-18). Both abort the stream; they differ in
+    // whether the partial answer is left resumable. This ref tells the send
+    // handler's `finally` which one happened — a ref, not state, because the
+    // abort resolves the await and the flag must be readable immediately.
+    const pausedIntentRef = useRef(false);
+    // The interrupted turn: which bubble to append to, and the text to hand back
+    // to the model on resume. Non-null means the composer shows Resume.
+    const [pausedTurn, setPausedTurn] = useState(null);
 
   // ── Permissions & Modals ──
   const [pendingPermissions, setPendingPermissions] = useState([]);
@@ -377,10 +386,21 @@ export default function MyAgentView({
   };
 
   // ── Send Prompt & Execution Stream ──
-  const handleSendMessage = async (e) => {
-    e?.preventDefault();
-    const query = inputQuery.trim();
-    if (!query || isStreaming) return;
+    const handleSendMessage = async (e) => {
+      e?.preventDefault();
+      const query = inputQuery.trim();
+      if (!query || isStreaming) return;
+
+      // Typing a new message while paused is itself a resume (owner 2026-09-18:
+      // "either a new message or resume button resumes it"). Clear the paused
+      // state so the unfinished bubble stops offering Resume and the agent picks
+      // up under the new instruction — the partial stays in the thread as
+      // context rather than being thrown away.
+      if (pausedTurn) {
+        setMessages((prev) => prev.map((m) => (m.id === pausedTurn.msgId ? { ...m, paused: false } : m)));
+        setPausedTurn(null);
+      }
+
 
     const userMsg = {
       id: `user_${Date.now()}`,
@@ -516,23 +536,34 @@ export default function MyAgentView({
           },
         ]);
       }
-    } finally {
-      if (replyBuffer) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `agent_${Date.now()}`,
-            role: 'agent',
-            text: replyBuffer,
-            timestamp: new Date().toISOString(),
-            tokens: 650,
-            // Stored on the message so the thinking block stays with the answer
-            // instead of disappearing once the turn ends.
-            reasoning: reasoningRef.current || '',
-          },
-        ]);
-      }
-      setIsStreaming(false);
+      } finally {
+        if (replyBuffer) {
+          // Same id is reused by Resume so the continuation appends to THIS
+          // bubble instead of arriving as a second message.
+          const msgId = `agent_${Date.now()}`;
+          const wasPaused = pausedIntentRef.current;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: msgId,
+              role: 'agent',
+              text: replyBuffer,
+              timestamp: new Date().toISOString(),
+              tokens: 650,
+              // Stored on the message so the thinking block stays with the answer
+              // instead of disappearing once the turn ends.
+              reasoning: reasoningRef.current || '',
+              // Marks the bubble as unfinished, so it offers Resume rather than
+              // looking like a completed reply that simply stopped mid-sentence.
+              paused: wasPaused,
+            },
+          ]);
+          if (wasPaused) {
+            setPausedTurn({ msgId, text: replyBuffer, reasoning: reasoningRef.current || '' });
+          }
+        }
+        pausedIntentRef.current = false;
+        setIsStreaming(false);
       setStreamingText('');
       setAbortController(null);
       // The reasoning now lives on the committed message (above), so drop the
@@ -542,13 +573,95 @@ export default function MyAgentView({
     }
   };
 
-  const handleStopExecution = () => {
-    if (abortController) {
-      abortController.abort();
-    }
-    setIsStreaming(false);
-    setThinkingState((prev) => ({ ...prev, visible: false }));
-  };
+    const handleStopExecution = () => {
+      if (abortController) {
+        abortController.abort();
+      }
+      setIsStreaming(false);
+      setThinkingState((prev) => ({ ...prev, visible: false }));
+    };
+
+    /** Pause the running turn, keeping what was already written so it can resume.
+     *
+     * This is the same abort as Stop — the difference is the intent flag, which
+     * makes the send handler keep the partial and mark the bubble resumable. */
+    const handlePauseExecution = () => {
+      pausedIntentRef.current = true;
+      if (abortController) {
+        abortController.abort();
+      }
+      setIsStreaming(false);
+      setThinkingState((prev) => ({ ...prev, visible: false }));
+    };
+
+    /** Throw away a paused turn: drop the partial answer entirely.
+     *
+     * This is where the old Stop button's behaviour went. Pause made it
+     * unreachable directly, and leaving no way to cancel would have been a
+     * regression — so "discard" is now an explicit second step. */
+    const handleDiscardPaused = () => {
+      if (pausedTurn) {
+        setMessages((prev) => prev.filter((m) => m.id !== pausedTurn.msgId));
+      }
+      setPausedTurn(null);
+    };
+
+    /** Continue a paused answer from where it stopped.
+     *
+     * A paused turn is ONE turn: the partial text goes back to the model via
+     * `continue_from` (so no user message is recorded and the half-finished
+     * answer never enters the thread as a synthetic prompt), and the deltas are
+     * appended to the same bubble. */
+    const handleResume = async () => {
+      const turn = pausedTurn;
+      if (!turn || isStreaming) return;
+
+      setPausedTurn(null);
+      // Drop the marker first: if the resume fails the bubble must not still
+      // claim it has a Resume button wired to a turn we have already consumed.
+      setMessages((prev) => prev.map((m) => (m.id === turn.msgId ? { ...m, paused: false } : m)));
+      setIsStreaming(true);
+      setStreamingText('');
+      setThinkingState({ visible: true, text: 'Continuing where it left off…', tokens: 0 });
+
+      const controller = new AbortController();
+      setAbortController(controller);
+      let appended = '';
+      try {
+        if (api.agentChatStream) {
+          await api.agentChatStream(
+            { text: '', continue_from: turn.text, signal: controller.signal },
+            (evt) => {
+              if (evt.type === 'reasoning' && evt.delta) {
+                reasoningRef.current = `${reasoningRef.current || ''}${evt.delta}`;
+              } else if (evt.type === 'delta' && evt.delta) {
+                appended += evt.delta;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === turn.msgId ? { ...m, text: turn.text + appended } : m)),
+                );
+              }
+            },
+          );
+        }
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `err_${Date.now()}`,
+              role: 'error',
+              isError: true,
+              text: `Could not resume the paused answer: ${err?.message || 'unknown error'}`,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }
+      } finally {
+        setIsStreaming(false);
+        setAbortController(null);
+        setThinkingState({ visible: false, text: '', tokens: 0 });
+      }
+    };
 
   // ── Permission Decision Handler (ApprovalCard) ──
   // Contract (09-07): one note input shared by every decision. Each button
@@ -719,22 +832,47 @@ export default function MyAgentView({
               </div>
             )}
 
-            {/* Render Messages */}
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex flex-col gap-2">
-                {/* The thinking that produced this reply, kept with it. */}
-                {msg.reasoning ? (
-                  <ThinkingBubble thought={msg.reasoning} isStreaming={false} />
-                ) : null}
-                <ChatBubble
-                  message={msg}
-                  onRetry={() => {
-                    setInputQuery(msg.text);
-                    handleSendMessage();
-                  }}
-                />
-              </div>
-            ))}
+              {/* Render Messages */}
+              {messages.map((msg) => (
+                <div key={msg.id} className="flex flex-col gap-2">
+                  {/* The thinking that produced this reply, kept with it. */}
+                  {msg.reasoning ? (
+                    <ThinkingBubble thought={msg.reasoning} isStreaming={false} />
+                  ) : null}
+                  <ChatBubble
+                    message={msg}
+                    onRetry={() => {
+                      setInputQuery(msg.text);
+                      handleSendMessage();
+                    }}
+                  />
+                  {/* A paused turn is visibly unfinished, with its own Resume —
+                      the user should not have to hunt for the composer button. */}
+                  {msg.paused && (
+                    <div className="flex items-center gap-2 pl-1">
+                      <span className="font-label-caps text-[10px] px-2 py-0.5 rounded-full bg-secondary/15 text-secondary">
+                        paused
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResume}
+                        className="font-label-caps text-[11px] px-3 h-7 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Play className="w-3 h-3" />
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDiscardPaused}
+                        className="font-label-caps text-[11px] px-3 h-7 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        Discard
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
 
             {/* Active Streaming Thinking Bubble */}
             {thinkingState.visible && (
@@ -843,8 +981,38 @@ export default function MyAgentView({
           </div>
 
           {/* Sticky Glass Composer Bar (§3.6.1) */}
-          <div className="sticky bottom-0 z-30 p-unit-3 rounded-2xl bg-surface-container-lowest/85 backdrop-blur-xl border border-outline-variant/30 shadow-2xl">
-            <form onSubmit={handleSendMessage} className="flex items-center gap-unit-3">
+            <div className="sticky bottom-0 z-30 p-unit-3 rounded-2xl bg-surface-container-lowest/85 backdrop-blur-xl border border-outline-variant/30 shadow-2xl">
+              {/* Paused banner (outside the form so it stacks above the composer
+                  instead of squeezing the input): keeps Resume reachable after
+                  scrolling away from the paused bubble, and says plainly that the
+                  answer is unfinished rather than letting it read as complete. */}
+              {pausedTurn && !isStreaming && (
+                <div className="w-full flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-xl border border-secondary/30 bg-secondary/10">
+                  <span className="font-body-sm text-xs text-on-surface-variant">
+                    Answer paused — nothing was lost. Resume it, or just type a new message to carry on.
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleResume}
+                      className="font-label-caps text-[11px] px-3 h-7 rounded-lg bg-primary text-on-primary hover:bg-primary-fixed transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3" />
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDiscardPaused}
+                      className="font-label-caps text-[11px] px-2 h-7 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition flex items-center gap-1.5 cursor-pointer"
+                      title="Discard the paused answer"
+                    >
+                      <X className="w-3 h-3" />
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+              <form onSubmit={handleSendMessage} className="flex items-center gap-unit-3">
               {/* Attachment Button (44px min target) */}
               <button
                 type="button"
@@ -878,26 +1046,38 @@ export default function MyAgentView({
                 <Mic className="w-5 h-5" />
               </button>
 
-              {/* Glowing Circular Send / Stop Button */}
-              {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={handleStopExecution}
-                  className="w-11 h-11 rounded-full bg-error text-on-error flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(239,68,68,0.4)] hover:shadow-[0_0_28px_rgba(239,68,68,0.6)] active:scale-95 transition-all cursor-pointer"
-                  title="Stop Execution"
-                >
-                  <StopCircle className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!inputQuery.trim()}
-                  className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Send to Agent"
-                >
-                  <Send className="w-5 h-5 text-on-primary" />
-                </button>
-              )}
+                {/* Circular Send / Resume / Pause button.
+                    Pause is the streaming action; Resume replaces it once a turn
+                    is paused. Discard (a paused turn's cancel) sits beside Resume
+                    in the strip above, so cancelling is still reachable. */}
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={handlePauseExecution}
+                    className="w-11 h-11 rounded-full bg-secondary text-on-secondary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:shadow-[0_0_28px_rgba(234,179,8,0.55)] active:scale-95 transition-all cursor-pointer"
+                    title="Pause — keep what's written and continue later"
+                  >
+                    <Pause className="w-5 h-5" />
+                  </button>
+                ) : pausedTurn ? (
+                  <button
+                    type="button"
+                    onClick={handleResume}
+                    className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer"
+                    title="Resume the paused answer"
+                  >
+                    <Play className="w-5 h-5 text-on-primary" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!inputQuery.trim()}
+                    className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Send to Agent"
+                  >
+                    <Send className="w-5 h-5 text-on-primary" />
+                  </button>
+                )}
             </form>
           </div>
         </main>

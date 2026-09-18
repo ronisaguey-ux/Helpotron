@@ -108,14 +108,33 @@ def list_keys(db: Session, user) -> List[Dict[str, Any]]:
     return out
 
 
-def revoke_key(db: Session, user, key_id: int) -> bool:
+def delete_key(db: Session, user, key_id: int) -> bool:
+    """Delete a key outright (owner 2026-09-18: *"theres no option to delete keys,
+    only revoke, just make it a plain deletion"*).
+
+    This replaces the old soft revoke, which set `revoked_at` and left the row in
+    the list forever. The owner's point is that a revoked key is just a dead row
+    the user cannot get rid of: it still shows up in their key list, still counts
+    toward the list, and still has to be read past every time. Deleting is what
+    the button says it does.
+
+    Nothing depends on the row: no other table carries an `api_key_id` foreign
+    key, and the only reference to a key's id is `request.state.api_key_id`, which
+    lives for the duration of one request. So a hard delete cascades to nothing
+    and breaks nothing.
+
+    Authentication is unaffected in the way that matters: a deleted key fails the
+    `ApiKey.key_hash` lookup and is rejected with the same bare 401 an unknown key
+    gets — indistinguishable to the caller, which is deliberate.
+    """
     row = (db.query(ApiKey)
              .filter(ApiKey.id == int(key_id), ApiKey.user_id == user.id).first())
     if row is None:
         return False
-    row.revoked_at = datetime.utcnow()
+    prefix = row.key_prefix
+    db.delete(row)
     db.commit()
-    logger.info("revoked API key %s… for user %s", row.key_prefix, user.public_id)
+    logger.info("deleted API key %s… for user %s", prefix, user.public_id)
     return True
 
 

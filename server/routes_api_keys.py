@@ -101,9 +101,14 @@ async def update_key(key_id: int, body: UpdateKeyIn, request: Request,
 
 
 @router.delete("/{key_id}")
-async def revoke_key(key_id: int, request: Request,
+async def delete_key(key_id: int, request: Request,
                      db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Delete a key. Plain deletion — the row is gone (owner 2026-09-18).
+
+    Was a soft revoke that left a dead row in the list; see
+    `api_keys.delete_key` for why nothing depends on it.
+    """
     user = await _get_current_user(request, db)
-    if not keys.revoke_key(db, user, key_id):
+    if not keys.delete_key(db, user, key_id):
         raise HTTPException(404, "key not found")
     return {"status": "success", "keys": keys.list_keys(db, user)}

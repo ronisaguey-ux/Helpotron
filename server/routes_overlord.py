@@ -62,6 +62,13 @@ class ChatMessageRequest(BaseModel):
     action_type: Optional[str] = None
     session_mode_override: Optional[str] = None
     thread_id: Optional[int] = None  # chat thread (0/none = legacy single conversation)
+    # Resume a paused reply (owner 2026-09-18). When set, the partial text the
+    # user already saw is handed back to the model to continue from, and NO user
+    # message is recorded — the paused turn is one turn, not two. Without this,
+    # resuming would have to be faked by sending the half-finished answer as a
+    # giant synthetic user message, which would then live in the thread forever
+    # and be re-read on every later turn.
+    continue_from: Optional[str] = Field(None, max_length=20000)
 
 
 class ThreadCreateRequest(BaseModel):
@@ -2115,15 +2122,36 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
             yield f"data: {json.dumps({'type': 'unavailable', 'reason': 'actions'})}\n\n"
         return StreamingResponse(_actions_stream(), media_type="text/event-stream")
 
-    # Record user message
-    user_msg = overlord_agent.add_chat_message(thread_key, sender="user", text=payload.text, user_id=user.id)
-    try:
-        from .overlord_agent import persist_chat_message
-        persist_chat_message(db, user.id, thread_key, "user", payload.text)
-    except Exception:
-        pass
+    # Record user message — UNLESS this is a resume. A paused reply is still one
+    # turn: writing a user message for the resume would split it in two and put
+    # the half-finished answer into the thread as a giant synthetic prompt that
+    # every later turn then re-reads.
+    resuming = bool((payload.continue_from or "").strip())
+    if not resuming:
+        user_msg = overlord_agent.add_chat_message(thread_key, sender="user", text=payload.text, user_id=user.id)
+        try:
+            from .overlord_agent import persist_chat_message
+            persist_chat_message(db, user.id, thread_key, "user", payload.text)
+        except Exception:
+            pass
 
     effort_score = int(settings.get("default_effort_level", 5) or 5) * 100
+
+    if resuming:
+        # Ask for the remainder only. Without the "do not repeat" instruction a
+        # model restarts the answer, so the user sees the whole thing twice.
+        user_prompt = (
+            "Your previous answer was interrupted before it finished. Continue it from "
+            "exactly where it stops.\n\n"
+            "Rules:\n"
+            "- Do not repeat, restate, summarise or re-introduce anything already written.\n"
+            "- Do not write a preamble, apology, or the words \"continuing from where I left off\".\n"
+            "- Output ONLY the remaining text, matching the style and formatting of the part below.\n\n"
+            "Answer so far:\n"
+            f"{(payload.continue_from or '').strip()}"
+        )
+    else:
+        user_prompt = payload.text
 
     async def event_generator():
         from .llm import stream_llm
@@ -2131,7 +2159,7 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
         stream_failed = False
         try:
             async for chunk in stream_llm(
-                user_prompt=payload.text,
+                user_prompt=user_prompt,
                 system_prompt=system_prompt,
                 effort="auto",
                 effort_score=effort_score,
