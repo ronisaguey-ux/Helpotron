@@ -120,14 +120,32 @@ def test_ref_with_bad_button_drops_the_list():
 
 
 def test_malformed_refs_drop_the_whole_burst():
-    """All-or-nothing still holds: a nonsense ref must never let the rest run."""
+    """All-or-nothing still holds for STATE ops: a nonsense ref must never let
+    the rest run. A malformed ref on a `move` is skipped on its own instead —
+    a move changes nothing on the page, so it cannot leave a type half-run
+    (see test_a_bad_move_ref_is_skipped_not_fatal)."""
     for bad in ({"op": "click", "ref": -1}, {"op": "click", "ref": True},
                 {"op": "click", "ref": "three"}, {"op": "click", "ref": 1.5},
-                {"op": "move", "ref": -2}, {"op": "dblclick", "ref": None}):
+                {"op": "dblclick", "ref": None}):
         assert _harden_actions([bad], VP) is None, bad
         assert _harden_actions(
             [{"op": "type", "text": "x"}] + [bad], VP
         ) is None, bad
+
+
+def test_a_bad_move_ref_is_skipped_not_fatal():
+    """A move with a nonsense ref is dropped; the real work still runs.
+
+    One bad op used to fail the entire burst — which is how a model writing a
+    scroll or a move the validator disliked lost its clicks as well, and the
+    page never moved at all. That is the "it doesn't scroll" report.
+    """
+    bad = {"op": "move", "ref": -2}
+    assert _harden_actions([bad], VP) is None          # nothing left to run
+    out = _harden_actions([{"op": "type", "text": "x"}] + [bad], VP)
+    assert out == [{"op": "type", "text": "x"}]
+    out2 = _harden_actions([bad, {"op": "click", "x": 5, "y": 5}], VP)
+    assert [op["op"] for op in out2] == ["click"]
 
 
 # ── the control fence path the model actually uses ────────────────────────────
