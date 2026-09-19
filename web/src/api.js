@@ -341,8 +341,10 @@ export const api = {
   me: () => request('/api/me', { method: 'GET' }),
   signup: (public_id, password, turnstileToken = null) => request('/api/signup', { method: 'POST', body: JSON.stringify({ public_id, password, turnstile_token: turnstileToken }) }),
   adminCheck: () => request('/api/admin/check', { method: 'GET' }),
-  setup2FA: (method = 'totp', phone = null) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method, phone_number: phone }) }),
-  verifySetup2FA: (method, code, secret, phone = null) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret, phone_number: phone }) }),
+  // Owner 2026-09-19: `email` is a real destination now. The server refuses to
+  // invent one, so email 2FA must carry the address the user typed.
+  setup2FA: (method = 'totp', phone = null, email = null) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ method, phone_number: phone, email }) }),
+  verifySetup2FA: (method, code, secret, phone = null, email = null) => request('/api/auth/2fa/verify-setup', { method: 'POST', body: JSON.stringify({ method, code, secret, phone_number: phone, email }) }),
   // Telegram bot ↔ My Agent (08-31, operator): user's own bot token.
   telegramAgentStatus: () => request('/api/telegram-agent/status', { method: 'GET' }),
   telegramAgentConnect: (token) => request('/api/telegram-agent/connect', { method: 'POST', body: JSON.stringify({ token }) }),

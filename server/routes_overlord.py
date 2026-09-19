@@ -9,7 +9,7 @@ import re
 import subprocess
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import logging
@@ -467,6 +467,71 @@ async def get_launch_to_doc_config(request: Request, db: Session = Depends(get_d
     from .launch_to_doc import build_launch_config
 
     return build_launch_config()
+
+
+@router.post("/launch-to-doc/launch")
+async def post_launch_to_doc_launch(
+    payload: LaunchToDocRequest, request: Request, db: Session = Depends(get_db)
+):
+    """Mark an assignment as LAUNCHED — the hand-off, not the typing.
+
+    Owner 2026-09-19: *"the launch to doc button isnt supposed to start streaming
+    text automatically, ur just supposed to click launch to doc, then in the
+    extension u see the launched assignment"*.
+
+    So this is the whole website-side action: it records WHICH assignment is
+    being worked on and with what text, and stops there. Nothing is typed, no
+    browser is driven, no stream starts. The extension reads the record (see
+    `GET /launch-to-doc/launched`) and presents the assignment as ready to type,
+    which keeps the typing itself an explicit, user-started act inside the
+    extension.
+    """
+    user = _get_current_user(request, db)
+    if not payload.assignment_id:
+        raise HTTPException(400, "An assignment is required to launch to a doc.")
+
+    title, text, subject, assignment_id = _resolve_launch_text(payload, user, db)
+
+    settings = dict(user.settings or {})
+    settings["launch_to_doc"] = {
+        "assignment_id": assignment_id,
+        "title": title or "",
+        "subject": subject or "",
+        "preset_id": payload.preset_id or "",
+        # The resolved text is stored so the extension types exactly what the
+        # website showed, with no second resolution that could disagree.
+        "text": text or "",
+        "launched_at": datetime.now(timezone.utc).isoformat(),
+    }
+    user.settings = settings
+    # Settings is a JSON blob: an ORM-cached shallow write is skipped, so this
+    # goes through the same core UPDATE the rest of the settings paths use.
+    from .overlord_agent import _persist_user_settings
+    _persist_user_settings(db, user, settings)
+
+    return {
+        "status": "success",
+        "assignment_id": assignment_id,
+        "title": title or "",
+        "message": (
+            f"“{title or 'This assignment'}” is ready in the extension — open Helpotron "
+            f"there and press Start when you want it typed."
+        ),
+    }
+
+
+@router.get("/launch-to-doc/launched")
+async def get_launch_to_doc_launched(request: Request, db: Session = Depends(get_db)):
+    """The assignment the website last launched, for the extension to present.
+
+    Returns `launched: null` when nothing has been launched — the extension then
+    falls back to its normal assignment picker rather than showing stale state.
+    """
+    user = _get_current_user(request, db)
+    record = (dict(user.settings or {})).get("launch_to_doc") or None
+    if not isinstance(record, dict) or not record.get("assignment_id"):
+        return {"status": "success", "launched": None}
+    return {"status": "success", "launched": record}
 
 
 @router.post("/launch-to-doc/plan")

@@ -85,8 +85,15 @@ export function deriveTrafficMetrics(traffic = {}) {
   })();
   const errorRateData = calculateErrorRate(traffic.status_counts, 0);
 
+  // Owner 2026-09-19: requests the middleware deliberately does NOT count as
+  // traffic. Surfaced so the excluded volume is visible rather than vanished.
+  const excluded = Number(
+    traffic.excluded?.session_polling ?? 0
+  ) + Number(traffic.excluded?.background ?? 0);
+
   return {
     total,
+    excluded: Number.isFinite(excluded) ? excluded : 0,
     ratePerSec: ratePerSec === null || Number.isNaN(ratePerSec) ? null : Number(ratePerSec.toFixed(2)),
     ratePerMin,
     p95Latency,
@@ -107,12 +114,25 @@ export function parseDataLakeCounts(datalake = {}) {
   const feedback = num(datalake.user_feedback);
   const microcredits = num(datalake.microcredit_submissions);
   const humanized = num(datalake.humanized_samples);
+  // Owner 2026-09-19: the events figure is now DISTINCT events, not raw rows —
+  // the lake held 814 rows but only 274 distinct payloads (540 were a synthetic
+  // load run repeating identical scores). The raw count is carried through so
+  // the difference can be shown rather than hidden.
+  const eventRows = num(datalake.operational_events_rows);
+  const eventSynthetic = num(datalake.operational_events_synthetic);
 
   const deltas = datalake.deltas_last_window || {};
   const delta = (k) => (Number.isFinite(Number(deltas[k])) ? Number(deltas[k]) : null);
 
   return [
-    { label: "Operational events", value: fmt(events), delta: delta("operational_events") },
+    {
+      label: "Operational events",
+      value: fmt(events),
+      delta: delta("operational_events"),
+      note: (eventRows !== null && eventRows !== events)
+        ? `${fmt(eventRows)} rows logged, ${fmt(eventSynthetic)} repeat a payload already counted`
+        : null,
+    },
     { label: "User feedback", value: fmt(feedback), delta: delta("user_feedback") },
     { label: "Microcredit submissions", value: fmt(microcredits), delta: delta("microcredit_submissions") },
     { label: "Humanized samples", value: fmt(humanized), delta: delta("humanized_samples") },

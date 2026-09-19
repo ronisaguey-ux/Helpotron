@@ -135,7 +135,14 @@ async def send_email_verification(payload: EmailVerificationRequest, request: Re
     code = code_store.generate_code(payload.email, purpose="email_verification")
     sent = await asyncio.to_thread(email_service.send_verification_code, payload.email, code, purpose_label="Email Verification")
     if not sent:
-        raise HTTPException(500, "Failed sending verification email. Please check SMTP configuration.")
+        # 503, not 500: email is genuinely unavailable when SMTP is unconfigured,
+        # and the caller must be told that rather than shown a code-entry screen
+        # for a message that was never sent (owner 2026-09-19).
+        raise HTTPException(
+            503,
+            "Email delivery is not configured on this deployment, so a verification "
+            "email cannot be sent right now.",
+        )
     return {"status": "success", "message": "Verification code sent to your email (expires in 15 minutes)."}
 
 
@@ -185,13 +192,44 @@ async def setup_two_factor(
         }
 
     elif method == "email":
-        target_email = payload.email or current_user.public_id
+        # Owner 2026-09-19: *"it just 'sends' the code to your email/phone
+        # without actually asking u to put in ur email/phone, its bogus"*.
+        #
+        # It was. This branch used `payload.email or current_user.public_id` —
+        # and `public_id` is a USERNAME ("RoniDev"), not an address, while the
+        # User model has no email column at all. So the "code" went to a string
+        # that is not an address, the endpoint returned
+        # "sent to RoniDev", and the user was told an email had gone out.
+        #
+        # A 2FA factor must have a REAL destination, so: take the address the
+        # user just typed, or one already saved from a previous setup, and
+        # refuse to proceed without one. Never invent an address.
+        settings_now = dict(current_user.settings or {})
+        stored_email = (
+            (settings_now.get("profile") or {}).get("email")
+            or settings_now.get("email")
+        )
+        target_email = (payload.email or stored_email or "").strip()
+        if not target_email:
+            raise HTTPException(
+                400,
+                "Enter the email address you want your 2FA codes sent to.",
+            )
+        if "@" not in target_email or "." not in target_email.split("@")[-1]:
+            raise HTTPException(400, "That does not look like an email address.")
         code = code_store.generate_code(target_email, purpose="2fa_setup")
-        await asyncio.to_thread(email_service.send_verification_code, target_email, code, purpose_label="2FA Setup")
+        sent = await asyncio.to_thread(
+            email_service.send_verification_code, target_email, code, purpose_label="2FA Setup"
+        )
+        if not sent:
+            # Do not claim a send that did not happen — the caller only reaches
+            # the code-entry screen on a real delivery.
+            raise HTTPException(502, "The code could not be emailed right now — try again in a moment.")
         return {
             "status": "success",
             "method": "email",
-            "message": f"6-digit 2FA setup code sent to {target_email}."
+            "target": target_email,
+            "message": f"Code sent to {target_email}.",
         }
 
     elif method == "sms":
@@ -283,6 +321,20 @@ async def verify_two_factor_setup(
                 current_settings["phone_number"] = _e164(raw_phone)
             except ValueError as e:
                 raise HTTPException(400, f"SMS 2FA needs a valid phone number: {e}")
+        if method == "email":
+            # Owner 2026-09-19: the email was never persisted, so login
+            # challenges fell through to a fabricated "<public_id>@helpotron.app"
+            # address. Store the verified address the same way the phone is
+            # stored, in the location the login path already reads.
+            raw_email = (payload.email or "").strip() or (
+                (current_settings.get("profile") or {}).get("email") or ""
+            ).strip()
+            if not raw_email or "@" not in raw_email:
+                raise HTTPException(400, "A valid email address is required for email 2FA.")
+            prof = dict(current_settings.get("profile") or {})
+            prof["email"] = raw_email
+            current_settings["profile"] = prof
+            current_settings["email"] = raw_email
         user.settings = current_settings
         db.commit()
 
@@ -491,7 +543,13 @@ async def send_purchase_challenge(
         code = code_store.generate_code(target, purpose="purchase_verification")
         sent = await asyncio.to_thread(email_service.send_verification_code, target, code, purpose_label="Purchase Authorization")
         if not sent:
-            raise HTTPException(500, "Failed to send purchase verification email.")
+            # Same honesty rule as the other email paths: unavailable is 503 and
+            # says why, rather than a 500 that reads like a transient failure.
+            raise HTTPException(
+                503,
+                "Email delivery is not configured on this deployment, so a purchase "
+                "verification email cannot be sent. Use SMS or your authenticator app.",
+            )
         return {
             "status": "success",
             "method": "email",

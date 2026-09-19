@@ -94,6 +94,7 @@ try:
     from .privacy import router as privacy_router
     from .admin import router as admin_router
     from .routes_features import router as features_router
+    from .routes_calendar import router as calendar_router
     from .routes_trial import router as trial_router
     from .routes_notifications import router as notifications_router
     from .routes_library import router as library_router
@@ -129,6 +130,7 @@ except (ImportError, ValueError):
     from server.privacy import router as privacy_router
     from server.admin import router as admin_router
     from server.routes_features import router as features_router
+    from server.routes_calendar import router as calendar_router
     from server.routes_trial import router as trial_router
     from server.routes_notifications import router as notifications_router
     from server.routes_library import router as library_router
@@ -465,6 +467,7 @@ app.include_router(agent_actions_router)
 app.include_router(admin_advanced_router)
 app.include_router(admin_router)
 app.include_router(features_router)
+app.include_router(calendar_router)
 app.include_router(recovery_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
@@ -1148,9 +1151,35 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
                         raise HTTPException(502, "SMS could not be delivered right now — try again in a moment.")
                 else:  # email
                     from .auth_2fa import email_service
-                    target = (settings_.get("profile") or {}).get("email") or f"{user.public_id}@helpotron.app"
+                    # Owner 2026-09-19: this fell back to
+                    # f"{user.public_id}@helpotron.app" — a fabricated address
+                    # nobody owns — and the user was told a code had been sent.
+                    # Only ever send to an address the account actually holds.
+                    target = (
+                        (settings_.get("profile") or {}).get("email")
+                        or settings_.get("email")
+                        or ""
+                    ).strip()
+                    if not target:
+                        raise HTTPException(
+                            400,
+                            "This account has email 2FA enabled but no email address stored. "
+                            "Sign in another way, then re-save your email in Settings → Security.",
+                        )
+                    if not email_service.is_configured():
+                        raise HTTPException(
+                            503,
+                            "Email delivery is not configured on this deployment, so an email "
+                            "code cannot be sent. Use your authenticator app or SMS.",
+                        )
                     new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
-                    email_service.send_verification_code(target, new_code, purpose_label="2FA Login")
+                    # `login` is a SYNC route, so this is a plain call — the
+                    # original did the same. (An `await` here is a SyntaxError:
+                    # "'await' outside async function", which took the whole API
+                    # down in a crash loop.)
+                    sent = email_service.send_verification_code(target, new_code, "2FA Login")
+                    if not sent:
+                        raise HTTPException(502, "The login code could not be emailed — try again in a moment.")
             return {"status": "2fa_required", "method": method, "message": "2FA verification code required"}
 
         if method == "totp":

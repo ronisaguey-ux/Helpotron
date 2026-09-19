@@ -15,7 +15,6 @@ import {
   User,
 } from 'lucide-react';
 import api from '../api.js';
-import LaunchToDocModal from './LaunchToDocModal.jsx';
 import StatusChip from './StatusChip.jsx';
 import DueChip from './DueChip.jsx';
 import DirectionPicker from './DirectionPicker.jsx';
@@ -46,7 +45,32 @@ export function AssignmentDetailView({
   const [loading, setLoading] = useState(false);
 
   // Modals & Chat
-  const [showLaunchToDocModal, setShowLaunchToDocModal] = useState(false);
+  // Owner 2026-09-19: "Launch to Doc" is a HAND-OFF, not a typing stream. It
+  // records that this assignment is being worked on; the extension then shows
+  // it as ready. No modal, no auto-typing.
+  const [launching, setLaunching] = useState(false);
+  const [launchNotice, setLaunchNotice] = useState('');
+  const [launchError, setLaunchError] = useState('');
+
+  const handleLaunchToDoc = async () => {
+    setLaunching(true);
+    setLaunchError('');
+    setLaunchNotice('');
+    try {
+      const res = await api.request('/api/launch-to-doc/launch', {
+        method: 'POST',
+        body: JSON.stringify({ assignment_id: assignment?.id ?? null }),
+      });
+      setLaunchNotice(
+        (res && res.message) ||
+        'Ready in the extension — open Helpotron there and press Start when you want it typed.'
+      );
+    } catch (e) {
+      setLaunchError(String((e && e.message) || e));
+    } finally {
+      setLaunching(false);
+    }
+  };
   const [teamChat, setTeamChat] = useState([]);
   const [teamInput, setTeamInput] = useState('');
   const [teamBusy, setTeamBusy] = useState(false);
@@ -316,16 +340,25 @@ export function AssignmentDetailView({
             </div>
           </div>
 
+          {(launchNotice || launchError) && (
+            <div className="w-full flex items-center gap-2 pb-2">
+              <span className={`font-body-sm text-xs ${launchError ? 'text-error' : 'text-secondary'}`}>
+                {launchError ? `⚠️ ${launchError}` : `✓ ${launchNotice}`}
+              </span>
+            </div>
+          )}
+
           {/* Desktop Cockpit Quick Actions */}
           <div className="hidden sm:flex items-center gap-2.5 flex-wrap self-start lg:self-center">
             <button
               type="button"
-              onClick={() => setShowLaunchToDocModal(true)}
-              className="h-11 px-4 rounded-xl bg-secondary/15 hover:bg-secondary/25 border border-secondary/30 text-secondary font-label-caps text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
-              title="Launch to Google Doc with Assistive Typing"
+              onClick={handleLaunchToDoc}
+              disabled={launching}
+              className="h-11 px-4 rounded-xl bg-secondary/15 hover:bg-secondary/25 border border-secondary/30 text-secondary font-label-caps text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+              title="Send this assignment to the extension, ready to type"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Launch to Doc</span>
+              <span>{launching ? 'Launching…' : 'Launch to Doc'}</span>
             </button>
 
             <button
@@ -482,7 +515,7 @@ export function AssignmentDetailView({
             loading={loading}
             onMarkDone={handleMarkDone}
             onArchive={handleArchive}
-            onLaunchToDoc={() => setShowLaunchToDocModal(true)}
+            onLaunchToDoc={handleLaunchToDoc}
             onExport={handleExport}
             onPickDirection={() => {
               window.scrollTo({ top: 180, behavior: 'smooth' });
@@ -497,7 +530,7 @@ export function AssignmentDetailView({
       <div className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-surface-container-lowest/95 backdrop-blur-xl border-t border-outline-variant/30 p-3 flex items-center justify-between gap-3 shadow-2xl">
         <button
           type="button"
-          onClick={() => setShowLaunchToDocModal(true)}
+          onClick={handleLaunchToDoc}
           className="h-11 px-3 rounded-xl bg-secondary/15 text-secondary font-label-caps text-xs uppercase tracking-wider flex items-center justify-center border border-secondary/30 flex-1"
         >
           <Sparkles className="w-4 h-4 mr-1.5" />
@@ -515,12 +548,6 @@ export function AssignmentDetailView({
         </button>
       </div>
 
-      {/* Launch to Doc Modal */}
-      <LaunchToDocModal
-        isOpen={showLaunchToDocModal}
-        assignment={assignment}
-        onClose={() => setShowLaunchToDocModal(false)}
-      />
     </div>
   );
 }

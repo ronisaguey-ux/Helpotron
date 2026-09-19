@@ -58,6 +58,14 @@ export default function MonitorsView({ userId = "" }) {
 
   const overview = data?.overview;
   const feedback = data?.feedback || [];
+  // `history` was NEVER bound here. The fetch result carries it, but without
+  // this line the JSX resolved `history` to `window.history` — the browser
+  // History API object. That is why the crash was so specific:
+  // `history.length` is real (History has a length, so the label rendered a
+  // nonsense snapshot count) but `history.map` does not exist, so the moment
+  // the Traction/ Live Traffic tab rendered its graph the whole app hit the
+  // error boundary: "history.map is not a function" (owner 2026-09-19).
+  const history = Array.isArray(data?.history) ? data.history : [];
   const trafficMetrics = deriveTrafficMetrics(overview?.traffic || {});
   const dataLakeMetrics = parseDataLakeCounts(overview?.datalake || {});
 
@@ -346,6 +354,20 @@ export default function MonitorsView({ userId = "" }) {
             </div>
           </div>
 
+          {/* Owner 2026-09-19: this panel used to count EVERY request, so ~96%
+              of it was the dashboard's own polling, /api/health probes, and an
+              idle tab's session timers — leaving the graph open raised the
+              graph. It now counts real user traffic only, and says out loud how
+              much was excluded so the number is honest rather than merely
+              smaller. */}
+          {trafficMetrics.excluded > 0 && (
+            <p className="font-code-sm text-[11px] text-outline -mt-3">
+              Real user traffic only. {fmt(trafficMetrics.excluded)} request
+              {trafficMetrics.excluded === 1 ? "" : "s"} excluded — health probes, the
+              monitor&apos;s own endpoints, CORS preflight and idle-tab session polling.
+            </p>
+          )}
+
           {/* Real Metrics Grid (owner 09-06: every number comes from
               /api/monitors/overview — no fabricated fallbacks) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -410,7 +432,14 @@ export default function MonitorsView({ userId = "" }) {
               invented. This plots actual snapshots, or says it is still collecting.) */}
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between text-xs font-code-sm text-on-surface-variant">
-              <span>REQUEST VOLUME · LAST {Math.max(history.length, 0)} SNAPSHOTS (30s POLL)</span>
+              <span>
+                REQUEST VOLUME · LAST {Math.max(history.length, 0)} SNAPSHOTS (30s POLL)
+              </span>
+              {/* `history` is the fetched snapshot array — bound at the top of
+                  this component. It used to resolve to window.history (the
+                  browser History API), which rendered a nonsense count here and
+                  then crashed the whole app with "history.map is not a
+                  function" the moment the graph rendered (owner 2026-09-19). */}
             </div>
             <div className="w-full h-28 bg-surface-container-low/40 rounded-xl p-3 flex items-center justify-center border border-outline-variant/20">
               {history.length > 1 ? (

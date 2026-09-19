@@ -8,7 +8,7 @@ Rules:
    (Stripe checkout when configured, else a manual record the operator
    approves) — see payments.create_trial_verification.
 4. Upon activation the user receives the trial token allowance, plan becomes 'trial'
-   and subscription_status becomes 'trialing' for 7 days.
+   and subscription_status becomes 'trialing' for 14 days (owner 2026-09-19).
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ logger = logging.getLogger("helpotron.trial")
 # Sourced from TIER_TOKENS so the grant and the catalogue cannot drift.
 from .payments import TIER_TOKENS as _TIER_TOKENS
 TRIAL_CREDITS_GRANT = float(_TIER_TOKENS["trial"])
-TRIAL_DURATION_DAYS = 7
+TRIAL_DURATION_DAYS = 14  # owner 2026-09-19: one-time trial, 2 weeks
 
 
 class TrialVerificationService:

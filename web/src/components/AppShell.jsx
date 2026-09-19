@@ -48,7 +48,6 @@ import MobileBottomBar from './MobileBottomBar.jsx';
 import DevContactModal from './DevContactModal.jsx';
 import NewAssignmentModal from './NewAssignmentModal.jsx';
 import DemoRibbon from './DemoRibbon.jsx';
-import DemoModeToggle from './DemoModeToggle.jsx';
 
 const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 
@@ -57,11 +56,19 @@ export const getNavItems = (isAdmin = false) => [
   { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'dump', label: 'Assignment Dump', Icon: Inbox, group: 'Workspace Core' },
   { key: 'datalake', label: 'Data Lake', Icon: Database, group: 'Workspace Core' },
-  { key: 'insights', label: 'Insights', Icon: BarChart3, group: 'Workspace Core' },
-  { key: 'history', label: 'History', Icon: History, group: 'Workspace Core' },
+  // Owner 2026-09-19 restructure — the nav is now only what a student uses:
+  //
+  //   * History + Library merged into ONE "Library" section. They were two
+  //     views of the same material.
+  //   * Insights is gone from the nav — it is a niche analytics page relevant to
+  //     ~1% of users, so it lives inside Settings.
+  //   * Billing is gone from the nav — plans and the ledger belong in Settings,
+  //     not a top-level product area.
+  //
+  // The keys still resolve (see VIEW_COMPONENTS) so deep links and the in-app
+  // search keep working; they are simply no longer advertised as destinations.
   { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
   { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
-  { key: 'credits', label: 'Billing', Icon: CreditCard, group: 'Platform System' },
   { key: 'extension', label: 'Extension', Icon: Puzzle, group: 'Platform System' },
   { key: 'guide', label: 'Guide', Icon: HelpCircle, group: 'Platform System' },
   ...(isAdmin ? [
@@ -372,7 +379,9 @@ export default function AppShell({
 
             {/* Breadcrumb / Title */}
             <div className="flex items-center gap-2 font-body-sm text-xs sm:text-sm">
-              <span className="text-on-surface-variant hidden sm:inline">Helpotron OS</span>
+              {/* Owner 2026-09-19: 'Helpotron OS' appeared before every section
+                  title. Just the product name. */}
+              <span className="text-on-surface-variant hidden sm:inline">Helpotron</span>
               <span className="text-outline-variant/60 hidden sm:inline">/</span>
               <h1 className="font-semibold text-on-surface truncate">
                 {currentNav.label}
@@ -413,15 +422,12 @@ export default function AppShell({
             >
               <Search className="w-4 h-4 text-primary shrink-0" />
               <span className="hidden sm:inline text-xs font-medium text-on-surface-variant truncate max-w-[140px]">
-                Search synthesis...
+                Search
               </span>
               <span className="hidden sm:inline font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface border border-outline-variant/30">
                 ⌘K
               </span>
             </button>
-
-            {/* Sandbox Demo Environment Toggle */}
-            <DemoModeToggle />
 
             {/* Notifications Bell Trigger */}
             <div className="relative" ref={notificationsRef}>

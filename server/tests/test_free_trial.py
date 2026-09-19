@@ -59,7 +59,10 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     assert testing_plan["is_testing"] is True
     assert testing_plan["requires_approval"] is True
     assert testing_plan["price_cents"] == 0
-    assert testing_plan["monthly_credits"] == 15000
+    # Owner 2026-09-19: Testing is a flat 10,000-token allocation that never
+    # expires — deliberately not on the monthly ladder, because nothing
+    # renews it and nothing claws it back.
+    assert testing_plan["monthly_credits"] == 10000
     assert testing_plan["requires_1c_payment"] is False
     assert "usage_value_usd" not in testing_plan
 
@@ -73,7 +76,7 @@ def test_plan_catalogue_reprice_and_no_usd_disclosures():
     #   $10 -> 30,000 = $3.00 of service · $20 -> 100,000 = $10.00 · $40 -> 270,000 = $27.00
     allowances = {p["id"]: p["monthly_credits"] for p in catalogue}
     assert allowances["trial"] == 15000
-    assert allowances["testing"] == 15000
+    assert allowances["testing"] == 10000  # flat grant, never expires (owner 2026-09-19)
     assert allowances["basic"] == 30000
     assert allowances["pro"] == 100000
     assert allowances["elite"] == 270000
